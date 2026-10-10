@@ -39,5 +39,5 @@ facilities:
   quote: "The AP1000 units at Vogtle are the first new nuclear build projects in the U.S. in more than 30 years and are operated by Southern Nuclear."
   published: '2024-04-29'
   confidence: 1.0
-  note: "Units 3 and 4 (the AP1000 units) only; this source doesn't cover Units 1 and 2. Kept on the site until NRC's Vogtle 3 and 4 unit records are verified, then move it to those units."
-notes: "HQ conflict: DOE/INL bulletin (2025) lists 'Westinghouse (Etna, Pennsylvania)'; Westinghouse's 2024 Vogtle release is datelined Cranberry Township, PA. Fuel sub-type (fabrication) not separately sourced. eVinci is a microreactor; 'smr' tag is approximate. DOE selected Westinghouse eVinci for first DOME tests at INL (see INL notes)."
+  note: "Units 3 and 4 (the AP1000 units)."
+notes: "HQ conflict: DOE/INL bulletin (2025) lists 'Westinghouse (Etna, Pennsylvania)'; Westinghouse's 2024 Vogtle release is datelined Cranberry Township, PA. Fuel sub-type (fabrication) not separately sourced. eVinci is a microreactor; 'smr' tag is approximate. DOE selected Westinghouse eVinci for first DOME tests at INL (see INL notes). Vogtle (2026-10-10): the vendor_for link sits on the Plant Vogtle site and covers Units 3 and 4 only; move it to NRC's Vogtle 3 and 4 unit records once those are verified."
