@@ -25,7 +25,7 @@ relationships:
   quote: "Southern Wholesale Energy (SWE) markets surplus generating capacity from our retail operating companies—Alabama Power, Georgia Power and Mississippi Power—to wholesale customers across the Southeast."
   confidence: 1.0
 facilities:
-- name: Plant Vogtle Units 3 & 4
+- name: Plant Vogtle
   type: owns
   source_url: "https://www.georgiapower.com/news-hub/company-news/special-announcement-plant-vogtle-unit-4-has-officially-entered-commercial-operation.html"
   quote: "As we mark the completion of the expansion, we’re grateful for the leadership and foresight of the Georgia Public Service Commission, as well as the steadfast dedication from all the project’s co-owners (Oglethorpe Power, MEAG Power and Dalton Utilities) along the way."

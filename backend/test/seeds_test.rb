@@ -53,6 +53,17 @@ class SeedsTest < ActiveSupport::TestCase
     assert_includes Organization.find(converdyn.id).roles.pluck(:key), "conversion"
   end
 
+  test "Plant Vogtle is one site-level record covering every unit" do
+    load_seeds
+
+    vogtle = Facility.find_by!(name: "Plant Vogtle")
+    assert_nil Facility.find_by(name: "Plant Vogtle Units 3 & 4")
+    links = vogtle.facility_relationships.includes(:organization).to_h { |link| [ link.organization.slug, link ] }
+    assert links["georgia-power"].owns?
+    assert links["westinghouse-electric-company"].vendor_for?
+    assert_match "Units 3 and 4", links["westinghouse-electric-company"].description
+  end
+
   test "CFS and Dominion share one ARC facility" do
     load_seeds
 
