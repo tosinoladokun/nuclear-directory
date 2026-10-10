@@ -74,6 +74,21 @@ Postgres shell:
 docker compose exec db psql -U postgres nuclear_directory_development
 ```
 
+## Usage counts
+
+The site keeps anonymous daily counts of page views per path and searches
+per query, in the `usage_counts` table. It stores no cookies, IP addresses or
+user agents and uses no third-party trackers. Bots, Turbo prefetches and the
+`/design` page aren't counted. To see top pages, top searches and searches
+with no results for the last 30 days:
+
+```bash
+docker compose run --rm web bin/rails "usage:report[30]"
+```
+
+A search page records each search with
+`UsageCount.track_search(query, results: count)`.
+
 ## Configuration
 
 Settings live in `.env` (gitignored). See `.env.example` for the full list:

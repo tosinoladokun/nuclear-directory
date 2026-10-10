@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_10_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_10_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -426,6 +426,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_10_000001) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_technologies_on_key", unique: true
     t.index ["parent_id"], name: "index_technologies_on_parent_id"
+  end
+
+  create_table "usage_counts", force: :cascade do |t|
+    t.date "day", null: false
+    t.string "event", null: false
+    t.string "key", null: false
+    t.integer "count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["day", "event", "key"], name: "index_usage_counts_on_day_and_event_and_key", unique: true
+    t.index ["event", "day"], name: "index_usage_counts_on_event_and_day"
+    t.check_constraint "count >= 0", name: "usage_counts_count_check"
+    t.check_constraint "event::text = ANY (ARRAY['page_view'::character varying::text, 'search'::character varying::text, 'search_no_results'::character varying::text])", name: "usage_counts_event_check"
   end
 
   add_foreign_key "candidates", "crawl_runs"
