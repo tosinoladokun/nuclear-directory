@@ -172,4 +172,114 @@ class DirectoryRakeTest < ActiveSupport::TestCase
     assert kept.reload.verified?
     assert_raises(SystemExit) { capture_io { retire_eia_operators(SKIP: "Perry") } }
   end
+
+  def backfill_award_terms(**env)
+    env.each { |key, value| ENV[key.to_s] = value }
+    Rake::Task["directory:backfill_award_terms"].execute
+  ensure
+    env.each_key { |key| ENV.delete(key.to_s) }
+  end
+
+  test "award terms are written from a funds link's own USAspending rows, verified only with a verified link (#256)" do
+    by = "human:tosin"
+    doe = Organization.create!(name: "U.S. Department of Energy", verification_status: "verified", verified_by: by)
+    xenergy = Organization.create!(name: "X-energy", verification_status: "verified", verified_by: by)
+    other = Organization.create!(name: "Kairos Power")
+    verified = Relationship.create!(from_organization: doe, to_organization: xenergy, relationship_type: "funds",
+      verification_status: "verified", verified_by: by)
+    pending = Relationship.create!(from_organization: doe, to_organization: other, relationship_type: "funds")
+    columns = %w[award_id recipient_name amount_usd start_date end_date award_type assistance_listing search award_url
+      generated_award_id recipient_id description]
+    page = ->(url, rows) do
+      Source.create!(url:, source_kind: "usaspending_doe_awards", crawl_status: "ok",
+        content_text: CSV.generate { |csv| csv << columns; rows.each { |row| csv << row } })
+    end
+    xenergy_page = page.("https://www.usaspending.gov/recipient/x-energy/latest", [
+      [ "DE-NE0009040", "X ENERGY, LLC", "80000000.00", "2020-10-13", "2027-09-30", "assistance", "81.121", "nuclear",
+        "https://www.usaspending.gov/award/ASST_A", "ASST_A", "x-C", "ARDP" ],
+      [ "89243223CNE000030", "X ENERGY, LLC", "1200000.00", "2023-01-05", "", "contract", "", "fuel",
+        "https://www.usaspending.gov/award/CONT_B", "CONT_B", "x-C", "HALEU" ]
+    ])
+    kairos_page = page.("https://www.usaspending.gov/recipient/kairos/latest", [
+      [ "DE-NE0009300", "KAIROS POWER LLC", "303000000.00", "2020-12-16", "", "assistance", "81.121", "nuclear",
+        "https://www.usaspending.gov/award/ASST_C", "ASST_C", "k-C", "Hermes" ]
+    ])
+    verified.evidence.create!(source: xenergy_page, quote: "row", found_by: "crawler", confidence: 1)
+    pending.evidence.create!(source: kairos_page, quote: "row", found_by: "crawler", confidence: 1)
+
+    assert_output(/3 award terms would be written, 0 already there.\nDry run/) { backfill_award_terms(BY: by) }
+    assert_equal 0, DealTerm.count
+
+    assert_output(/3 award terms written, 0 already there/) { backfill_award_terms(BY: by, APPLY: "1") }
+    assert_equal %w[ASST_A CONT_B], DealTerm.where(link: verified).order(:external_id).pluck(:external_id)
+    assert DealTerm.where(link: verified).all?(&:verified?), "a verified link's terms are verified"
+    assert DealTerm.find_by!(external_id: "ASST_C").pending?, "a pending link's terms wait with it"
+    assert_equal "contract", DealTerm.find_by!(external_id: "CONT_B").program
+    assert_equal [ xenergy_page.id ], DealTerm.find_by!(external_id: "ASST_A").evidence.pluck(:source_id)
+
+    assert_output(/0 award terms written, 3 already there/) { backfill_award_terms(BY: by, APPLY: "1") }
+
+    # One link backed by two recipient pages (BWXT has two USAspending recipients).
+    second_page = page.("https://www.usaspending.gov/recipient/x-energy-2/latest", [
+      [ "DE-NE0009999", "X-ENERGY LLC", "5000000.00", "2025-02-01", "", "assistance", "81.121", "nuclear",
+        "https://www.usaspending.gov/award/ASST_D", "ASST_D", "x2-C", "Fuel" ]
+    ])
+    verified.evidence.create!(source: second_page, quote: "row", found_by: "crawler")
+    assert_output(/1 award terms written, 3 already there/) { backfill_award_terms(BY: by, APPLY: "1") }
+    assert_equal second_page.id, DealTerm.find_by!(external_id: "ASST_D").evidence.sole.source_id
+
+    # A company merged into X-energy before the backfill: its DOE link was retired, and its awards land on X-energy's.
+    duplicate = Organization.create!(name: "X-energy Duplicate", verification_status: "verified", verified_by: by)
+    retired = Relationship.create!(from_organization: doe, to_organization: duplicate, relationship_type: "funds",
+      verification_status: "verified", verified_by: by)
+    retired.evidence.create!(source: page.("https://www.usaspending.gov/recipient/x-energy-dup/latest", [
+      [ "DE-NE0008888", "X ENERGY DUP", "7000000.00", "2024-03-01", "", "assistance", "81.121", "nuclear",
+        "https://www.usaspending.gov/award/ASST_E", "ASST_E", "xd-C", "Dup" ]
+    ]), quote: "row", found_by: "crawler")
+    assert Directory::FactWriter.merge_organization(from_id: duplicate.id, into_id: xenergy.id, by:).ok?
+    assert retired.reload.rejected?
+    assert_output(/1 award terms written, 4 already there/) { backfill_award_terms(BY: by, APPLY: "1") }
+    assert_equal verified, DealTerm.find_by!(external_id: "ASST_E").link
+
+    # A chain (A into B, B into X-energy), a link a person closed before its merge, and a rejected term.
+    a = Organization.create!(name: "Chain A", verification_status: "verified", verified_by: by)
+    b = Organization.create!(name: "Chain B", verification_status: "verified", verified_by: by)
+    award_row = ->(id, recipient) do
+      [ id, recipient, "1000000.00", "2024-05-01", "", "assistance", "81.121", "nuclear", "https://www.usaspending.gov/award/#{id}", id, "c-C", "Chain" ]
+    end
+    link_a = Relationship.create!(from_organization: doe, to_organization: a, relationship_type: "funds", verification_status: "verified", verified_by: by)
+    link_b = Relationship.create!(from_organization: doe, to_organization: b, relationship_type: "funds", verification_status: "verified", verified_by: by)
+    link_a.evidence.create!(source: page.("https://www.usaspending.gov/recipient/a/latest", [ award_row.("ASST_A1", "A") ]), quote: "row", found_by: "crawler")
+    link_b.evidence.create!(source: page.("https://www.usaspending.gov/recipient/b/latest", [ award_row.("ASST_B1", "B") ]), quote: "row", found_by: "crawler")
+    closed_co = Organization.create!(name: "Closed Co", verification_status: "verified", verified_by: by)
+    closed = Relationship.create!(from_organization: doe, to_organization: closed_co, relationship_type: "funds",
+      verification_status: "verified", verified_by: by)
+    closed.evidence.create!(source: page.("https://www.usaspending.gov/recipient/closed/latest", [ award_row.("ASST_CLOSED", "C") ]),
+      quote: "row", found_by: "crawler")
+    closed.reject!(by:, reason: "Not a DOE award to this company")
+    DealTerm.find_by!(external_id: "ASST_E").reject!(by:, reason: "Wrong award")
+
+    assert Directory::FactWriter.merge_organization(from_id: a.id, into_id: b.id, by:).ok?
+    assert Directory::FactWriter.merge_organization(from_id: b.id, into_id: xenergy.id, by:).ok?
+    assert Directory::FactWriter.merge_organization(from_id: closed_co.id, into_id: xenergy.id, by:).ok?
+
+    capture_io { backfill_award_terms(BY: by, APPLY: "1") }
+    assert_equal verified, DealTerm.find_by!(external_id: "ASST_A1").link, "A's award, two merges away"
+    assert_equal verified, DealTerm.find_by!(external_id: "ASST_B1").link
+    assert_nil DealTerm.find_by(external_id: "ASST_CLOSED"), "a link a person closed before the merge stays closed"
+    assert_equal 1, DealTerm.where(external_id: "ASST_E").count, "a rejected term isn't written again"
+    assert DealTerm.find_by!(external_id: "ASST_E").rejected?
+
+    # A duplicate DOE record merged into DOE: its link to X-energy was retired, and its award lands on DOE's.
+    doe_dup = Organization.create!(name: "DOE Duplicate", verification_status: "verified", verified_by: by)
+    dup_link = Relationship.create!(from_organization: doe_dup, to_organization: xenergy, relationship_type: "funds",
+      verification_status: "verified", verified_by: by)
+    dup_link.evidence.create!(source: page.("https://www.usaspending.gov/recipient/x-energy-doe-dup/latest", [ award_row.("ASST_F", "X") ]),
+      quote: "row", found_by: "crawler")
+    assert Directory::FactWriter.merge_organization(from_id: doe_dup.id, into_id: doe.id, by:).ok?
+    assert dup_link.reload.rejected?
+    capture_io { backfill_award_terms(BY: by, APPLY: "1") }
+    assert_equal verified, DealTerm.find_by!(external_id: "ASST_F").link, "a funder-side merge"
+    assert_raises(SystemExit) { capture_io { backfill_award_terms(BY: "agent:x") } }
+  end
 end

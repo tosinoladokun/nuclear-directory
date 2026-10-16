@@ -35,7 +35,9 @@ module Directory
     # unpublished one, newest first, since a time. A merge says what the
     # record went into. Reads only.
     def exits(since:, limit: 50)
-      events = VerificationEvent.where(to_status: %w[rejected unpublished], created_at: since..).order(created_at: :desc, id: :desc).limit(limit).to_a
+      # The fact types the admin lists (a deal term's decisions show with its link, #256).
+      events = VerificationEvent.where(subject_type: FACT_TYPES, to_status: %w[rejected unpublished], created_at: since..)
+        .order(created_at: :desc, id: :desc).limit(limit).to_a
       records = events.group_by(&:subject_type).to_h do |type, group|
         # With what each label names (a role's company, a link's ends), loaded in one go.
         [ type, type.constantize.where(id: group.map(&:subject_id)).includes(*PENDING_INCLUDES.fetch(type.underscore)).index_by(&:id) ]
@@ -49,6 +51,16 @@ module Directory
 
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
+
+    # The awards, offtakes or rounds under one link (#256), oldest first.
+    # published: true (the default) gives only what public pages may show.
+    def deal_terms(link_type:, link_id:, published: true)
+      raise ArgumentError, "not a link type: #{link_type.inspect}" unless DealTerm::LINK_TYPES.include?(link_type.to_s)
+
+      scope = published ? DealTerm.published : DealTerm.where.not(verification_status: Verifiable::CLOSED_STATUSES)
+      scope.where(link_type: link_type.to_s, link_id:).includes(evidence: :source)
+        .order(Arel.sql("COALESCE(starts_on, signed_on) ASC NULLS LAST"), :id).map { |term| DealTermRef.from(term) }
+    end
 
     # Every change of a fact's verification, newest first, as plain values:
     # who, when, from -> to, why. type is the fact's class name ("Organization").
