@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Render's pre-deploy step (render.yaml's preDeployCommand). Render runs that
+# command without a shell, so the two steps live here: schema migrations
+# first (a failure stops the deploy), then the data step (#301), which never
+# fails the deploy.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+bin/rails db:migrate
+exec bin/deploy-data

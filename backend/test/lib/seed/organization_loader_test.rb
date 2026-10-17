@@ -36,8 +36,21 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
 
     acme = Organization.find_by!(slug: "acme-fuel")
     assert_equal %w[enrichment fuel], acme.roles.pluck(:key).sort
-    assert_equal({ created: 2, updated: 0 }, loader.results[:organization_role])
+    assert_equal({ created: 2, changed: 0, unchanged: 0 }, loader.results[:organization_role])
     assert_equal Date.new(2026, 1, 2), Source.find_by!(url: "https://example.com/news").published_on
+  end
+
+  test "a re-seed counts what it changed apart from what it only restated (#301)" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", roles: [ item(key: "fuel") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+
+    again = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal({ created: 0, changed: 0, unchanged: 1 }, again.results[:organization], "nothing new: unchanged, not updated")
+    assert_equal({ created: 0, changed: 0, unchanged: 1 }, again.results[:organization_role])
+
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.org", roles: [ item(key: "fuel") ]))
+    edited = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal 1, edited.results[:organization][:changed]
   end
 
   test "organizations sharing a website get no matching domain" do
@@ -130,6 +143,24 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert plant.operating?
     assert_nil plant.city, "a blank value isn't written"
     assert_includes plant.evidence.pluck(:quote), "Running since 2020."
+  end
+
+  test "a plant written field by field counts once: created, then unchanged, then changed (#301)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
+    details = ->(status) do
+      File.write(facilities_file, { "facilities" => [ {
+        "name" => "Acme Plant",
+        "status" => { "value" => status, "source_url" => "https://example.com/status", "quote" => "It is #{status}." },
+        "state" => { "value" => "GA", "source_url" => "https://example.com/where", "quote" => "In Georgia." }
+      } ] }.to_yaml)
+    end
+    load = -> { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.results[:facility] }
+
+    details.("operating")
+    assert_equal({ created: 1, changed: 0, unchanged: 0 }, load.call)
+    assert_equal({ created: 0, changed: 0, unchanged: 1 }, load.call, "restated: one unchanged row, not one per field")
+    details.("planned")
+    assert_equal({ created: 0, changed: 1, unchanged: 0 }, load.call, "edited: changed, not also unchanged")
   end
 
   test "a plant link marked pending is created pending, and a rerun keeps a later decision" do
@@ -252,7 +283,9 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     write_file("acme", org("Acme", website: "https://acme.com", merges: [ "Acme USA" ], aliases: [ "Acme USA", "AUSA" ],
       facilities: [ item(name: "Acme Plant", type: "operates") ]))
     assert_empty Seed::OrganizationLoader.new(@dir).collisions, "a merged name isn't a collision"
-    Seed::OrganizationLoader.new(@dir).load!
+    merged = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal({ created: 0, changed: 2, unchanged: 0 }, merged.results[:organization], "both companies changed (#301)")
+    assert_equal({ created: 0, changed: 1, unchanged: 0 }, merged.results[:facility_relationship], "the moved link changed, though restated")
 
     acme = Organization.find_by!(slug: "acme")
     assert old.reload.unpublished?
@@ -262,8 +295,25 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ "Acme Plant" ], acme.facility_relationships.map { |link| link.facility.name }
     assert_empty old.aliases
 
-    Seed::OrganizationLoader.new(@dir).load!
+    again = Seed::OrganizationLoader.new(@dir).load!
     assert_equal 1, Organization.where(slug: "acme").count, "a second run has nothing to merge"
+    assert_equal({ created: 0, changed: 0, unchanged: 1 }, again.results[:organization])
+    assert_equal({ created: 0, changed: 0, unchanged: 1 }, again.results[:facility_relationship])
+  end
+
+  test "a merge counts the links it moved, not one that stays as it was decided (#301)" do
+    write_file("acme", org("Acme", website: "https://acme.com"))
+    write_file("acme-usa", org("Acme USA", website: "https://acme.com/usa",
+      facilities: [ item(name: "Acme Plant", type: "operates"), item(name: "Other Plant", type: "owns") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    old = Organization.find_by!(slug: "acme-usa")
+    old.facility_relationships.joins(:facility).find_by!(facilities: { name: "Other Plant" }).unpublish!(by: "human:tosin", reason: "Sold")
+
+    File.delete(File.join(@dir, "acme-usa.yml"))
+    write_file("acme", org("Acme", website: "https://acme.com", merges: [ "Acme USA" ], aliases: [ "Acme USA" ]))
+    merged = Seed::OrganizationLoader.new(@dir).load!
+
+    assert_equal({ created: 0, changed: 1, unchanged: 0 }, merged.results[:facility_relationship], "the taken-off link isn't counted")
   end
 
   test "the dry run lists a name another organization already has" do

@@ -44,6 +44,26 @@ else
   end
 end
 
+# The web service's pre-deploy backup (#301) must use the same key: a
+# different one would make backups only that key could read.
+web = blueprint["services"].find { |service| service["name"] == "nuclear-directory" }
+web_recipient = web&.fetch("envVars", [])&.find { |var| var.is_a?(Hash) && var["key"] == "BACKUP_AGE_RECIPIENT" }
+if web_recipient && backup && web_recipient["value"] != recipient
+  problems << "nuclear-directory's BACKUP_AGE_RECIPIENT must match the backup cron job's"
+end
+
+# Tokens and the data deploy's kill switch are set in the dashboard only:
+# sync: false, never a value or a reference, wherever they appear.
+DASHBOARD_ONLY = %w[BACKUP_GITHUB_TOKEN DEPLOY_REPORT_GITHUB_TOKEN AUTO_DATA_DEPLOY].freeze
+blueprint["services"].each do |service|
+  service.fetch("envVars", []).each do |var|
+    next unless var.is_a?(Hash) && DASHBOARD_ONLY.include?(var["key"])
+    next if var.keys.sort == %w[key sync] && var["sync"] == false
+
+    problems << "#{service["name"]}'s #{var["key"]} must be sync: false (set in the dashboard), never a value"
+  end
+end
+
 # The UI preview must never reach production data or carry production secrets.
 preview = blueprint["services"].find { |service| service["name"] == "nuclear-directory-preview" }
 if preview

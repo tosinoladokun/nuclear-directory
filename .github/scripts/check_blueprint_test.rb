@@ -144,4 +144,26 @@ class CheckBlueprintTest < Minitest::Test
   def test_a_second_host_fails
     refute check([ host("99.110.208.39/32"), host("99.110.208.40/32", "Someone else") ]).first
   end
+
+  def web_vars(blueprint)
+    blueprint["services"].find { |service| service["name"] == "nuclear-directory" }["envVars"]
+  end
+
+  def test_the_pre_deploy_backup_uses_the_cron_jobs_key
+    ok, output = check_blueprint do |blueprint|
+      web_vars(blueprint).find { |var| var["key"] == "BACKUP_AGE_RECIPIENT" }["value"] = "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"
+    end
+    refute ok
+    assert_includes output, "nuclear-directory's BACKUP_AGE_RECIPIENT must match the backup cron job's"
+  end
+
+  def test_tokens_and_the_kill_switch_are_never_checked_in
+    %w[BACKUP_GITHUB_TOKEN DEPLOY_REPORT_GITHUB_TOKEN AUTO_DATA_DEPLOY].each do |key|
+      ok, output = check_blueprint do |blueprint|
+        web_vars(blueprint).find { |var| var["key"] == key }.replace("key" => key, "value" => "on")
+      end
+      refute ok, key
+      assert_includes output, "nuclear-directory's #{key} must be sync: false"
+    end
+  end
 end

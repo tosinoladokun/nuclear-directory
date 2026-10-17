@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# The deploy's data step (#301), run by Render's pre-deploy step after
+# db:migrate: backup, seed:check, db:seed, data migrations, report. See
+# lib/deploy_data/run.rb. Off unless AUTO_DATA_DEPLOY=on.
+#
+#   bin/deploy-data             # on deploy: never fails it; a stop alerts
+#   bin/deploy-data --dry-run   # rehearsal on a restored backup: all rolled back
+#
+# A data step that stops or fails never stops the code deploy, so this
+# exits 0 unless it's a dry run. It gets 20 minutes (Render allows the
+# whole pre-deploy step 30), then a TERM to stop and report, then a KILL.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+dry_run=0
+[[ "${1:-}" == "--dry-run" ]] && dry_run=1
+
+DRY_RUN="$dry_run" timeout --signal=TERM --kill-after=60 "${DEPLOY_DATA_TIMEOUT:-1200}" bin/rails deploy_data:run
+status=$?
+(( dry_run )) && exit "$status"
+if (( status != 0 )); then
+  echo "deploy-data: the data step didn't finish (exit ${status}); see above. The code deploy goes on." >&2
+fi
+exit 0

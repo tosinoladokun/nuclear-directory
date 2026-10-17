@@ -18,9 +18,13 @@ services:
     # Paths are relative to the repo root.
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    # Runs in the new image before it takes traffic; a failure stops the
-    # deploy and the previous version keeps serving.
-    preDeployCommand: bin/rails db:migrate
+    # Runs in the new image before it takes traffic. A failed schema migration
+    # stops the deploy and the previous version keeps serving. bin/deploy-data
+    # (#301) then runs the data steps when the seed or db/data/ changed:
+    # backup, seed:check, db:seed, data migrations, a report on the PR. It
+    # never fails the deploy; a stop alerts instead. Render runs this without
+    # a shell, so both steps are in bin/pre-deploy.
+    preDeployCommand: bin/pre-deploy
     healthCheckPath: /up
     # Custom domain (#57). Render adds it as unverified until the Namecheap
     # records point here, then issues certificates. Adding the bare domain
@@ -89,6 +93,26 @@ services:
       # config/initializers/sentry.rb.
       - key: SENTRY_DSN
         sync: false
+      # The data step on deploy (#301, bin/deploy-data). The kill switch: it
+      # runs only when this is "on", set in the dashboard; blank or anything
+      # else turns it off.
+      - key: AUTO_DATA_DEPLOY
+        sync: false
+      # Its backup before writing: the same script, key and repo as the
+      # backup cron job below, tagged backup-<time>-predeploy.
+      - key: BACKUP_AGE_RECIPIENT
+        value: age160huv36mvxec0v3jjdvd238anktgzrsplrjkd53q2e0l2slslyfqzlu9cu
+      - key: BACKUP_REPO
+        value: tosinoladokun/nuclear-directory-backups
+      - key: BACKUP_KEEP
+        value: "14"
+      # The backup cron job's token: the backups repo only, Contents read/write.
+      - key: BACKUP_GITHUB_TOKEN
+        sync: false
+      # Posts the data step's report on the merged PR: a fine-grained token
+      # for nuclear-directory, Issues and Pull requests write only.
+      - key: DEPLOY_REPORT_GITHUB_TOKEN
+        sync: false
 
   # UI previews: a free instance that runs whichever PR was last labelled
   # "preview" (.github/workflows/preview.yml pushes it to the preview branch).
@@ -148,11 +172,15 @@ services:
     region: oregon
     branch: main
     dockerfilePath: ./backup/Dockerfile
-    dockerContext: ./backup
+    # The repo root: the image takes the backup script from backend/, which
+    # the web service also runs before a data deploy (#301).
+    dockerContext: .
     autoDeployTrigger: checksPass
     buildFilter:
       paths:
         - backup/**
+        - backend/bin/backup
+        - backend/lib/backup/**
     # Every day at 09:00 UTC (1–2 a.m. in California). The daily crawl runs at
     # 3 a.m. New York time (07:00 UTC in summer, 08:00 UTC in winter), so each
     # backup comes one to two hours after it and includes that day's crawl.
@@ -163,7 +191,7 @@ services:
           name: nuclear-directory-db
           property: connectionString
       # age public key. Only its private half, kept in Tosin's password
-      # manager, can decrypt the backups.
+      # manager, can decrypt the backups. The web service's copy must match.
       - key: BACKUP_AGE_RECIPIENT
         value: age160huv36mvxec0v3jjdvd238anktgzrsplrjkd53q2e0l2slslyfqzlu9cu
       - key: BACKUP_REPO

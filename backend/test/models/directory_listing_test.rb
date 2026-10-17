@@ -222,12 +222,13 @@ class DirectoryListingTest < ActiveSupport::TestCase
   end
 
   test "sites carry their verified units' count and capacity" do
-    @unit.update!(capacity_mw: 1117)
-    plant("Vogtle Unit 4", parent: @vogtle, capacity_mw: 1117)
-    plant("Vogtle Unit 5", parent: @vogtle, capacity_mw: 500, verified: false)
+    @unit.update!(capacity_mw: 1117, status: "operating")
+    plant("Vogtle Unit 4", parent: @vogtle, capacity_mw: 1117, status: "operating")
+    plant("Vogtle Unit 5", parent: @vogtle, capacity_mw: 500, status: "operating", verified: false)
+    plant("Vogtle Unit 1", parent: @vogtle, capacity_mw: 400, status: "shut_down")
     site = DirectoryListing.new(category: "plants").plants.first
 
-    assert_equal 2, site.units_count
+    assert_equal %w[operating operating shut_down], site.units_statuses.sort
     assert_equal 2234, site.units_capacity_mw
   end
 
@@ -335,6 +336,6 @@ class DirectoryListingTest < ActiveSupport::TestCase
     second.unpublish!(by: "human:test")
 
     site = DirectoryListing.new(category: "plants").plants.first
-    assert_equal 1, site.units_count
+    assert_equal 1, site.units_statuses.size
   end
 end

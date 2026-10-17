@@ -139,45 +139,33 @@ namespace :directory do
   # Sets plants' or units' status as a person's decision, quoting NRC's
   # 365-day power status file: human-verified, so a crawler can't change it
   # back, only propose a change in Checks. Without APPLY=1 it's a dry run:
-  # it writes, prints what changed and rolls back. The quote is the file's
+  # it prints what would change and writes nothing. The quote is the file's
   # newest line naming the first facility ("10/14/2026 12:00:00 AM|Palisades|0"),
-  # or QUOTE=… (it must be in the file as last fetched).
+  # or QUOTE=… (it must be in the file as last fetched). The admin's Change
+  # status does the same (Directory::StatusChange, #316).
   desc "Set plants' or units' status from NRC's status file, audited: BY=human:tosin [APPLY=1] bin/rails \"directory:set_status[not_operating,171 174]\""
   task :set_status, %i[status ids] => :environment do |_task, args|
     by = ENV["BY"].to_s
     apply = ENV["APPLY"] == "1"
     status = args[:status].to_s
-    tokens = args[:ids].to_s.split
     abort "Usage: BY=human:<handle> [APPLY=1] [QUOTE=…] bin/rails \"directory:set_status[status,id id …]\"" unless
-      by.match?(/\Ahuman:\S+\z/) && Facility.statuses.key?(status) && tokens.any? && tokens.all? { |token| token.match?(/\A[1-9]\d*\z/) }
+      by.match?(/\Ahuman:\S+\z/) && Facility.statuses.key?(status) && args[:ids].present?
 
-    ids = tokens.map(&:to_i).uniq
-    facilities = Facility.where(id: ids).index_by(&:id)
-    abort "No facility #{(ids - facilities.keys).join(', ')}" if (ids - facilities.keys).any?
-    # One quote backs them all, so they must be one plant: a site and its units.
-    sites = facilities.values.map { |facility| facility.parent_id || facility.id }.uniq
-    abort "These aren't one plant (a site and its units), so one quote can't back them all: #{ids.join(', ')}" if sites.many?
-    source = Source.where(source_kind: "nrc_power_status").order(fetched_at: :desc).first or abort "NRC's status file hasn't been fetched"
-    text = source.content_text.to_s
-    first = facilities.fetch(ids.first)
-    dated = ->(line) { Time.strptime(line.split("|").first.to_s, "%m/%d/%Y %I:%M:%S %p") rescue Time.at(0) }
-    quote = ENV["QUOTE"].presence || text.lines.map(&:strip).grep(/\|#{Regexp.escape(first.name)}\|/i).max_by(&dated)
+    plan = Directory::StatusChange.plan(ids: args[:ids], status:)
+    first = Facility.find(args[:ids].split.first.to_i)
+    source = Directory::StatusChange.nrc_status_file or abort "NRC's status file hasn't been fetched"
+    quote = ENV["QUOTE"].presence || Directory::StatusChange.nrc_quote(first.name)&.last
     abort "#{first.name} isn't in NRC's status file; give QUOTE=…" if quote.blank?
-    abort "The quote isn't in NRC's status file as last fetched: #{quote}" unless text.include?(quote)
+    abort "The quote isn't in NRC's status file as last fetched: #{quote}" unless source.content_text.to_s.include?(quote)
 
     reason = ENV["REASON"].presence || "NRC's 365-day power status file: #{quote}"
-    ActiveRecord::Base.transaction(requires_new: true) do
-      ids.each do |id|
-        facility = facilities.fetch(id)
-        next puts("#{facility.name} (##{id}) is already #{status}; nothing to change") if facility.status == status
-
-        result = Directory::FactWriter.write(:facility, { id:, status: },
-          evidence: [ { source_id: source.id, quote:, found_by: "human" } ], verification: { status: "verified", by:, reason: })
-        abort "#{facility.name} (##{id}): #{result.errors.to_sentence}" unless result.ok?
-        puts "#{apply ? 'Set' : 'Would set'} #{facility.name} (##{id}): #{facility.status || 'blank'} -> #{status}, quoting \"#{quote}\""
-      end
-      raise ActiveRecord::Rollback unless apply
+    plan = Directory::StatusChange.apply(ids: args[:ids], status:, by:, reason:, source_id: source.id, quote:) if apply
+    plan.unchanged.each { |same| puts "#{same.name} (##{same.id}) is already #{status}; nothing to change" }
+    plan.changes.each do |change|
+      puts "#{apply ? 'Set' : 'Would set'} #{change.name} (##{change.id}): #{change.from || 'blank'} -> #{status}, quoting \"#{quote}\""
     end
     puts "Dry run: nothing changed. Add APPLY=1 to set it." unless apply
+  rescue Directory::StatusChange::Invalid => error
+    abort error.message
   end
 end

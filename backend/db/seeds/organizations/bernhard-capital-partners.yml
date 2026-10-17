@@ -10,11 +10,16 @@ hq:
   confidence: 1.0
 country_code: null
 status: active
-roles: []
+roles:
+- key: venture_capital
+  source_url: https://alliedpwr.com/?p=6158
+  quote: In November 2020, the Company was acquired by Bernhard Capital Partners, a services and infrastructure-focused private equity management firm investing in middle market businesses providing essential services to owners of critical infrastructure.
+  published: '2023-02-09'
+  confidence: 0.8
 technologies: []
 relationships: []
 facilities: []
-notes: 'Private equity owner of Allied Power (acquired Nov 2020) per Allied Power''s Feb 2023 release, which describes it as ''a services and infrastructure-focused private equity management firm established in 2013''. Not tagged venture_capital (private equity). country_code left blank: no fetched page states its country/HQ. #63: ROLE NEEDS REVIEW: firm is private equity, not venture capital; venture_capital is the closest allowed key. Drop it if the taxonomy should stay strict. HQ source is Baton Rouge Business Report (local business press; meta description). Firm site gives only an email contact.'
+notes: 'Private equity owner of Allied Power (acquired Nov 2020) per Allied Power''s Feb 2023 release, which describes it as ''a services and infrastructure-focused private equity management firm established in 2013''. Tagged venture_capital (Tosin, 16 Oct 2026, reversing #63: "Invests equity in nuclear companies"; it owns Allied Power, which serves 12 Constellation nuclear plants). It is private equity, not venture capital, so confidence 0.8. country_code left blank: no fetched page states its country/HQ. #63: ROLE NEEDS REVIEW: firm is private equity, not venture capital; venture_capital is the closest allowed key. Drop it if the taxonomy should stay strict. HQ source is Baton Rouge Business Report (local business press; meta description). Firm site gives only an email contact.'
 description:
   text: Private equity firm, founded in 2013, that invests in services and infrastructure businesses.
   source_url: https://www.bernhardcapital.com/about

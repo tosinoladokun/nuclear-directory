@@ -21,8 +21,8 @@ module Seed
     class Error < StandardError; end
 
     VERIFICATION = { status: "verified", by: "human:tosin" }.freeze
-
-    attr_reader :results
+    # A row's state across its writes: the first listed wins.
+    STATES = %i[created changed unchanged].freeze
 
     FACILITY_FIELDS = %w[facility_type status city state].freeze
 
@@ -30,8 +30,19 @@ module Seed
     def initialize(dir, facilities: File.join(File.dirname(dir), "facilities.yml"))
       @files = Dir[File.join(dir, "*.yml")].sort
       @facilities_file = facilities
-      @results = Hash.new { |h, kind| h[kind] = { created: 0, updated: 0 } }
+      # What happened to each row written: { [kind, id] => :created | :changed | :unchanged }.
+      @rows = {}
       @errors = []
+    end
+
+    # Per kind, the rows the seed created, changed (an existing fact it
+    # changed) and left unchanged (only restated), so a re-seed's report
+    # shows what moved (#301). Each row counts once, however many writes it
+    # took: created over changed over unchanged.
+    def results
+      @rows.each_with_object(Hash.new { |h, kind| h[kind] = { created: 0, changed: 0, unchanged: 0 } }) do |((kind, _id), state), counts|
+        counts[kind][state] += 1
+      end
     end
 
     # Dry run: every name, alias or domain in the files that the database
@@ -206,6 +217,30 @@ module Seed
       # merged into this one, attributed to the seed's human, so its aliases
       # and facts move here instead of colliding. Nothing to do on a fresh
       # database, or once merged.
+      # One row's state, keeping the strongest seen this load (STATES).
+      def count(kind, id, state)
+        key = [ kind, id ]
+        @rows[key] = [ state, @rows[key] ].compact.min_by { |seen| STATES.index(seen) }
+      end
+
+      # A merge changes both companies, and moves (or rejects, as a
+      # duplicate) the former one's open links: each counts as changed, even
+      # when a later write only restates it. A rejected or unpublished link
+      # stays as it was decided, so it isn't counted.
+      def count_merge(former_id, target_id)
+        former = Organization.find(former_id)
+        open = ->(scope) { scope.where.not(verification_status: Verifiable::CLOSED_STATUSES).ids }
+        moved = { organization_role: open.(former.organization_roles), organization_technology: open.(former.organization_technologies),
+          facility_relationship: open.(former.facility_relationships),
+          relationship: open.(Relationship.where(from_organization_id: former_id).or(Relationship.where(to_organization_id: former_id))) }
+        yield.tap do |result|
+          next unless result.ok?
+
+          [ former_id, target_id ].each { |id| count(:organization, id, :changed) }
+          moved.each { |kind, ids| ids.each { |id| count(kind, id, :changed) } }
+        end
+      end
+
       def merge_former_organizations(slug, doc)
         Array(doc["merges"]).each do |name|
           former = Directory::Lookup.organization(name:) or next
@@ -214,8 +249,10 @@ module Seed
           next if former.verification_status == "unpublished" # merged on an earlier load
           next @errors << "#{slug}: can't merge #{name.inspect}: #{doc["name"].inspect} isn't loaded yet" unless target
 
-          result = Directory::FactWriter.merge_organization(from_id: former.id, into_id: target.id, by: VERIFICATION[:by],
-            reason: "One company per brand (decision #23): #{name} is part of #{doc["name"]}")
+          result = count_merge(former.id, target.id) do
+            Directory::FactWriter.merge_organization(from_id: former.id, into_id: target.id, by: VERIFICATION[:by],
+              reason: "One company per brand (decision #23): #{name} is part of #{doc["name"]}")
+          end
           @errors << "#{slug}: merging #{name.inspect}: #{result.errors.join("; ")}" unless result.ok?
         end
       end
@@ -308,7 +345,7 @@ module Seed
         verification = hold ? { status: "pending", by: VERIFICATION[:by], reason: hold } : (VERIFICATION unless pending)
         result = Directory::FactWriter.write(kind, attributes, evidence: Array.wrap(evidence), verification:, remove_aliases:)
         if result.ok?
-          @results[kind][result.created ? :created : :updated] += 1
+          count(kind, result.id, result.created ? :created : (result.changed ? :changed : :unchanged))
         else
           @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type]}: " \
             "#{result.errors.join("; ")}"

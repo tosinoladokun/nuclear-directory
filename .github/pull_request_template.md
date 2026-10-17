@@ -11,5 +11,8 @@ Closes #
 ## Tests
 <!-- What you ran and what it showed. For a UI change: add the "preview" label and phone (390px) and desktop screenshots. -->
 
+## Rehearsal output
+<!-- Data PRs only (the seed, its loader, or db/data/): paste `bin/deploy-data --dry-run` from a restored backup. The deploy posts its own report on this PR to compare. Otherwise delete this section. -->
+
 ## After merge
 <!-- Anything someone has to do by hand (Render setting, seed, label), or "Nothing." -->

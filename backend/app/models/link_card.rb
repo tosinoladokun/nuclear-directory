@@ -27,13 +27,15 @@ class LinkCard
 
   # squares: colours; label: the mono line beside them; name: drawn in
   # Anton; subline: the line under the name ([text, :role] or [text, :tagline]);
-  # footer_left: the wordmark, or text; footer_right: the facts.
+  # footer_left: the wordmark, or text; footer_right: the facts;
+  # footer_short: a shorter first fact, drawn when footer_right's first
+  # fact doesn't fit whole (the alt text keeps footer_right).
   # name_sizes: the steps tried for the name (the default card's is fixed).
-  attr_reader :squares, :label, :name, :subline, :footer_left, :footer_right, :name_sizes
+  attr_reader :squares, :label, :name, :subline, :footer_left, :footer_right, :footer_short, :name_sizes
 
-  def initialize(squares:, name:, label: nil, subline: nil, footer_left: :wordmark, footer_right: nil, name_sizes: NAME_SIZES)
+  def initialize(squares:, name:, label: nil, subline: nil, footer_left: :wordmark, footer_right: nil, footer_short: nil, name_sizes: NAME_SIZES)
     @squares, @label, @name, @subline, @footer_left, @footer_right = squares, label, name, subline, footer_left, footer_right
-    @name_sizes = name_sizes
+    @footer_short, @name_sizes = footer_short, name_sizes
   end
 
   def self.helpers = ApplicationController.helpers
@@ -42,12 +44,16 @@ class LinkCard
     type = helpers.facility_type_label(profile.facility_type)
     label = [ type, US_STATES[profile.state.to_s] || profile.state.presence ].compact.join(" · ").presence
     reactors = %w[power_reactor research_reactor].include?(profile.facility_type.to_s)
-    units = profile.units.size
     capacity = "#{helpers.number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if profile.capacity_mw
-    facts = [ (helpers.pluralize(units, reactors ? "reactor" : "unit") if units.positive?), capacity ].compact.join(" · ").presence
+    noun = reactors ? "reactor" : "unit"
+    statuses = profile.units.map(&:status)
+    facts = [ helpers.units_summary(statuses, noun:), capacity ].compact.join(" · ").presence
+    # "3 reactors, 2 operating" when the statuses don't fit the image whole.
+    operating = statuses.count("operating")
+    short = [ helpers.pluralize(statuses.size, noun), ("#{operating} operating" if operating.positive?) ].compact.join(", ") if statuses.any?
     roles = { "Operated by" => profile.current_companies_for("operates").map(&:name), "Owned by" => profile.current_companies_for("owns").map(&:name) }
     new(squares: [ CATEGORY_COLORS["plants"] ], label:, name: profile.name, subline: roles.values.any?(&:any?) ? [ roles, :role ] : nil,
-      footer_right: facts)
+      footer_right: facts, footer_short: short)
   end
 
   def self.for_company(profile)
@@ -78,7 +84,7 @@ class LinkCard
       footer_left: "Companies · plants and sites · deals", footer_right: "nuclear-directory.org")
   end
 
-  def to_h = { v: VERSION, squares:, label:, name:, subline:, footer_left:, footer_right:, name_sizes: }
+  def to_h = { v: VERSION, squares:, label:, name:, subline:, footer_left:, footer_right:, footer_short:, name_sizes: }
 
   def digest = @digest ||= Digest::SHA256.hexdigest(to_h.to_json)[0, 16]
 
@@ -185,7 +191,8 @@ class LinkCard
     # [left text, its style, the facts as drawn]. Text on both sides keeps
     # 48px between them, the left at 26px if need be (Design). Whole facts
     # are dropped from the end before one is cut ("Operates 1 plant", not
-    # "Operates 1 plant · Owns stakes in 2…").
+    # "Operates 1 plant · Owns stakes in 2…"); a first fact too long to fit
+    # whole gives way to footer_short ("3 reactors, 2 operating").
     def footer_drawn
       left_style = footer_left == :wordmark ? WORDMARK : FACTS
       left = footer_left == :wordmark ? "NUCLEAR DIRECTORY" : footer_left
@@ -197,6 +204,7 @@ class LinkCard
 
       room = TEXT_WIDTH - Font.width(left, **left_style) - FOOTER_GAP
       facts = footer_right.split(" · ")
+      facts[0] = footer_short if footer_short && Font.width(facts.first, **FACTS) > room
       facts.pop while facts.size > 1 && Font.width(facts.join(" · "), **FACTS) > room
       [ left, left_style, Font.fit(facts.join(" · "), room, **FACTS) ]
     end

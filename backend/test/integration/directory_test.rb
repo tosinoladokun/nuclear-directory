@@ -15,11 +15,11 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
   test "a pending site's row shows its name and verified units, not its own type or place" do
     site = Facility.create!(name: "Quiet Station", verification_status: "pending", facility_type: "power_reactor", status: "planned", city: "Nowhere", state: "OR")
-    Facility.create!(name: "Quiet Unit 1", parent: site, verification_status: "verified", verified_by: "human:test", capacity_mw: 300)
+    Facility.create!(name: "Quiet Unit 1", parent: site, verification_status: "verified", verified_by: "human:test", capacity_mw: 300, status: "operating")
     get companies_path(category: "plants")
 
     assert_select ".nd-listrow", text: /Quiet Station/ do
-      assert_select ".nd-listrow__desc", "1 unit · 300 MW"
+      assert_select ".nd-listrow__desc", "1 operating unit · 300 MW", "the pending site's own status isn't shown, so the unit's is"
     end
     assert_select "body", text: /Nowhere|Planned/, count: 0
   end
@@ -120,14 +120,20 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "#plants-heading", count: 0
   end
 
-  test "a site row shows its verified units and their total capacity" do
+  test "a site row shows its verified units and their operating units' capacity" do
     vogtle = Facility.find_by!(name: "Plant Vogtle")
-    plant("Vogtle Unit 3", parent: vogtle, capacity_mw: 1117)
-    plant("Vogtle Unit 4", parent: vogtle, capacity_mw: 1117.5)
-    plant("Vogtle Unit 5", parent: vogtle, capacity_mw: 999, verified: false)
+    plant("Vogtle Unit 3", parent: vogtle, capacity_mw: 1117, status: "operating")
+    plant("Vogtle Unit 4", parent: vogtle, capacity_mw: 1117.5, status: "operating")
+    plant("Vogtle Unit 5", parent: vogtle, capacity_mw: 999, status: "operating", verified: false)
     get companies_path(category: "plants")
 
     assert_select "a.nd-listrow[href='/plants/plant-vogtle'] .nd-listrow__desc", "Power plant · Operating · 2 units · 2,234.5 MW"
+
+    plant("Vogtle Unit 1", parent: vogtle, capacity_mw: 500, status: "decommissioning")
+    get companies_path(category: "plants")
+
+    assert_select "a.nd-listrow[href='/plants/plant-vogtle'] .nd-listrow__desc",
+      "Power plant · Operating · 2 operating units, 1 being decommissioned · 2,234.5 MW", "capacity counts operating units only"
   end
 
   test "an unknown filter value is ignored, not applied behind an Any control" do

@@ -70,6 +70,11 @@ docker compose run --rm web bin/rails data_quality:status
 **Guards (#81):**
 - **One run per source kind at a time.** `Pipeline.run` holds a Postgres advisory lock, and a second
   run stops with `Pipeline::AlreadyRunning`. `RunJob` also limits concurrency per source kind in Solid Queue.
+- **No crawl during a data deploy (#301).** Every run also holds the `data_quality:writes` lock shared
+  (`WriteLock`), so runs of different kinds still overlap. A deploy's data steps take it alone:
+  `TASKS="seed:check db:seed" bin/rails data_quality:with_write_lock` waits for running crawls (up to
+  `WAIT_MINUTES`, default 30), then runs the tasks in that one process. A crawl that starts meanwhile stops
+  with `AlreadyRunning` and is retried.
 - **No stuck runs (#188).** Every run is made inside its source kind's lock, so a run of that kind still
   "running" while the lock is held belongs to a process that died (a restart, or running out of memory).
   Each run first marks those as failed ("Abandoned…"). In production the hourly `CatchUpJob` does the same

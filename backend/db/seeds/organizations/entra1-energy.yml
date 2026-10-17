@@ -7,7 +7,12 @@ website: https://entra1.com
 hq: null
 country_code: US
 status: active
-roles: []
+roles:
+- key: project_developer
+  source_url: https://www.sec.gov/Archives/edgar/data/1822966/000182296623000242/a2023-10x06xstandardpowe.htm
+  quote: ENTRA1 develops, finances, owns and operates energy production plants powered by the NuScale SMR Technology
+  published: '2023-10-06'
+  confidence: 0.9
 technologies:
 - key: smr
   source_url: https://www.sec.gov/Archives/edgar/data/1822966/000182296623000242/a2023-10x06xstandardpowe.htm
@@ -15,7 +20,7 @@ technologies:
   confidence: 0.9
 relationships: []
 facilities: []
-notes: 'entra1.com renders with JavaScript; only its meta description was readable in the raw HTML (used for the description). No category given: the site does not say it designs reactors or operates plants today, and the only "operates" claim is the 2023 SEC boilerplate ("ENTRA1 develops, finances, owns and operates energy production plants powered by the NuScale SMR Technology"). country_code US rests on the same exhibit: "ENTRA1 Energy LLC is an American independent global energy production company" (SEC, not char-verified live; matched against a copy fetched earlier this session). Developer partner on the Standard Power plan (standard-power.yml).'
+notes: 'entra1.com renders with JavaScript; only its meta description was readable in the raw HTML (used for the description). Category project_developer (Tosin, 16 Oct), from the 2023 SEC boilerplate ("ENTRA1 develops, finances, owns and operates energy production plants powered by the NuScale SMR Technology"); the site does not say it designs reactors or runs a plant today. country_code US rests on the same exhibit: "ENTRA1 Energy LLC is an American independent global energy production company" (SEC, not char-verified live; matched against a copy fetched earlier this session). Developer partner on the Standard Power plan (standard-power.yml).'
 description:
   text: Energy company deploying baseload power infrastructure across nuclear, natural gas and other sources.
   source_url: https://entra1.com/

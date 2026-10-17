@@ -1,15 +1,15 @@
 <%# One power plant or site in a list. Locals:
     facility:    a Facility (a site). When it comes from DirectoryListing it
-                 also carries units_count and units_capacity_mw from its
-                 verified units.
+                 also carries units_statuses and units_capacity_mw (its
+                 operating units') from its verified units.
     connections: number of verified links (optional)
     Type, status, units, capacity and place are left out when not known; a
     pending site (public for a verified unit) shows only its units' facts. %>
 <% own = facility.verified? %>
-<% units = facility.try(:units_count).to_i %>
+<% units = units_summary(Array(facility.try(:units_statuses)), shown_status: (facility.status if own)) %>
 <% capacity = facility.try(:units_capacity_mw) %>
 <% kind = [ (facility_type_label(facility.facility_type) if own), (facility_status_label(facility.status) if own),
-            (pluralize(units, "unit") if units.positive?),
+            units,
             ("#{number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if capacity.present?) ].compact.join(" · ").presence %>
 <% where = place(facility.city, facility.state) if own %>
 <% connections = local_assigns[:connections] %>

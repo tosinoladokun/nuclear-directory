@@ -46,6 +46,7 @@ module DirectoryHelper
     "enrichment" => "Enrichment",
     "fabrication" => "Fuel fabrication",
     "reactor_vendor" => "Reactor developer",
+    "project_developer" => "Project developer",
     "reactor_services" => "Repair and services",
     "utility" => "Utility",
     "operator" => "Plant operator",
@@ -133,10 +134,36 @@ module DirectoryHelper
     [ [ profile.name, place(profile.city, profile.state) ].compact.join(", "), who ].compact.join(": ")
   end
 
+  UNIT_STATUS_ORDER = %w[operating not_operating under_construction planned shut_down decommissioning].freeze
+
+  # A plant's units by status, operating first, leaving out statuses no
+  # unit has (PM, 16 Oct): "4 operating units", "2 operating units,
+  # 1 being decommissioned", "1 unit, not operating", "3 units: 2 shut
+  # down, 1 being decommissioned". A unit with no stated status counts as
+  # "not stated"; with only those, just the number. noun: "reactor" on
+  # link cards. shown_status: the plant's own status, when the same line
+  # already says it; if every unit shares it, only the number is given
+  # ("Operating · 4 units", not "Operating · 4 operating units").
+  def units_summary(statuses, noun: "unit", shown_status: nil)
+    return if statuses.empty?
+    return pluralize(statuses.size, noun) if shown_status.present? && statuses.all?(shown_status.to_s)
+
+    groups = statuses.map(&:presence).tally.sort_by { |status, _| UNIT_STATUS_ORDER.index(status) || UNIT_STATUS_ORDER.size }
+    parts = groups.map do |status, count|
+      status == "operating" ? pluralize(count, "operating #{noun}") : "#{count} #{status ? facility_status_label(status).downcase : "not stated"}"
+    end
+    return parts.join(", ") if groups.first.first == "operating"
+
+    total = pluralize(statuses.size, noun)
+    return total if groups.one? && groups.first.first.nil?
+
+    groups.one? ? "#{total}, #{parts.first.delete_prefix("#{statuses.size} ")}" : "#{total}: #{parts.join(", ")}"
+  end
+
   # Two sentences, with a full stop between them unless the first has one.
   # A plant's link preview and meta description (#246), from published facts
   # only, each left out when it isn't known:
-  #   "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 units, 4,536 MW.
+  #   "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 operating units, 4,536 MW.
   #    Owned by Georgia Power and 3 others; operated by Southern Nuclear."
   # Kept under PREVIEW_LIMIT characters: a long owner list becomes "<first>
   # and <n> others", then the units and capacity go, then owners.
@@ -151,9 +178,8 @@ module DirectoryHelper
     where = full_place(profile.city, profile.state)
     what = kind ? [ kind, (where && "in #{where}") ].compact.join(" ") : (where && "In #{where}")
     what = what ? "#{what}, not operating" : "Not operating" if idle
-    units = profile.units.size
     capacity = "#{number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if profile.capacity_mw
-    size = [ (pluralize(units, "unit") if units.positive?), capacity ].compact.join(", ").presence
+    size = [ units_summary(profile.units.map(&:status), shown_status: profile.status), capacity ].compact.join(", ").presence
     owners = profile.current_companies_for("owns").map(&:name)
     operators = profile.current_companies_for("operates").map(&:name)
     # Lists as the site writes them, without a serial comma ("A, B and C").

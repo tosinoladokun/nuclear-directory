@@ -21,8 +21,11 @@ module Directory
   class FactWriter
     # conflicts: { "state" => [stored, incoming] } when a write disagreed with a
     # human-reviewed fact (see protect_human_verified); nothing was written.
-    Result = Data.define(:kind, :id, :created, :errors, :conflicts) do
-      def initialize(kind:, id:, created:, errors:, conflicts: {}) = super
+    # changed: the write changed something (a value, its decision, an alias
+    # or a piece of evidence); false when it only restated the fact (#301:
+    # seed counts say what a re-seed actually changed).
+    Result = Data.define(:kind, :id, :created, :errors, :conflicts, :changed) do
+      def initialize(kind:, id:, created:, errors:, conflicts: {}, changed: created) = super
       def ok? = errors.empty? && conflicts.empty?
       def conflict? = conflicts.any?
     end
@@ -509,17 +512,20 @@ module Directory
       end
 
       record = nil
-      created = false
+      created = changed = false
       ActiveRecord::Base.transaction(requires_new: true) do
         # Checked before anything changes, even for a curated record whose
         # verification won't be applied: a bad key must never pass silently.
         check_verification!(verification) if verification
         record = find(kind, spec[:model], attributes) || spec[:model].new
         created = record.new_record?
+        @evidence_changed = @aliases_changed = false
         # Locked, so a human's decision made while this write runs is seen
         # before the checks below, and two decisions at once are recorded in
         # the order they happen.
         record.lock! unless created
+        # What it was, read under the lock, so `changed` is about this write alone.
+        before = record.attributes.except("updated_at") unless created
         # A rejected or unpublished fact only changes by a human's hand:
         # protected writes never change it, and any other write must carry a
         # human's decision (verification: { by: "human:…" }), so the change is
@@ -563,6 +569,7 @@ module Directory
           dropped = Array(remove_aliases).map { |name| OrganizationAlias.normalize(name) } - [ OrganizationAlias.normalize(record.name) ]
           record.aliases.where(normalized_alias: dropped).delete_all if dropped.any?
           aliases_after = record.aliases.reload.pluck(:alias).sort
+          @aliases_changed = aliases_after != aliases_before
           edited["aliases"] = [ aliases_before, aliases_after ] if edited && aliases_after != aliases_before
         end
         if kind == :facility
@@ -571,14 +578,17 @@ module Directory
           record.aliases.where(normalized_alias: FacilityAlias.normalize(record.name)).delete_all
           write_facility_aliases(record, attributes[:aliases])
           aliases_after = record.aliases.reload.pluck(:alias).sort
+          @aliases_changed = aliases_after != aliases_before
           edited["aliases"] = [ aliases_before, aliases_after ] if edited && aliases_after != aliases_before
         end
         Array(evidence).each { |item| write_evidence(record, item) }
         apply_verification(record, verification, edited:) if verification && !curated
         record.recompute_confidence!
+        # Still under the lock, so another writer can't make a restatement look like a change, or the reverse.
+        changed = created || @evidence_changed || @aliases_changed || before != record.reload.attributes.except("updated_at")
       end
 
-      Result.new(kind:, id: record.id, created:, errors: [])
+      Result.new(kind:, id: record.id, created:, errors: [], changed:)
     rescue Conflict => e
       Result.new(kind:, id: e.id, created: false, errors: [ e.message ], conflicts: e.conflicts)
     rescue Invalid, ArgumentError => e
@@ -776,6 +786,7 @@ module Directory
 
         row = record.evidence.find_or_initialize_by(source_id: item[:source_id], quote: item[:quote])
         row.assign_attributes(item.slice(:found_by, :confidence, :crawl_run_id))
+        @evidence_changed = true if row.new_record? || row.changed?
         row.save!
       end
 

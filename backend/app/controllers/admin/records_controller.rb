@@ -148,8 +148,12 @@ class Admin::RecordsController < Admin::BaseController
 
     # A site's capacity is the sum of its units, never stored (DATA.md), so a
     # site with units has none to edit; a standalone reactor keeps its own.
+    # A plant's status is changed with its evidence, in Change status (#316).
     def editable_fields
       fields = @fact.values.reject { |name, value| NOT_EDITED.include?(name) || value.is_a?(Array) || value.is_a?(Hash) }.keys
-      @fact.type == "Facility" && Facility.exists?(parent_id: @fact.id) ? fields - %w[capacity_mw] : fields
+      return fields unless @fact.type == "Facility"
+
+      fields -= %w[status]
+      Facility.exists?(parent_id: @fact.id) ? fields - %w[capacity_mw] : fields
     end
 end

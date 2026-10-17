@@ -29,6 +29,13 @@ class DataQuality::DirectoryClient
     def conflict? = conflicts.any?
   end
 
+  # A plant's status change (#316): plan is Directory::StatusChange's Plan
+  # (changes, unchanged, operating_before, operating_after), or error says
+  # why it can't be made.
+  StatusResult = Data.define(:plan, :error) do
+    def ok? = error.nil?
+  end
+
   # Kinds whose payload names other records instead of carrying attributes;
   # the match stage resolves those names to ids and writes the fact.
   LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship].freeze
@@ -351,6 +358,19 @@ class DataQuality::DirectoryClient
     write_result(result)
   end
 
+  # What setting these plant records (a site and its units) to status would
+  # change, without writing. Returns a StatusResult.
+  def status_change_plan(ids:, status:) = status_result { status_change.plan(ids:, status:) }
+
+  # Sets their status as `by`'s decision (Directory::StatusChange.apply).
+  # Returns a StatusResult.
+  def set_status(ids:, status:, by:, reason:, source_id: nil, quote: nil)
+    status_result { status_change.apply(ids:, status:, by:, reason:, source_id:, quote:) }
+  end
+
+  # NRC's power status file's newest line for this plant: [source_id, quote], or nil.
+  def nrc_status_quote(name) = status_change.nrc_quote(name)
+
   # A human removes one piece of evidence from a fact (see
   # Directory::FactWriter#remove_evidence). Returns a WriteResult.
   def remove_evidence(type:, id:, evidence_id:, source_id:, quote:, by:, reason:)
@@ -403,6 +423,13 @@ class DataQuality::DirectoryClient
     # Resolved lazily so the module has no load-time dependency on the directory.
     def lookup = @lookup ||= "Directory::Lookup".constantize
     def fact_writer = @fact_writer ||= "Directory::FactWriter".constantize
+    def status_change = "Directory::StatusChange".constantize
+
+    def status_result
+      StatusResult.new(plan: yield, error: nil)
+    rescue status_change::Invalid => error
+      StatusResult.new(plan: nil, error: error.message)
+    end
 
     # Read once and reused for every brand check, until a facility or company is written.
     def plant_names = @plant_names ||= lookup.plant_names(owners: owner_hints)

@@ -1,0 +1,7 @@
+# Production data: once merged, bin/deploy-data writes these to production
+# on deploy (#301). Listed for visibility; Tosin's merge is the approval.
+/backend/db/seeds.rb @tosinoladokun
+/backend/db/seeds/ @tosinoladokun
+/backend/db/data/ @tosinoladokun
+/backend/lib/seed/ @tosinoladokun
+/backend/app/directory/fact_writer.rb @tosinoladokun

@@ -12,7 +12,7 @@ roles: []
 technologies: []
 relationships: []
 facilities: []
-notes: 'HQ not set: the company page fetched does not state it. Google power deal (Duane Arnold) is recorded in google.yml (#253).'
+notes: 'HQ not set: the company page fetched does not state it. Parent of Florida Power & Light (subsidiary_of link in florida-power-light-co.yml, #322); it does not inherit FPL''s buckets. Google power deal (Duane Arnold) is recorded in google.yml (#253).'
 description:
   text: Energy company building generation of all kinds, including nuclear.
   source_url: https://www.nexteraenergy.com/company.html

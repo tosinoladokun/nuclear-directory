@@ -1,0 +1,27 @@
+# Seed research for #322 (no-bucket review) - 2026-10-16. Quotes copied from raw page text fetched this session.
+# Created by the NRC crawler on 12 Oct (operator of St. Lucie and Turkey Point); this file adds its parent.
+name: Florida Power & Light Co.
+legal_name: Florida Power & Light Company
+aliases:
+- FPL
+website: https://www.fpl.com
+hq: null
+country_code: US
+status: active
+roles: []
+technologies: []
+relationships:
+- type: subsidiary_of
+  to: NextEra Energy
+  description: FPL is a subsidiary of NextEra Energy, Inc.
+  source_url: https://www.fpl.com/about/company-profile.html
+  quote: FPL is a subsidiary of Juno Beach, Florida-based NextEra Energy, Inc.
+  confidence: 1.0
+facilities: []
+notes: 'Display name kept as the crawler made it; the brand question (Florida Power & Light vs the record''s "Co.") is separate. Its operator links to St. Lucie and Turkey Point come from NRC''s list and put it in Utilities and operators. NextEra Energy does not inherit FPL''s buckets (Tosin, 16 Oct: no parent inheritance); this link only shows the family on both pages. HQ not set: the profile names NextEra''s city (Juno Beach), not FPL''s.'
+description:
+  text: Electric utility serving about 12 million people across Florida, with a fleet that includes nuclear, natural gas, solar and battery storage.
+  source_url: https://www.fpl.com/about/company-profile.html
+  quote: Florida Power & Light Company is America’s largest electric utility, delivering reliable power to more than 6 million customer accounts — serving approximately 12 million people across Florida.
+  also:
+  - quote: By leveraging a diverse energy mix, including nuclear, natural gas, solar and battery storage, FPL operates one of the most fuel- and cost-efficient power generation fleets in the U.S.

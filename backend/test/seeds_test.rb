@@ -40,13 +40,13 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 68, Organization.verified.count
-    assert_equal 79, OrganizationRole.verified.count
+    assert_equal 69, Organization.verified.count
+    assert_equal 84, OrganizationRole.verified.count
     assert_equal 57, OrganizationTechnology.verified.count
-    assert_equal 70, Relationship.verified.count
+    assert_equal 71, Relationship.verified.count
     assert_equal 35, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 55, 8 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal [ 55, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal 26, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
@@ -113,6 +113,10 @@ class SeedsTest < ActiveSupport::TestCase
       hermes.slice(:facility_type, :status, :city, :state).values
     assert hermes.evidence.count >= 4, "one evidence row per sourced field"
 
+    # A city only where a source says the site is in it (#225); "near" a town isn't a city.
+    assert_equal [ "Palo", "IA" ], Facility.find_by!(name: "Duane Arnold Energy Center").slice(:city, :state).values
+    assert_nil Facility.find_by!(name: "White Mesa Mill").city, "its source says only near Blanding"
+
     vogtle = Facility.find_by!(name: "Plant Vogtle")
     shares = vogtle.facility_relationships.owns.includes(:organization).to_h { |l| [ l.organization.name, l.ownership_pct.to_f ] }
     assert_equal({ "Georgia Power" => 45.7, "Oglethorpe Power" => 30.0, "MEAG Power" => 22.7, "Dalton Utilities" => 1.6 }, shares)
@@ -125,12 +129,13 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal [ "American Centrifuge Plant" ], doe.facility_relationships.owns.verified.joins(:facility).pluck("facilities.name")
     assert_equal [ "Advanced Test Reactor", "High Flux Isotope Reactor" ],
       doe.facility_relationships.owns.pending.joins(:facility).pluck("facilities.name").sort
-    long_mott = Organization.find_by!(slug: "long-mott-energy").facility_relationships.owns.sole
-    assert long_mott.pending?
-    assert_equal 1, long_mott.evidence.count, "its quote is kept as evidence"
+    # Long Mott Energy's unsupported owns link was dropped (#322); it's a project developer instead.
+    long_mott = Organization.find_by!(slug: "long-mott-energy")
+    assert_empty long_mott.facility_relationships
+    assert_equal [ "project_developer" ], long_mott.roles.pluck(:key)
   end
 
-  test "the approved #63 calls: descriptions and HQs, no NRC description, no Bernhard role" do
+  test "the approved #63 calls: descriptions and HQs, no NRC description; Bernhard an investor since 16 Oct" do
     load_seeds
 
     centrus = Organization.find_by!(slug: "centrus-energy")
@@ -140,7 +145,8 @@ class SeedsTest < ActiveSupport::TestCase
     nrc = Organization.find_by!(slug: "us-nuclear-regulatory-commission")
     assert_nil nrc.description
     assert_equal [ "Rockville", "MD" ], [ nrc.hq_city, nrc.hq_state ]
-    assert_empty Organization.find_by!(slug: "bernhard-capital-partners").roles
+    # Tosin reversed #63 on 16 Oct 2026: it owns Allied Power, a nuclear services company.
+    assert_equal [ "venture_capital" ], Organization.find_by!(slug: "bernhard-capital-partners").roles.pluck(:key)
   end
 
   test "CFS and Dominion share one ARC facility" do

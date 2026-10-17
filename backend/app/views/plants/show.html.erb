@@ -41,7 +41,8 @@
             [ buyers.size > 1 ? "Power buyers" : "Power buyer", company_links.(buyers), cited.("offtakes_from") ],
             [ "Technology", p.technologies.join(", ").presence, details_cited ],
             [ p.reactor_types.size > 1 ? "Reactor types" : "Reactor type", p.reactor_types.join(", ").presence, details_cited ],
-            [ "Capacity", capacity, details_cited, "Net summer capacity, from EIA" ],
+            [ "Capacity", capacity, details_cited,
+              p.capacity_leaves_out_units? ? "Net summer capacity of operating units, from EIA" : "Net summer capacity, from EIA" ],
             [ "NRC docket", p.nrc_docket, p.site_citations ]
           ] %>
     </div>

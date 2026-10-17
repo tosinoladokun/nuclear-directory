@@ -37,10 +37,12 @@ class DirectoryListing
     ordered(company_scope.select("organizations.*", "(#{company_connections_sql}) AS connections_count"), "organizations.name")
   end
 
-  # Each site also gets #units_count and #units_capacity_mw, from its published units.
+  # Each site also gets #units_statuses (one per published unit, for
+  # units_summary) and #units_capacity_mw, the sum of its operating units'.
   def plants
     ordered(plant_scope.select("facilities.*", "(#{plant_connections_sql}) AS connections_count",
-      "(#{units_sql("COUNT(*)")}) AS units_count", "(#{units_sql("SUM(u.capacity_mw)")}) AS units_capacity_mw"), "facilities.name")
+      "ARRAY(#{units_sql("u.status")}) AS units_statuses",
+      "(#{units_sql("SUM(u.capacity_mw) FILTER (WHERE u.status = 'operating')")}) AS units_capacity_mw"), "facilities.name")
   end
 
   # Companies are listed unless the Plants and sites category is chosen.

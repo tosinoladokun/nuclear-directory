@@ -343,6 +343,8 @@
 
   /* .nd-field and .nd-input are the shared ones from the corrections form (#103). */
   .nd-check { width: 18px; height: 18px; accent-color: var(--nd-ink); cursor: pointer; }
+  /* A checkbox or radio with its words: the whole row is a 44px tap area (Design, #316). */
+  .nd-choice { min-height: 44px; cursor: pointer; }
 
   .nd-items { list-style: none; margin: 0; padding: 0; border-top: var(--nd-hairline) solid var(--nd-rule); }
   .nd-item { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--nd-space-3) var(--nd-space-4); padding: var(--nd-space-4) 0; border-bottom: var(--nd-hairline) solid var(--nd-rule); }

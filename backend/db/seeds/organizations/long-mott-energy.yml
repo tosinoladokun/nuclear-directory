@@ -8,7 +8,12 @@ website: null
 hq: null
 country_code: US
 status: active
-roles: []
+roles:
+- key: project_developer
+  source_url: https://www.govinfo.gov/content/pkg/FR-2025-05-16/html/2025-07729.htm
+  quote: Long Mott Energy, LLC., a wholly owned subsidiary of the Dow Chemical Company, filed an application for a construction permit for a four-unit power reactor facility to be located in Calhoun County, Texas
+  published: '2025-05-16'
+  confidence: 1.0
 technologies:
 - key: smr
   source_url: https://public-inspection.federalregister.gov/2026-10073.pdf
@@ -16,13 +21,5 @@ technologies:
   published: 2026-05
   confidence: 1.0
 relationships: []
-facilities:
-- name: Long Mott Generating Station
-  type: owns
-  source_url: https://www.bicmagazine.com/industry/powergen/nrc-dow-x-energy-nuclear-texas/
-  quote: Long Mott Generating Station is being developed through Dow's wholly owned subsidiary, Long Mott Energy, LLC under the U.S. Department of Energy's Advanced Reactor Demonstration Program (ARDP).
-  published: '2026-05-19'
-  confidence: 0.8
-  pending: true
-  pending_reason: The quote doesn't state ownership directly; pending until a direct quote is found or Tosin accepts this one.
-notes: 'Wholly owned subsidiary of Dow Inc. (Dow not in seed; the seed X-energy notes say Dow was deliberately not added). No standalone website found; Dow''s press release (corporate.dow.com) returned 403. No role key fits well (project owner/developer); roles left empty. Alternative: add Dow Inc. instead and model LME as an alias. #60 (Long Mott Generating Station owns): ''owns'' inferred from LME being the developer and NRC construction-permit applicant (''issuance of a construction permit (CP) to Long Mott Energy, LLC (LME)'', Federal Register). No ownership statement found.'
+facilities: []
+notes: 'Wholly owned subsidiary of Dow Inc. (Dow not in seed; the seed X-energy notes say Dow was deliberately not added). No standalone website found; Dow''s press release (corporate.dow.com) returned 403. Category project_developer (Tosin, 16 Oct), quoted from NRC''s Federal Register notice of its construction-permit application. Alternative: add Dow Inc. instead and model LME as an alias. Owns link to Long Mott Generating Station removed (Data Quality, 16 Oct): no source states ownership, only that the plant is being developed through LME and that LME applied for the construction permit; the pending link is to be rejected in the admin. #60: ''owns'' was inferred from LME being the developer and NRC construction-permit applicant (''issuance of a construction permit (CP) to Long Mott Energy, LLC (LME)'', Federal Register). No ownership statement found.'

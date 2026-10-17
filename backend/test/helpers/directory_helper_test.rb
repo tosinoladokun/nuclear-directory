@@ -6,9 +6,12 @@ class DirectoryHelperTest < ActionView::TestCase
     def current_companies_for(type) = { "owns" => owners, "operates" => operators }.fetch(type).to_a.map { |name| Struct.new(:name).new(name) }
   end
 
+  Unit = Struct.new(:status)
+  def units(*statuses) = statuses.map { |status| Unit.new(status) }
+
   def profile(**overrides)
     Profile.new(name: "Plant Vogtle", status: "operating", facility_type: "power_reactor", city: "Waynesboro", state: "GA",
-      units: Array.new(4), capacity_mw: BigDecimal("4536"), owners: [ "Georgia Power" ], operators: [ "Southern Nuclear" ], **overrides)
+      units: units(*Array.new(4, "operating")), capacity_mw: BigDecimal("4536"), owners: [ "Georgia Power" ], operators: [ "Southern Nuclear" ], **overrides)
   end
 
   test "a plant's preview says what it is, where, how big, and who owns and runs it (#246)" do
@@ -17,7 +20,7 @@ class DirectoryHelperTest < ActionView::TestCase
   end
 
   test "a plant that's not operating says so after the place (#296)" do
-    palisades = profile(name: "Palisades", status: "not_operating", city: "Covert", state: "MI", units: Array.new(1), capacity_mw: nil,
+    palisades = profile(name: "Palisades", status: "not_operating", city: "Covert", state: "MI", units: units("not_operating"), capacity_mw: nil,
       owners: [ "Holtec" ], operators: [ "Holtec" ])
 
     assert_equal "Palisades: Power plant in Covert, Michigan, not operating. 1 unit. Owned by Holtec; operated by Holtec.", plant_preview(palisades)
@@ -48,7 +51,24 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_equal "Blank Site", plant_preview(profile(name: "Blank Site", status: nil, facility_type: nil, city: nil, state: nil,
       units: [], capacity_mw: nil, owners: [], operators: []))
     assert_equal "Gone Plant: In Somewhere, Texas. 1 unit.", plant_preview(profile(name: "Gone Plant", status: nil, facility_type: nil,
-      city: "Somewhere", state: "TX", units: [ 1 ], capacity_mw: nil, owners: [], operators: []))
+      city: "Somewhere", state: "TX", units: units(nil), capacity_mw: nil, owners: [], operators: []))
+  end
+
+  test "units are counted by status, operating first; the plant's own status isn't repeated (PM, 16 Oct)" do
+    assert_equal "4 operating units", units_summary(%w[operating operating operating operating])
+    assert_equal "4 units", units_summary(%w[operating operating operating operating], shown_status: "operating")
+    assert_equal "2 operating units, 1 being decommissioned", units_summary(%w[decommissioning operating operating], shown_status: "operating")
+    assert_equal "1 unit, not operating", units_summary(%w[not_operating])
+    assert_equal "1 unit", units_summary(%w[not_operating], shown_status: "not_operating")
+    assert_equal "3 units: 2 shut down, 1 being decommissioned", units_summary(%w[shut_down decommissioning shut_down])
+    assert_equal "1 operating reactor, 1 not stated", units_summary([ "operating", nil ], noun: "reactor")
+    assert_equal "2 units", units_summary([ nil, "" ])
+    assert_nil units_summary([])
+
+    dresden = profile(name: "Dresden", city: "Morris", state: "IL", units: units("operating", "operating", "decommissioning"),
+      capacity_mw: BigDecimal("1845"), owners: [], operators: [ "Constellation" ])
+    assert_equal "Dresden: Operating power plant in Morris, Illinois. 2 operating units, 1 being decommissioned, 1,845 MW. " \
+      "Operated by Constellation.", plant_preview(dresden)
   end
 
   test "a plant's preview drops the size, then owners, before it would run long" do

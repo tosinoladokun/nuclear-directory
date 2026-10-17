@@ -57,6 +57,11 @@ Rails.application.routes.draw do
       get "merge" => "records#merge", as: :merge
       post "merge" => "records#perform_merge"
     end
+    # Change status on a plant or a unit (#316): the form previews with a GET.
+    scope "facilities/:id/status", as: :facility_status, constraints: { id: /\d+/ } do
+      get "/" => "status_changes#edit"
+      patch "/" => "status_changes#update"
+    end
     resources :candidates, only: %i[index edit update] do
       collection do
         post :approve

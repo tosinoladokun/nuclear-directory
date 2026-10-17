@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Dumps the database, encrypts it with age and uploads it as a release asset
-# to a private GitHub repo, keeping the newest BACKUP_KEEP releases.
+# to a private GitHub repo, keeping the newest BACKUP_KEEP releases. Run daily
+# by the backup cron job and before a data deploy by bin/deploy-data (#301).
 # Runbook: "Backups" in the private backups repo.
 #
 # Env:
@@ -8,13 +9,18 @@
 #   BACKUP_AGE_RECIPIENT  age public key (age1...); only its private half decrypts
 #   BACKUP_REPO           owner/name of the private backups repo
 #   BACKUP_GITHUB_TOKEN   fine-grained token for BACKUP_REPO, Contents read/write
-#   BACKUP_KEEP           releases to keep (default 14)
+#   BACKUP_KEEP           releases to keep of each kind, daily and pre-deploy (default 14)
+#   BACKUP_TAG_SUFFIX     e.g. "predeploy" (bin/deploy-data): tag backup-<time>-predeploy
+#   BACKUP_JQ_DIR         folder with prune_backups.jq and abandoned_drafts.jq
+#                         (default: the cron image's copy)
 #   BACKUP_OUTPUT_DIR     if set, write the file there and skip GitHub (local tests)
 set -euo pipefail
 
 : "${DATABASE_URL:?}" "${BACKUP_AGE_RECIPIENT:?}"
 keep="${BACKUP_KEEP:-14}"
-stamp="$(date -u +%Y-%m-%dT%H%MZ)"
+stamp="$(date -u +%Y-%m-%dT%H%MZ)${BACKUP_TAG_SUFFIX:+-${BACKUP_TAG_SUFFIX}}"
+[[ "$stamp" =~ ^[0-9T:Z-]+(-[a-z]+)?$ ]] || { echo "BACKUP_TAG_SUFFIX must be lowercase letters" >&2; exit 1; }
+jq_dir="${BACKUP_JQ_DIR:-/usr/local/share/backup}"
 name="nuclear-directory-${stamp}.dump.age"
 dir="${BACKUP_OUTPUT_DIR:-$(mktemp -d)}"
 file="${dir}/${name}"
@@ -72,10 +78,11 @@ api() {
 tag="backup-${stamp}"
 releases="https://api.github.com/repos/${BACKUP_REPO}/releases"
 
-# Drafts left by earlier runs whose upload failed: never restorable, so remove.
+# Drafts left by earlier runs whose upload failed: never restorable, so remove
+# them, but not one another run may still be uploading.
 api "${releases}?per_page=100" \
-  | jq -r '.[] | select(.draft and (.tag_name | startswith("backup-"))) | .id' \
-  | while read -r id; do api -X DELETE "${releases}/${id}" > /dev/null; done
+  | jq -r --argjson now "$(date -u +%s)" -f "${jq_dir}/abandoned_drafts.jq" \
+  | while read -r id; do api -X DELETE "${releases}/${id}" > /dev/null || true; done
 
 # Create as a draft, upload, then publish, so a failed upload never leaves an
 # empty release as the newest backup.
@@ -87,11 +94,17 @@ api -X POST -H "Content-Type: application/octet-stream" --data-binary @"$file" \
 api -X PATCH "${releases}/${release_id}" -d '{"draft": false}' > /dev/null
 echo "Uploaded to ${BACKUP_REPO} release ${tag}"
 
-# Prune: keep the newest $keep published backups, delete the rest and their tags.
+# Prune: keep the newest $keep published backups of each kind, delete the rest
+# and their tags.
 api "${releases}?per_page=100" \
-  | jq -r --argjson keep "$keep" -f /usr/local/share/backup/prune_backups.jq \
+  | jq -r --argjson keep "$keep" -f "${jq_dir}/prune_backups.jq" \
   | while read -r id old_tag; do
-      api -X DELETE "${releases}/${id}" > /dev/null
-      api -X DELETE "https://api.github.com/repos/${BACKUP_REPO}/git/refs/tags/${old_tag}" > /dev/null
-      echo "Pruned ${old_tag}"
+      # The daily job and a pre-deploy backup can prune the same release at
+      # once; one already gone isn't a failure.
+      if api -X DELETE "${releases}/${id}" > /dev/null && \
+         api -X DELETE "https://api.github.com/repos/${BACKUP_REPO}/git/refs/tags/${old_tag}" > /dev/null; then
+        echo "Pruned ${old_tag}"
+      else
+        echo "Couldn't prune ${old_tag} (already gone?); the next run tries again"
+      fi
     done

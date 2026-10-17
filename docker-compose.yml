@@ -37,7 +37,9 @@ services:
   # Backup and restore tools (backup/, issue #54). Not started by `up`; used
   # by backup/restore-latest through `docker compose run`.
   backup:
-    build: ./backup
+    build:
+      context: .
+      dockerfile: backup/Dockerfile
     profiles: ["tools"]
     depends_on:
       db:

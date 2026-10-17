@@ -410,6 +410,25 @@ module DataQuality::Review
 
     def history(type:, id:, directory: DataQuality::DirectoryClient.new) = directory.verification_history(type:, id:)
 
+    # Changing a plant's status (#316), the admin's side of
+    # `directory:set_status`: what it would change, read only, and then the
+    # change as `by`'s decision. The evidence is a source and its quote: a
+    # link, saved as a source, or NRC's status file by its source_id. Each returns a
+    # DirectoryClient::StatusResult.
+    def status_change_plan(ids:, status:, directory: DataQuality::DirectoryClient.new) = directory.status_change_plan(ids:, status:)
+
+    def set_status(ids:, status:, by:, reason:, source_url: nil, source_id: nil, quote: nil, directory: DataQuality::DirectoryClient.new)
+      if source_url.present?
+        source = DataQuality::Sources.find_or_create(url: source_url.strip)
+        return DataQuality::DirectoryClient::StatusResult.new(plan: nil, error: "Enter a link to a public source, starting with https://") unless source.ok?
+
+        source_id = source.ref.id
+      end
+      directory.set_status(ids:, status:, by:, reason:, source_id:, quote: quote.presence)
+    end
+
+    def nrc_status_quote(name, directory: DataQuality::DirectoryClient.new) = directory.nrc_status_quote(name)
+
     # Merges a company or plant site into another, as a person's decision
     # (#142): a reason is required; dry_run says what would move and changes
     # nothing. Returns a MergeResult, never raises.

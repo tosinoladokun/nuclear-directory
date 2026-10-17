@@ -1,0 +1,101 @@
+<% name = @facility.name.to_s.upcase_first %>
+<% content_for :title, "Change status of #{name}" %>
+<%
+  first_visit = !params.key?(:status)
+  ticked = first_visit ? @units.map(&:id) : Array(params[:unit_ids]).map(&:to_i)
+  current = @facility.status
+%>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: name, parent_path: back_here, current: "Change status" %>
+  <h1 class="type-admin-h1 m-0">Change status</h1>
+  <p class="type-body"><%= name %> is <%= current ? facility_status_label(current).downcase : "without a status" %>.</p>
+
+  <% if @errors.present? %>
+    <div class="nd-alert" role="alert">
+      <p class="type-body-strong">Not changed yet. Fix this first:</p>
+      <ul class="type-body"><% @errors.each do |error| %><li><%= error %></li><% end %></ul>
+    </div>
+  <% end %>
+
+  <%# Preview lands on "What changes", so it's in view on a phone. %>
+  <%= form_with url: admin_facility_status_path(id: @facility.id, anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>
+    <% carried.each do |name, value| %><%= hidden_field_tag name, value, id: nil %><% end %>
+    <div class="nd-field">
+      <label for="status" class="type-body-strong">New status</label>
+      <%= select_tag :status, options_for_select(DirectoryHelper::FACILITY_STATUS_LABELS.invert, @status || params[:status]), include_blank: "Choose a status", class: "nd-input type-input", required: true %>
+    </div>
+
+    <% if @units.any? %>
+      <fieldset class="nd-field">
+        <legend class="type-body-strong">Also change its units</legend>
+        <% @units.each do |unit| %>
+          <label class="nd-row nd-choice type-body">
+            <%= check_box_tag "unit_ids[]", unit.id, ticked.include?(unit.id), id: "unit_#{unit.id}", class: "nd-check" %>
+            <%= unit.name %> <span class="type-small text-ink-muted"><%= unit.status ? facility_status_label(unit.status) : "No status" %></span>
+          </label>
+        <% end %>
+      </fieldset>
+    <% end %>
+
+    <fieldset class="nd-field">
+      <legend class="type-body-strong">Source</legend>
+      <% if @nrc %>
+        <label class="nd-row nd-choice type-body">
+          <%= radio_button_tag :evidence, "nrc", @evidence == "nrc", class: "nd-check" %>
+          NRC's power status file: <span class="type-data"><%= @nrc.last %></span>
+        </label>
+      <% end %>
+      <label class="nd-row nd-choice type-body"><%= radio_button_tag :evidence, "link", @evidence == "link", class: "nd-check" %> A link and a quote</label>
+    </fieldset>
+
+    <div class="nd-field">
+      <label for="url" class="type-body-strong">Link <span class="type-small text-ink-muted">(a public page that states the status)</span></label>
+      <%= url_field_tag :url, params[:url], class: "nd-input type-input", placeholder: "https://" %>
+    </div>
+    <div class="nd-field">
+      <label for="quote" class="type-body-strong">Quote <span class="type-small text-ink-muted">(the sentence from the source that states the status)</span></label>
+      <%= text_field_tag :quote, params[:quote], class: "nd-input type-input" %>
+    </div>
+    <div class="nd-field">
+      <label for="note" class="type-body-strong">Note <span class="type-small text-ink-muted">(optional, kept in the admin's history)</span></label>
+      <%= text_field_tag :note, params[:note], class: "nd-input type-input" %>
+    </div>
+
+    <div class="nd-row">
+      <button type="submit" class="nd-btn nd-btn--outline type-ui">Preview</button>
+      <%= link_to "Cancel", back_here, class: "nd-btn nd-btn--outline type-ui" %>
+    </div>
+  <% end %>
+
+  <% if @plan && @errors.blank? %>
+    <section class="nd-panel nd-stack" aria-labelledby="preview-heading">
+      <h2 id="preview-heading" class="type-admin-h2 m-0">What changes</h2>
+      <% if @plan.changes.empty? %>
+        <p class="type-body">Nothing. <%= @plan.unchanged.one? ? "It's" : "They're" %> already <%= facility_status_label(@status).downcase %>.</p>
+      <% else %>
+        <ul class="type-body">
+          <% @plan.changes.each do |change| %>
+            <li><%= change.name %>: <%= change.from ? facility_status_label(change.from) : "No status" %> → <%= facility_status_label(change.to) %></li>
+          <% end %>
+          <% @plan.unchanged.each do |same| %>
+            <li class="text-ink-muted"><%= same.name %>: already <%= facility_status_label(@status).downcase %></li>
+          <% end %>
+        </ul>
+        <% if @plan.operating_before != @plan.operating_after %>
+          <p class="type-body">The directory's operating plants go from <span class="type-data"><%= @plan.operating_before %></span> to <span class="type-data"><%= @plan.operating_after %></span>.</p>
+        <% end %>
+
+        <%= form_with url: admin_facility_status_path(id: @facility.id), method: :patch do %>
+          <% carried.each do |name, value| %><%= hidden_field_tag name, value, id: nil %><% end %>
+          <%= hidden_field_tag :status, @status, id: nil %>
+          <%= hidden_field_tag :evidence, @evidence, id: nil %>
+          <%= hidden_field_tag :nrc_quote, @nrc&.last, id: nil if @evidence == "nrc" %>
+          <% chosen_ids.drop(1).each do |id| %><%= hidden_field_tag "unit_ids[]", id, id: nil %><% end %>
+          <% %i[url quote note].each do |field| %><%= hidden_field_tag field, params[field], id: nil %><% end %>
+          <button type="submit" class="nd-btn nd-btn--primary type-ui">Change status</button>
+        <% end %>
+      <% end %>
+    </section>
+  <% end %>
+</div>

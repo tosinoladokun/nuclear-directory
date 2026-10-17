@@ -139,6 +139,22 @@ namespace :data_quality do
     puts "Dry run: nothing changed. The next DOE crawl makes these changes itself." unless apply
   end
 
+  # For bin/deploy-data (#301): its data steps in one process, holding the
+  # data write lock exclusively, so no crawl writes meanwhile. The lock
+  # belongs to this process's database session, so the steps run here, one
+  # after another, rather than as separate commands.
+  desc "Run rake tasks holding the data write lock (#301): TASKS=\"seed:check db:seed\" [WAIT_MINUTES=30] bin/rails data_quality:with_write_lock"
+  task with_write_lock: :environment do
+    tasks = ENV["TASKS"].to_s.split
+    abort "Usage: TASKS=\"task another:task\" [WAIT_MINUTES=30] bin/rails data_quality:with_write_lock" if tasks.empty?
+
+    DataQuality::WriteLock.exclusive(timeout: ENV.fetch("WAIT_MINUTES", "30").to_i.minutes) do
+      tasks.each { |name| Rake::Task[name].invoke }
+    end
+  rescue DataQuality::WriteLock::Busy => error
+    abort "Not run: #{error.message}"
+  end
+
   desc "Check the OpenRouter key works, without a model call: bin/rails data_quality:check_key"
   task check_key: :environment do
     key = DataQuality::OpenRouter::Client.new.check_key

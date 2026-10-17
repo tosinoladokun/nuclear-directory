@@ -43,6 +43,9 @@
 
     <% if %w[verified pending].include?(@fact.verification_status) %>
       <%= link_to "Edit", admin_record_edit_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--primary type-ui" %>
+      <% if @fact.type == "Facility" %>
+        <%= link_to "Change status", admin_facility_status_path(id: @fact.id, **params.permit(:from, :section, :row, :with_removed, :back).to_h.symbolize_keys.compact_blank), class: "nd-btn nd-btn--outline type-ui" %>
+      <% end %>
     <% end %>
     <span class="nd-btn nd-btn--outline type-ui text-ink-muted" aria-disabled="true" title="Adding facts comes with #202">Add fact <span class="nd-tag">Soon</span></span>
     <% if %w[verified pending].include?(@fact.verification_status) %>
