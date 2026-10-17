@@ -40,7 +40,9 @@ class LinkCard
 
   def self.for_plant(profile)
     type = helpers.facility_type_label(profile.facility_type)
-    label = [ type, US_STATES[profile.state.to_s] || profile.state.presence ].compact.join(" · ").presence
+    # "Waynesboro, GA" when a source names the town (#225); otherwise the state's full name.
+    where = profile.city.present? ? helpers.place(profile.city, profile.state) : US_STATES[profile.state.to_s] || profile.state.presence
+    label = [ type, where ].compact.join(" · ").presence
     reactors = %w[power_reactor research_reactor].include?(profile.facility_type.to_s)
     units = profile.units.size
     capacity = "#{helpers.number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if profile.capacity_mw

@@ -54,10 +54,29 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     end
 
     body["recentlyAdded"].each do |entry|
-      assert_equal %w[addedAt category name url], entry.keys.sort
+      assert_equal %w[addedAt category location name url], entry.keys.sort
       %w[name category url].each { |field| assert_kind_of String, entry[field], field }
+      assert entry["location"].nil? || entry["location"].is_a?(String), "location is a string or null"
       assert_match(/\A\d{4}-\d{2}-\d{2}\z/, entry["addedAt"])
     end
+  end
+
+  test "each recent addition gives its place as its page shows it: City, ST, the state alone, or null (#225)" do
+    @kairos.update!(hq_city: "Alameda", hq_state: "CA")
+    @nuscale.update!(hq_city: nil, hq_state: "OR")
+    @vogtle.update!(city: "Waynesboro", state: "GA")
+    cite!(@vogtle)
+    pending = plant("Pending Site", verified: false, city: "Nowhere", state: "TX")
+    cite!(plant("Pending Site 1", parent: pending, verified_at: 1.hour.ago))
+
+    places = snapshot["recentlyAdded"].to_h { |entry| [ entry["name"], entry["location"] ] }
+
+    assert_equal "Alameda, CA", places["Kairos Power"]
+    assert_equal "OR", places["NuScale Power"]
+    assert_nil places["Duke Energy"], "no HQ stored"
+    assert_equal "Waynesboro, GA", places["Vogtle"]
+    assert places.key?("Pending Site"), "public for its published unit"
+    assert_nil places["Pending Site"], "a pending site's own place isn't shown, as on its page"
   end
 
   test "at most five recent additions, however many there are" do

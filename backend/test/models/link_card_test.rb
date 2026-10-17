@@ -3,13 +3,19 @@ require "test_helper"
 # The link-preview cards (#245), to Design's spec on #245 (direction E).
 class LinkCardTest < ActiveSupport::TestCase
   # Stands in for PlantProfile: only what for_plant reads.
-  Plant = Struct.new(:name, :facility_type, :state, :units, :capacity_mw, :operators, :owners, keyword_init: true) do
+  Plant = Struct.new(:name, :facility_type, :city, :state, :units, :capacity_mw, :operators, :owners, keyword_init: true) do
     def current_companies_for(type) = { "operates" => operators, "owns" => owners }.fetch(type).to_a.map { |name| Struct.new(:name).new(name) }
   end
 
   def vogtle(**overrides)
     Plant.new(name: "Plant Vogtle", facility_type: "power_reactor", state: "GA", units: Array.new(4), capacity_mw: BigDecimal("4530"),
       operators: [ "Southern Nuclear" ], owners: [ "Georgia Power", "Oglethorpe Power", "MEAG Power", "Dalton Utilities" ], **overrides)
+  end
+
+  test "a plant card names the town when a source does: City, ST (#225)" do
+    assert_equal "Power plant · Waynesboro, GA", LinkCard.for_plant(vogtle(city: "Waynesboro")).label
+    assert_equal "Power plant · Georgia", LinkCard.for_plant(vogtle(city: nil)).label, "no town: the state's full name"
+    assert_equal "Power plant · Waynesboro", LinkCard.for_plant(vogtle(city: "Waynesboro", state: nil)).label
   end
 
   def name_lines(name) = LinkCard.new(squares: [ "#fff" ], name:).send(:name_lines)
