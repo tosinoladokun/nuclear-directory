@@ -131,9 +131,9 @@ services:
     autoDeployTrigger: commit
     healthCheckPath: /up
     # Free instances have no pre-deploy step, so every start empties and
-    # reloads the preview database (bin/preview-start, which refuses any
+    # reloads the preview database (bin/preview-start.sh, which refuses any
     # database but nuclear_directory_preview).
-    dockerCommand: ./bin/preview-start
+    dockerCommand: ./bin/preview-start.sh
     envVars:
       # postgres://preview_app:<password>@<internal host>/nuclear_directory_preview
       - key: DATABASE_URL
@@ -156,7 +156,7 @@ services:
       - key: SECRET_KEY_BASE
         generateValue: true
       # The preview's admin login (preview@nuclear-directory.org), made on
-      # every start by bin/preview-start. Set by hand; only on the preview.
+      # every start by bin/preview-start.sh. Set by hand; only on the preview.
       - key: PREVIEW_ADMIN_PASSWORD
         sync: false
 

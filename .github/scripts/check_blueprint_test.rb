@@ -95,6 +95,15 @@ class CheckBlueprintTest < Minitest::Test
     assert_includes output, "PREVIEW_ADMIN_PASSWORD must be listed once"
   end
 
+  def test_the_preview_start_script_keeps_its_sh_extension
+    ok, output = check_blueprint do |blueprint|
+      preview = blueprint["services"].find { |service| service["name"] == "nuclear-directory-preview" }
+      preview["dockerCommand"] = "./bin/preview-start"
+    end
+    refute ok
+    assert_includes output, "the preview's dockerCommand must be ./bin/preview-start.sh"
+  end
+
   def test_the_preview_admin_password_never_reaches_production
     ok, output = check_blueprint do |blueprint|
       web = blueprint["services"].find { |service| service["name"] == "nuclear-directory" }

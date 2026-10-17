@@ -67,6 +67,12 @@ end
 # The UI preview must never reach production data or carry production secrets.
 preview = blueprint["services"].find { |service| service["name"] == "nuclear-directory-preview" }
 if preview
+  # The start script's filename ends in .sh so Copilot code review doesn't skip
+  # changes to it (#224). A rename that drops the extension would silently stop
+  # getting automated review on PRs.
+  unless preview["dockerCommand"] == "./bin/preview-start.sh"
+    problems << "the preview's dockerCommand must be ./bin/preview-start.sh (see #224)"
+  end
   entries = preview.fetch("envVars", [])
   # Only these keys, each a plain value, generated, or (DATABASE_URL) set by
   # hand. No fromDatabase, fromService or fromGroup anywhere: any of them could
