@@ -9,12 +9,9 @@ class RelayTest < ActionDispatch::IntegrationTest
   VISITOR = "81.2.69.142"
   BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
 
-  # Both are process-wide; another test may have used up the sign-in limit
-  # (one test here signs in to the admin).
-  setup do
-    RelayController::RATE_LIMIT_STORE.clear
-    SessionsController::RATE_LIMIT_STORE.clear
-  end
+  # Both rate-limit stores are process-wide; test_helpers/rate_limit_isolation
+  # clears them (and Rails.cache) before every integration test (#220), so
+  # another test signing in to the admin can't use up this one's quota.
 
   def send_events(body, path: "/relay/e/?ip=0&ver=1.438.7", ip: VISITOR, headers: {})
     post path, params: body.is_a?(String) ? body : body.to_json,
