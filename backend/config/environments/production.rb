@@ -94,12 +94,14 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # DNS rebinding protection and Host-header attacks (#147). Render only
+  # routes our own domains to the service today (render.yaml disables
+  # renderSubdomainPolicy, #57), so this isn't exploitable as things stand;
+  # pinning the hosts is still the standard defence and keeps working if the
+  # hosting setup changes. Keep in sync with production_hosts_test.rb.
+  config.hosts = %w[nuclear-directory.org www.nuclear-directory.org]
+
+  # Render's health check and the Sentry uptime monitor hit /up without our
+  # Host, so it has to stay 200. Everything else goes through the check.
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
