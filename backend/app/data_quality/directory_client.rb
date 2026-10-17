@@ -58,6 +58,12 @@ class DataQuality::DirectoryClient
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
   end
 
+  # For a plant-level EIA file (#319): the sites' EIA plant IDs, and the
+  # power plants that have none yet, to find by name and state.
+  def eia_plant_ids = lookup.eia_plant_ids
+  def plants_without_eia_plant_id = lookup.plants_without_eia_plant_id
+  def normalize_facility_name(name) = lookup.normalize_facility_name(name)
+
   # Runs the block with the candidate's attached fact locked, unless it was
   # rejected or unpublished meanwhile: then returns that fact's Record and
   # doesn't run the block. A candidate with no fact just runs the block.

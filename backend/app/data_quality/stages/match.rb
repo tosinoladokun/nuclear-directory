@@ -345,6 +345,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # still in review), the candidate stays new and is retried on the next run.
     # More than one fit goes to review.
     def match_enrichment(candidate, identify)
+      return match_site_enrichment(candidate, identify.to_h) unless identify.to_h.key?("unit")
+
       name, state, unit = identify.to_h.values_at("name", "state", "unit")
       number = unit.to_s[/\d+/]&.to_i
       units, same_number = enrichment_fits(name, state, number)
@@ -365,6 +367,31 @@ class DataQuality::Stages::Match < DataQuality::Stage
         # while only Vogtle 3 and 4 are in the directory).
         @stats["waiting"] += 1
         candidate.update!(notes: "No NRC unit for #{label} yet; retried on the next match run")
+      end
+    end
+
+    # A plant-level enrichment (EIA-860's Plant file, #319) adds values to a
+    # site and never creates one. identify: { "eia_plant_id", "name", and
+    # "site_id" when the plug-in found a site with no EIA plant ID by name }.
+    # The site with that EIA plant ID wins; site_id counts only while that
+    # site still has no EIA plant ID. No site yet: retried on the next run.
+    def match_site_enrichment(candidate, identify)
+      plant, name, site_id = identify.values_at("eia_plant_id", "name", "site_id")
+      label = "EIA plant #{plant} (#{name})"
+      site = directory.facility(eia_plant_id: plant) if plant.present?
+      if site.nil? && site_id.present?
+        by_name = directory.facility(id: site_id)
+        site = by_name if by_name && by_name.eia_plant_id.blank?
+      end
+
+      if site.nil?
+        @stats["waiting"] += 1
+        candidate.update!(notes: "No site for #{label} yet; retried on the next match run")
+      elsif site.closed?
+        settle_closed(candidate, site, "#{label} is #{site.name}, which was #{site.verification_status}")
+      else
+        attach(candidate, site, "#{label} is #{site.name}#{' (by name)' if site.eia_plant_id.blank?}")
+        settle(candidate, site)
       end
     end
 

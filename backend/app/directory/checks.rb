@@ -145,7 +145,7 @@ module Directory::Checks
         domains = ->(model) { evidence(model).joins(:source).group(:subject_id).having("COUNT(DISTINCT COALESCE(sources.domain, sources.url)) >= 2").select(:subject_id) }
         [
           Tag.new("nrc", "NRC", "source", nil, "Quoted from NRC", from_kinds.call(%w[nrc_reactor_list nrc_power_status])),
-          Tag.new("eia", "EIA", "source", nil, "Quoted from EIA-860M", from_kinds.call(%w[eia_generators])),
+          Tag.new("eia", "EIA", "source", nil, "Quoted from EIA-860M or EIA-860", from_kinds.call(%w[eia_generators eia_plants])),
           Tag.new("doe", "USAspending", "source", nil, "Quoted from USAspending.gov", from_kinds.call(%w[usaspending_doe_awards])),
           Tag.new("web", "Web", "source", nil, "Quoted from a page the crawler found",
             each_model { |model| model.where(id: evidence(model).joins(:source).where(found_by: "crawler", sources: { source_kind: "web_page" }).select(:subject_id)) }),

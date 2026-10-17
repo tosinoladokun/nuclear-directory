@@ -238,6 +238,25 @@ module Directory
       FacilityRef.from(record) if record
     end
 
+    # A plant name as the directory compares names ("Plant Vogtle" and
+    # "PLANT VOGTLE" alike).
+    def normalize_facility_name(name) = FacilityAlias.normalize(name.to_s)
+
+    # The EIA plant IDs the directory's sites have (#319).
+    def eia_plant_ids = Facility.where(parent_id: nil).where.not(eia_plant_id: [ nil, "" ]).distinct.pluck(:eia_plant_id)
+
+    # Power plants with no EIA plant ID that aren't rejected or taken off:
+    # top-level records (a site, or a one-unit plant kept as one record,
+    # like Columbia), each as { id:, state:, site:, names: [name, *aliases] },
+    # for a plant-level EIA file to find by name and state (#319). site:
+    # false for a one-record plant with its NRC docket, which can't carry an
+    # EIA plant ID (only a site can).
+    def plants_without_eia_plant_id
+      Facility.where(parent_id: nil, eia_plant_id: [ nil, "" ], facility_type: [ "power_reactor", nil ])
+        .where.not(verification_status: %w[rejected unpublished]).includes(:aliases).order(:id)
+        .map { |plant| { id: plant.id, state: plant.state, site: plant.nrc_docket.blank?, names: [ plant.name, *plant.aliases.map(&:alias) ] } }
+    end
+
     # Words too common in this industry to tell two names apart.
     GENERIC_WORDS = %w[
       the of and a an

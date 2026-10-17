@@ -264,6 +264,22 @@ then NRC's page for each site it links to (about 20), each at most once a day. A
 - A unit gone from the list is suggested as shut down. The list's rows, and each page's text without its
   date stamp, are what's hashed (#240).
 
+## EIA annual plant file (#319)
+
+`plugins/eia_plants.rb` gives each nuclear power plant its city, which the monthly 860M file doesn't have.
+It reads EIA's EIA-860 page, fetches the newest final yearly zip (about 24 MB, so it passes a 60 MB limit
+to the shared Fetcher), and reads the Plant sheet of `2___Plant_Y<year>.xlsx` inside it (`PlantFile`).
+
+- **Which rows:** only nuclear plants. These are plants in the newest 860M file, sites the directory has
+  by EIA plant ID, and power plants it has without one, found by name and state. Each is stored as CSV,
+  and the row is the quote.
+- **What it proposes:** each plant's `city`, as enrichment (`identify` with the plant ID and no unit). It
+  never creates or renames a site. A blank city is filled. A city a person set isn't overwritten: a
+  different one comes back as a difference. A row with no city proposes nothing.
+- **Found by name:** a plant with no EIA plant ID is held for a person. A site also gets EIA's plant ID
+  (Duane Arnold). A one-record plant with its NRC docket (Columbia) gets only the city, because only a
+  site can carry an EIA plant ID.
+
 
 The contract is in [`app/directory/README.md`](../directory/README.md).
 `directory_client.rb` uses `Directory::Lookup.organization` / `.facility` and
