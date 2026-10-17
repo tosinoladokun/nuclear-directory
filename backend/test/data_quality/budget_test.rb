@@ -95,6 +95,19 @@ class DataQuality::BudgetTest < ActiveSupport::TestCase
     assert_in_delta 0.25, DataQuality::Budget.spent_this_month
   end
 
+  # #95: historical reports pass a past now:. A legacy run (no by_month)
+  # started in a later month would otherwise be counted against it, since
+  # the fallback had only a lower bound on started_at.
+  test "a historical month's usage ignores legacy runs started in a later month" do
+    september = Time.zone.parse("2026-09-15 12:00")
+    october = Time.zone.parse("2026-10-05 12:00")
+    spend(1.0, at: september)
+    spend(2.0, at: october)
+
+    assert_equal 1.0, DataQuality::Budget.usage_this_month(now: september)[:cost]
+    assert_equal 2.0, DataQuality::Budget.usage_this_month(now: october)[:cost]
+  end
+
   test "the budget comes from DATA_QUALITY_MONTHLY_BUDGET, $5 by default" do
     assert_equal 5.0, DataQuality::Config.from_env({}).monthly_budget
     assert_equal 2.5, DataQuality::Config.from_env("DATA_QUALITY_MONTHLY_BUDGET" => "2.5").monthly_budget
