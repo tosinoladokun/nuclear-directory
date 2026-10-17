@@ -348,6 +348,12 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
       if chosen&.rejected?
         settle_closed(candidate, chosen, "#{label} would be NRC unit #{chosen.name}, which was rejected")
+      elsif chosen && !chosen.verified?
+        # The unit's own NRC record is still in review (or was unpublished):
+        # enriching it would push EIA's values to a record that isn't public
+        # yet (#118). Wait and retry, like a unit that doesn't exist yet.
+        @stats["waiting"] += 1
+        candidate.update!(notes: "NRC unit for #{label} isn't verified yet; retried on the next match run")
       elsif chosen
         # Attach only: the values (and their evidence) are written when verify publishes.
         attach(candidate, chosen, "#{label} is NRC unit #{chosen.name}")

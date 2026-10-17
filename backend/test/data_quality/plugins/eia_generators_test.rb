@@ -25,8 +25,13 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
   def crawl! = plugin.crawl(CrawlRun.create!(stage: "crawl", source_kind: "eia_generators"))
   def source = Source.find_by!(url: FILE)
 
-  def nrc_unit(name, docket, state, **attributes)
-    Facility.create!(name: name, nrc_docket: docket, state: state, facility_type: "power_reactor", **attributes)
+  # Enrichment attaches only to a verified NRC unit (#118); real NRC units
+  # reach this point through their own publication pipeline, so the helper
+  # creates them verified by default. Pass verified: false to simulate a
+  # unit still in review.
+  def nrc_unit(name, docket, state, verified: true, **attributes)
+    status = verified ? { verification_status: "verified", verified_by: "human:test", verified_at: Time.current } : {}
+    Facility.create!(name: name, nrc_docket: docket, state: state, facility_type: "power_reactor", **status, **attributes)
   end
 
   # Extract, match and verify, then a human approves what verify recommended
@@ -392,8 +397,22 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
       match_and_verify!
     end
 
-    assert unit.reload.pending?, "EIA values don't verify the NRC unit"
+    assert unit.reload.verified?, "EIA values don't re-decide the NRC unit"
     assert_equal [ "crawler" ], unit.evidence.distinct.pluck(:found_by)
+  end
+
+  # #118: enriching a pending unit would push EIA's values onto a record
+  # that isn't public yet. Wait instead, as for a unit that doesn't exist.
+  test "EIA waits for a pending NRC unit; values don't attach to a record that isn't public yet (#118)" do
+    pending_unit = nrc_unit("Vogtle 1", "05000424", "GA", verified: false)
+    crawl!
+    match_and_verify!
+
+    assert pending_unit.reload.pending?
+    assert_empty pending_unit.evidence, "no values attached until the NRC unit is verified"
+    waiting = Candidate.where(source: source).find { |c| c.payload["identify"]&.values_at("name", "unit") == %w[Vogtle 1] }
+    assert waiting.status_new?
+    assert_match "isn't verified yet", waiting.notes
   end
 
   test "each plant proposes its site and no operator: Entity Name is the reporting utility (#121, #227)" do
