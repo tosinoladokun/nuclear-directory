@@ -28,7 +28,7 @@
   <div class="nd-columns nd-columns--profile">
     <div class="nd-columns__side">
       <%= render "shared/overview_panel", verified_at: p.verified_at, correction_url: correction_url_for(p.name), rows: [
-            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), p.website, class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)), record_citations ],
+            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)), record_citations ],
             [ "Also known as", p.aliases.join(", ").presence, record_citations ],
             [ "Legal name", p.legal_name, record_citations ],
             [ role_tags.size > 1 ? "Roles" : "Role", role_tags.join(", ").presence, p.shown_roles.flat_map { |r| p.citations_for(r) }.uniq(&:first) ],

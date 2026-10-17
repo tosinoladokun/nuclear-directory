@@ -283,4 +283,28 @@ module DirectoryHelper
   rescue URI::InvalidURIError
     "unlinked source"
   end
+
+  # #200: append utm_source=nuclear-directory&utm_medium=referral (and
+  # optionally utm_campaign) to outbound company website links at render
+  # time, so companies can see in their own analytics that visitors came
+  # from here. Only for company websites; source citations stay exactly as
+  # cited. Preserves utm_* a URL already carries, and anything that isn't
+  # plain http(s) is returned unchanged.
+  def with_referral_utm(url, campaign: nil)
+    return url if url.blank?
+
+    uri = URI.parse(url.to_s.strip)
+    return url unless %w[http https].include?(uri.scheme&.downcase) && uri.host.present?
+
+    params = URI.decode_www_form(uri.query.to_s)
+    keys = params.map(&:first)
+    params << [ "utm_source", "nuclear-directory" ] unless keys.include?("utm_source")
+    params << [ "utm_medium", "referral" ] unless keys.include?("utm_medium")
+    params << [ "utm_campaign", campaign ] if campaign && !keys.include?("utm_campaign")
+
+    uri.query = params.any? ? URI.encode_www_form(params) : nil
+    uri.to_s
+  rescue URI::InvalidURIError
+    url
+  end
 end
