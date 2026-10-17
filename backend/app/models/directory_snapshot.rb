@@ -4,8 +4,9 @@
 #   DirectorySnapshot.current(base_url: "https://nuclear-directory.org")
 #
 # Only what the site already shows: published companies and sites, their
-# names and page links, the eight categories (Category) with the same
-# counts as the directory's category pills, and when each was published.
+# names and page links, the buckets that list a company plus Plants and
+# sites (Category, #281) with the same counts as the directory's pills, and
+# when each was published.
 #
 # The shape is a public contract: fields may be added, never renamed or
 # removed (the test pins it).
@@ -63,7 +64,7 @@ class DirectorySnapshot
     {
       updatedAt: updated_at.utc.iso8601,
       totalEntries: companies.count + sites.count,
-      categories: Category.all.map { |category| category_json(category) },
+      categories: Category.all.map { |category| category_json(category) }.reject { |json| json[:count].zero? && json[:slug] != "plants" },
       recentlyAdded: recently_added
     }
   end

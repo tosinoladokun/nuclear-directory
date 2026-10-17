@@ -8,9 +8,54 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     vendor = role("reactor_vendor")
     @kairos = company("Kairos Power", city: "Alameda", state: "CA", roles: [ vendor ],
       description: "Develops salt-cooled reactors.")
-    company("Oklo", roles: [ vendor ])
-    company("Pending Reactors", roles: [ vendor ], verified: false)
+    @oklo = company("Oklo", roles: [ vendor ])
+    cite!(@kairos, @oklo, company("Pending Reactors", roles: [ vendor ], verified: false))
     plant("Plant Vogtle", state: "GA", facility_type: "power_reactor", status: "operating")
+  end
+
+  test "the old fusion category moves for good to the fusion tag page, keeping filters (#281)" do
+    get companies_path(category: "fusion", state: "CA", sort: "connections")
+
+    assert_response :moved_permanently
+    assert_redirected_to companies_url(state: "CA", sort: "connections", tag: "fusion")
+  end
+
+  test "a tag page lists the companies with that tag, under its own title and address" do
+    cite!(company("Helion", techs: [ technology("fusion", "Fusion") ]))
+    get companies_path(tag: "fusion")
+
+    assert_response :success
+    assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
+    assert_select "h1", /Fusion/
+    assert_select "h1 .nd-listhead__count", "1 company"
+    assert_select "a.nd-listrow[href='/companies/helion']"
+    assert_select "a.nd-listrow[href='/companies/kairos-power']", count: 0
+    assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies?tag=fusion", 1
+    assert_select "form.nd-filters input[type=hidden][name=tag][value=fusion]"
+  end
+
+  test "a company in no bucket still lists, turns up in search and has its page" do
+    cite!(company("NextEra Energy", description: "Utility holding company."))
+    nextera = Organization.find_by!(name: "NextEra Energy")
+    assert_empty Bucket.for(nextera)
+
+    get companies_path
+    assert_select "a.nd-listrow[href='/companies/#{nextera.slug}']"
+
+    get companies_path(q: "NextEra")
+    assert_select "a.nd-listrow[href='/companies/#{nextera.slug}']"
+
+    get company_path(slug: nextera.slug)
+    assert_response :success
+    assert_select ".nd-overview dt", text: "Type", count: 0
+    assert_select ".nd-crumbs a", count: 0
+  end
+
+  test "an unknown tag lists every company" do
+    get companies_path(tag: "nope")
+
+    assert_response :success
+    assert_select "h1", /All companies/
   end
 
   test "a pending site's row shows its name and verified units, not its own type or place" do
@@ -39,10 +84,10 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "reactor-developers")
 
     assert_response :success
-    assert_select "title", "Advanced reactor and SMR developers in the US · Nuclear Directory"
-    assert_select "h1", /Reactor developers/
+    assert_select "title", "Nuclear reactor and project developers in the US · Nuclear Directory"
+    assert_select "h1", /Developers/
     assert_select "h1 .nd-listhead__count", "2 companies"
-    assert_select "a.nd-pill[aria-current=page]", /Reactor developers/
+    assert_select "a.nd-pill[aria-current=page]", /Developers/
     assert_select "a.nd-listrow[href='/companies/kairos-power']", /Develops salt-cooled reactors./
     assert_select "a.nd-listrow", text: /Pending Reactors/, count: 0
   end
@@ -73,7 +118,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   test "no results offers to clear the search" do
     get companies_path(category: "reactor-developers", q: "molten salt pump")
 
-    assert_select ".nd-notice", /No results for “molten salt pump” in Reactor developers./
+    assert_select ".nd-notice", /No results for “molten salt pump” in Developers./
     assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers", text: "Clear search"
   end
 
@@ -118,6 +163,35 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     assert_select "#companies-heading", "Companies"
     assert_select "#plants-heading", count: 0
+  end
+
+  # Path data of the site icons, to tell which one a ring holds.
+  PWR_ICON = "M5 20v-7a7 7 0 0 1 14 0v7"
+  BWR_ICON = "M4 20V9h10v11"
+
+  test "a pending site whose own type isn't public keeps the plain icon, whatever its units' reactor types" do
+    site = plant("Quiet Research Site", verified: false, facility_type: "research_reactor")
+    cite!(plant("Quiet Research Site Reactor", parent: site, reactor_type: "TRIGA"))
+    get companies_path(category: "plants")
+
+    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-ring").to_s, "M4 20c1.2-4 1.2-8 0-12h6", "site-plant"
+  end
+
+  test "a site's icon uses only reactor types its page shows: sourced site, sourced units (#281)" do
+    sourced = cite!(plant("Sourced Station", facility_type: "power_reactor", status: "operating", reactor_type: "PWR"))
+    plant("Sourced Station Unit 9", parent: sourced, reactor_type: "BWR", status: "operating") # verified, no source
+    plant("Quiet Station", facility_type: "power_reactor", status: "operating", reactor_type: "BWR") # verified, no source
+
+    [ companies_path(category: "plants"), search_path(q: "station") ].each do |path|
+      get path
+      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-ring").to_s
+      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-ring").to_s
+
+      assert_includes sourced_ring, PWR_ICON, path
+      assert_not_includes sourced_ring, BWR_ICON, "#{path}: an unsourced unit doesn't change it"
+      assert_includes quiet_ring, "<svg", path
+      assert_not_includes quiet_ring, BWR_ICON, "#{path}: an unsourced site's own reactor type isn't used"
+    end
   end
 
   test "a site row shows its verified units and their total capacity" do

@@ -1,11 +1,14 @@
-<%# The eight category boxes on the home page. Locals:
+<%# The category boxes on the home page. Locals:
     examples: { "fuel" => ["Centrus Energy", "BWX Technologies"], ... }
+    counts:   { "fuel" => 11, ... } (optional): a bucket counted at zero is hidden
     A box with no examples shows its name only. %>
 <% examples = local_assigns.fetch(:examples, {}) %>
+<% counts = local_assigns.fetch(:counts, {}) %>
 <nav class="nd-cats" aria-label="Browse by category">
   <% Category.all.each do |category| %>
-    <%= link_to directory_url_for(category:), class: "nd-cat" do %>
-      <b><%= category.name %></b>
+    <% next if !category.plants && counts[category.key]&.zero? %>
+    <%= link_to directory_url_for(category:), class: [ "nd-cat", bucket_class(category) ] do %>
+      <b><%= bucket_icon(category) %><%= category.name %></b>
       <% if examples[category.key].present? %><span><%= examples[category.key].first(3).to_sentence(two_words_connector: ", ", last_word_connector: ", ") %></span><% end %>
     <% end %>
   <% end %>

@@ -8,10 +8,12 @@
 <meta property="og:site_name" content="Nuclear Directory">
 <meta property="og:title" content="<%= content_for(:og_title).presence || content_for(:title).presence || "Nuclear Directory" %>">
 <meta property="og:description" content="<%= og_description %>">
-<%# The page's own address. A category is its own indexable page, so it keeps
-    ?category=; other query strings (search, filters) are dropped. %>
+<%# The page's own address. A category or tag is its own indexable page, so it
+    keeps ?category= or ?tag=; other query strings (search, filters) are dropped. %>
 <% category = Category.find(params[:category].to_s) if request.path == companies_path && params[:category].present? %>
-<meta property="og:url" content="<%= request.base_url + request.path + (category ? "?#{ { category: category.to_param }.to_query }" : "") %>">
+<% list_tag = Tag.find(params[:tag].to_s) if request.path == companies_path && params[:tag].present? && !category&.plants %>
+<% own = category ? { category: category.to_param } : list_tag ? { tag: list_tag.to_param } : nil %>
+<meta property="og:url" content="<%= request.base_url + request.path + (own ? "?#{own.to_query}" : "") %>">
 <% card, card_kind, card_key = @link_card || [ LinkCard.default, "default", nil ] %>
 <meta property="og:image" content="<%= request.base_url + LinkCardsController.url_for_card(card, card_kind, card_key) %>">
 <meta property="og:image:type" content="image/png">

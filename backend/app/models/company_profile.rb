@@ -104,18 +104,12 @@ class CompanyProfile
     @aliases ||= organization.aliases.map(&:alias).reject { |name| OrganizationAlias.normalize(name) == OrganizationAlias.normalize(organization.name) }
   end
 
-  # The first category this company falls in, for the breadcrumb, by the
-  # same rules as the directory (DirectoryListing#in_category).
-  def category
-    role_keys = roles.flat_map { |r| [ r.role.key, r.role.parent&.key ] }.compact
-    tech_keys = technologies.flat_map { |t| [ t.technology.key, t.technology.parent&.key ] }.compact
-    Category.all.find do |c|
-      (c.role_keys & role_keys).any? || (c.technology_key && tech_keys.include?(c.technology_key)) || (c.investors && investor?)
-    end
-  end
+  # Every bucket the company is in (#281), by the same rules as the
+  # directory (Bucket), in display order.
+  def buckets = @buckets ||= Bucket.for(organization)
 
-  # From the deals the page shows, so a hidden deal never adds the category.
-  def investor? = deals.any? { |deal| deal.relationship_type == "invests_in" && deal.from_organization_id == organization.id }
+  # Its first bucket, where only one label fits: the breadcrumb, its link card.
+  def category = buckets.first
 
   # Fields DESIGN.md marks "must" that this company doesn't have yet.
   def missing_fields

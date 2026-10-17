@@ -1,6 +1,7 @@
 <%# The top of a company or power plant page. Locals:
     name:        the page's subject
     kind:        :company (initials in a square) or :plant (a ring)
+    site_icon:   for a plant, its line icon's name (optional; site-plant by default)
     description: one plain line (optional; left out when unknown)
     citations:   [[number, source], ...] backing the description (optional)
     tags:        short labels, e.g. ["Reactor developer", "Fission"] (optional)
@@ -8,7 +9,7 @@
 <% heading_id = local_assigns.fetch(:heading_id, "profile-name") %>
 <section class="nd-profile" aria-labelledby="<%= heading_id %>">
   <% if kind == :plant %>
-    <span class="nd-ring nd-ring--lg" aria-hidden="true"><%= icon("factory", size: 24) %></span>
+    <span class="nd-ring nd-ring--lg" aria-hidden="true"><%= icon(local_assigns.fetch(:site_icon, "site-plant"), set: :nd, size: 24) %></span>
   <% else %>
     <span class="nd-mono nd-mono--md" aria-hidden="true"><%= initials(name) %></span>
   <% end %>

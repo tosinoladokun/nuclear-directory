@@ -63,7 +63,7 @@ class LinkPreviewTest < ActionDispatch::IntegrationTest
 
   test "a category and the full listing preview with their own description, not the home page's (#246)" do
     get companies_path(category: "reactor-developers")
-    line = "Companies developing nuclear reactors in the US, including small modular reactors."
+    line = "Companies designing reactors or developing new nuclear plants in the US, including small modular reactors and fusion."
     assert_select "meta[name='description'][content=?]", line
     assert_select "meta[property='og:description'][content=?]", line
 
@@ -93,6 +93,9 @@ class LinkPreviewTest < ActionDispatch::IntegrationTest
 
     get companies_path(category: "not-a-category")
     assert_select "meta[property='og:url'][content=?]", "http://www.example.com/companies"
+
+    get companies_path(tag: "fusion", state: "CA")
+    assert_select "meta[property='og:url'][content=?]", "http://www.example.com/companies?tag=fusion"
 
     company("Kairos Power")
     get company_path(slug: "kairos-power", category: "fuel")
@@ -140,5 +143,17 @@ class LinkPreviewTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     get "/cards/categories/not-a-category/0000000000000000.png"
     assert_response :not_found
+  end
+
+  test "the old fusion category's card moves to the default card its tag page uses (#281)" do
+    get "/cards/categories/fusion/0000000000000000.png"
+    assert_response :moved_permanently
+
+    follow_redirect!
+    assert_response :success
+    assert_equal "image/png", response.media_type
+
+    get companies_path(tag: "fusion")
+    assert_match %r{/cards/default/}, og_image, "the tag page uses the default card"
   end
 end

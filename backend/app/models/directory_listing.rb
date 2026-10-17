@@ -6,16 +6,19 @@
 # so unpublishing a company or plant hides everything that hangs on it.
 #
 #   listing = DirectoryListing.new(category: "fuel", q: "enrich", state: "TN")
+#   listing = DirectoryListing.new(tag: "fusion")  # a tag's list page (#281)
 #   listing.companies  # => Organizations, each with #connections_count
 #   listing.plants     # => Facilities (sites, not units)
 class DirectoryListing
   SORTS = { "name" => "A to Z", "connections" => "Most connected" }.freeze
 
-  attr_reader :category, :query, :technology, :state, :sort
+  attr_reader :category, :tag, :query, :technology, :state, :sort
 
   # Unknown values are ignored rather than raising: these come from the URL.
-  def initialize(category: nil, q: nil, technology: nil, state: nil, sort: nil)
+  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil)
     @category = Category.find(category)
+    # A tag narrows companies, so it's ignored on Plants and sites.
+    @tag = Tag.find(tag) unless @category&.plants
     @query = q.to_s.strip.first(100).presence
     # A filter value that isn't one of the options is dropped, so a stale or
     # mistyped URL can't silently narrow the list behind an "Any" control.
@@ -24,12 +27,10 @@ class DirectoryListing
     @sort = SORTS.key?(sort.to_s) ? sort.to_s : "name"
   end
 
-  # Number of published companies or plants in each category, for the pills.
+  # Number of published companies in each bucket, and of plants and sites,
+  # for the pills. A company in two buckets counts in both.
   def self.category_counts
-    Category.all.to_h do |category|
-      listing = new(category: category.key)
-      [ category.key, category.plants ? listing.plant_scope.count : listing.company_scope.count ]
-    end
+    Bucket.counts.merge("plants" => new(category: "plants").plant_scope.count)
   end
 
   # Each with #connections_count, in the chosen order.
@@ -40,7 +41,11 @@ class DirectoryListing
   # Each site also gets #units_count and #units_capacity_mw, from its published units.
   def plants
     ordered(plant_scope.select("facilities.*", "(#{plant_connections_sql}) AS connections_count",
-      "(#{units_sql("COUNT(*)")}) AS units_count", "(#{units_sql("SUM(u.capacity_mw)")}) AS units_capacity_mw"), "facilities.name")
+      "(#{units_sql("COUNT(*)")}) AS units_count", "(#{units_sql("SUM(u.capacity_mw)")}) AS units_capacity_mw",
+      # For the site's icon: its sourced units' reactor types, and whether the
+      # site's own facts are sourced, as its page decides (PlantProfile).
+      "ARRAY(#{units_sql("u.reactor_type")} AND #{sourced_sql("u.id")}) AS units_reactor_types",
+      "(#{sourced_sql("facilities.id")}) AS site_sourced"), "facilities.name")
   end
 
   # Companies are listed unless the Plants and sites category is chosen.
@@ -48,7 +53,8 @@ class DirectoryListing
     return Organization.none if category&.plants
 
     scope = Organization.published
-    scope = in_category(scope) if category
+    scope = scope.where(id: Bucket.organization_ids(category)) if category
+    scope = scope.where(id: tag.organization_ids) if tag
     scope = matching_companies(scope) if query
     scope = with_technology(scope) if technology
     scope = scope.where(hq_state: state) if state
@@ -60,7 +66,7 @@ class DirectoryListing
   # site is public when it's verified, or when at least one of its units is
   # published (#73: a site made from NRC units goes public with its first one).
   def plant_scope
-    return Facility.none if category && !category.plants
+    return Facility.none if (category && !category.plants) || tag
     return Facility.none if category.nil? && query.nil?
 
     scope = public_sites
@@ -106,7 +112,7 @@ class DirectoryListing
   # Companies show unless the Plants and sites category is chosen; plants
   # show in that category and alongside companies in search results.
   def lists_companies? = !category&.plants
-  def lists_plants? = category ? category.plants : query.present?
+  def lists_plants? = category ? category.plants : query.present? && tag.nil?
 
   # Sites the public can see: verified ones, and pending ones with at least
   # one published unit (#73). A rejected or unpublished site never shows.
@@ -124,23 +130,6 @@ class DirectoryListing
   end
 
   private
-    def in_category(scope)
-      matches = []
-      if category.role_keys.any?
-        roles = Role.where(key: category.role_keys)
-        role_ids = Role.where(id: roles.select(:id)).or(Role.where(parent_id: roles.select(:id))).select(:id)
-        matches << OrganizationRole.published.where(role_id: role_ids).select(:organization_id)
-      end
-      if category.technology_key
-        technologies = Technology.where(key: category.technology_key)
-        tech_ids = Technology.where(id: technologies.select(:id)).or(Technology.where(parent_id: technologies.select(:id))).select(:id)
-        matches << OrganizationTechnology.published.where(technology_id: tech_ids).select(:organization_id)
-      end
-      matches << Relationship.published.invests_in.select(:from_organization_id) if category.investors
-
-      matches.map { |ids| scope.where(id: ids) }.reduce { |all, one| all.or(one) } || scope.none
-    end
-
     # Name or any alias (compared normalized, as the matcher does); a role or
     # technology whose name or key matches ("SMR", "enrichment"); or any
     # party to a published deal or plant link whose description matches
@@ -232,6 +221,8 @@ class DirectoryListing
     end
 
     # An aggregate over a site's published units.
+    def sourced_sql(id) = "EXISTS (SELECT 1 FROM evidence e WHERE e.subject_type = 'Facility' AND e.subject_id = #{id})"
+
     def units_sql(aggregate)
       "SELECT #{aggregate} FROM facilities u WHERE u.parent_id = facilities.id " \
         "AND u.id IN (#{Facility.published.where.not(parent_id: nil).select(:id).to_sql})"

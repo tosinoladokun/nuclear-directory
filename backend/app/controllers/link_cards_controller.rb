@@ -5,6 +5,12 @@
 # is "Not found", as its page is. Drawn once per digest, then cached.
 class LinkCardsController < ApplicationController
   def show
+    # A category that became a tag page (#281) had its own card; its tag page
+    # uses the default one, so an old image address moves there.
+    if params[:kind] == "categories" && DirectoryController::CATEGORY_TAGS.key?(params[:key])
+      return redirect_to(self.class.url_for_card(LinkCard.default, "default"), status: :moved_permanently)
+    end
+
     card = find_card or raise ActiveRecord::RecordNotFound
     return redirect_to(self.class.url_for_card(card, params[:kind], params[:key]), status: :moved_permanently) if card.digest != params[:digest]
 

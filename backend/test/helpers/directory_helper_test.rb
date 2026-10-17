@@ -60,6 +60,21 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_match "Operated by An Exceptionally Long Operating Company Name, LLC", line, "the operator outlasts the owners"
     assert_no_match "MW", line
   end
+  test "a site's icon follows its type, a power plant's its reactors (Design, #281)" do
+    assert_equal "site-pwr", site_icon_name("power_reactor", reactor_types: [ "PWR", nil ])
+    assert_equal "site-pwr", site_icon_name("power_reactor", reactor_types: [ "AP1000" ])
+    assert_equal "site-bwr", site_icon_name("power_reactor", reactor_types: [ "BWR" ])
+    assert_equal "site-advanced", site_icon_name("power_reactor", reactor_types: [ "Natrium" ])
+    assert_equal "site-plant", site_icon_name("power_reactor")
+    assert_equal "site-waste", site_icon_name("power_reactor", reactor_types: [ "PWR" ], status: "decommissioning")
+    assert_equal "site-research", site_icon_name("research_reactor")
+    assert_equal "site-fusion", site_icon_name("fusion_facility")
+    assert_equal "site-mine", site_icon_name("mill")
+    assert_equal "site-enrichment", site_icon_name("enrichment")
+    assert_equal "site-fuel", site_icon_name("fuel_facility")
+    assert_equal "site-plant", site_icon_name(nil)
+  end
+
   test "relationship verbs read left to right in visitors' words" do
     assert_equal "offtakes from", relationship_verb("offtake_with")
     assert_equal "invests in", relationship_verb(:invests_in)

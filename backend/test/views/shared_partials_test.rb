@@ -144,18 +144,32 @@ class SharedPartialsTest < ActionView::TestCase
   test "category pills mark the current one and show counts when given" do
     render partial: "shared/category_pills", locals: { current: Category.find("fuel"), counts: { "fuel" => 11 } }
 
-    assert_select "a.nd-pill", count: 8
-    assert_select "a.nd-pill[aria-current='page']", /Fuel suppliers/
+    assert_select "a.nd-pill", count: 10
+    assert_select "a.nd-pill.nd-bucket--fuel[aria-current='page']", /Fuel and materials/
+    assert_select "a.nd-pill.nd-bucket--fuel svg.nd-ic", 1
+    assert_select "a.nd-pill[href=?]:not([class*=nd-bucket--]) svg.nd-ic", "/companies?category=plants", 1, "Plants and sites has no accent"
     assert_select "a.nd-pill[aria-current='page'] .nd-num", "11"
     assert_select "a.nd-pill[href=?]", "/companies?category=plants", text: /Plants and sites/
   end
 
-  test "category boxes show examples when there are any" do
+  test "empty buckets are hidden from the pills, unless it's the one shown" do
+    render partial: "shared/category_pills", locals: { current: Category.find("components"), counts: { "fuel" => 2, "components" => 0, "investors" => 0 } }
+
+    assert_select "a.nd-pill", count: 9
+    assert_select "a.nd-pill[href=?]", "/companies?category=investors", count: 0
+    assert_select "a.nd-pill[aria-current='page']", /Components and manufacturing/
+  end
+
+  test "category boxes show examples when there are any, and hide empty buckets" do
     render partial: "shared/category_boxes", locals: { examples: { "fuel" => [ "Centrus Energy", "Urenco USA" ] } }
 
-    assert_select "a.nd-cat", count: 8
+    assert_select "a.nd-cat", count: 10
     assert_select "a.nd-cat[href=?] span", "/companies?category=fuel", text: "Centrus Energy, Urenco USA"
+    assert_select "a.nd-cat.nd-bucket--fuel b svg.nd-ic", 1, "the bucket's icon beside its name"
     assert_select "a.nd-cat[href=?] span", "/companies?category=fusion", count: 0
+
+    render partial: "shared/category_boxes", locals: { examples: {}, counts: { "fuel" => 3, "components" => 0 } }
+    assert_select "a.nd-cat[href=?]", "/companies?category=components", count: 0
   end
 
   test "empty state with and without an action" do

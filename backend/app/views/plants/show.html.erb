@@ -26,7 +26,8 @@
     <%= link_to "Plants and sites", directory_url_for(category: Category.find("plants")), class: "nd-link nd-link--muted" %> / <span aria-current="page"><%= p.name %></span>
   </nav>
 
-  <%= render "shared/profile_header", name: p.name, kind: :plant, tags: %>
+  <%= render "shared/profile_header", name: p.name, kind: :plant, tags:,
+        site_icon: site_icon_name(p.facility_type, reactor_types: p.reactor_types, status: p.status) %>
 
   <%# Key facts come first in reading and focus order; wide screens place them on the right. %>
   <div class="nd-columns nd-columns--profile">

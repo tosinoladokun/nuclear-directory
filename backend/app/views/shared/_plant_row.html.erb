@@ -15,7 +15,10 @@
 <% connections = local_assigns[:connections] %>
 <li>
   <%= link_to plant_url_for(facility), class: "nd-listrow" do %>
-    <span class="nd-ring" aria-hidden="true"><%= icon("factory", size: 20) %></span>
+    <%# The site's own type and status are public; its reactor type only once sourced, as on its page. %>
+    <span class="nd-ring" aria-hidden="true"><%= icon(site_icon_name((facility.facility_type if own),
+          reactor_types: [ (facility.reactor_type if own && facility.try(:site_sourced)), *facility.try(:units_reactor_types) ],
+          status: (facility.status if own)), set: :nd, size: 20) %></span>
     <span class="nd-listrow__main">
       <span class="nd-listrow__name"><%= facility.name %></span>
       <% if kind %><span class="nd-listrow__desc"><%= kind %></span><% end %>

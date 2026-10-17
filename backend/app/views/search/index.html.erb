@@ -26,7 +26,8 @@
             <% meta = ([ facility_type_label(plant.facility_type), place(plant.city, plant.state) ].compact.join(" · ").presence if plant.verified?) %>
             <li>
               <%= link_to plant_url_for(plant), class: "nd-instant__row" do %>
-                <span class="nd-ring" aria-hidden="true"><%= icon("factory") %></span>
+                <span class="nd-ring" aria-hidden="true"><%= icon(site_icon_name((plant.facility_type if plant.verified?),
+                      reactor_types: [ (plant.reactor_type if plant.verified? && plant.try(:site_sourced)), *plant.try(:units_reactor_types) ], status: (plant.status if plant.verified?)), set: :nd) %></span>
                 <span class="nd-instant__text"><b class="type-body-strong"><%= plant.name %></b><% if meta %><span class="type-small"><%= meta %></span><% end %></span>
               <% end %>
             </li>

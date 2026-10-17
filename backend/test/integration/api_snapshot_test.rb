@@ -15,7 +15,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     @nuscale = company("NuScale Power", roles: [ vendor ], verified_at: 2.days.ago)
     # In two categories: utilities, and investors through its deal.
     @duke = company("Duke Energy", roles: [ utility ], verified_at: 1.day.ago)
-    link(@duke, "invests_in", @kairos)
+    cite!(link(@duke, "invests_in", @kairos))
     @vogtle = plant("Vogtle", verified_at: 4.days.ago)
     @hidden = company("Pending Co", verified: false)
     @gone = company("Gone Co").tap { |gone| gone.unpublish!(by: "human:test", reason: "test") }
@@ -43,8 +43,8 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     assert_kind_of Integer, body["totalEntries"]
     assert_nothing_raised { Time.iso8601(body["updatedAt"]) }
 
-    assert_equal %w[fuel reactor-developers plants utilities services power-buyers investors fusion],
-      body["categories"].map { |c| c["slug"] }, "the site's eight categories, in its order"
+    assert_equal %w[reactor-developers utilities plants investors],
+      body["categories"].map { |c| c["slug"] }, "the buckets with companies, and Plants and sites, in the site's order (#281)"
     body["categories"].each do |category|
       assert_equal %w[count examples name slug url], category.keys.sort
       assert_kind_of Integer, category["count"]
@@ -97,7 +97,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     assert_not_includes names, "Pending Co"
     assert_not_includes names, "Gone Co"
     assert_equal [ "Duke Energy", "NuScale Power", "Kairos Power", "Vogtle" ], body["recentlyAdded"].map { |e| e["name"] }
-    assert_equal [ "Utilities and operators", "Reactor developers", "Reactor developers", "Plants and sites" ],
+    assert_equal [ "Utilities and operators", "Developers", "Developers", "Plants and sites" ],
       body["recentlyAdded"].map { |e| e["category"] }
     assert_equal 1.day.ago.to_date.iso8601, body["recentlyAdded"].first["addedAt"]
     assert_equal [ "Duke Energy" ], body["categories"].find { |c| c["slug"] == "investors" }["examples"]

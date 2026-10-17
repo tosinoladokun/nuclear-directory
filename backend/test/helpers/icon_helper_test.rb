@@ -30,6 +30,20 @@ class IconHelperTest < ActionView::TestCase
     assert_raises(ArgumentError) { icon("../../../config/master") }
   end
 
+  test "our own line icons: one per bucket and per kind of site, stroked in the text colour (#281)" do
+    html = icon("bucket-fuel", set: :nd, size: 20)
+    assert_includes html, 'class="nd-ic nd-ic--20"'
+    assert_includes html, 'stroke="currentColor"'
+    assert_includes html, 'fill="none"'
+
+    Category.buckets.each { |bucket| assert IconHelper::ND_ICON_ROOT.join("bucket-#{bucket.key}.svg").file?, bucket.key }
+    %w[plant pwr bwr advanced fusion research mine enrichment fuel waste].each do |kind|
+      assert IconHelper::ND_ICON_ROOT.join("site-#{kind}.svg").file?, kind
+    end
+    assert_raises(ArgumentError) { icon("bucket-nope", set: :nd) }
+    assert_raises(ArgumentError) { icon("flag", set: :other) }
+  end
+
   test "every icon named in DESIGN.md exists in both weights" do
     %w[magnifying-glass sliders-horizontal graph buildings factory link arrow-square-out check clock x
        map-pin coins plug flag download-simple].each do |name|

@@ -1,21 +1,24 @@
 <%
   listing = @listing
-  heading = if listing.category then listing.category.name
+  # A bucket's page, or a tag's (/companies?tag=fusion, #281): each has its
+  # own heading, title, description and canonical address.
+  list_page = listing.category || listing.tag
+  heading = if list_page then list_page.name
             elsif listing.searching? then "Results for “#{listing.query}”"
             else "All companies"
             end
   total = @companies.size + @plants.size
   # The plants category mixes plants, mines and test reactors (VOICE.md).
   noun, plural = if listing.category&.plants then [ "plant or site", "plants and sites" ]
-                 elsif listing.searching? && listing.category.nil? then [ "result", "results" ]
+                 elsif listing.searching? && list_page.nil? then [ "result", "results" ]
                  else [ "company", "companies" ]
                  end
   # A category's title and description use the words people search with,
   # and the description gives its count (#290); the heading stays short.
-  category_page = listing.category && !listing.searching?
-  content_for :title, "#{category_page ? listing.category.title : heading} · Nuclear Directory"
+  category_page = list_page && !listing.searching?
+  content_for :title, "#{category_page ? list_page.title : heading} · Nuclear Directory"
   # The count of what this page lists (a state or technology filter narrows it).
-  description = if category_page then listing.category.description(total)
+  description = if category_page then list_page.description(total)
                 elsif listing.searching? then "Companies and plants matching “#{listing.query}”."
                 else "#{heading} in the US nuclear industry."
                 end
@@ -28,7 +31,7 @@
   <meta name="description" content="<%= description %>">
   <% if listing.searching? || listing.filtered? %><meta name="robots" content="noindex"><% end %>
   <%# Search and filters point back to the plain list or category. %>
-  <link rel="canonical" href="<%= listing.category ? companies_url(category: listing.category.to_param) : companies_url %>">
+  <link rel="canonical" href="<%= listing.category ? companies_url(category: listing.category.to_param) : listing.tag ? companies_url(tag: listing.tag.to_param) : companies_url %>">
 <% end %>
 <%= render "shared/site_header", query: listing.query %>
 
@@ -57,6 +60,7 @@
         </div>
         <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#count" } do %>
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
+          <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
           <label class="nd-select"><b>Technology</b>
             <%= select_tag :technology, options_for_select(listing.technology_options, listing.technology), include_blank: "Any", class: "type-input" %>
@@ -78,16 +82,16 @@
 
   <% if total.zero? %>
     <% if listing.searching? %>
-      <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{listing.category.name}" if listing.category}.",
+      <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{list_page.name}" if list_page}.",
             action_label: "Clear search",
-            action_url: directory_url_for(category: listing.category, technology: listing.technology, state: listing.state,
+            action_url: directory_url_for(category: listing.category, tag: listing.tag&.key, technology: listing.technology, state: listing.state,
                                           sort: (listing.sort unless listing.sort == "name")) %>
     <% elsif listing.filtered? %>
-      <%= render "shared/empty_state", message: "Nothing matches these filters.", action_label: "Clear filters", action_url: directory_url_for(category: listing.category) %>
+      <%= render "shared/empty_state", message: "Nothing matches these filters.", action_label: "Clear filters", action_url: directory_url_for(category: listing.category, tag: listing.tag&.key) %>
     <% else %>
-      <%= render "shared/empty_state", message: listing.category ? "Nothing verified in this category yet." : "No companies verified yet." %>
+      <%= render "shared/empty_state", message: list_page ? "Nothing verified here yet." : "No companies verified yet." %>
     <% end %>
-  <% elsif listing.searching? && listing.category.nil? %>
+  <% elsif listing.searching? && list_page.nil? %>
     <%# Search results are always grouped, so each row's type is announced. %>
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
