@@ -64,6 +64,13 @@ class DataQuality::Plugin
   # the source itself plainly states, never outside knowledge. Default: none.
   def source_facts(_source) = nil
 
+  # Why a person must decide this claim whatever the verifier would say
+  # (e.g. NRC lists a unit as decommissioning while its owner plans a
+  # restart), or nil. Verify checks it with its other code checks, after
+  # match, so the claim keeps its record and its links still resolve.
+  # Default: none.
+  def hold_for_review(_candidate) = nil
+
   private
     # The source's text as a reader sees it: tags dropped for HTML (and
     # script, style, template and noscript contents, which nobody reads), with a

@@ -171,7 +171,7 @@ module Directory
       "sodium" => "a sodium coolant supplier", "lead" => "a lead coolant supplier",
       "heavy_water" => "a heavy water supplier", "regulatory_consultant" => "a regulatory consultant",
       "venture_capital" => "a venture capital investor", "government_agency" => "a government agency",
-      "national_lab" => "a national lab"
+      "national_lab" => "a national lab", "waste_decommissioning" => "a waste and decommissioning company"
     }.freeze
     private_constant :LINK_VERBS, :ROLE_WORDS
 

@@ -55,6 +55,7 @@ module DirectoryHelper
     "venture_capital" => "Investor",
     "government_agency" => "Government agency",
     "national_lab" => "National lab",
+    "waste_decommissioning" => "Waste and decommissioning",
     "molten_salt" => "Molten salt coolant",
     "water" => "Water coolant",
     "helium" => "Helium coolant",

@@ -68,6 +68,19 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
 
   def unit(docket) = Facility.find_by!(nrc_docket: docket)
 
+  test "a read that no longer has a fact's quote never records the fact as checked" do
+    first_read_approved!
+    evidence = Evidence.where(source: source)
+    checked = evidence.pluck(:id, :last_confirmed_at).to_h
+
+    read!([], on: 1.day.ago) # the table now names nothing: no candidates
+    pipeline!
+    read!([], on: 1.hour.ago) # and reads the same again
+    pipeline!
+
+    assert_equal checked, evidence.pluck(:id, :last_confirmed_at).to_h, "the old quotes are gone, so nothing was re-checked"
+  end
+
   test "a second read of an unchanged table queues nothing and records when it was checked" do
     first_read_approved!
     events = VerificationEvent.count

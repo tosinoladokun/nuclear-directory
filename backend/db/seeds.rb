@@ -27,7 +27,8 @@ ROLES = [
   [ "regulatory_consultant", "Regulatory consultant", "Helps companies through NRC licensing and other approvals." ],
   [ "venture_capital", "Venture capital", "Invests equity in nuclear companies." ],
   [ "government_agency", "Government agency", "Regulates or funds the industry, e.g. NRC, DOE." ],
-  [ "national_lab", "National lab", "National laboratory doing nuclear research or running test reactors." ]
+  [ "national_lab", "National lab", "National laboratory doing nuclear research or running test reactors." ],
+  [ "waste_decommissioning", "Waste and decommissioning", "Decommissions shut-down plants, or stores, transports or disposes of spent fuel and radioactive waste." ]
 ].freeze
 
 TECHNOLOGIES = [

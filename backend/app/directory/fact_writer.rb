@@ -436,6 +436,13 @@ module Directory
 
         site = Facility.lock.find(unit.parent_id)
         stated = fields.to_h { |name| [ name.to_sym, unit.public_send(name) ] }.compact_blank
+        # A unit's status is its site's only when every other live unit there
+        # has it too: Dresden 1 decommissioning doesn't make the station so
+        # while Dresden 2 and 3 run (#312).
+        if stated.key?(:status)
+          others = Facility.where(parent_id: site.id).where.not(id: unit.id).where.not(verification_status: Verifiable::CLOSED_STATUSES).pluck(:status)
+          stated.delete(:status) if others.any? { |status| status != stated[:status] }
+        end
         if site.human_reviewed? && !site.closed? && (conflicts = conflicts_with(site, stated)).any?
           raise Conflict.new(site.id, conflicts)
         end
