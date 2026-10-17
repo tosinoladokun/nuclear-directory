@@ -101,6 +101,10 @@ class SourceCatalog
     def total = Source.count
 
     # Source ids under a row's key, or a single document ("doc-12"), for Live's filter.
+    # How many published facts these rows (crawler kinds or groups) back
+    # together, each fact once however many of them back it.
+    def facts_backed_by(keys) = public_facts(keys.flat_map { |key| source_ids(key) }.uniq).map { |_, type, id| [ type, id ] }.uniq.size
+
     def source_ids(key)
       return Source.where(id: key.delete_prefix("doc-").to_i).ids if key.to_s.start_with?("doc-")
       return Source.where(source_kind: key).ids if OFFICIAL.key?(key) || (Source.exists?(source_kind: key) && key != RESEARCH_KIND)
