@@ -20,7 +20,11 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
   # The 860M page is snapshotted as its own source (never extracted), so it
   # follows the once-a-day fetch rule like any other source.
   INDEX_SOURCE_KIND = "eia_860m_index"
-  FILE_LINK = %r{(?:\A|/)xls/([a-z]+)_generator(\d{4})\.xlsx\z}i
+  # Date::MONTHNAMES is [nil, "January", ...]; "january|february|...|december".
+  MONTH_NAMES_RE = Date::MONTHNAMES.compact.join("|").downcase.freeze
+  # Only real month names, so a bogus "xyz_generator2026.xlsx" never matches
+  # (its Date::MONTHNAMES.index would be nil and sort as month 0, #118).
+  FILE_LINK = %r{(?:\A|/)xls/(#{MONTH_NAMES_RE})_generator(\d{4})\.xlsx\z}i
 
   def initialize(fetcher: DataQuality::Fetcher.new)
     @fetcher = fetcher
