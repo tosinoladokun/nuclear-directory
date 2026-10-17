@@ -27,15 +27,23 @@ module Directory
       def conflict? = conflicts.any?
     end
 
-    # Raised inside a write to undo it and report the disagreement.
+    # Raised inside a write to undo it and report the disagreement. The
+    # message shows readable field names (#101: "headquarters state", not
+    # "hq_state"), the same labels as DataQuality::Differences uses for
+    # Verify's review notes.
     class Conflict < StandardError
       attr_reader :id, :conflicts
 
       def initialize(id, conflicts)
         @id = id
         @conflicts = conflicts
-        super(conflicts.map { |name, (stored, incoming)| "human-verified #{name} is #{stored}; this source says #{incoming}" }.join("; "))
+        super(conflicts.map { |name, (stored, incoming)| "human-verified #{readable(name)} is #{stored}; this source says #{incoming}" }.join("; "))
       end
+
+      private
+        def readable(name)
+          DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize(capitalize: false) }
+        end
     end
 
     # Never compared for conflicts: names vary by legal form and spelling

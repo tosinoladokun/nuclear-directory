@@ -199,6 +199,20 @@ class Directory::FactWriterTest < ActiveSupport::TestCase
     assert_empty site.evidence
   end
 
+  # #101: raw keys like hq_state and nrc_docket end up in review notes an
+  # admin reads, so the conflict message shows readable labels instead.
+  test "conflict messages show readable field names, not raw column keys" do
+    org = organizations(:terrapower)
+    org.update!(hq_state: "WA")
+    org.verify!(by: "human:tosin")
+    result = write(:organization, { id: org.id, hq_state: "DE" }, protect_human_verified: true,
+      evidence: [ @evidence ])
+    assert result.conflict?
+    assert_equal({ "hq_state" => [ "WA", "DE" ] }, result.conflicts,
+      "the hash stays keyed by column name so callers can match on it")
+    assert_match "human-verified headquarters state is WA; this source says DE", result.errors.join
+  end
+
   test "a rejected fact isn't changed by an automated write, whoever rejected it" do
     org = organizations(:terrapower)
     org.reject!(by: "agent:verifier/x")
