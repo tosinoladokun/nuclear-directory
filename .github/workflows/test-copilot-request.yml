@@ -1,0 +1,23 @@
+# TEMPORARY test (never merged): can GITHUB_TOKEN request a Copilot review?
+name: Test Copilot request
+on:
+  pull_request:
+    types: [opened]
+permissions:
+  pull-requests: write
+jobs:
+  try:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request Copilot with GITHUB_TOKEN (REST)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR}/requested_reviewers" -f 'reviewers[]=copilot-pull-request-reviewer[bot]' --jq '[.requested_reviewers[].login]' || echo "REST failed"
+      - name: Request Copilot with GITHUB_TOKEN (GraphQL, bot id)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE: ${{ github.event.pull_request.node_id }}
+        run: |
+          gh api graphql -f query='mutation($pr:ID!){requestReviews(input:{pullRequestId:$pr,botIds:["BOT_kgDOCnlnWA"]}){pullRequest{reviewRequests(first:5){nodes{requestedReviewer{__typename ... on Bot{login}}}}}}}' -f pr="$NODE" || echo "GraphQL failed"
