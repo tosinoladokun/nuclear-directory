@@ -87,4 +87,28 @@ class FacilityTest < ActiveSupport::TestCase
       relationship_type: "operates", ownership_pct: 10)
     assert_not link.valid?
   end
+
+  # #117: a decided record carries when the decision was made so review
+  # notes always show a date. The helpers set it explicitly; direct
+  # constructors get it auto-filled.
+  test "a non-pending record created directly gets verified_at auto-filled" do
+    before = Time.current
+    plant = Facility.create!(name: "Decided Direct", verification_status: "verified", verified_by: "human:test")
+    assert_not_nil plant.verified_at
+    assert_operator plant.verified_at, :>=, before
+  end
+
+  test "a non-pending record without verified_by is a validation error" do
+    plant = Facility.new(name: "No Who", verification_status: "verified")
+    plant.verified_at = Time.current  # bypasses the auto-fill
+    assert_not plant.valid?
+    assert_includes plant.errors[:verified_by], "is required for non-pending records (#117)"
+  end
+
+  test "pending records don't need a decision timestamp" do
+    plant = Facility.create!(name: "Pending Direct")
+    assert plant.pending?
+    assert_nil plant.verified_at
+    assert_nil plant.verified_by
+  end
 end

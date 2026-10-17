@@ -20,6 +20,15 @@ module Verifiable
     has_many :verification_events, as: :subject, dependent: nil
 
     validates :confidence, numericality: { in: 0..1 }, allow_nil: true
+    # #117: a decided record carries who and when. The helpers set both;
+    # direct constructors (test builders, mocks) that only set a status get
+    # verified_at auto-filled below, and the validation is the safety net
+    # against a bare `.create!(verification_status: "verified")`.
+    with_options if: -> { !pending? } do
+      validates :verified_at, presence: { message: "is required for non-pending records (#117)" }
+      validates :verified_by, presence: { message: "is required for non-pending records (#117)" }
+    end
+    before_validation :fill_decided_at
     validate :closed_decisions_need_a_human
     # Who is making this change (not who made the last one); set by the
     # verify!/reject!/unpublish! helpers and by FactWriter.
@@ -91,6 +100,13 @@ module Verifiable
   end
 
   private
+    # A record saved as non-pending without a timestamp (direct constructors
+    # in tests and mocks) gets one now, so its audit event and review notes
+    # always have a date. The helpers set it to Time.current explicitly.
+    def fill_decided_at
+      self.verified_at ||= Time.current unless pending?
+    end
+
     # Locked, so two decisions at once are recorded in the order they happen.
     # The same decision again changes nothing, not even verified_at, so the
     # date shown always matches the audit trail.
