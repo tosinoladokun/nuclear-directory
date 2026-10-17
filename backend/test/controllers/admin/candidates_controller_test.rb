@@ -151,6 +151,49 @@ class Admin::CandidatesControllerTest < ActionDispatch::IntegrationTest
     assert_not late.reload.status_merged?
   end
 
+  # Makes the next `n` approvals collide with a merge, as the database would
+  # stop one of two transactions locking the same rows (#325).
+  module Collide
+    mattr_accessor :left, default: 0
+
+    private
+
+    def approve_one(*, **)
+      return super unless Collide.left.positive?
+
+      Collide.left -= 1
+      raise ActiveRecord::Deadlocked, "deadlock detected"
+    end
+  end
+  DataQuality::Review.singleton_class.prepend(Collide)
+
+  test "an approval that collides with a merge approves nothing and says to try again (#325)" do
+    c = candidate("organization", { "name" => "Busy Fission Co" })
+    match_and_verify
+    sign_in_as users(:admin)
+
+    Collide.left = 1
+    post approve_admin_candidates_path, params: { candidate_id: c.id }
+
+    assert_response :see_other
+    assert_match "someone was merging this just then; try again", flash[:alert]
+    assert_not c.reload.status_merged?
+  ensure
+    Collide.left = 0
+  end
+
+  test "approve all tries a batch again when it collides with a merge, then approves it (#325)" do
+    c = candidate("organization", { "name" => "Retry Fission Co" })
+    match_and_verify
+
+    Collide.left = 1
+    DataQuality::ApproveAllJob.perform_now([ c.id ], by: users(:admin).actor)
+
+    assert c.reload.status_merged?
+  ensure
+    Collide.left = 0
+  end
+
   test "approve all keeps to its filters, and says when nothing matches" do
     candidate("organization", { "name" => "Alpha Fission Co" })
     match_and_verify

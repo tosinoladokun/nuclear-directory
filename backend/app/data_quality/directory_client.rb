@@ -316,10 +316,16 @@ class DataQuality::DirectoryClient
   # A person's merge of one company or plant site into another (#142), as the
   # merge rake tasks do it: everything moves to into, from is unpublished
   # with a reason saying what moved, and its address redirects. With
-  # dry_run it's done and rolled back, to say what it would move. Returns
-  # [WriteResult, what moved ("3 aliases, 2 evidence") or nil].
+  # dry_run it only reads (FactWriter.merge_preview), taking no locks, to
+  # say what it would move (#325). Returns [WriteResult, what moved
+  # ("3 aliases, 2 claims") or nil].
   def merge(type, from_id:, into_id:, by:, reason: nil, dry_run: false)
     method = MERGES.fetch(type)
+    if dry_run
+      result, moved = fact_writer.merge_preview(type:, from_id:, into_id:)
+      return [ write_result(result), (claims_word(moved) if result.errors.empty?) ]
+    end
+
     result = moved = nil
     ActiveRecord::Base.transaction(requires_new: true) do
       # The claims on both records are locked first, in the order an approval
@@ -332,14 +338,17 @@ class DataQuality::DirectoryClient
       claims.order(:id).lock.to_a
       result = write_result(fact_writer.public_send(method, from_id:, into_id:, by:, reason:))
       # In the admin's words: candidates are claims.
-      moved = verification_history(type:, id: from_id).first&.reason.to_s[/Moved: (.*)\z/, 1]&.gsub(/\bcandidate(s?)\b/, "claim\\1") if result.errors.empty?
-      raise ActiveRecord::Rollback if dry_run
+      moved = claims_word(verification_history(type:, id: from_id).first&.reason.to_s[/Moved: (.*)\z/, 1]) if result.errors.empty?
     end
-    @plant_names = nil unless dry_run
+    @plant_names = nil
     [ result, moved ]
   rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
     [ WriteResult.new(ref: nil, errors: [ "someone was deciding on one of its claims just then; try again" ]), nil ]
   end
+
+  # Moves open claims left on a merged-away record to the one kept (#325).
+  # Returns how many moved.
+  def repoint_merged_claims = fact_writer.repoint_merged_claims
 
   # A human's decision on a directory fact: status "verified" (approve or
   # republish, optionally with edited attributes), "rejected" or
@@ -403,6 +412,9 @@ class DataQuality::DirectoryClient
     # Resolved lazily so the module has no load-time dependency on the directory.
     def lookup = @lookup ||= "Directory::Lookup".constantize
     def fact_writer = @fact_writer ||= "Directory::FactWriter".constantize
+
+    # In the admin's words: candidates are claims.
+    def claims_word(moved) = moved&.gsub(/\bcandidate(s?)\b/, "claim\\1")
 
     # Read once and reused for every brand check, until a facility or company is written.
     def plant_names = @plant_names ||= lookup.plant_names(owners: owner_hints)

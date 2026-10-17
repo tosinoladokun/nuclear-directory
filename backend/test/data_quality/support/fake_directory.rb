@@ -53,6 +53,9 @@ module FakeDirectory
       @next_id = 1000
     end
 
+    # Nothing here is ever merged.
+    def repoint_merged_claims = 0
+
     def write(kind, attributes, evidence: [], verification: nil, fill_blank: false, protect_human_verified: false,
       remove_aliases: [])
       @writes << { kind:, attributes:, evidence:, verification:, fill_blank: }

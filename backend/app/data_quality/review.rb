@@ -73,6 +73,9 @@ module DataQuality::Review
   # technology is an ordinary value).
   IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology] }.freeze
 
+  # A decision that collided with a merge of the same records (#325).
+  BUSY = "someone was merging this just then; try again".freeze
+
   class << self
     # Candidates waiting for a decision, oldest first. queue: :recommended
     # (the agent recommends publishing) or :needs_review. Narrow by the
@@ -227,6 +230,10 @@ module DataQuality::Review
     # queue only; anything else needs a look on its own (#86).
     # One outer transaction: an unexpected error rolls the whole batch back
     # (a refused item is a Result with errors, not an error).
+    #
+    # A merge locks the same rows (#325): if the two collide, the database
+    # stops one, and here nothing is approved; each claim comes back with
+    # BUSY, to try again.
     def approve(candidate_ids, by:, reason: nil, only_recommended: false, directory: DataQuality::DirectoryClient.new)
       human!(by)
       firsts = first_batches if only_recommended # once per bulk approval
@@ -235,6 +242,8 @@ module DataQuality::Review
           approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:)
         end
       end
+    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
+      candidate_ids.map { |id| Result.new(candidate_id: id, ref: nil, errors: [ BUSY ]) }
     end
 
     # Changes some of a candidate's values, then approves it. Link ends and
