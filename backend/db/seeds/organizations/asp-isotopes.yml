@@ -1,0 +1,45 @@
+# Seed research for #253 (deals) from a Talkwalker lead (17 Oct 2026). Quotes copied from raw page text fetched this session.
+name: ASP Isotopes
+legal_name: ASP Isotopes Inc.
+aliases:
+- ASPI
+- Quantum Leap Energy
+- QLE
+website: https://www.aspisotopes.com
+hq: null
+country_code: null
+status: active
+roles:
+- key: isotopes
+  source_url: https://www.aspisotopes.com/
+  quote: ASPI’s advanced technology leverages 20+ years of R&D history to enrich isotopes in varying levels of atomic mass.
+  confidence: 1.0
+- key: enrichment
+  source_url: https://www.aspisotopes.com/quantum-leap-energy
+  quote: Quantum Leap Energy (QLE) plans to deliver secure, reliable nuclear materials through proprietary enrichment technologies and a robust supply chain.
+  confidence: 0.8
+technologies: []
+relationships:
+- type: supplies
+  to: TerraPower
+  description: 'Term sheet (Oct 2024): ASP Isotopes to build a HALEU enrichment facility in South Africa, with TerraPower investing in it and buying its HALEU for the Natrium reactor.'
+  source_url: https://www.terrapower.com/terraPower-announces-strategic-agreement
+  quote: TerraPower has signed a term sheet with ASP Isotopes for the construction of a uranium enrichment facility in South Africa and a supply agreement for fuel delivery for the Natrium® reactor¹.
+  published: '2024-10-30'
+  confidence: 1.0
+- type: supplies
+  to: TerraPower
+  description: 'Term sheet (Oct 2024): ASP Isotopes to build a HALEU enrichment facility in South Africa, with TerraPower investing in it and buying its HALEU for the Natrium reactor.'
+  source_url: https://www.terrapower.com/terraPower-announces-strategic-agreement
+  quote: The agreement is the first step towards a two-fold definitive agreement; TerraPower plans to invest in the construction of a HALEU enrichment facility in South Africa, and TerraPower would purchase HALEU from the facility.
+  published: '2024-10-30'
+  confidence: 1.0
+facilities: []
+notes: 'Quantum Leap Energy (QLE) is ASP Isotopes'' nuclear fuel business (its page is on aspisotopes.com; qleapenergy.com is linked from it), so it is an alias here, not its own company, until a source shows it as a separate US company (PM, 17 Oct). Stage is the Oct 2024 term sheet only: a later definitive supply agreement (reported as up to 150 t of HALEU) needs ASP''s SEC filing read by a person; SEC''s robots.txt returned 403 to our bot, so it wasn''t fetched. Not recorded: QLE''s contracts with Necsa in South Africa (Feb 2026 services contract; the "binding heads of agreement" for a HALEU joint venture listed on the QLE page), since neither party is a US company. Country and HQ not set: no fetched page states them.'
+description:
+  text: Isotope enrichment company developing nuclear fuel enrichment through Quantum Leap Energy.
+  source_url: https://www.aspisotopes.com/
+  quote: ASPI’s advanced technology leverages 20+ years of R&D history to enrich isotopes in varying levels of atomic mass.
+  also:
+  - source_url: https://www.aspisotopes.com/quantum-leap-energy
+    quote: Quantum Leap Energy (QLE) plans to deliver secure, reliable nuclear materials through proprietary enrichment technologies and a robust supply chain.
