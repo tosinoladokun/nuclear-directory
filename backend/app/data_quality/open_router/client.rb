@@ -23,7 +23,10 @@ class DataQuality::OpenRouter::Client
   ACCOUNT_PROBLEMS = {
     401 => "OpenRouter rejected the API key: check OPENROUTER_API_KEY",
     402 => "OpenRouter says the account is out of credit: add credit or raise the key's limit",
-    403 => "OpenRouter refused the request for this key: check its limits and allowed models"
+    # 403 can mean a key limit, an allowed-models rule, a moderation refusal,
+    # or an IP allowlist (#192), so the prefix stays cause-neutral and
+    # OpenRouter's own message, appended below, says why.
+    403 => "OpenRouter refused the request"
   }.freeze
 
   class Error < StandardError; end

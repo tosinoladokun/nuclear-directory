@@ -172,13 +172,18 @@ module DeployData
         $stdout = original
       end
 
+      # Compared with the last applied run, never a reported one: a report
+      # rolled back, so the files it saw changed are still pending in the data,
+      # and re-writing them now isn't a flip-flop.
       def flip_flops(events)
-        if @last.nil?
-          @report.notes << "first automatic run: there's no earlier file list, so flip-flops can't be told from changes"
+        applied = DataDeploy.baseline(report_mode: false)
+        if applied.nil?
+          @report.notes << "no applied run yet: there's no file list to compare with, so flip-flops can't be told from changes"
         else
-          @report.flags = FlipFlops.find(events, changed: @changed)
-          if Fingerprint.code_changed?(@changed) && @report.flags.any?
-            @report.notes << "the seed's code changed (#{@changed.grep(Fingerprint::CODE).join(', ')}), so flagged events may be expected"
+          changed = @fingerprint.changed_since(applied.files)
+          @report.flags = FlipFlops.find(events, changed:)
+          if Fingerprint.code_changed?(changed) && @report.flags.any?
+            @report.notes << "the seed's code changed (#{changed.grep(Fingerprint::CODE).join(', ')}), so flagged events may be expected"
           end
         end
       end

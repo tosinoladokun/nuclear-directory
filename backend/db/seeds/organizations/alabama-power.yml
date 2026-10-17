@@ -1,0 +1,36 @@
+# Seed research for #322 (no-bucket review) - 2026-10-17. Quotes copied from raw page text fetched this session.
+# Created by the EIA crawler on 12 Oct as "Alabama Power Co" (EIA's reporting utility for Farley); its EIA operates link was retired under #227.
+name: Alabama Power
+aliases:
+- Alabama Power Co
+website: https://www.alabamapower.com
+hq: null
+country_code: US
+status: active
+roles:
+- key: utility
+  source_url: https://www.alabamapower.com/
+  quote: With a variety of fuel sources, we’re able to meet our customers’ energy needs today and tomorrow.
+  confidence: 0.9
+technologies: []
+relationships:
+- type: subsidiary_of
+  to: Southern Company
+  description: Alabama Power is part of Southern Company.
+  source_url: https://www.alabamapower.com/our-company.html
+  quote: We’re part of Southern Company, one of the nation’s largest energy producers.
+  confidence: 1.0
+facilities:
+- name: Joseph M Farley
+  type: owns
+  source_url: https://southernnuclear.com/our-plants/plant-farley.html
+  quote: Plant Farley, located near Dothan in southeast Alabama, is owned by Alabama Power and operated by Southern Nuclear.
+  confidence: 1.0
+notes: 'Display name is the brand (D1); EIA''s "Alabama Power Co" is kept as an alias. Its own brand like Georgia Power, so it stays a company with a subsidiary_of link rather than merging into Southern Company. The utility category (and, on production, the owns link to operating Farley) puts it in Utilities and operators. No ownership share: the source says it owns Plant Farley but gives no percentage. Southern Nuclear operates Farley (NRC list).'
+description:
+  text: Electric utility in Alabama, part of Southern Company, that owns Plant Farley.
+  source_url: https://southernnuclear.com/our-plants/plant-farley.html
+  quote: Plant Farley, located near Dothan in southeast Alabama, is owned by Alabama Power and operated by Southern Nuclear.
+  also:
+  - source_url: https://www.alabamapower.com/our-company.html
+    quote: We’re part of Southern Company, one of the nation’s largest energy producers.

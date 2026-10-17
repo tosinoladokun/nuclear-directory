@@ -1,0 +1,22 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: NAC International
+aliases:
+- NAC INTERNATIONAL INC.
+website: https://www.nacintl.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.nacintl.com/solutions/storage-technologies
+  quote: NAC International holds decades of experience designing, engineering, licensing, operating and maintaining nuclear spent fuel management systems for storage and transport.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: Founded as Nuclear Assurance Corporation (About page); not added as a former alias without the year.
+description:
+  text: Designs, licenses and supplies casks for storing and transporting spent nuclear fuel.
+  source_url: https://www.nacintl.com/solutions/storage-technologies
+  quote: 'NAC has designed, licensed and delivered more than 700 transportable nuclear fuel storage systems worldwide, including the industry’s three leading systems: MAGNASTOR, UMS, and MPC.'

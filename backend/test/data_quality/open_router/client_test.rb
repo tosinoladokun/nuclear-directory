@@ -122,6 +122,15 @@ class DataQuality::OpenRouter::ClientTest < ActiveSupport::TestCase
     assert_match "out of credit", assert_raises(DataQuality::OpenRouter::Client::RequestError) { ask }.message
   end
 
+  # #192: 403 can be a key limit, a moderation refusal, an allowed-models
+  # rule or an IP allowlist, so the prefix doesn't guess; OpenRouter's own
+  # message says why.
+  test "a 403 says it was refused and appends OpenRouter's reason, without guessing the cause (#192)" do
+    stub_request(:post, ENDPOINT).to_return(status: 403, body: { error: { message: "Prompt flagged by moderation" } }.to_json)
+    assert_equal "OpenRouter refused the request (OpenRouter 403: Prompt flagged by moderation)",
+      assert_raises(DataQuality::OpenRouter::Client::RequestError) { ask }.message
+  end
+
   test "checks the key without a model call" do
     key = stub_request(:get, "https://openrouter.ai/api/v1/key").with(headers: { "Authorization" => "Bearer test-key" })
       .to_return(status: 200, body: { data: { label: "nd-prod", usage: 0.07, limit: 10 } }.to_json)

@@ -1,0 +1,25 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Ampeers
+aliases:
+- AMPEERS LLC
+website: https://www.ampeers.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://www.ampeers.com/blog/hts
+  quote: By dramatically improving manufacturing efficiency and scale, AMPeers is enabling the widespread adoption of superconductors in fusion magnets, power transmission, and next-generation energy systems.
+  confidence: 0.9
+technologies: []
+relationships: []
+facilities: []
+notes: 'The company styles itself AMPeers; the display name stays Ampeers here to match the #308 repair, and becomes AMPeers in a follow-up rename (D1).'
+description:
+  text: Makes superconducting wire for fusion magnets and power systems.
+  source_url: https://www.ampeers.com/about
+  quote: AMPeers scales breakthrough HTS technology by combining decades of academic leadership with industry-proven manufacturing expertise to deliver next-generation superconducting wire.
+  also:
+  - source_url: https://www.ampeers.com/blog/hts
+    quote: By dramatically improving manufacturing efficiency and scale, AMPeers is enabling the widespread adoption of superconductors in fusion magnets, power transmission, and next-generation energy systems.

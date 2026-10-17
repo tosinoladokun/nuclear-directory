@@ -1,0 +1,24 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: ENSCO
+aliases:
+- ENSCO INC
+website: https://www.ensco.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://www.ensco.com/news-media/press-releases/us-department-of-energy-awards-contract-to-ensco-to-build-and-test-fortis-railcar
+  quote: Company will fabricate and test prototype railcar to transport spent nuclear fuel, high-level radioactive waste
+  confidence: 0.8
+technologies: []
+relationships: []
+facilities: []
+notes: Only nuclear work found is the DOE Fortis cask railcar (it builds the railcar; it doesn't transport waste), so components at 0.8.
+description:
+  text: Engineering company in aerospace, national security, rail and cybersecurity; contracted by DOE to build and test a spent-fuel railcar prototype.
+  source_url: https://www.ensco.com/news-media/press-releases/us-department-of-energy-awards-contract-to-ensco-to-build-and-test-fortis-railcar
+  quote: ENSCO operates in the aerospace, national security, surface transportation and cybersecurity sectors and focuses on technologies, products, and services to support the safety, security, reliability, and efficiency of customer missions.
+  also:
+  - quote: Company will fabricate and test prototype railcar to transport spent nuclear fuel, high-level radioactive waste

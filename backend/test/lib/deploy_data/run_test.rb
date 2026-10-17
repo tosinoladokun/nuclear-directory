@@ -393,4 +393,21 @@ class DeployData::RunTest < ActiveSupport::TestCase
     assert DataDeploy.sole.applied?
     assert_includes @github.posts.sole[:body], "Error after the data committed (it stands): RuntimeError: snapshot expiry failed"
   end
+
+  test "report mode compares flip-flops with the last applied run, not the last report" do
+    run_step
+    westinghouse = organizations(:westinghouse)
+    write "db/seeds/organizations/westinghouse.yml", "name: Westinghouse Electric\n"
+    assert_equal :reported, run_step(mode: "report", seeder: -> { VerificationEvent.create!(subject: westinghouse, to_status: "verified", by: "human:tosin") })
+
+    # The next PR changes another file. Westinghouse's change is still
+    # pending (the report rolled back), so writing it again isn't a flip-flop.
+    write "db/seeds/organizations/terrapower.yml", "name: TerraPower Inc\n"
+    seeder = lambda do
+      VerificationEvent.create!(subject: westinghouse, to_status: "verified", by: "human:tosin")
+      VerificationEvent.create!(subject: organizations(:terrapower), to_status: "verified", by: "human:tosin")
+    end
+    assert_equal :reported, run_step(mode: "report", seeder:)
+    refute_includes @github.posts.last[:body], "Flag:"
+  end
 end

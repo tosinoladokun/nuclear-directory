@@ -1,0 +1,24 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: XUV Lasers
+aliases:
+- XUV LASERS, INC.
+website: https://www.xuvlasers.com
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://www.sbir.gov/portfolio/405296
+  quote: Amorphous oxide interference coatings for multi-gigashot lifetime for inertial fusion energy laser drivers
+  confidence: 0.9
+technologies: []
+relationships: []
+facilities: []
+notes: Own site returned 403 to our bot; quotes are award titles on its SBIR.gov firm record (tier 1). Fort Collins, CO.
+description:
+  text: Develops components and optical coatings for high-power lasers, including fusion laser drivers.
+  source_url: https://www.sbir.gov/portfolio/405296
+  quote: Key Components for the implementation of high repetition rate Petawatt-class lasers
+  also:
+  - quote: Amorphous oxide interference coatings for multi-gigashot lifetime for inertial fusion energy laser drivers

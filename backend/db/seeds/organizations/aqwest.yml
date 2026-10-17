@@ -1,0 +1,22 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Aqwest
+aliases:
+- AQWEST, LLC
+website: https://www.aqwest.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://www.aqwest.com/
+  quote: Aqwest products, technologies, and solutions aim to benefit a broad range of industrial and Government applications including energy production via nuclear fusion, medical therapy and imaging, security, materials sciences, remote sensing, and high-energy physics research.
+  confidence: 0.8
+technologies: []
+relationships: []
+facilities: []
+notes: Weak fusion link (one market in a list), so confidence 0.8.
+description:
+  text: Develops photonics, thermal management and energy-efficiency products.
+  source_url: https://www.aqwest.com/
+  quote: We develop and commercialize cutting-edge solutions in photonics, thermal management and energy efficiency.

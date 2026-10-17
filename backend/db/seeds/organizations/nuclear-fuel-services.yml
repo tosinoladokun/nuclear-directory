@@ -1,0 +1,29 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Nuclear Fuel Services
+aliases:
+- NUCLEAR FUEL SERVICES INC
+- NFS
+website: null
+hq: null
+country_code: US
+status: active
+roles:
+- key: fuel
+  source_url: https://www.bwxt.com/sectors/nuclear-fuel/nuclear-fuel-services/
+  quote: NFS also converts Cold War-era government stockpiles of HEU into material suitable for processing into commercial nuclear reactor fuel.
+  confidence: 1.0
+technologies: []
+relationships:
+- type: subsidiary_of
+  to: BWXT
+  description: NFS is a BWXT subsidiary.
+  source_url: https://www.bwxt.com/sectors/nuclear-fuel/nuclear-fuel-services/
+  quote: Our subsidiary Nuclear Fuel Services (NFS) is a leading manufacturer of fuel material for all naval nuclear reactors used in U.S. submarines and aircraft carriers.
+  confidence: 1.0
+facilities: []
+notes: Its own domain doesn't resolve; quotes are from its parent's page. No website set (it would share BWXT's domain). Erwin, TN.
+description:
+  text: BWXT subsidiary that makes fuel material for U.S. Navy submarine and aircraft carrier reactors.
+  source_url: https://www.bwxt.com/sectors/nuclear-fuel/nuclear-fuel-services/
+  quote: Our subsidiary Nuclear Fuel Services (NFS) is a leading manufacturer of fuel material for all naval nuclear reactors used in U.S. submarines and aircraft carriers.

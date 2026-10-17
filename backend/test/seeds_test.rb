@@ -40,13 +40,13 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 69, Organization.verified.count
-    assert_equal 84, OrganizationRole.verified.count
+    assert_equal 89, Organization.verified.count
+    assert_equal 106, OrganizationRole.verified.count
     assert_equal 57, OrganizationTechnology.verified.count
-    assert_equal 71, Relationship.verified.count
-    assert_equal 35, Facility.verified.count
+    assert_equal 74, Relationship.verified.count
+    assert_equal 36, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 55, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal [ 56, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal 26, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
@@ -133,6 +133,20 @@ class SeedsTest < ActiveSupport::TestCase
     long_mott = Organization.find_by!(slug: "long-mott-energy")
     assert_empty long_mott.facility_relationships
     assert_equal [ "project_developer" ], long_mott.roles.pluck(:key)
+  end
+
+  test "DOE-funded companies carry sourced categories; new category keys exist (#322)" do
+    load_seeds
+
+    assert_equal %w[components fuel], Organization.find_by!(name: "BWXT").roles.pluck(:key).sort
+    assert_equal [ "waste_decommissioning" ], Organization.find_by!(name: "NAC International").roles.pluck(:key)
+    nfs = Organization.find_by!(name: "Nuclear Fuel Services")
+    assert_equal "BWXT", Relationship.find_by!(from_organization: nfs, relationship_type: "subsidiary_of").to_organization.name
+    alabama = Organization.find_by!(name: "Alabama Power")
+    assert_equal [ "Joseph M Farley" ], alabama.facility_relationships.owns.joins(:facility).pluck("facilities.name")
+    assert_equal alabama.id, Directory::Lookup.organization(name: "Alabama Power Co").id, "EIA's spelling still finds it"
+    assert_equal [ "utility" ], alabama.roles.pluck(:key)
+    assert_equal %w[components isotopes research_organization university waste_decommissioning], Role.where(key: %w[components isotopes waste_decommissioning university research_organization]).pluck(:key).sort
   end
 
   test "the approved #63 calls: descriptions and HQs, no NRC description; Bernhard an investor since 16 Oct" do
