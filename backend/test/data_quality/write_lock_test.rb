@@ -108,4 +108,15 @@ class DataQuality::WriteLockTest < ActiveSupport::TestCase
       assert_output(nil, /Usage: TASKS=/) { Rake::Task["data_quality:with_write_lock"].execute }
     end
   end
+
+  test "the approve-all repair task doesn't run during a deploy's data steps (#308)" do
+    deploy = other_session
+    assert try(deploy, "pg_try_advisory_lock")
+
+    assert_raises(SystemExit) do
+      assert_output(nil, /Not run: data is being deployed/) { Rake::Task["data_quality:repair_approve_all"].execute }
+    end
+  ensure
+    close_session(deploy)
+  end
 end
