@@ -1,0 +1,26 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Ceramic Tubular Products
+aliases:
+- CERAMIC TUBULAR PRODUCTS LLC
+- CTP
+website: https://ctp-usa.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://ctp-usa.com/
+  quote: Advanced Silicon Carbide accident tolerant nuclear fuel rod cladding.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: Calls itself CTP. fuel (fabrication) is a possible second category, since cladding is part of the fuel rod; left at components.
+description:
+  text: Lynchburg, Virginia manufacturer of silicon carbide nuclear fuel rod cladding.
+  source_url: https://ctp-usa.com/about/
+  quote: CTP is a small business engineering and manufacturing company headquartered in Lynchburg, VA.
+  also:
+  - source_url: https://ctp-usa.com/
+    quote: Advanced Silicon Carbide accident tolerant nuclear fuel rod cladding.

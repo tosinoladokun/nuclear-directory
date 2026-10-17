@@ -1,0 +1,26 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Advanced Reactor Concepts
+aliases:
+- ADVANCED REACTOR CONCEPTS, LLC
+- ARC Clean Technology
+website: https://www.arc-cleantech.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: reactor_vendor
+  source_url: https://www.arc-cleantech.com/
+  quote: The ARC-100 is a sodium-cooled fast reactor using metallic fuel, leveraging proven technology and ongoing licensing engagement in the US and Canada.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: Trades as ARC Clean Technology (alias here). Its site doesn't state the rename from Advanced Reactor Concepts, so the display name stays until a quote does (D1 former alias).
+description:
+  text: Develops the ARC-100, a sodium-cooled fast small modular reactor.
+  source_url: https://www.arc-cleantech.com/about
+  quote: ARC Clean Technology builds advanced small modular reactors that deliver uninterruptible, clean power for the industries that cannot afford downtime.
+  also:
+  - source_url: https://www.arc-cleantech.com/
+    quote: The ARC-100 is a sodium-cooled fast reactor using metallic fuel, leveraging proven technology and ongoing licensing engagement in the US and Canada.

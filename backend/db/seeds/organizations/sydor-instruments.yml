@@ -1,0 +1,24 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Sydor Instruments
+aliases:
+- SYDOR INSTRUMENTS, LLC
+website: https://sydortechnologies.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://www.sbir.gov/portfolio/15610
+  quote: Plasma Electrode Pockels Cells for Inertial Fusion Facilities
+  confidence: 0.9
+technologies: []
+relationships: []
+facilities: []
+notes: Own site (sydortechnologies.com) returned 403 to our bot, so quotes are award titles on its SBIR.gov firm record (tier 1), which lists that website. Not Sydor Optics (sydor.com). Brand may now be Sydor Technologies; unconfirmed.
+description:
+  text: Developer of ultra-fast photodiodes and laser components for fusion facilities, under DOE research awards.
+  source_url: https://www.sbir.gov/portfolio/15610
+  quote: An ultra-fast photodiode for picosecond optical, UV, and x-ray detection
+  also:
+  - quote: Plasma Electrode Pockels Cells for Inertial Fusion Facilities

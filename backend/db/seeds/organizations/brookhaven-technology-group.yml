@@ -1,0 +1,25 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Brookhaven Technology Group
+aliases:
+- BROOKHAVEN TECHNOLOGY GROUP INC
+website: https://brookhaventech.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://brookhaventech.com/customers/
+  quote: We are working with Massachusetts Institute of Technology on application of ExoCable technology in compact fusion reactors.
+  confidence: 0.9
+technologies: []
+relationships: []
+facilities: []
+notes: Also styled BTG. Not Brookhaven National Laboratory (a partner).
+description:
+  text: Develops superconducting cables, including for compact fusion reactors.
+  source_url: https://brookhaventech.com/
+  quote: We develop superconducting cables that combine high quench stability with low magnetization loss and high mechanical strength.
+  also:
+  - source_url: https://brookhaventech.com/customers/
+    quote: We are working with Massachusetts Institute of Technology on application of ExoCable technology in compact fusion reactors.

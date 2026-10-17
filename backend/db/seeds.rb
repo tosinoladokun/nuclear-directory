@@ -13,6 +13,9 @@ ROLES = [
   [ "enrichment", "Enrichment", "Enriches uranium, including HALEU.", "fuel" ],
   [ "fabrication", "Fuel fabrication", "Makes finished fuel such as fuel assemblies or TRISO particles.", "fuel" ],
   [ "reactor_vendor", "Reactor vendor", "Designs and sells reactors, from large light-water plants to SMRs and microreactors." ],
+  [ "components", "Components", "Makes equipment for nuclear or fusion plants: pumps, valves, forgings, magnets, instrumentation and control hardware." ],
+  [ "isotopes", "Isotopes", "Produces medical or industrial isotopes." ],
+  [ "waste_decommissioning", "Waste and decommissioning", "Stores, transports or disposes of spent fuel and waste, or decommissions plants." ],
   [ "reactor_services", "Reactor services", "Maintains, inspects, refuels or upgrades operating reactors." ],
   [ "utility", "Utility", "Sells electricity to customers and owns or plans nuclear generation." ],
   [ "operator", "Operator", "Holds the license and runs a nuclear facility day to day." ],
@@ -27,7 +30,9 @@ ROLES = [
   [ "regulatory_consultant", "Regulatory consultant", "Helps companies through NRC licensing and other approvals." ],
   [ "venture_capital", "Venture capital", "Invests equity in nuclear companies." ],
   [ "government_agency", "Government agency", "Regulates or funds the industry, e.g. NRC, DOE." ],
-  [ "national_lab", "National lab", "National laboratory doing nuclear research or running test reactors." ]
+  [ "national_lab", "National lab", "National laboratory doing nuclear research or running test reactors." ],
+  [ "university", "University", "University doing nuclear research or running a research reactor." ],
+  [ "research_organization", "Research organization", "Independent research organization doing nuclear research and development." ]
 ].freeze
 
 TECHNOLOGIES = [

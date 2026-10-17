@@ -34,6 +34,10 @@ The database says "organization", "facility" and "role". Visitors don't. On scre
 | facility | power plant, or plant and site when it includes test reactors and fuel plants |
 | reactor_vendor | reactor developer |
 | reactor_services | repair and services |
+| components | component maker |
+| isotopes | isotope producer |
+| waste_decommissioning | waste and decommissioning |
+| research_organization | research organization |
 | data center offtaker | power buyer |
 | offtake agreement | power deal in navigation and suggestions; offtake agreement in the fact itself |
 

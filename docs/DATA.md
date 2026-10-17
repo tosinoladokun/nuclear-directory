@@ -124,7 +124,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | Services and engineering | Maintains, builds, licenses or advises, and other professional services to the industry | `reactor_services`, `regulatory_consultant`, or a sourced activity tag: construction (EPC), licensing and consulting, legal, insurance, software | 6 |
 | Power buyers | Buys nuclear power, mostly hyperscalers and data centers | `data_center_offtaker`, or a published power deal as the buyer, **unless the buyer is a utility** (TVA buying from Kairos is a utility deal) | 4 |
 | Investors | Puts money into nuclear companies or projects | `venture_capital`, a sourced investor-type tag (private equity, bank, project finance, corporate fund), or a published `invests_in` or `funds` link as the funder, **unless the funder is a government agency** (DOE grants put DOE in Government and research, not Investors) | 6 |
-| Government and research | Agencies, regulators, national labs and universities | `government_agency`, `national_lab`, `university` (new key) | 4 |
+| Government and research | Agencies, regulators, national labs, universities and independent research organizations | `government_agency`, `national_lab`, `university`, `research_organization` | 4 |
 
 **Counting:** buckets overlap (6 of 81 companies are in two or more today). The total is always the number of companies ("81 companies"), never the sum of buckets. A bucket count is labelled "companies that develop reactors", "companies that buy nuclear power", and so on. Charts of buckets are bars, never a pie or a 100% stack.
 
@@ -245,6 +245,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | Capacity is shown as "MW", noted "Net summer capacity, from EIA" on plant pages (D2) | Tosin | #238 |
 | A counted deal is a signed power deal; frameworks and MOUs are listed separately by stage | Tosin | #253, #255 |
 | Nuclear Capital Partners is venture capital (#250) | Tosin | #250 |
+| Government and research includes independent research organizations (`research_organization`), e.g. EPRI | Tosin | #322, #341 |
 | A licensed reactor that produces no power is "Not operating", not "Restarting"; a restart plan is a sourced note | Tosin | #296 |
 | 9 company buckets; a company is in every bucket its facts support, with no stored main bucket; tags for detail | Tosin | #266 |
 | Scope is the whole nuclear industry, not only power; isotopes are in | Tosin | #266 |

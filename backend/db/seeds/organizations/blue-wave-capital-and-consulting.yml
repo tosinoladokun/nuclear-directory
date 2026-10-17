@@ -1,0 +1,23 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Blue Wave Capital and Consulting
+aliases:
+- BLUE WAVE CAPITAL AND CONSULTING LLC
+- Blue Wave AI Labs
+website: https://bluewaveailabs.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: reactor_services
+  source_url: https://bluewaveailabs.com/
+  quote: Turn your data into unprecedented insights and elevate plant operations with the BWNuclear.ai™ Core Optimization software suite.
+  confidence: 0.9
+technologies: []
+relationships: []
+facilities: []
+notes: Now trades as Blue Wave AI Labs; its site thanks DOE for "Grant DE-NE0008930", the same award as our DOE link (DENE0008930). The site never shows the legal name, so the rename needs a quote before the display name changes (follow-up).
+description:
+  text: Makes AI software that helps nuclear plants cut fuel and maintenance costs.
+  source_url: https://bluewaveailabs.com/about/
+  quote: By utilizing your existing plant data and documents our Machine Learning models can help reduce fuel and O&M costs and optimize document preparation costs allowing nuclear energy to better compete as a cost-effective, sustainable energy source to power our carbon neutral, clean energy future.

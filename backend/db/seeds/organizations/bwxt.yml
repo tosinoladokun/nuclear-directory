@@ -1,0 +1,30 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: BWXT
+aliases:
+- BWXT NUCLEAR ENERGY, INC.
+- BWXT NUCLEAR OPERATIONS GROUP, INC.
+website: https://www.bwxt.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://www.bwxt.com/sectors/nuclear-energy/components-equipment/
+  quote: We engineer and manufacture reactor pressure vessels, steam generators and heat exchangers to the highest safety standards, enabling reliable clean energy.
+  confidence: 1.0
+- key: fuel
+  source_url: https://www.bwxt.com/sectors/nuclear-fuel/
+  quote: We possess decades of experience downblending highly enriched uranium (HEU) to produce low enriched uranium (LEU) and high assay low-enriched uranium (HALEU) nuclear fuels for both government and commercial applications.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: BWX Technologies; legal entities from DOE awards are aliases (D1). BWXT Medical (isotopes) not added without a quote.
+description:
+  text: Makes naval nuclear reactors and components, as it has since the 1950s, and nuclear fuel.
+  source_url: https://www.bwxt.com/
+  quote: We have proudly manufactured naval nuclear components and reactors since the 1950s – we designed and fabricated components for the USS Nautilus, the world’s first nuclear-powered submarine.
+  also:
+  - source_url: https://www.bwxt.com/sectors/nuclear-fuel/
+    quote: We possess decades of experience downblending highly enriched uranium (HEU) to produce low enriched uranium (LEU) and high assay low-enriched uranium (HALEU) nuclear fuels for both government and commercial applications.

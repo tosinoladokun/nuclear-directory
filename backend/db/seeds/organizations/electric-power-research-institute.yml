@@ -1,0 +1,26 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Electric Power Research Institute
+aliases:
+- ELECTRIC POWER RESEARCH INSTITUTE INC
+- EPRI
+website: https://www.epri.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: research_organization
+  source_url: https://europe.epri.com/
+  quote: EPRI Europe is the European research arm of EPRI, a world-recognised non-profit RD&D membership organization with global reach.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'Tosin, 17 Oct: Government and research, as an independent research organization (#341). www.epri.com renders with JavaScript only, so quotes are from EPRI''s own subdomains (europe.epri.com, nuclearplantmod.epri.com). Abbreviation EPRI is an alias (DATA.md).'
+description:
+  text: Non-profit energy research organization with a program for modernizing nuclear power plants.
+  source_url: https://europe.epri.com/
+  quote: EPRI Europe is the European research arm of EPRI, a world-recognised non-profit RD&D membership organization with global reach.
+  also:
+  - source_url: https://nuclearplantmod.epri.com/Nuclear_Plant_Modernization_Toolbox
+    quote: The Plant Modernization Toolbox (PMTB) Wiki is intended to be a resource to facilitate decision making and execution of the modernization process at nuclear power plants (NPPs).

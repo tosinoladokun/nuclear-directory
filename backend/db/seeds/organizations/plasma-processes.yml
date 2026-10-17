@@ -1,0 +1,22 @@
+# Seed research for #322 (DOE-funded companies' categories) - 2026-10-17. Quotes copied from raw page text fetched this session by Data Quality's research.
+# Created by the USAspending DOE awards crawler (#260); name as set by the #308 repair, the award spelling kept as an alias.
+name: Plasma Processes
+aliases:
+- PLASMA PROCESSES, LLC
+website: https://plasmapros.com/
+hq: null
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://plasmapros.com/markets/department-of-energy-doe-and-energy/
+  quote: Our coatings protect critical components from intense heat, neutron irradiation, plasma erosion, and tritium permeation, enabling longer lifetimes and improved performance of reactor walls, divertors, and diagnostic systems.
+  confidence: 0.9
+technologies: []
+relationships: []
+facilities: []
+notes: Huntsville, AL (not stated on a fetched page, so no HQ). Mostly aerospace and defense; fusion and fission coatings are one market.
+description:
+  text: Develops, makes and coats engineered materials for extreme conditions.
+  source_url: https://plasmapros.com/
+  quote: We specialize in the development, manufacture, and coating of engineered materials and their applications for extreme conditions.
