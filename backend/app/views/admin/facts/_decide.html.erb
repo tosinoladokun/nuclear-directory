@@ -39,8 +39,11 @@
         </div>
       </details>
       <% unless duplicate %>
-        <%# Opened from anywhere but Checks (Live, a Record), approving comes back here. %>
-        <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, back:, next: (request.fullpath unless params[:from] == "checks")), class: "nd-btn nd-btn--outline nd-decide__edit" %>
+        <%# Opened from anywhere but Checks (Live, a Record), the edit page leads back here.
+            Going through a Record row's claims, approving goes on to the next
+            claim (done), or back to the row after the last. %>
+        <% done = (@following || back if params[:claims].present? && params[:from] == "record") %>
+        <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, back:, next: (request.fullpath unless params[:from] == "checks"), done:), class: "nd-btn nd-btn--outline nd-decide__edit" %>
       <% end %>
     </div>
   <% end %>

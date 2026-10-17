@@ -6,7 +6,12 @@ class Admin::FactsController < Admin::BaseController
 
   def show
     @fact = DataQuality::Review.fact(type: params[:type], id: params[:id].to_i) or raise ActiveRecord::RecordNotFound
-    @list = params[:from] == "live" ? live_position(@fact.type, @fact.id) : (list_position if params[:from] == "checks")
+    @list =
+      case params[:from]
+      when "live" then live_position(@fact.type, @fact.id)
+      when "record" then related_context&.dig(:list)
+      when "checks" then list_position
+      end
     # Decide here (#269): the claim this page was opened for (a Checks row is
     # one claim), else the oldest waiting on it, or the fact itself when it's
     # pending with none.
@@ -14,6 +19,8 @@ class Admin::FactsController < Admin::BaseController
     # A named claim that's no longer waiting shows its own result, never another claim's buttons.
     asked = params[:claim].presence&.to_i
     @claim = asked ? waiting.find { |item| item.candidate_id == asked } : waiting.first
+    # Opened by Decide on a Record's row (claims=1): Previous and Next through this item's waiting claims.
+    @list = waiting_position(waiting) if params[:claims].present? && params[:from] == "record"
     if asked && @claim.nil?
       @decided = DataQuality::Review.decision_of(asked)
       @following = @list&.dig(:next)
@@ -37,24 +44,41 @@ class Admin::FactsController < Admin::BaseController
     end
 
     result = DataQuality::Review.unpublish(type: params[:type], id: params[:id].to_i, by: actor, reason: params[:reason].strip)
-    flash_results([ result ], "Unpublished")
+    flash_named(result, "Taken off")
     redirect_after next_or(fact_path_here)
   end
 
   def republish
     result = DataQuality::Review.republish(type: params[:type], id: params[:id].to_i, by: actor, reason: params[:reason].presence)
-    flash_results([ result ], "Republished")
+    flash_named(result, "Put back")
     redirect_after next_or(fact_path_here)
   end
 
   private
+    # Where the claim sits among those waiting on this item ("1 of 2 waiting"),
+    # each opened the same way; after the last decision, back (the Record's row).
+    def waiting_position(waiting)
+      index = waiting.index { |item| item.candidate_id == @claim&.candidate_id } or return
+      path = ->(item) { item && admin_fact_path(type: @fact.type, id: @fact.id, **context, claims: 1, claim: item.candidate_id) }
+      { index: index + 1, total: waiting.size, label: "waiting", previous: path.(index.positive? ? waiting[index - 1] : nil), next: path.(waiting[index + 1]) }
+    end
+
+    # "Taken off: Georgia Power owns Plant Vogtle." (Design, #166), or the error.
+    def flash_named(result, verb)
+      return flash_results([ result ], verb) unless result.ok?
+
+      name = DataQuality::Review.fact(type: params[:type], id: params[:id].to_i)&.name
+      flash[:notice] = name ? "#{verb}: #{name.to_s.upcase_first}." : "#{verb}."
+    end
+
     def check_type
       raise ActiveRecord::RecordNotFound unless DataQuality::Review.fact_kinds.map(&:camelize).include?(params[:type])
     end
 
     # This page again, with where it was opened from.
     def fact_path_here = admin_fact_path(type: params[:type], id: params[:id], **context, claim: params[:claim].presence)
-    def context = params.permit(:from, :back).to_h.symbolize_keys.compact_blank
+    # claims: opened through a Record row's waiting claims, kept by Take off and Put back too.
+    def context = params.permit(:from, :section, :row, :back, :with_removed, :claims).to_h.symbolize_keys.compact_blank
     helper_method :context
 
     # Where this item (the fact, or one claim on it) sits in the Checks list

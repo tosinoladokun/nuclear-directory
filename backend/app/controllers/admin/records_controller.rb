@@ -1,8 +1,13 @@
 # A company's or plant's Record (#201 part 2): the public page as visitors
-# see it, with its status, Edit, Take off or Put back, its sources and its
-# history. Opened from Live, it has a breadcrumb back to that list and
-# Previous and Next through it. Writes go through DataQuality::Review.
+# see it, with its status, Edit, Take off or Put back, its related items,
+# its sources and its history. Opened from Live, it has a breadcrumb back to
+# that list and Previous and Next through it; opened from another Record's
+# related items, Previous and Next through that section. Writes go through
+# DataQuality::Review. Edit serves a unit or a link too (page: "fact"), from
+# a related row's menu, and returns to that row (next).
 class Admin::RecordsController < Admin::BaseController
+  EDITABLE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze
+
   before_action :load_fact
   # Saving an edit approves the record, which would put a removed one back:
   # that's Put back's job, so a removed or rejected record isn't edited here.
@@ -15,7 +20,8 @@ class Admin::RecordsController < Admin::BaseController
     @profile = @record.is_a?(Organization) ? CompanyProfile.new(@record) : PlantProfile.new(@record)
     @sources = Directory::Lookup.evidence_sources(type: @fact.type, id: @fact.id)
     @waiting = DataQuality::Review.waiting_for(type: @fact.type, id: @fact.id)
-    @list = live_position(@fact.type, @fact.id)
+    @related = RelatedItems.new(@record)
+    @list = related_context ? related_context[:list] : live_position(@fact.type, @fact.id)
   end
 
   def edit
@@ -32,7 +38,7 @@ class Admin::RecordsController < Admin::BaseController
     # A pending record is approved as it is ("Save and approve"); a live one with nothing changed stays as it was.
     if values.empty? && @fact.verification_status != "pending"
       flash[:notice] = "Nothing changed."
-      return redirect_after record_path_here
+      return redirect_after next_or(record_path_here)
     end
 
     result = nil
@@ -50,7 +56,7 @@ class Admin::RecordsController < Admin::BaseController
 
     if result.ok?
       flash[:notice] = "Saved."
-      redirect_after record_path_here
+      redirect_after next_or(record_path_here)
     else
       @fields = editable_fields
       @errors = result.errors
@@ -127,18 +133,29 @@ class Admin::RecordsController < Admin::BaseController
     end
 
     def load_fact
+      raise ActiveRecord::RecordNotFound unless EDITABLE_TYPES.include?(params[:type])
+
       @fact = DataQuality::Review.fact(type: params[:type], id: params[:id].to_i) or raise ActiveRecord::RecordNotFound
+      return if fact_page?
+      raise ActiveRecord::RecordNotFound unless %w[Organization Facility].include?(@fact.type)
       raise ActiveRecord::RecordNotFound if @fact.type == "Facility" && @fact.values["parent_id"].present? # a unit has its fact page
     end
+
+    # Editing a unit or a link: its page is the fact page.
+    def fact_page? = params[:page] == "fact"
+    helper_method :fact_page?, :next_or
 
     def editable!
       return if %w[verified pending].include?(@fact.verification_status)
 
       flash[:alert] = @fact.verification_status == "unpublished" ? "It's taken off. Put it back first, then edit it." : "It was rejected, so it can't be edited."
-      redirect_after record_path_here
+      redirect_after next_or(record_path_here)
     end
 
-    def record_path_here = admin_record_path(type: @fact.type, id: @fact.id, back: params[:back].presence)
+    def record_path_here
+      context = params.permit(:from, :section, :row, :back, :with_removed).to_h.symbolize_keys.compact_blank
+      fact_page? ? admin_fact_path(type: @fact.type, id: @fact.id, **context) : admin_record_path(type: @fact.type, id: @fact.id, **context)
+    end
     helper_method :record_path_here
 
     # Single values a person may change here; ids, slugs and lists aren't.
@@ -150,7 +167,12 @@ class Admin::RecordsController < Admin::BaseController
     # site with units has none to edit; a standalone reactor keeps its own.
     # A plant's status is changed with its evidence, in Change status (#316).
     def editable_fields
-      fields = @fact.values.reject { |name, value| NOT_EDITED.include?(name) || value.is_a?(Array) || value.is_a?(Hash) }.keys
+      # A link's ends and kind identify it, so they aren't edited (as in
+      # Checks: Review::NOT_EDITABLE). A stored identifier such as a site's
+      # EIA plant ID is a value like any other.
+      fields = @fact.values.reject do |name, value|
+        NOT_EDITED.include?(name) || DataQuality::Review::NOT_EDITABLE.include?(name) || value.is_a?(Array) || value.is_a?(Hash)
+      end.keys
       return fields unless @fact.type == "Facility"
 
       fields -= %w[status]

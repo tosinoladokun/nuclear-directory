@@ -55,7 +55,7 @@
     <%= form_with url: reject_admin_candidates_path, class: "nd-fold__body nd-wait__more" do %>
       <button type="submit" disabled hidden aria-hidden="true" tabindex="-1"></button>
       <%= hidden_field_tag :back, back_path(admin_checks_path(filters.slice("category", "source"))), id: nil %>
-      <%= hidden_field_tag :next, from_fact || @list&.dig(:next), id: nil if from_fact || @list&.dig(:next) %>
+      <%= hidden_field_tag :next, done_path || from_fact || @list&.dig(:next), id: nil if done_path || from_fact || @list&.dig(:next) %>
       <div class="nd-field">
         <label for="edit-reject-reason" class="type-body-strong">Reason (optional)</label>
         <input type="text" class="nd-input type-input" id="edit-reject-reason" name="reasons[<%= @item.candidate_id %>]">

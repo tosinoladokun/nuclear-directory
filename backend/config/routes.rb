@@ -87,6 +87,9 @@ Rails.application.routes.draw do
       get "/" => "facts#show"
       post "unpublish" => "facts#unpublish", as: :unpublish
       post "republish" => "facts#republish", as: :republish
+      # Edit a unit or a link (#201, related items on a Record): the Record's edit flow.
+      get "edit" => "records#edit", as: :edit, defaults: { page: "fact" }
+      patch "/" => "records#update", defaults: { page: "fact" }
     end
   end
 

@@ -1,0 +1,59 @@
+<%# What this Record is connected to, under its public card (#201, Design's
+    spec on #166): a plant's units and companies; a company's deals and
+    links, then its plants and sites. Each row opens its own Record or fact
+    page, shows its status and the claims waiting on it, and has a menu of
+    actions that come back here, to that row. Removed and rejected rows show
+    on request. Locals: related (RelatedItems). %>
+<% related.sections.each do |section| %>
+  <% removed = params[:removed] == section.key %>
+  <% rows = section.shown(removed) %>
+  <section class="nd-related" id="<%= section.key %>" aria-labelledby="related-<%= section.key %>">
+    <div class="nd-shell__head">
+      <h2 class="type-admin-h2 m-0" id="related-<%= section.key %>"><%= section.title %> <span class="type-data nd-num text-ink-muted"><%= rows.size %></span></h2>
+      <% if section.removed_count.positive? %>
+        <%= link_to removed ? "Hide removed" : "Show removed (#{section.removed_count})",
+              "#{url_for(request.query_parameters.merge(removed: (section.key unless removed)).compact)}##{section.key}", class: "nd-link nd-link--muted type-ui nd-tap" %>
+      <% end %>
+    </div>
+    <table class="nd-numtable nd-related__table">
+      <thead>
+        <tr>
+          <% if section.key == "units" %>
+            <th scope="col">Unit</th><th scope="col">Reactor type</th><th scope="col">Capacity</th>
+          <% else %>
+            <th scope="col"><%= section.key == "plants" ? "Plant" : "Company" %></th><th scope="col">Link</th>
+          <% end %>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.each do |row| %>
+          <% item_type, item_id = row.item %>
+          <%# Back here at the row, with this section's removed rows shown: a decision
+              (Take off, or rejecting a proposal's last claim) can remove it. %>
+          <% here = "#{url_for(request.query_parameters.merge(removed: section.key))}##{row.anchor}" %>
+          <tr id="<%= row.anchor %>">
+            <td class="type-body nd-related__name"><%= link_to row.name, related_row_path(row, section.key, record_path_here, removed:), class: "nd-link" %></td>
+            <% if section.key == "units" %>
+              <td class="type-body"><%= row.words %></td>
+              <td class="type-data"><%= row.details.first %></td>
+            <% else %>
+              <td class="type-body nd-related__link">
+                <%= link_to row.words, admin_fact_path(type: item_type, id: item_id, from: "record", section: section.key, row: row.item.join("-"), back: record_path_here, with_removed: (1 if removed)), class: "nd-link" %>
+                <% if row.details.any? %><span class="text-ink-muted"> · <%= row.details.join(" · ") %></span><% end %>
+              </td>
+            <% end %>
+            <td class="type-body nd-related__status">
+              <%= row.status %>
+              <% if row.waiting.positive? %>
+                · <%= link_to "#{row.waiting} waiting", admin_fact_path(type: item_type, id: item_id, claim: row.first_claim, claims: 1, from: "record", section: section.key, row: row.item.join("-"), back: here), class: "nd-link type-data" %>
+              <% end %>
+            </td>
+            <td class="nd-related__actions"><%= render "admin/records/row_menu", row:, section:, here:, removed: %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </section>
+<% end %>

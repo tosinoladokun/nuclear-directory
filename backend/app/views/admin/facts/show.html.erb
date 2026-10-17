@@ -12,7 +12,8 @@
 
 <div class="nd-shell__head">
   <% from_live = params[:from] == "live" %>
-  <%= render "admin/crumbs", parent_label: from_live ? "Live" : "Checks", parent_path: back_path(from_live ? admin_live_path : admin_checks_path), current: @fact.name.to_s.upcase_first %>
+  <% trail = [ [ "Live", related_context[:live] ], [ related_context[:name], related_context[:path] ] ] if related_context %>
+  <%= render "admin/crumbs", parent_label: from_live ? "Live" : "Checks", parent_path: back_path(from_live ? admin_live_path : admin_checks_path), trail:, current: @fact.name.to_s.upcase_first %>
   <%= render "admin/itemnav", list: @list if @list %>
   <%= render "admin/facts/decide" %>
 </div>

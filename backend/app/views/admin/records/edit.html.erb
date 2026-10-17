@@ -2,10 +2,13 @@
 <% pending = @fact.verification_status == "pending" %>
 
 <div class="nd-stack max-w-prose">
-  <%= render "admin/crumbs", parent_label: @fact.name.to_s.upcase_first, parent_path: record_path_here, current: "Edit" %>
+  <% trail = [ [ "Live", related_context[:live] ], [ related_context[:name], next_or(related_context[:path]) ], [ @fact.name.to_s.upcase_first, record_path_here ] ] if related_context %>
+  <%= render "admin/crumbs", parent_label: @fact.name.to_s.upcase_first, parent_path: next_or(record_path_here), trail:, current: "Edit" %>
   <h1 class="type-admin-h1 m-0">Edit <%= @fact.name %></h1>
 
-  <%= form_with url: admin_record_path(type: @fact.type, id: @fact.id, back: params[:back].presence), method: :patch, class: "nd-stack" do |form| %>
+  <%= form_with url: record_path_here, method: :patch, class: "nd-stack" do |form| %>
+    <%# Back to where Edit was opened (a related row on a Record), else this page. %>
+    <%= hidden_field_tag :next, params[:next], id: nil if next_or(nil) %>
     <button type="submit" disabled hidden aria-hidden="true" tabindex="-1"></button>
     <% if @errors.present? %>
       <div class="nd-alert" role="alert">
@@ -26,7 +29,7 @@
     </div>
     <div class="nd-row">
       <%= form.submit(pending ? "Save and approve" : "Save", class: "nd-btn nd-btn--primary") %>
-      <%= link_to "Cancel", record_path_here, class: "nd-btn nd-btn--outline" %>
+      <%= link_to "Cancel", next_or(record_path_here), class: "nd-btn nd-btn--outline" %>
     </div>
   <% end %>
 </div>

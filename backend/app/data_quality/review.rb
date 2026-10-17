@@ -160,6 +160,13 @@ module DataQuality::Review
         .map { |candidate| item(candidate, directory) }
     end
 
+    # How many claims wait on each of these facts, and the first, counted as
+    # waiting_for counts them: { id => [count, first_candidate_id] }.
+    def waiting_counts(type:, ids:)
+      waiting_scope.where(subject_type: type.to_s, subject_id: ids).group(:subject_id)
+        .pluck(:subject_id, Arel.sql("COUNT(*)"), Arel.sql("MIN(candidates.id)")).to_h { |id, count, first| [ id, [ count, first ] ] }
+    end
+
     # The last decision a person made on a claim about one fact, for the
     # result line once nothing waits: { status: "merged"|"rejected", by:, at: }, or nil.
     def last_decision_for(type:, id:)
