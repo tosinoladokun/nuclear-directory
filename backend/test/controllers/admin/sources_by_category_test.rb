@@ -49,7 +49,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
 
     run_crawler("usaspending_doe_awards")
     get admin_sources_path(by: "category")
-    assert_select "details#government-research summary", /1 of 2.*Live/m
+    assert_select "details#government-research summary", /1 of 3.*Live/m
     assert_select "details#government-research .nd-cov__src a[href=?]", admin_source_path(key: "usaspending_doe_awards", back: admin_sources_path(by: "category")), "DOE awards (USAspending)"
   end
 
@@ -137,7 +137,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     api = run_crawler("usaspending_api")
     api.update!(content_sha256: nil)
     get admin_sources_path(by: "category")
-    assert_select "details#government-research summary", /1 of 2.*Live/m
+    assert_select "details#government-research summary", /1 of 3.*Live/m
 
     api.update!(crawl_status: "blocked", status_reason: "HTTP 403")
     get admin_sources_path(by: "category")
@@ -214,5 +214,18 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     crawled = sources.select { |source| source["kind"] && "DataQuality::Plugins::#{source['kind'].camelize}".safe_constantize }
     assert crawled.any?
     crawled.each { |source| assert_equal "built", source["status"], "#{source['name']} has a crawler, so it's built (or live once it runs)" }
+  end
+
+  # The isotope sites crawl names national labs and universities, which are
+  # Government and research (DATA.md), as well as Fuel's isotope producers.
+  test "a recent isotope crawl makes Government and research live, even with DOE awards stale" do
+    run_crawler("usaspending_doe_awards", at: 5.days.ago)
+    run_crawler("doe_isotope_sites")
+    get admin_sources_path(by: "category")
+
+    assert_select "details#government-research summary .nd-flag", count: 0
+    assert_select "details#government-research summary", /1 of 3.*Live/m
+    assert_select "details#government-research .nd-cov__src", /DOE Isotope Program \(national labs and universities\).*Live/m
+    assert_select "details#fuel .nd-cov__src", /DOE Isotope Program \(isotope producers\).*Live/m
   end
 end
