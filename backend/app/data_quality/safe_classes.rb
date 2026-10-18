@@ -163,7 +163,11 @@ module DataQuality::SafeClasses
         if changes.key?("description")
           before, after = changes.fetch("description").map { |text| total(text) }
           throw :unsafe, "its award total can't be read" unless before && after
-          throw :unsafe, "its award total drops by more than #{(config.fetch('max_total_drop') * 100).round}%" if after < before * (1 - config.fetch("max_total_drop"))
+          # The summaries round ("$1.3 million"), so the drop is judged at its
+          # largest: the old total rounded down to its most, the new to its least.
+          if after.first - after.last < (before.first + before.last) * (1 - config.fetch("max_total_drop"))
+            throw :unsafe, "its award total may drop by more than #{(config.fetch('max_total_drop') * 100).round}%"
+          end
         end
 
         changes
@@ -179,12 +183,17 @@ module DataQuality::SafeClasses
         config = CONFIG.fetch("classes").fetch(klass)
         kind = config.fetch("source_kind")
         latest = ->(stage) { CrawlRun.where(stage:, source_kind: kind).order(started_at: :desc, id: :desc).first }
-        crawl, match = latest.("crawl"), latest.("match")
+        crawl, match, verify = latest.("crawl"), latest.("match"), latest.("verify")
         index = ::Source.where(source_kind: config["index_source_kind"]).order(fetched_at: :desc, id: :desc).first if config["index_source_kind"]
         problem =
           if crawl.nil? || crawl.status != "succeeded" then "the source's last crawl didn't finish"
-          elsif config["index_source_kind"] && index&.http_status != 200 then "the source's last fetch didn't return 200"
+          # An answer that couldn't be read (malformed JSON) is a 200 with a status reason.
+          elsif config["index_source_kind"] && (index&.http_status != 200 || index.status_reason.present?)
+            "the source's last fetch didn't return 200"
           elsif match.nil? || match.status != "succeeded" then "the last match run didn't finish"
+          # Verify saves its recommendations one claim at a time: the run's
+          # set (and so the cap) is only whole once it's done.
+          elsif verify&.status == "running" then "the verifier is still checking this source"
           end
         { firsts: DataQuality::Review.first_batches, run_problem: problem,
           checked_sources: Array(match&.stats&.dig("dropped_checked_source_ids")).to_set }
@@ -200,27 +209,36 @@ module DataQuality::SafeClasses
 
       # G6: a run that proposes more safe changes than the cap, or more than
       # its share of the source's published facts, gets none of them taken.
+      # What the run already had approved counts too, so accepting some and
+      # then the rest can't pass the cap in two clicks.
       def capped(items, config, claims, directory:)
         cap = CONFIG.fetch("cap")
         runs = claims.to_h { |candidate| [ candidate.id, candidate.crawl_run_id ] }
         facts = directory.published_count_backed_by(source_ids: ::Source.where(source_kind: config.fetch("source_kind")).ids)
         limit = [ cap.fetch("max_items"), (facts * cap.fetch("max_share")).floor ].min
-        over = items.select(&:safe?).group_by { |item| runs[item.candidate_id] }.select { |_run, group| group.size > limit }
+        approved = Candidate.joins(:source).where(sources: { source_kind: config.fetch("source_kind") }, kind: config.fetch("kind"),
+          status: "merged", crawl_run_id: runs.values.uniq).group(:crawl_run_id).count
+        proposed = items.select(&:safe?).group_by { |item| runs[item.candidate_id] }.transform_values(&:size)
         items.map do |item|
-          group = over[runs[item.candidate_id]]
-          next item unless group && item.safe?
+          run = runs[item.candidate_id]
+          total = proposed.fetch(run, 0) + approved.fetch(run, 0)
+          next item unless item.safe? && total > limit
 
-          item.with(why: "its run proposes #{group.size} safe changes, over the limit of #{limit} " \
+          earlier = " (#{approved[run]} already approved)" if approved[run].to_i.positive?
+          item.with(why: "its run proposes #{total} safe changes#{earlier}, over the limit of #{limit} " \
             "(#{cap.fetch('max_items')}, or #{(cap.fetch('max_share') * 100).round}% of the source's #{facts} public facts)")
         end
       end
 
       def label(name) = DataQuality::Claim::LABELS.fetch(name) { name.humanize(capitalize: false) }
 
-      # In dollars, or nil.
+      # [dollars, how far rounding may have moved it], or nil. "$1.3 million"
+      # is anything from $1.25 to $1.35 million: 0.05 million either way.
       def total(text)
         match = TOTAL.match(text.to_s) or return
-        BigDecimal(match[1].delete(",")) * SCALE.fetch(match[2])
+        decimals = match[1][/\.(\d+)\z/, 1].to_s.size
+        scale = SCALE.fetch(match[2])
+        [ BigDecimal(match[1].delete(",")) * scale, BigDecimal("0.5") * scale / (10**decimals) ]
       end
 
       # The claim as the preview showed it, and as the verifier judged it.

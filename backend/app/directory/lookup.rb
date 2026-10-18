@@ -125,10 +125,12 @@ module Directory
     end
 
     # A company's or a plant's public paths: today's, then its former ones
-    # that no record holds now.
+    # that no published record holds now. A merged company keeps its slug
+    # on its unpublished row, and its address redirects to the survivor, so
+    # only a published one wins the address (as the public pages decide).
     def addresses(prefix, record)
       former = record.former_slugs.pluck(:slug)
-      former -= record.class.where(slug: former).pluck(:slug)
+      former -= record.class.published.where(slug: former).pluck(:slug)
       [ record.slug, *former ].map { |slug| "/#{prefix}/#{slug}" }
     end
     private :addresses

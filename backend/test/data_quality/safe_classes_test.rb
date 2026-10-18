@@ -206,8 +206,62 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
 
   test "S1: an award total that drops by more than 20% isn't safe" do
     lower = FIRST.sub("$1.0 million", "$750,000")
-    assert_equal "its award total drops by more than 20%", why(claim({ "description" => lower }))
+    assert_equal "its award total may drop by more than 20%", why(claim({ "description" => lower }))
     assert_nil why(claim({ "description" => FIRST.sub("$1.0 million", "$900,000") }))
+  end
+
+  # The plug-in's summaries round: $1,340,000 → $1,060,000 is a 20.9% drop
+  # that reads "$1.3 million" → "$1.1 million" (15.4%).
+  test "S1: a drop that rounding could hide counts at its largest" do
+    dollars = ->(amount) { DataQuality::Plugins::UsaspendingDoeAwards.new.send(:dollars, BigDecimal(amount)) }
+    text = ->(amount) { "1 award from the U.S. Department of Energy totaling #{dollars.(amount)}, 2021: DENE0000001." }
+    assert_equal [ "$1.3 million", "$1.1 million" ], [ dollars.("1340000"), dollars.("1060000") ]
+    written = claim({ "description" => text.("1340000") }, crawl_run: @first_run)
+    assert DataQuality::Review.approve([ written.id ], by: "human:tosin").sole.ok?
+
+    assert_equal "its award total may drop by more than 20%", why(claim({ "description" => text.("1060000") }))
+    assert_nil why(claim({ "description" => text.("1300000").sub("1.3", "1.2") })), "$1.3 → $1.2 million is at most 11.1%"
+  end
+
+  test "G6: what the run already had approved counts, so the cap can't be passed in two clicks" do
+    other = Organization.create!(name: "Other Fission Co", verification_status: "verified", verified_by: "human:tosin")
+    second_link = Relationship.create!(from_organization: @doe, to_organization: other, relationship_type: "funds")
+    first = Candidate.create!(source: @source, kind: "relationship", status: "matched", quote: "other award", crawl_run: @first_run,
+      payload: { "relationship_type" => "funds", "description" => FIRST }, subject_type: "Relationship", subject_id: second_link.id,
+      ai_recommendation: "recommend_publish", ai_confidence: 0.95, ai_source_sha256: @source.content_sha256)
+    assert DataQuality::Review.approve([ first.id ], by: "human:tosin").sole.ok?
+
+    with_config(max_items: 1) do
+      a = claim({ "description" => SECOND })
+      item = item_for(a)
+      assert item.taken?, item.why
+      assert SafeClasses.accept([ item ], by: "human:tosin").sole.ok?
+
+      b = Candidate.create!(source: @source, kind: "relationship", status: "matched", quote: "other award 2", crawl_run: @run,
+        payload: { "relationship_type" => "funds", "description" => SECOND }, subject_type: "Relationship", subject_id: second_link.id,
+        ai_recommendation: "recommend_publish", ai_confidence: 0.95, ai_source_sha256: @source.content_sha256)
+      assert_match(/\Aits run proposes 2 safe changes \(1 already approved\), over the limit of 1/, item_for(b).why)
+    end
+  end
+
+  test "G5: an API answer that couldn't be read, or a verify run still going, isn't safe" do
+    candidate = claim({ "description" => SECOND })
+    @index.update_columns(http_status: 200, status_reason: "the answer wasn't valid JSON", fetched_at: Time.current)
+    assert_equal "the source's last fetch didn't return 200", why(candidate)
+
+    @index.update_columns(status_reason: nil)
+    CrawlRun.create!(stage: "verify", source_kind: "usaspending_doe_awards", status: "running", started_at: Time.current)
+    assert_equal "the verifier is still checking this source", why(candidate)
+  end
+
+  test "G4: a report on a company merged into the link's company still counts" do
+    candidate = claim({ "description" => SECOND })
+    merged = Organization.create!(name: "Old Fission Holdings", verification_status: "verified", verified_by: "human:tosin")
+    CorrectionReport.create!(subject: merged.name, page_path: "/companies/#{merged.slug}", message: "This is the same company as Imaginary Fission.")
+    Directory::FactWriter.merge_organization(from_id: merged.id, into_id: @company.id, by: "human:tosin", reason: "Same company")
+    assert merged.reload.unpublished?
+
+    assert_equal "a correction report on its page isn't resolved", why(candidate)
   end
 
   test "Accept checks it again under the link's lock: a person's edit after the page loaded stops it" do

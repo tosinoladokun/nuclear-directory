@@ -215,9 +215,11 @@ if every gate holds:
   succeeded, and the match checked the claim's own source for dropped facts (`dropped_checked_source_ids`
   in the run's stats; a run skips sources with a claim still to place); the last fetch returned 200, both the claim's page
   and, for S1, the USAspending API index
-- **G6** its run proposes no more safe changes than the cap (20, and 25% of the source's public facts)
+- **G6** its run proposes no more safe changes than the cap (20, and 25% of the source's public facts),
+  counting what the run already had approved; and the source's verify run has finished
 
-S1 also leaves out an award total that drops by more than 20%. Accept asks every gate but the cap again
+S1 also leaves out an award total that may drop by more than 20%: the summaries round ("$1.3 million"),
+so the drop is judged at its largest. Accept asks every gate but the cap again
 under the record's lock, and records "Accepted the verifier's recommendation (safe class S1: …)" as
 Tosin's decision. One fingerprint covers Data Quality's list and the safe items.
 
