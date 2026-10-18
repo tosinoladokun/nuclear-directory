@@ -112,7 +112,9 @@ module Directory
 
       record = type.to_s.constantize.find_by(id:) or return false
       company = ->(organization) { addresses("companies", organization) }
-      plant = ->(facility) { addresses("plants", facility.parent || facility) }
+      # A unit's own addresses redirect to its site's page, so a report filed
+      # there (before it was grouped, say) is about it too.
+      plant = ->(facility) { addresses("plants", facility) + (facility.parent ? addresses("plants", facility.parent) : []) }
       pages = case record
       when Organization then company.(record)
       when Facility then plant.(record)
