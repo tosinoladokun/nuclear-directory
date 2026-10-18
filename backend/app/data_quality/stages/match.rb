@@ -287,7 +287,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # A link already citing another page of the same kind of source (another
     # USAspending recipient's awards on one company's link), which this claim
     # would change: approving it would replace what that page says (#390).
+    # Not for a deal term: a later filing of the same round (a Form D/A on its
+    # own page) supersedes the earlier one, so there's nothing to combine.
     def other_page_on(candidate, existing)
+      return if candidate.kind_deal_term?
+
       cited = directory.evidence(type: existing.type, id: existing.id).map(&:source_id)
       other = ::Source.where(id: cited, source_kind: candidate.source.source_kind).where.not(id: candidate.source_id).order(:id).first
       return unless other

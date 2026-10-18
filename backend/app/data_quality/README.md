@@ -322,7 +322,12 @@ A crawler can propose a deal term: today, a company's own funding round from a F
   a person decided is held as a conflict (`amount_usd`, `amount_offered_usd`, `starts_on`, `ends_on`,
   `round`, `status`).
 - **A person decides every one.** A deal term is never in Approve all or a safe class (`BY_A_PERSON`). A
-  person approves it, or accepts Data Quality's reviewed call on it.
+  person approves it, or accepts Data Quality's reviewed call on it. An amendment to a round a person already
+  approved is decided on that round's page, never through Data Quality's Accept: a decided record's rule
+  (16 Oct) comes first.
+- **A later filing supersedes an earlier one.** #390's guard against another page of the same source doesn't
+  apply to deal terms: a Form D/A on its own filing page replaces its original's values, once a person
+  approves it.
 
 
 Sources belong to this module. Code outside it (e.g. the seed loader) gets one

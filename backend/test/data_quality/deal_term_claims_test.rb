@@ -103,13 +103,18 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     assert_equal [ source.id ], term.evidence.map(&:source_id)
     assert_equal "#{issuer.name}'s funding round #{ACCESSION}", Directory::Lookup.fact_state(type: "DealTerm", id: term.id).name
 
-    # A Form D/A: the original's accession, more sold since.
-    amended = claim(round(amount_usd: "52000000.0"))
+    # A Form D/A, on its own filing page: the original's accession, more sold since.
+    amendment = Source.create!(url: "https://www.sec.gov/Archives/edgar/data/2028336/000202833625000002/xslFormDX01/primary_doc.xml",
+      source_kind: "dummy_form_d", crawl_status: "ok", content_text: FormD::QUOTE, content_sha256: Digest::SHA256.hexdigest(FormD::QUOTE))
+    amended = Candidate.create!(source: amendment, kind: "deal_term", payload: round(amount_usd: "52000000.0"), quote: FormD::QUOTE)
     run_stage("match", round(amount_usd: "52000000.0"))
     assert_equal term.id, amended.reload.subject_id, "the same round, by its accession number"
     run_stage("verify", round(amount_usd: "52000000.0"), verifier: PublishEverything.new)
     assert amended.reload.status_needs_review?, "a person decided the round, so a new amount is theirs to accept"
     assert_match "52", amended.notes
+    assert_no_match "another page of this source", amended.notes, "an amendment supersedes; there's nothing to combine (#390)"
+    assert_empty DataQuality::Review.approve([ amended.id ], by: BY).first.errors, "a person can take the new amount"
+    assert_equal 52_000_000, term.reload.amount_usd
   end
 
   test "a round a person approved, stated again, is confirmed without a review item" do
