@@ -102,7 +102,7 @@ Home and the directory show the nine buckets of companies (docs/DATA.md section 
 | Fuel and materials | `fuel` | roles `fuel`, `coolant` and their children, `isotopes` | 2 |
 | Components and manufacturing | `components` | role `components` | 3 |
 | Waste and decommissioning | `waste-decommissioning` | role `waste_decommissioning` | 4 |
-| Utilities and operators | `utilities` | roles `utility` or `operator`, or a current owns or operates link to an operating power reactor | 5 |
+| Power plant owners and operators | `utilities` | roles `utility` or `operator`, or a current owns or operates link to an operating power reactor | 5 |
 | Plants and sites | `plants` | facilities, not organizations: sites only, units sit under them (all facility types) | 6 |
 | Power buyers | `power-buyers` | role `data_center_offtaker`, or the buyer in a power deal, unless it's a utility | 7 |
 | Services and engineering | `services` | roles `reactor_services` or `regulatory_consultant` | 8 |

@@ -116,7 +116,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 
 | Bucket | Means | A company is in it when it has | Today |
 |---|---|---|---|
-| Utilities and operators | Owns or runs nuclear power plants | `utility` or `operator`, or a published owns/operates link to an **operating power plant** | 33 |
+| Power plant owners and operators | Owns or runs nuclear power plants. Its slug stays `utilities` | `utility` or `operator`, or a published owns/operates link to an **operating power plant** | 33 |
 | Developers | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers` | `reactor_vendor` or `project_developer` | 19 |
 | Fuel and materials | Mines, converts, enriches or fabricates fuel; ships fresh fuel; supplies materials such as coolant; produces isotopes (medical and industrial) | `fuel` or its stages, `coolant` or its kinds, `isotopes` (new key), or the sourced tag "fresh-fuel transport" | 11 |
 | Components and manufacturing | Makes equipment: pumps, valves, forgings, steam generators, instrumentation and control hardware, naval and defense nuclear components | `components` (new key) | 0 |
@@ -128,7 +128,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 
 **Counting:** buckets overlap (6 of 81 companies are in two or more today). The total is always the number of companies ("81 companies"), never the sum of buckets. A bucket count is labelled "companies that develop reactors", "companies that buy nuclear power", and so on. Charts of buckets are bars, never a pie or a 100% stack.
 
-**One label, where only one fits:** cramped spots (link-preview cards, search results) show the company's first bucket in this display order: Developers, Fuel and materials, Components and manufacturing, Waste and decommissioning, Utilities and operators, Power buyers, Services and engineering, Investors, Government and research. It's for display only: never stored, counted or exported. The company's page and the dataset list all its buckets.
+**One label, where only one fits:** cramped spots (link-preview cards, search results) show the company's first bucket in this display order: Developers, Fuel and materials, Components and manufacturing, Waste and decommissioning, Power plant owners and operators, Power buyers, Services and engineering, Investors, Government and research. It's for display only: never stored, counted or exported. The company's page and the dataset list all its buckets.
 
 **Where edge cases go** (the bucket, then the tag that says more):
 
@@ -167,7 +167,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 - Navigation shows the buckets that have companies (7 today) instead of 11 categories; a company appears under each of its buckets.
 - Company pages show all of a company's buckets, then its tags.
 - Public filters (#263) become "Type" (buckets, multi-select) plus the tag groups.
-- 20 operators the crawlers created, which have no category, appear under Utilities and operators through their sourced links to operating power plants.
+- 20 operators the crawlers created, which have no category, appear under Power plant owners and operators through their sourced links to operating power plants.
 - The 13 companies in no bucket (duplicates and raw names, #230, #267) stay out of navigation until they're cleaned up.
 - No database change beyond the two new category keys: buckets are a fixed mapping in code from category keys and links.
 - The open dataset (#254) has one company per row, with buckets and tags as list columns; each category's source is in the facts export.
@@ -192,7 +192,7 @@ Not a source: anything behind a login or paywall, AI-written summaries, a page t
 - **The quote states the value.** "Oglethorpe Power (30%)" supports `owns 30%`; a page that only lists Oglethorpe as a partner doesn't.
 - **Copied exactly** from the page's text, not from a summarizer. Short is fine; it has to contain the fact.
 - **Derived values** (a site's total capacity, counts) aren't stored as facts. They're computed from sourced facts and shown as computed.
-- **Every quote keeps its source's URL** and the date it was read. A source re-read nightly is stamped `last_confirmed_at` when it still says the same thing (#240). A person's decision always wins over a later source: a source that disagrees with a human-verified value goes to review, never overwrites it.
+- **Every quote keeps its source's URL** and the date it was read. A source re-read nightly is stamped `last_confirmed_at` when it still says the same thing (#240). A person's decision always wins over a later source: a source that disagrees with a human-verified value goes to review, never overwrites it. A value counts as a person's unless the last write to it was an unedited approval from the same kind of source; then the source may update it, through the verifier and a person's approval like any claim.
 
 ## 6. Checks
 
@@ -251,4 +251,5 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | Scope is the whole nuclear industry, not only power; isotopes are in | Tosin | #266 |
 | Bucket names and edge cases ("Waste and decommissioning"; universities in Government and research; fusion and uranium as tags; stable URLs) | Tosin, with Founder and GTM | #266 |
 | "Reactor developers" becomes "Developers": reactor designers plus nuclear project developers (`project_developer`), so everything building new nuclear sits together; slug unchanged. A parent never inherits its subsidiaries' buckets | Tosin | #322 |
+| "Utilities and operators" becomes "Power plant owners and operators" (17 Oct 2026): named for what puts a company there; same rule, slug `utilities` unchanged. The homepage's short label is "Plant operators" | Tosin | #367 |
 | Bernhard Capital Partners is an investor (`venture_capital`): it owns Allied Power, a nuclear services company. Reverses #63's "no Bernhard role" (16 Oct 2026) | Tosin | #63, #322 |

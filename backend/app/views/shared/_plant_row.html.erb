@@ -8,9 +8,10 @@
 <% own = facility.verified? %>
 <% units = units_summary(Array(facility.try(:units_statuses)), shown_status: (facility.status if own)) %>
 <% capacity = facility.try(:units_capacity_mw) %>
-<% kind = [ (facility_type_label(facility.facility_type) if own), (facility_status_label(facility.status) if own),
-            units,
-            ("#{number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if capacity.present?) ].compact.join(" · ").presence %>
+<% kind = [ (facility_type_label(facility.facility_type) if own), (facility_status_label(facility.status) if own), units ].compact.join(" · ").presence %>
+<%# Capacity is the part a narrow row drops first, so the line stays one line. %>
+<% capacity_text = "#{number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if capacity.present? %>
+<% meta = [ kind, capacity_text ].compact.join(" · ").presence %>
 <% where = place(facility.city, facility.state) if own %>
 <% connections = local_assigns[:connections] %>
 <li>
@@ -21,8 +22,8 @@
           reactor_types: [ (facility.reactor_type if sourced), *facility.try(:units_reactor_types) ],
           status: (facility.status if sourced)), set: :nd, size: 20) %></span>
     <span class="nd-listrow__main">
-      <span class="nd-listrow__name"><%= facility.name %></span>
-      <% if kind %><span class="nd-listrow__desc"><%= kind %></span><% end %>
+      <span class="nd-listrow__name" data-truncate title="<%= facility.name %>" style="--chars: <%= facility.name.length %>"><%= facility.name %></span>
+      <% if meta %><span class="nd-listrow__desc" data-truncate title="<%= meta %>" style="--chars: <%= meta.length %>"><%= kind %><% if capacity_text %><span class="nd-listrow__cap"><%= " · " if kind %><%= capacity_text %></span><% end %></span><% end %>
     </span>
     <% if where || connections %>
       <span class="nd-listrow__side">

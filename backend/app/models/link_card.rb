@@ -61,7 +61,7 @@ class LinkCard
   def self.for_company(profile)
     # The role behind its first bucket ("Reactor developer", not "Molten salt
     # coolant"). A bucket it's in through its links has no such role, so the
-    # bucket's own name stands in ("Utilities and operators"), never a role
+    # bucket's own name stands in ("Power plant owners and operators"), never a role
     # from a bucket it isn't in. With no bucket, its first role.
     bucket = profile.category
     keys = bucket&.role_keys.to_a

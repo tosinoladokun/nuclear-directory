@@ -18,7 +18,8 @@ module AdminHelper
   # Sources by kind, in the names the admin uses (canvas A).
   SOURCE_KIND_LABELS = {
     "nrc_reactor_list" => "NRC", "nrc_power_status" => "NRC", "eia_generators" => "EIA", "eia_860m_index" => "EIA",
-    "usaspending_doe_awards" => "USAspending", "usaspending_api" => "USAspending", "web_page" => "Research"
+    "usaspending_doe_awards" => "USAspending", "usaspending_api" => "USAspending", "nrc_decommissioning" => "NRC",
+    "web_page" => "Research"
   }.freeze
 
   def source_kind_label(kind) = SOURCE_KIND_LABELS.fetch(kind.to_s) { kind.to_s.humanize }

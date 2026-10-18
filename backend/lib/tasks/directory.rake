@@ -98,6 +98,76 @@ namespace :directory do
     puts found.any? ? found : "No published operates links rest on EIA alone."
   end
 
+  # Awards #260 stored before deal terms existed (#256): each DOE "funds"
+  # link sums its awards in its description; this writes one award term per
+  # award, from the rows on that link's own sources (the recipient pages), never
+  # by name. A term is verified only if a human verified its link; otherwise it
+  # waits with the link. Re-running finds each term by its award ID.
+  desc "Write award deal terms from stored USAspending rows, audited: BY=human:<name> [APPLY=1] (#256)"
+  task backfill_award_terms: :environment do
+    by = ENV["BY"].to_s
+    abort "Usage: BY=human:<handle> [APPLY=1] bin/rails directory:backfill_award_terms" unless by.match?(/\Ahuman:\S+\z/)
+
+    apply = ENV["APPLY"] == "1"
+    counts = Hash.new(0)
+    # Every company merged into this one, at any depth (A into B, then B into C).
+    merged_into = ->(company_id) do
+      found = []
+      frontier = [ company_id ]
+      while frontier.any?
+        frontier = VerificationEvent.where(subject_type: "Organization", to_status: "unpublished")
+          .where("context -> 'merged_into' ->> 'id' IN (?)", frontier.map(&:to_s)).pluck(:subject_id) - found
+        found += frontier
+      end
+      found
+    end
+    Relationship.where(relationship_type: "funds").where.not(verification_status: Verifiable::CLOSED_STATUSES).order(:id).each do |link|
+      # Its own sources, and those of a funds link between companies merged
+      # into either end (funder or recipient), but only a link the merge itself retired: its last
+      # decision is the merge's rejection ("Merged into …", #229). A link a
+      # person closed before the merge stays closed, and its rows aren't read.
+      funders = [ link.from_organization_id, *merged_into.(link.from_organization_id) ]
+      recipients = [ link.to_organization_id, *merged_into.(link.to_organization_id) ]
+      retired = Relationship.where(from_organization_id: funders, to_organization_id: recipients,
+        relationship_type: "funds", verification_status: "rejected").where.not(id: link.id).select do |other|
+        other.verification_events.order(:id).last&.reason.to_s.match?(/Merged into .+ \(#\d+\)/)
+      end
+      links = [ link, *retired ]
+      sources = Source.where(source_kind: "usaspending_doe_awards", id: Evidence.where(subject: links).select(:source_id))
+      sources.each do |source|
+        CSV.parse(source.content_text, headers: true).each do |row|
+          next if row["generated_award_id"].blank?
+
+          # Already handled when any of these links has it, in any state: a
+          # term a person rejected isn't written again on the kept link.
+          existing = DealTerm.where(link: links, term_type: "award", external_id: row["generated_award_id"]).exists?
+          next counts[:already] += 1 if existing
+
+          counts[:written] += 1
+          next unless apply
+
+          verification = { status: "verified", by:, reason: "Backfilled from its link's USAspending rows (#256)" } if link.human_verified?
+          result = Directory::FactWriter.write(:deal_term, {
+            link_type: "Relationship", link_id: link.id, term_type: "award", external_id: row["generated_award_id"],
+            amount_usd: row["amount_usd"], starts_on: row["start_date"], ends_on: row["end_date"].presence,
+            program: row["assistance_listing"].presence || row["award_type"]
+          }, evidence: [ { source_id: source.id, quote: row.to_csv.chomp, found_by: "crawler" } ], verification:,
+            # Locks the link and refuses it if a merge closed it since it was
+            # read, so a rerun writes onto the link the merge kept.
+            protect_human_verified: true)
+          next if result.ok?
+
+          counts[:written] -= 1
+          counts[:failed] += 1
+          puts "link #{link.id}, award #{row["generated_award_id"]}: #{result.errors.join('; ')}"
+        end
+      end
+    end
+    verb = apply ? "written" : "would be written"
+    puts "#{counts[:written]} award terms #{verb}, #{counts[:already]} already there#{", #{counts[:failed]} failed" if counts[:failed].positive?}."
+    puts "Dry run: nothing changed. Run again with APPLY=1 to apply." unless apply
+  end
+
   # Merges before #166 recorded where a record went only in their reason
   # ("… Merged into Urenco (#41). Moved: …"). This adds the same, structured,
   # to those events' context ({ "merged_into" => { "type", "id" } }), as

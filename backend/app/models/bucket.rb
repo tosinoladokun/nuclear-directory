@@ -7,10 +7,10 @@
 #   Bucket.counts             # => { "fuel" => 11, ... }, published companies
 #
 # Roles count with their child roles (enrichment under fuel). The link rules:
-#   Utilities and operators: a current owns or operates link to an operating
-#     power reactor, or to a site with one.
+#   Power plant owners and operators: a current owns or operates link to an
+#     operating power reactor, or to a site with one.
 #   Power buyers: the buyer in a power deal (offtake_with, or offtakes_from a
-#     plant). A company in Utilities and operators never is one.
+#     plant). A power plant owner or operator never is one.
 #   Investors: the funder in an invests_in or funds link. A government
 #     agency, national lab or university never is one.
 # The reactor behind an operating plant must itself be public: published,

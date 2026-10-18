@@ -8,8 +8,8 @@
   <% Category.all.each do |category| %>
     <% next if !category.plants && counts[category.key]&.zero? %>
     <%= link_to directory_url_for(category:), class: [ "nd-cat", bucket_class(category) ] do %>
-      <b><%= bucket_icon(category, size: 24) %><%= category.name %></b>
-      <% if examples[category.key].present? %><span><%= examples[category.key].first(3).to_sentence(two_words_connector: ", ", last_word_connector: ", ") %></span><% end %>
+      <b><%= bucket_icon(category, size: 24) %><span class="nd-cat__fit"><span class="nd-cat__name" style="--chars: <%= category.name.length %>"><%= category.name %></span></span></b>
+      <% if examples[category.key].present? %><% names = examples[category.key].first(3).to_sentence(two_words_connector: ", ", last_word_connector: ", ") %><span class="nd-cat__examples" data-truncate title="<%= names %>"><%= names %></span><% end %>
     <% end %>
   <% end %>
 </nav>
