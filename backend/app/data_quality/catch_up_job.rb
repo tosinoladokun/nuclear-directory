@@ -25,6 +25,8 @@ class DataQuality::CatchUpJob < ApplicationJob
 
   def perform(now: Time.current)
     DataQuality::Pipeline.sweep_all_abandoned
+    # Claims a crawl attached mid-merge, if match didn't catch them (#325).
+    DataQuality::DirectoryClient.new.repoint_merged_claims
 
     local = now.in_time_zone(ZONE)
     return if local.hour < CATCH_UP_AFTER

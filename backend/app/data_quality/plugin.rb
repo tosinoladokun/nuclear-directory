@@ -40,6 +40,13 @@ class DataQuality::Plugin
   # keep the fact's last payload and just ask. Returns [payload, note] or nil.
   def dropped(_kind) = nil
 
+  # The largest share of a source's supported facts one complete read may
+  # drop and still be flagged (#240). More than that looks like a broken
+  # page rather than real changes, and flags nothing. Default: a quarter. A
+  # plug-in whose sources each hold a few facts, checked elsewhere as
+  # complete, can allow more; a dropped fact is only ever a review item.
+  def max_dropped_share(_source) = 0.25
+
   # Verify (#15) asks these two questions of the plug-in, because only it
   # knows how its quotes were taken from the source.
 
@@ -63,6 +70,13 @@ class DataQuality::Plugin
   # reactor"). The verifier treats it as part of every excerpt. Only facts
   # the source itself plainly states, never outside knowledge. Default: none.
   def source_facts(_source) = nil
+
+  # Why a person must decide this claim whatever the verifier would say
+  # (e.g. NRC lists a unit as decommissioning while its owner plans a
+  # restart), or nil. Verify checks it with its other code checks, after
+  # match, so the claim keeps its record and its links still resolve.
+  # Default: none.
+  def hold_for_review(_candidate) = nil
 
   private
     # The source's text as a reader sees it: tags dropped for HTML (and

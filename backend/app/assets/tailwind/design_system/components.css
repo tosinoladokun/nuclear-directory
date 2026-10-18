@@ -782,3 +782,18 @@
     .nd-seg__short { display: inline; }
   }
 }
+
+/* Data Quality's recommendations (#306): what Accept does sits before its
+   button (above it on phones); in a stacked row, the reason a claim is left
+   says so. */
+@layer components {
+  .nd-recs__accept { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-2) var(--nd-space-3); }
+  /* Claims and reasons are prose: they wrap at every width (a reason runs to 500 characters). */
+  .nd-recs td { white-space: normal; overflow-wrap: anywhere; }
+  .nd-recs__label { display: none; }
+
+  @media (max-width: 560px) {
+    .nd-recs__accept { flex-direction: column; align-items: stretch; width: 100%; }
+    .nd-recs__label { display: inline; }
+  }
+}

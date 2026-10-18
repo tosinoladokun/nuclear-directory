@@ -13,7 +13,13 @@
     <%= hidden_field_tag :back, request.fullpath, id: nil %>
     <div class="nd-wait__what">
       <p class="type-kicker text-ink-muted"><%= check_kicker(item) %></p>
-      <% if item.held %><p class="m-0"><span class="nd-tag">Waiting for Data Quality</span></p><% end %>
+      <%# Data Quality's call, while it still stands; the hold tag unless that call is what the hold waits for (a first batch). %>
+      <% if item.dq_recommendation %>
+        <p class="type-small m-0"><strong>Data Quality recommends <%= item.dq_recommendation == "approve" ? "approving" : "rejecting" %>:</strong> <%= item.dq_reason %></p>
+      <% end %>
+      <% if item.held && !(item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH) %>
+        <p class="m-0"><span class="nd-tag">Waiting for Data Quality</span></p>
+      <% end %>
       <p class="type-subject">
         <% if item.subject_id %>
           <%= link_to check_subject(item), admin_fact_path(type: item.subject_type, id: item.subject_id, from: "checks", back: request.fullpath, claim: item.candidate_id), class: "nd-link" %>

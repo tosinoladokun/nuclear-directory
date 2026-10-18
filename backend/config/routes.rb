@@ -46,6 +46,13 @@ Rails.application.routes.draw do
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
     get "status", to: redirect("/admin/sources")
     get "checks" => "checks#show", as: :checks
+    # Data Quality's recommendations (#306): paste its list, see exactly
+    # what Accept will do, then accept them as one decision.
+    scope "checks/recommendations", as: :recommendations do
+      get "/" => "recommendations#show"
+      post "/" => "recommendations#create"
+      post "accept" => "recommendations#accept", as: :accept
+    end
     # Live (#201 part 2): every record with Data Quality's tag filters, and
     # a company's or plant's Record page.
     get "live" => "live#show", as: :live

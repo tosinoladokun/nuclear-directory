@@ -25,7 +25,7 @@ module DataQuality::Claim
     "sodium" => "a sodium coolant supplier", "lead" => "a lead coolant supplier",
     "heavy_water" => "a heavy water supplier", "regulatory_consultant" => "a regulatory consultant",
     "venture_capital" => "a venture capital investor", "government_agency" => "a government agency",
-    "national_lab" => "a national lab"
+    "national_lab" => "a national lab", "waste_decommissioning" => "a waste and decommissioning company"
   }.freeze
   LABELS = { "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
     "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity" }.freeze

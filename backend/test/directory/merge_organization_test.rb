@@ -16,7 +16,19 @@ class Directory::MergeOrganizationTest < ActiveSupport::TestCase
     @other = Organization.create!(name: "Other Co")
   end
 
-  def merge(**) = Directory::FactWriter.merge_organization(from_id: @from.id, into_id: @into.id, by: BY, **)
+  # Every merge here also checks the admin's read-only preview (#325): it
+  # refuses what the merge refuses, and says what moved exactly as the
+  # merge's own audit reason does. (It doesn't take a `by:`: who merges is
+  # checked when they confirm.)
+  def merge(**options)
+    return Directory::FactWriter.merge_organization(from_id: @from.id, into_id: @into.id, by: BY, **options) if options.key?(:by)
+
+    preview, moved = Directory::FactWriter.merge_preview(type: "Organization", from_id: @from.id, into_id: @into.id)
+    result = Directory::FactWriter.merge_organization(from_id: @from.id, into_id: @into.id, by: BY, **options)
+    assert_equal result.ok?, preview.ok?, "preview and merge agree on whether it can be done: #{result.errors + preview.errors}"
+    assert_equal VerificationEvent.where(subject: @from).order(:id).last.reason[/Moved: (.*)\z/, 1], moved if result.ok?
+    result
+  end
 
   test "aliases, the domain, roles, technologies, links, evidence and candidates move" do
     role = @from.organization_roles.create!(role: @role)
@@ -36,6 +48,13 @@ class Directory::MergeOrganizationTest < ActiveSupport::TestCase
     assert_equal @into.id, deal.reload.to_organization_id
     assert_equal @into.id, candidate.reload.subject_id
     assert_equal @into.id, Directory::Lookup.organization(name: "Acme USA").id
+  end
+
+  test "two pieces of evidence with the same source and quote move as one, in the preview too (#325)" do
+    2.times { Evidence.create!(subject: @from, source: sources(:press_release), quote: "Acme USA runs it.", found_by: "human") }
+
+    assert merge.ok?
+    assert_equal 1, Evidence.where(subject: @into).count
   end
 
   test "what into already has, and a link to itself, stay behind rejected" do

@@ -23,6 +23,9 @@ class Admin::ChecksController < Admin::BaseController
     ids = DataQuality::Review.safe_ids(category: @category, source_kind: @source_kind)
     @safe = ids.size
     @shown = Admin::CandidatesController.fingerprint(ids)
+    # Data Quality's recommendations (#306): how many Accept would decide, and how many are left.
+    plan = DataQuality::Recommendations.plan
+    @recommended, @recommended_left = plan.accept.size, plan.left.size
 
     load_page(pending.positive? && %w[all facts].include?(@category))
   end

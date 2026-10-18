@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title><%= [ content_for(:title), "Admin", "Nuclear Directory" ].compact.join(" · ") %></title>
+    <title><%= safe_join([ content_for(:title), "Admin", "Nuclear Directory" ].compact, " · ") %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <%# Not indexed, and no analytics snippet (TracksAnalytics skips /admin). %>
     <meta name="robots" content="noindex, nofollow">

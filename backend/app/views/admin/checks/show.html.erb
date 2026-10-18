@@ -10,6 +10,10 @@
 
 <div class="nd-shell__head nd-shell__head--section">
   <h2 class="type-admin-h2">Waiting <span class="type-count"><%= number_with_delimiter(@counts[@category]) %></span></h2>
+  <%# Data Quality's recommendations (#306): its list, what Accept decides and what's left. %>
+  <%= link_to admin_recommendations_path, class: "nd-btn #{@recommended.positive? && @safe.zero? ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui" do %>
+    <%= @recommended.positive? ? "Data Quality's recommendations (#{number_with_delimiter(@recommended)})" : "Add Data Quality's list" %>
+  <% end %>
   <% if @safe.positive? %>
     <%# Today's Approve all: every recommended claim, checked again as each is approved. %>
     <%= button_to "Approve #{number_with_delimiter(@safe)} safe", approve_all_admin_candidates_path(filters), params: { shown: @shown },

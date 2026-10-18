@@ -60,6 +60,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
         ORDER.each do |kind|
           candidates.status_new.where(kind: kind).find_each { |candidate| match(candidate) }
         end
+        # A claim attached while a person merged its record follows the merge
+        # (#325), before dropped rows are looked for, so the record kept
+        # isn't taken for one its source dropped.
+        repointed = directory.repoint_merged_claims
+        @stats["repointed"] = repointed if repointed.positive?
         sources.crawl_ok.find_each { |source| flag_dropped(source) }
       end
 
@@ -72,8 +77,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # candidates has been placed (a blocked fetch, a page not yet extracted,
     # or a row still waiting or unresolved flags nothing). Only facts this
     # source supported (a person approved them from it, or it confirmed
-    # them). A read that would drop more than a quarter of them is more
-    # likely a broken page than closures, and flags nothing.
+    # them). A read that would drop more than a quarter of them (or the
+    # plug-in's max_dropped_share) is more likely a broken page than
+    # closures, and flags nothing.
     def flag_dropped(source)
       return unless source.extracted_sha256.present? && source.extracted_sha256 == source.content_sha256 && source.status_reason.blank?
 
@@ -86,7 +92,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       supported = from_source.where(status: %w[merged confirmed]).where.not(subject_id: nil).distinct.pluck(:subject_type, :subject_id)
       dropped = supported.reject { |pair| listed.include?(pair) }.select { |type, id| directory.published?(type:, id:) }
       return if dropped.empty?
-      return skip_dropped_check if dropped.size * 4 > supported.size
+      return skip_dropped_check if dropped.size > supported.size * plugin.max_dropped_share(source)
 
       dropped.each { |type, id| flag_one_dropped(source, from_source, type, id) }
     end

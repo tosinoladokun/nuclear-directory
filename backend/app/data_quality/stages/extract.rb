@@ -87,12 +87,16 @@ class DataQuality::Stages::Extract < DataQuality::Stage
     # last extracted rows support (approved or confirmed from them, with
     # their quotes) were checked when it was fetched. Not after a failed
     # fetch, which keeps the old content but still moves fetched_at.
+    # Only facts whose quote the source still has: a read that found nothing
+    # (a page that stopped naming its licensees) writes no candidates, so the
+    # last read's are still the ones here, and their quotes may be gone.
     def reconfirm(source, rows)
       return if rows.blank? || source.status_reason.present?
 
       from_rows = source.candidates.where(crawl_run_id: last_read(source), status: %w[merged confirmed]).where.not(subject_id: nil)
-      directory.reconfirm_source(source_id: source.id, facts: from_rows.distinct.pluck(:subject_type, :subject_id),
-        quotes: from_rows.distinct.pluck(:quote), rows_sha256: rows, at: source.fetched_at || Time.current)
+      still = from_rows.select(:subject_type, :subject_id, :quote).distinct.select { |row| plugin.quote_in_source?(source, row.quote) }
+      directory.reconfirm_source(source_id: source.id, facts: still.map { |row| [ row.subject_type, row.subject_id ] }.uniq,
+        quotes: still.map(&:quote).uniq, rows_sha256: rows, at: source.fetched_at || Time.current)
     end
 
     # A source extracted before rows were hashed (#240) gets its hash from the

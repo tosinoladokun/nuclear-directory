@@ -19,7 +19,7 @@
     </div>
 
     <% if @preview.ok? %>
-      <% moved = merge_moved_words(@preview.moved) %>
+      <% moved = merge_moved_words(@preview.moved, into_name: @into.name) %>
       <p class="type-body"><%= moved ? "Moves to #{@into.name}: #{moved}." : "Nothing else moves." %> <%= @fact.name %> is then taken off, and its page leads to <%= @into.name %>.</p>
       <% unless @into_public %>
         <p class="type-body"><strong><%= @into.name %> isn't on the public site yet,</strong> so neither page is public until it is.</p>
