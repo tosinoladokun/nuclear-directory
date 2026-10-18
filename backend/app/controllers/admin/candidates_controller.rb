@@ -75,8 +75,9 @@ class Admin::CandidatesController < Admin::BaseController
       reason: params[:note].presence)
     if result.ok?
       flash_results([ result ], "Approved")
-      # Opened from a fact page in Live: back to it, which moves on through Live.
-      return redirect_after(from_fact) if from_fact
+      # Opened from a fact page: on to where it said (done), else back to it,
+      # which moves on through Live.
+      return redirect_after(done_path || from_fact) if from_fact
 
       # On to the next claim in the list it was opened from; back to the list after the last.
       following = list_ids.find { |id| id > item.candidate_id }
@@ -108,13 +109,21 @@ class Admin::CandidatesController < Admin::BaseController
       DataQuality::Review.check_ids(category:, source_kind: (filters["source"] || list_filters["source"]).presence)
     end
 
-    def item_context = { back: params[:back].presence, next: from_fact, **filters.slice("category", "source").symbolize_keys }.compact
+    def item_context = { back: params[:back].presence, next: from_fact, done: done_path, **filters.slice("category", "source").symbolize_keys }.compact
     helper_method :item_context
 
     # The fact page this edit was opened from in Live (next), if any. Its
     # Previous and Next are Live's, so this page has none of Checks'.
     def from_fact = next_or(nil)
     helper_method :from_fact
+
+    # Where approving or rejecting from the edit page goes when it was opened
+    # through a Record row's claims: the next claim, or the row after the last.
+    def done_path
+      done = params[:done].to_s
+      done if done.match?(%r{\A/admin(?:[/?#]|\z)})
+    end
+    helper_method :done_path
 
     def list_position(id)
       ids = list_ids

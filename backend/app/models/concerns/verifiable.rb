@@ -20,6 +20,16 @@ module Verifiable
     has_many :verification_events, as: :subject, dependent: nil
 
     validates :confidence, numericality: { in: 0..1 }, allow_nil: true
+    # #117: a decided record carries who and when. The helpers set both;
+    # direct constructors (test builders, mocks) that only set a status get
+    # verified_at auto-filled below, and the validation is the safety net
+    # against a bare `.create!(verification_status: "verified")`.
+    # When is checked as a decision is made (a new decided record, or a
+    # change of status), so an older decided record without a date still
+    # saves ordinary edits, and is never stamped with today's date.
+    validates :verified_at, presence: { message: "is required for non-pending records (#117)" }, if: -> { !pending? && deciding_now? }
+    validates :verified_by, presence: { message: "is required for non-pending records (#117)" }, unless: :pending?
+    before_validation :fill_decided_at
     validate :closed_decisions_need_a_human
     # Who is making this change (not who made the last one); set by the
     # verify!/reject!/unpublish! helpers and by FactWriter.
@@ -91,6 +101,16 @@ module Verifiable
   end
 
   private
+    # A decision made without a timestamp (direct constructors in tests and
+    # mocks) gets one now, so its audit event and review notes always have a
+    # date. The helpers set it to Time.current explicitly. Only as the
+    # decision is made: an older record's missing date isn't invented.
+    def fill_decided_at
+      self.verified_at ||= Time.current if !pending? && deciding_now?
+    end
+
+    def deciding_now? = new_record? || will_save_change_to_verification_status?
+
     # Locked, so two decisions at once are recorded in the order they happen.
     # The same decision again changes nothing, not even verified_at, so the
     # date shown always matches the audit trail.

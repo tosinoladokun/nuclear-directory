@@ -2,7 +2,12 @@
 # told otherwise, since public pages read the .published scopes. A
 # verification names who decided, as every audit event must.
 module DirectoryBuilders
-  def verification(verified) = verified ? { verification_status: "verified", verified_by: "human:test" } : { verification_status: "pending" }
+  # #117: a decided record carries when the decision was made, so review
+  # notes always show a date. Verifiable's before_validation would catch a
+  # missing verified_at too; set it explicitly here for clarity.
+  def verification(verified)
+    verified ? { verification_status: "verified", verified_by: "human:test", verified_at: Time.current } : { verification_status: "pending" }
+  end
 
   def role(key, parent: nil) = Role.create!(key:, name: key.to_s.humanize, parent:)
   def technology(key, name = key.to_s.humanize, parent: nil) = Technology.create!(key:, name:, parent:)

@@ -68,6 +68,17 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
     assert_equal 11, source.content_text.lines.size, "header plus one line per generator"
   end
 
+  # #118: FILE_LINK used to accept any word before _generator<year>.xlsx,
+  # and Date::MONTHNAMES.index(non_month).to_i returned 0, so a bogus link
+  # on EIA's page sorted as month 0 and could win over a real one.
+  test "a link whose month isn't a real month name is ignored" do
+    stub_request(:get, INDEX).to_return(body: <<~HTML)
+      <a href="xls/xyz_generator2026.xlsx">Bogus</a>
+      <a href="xls/august_generator2026.xlsx">August 2026</a>
+    HTML
+    assert_equal FILE, crawl!["file"]
+  end
+
   test "only EIA's own https file links are followed, and never a redirect to another site" do
     stub_request(:get, INDEX).to_return(body: <<~HTML)
       <a href="https://127.0.0.1/xls/december_generator2030.xlsx">Elsewhere</a>

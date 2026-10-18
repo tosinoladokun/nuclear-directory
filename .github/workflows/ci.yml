@@ -124,6 +124,25 @@ jobs:
       - name: Run tests
         run: bin/rails test
 
+      # Browser tests (#362, #363): layout measured on the page and JavaScript,
+      # in headless Chrome, which ubuntu-latest has. On a freshly loaded schema:
+      # rows the unit tests leave in the shared test database would break
+      # loading the fixtures.
+      - name: Run system tests
+        timeout-minutes: 10
+        # The runner's own chromedriver ($CHROMEWEBDRIVER is set on GitHub's
+        # images), matching its Chrome; no download.
+        run: CHROMEDRIVER_PATH="$CHROMEWEBDRIVER/chromedriver" bin/rails db:test:prepare test:system
+
+      # Capybara saves a screenshot of the page for each failing system test.
+      - name: Upload system test screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-test-screenshots
+          path: backend/tmp/screenshots
+          if-no-files-found: ignore
+
   # #90: Lighthouse on a phone profile (simulated 4G, mid-range CPU) against
   # the production build with seed data. Fails below 95 for performance or
   # accessibility, or when the largest content takes over 2.5 s.

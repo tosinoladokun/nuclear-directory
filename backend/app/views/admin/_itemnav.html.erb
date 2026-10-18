@@ -7,7 +7,7 @@
   <% else %>
     <span class="nd-btn nd-btn--ghost nd-btn--sm text-ink-muted">‹ Previous</span>
   <% end %>
-  <span class="type-data text-ink-muted"><%= list[:index] %> of <%= list[:total] %></span>
+  <span class="type-data text-ink-muted"><%= list[:index] %> of <%= list[:total] %><%= " #{list[:label]}" if list[:label] %></span>
   <% if list[:next] %>
     <%= link_to "Next ›", list[:next], class: "nd-btn nd-btn--ghost nd-btn--sm", rel: "next" %>
   <% else %>

@@ -1,9 +1,11 @@
 # The home page (#41): one job, search. The wordmark, the search field with
-# instant results, a few suggested searches and the eight category boxes.
+# instant results, a few suggested searches and a box for each bucket with
+# companies, plus Plants and sites (#281).
 class HomeController < ApplicationController
   EXAMPLES_PER_CATEGORY = 3
 
   def show
+    @counts = DirectoryListing.category_counts
     @examples = Category.all.to_h { |category| [ category.key, examples_for(category) ] }
   end
 

@@ -34,74 +34,38 @@
   </section>
 
   <section class="flex flex-col gap-4" id="search">
-    <h2 class="type-title-md">SearchField and AZIndex</h2>
+    <h2 class="type-title-md">SearchField</h2>
     <label class="nd-search" for="design-q">
       <%= icon("magnifying-glass", size: 20) %>
       <input id="design-q" type="search" placeholder="Search organizations, facilities, technologies">
       <kbd>/</kbd>
     </label>
-    <div class="nd-suggest">Try <a href="#">HALEU suppliers</a> <a href="#">data center offtake</a> <a href="#">fusion investors</a> <a href="#">Vogtle</a></div>
-    <nav class="nd-az" aria-label="Browse A to Z">
-      <% [ "#", *("A".."Z") ].each do |letter| %>
-        <a href="#" <%= 'aria-current="true"'.html_safe if letter == "K" %> <%= 'aria-disabled="true"'.html_safe if %w[Q Y Z].include?(letter) %>><%= letter %></a>
-      <% end %>
-    </nav>
   </section>
 
   <section class="flex flex-col gap-4" id="directory">
-    <h2 class="type-title-md">FilterBar, OrgCard and DirectoryTable</h2>
-    <div class="nd-filterbar">
-      <div class="nd-row" role="group" aria-label="Role">
-        <% [ [ "All", 214, true ], [ "Fuel", 18 ], [ "Reactor vendor", 41 ], [ "Reactor services", 37 ], [ "Utility", 29 ], [ "Data center offtaker", 12 ], [ "Investor", 33 ] ].each do |name, count, on| %>
-          <button class="nd-chip" aria-pressed="<%= on ? true : false %>" type="button"><%= name %> <span class="nd-num"><%= count %></span></button>
-        <% end %>
-      </div>
-      <div class="nd-filterbar__top">
-        <div class="nd-row">
-          <span class="nd-select"><%= icon("sliders-horizontal") %><b>Technology</b> Fission, SMR <%= icon("caret-down", size: 12) %></span>
-          <span class="nd-select"><b>State</b> Any <%= icon("caret-down", size: 12) %></span>
-          <span class="type-small text-ink-muted">214 organizations</span>
-        </div>
-        <div class="nd-toggle" role="group" aria-label="View">
-          <button aria-pressed="true" type="button"><%= icon("squares-four", size: 12) %>Cards</button><button aria-pressed="false" type="button"><%= icon("list", size: 12) %>Table</button>
-        </div>
-      </div>
+    <h2 class="type-title-md">Select and DirectoryTable</h2>
+    <div class="nd-row">
+      <span class="nd-select"><%= icon("sliders-horizontal") %><b>Technology</b> Fission, SMR <%= icon("caret-down", size: 12) %></span>
+      <span class="nd-select"><b>State</b> Any <%= icon("caret-down", size: 12) %></span>
+      <span class="type-small text-ink-muted">214 organizations</span>
     </div>
 
     <% orgs = [
-         { initials: "KP", name: "Kairos Power", place: "Alameda, CA", founded: 2016, role: "Reactor vendor", tech: %w[Fission SMR], rels: 14, checked: "2026-10-02", verified: true,
-           desc: "Develops fluoride salt-cooled high-temperature reactors. Building the Hermes demonstration reactor in Oak Ridge, Tennessee." },
-         { initials: "CE", name: "Centrus Energy", place: "Bethesda, MD", founded: 1998, role: "Fuel", tech: %w[Fission], rels: 9, checked: "2026-09-28", verified: true,
-           desc: "Supplies nuclear fuel and enrichment services. Operates a HALEU enrichment cascade in Piketon, Ohio." },
-         { initials: "SN", name: "Southern Nuclear", place: "Birmingham, AL", founded: 1990, role: "Operator", tech: %w[Fission], rels: 22, checked: "2026-10-05", verified: true,
-           desc: "Operates nuclear plants for Southern Company, including all four units at Plant Vogtle in Georgia." },
-         { initials: "XE", name: "X-energy", place: "Rockville, MD", founded: 2009, role: "Reactor vendor", tech: %w[Fission SMR], rels: 11, checked: "2026-10-01", verified: false,
-           desc: "Develops the Xe-100 high-temperature gas-cooled small modular reactor and TRISO-X fuel." }
+         { initials: "KP", name: "Kairos Power", place: "Alameda, CA", role: "Reactor vendor", tech: %w[Fission SMR], rels: 14, verified: true },
+         { initials: "CE", name: "Centrus Energy", place: "Bethesda, MD", role: "Fuel", tech: %w[Fission], rels: 9, verified: true },
+         { initials: "SN", name: "Southern Nuclear", place: "Birmingham, AL", role: "Operator", tech: %w[Fission], rels: 22, verified: true },
+         { initials: "XE", name: "X-energy", place: "Rockville, MD", role: "Reactor vendor", tech: %w[Fission SMR], rels: 11, verified: false }
        ] %>
-    <div class="nd-cards">
-      <% orgs.first(3).each do |org| %>
-        <a class="nd-card" href="#">
-          <div class="nd-card__head">
-            <span class="nd-mono"><%= org[:initials] %></span>
-            <div><div class="nd-card__name"><%= org[:name] %></div><div class="nd-card__meta"><%= icon("map-pin", size: 12) %><%= org[:place] %> · Founded <%= org[:founded] %></div></div>
-          </div>
-          <p class="nd-card__desc"><%= org[:desc] %></p>
-          <div class="nd-row"><span class="nd-tag"><%= org[:role] %></span><% org[:tech].each do |t| %><span class="nd-tag"><%= t %></span><% end %></div>
-          <div class="nd-card__foot"><span><%= org[:rels] %> relationships</span><span>checked <%= org[:checked] %></span></div>
-        </a>
-      <% end %>
-    </div>
-
     <div class="nd-table-wrap">
       <table class="nd-table">
-        <thead><tr><th>Organization</th><th>Role</th><th>Technology</th><th>HQ</th><th class="nd-r">Relationships</th><th>Status</th></tr></thead>
+        <thead><tr><th>Organization</th><th>Role</th><th>Technology</th><th>HQ</th><th class="text-right">Relationships</th><th>Status</th></tr></thead>
         <tbody>
           <% orgs.each do |org| %>
             <tr>
-              <td><span class="nd-org"><span class="nd-mono"><%= org[:initials] %></span><span class="type-body-strong"><%= org[:name] %></span></span></td>
+              <td><span class="flex items-center gap-3 whitespace-nowrap"><span class="nd-mono"><%= org[:initials] %></span><span class="type-body-strong"><%= org[:name] %></span></span></td>
               <td><%= org[:role] %></td>
-              <td class="nd-muted"><%= org[:tech].join(" · ") %></td>
-              <td class="nd-muted"><%= org[:place] %></td>
+              <td class="text-ink-muted"><%= org[:tech].join(" · ") %></td>
+              <td class="text-ink-muted"><%= org[:place] %></td>
               <td class="nd-num"><%= org[:rels] %></td>
               <td>
                 <% if org[:verified] %>
@@ -117,38 +81,12 @@
     </div>
   </section>
 
-  <section class="flex flex-col gap-4" id="empty">
-    <h2 class="type-title-md">EmptyState</h2>
-    <div class="nd-empty">
-      <%= icon("magnifying-glass", size: 24) %>
-      <h3>Nothing matches “molten salt pump suppliers” yet</h3>
-      <p>We add organizations as we verify them. Know one? Suggest it and we’ll look for public sources before it goes live.</p>
-      <button class="nd-btn nd-btn--primary" type="button">Suggest an organization</button>
-    </div>
-  </section>
-
   <section class="flex flex-col gap-4" id="profile">
-    <h2 class="type-title-md">ProfileHeader, Tabs, OverviewPanel and SourceChip</h2>
-    <header class="nd-banner">
-      <span class="nd-mono nd-mono--lg">KP</span>
-      <h3 class="nd-banner__name">Kairos Power</h3>
-      <p class="nd-banner__desc">Develops fluoride salt-cooled high-temperature reactors. Building the Hermes demonstration reactor in Oak Ridge, Tennessee.</p>
-      <div class="nd-row"><span class="nd-tag">Reactor vendor</span><span class="nd-tag">Fission</span><span class="nd-tag">SMR</span></div>
-      <div class="nd-banner__actions">
-        <button class="nd-btn" type="button"><%= icon("graph", weight: :bold) %>View relationship map</button>
-        <button class="nd-btn nd-btn--ghost" type="button"><%= icon("flag", weight: :bold) %>Report a correction</button>
-      </div>
-    </header>
-    <div class="nd-tabs" role="tablist">
-      <button role="tab" aria-selected="true" type="button">Overview</button>
-      <button role="tab" aria-selected="false" type="button">Relationships<span class="nd-num">14</span></button>
-      <button role="tab" aria-selected="false" type="button">Facilities<span class="nd-num">1</span></button>
-      <button role="tab" aria-selected="false" type="button">Sources<span class="nd-num">9</span></button>
-    </div>
+    <h2 class="type-title-md">SourceChip, Badge, Confidence and OverviewPanel</h2>
     <div class="flex flex-col md:flex-row gap-8 items-start">
       <div class="flex flex-col gap-4 max-w-prose min-w-0">
-        <div class="nd-fact">Signed an agreement to supply up to 500 MW of power to Google from a fleet of small reactors.<a class="nd-src" href="#"><sup>1</sup>blog.google <span class="nd-src__checked">· checked 2026-10-02</span><%= icon("arrow-square-out", size: 12) %></a></div>
-        <div class="nd-fact">Building the Hermes demonstration reactor in Oak Ridge, Tennessee.<a class="nd-src" href="#"><sup>2</sup>nrc.gov</a><a class="nd-src" href="#"><sup>3</sup>energy.gov</a></div>
+        <p class="type-body m-0">Signed an agreement to supply up to 500 MW of power to Google from a fleet of small reactors.<a class="nd-src" href="#"><sup>1</sup>blog.google <span class="nd-src__checked">· checked 2026-10-02</span><%= icon("arrow-square-out", size: 12) %></a></p>
+        <p class="type-body m-0">Building the Hermes demonstration reactor in Oak Ridge, Tennessee.<a class="nd-src" href="#"><sup>2</sup>nrc.gov</a><a class="nd-src" href="#"><sup>3</sup>energy.gov</a></p>
         <div class="nd-row">
           <span class="nd-badge nd-badge--verified"><%= icon("check", weight: :bold, size: 12) %>Verified</span>
           <span class="nd-badge nd-badge--pending"><%= icon("clock", size: 12) %>Pending review</span>
@@ -174,45 +112,6 @@
           <span class="type-data-sm text-ink-muted">checked 2026-10-02</span>
         </div>
       </aside>
-    </div>
-  </section>
-
-  <section class="flex flex-col gap-4" id="graph">
-    <h2 class="type-title-md">RelationshipGraph</h2>
-    <div class="nd-graph">
-      <svg viewBox="0 0 520 320" role="img" aria-label="Relationship map for Kairos Power, sample data">
-        <line class="edge hot" x1="260" y1="160" x2="110" y2="70"/>
-        <line class="edge hot offtake" x1="260" y1="160" x2="420" y2="70"/>
-        <line class="edge hot invest" x1="260" y1="160" x2="90" y2="230"/>
-        <line class="edge hot" x1="260" y1="160" x2="430" y2="240"/>
-        <line class="edge" x1="110" y1="70" x2="90" y2="230"/>
-        <line class="edge" x1="430" y1="240" x2="470" y2="150"/>
-        <line class="edge invest" x1="420" y1="70" x2="470" y2="150"/>
-        <circle class="ring" cx="260" cy="160" r="15"/>
-        <circle class="org sel" cx="260" cy="160" r="11"/>
-        <text class="lbl sel" x="260" y="194" text-anchor="middle">Kairos Power</text>
-        <circle class="org" cx="110" cy="70" r="6"/><text class="lbl" x="110" y="54" text-anchor="middle">Supplier</text>
-        <circle class="org" cx="420" cy="70" r="6"/><text class="lbl" x="420" y="54" text-anchor="middle">Google</text>
-        <circle class="org" cx="90" cy="230" r="6"/><text class="lbl" x="90" y="254" text-anchor="middle">Investor</text>
-        <circle class="fac" cx="430" cy="240" r="6"/><text class="lbl" x="430" y="264" text-anchor="middle">Hermes, Oak Ridge TN</text>
-        <circle class="org" cx="470" cy="150" r="4"/>
-        <text class="elbl" x="352" y="104">offtake</text>
-        <text class="elbl" x="352" y="216">owns</text>
-      </svg>
-      <div class="nd-graph__panel">
-        <span class="nd-label">Selected</span>
-        <h4>Kairos Power</h4>
-        <div class="type-small text-ink-muted">Reactor vendor · Alameda, CA</div>
-        <div class="type-data">4 direct · 7 within 2 steps</div>
-        <a class="nd-btn nd-btn--sm self-start" href="#">Open profile<%= icon("arrow-right", size: 12) %></a>
-        <div class="nd-graph__legend">
-          <span><svg viewBox="0 0 28 8" aria-hidden="true"><circle cx="4" cy="4" r="3.5" fill="currentColor"/></svg>Organization</span>
-          <span><svg viewBox="0 0 28 8" aria-hidden="true"><circle cx="4" cy="4" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Facility</span>
-          <span><svg viewBox="0 0 28 8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="currentColor"/></svg>Supplies · owns · operates</span>
-          <span><svg viewBox="0 0 28 8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="currentColor" stroke-dasharray="4 4"/></svg>Invests in</span>
-          <span><svg viewBox="0 0 28 8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="currentColor" stroke-dasharray="1 3" stroke-linecap="round"/></svg>Offtakes from</span>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -293,7 +192,7 @@ Disallow: /</pre>
         </section>
         <div class="flex flex-col">
           <span class="type-label">Empty state: with an action, then without</span>
-          <%= render "shared/empty_state", message: "No results for “molten salt pump” in Reactor developers.", action_label: "Clear search", action_url: "#" %>
+          <%= render "shared/empty_state", message: "No results for “molten salt pump” in Developers.", action_label: "Clear search", action_url: "#" %>
           <%= render "shared/empty_state", message: "Nothing verified in this category yet." %>
         </div>
         <div class="flex flex-col gap-2">
@@ -315,7 +214,7 @@ Disallow: /</pre>
 
   <section class="flex flex-col gap-6" id="admin">
     <h2 class="type-title-md">Admin (#86)</h2>
-    <p class="type-small text-ink-muted m-0">Only behind sign-in. Desktop-first; on phones the bulk bar and checkboxes are hidden and buttons are 44px tall.</p>
+    <p class="type-small text-ink-muted m-0">Only behind sign-in. Desktop-first; on phones the checkboxes are hidden and buttons are 44px tall.</p>
 
     <div class="flex flex-col gap-3">
       <div class="nd-flash" role="status"><p class="type-body">Approved 3 items.</p></div>
@@ -330,11 +229,7 @@ Disallow: /</pre>
       <label class="nd-row type-ui"><input type="checkbox" class="nd-check" checked> Select all on this page</label>
     </div>
 
-    <div class="nd-bulk">
-      <label class="type-ui"><input type="checkbox" class="nd-check"> Select all on this page</label>
-      <span class="nd-row"><span class="type-small text-ink-muted">2 selected</span><button class="nd-btn nd-btn--primary nd-btn--sm" type="button">Approve selected</button></span>
-    </div>
-    <ol class="nd-items">
+    <ol class="m-0 p-0 list-none border-t border-rule">
       <li class="nd-item">
         <div class="nd-item__select"><input type="checkbox" class="nd-check" aria-label="Select claim 7"></div>
         <div class="nd-item__main">

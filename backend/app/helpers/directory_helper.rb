@@ -98,6 +98,38 @@ module DirectoryHelper
   def facility_type_label(type) = FACILITY_TYPE_LABELS[type.to_s]
   def facility_status_label(status) = FACILITY_STATUS_LABELS[status.to_s]
 
+  # The line icon for a kind of site (icons/nd, Design's mapping, #281): by
+  # facility type; a power plant by its reactors' types (BWR, PWR, else an
+  # advanced design, as is a planned or under-construction one with no
+  # PWR or BWR, like Kemmerer); a site being decommissioned as a waste
+  # site; anything unknown as a plain plant.
+  def site_icon_name(facility_type, reactor_types: [], status: nil)
+    return "site-waste" if status.to_s == "decommissioning"
+
+    case facility_type.to_s
+    when "power_reactor"
+      types = reactor_types.compact_blank.map(&:upcase)
+      if types.any? { |type| type.include?("BWR") } then "site-bwr"
+      elsif types.any? { |type| type.match?(/PWR|AP1000/) } then "site-pwr"
+      elsif types.any? || status.to_s.in?(%w[planned under_construction]) then "site-advanced"
+      else "site-plant"
+      end
+    when "research_reactor" then "site-research"
+    when "fusion_facility" then "site-fusion"
+    when "uranium_mine", "mill" then "site-mine"
+    when "enrichment" then "site-enrichment"
+    when "fuel_facility" then "site-fuel"
+    else "site-plant"
+    end
+  end
+
+  # A bucket's icon and the class that gives it the bucket's colours.
+  def bucket_icon(category, size: 16)
+    icon(category.plants ? "site-plant" : "bucket-#{category.key}", set: :nd, size:)
+  end
+
+  def bucket_class(category) = ("nd-bucket--#{category.key}" unless category.plants)
+
   # Roles whose parent is shown instead (enrichment under fuel) are left to the caller.
   def role_label(role)
     key = role.respond_to?(:key) ? role.key : role.to_s

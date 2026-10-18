@@ -23,6 +23,19 @@
   --nd-focus: var(--nd-ink);
   --nd-critical: #a8261b;
 
+  /* Category accents and tints, one per bucket (#281, Design's palette).
+     Colour only marks a category, always beside its icon and name. Plants
+     and sites has none: it stays ink. */
+  --nd-cat-utilities: #07618f;             --nd-cat-utilities-tint: #dff2ff;
+  --nd-cat-reactor-developers: #71448b;    --nd-cat-reactor-developers-tint: #f5e9fe;
+  --nd-cat-fuel: #7b5100;                  --nd-cat-fuel-tint: #f9eddd;
+  --nd-cat-components: #4c5d6e;            --nd-cat-components-tint: #eaeff4;
+  --nd-cat-waste-decommissioning: #5d600a; --nd-cat-waste-decommissioning-tint: #eef1de;
+  --nd-cat-services: #036966;              --nd-cat-services-tint: #dff3f2;
+  --nd-cat-power-buyers: #8c395e;          --nd-cat-power-buyers-tint: #ffe7ef;
+  --nd-cat-investors: #2c6a31;             --nd-cat-investors-tint: #e4f4e3;
+  --nd-cat-government-research: #4e5492;   --nd-cat-government-research-tint: #eaedff;
+
   /* Spacing (4px base) */
   --nd-space-1: 4px;
   --nd-space-2: 8px;
@@ -59,6 +72,15 @@
     --nd-ink: #ececea;
     --nd-ink-muted: #a3a3a6;
     --nd-critical: #ff8f80;
+    --nd-cat-utilities: #85c6f4;             --nd-cat-utilities-tint: #1a262e;
+    --nd-cat-reactor-developers: #d4abee;    --nd-cat-reactor-developers-tint: #28212d;
+    --nd-cat-fuel: #deb67f;                  --nd-cat-fuel-tint: #2a2318;
+    --nd-cat-components: #b0c0d1;            --nd-cat-components-tint: #212428;
+    --nd-cat-waste-decommissioning: #bfc483; --nd-cat-waste-decommissioning-tint: #242519;
+    --nd-cat-services: #85cdca;              --nd-cat-services-tint: #1a2726;
+    --nd-cat-power-buyers: #f2a2c1;          --nd-cat-power-buyers-tint: #2e1f25;
+    --nd-cat-investors: #98ce99;             --nd-cat-investors-tint: #1d271d;
+    --nd-cat-government-research: #b0b9f5;   --nd-cat-government-research-tint: #21232e;
     color-scheme: dark;
   }
 }
@@ -73,6 +95,15 @@
   --nd-ink: #ececea;
   --nd-ink-muted: #a3a3a6;
   --nd-critical: #ff8f80;
+  --nd-cat-utilities: #85c6f4;             --nd-cat-utilities-tint: #1a262e;
+  --nd-cat-reactor-developers: #d4abee;    --nd-cat-reactor-developers-tint: #28212d;
+  --nd-cat-fuel: #deb67f;                  --nd-cat-fuel-tint: #2a2318;
+  --nd-cat-components: #b0c0d1;            --nd-cat-components-tint: #212428;
+  --nd-cat-waste-decommissioning: #bfc483; --nd-cat-waste-decommissioning-tint: #242519;
+  --nd-cat-services: #85cdca;              --nd-cat-services-tint: #1a2726;
+  --nd-cat-power-buyers: #f2a2c1;          --nd-cat-power-buyers-tint: #2e1f25;
+  --nd-cat-investors: #98ce99;             --nd-cat-investors-tint: #1d271d;
+  --nd-cat-government-research: #b0b9f5;   --nd-cat-government-research-tint: #21232e;
   color-scheme: dark;
 }
 

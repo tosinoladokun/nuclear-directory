@@ -12,7 +12,8 @@
 %>
 
 <div class="nd-shell__head">
-  <%= render "admin/crumbs", parent_label: "Live", parent_path: back, current: @fact.name.to_s.upcase_first %>
+  <% trail = [ [ "Live", related_context[:live] ], [ related_context[:name], related_context[:path] ] ] if related_context %>
+  <%= render "admin/crumbs", parent_label: "Live", parent_path: back, trail:, current: @fact.name.to_s.upcase_first %>
   <%= render "admin/itemnav", list: @list if @list %>
 </div>
 
@@ -42,7 +43,7 @@
     </div>
 
     <% if %w[verified pending].include?(@fact.verification_status) %>
-      <%= link_to "Edit", admin_record_edit_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--primary type-ui" %>
+      <%= link_to "Edit", admin_record_edit_path(type: @fact.type, id: @fact.id, **params.permit(:from, :section, :row, :back, :with_removed).to_h.symbolize_keys.compact_blank), class: "nd-btn nd-btn--primary type-ui" %>
       <% if @fact.type == "Facility" %>
         <%= link_to "Change status", admin_facility_status_path(id: @fact.id, **params.permit(:from, :section, :row, :with_removed, :back).to_h.symbolize_keys.compact_blank), class: "nd-btn nd-btn--outline type-ui" %>
       <% end %>
@@ -104,3 +105,5 @@
     </details>
   </aside>
 </div>
+
+<%= render "admin/records/related", related: @related %>

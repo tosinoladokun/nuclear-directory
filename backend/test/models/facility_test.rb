@@ -87,4 +87,49 @@ class FacilityTest < ActiveSupport::TestCase
       relationship_type: "operates", ownership_pct: 10)
     assert_not link.valid?
   end
+
+  # #117: a decided record carries when the decision was made so review
+  # notes always show a date. The helpers set it explicitly; direct
+  # constructors get it auto-filled.
+  test "a non-pending record created directly gets verified_at auto-filled" do
+    before = Time.current
+    plant = Facility.create!(name: "Decided Direct", verification_status: "verified", verified_by: "human:test")
+    assert_not_nil plant.verified_at
+    assert_operator plant.verified_at, :>=, before
+  end
+
+  test "a non-pending record without verified_by is a validation error" do
+    plant = Facility.new(name: "No Who", verification_status: "verified")
+    plant.verified_at = Time.current  # bypasses the auto-fill
+    assert_not plant.valid?
+    assert_includes plant.errors[:verified_by], "is required for non-pending records (#117)"
+  end
+
+  test "pending records don't need a decision timestamp" do
+    plant = Facility.create!(name: "Pending Direct")
+    assert plant.pending?
+    assert_nil plant.verified_at
+    assert_nil plant.verified_by
+  end
+
+  test "an older decided record without a date still saves ordinary edits, and isn't stamped with today (#348)" do
+    plant = Facility.create!(name: "Undated Decision", verification_status: "verified", verified_by: "human:tosin")
+    plant.update_columns(verified_at: nil) # as a record decided before #117 could be
+
+    plant.update!(city: "Waynesboro")
+    assert_nil plant.reload.verified_at, "no invented decision date"
+
+    taken_off = Facility.create!(name: "Undated Removal", verification_status: "verified", verified_by: "human:tosin")
+    taken_off.unpublish!(by: "human:tosin", reason: "Test")
+    taken_off.update_columns(verified_at: nil)
+    result = Directory::FactWriter.write(:facility, { id: taken_off.id, city: "Somewhere" }, verification: { status: "unpublished", by: "human:tosin" })
+    assert result.ok?, result.errors.to_sentence
+  end
+
+  test "a new decision still needs and gets a date" do
+    plant = Facility.create!(name: "Pending First")
+    plant.decided_by = "human:tosin" # as verify! and FactWriter say who decides
+    plant.update!(verification_status: "verified", verified_by: "human:tosin")
+    assert_not_nil plant.reload.verified_at
+  end
 end

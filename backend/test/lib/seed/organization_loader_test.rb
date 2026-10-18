@@ -163,6 +163,36 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal({ created: 0, changed: 1, unchanged: 0 }, load.call, "edited: changed, not also unchanged")
   end
 
+  test "a quote cited twice with different confidences takes the higher, so a re-seed changes nothing (#326)" do
+    quote = { "source_url" => "https://example.com/plant", "quote" => "Acme Plant is a fusion plant." }
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
+      facilities: [ item(name: "Acme Plant", type: "owns").merge(quote, "confidence" => 0.8) ]))
+    File.write(facilities_file, { "facilities" => [ {
+      "name" => "Acme Plant", "facility_type" => quote.merge("value" => "fusion_facility", "confidence" => 1.0)
+    } ] }.to_yaml)
+    load = -> { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.results[:facility] }
+
+    load.call
+    plant = Facility.find_by!(name: "Acme Plant")
+    assert_equal [ 1.0 ], plant.evidence.where(quote: quote["quote"]).pluck(:confidence).map(&:to_f)
+    assert_equal({ created: 0, changed: 0, unchanged: 1 }, load.call, "nothing moves on a re-seed")
+  end
+
+  test "a bad confidence still fails the load, even beside a good one for the same quote (#353)" do
+    quote = { "source_url" => "https://example.com/plant", "quote" => "Acme Plant is a fusion plant." }
+    [ -0.2, "unknown", 1.5 ].each do |bad|
+      write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
+        facilities: [ item(name: "Acme Plant", type: "owns").merge(quote, "confidence" => bad) ]))
+      File.write(facilities_file, { "facilities" => [ {
+        "name" => "Acme Plant", "facility_type" => quote.merge("value" => "fusion_facility", "confidence" => 0.8)
+      } ] }.to_yaml)
+
+      error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load! }
+      assert_match "confidence #{bad.inspect} isn't a number from 0 to 1", error.message
+      assert_nil Facility.find_by(name: "Acme Plant"), "nothing was written"
+    end
+  end
+
   test "a plant link marked pending is created pending, and a rerun keeps a later decision" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
       facilities: [ item(name: "Acme Plant", type: "owns", pending: true, pending_reason: "quote doesn't say owns") ]))

@@ -10,22 +10,22 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
   def description = css_select("meta[name='description']").first["content"]
   def og_description = css_select("meta[property='og:description']").first["content"]
 
-  test "every category has a search title and a counted description that doesn't talk about sourcing" do
-    Category.all.each do |category|
+  test "every category and tag page has a search title and a counted description that doesn't talk about sourcing" do
+    (Category.all + Tag.all).each do |category|
       assert category.title.present?, category.key
       assert_operator category.title.length, :<=, 60, category.key
       assert_match(/\A11 /, category.description(11), category.key)
       assert_no_match(/source/i, category.description(11), category.key)
       assert_operator category.description(11).length, :<=, 160, category.key
     end
-    assert_equal "Fusion energy companies in the US.", Category.find("fusion").description(1)
+    assert_equal "Fusion energy companies in the US.", Tag.find("fusion").description(1)
   end
 
-  test "a category page uses its search title and its count; the heading stays short" do
+  test "a tag page uses its search title and its count; the heading stays short" do
     fusion = technology("fusion", "Fusion")
     %w[Helion TAE].each { |name| cite!(company(name, techs: [ fusion ])) }
 
-    get companies_path(category: "fusion")
+    get companies_path(tag: "fusion")
 
     assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
     assert_select "h1", /Fusion/
@@ -124,7 +124,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     cite!(company("Helion", techs: [ fusion ], state: "WA"))
     %w[TAE Zap].each { |name| cite!(company(name, techs: [ fusion ], state: "CA")) }
 
-    get companies_path(category: "fusion", state: "CA")
+    get companies_path(tag: "fusion", state: "CA")
 
     assert_equal "2 fusion energy companies in the US.", description
   end

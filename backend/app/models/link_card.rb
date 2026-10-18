@@ -42,7 +42,9 @@ class LinkCard
 
   def self.for_plant(profile)
     type = helpers.facility_type_label(profile.facility_type)
-    label = [ type, US_STATES[profile.state.to_s] || profile.state.presence ].compact.join(" · ").presence
+    # "Waynesboro, GA" when a source names the town (#225); otherwise the state's full name.
+    where = profile.city.present? ? helpers.place(profile.city, profile.state) : US_STATES[profile.state.to_s] || profile.state.presence
+    label = [ type, where ].compact.join(" · ").presence
     reactors = %w[power_reactor research_reactor].include?(profile.facility_type.to_s)
     capacity = "#{helpers.number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if profile.capacity_mw
     noun = reactors ? "reactor" : "unit"
@@ -57,13 +59,20 @@ class LinkCard
   end
 
   def self.for_company(profile)
-    # The role behind its category ("Reactor developer", not "Molten salt
-    # coolant", which maps to none); with no such role, its first.
-    keys = profile.category&.role_keys.to_a
-    role = profile.shown_roles.map(&:role).find { |r| ([ r.key, r.parent&.key ] & keys).any? } || profile.shown_roles.first&.role
+    # The role behind its first bucket ("Reactor developer", not "Molten salt
+    # coolant"). A bucket it's in through its links has no such role, so the
+    # bucket's own name stands in ("Utilities and operators"), never a role
+    # from a bucket it isn't in. With no bucket, its first role.
+    bucket = profile.category
+    keys = bucket&.role_keys.to_a
+    role = profile.shown_roles.map(&:role).find { |r| ([ r.key, r.parent&.key ] & keys).any? }
+    kind = if role then helpers.role_label(role)
+    elsif bucket then bucket.name
+    else profile.shown_roles.first&.role&.then { |r| helpers.role_label(r) }
+    end
     # Only what the page shows: HQ when a source backs the company (CompanyProfile).
     place = [ profile.hq_city.presence, profile.hq_state.presence ].compact.join(", ").presence
-    label = [ (helpers.role_label(role) if role), place ].compact.join(" · ").presence
+    label = [ kind, place ].compact.join(" · ").presence
     # Present tense, so only links in effect today (as on a plant's card).
     current = ->(link) { (link.started_on.nil? || link.started_on <= Date.current) && (link.ended_on.nil? || link.ended_on > Date.current) }
     sites = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && current.call(link) }.map { |link| link.facility.parent || link.facility }.uniq.size }

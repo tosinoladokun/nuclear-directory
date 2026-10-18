@@ -89,8 +89,10 @@ module Seed
       facilities = File.exist?(@facilities_file.to_s) ? Array(read(@facilities_file)["facilities"]) : []
 
       ActiveRecord::Base.transaction do
-        sources = write_sources(docs.values.flat_map { |doc| evidence_items(doc) } +
-          facilities.flat_map { |facility| facility.values_at(*FACILITY_FIELDS).select { |f| f.is_a?(Hash) } })
+        items = docs.values.flat_map { |doc| evidence_items(doc) } +
+          facilities.flat_map { |facility| facility.values_at(*FACILITY_FIELDS).select { |f| f.is_a?(Hash) } }
+        @confidence = confidence_by_quote(items)
+        sources = write_sources(items)
         # Facts can't cite a source that wasn't saved, so stop here.
         raise Error, "Seed failed, nothing was written:\n  #{@errors.join("\n  ")}" if @errors.any?
         shared = shared_domains(docs)
@@ -314,7 +316,28 @@ module Seed
         return unless item["source_url"]
 
         { source_id: sources.fetch(item["source_url"]), quote: item["quote"], found_by: "human",
-          confidence: item["confidence"] }
+          confidence: @confidence.fetch([ item["source_url"], item["quote"] ], item["confidence"]) }
+      end
+
+      # One confidence per quote: the same quote from the same page, cited in
+      # two places (a company's file and facilities.yml) with different
+      # confidences, takes the higher everywhere. Otherwise each load would
+      # write one, then the other, and a re-seed would report it changed.
+      # Each confidence is checked first (a number from 0 to 1): a bad one
+      # fails the load, never hidden behind a good one.
+      def confidence_by_quote(items)
+        cited = items.select { |item| item["source_url"] && !item["confidence"].nil? }
+        bad = cited.reject { |item| valid_confidence?(item["confidence"]) }
+        bad.each { |item| @errors << "#{item['source_url']}: confidence #{item['confidence'].inspect} isn't a number from 0 to 1 (quote #{item['quote'].to_s.truncate(60).inspect})" }
+        (cited - bad).group_by { |item| [ item["source_url"], item["quote"] ] }
+          .transform_values { |same| same.map { |item| BigDecimal(item["confidence"].to_s) }.max }
+      end
+
+      def valid_confidence?(value)
+        number = value.is_a?(Numeric) ? value : BigDecimal(value.to_s)
+        number.between?(0, 1)
+      rescue ArgumentError, TypeError
+        false
       end
 
       # A link an earlier seed published that this one marks pending goes back

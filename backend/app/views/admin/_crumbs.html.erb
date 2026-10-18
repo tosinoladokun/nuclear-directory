@@ -1,10 +1,16 @@
 <%# The trail above an inner page (#269): the stage it's under (the list as it
-    was, with its filters), then this page. On phones, one link back to the
-    parent. Locals: parent_label, parent_path, current. %>
+    was, with its filters), then this page. Opened from a Record's related
+    items, the Record sits in the middle ("Live / Plant Vogtle / Vogtle 1").
+    On phones, one link back to the nearest parent. Locals: parent_label,
+    parent_path, current, and optionally trail ([[label, path], …] in place
+    of the parent). %>
+<% trail = local_assigns[:trail] || [ [ parent_label, parent_path ] ] %>
 <nav class="nd-crumbs type-small" aria-label="Breadcrumb">
   <ol>
-    <li><%= link_to parent_label, parent_path, class: "nd-link nd-link--muted" %></li>
+    <% trail.each do |label, path| %>
+      <li><%= link_to label, path, class: "nd-link nd-link--muted" %></li>
+    <% end %>
     <li aria-current="page"><%= current %></li>
   </ol>
-  <%= link_to "‹ #{parent_label}", parent_path, class: "nd-link nd-link--muted nd-tap nd-crumbs__back" %>
+  <%= link_to "‹ #{trail.last.first}", trail.last.last, class: "nd-link nd-link--muted nd-tap nd-crumbs__back" %>
 </nav>

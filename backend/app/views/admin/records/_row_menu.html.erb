@@ -1,0 +1,34 @@
+<%# A related row's actions (Design, #166): Open, Decide when claims wait
+    on it (through them, then back here), Edit, then Take off (with a
+    reason) or Put back.
+    Each comes back to this Record at the row (here). One menu open at a
+    time, Esc closes it; on phones it opens as a sheet. Locals: row,
+    section, here (this Record at the row, with the section's removed rows
+    shown, so a row a decision removes and its Put back stay in view),
+    removed (the section shows its removed rows). %>
+<% item_type, item_id = row.item %>
+<details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
+  <summary class="nd-btn nd-btn--ghost nd-rowmenu__button" aria-label="Actions for <%= row.name %>"><%= icon("dots-three", size: 20) %></summary>
+  <div class="nd-rowmenu__panel">
+    <%= link_to "Open", related_row_path(row, section.key, record_path_here, removed:), class: "nd-rowmenu__item type-ui" %>
+    <% if row.waiting.positive? %>
+      <%= link_to "Decide", admin_fact_path(type: item_type, id: item_id, claim: row.first_claim, claims: 1, from: "record", section: section.key, row: row.item.join("-"), back: here), class: "nd-rowmenu__item type-ui" %>
+    <% end %>
+    <% if row.editable? %>
+      <%= link_to "Edit", admin_fact_edit_path(type: item_type, id: item_id, from: "record", section: section.key, row: row.item.join("-"), back: record_path_here, next: here), class: "nd-rowmenu__item type-ui" %>
+    <% end %>
+    <% if row.live? %>
+      <%= form_with url: admin_fact_unpublish_path(type: item_type, id: item_id), class: "nd-rowmenu__takeoff" do %>
+        <%= hidden_field_tag :next, here, id: nil %>
+        <label for="reason-<%= row.anchor %>" class="type-body-strong">Reason</label>
+        <%= text_field_tag :reason, nil, id: "reason-#{row.anchor}", class: "nd-input type-input", required: true %>
+        <button type="submit" class="nd-btn nd-btn--danger type-ui">Take off</button>
+      <% end %>
+    <% elsif row.status == "Removed" %>
+      <%= form_with url: admin_fact_republish_path(type: item_type, id: item_id), class: "nd-rowmenu__takeoff" do %>
+        <%= hidden_field_tag :next, here, id: nil %>
+        <button type="submit" class="nd-btn nd-btn--primary type-ui">Put back</button>
+      <% end %>
+    <% end %>
+  </div>
+</details>

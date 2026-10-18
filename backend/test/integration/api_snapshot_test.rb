@@ -15,7 +15,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     @nuscale = company("NuScale Power", roles: [ vendor ], verified_at: 2.days.ago)
     # In two categories: utilities, and investors through its deal.
     @duke = company("Duke Energy", roles: [ utility ], verified_at: 1.day.ago)
-    link(@duke, "invests_in", @kairos)
+    cite!(link(@duke, "invests_in", @kairos))
     @vogtle = plant("Vogtle", verified_at: 4.days.ago)
     @hidden = company("Pending Co", verified: false)
     @gone = company("Gone Co").tap { |gone| gone.unpublish!(by: "human:test", reason: "test") }
@@ -43,8 +43,8 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     assert_kind_of Integer, body["totalEntries"]
     assert_nothing_raised { Time.iso8601(body["updatedAt"]) }
 
-    assert_equal %w[fuel reactor-developers plants utilities services power-buyers investors fusion],
-      body["categories"].map { |c| c["slug"] }, "the site's eight categories, in its order"
+    assert_equal %w[reactor-developers utilities plants investors],
+      body["categories"].map { |c| c["slug"] }, "the buckets with companies, and Plants and sites, in the site's order (#281)"
     body["categories"].each do |category|
       assert_equal %w[count examples name slug url], category.keys.sort
       assert_kind_of Integer, category["count"]
@@ -54,10 +54,29 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     end
 
     body["recentlyAdded"].each do |entry|
-      assert_equal %w[addedAt category name url], entry.keys.sort
+      assert_equal %w[addedAt category location name url], entry.keys.sort
       %w[name category url].each { |field| assert_kind_of String, entry[field], field }
+      assert entry["location"].nil? || entry["location"].is_a?(String), "location is a string or null"
       assert_match(/\A\d{4}-\d{2}-\d{2}\z/, entry["addedAt"])
     end
+  end
+
+  test "each recent addition gives its place as its page shows it: City, ST, the state alone, or null (#225)" do
+    @kairos.update!(hq_city: "Alameda", hq_state: "CA")
+    @nuscale.update!(hq_city: nil, hq_state: "OR")
+    @vogtle.update!(city: "Waynesboro", state: "GA")
+    cite!(@vogtle)
+    pending = plant("Pending Site", verified: false, city: "Nowhere", state: "TX")
+    cite!(plant("Pending Site 1", parent: pending, verified_at: 1.hour.ago))
+
+    places = snapshot["recentlyAdded"].to_h { |entry| [ entry["name"], entry["location"] ] }
+
+    assert_equal "Alameda, CA", places["Kairos Power"]
+    assert_equal "OR", places["NuScale Power"]
+    assert_nil places["Duke Energy"], "no HQ stored"
+    assert_equal "Waynesboro, GA", places["Vogtle"]
+    assert places.key?("Pending Site"), "public for its published unit"
+    assert_nil places["Pending Site"], "a pending site's own place isn't shown, as on its page"
   end
 
   test "at most five recent additions, however many there are" do
@@ -97,7 +116,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     assert_not_includes names, "Pending Co"
     assert_not_includes names, "Gone Co"
     assert_equal [ "Duke Energy", "NuScale Power", "Kairos Power", "Vogtle" ], body["recentlyAdded"].map { |e| e["name"] }
-    assert_equal [ "Utilities and operators", "Reactor developers", "Reactor developers", "Plants and sites" ],
+    assert_equal [ "Utilities and operators", "Developers", "Developers", "Plants and sites" ],
       body["recentlyAdded"].map { |e| e["category"] }
     assert_equal 1.day.ago.to_date.iso8601, body["recentlyAdded"].first["addedAt"]
     assert_equal [ "Duke Energy" ], body["categories"].find { |c| c["slug"] == "investors" }["examples"]

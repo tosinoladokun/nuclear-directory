@@ -72,7 +72,8 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
     first_read_approved!
     events = VerificationEvent.count
 
-    read!(on: 1.hour.ago) # a new page: only its date line changed
+    read_at = 1.hour.ago
+    read!(on: read_at) # a new page: only its date line changed
     runs = pipeline!
 
     assert_equal 1, @plugin.extracts, "the same rows aren't extracted again"
@@ -80,7 +81,7 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
     assert_empty queue
     assert_equal events, VerificationEvent.count, "nothing added to any fact's history"
     evidence = unit("05099001").evidence.find_by!(source: source)
-    assert_in_delta 1.hour.ago, evidence.last_confirmed_at, 1.second
+    assert_in_delta read_at, evidence.last_confirmed_at, 1.second
     assert_equal @plugin.rows_sha256(source), evidence.confirmed_sha256
   end
 
@@ -173,15 +174,16 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
     read!(ROWS.first(4), on: 2.hours.ago) # unit 5 dropped
     pipeline!
 
-    read!(ROWS.first(4), on: 1.hour.ago) # the same rows again
+    read_at = 1.hour.ago
+    read!(ROWS.first(4), on: read_at) # the same rows again
     pipeline!
 
-    assert_in_delta 1.hour.ago, unit("05099001").evidence.find_by!(source:).last_confirmed_at, 1.second
+    assert_in_delta read_at, unit("05099001").evidence.find_by!(source:).last_confirmed_at, 1.second
     assert_nil unit("05099005").evidence.find_by!(source:).last_confirmed_at, "the rows no longer list it"
 
     source.update!(fetched_at: Time.current, status_reason: "Timed out") # a failed fetch keeps the old content
     pipeline!
-    assert_in_delta 1.hour.ago, unit("05099001").evidence.find_by!(source:).last_confirmed_at, 1.second
+    assert_in_delta read_at, unit("05099001").evidence.find_by!(source:).last_confirmed_at, 1.second
   end
 
   test "a link to a plant a person unpublished, stated again unchanged, is confirmed and not written" do
@@ -265,13 +267,14 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
 
   test "a source extracted before rows were hashed gets its hash, and its evidence stamped, on the next unchanged read" do
     first_read_approved!
-    source.update_columns(extracted_rows_sha256: nil, fetched_at: 1.hour.ago)
+    read_at = 1.hour.ago
+    source.update_columns(extracted_rows_sha256: nil, fetched_at: read_at)
 
     runs = DataQuality::Pipeline.run("units_table", plugin: @plugin, only: %w[extract])
 
     assert_equal 1, runs.first.stats["unchanged"]
     assert_equal @plugin.rows_sha256(source), source.reload.extracted_rows_sha256
-    assert_in_delta 1.hour.ago, unit("05099001").evidence.find_by!(source:).last_confirmed_at, 1.second
+    assert_in_delta read_at, unit("05099001").evidence.find_by!(source:).last_confirmed_at, 1.second
   end
 
   test "a blocked or unread page flags nothing as dropped" do

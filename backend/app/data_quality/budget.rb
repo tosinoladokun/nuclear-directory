@@ -19,16 +19,19 @@ module DataQuality::Budget
   # Calls, tokens and US dollars for model calls made this calendar month.
   def self.usage_this_month(now: Time.current)
     start = now.beginning_of_month
+    finish = start.next_month
     key = start.strftime("%Y-%m")
     # Every run: one started long ago can still be making calls this month
     # (the abandoned-run sweep doesn't stop a run that's really working).
     # by_month picks out this month's share; older runs without it count by
-    # start month. The table is small, one row per stage run.
+    # start month, bounded above too so a historical now: (#95) doesn't pull
+    # in legacy rows from later months. The table is small, one row per stage run.
     runs = CrawlRun.all
     month = ->(field, cast) do
       "COALESCE(SUM(CASE WHEN stats -> 'llm' -> 'by_month' IS NOT NULL " \
         "THEN (stats -> 'llm' -> 'by_month' -> #{CrawlRun.connection.quote(key)} ->> '#{field}')::#{cast} " \
-        "WHEN started_at >= #{CrawlRun.connection.quote(start)} THEN (stats -> 'llm' ->> '#{field}')::#{cast} END), 0)"
+        "WHEN started_at >= #{CrawlRun.connection.quote(start)} AND started_at < #{CrawlRun.connection.quote(finish)} " \
+        "THEN (stats -> 'llm' ->> '#{field}')::#{cast} END), 0)"
     end
     calls, tokens, cost = runs.pick(Arel.sql(month.("calls", "int")), Arel.sql(month.("total_tokens", "int")),
       Arel.sql(month.("cost", "numeric")))

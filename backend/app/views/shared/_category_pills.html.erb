@@ -1,11 +1,13 @@
-<%# The eight categories as links to the directory. Locals:
+<%# The buckets and Plants and sites as links to the directory. Locals:
     current: the Category being shown, or nil
-    counts:  { "fuel" => 11, ... } (optional; a missing count shows no number) %>
+    counts:  { "fuel" => 11, ... } (optional; a missing count shows no number).
+             A bucket counted at zero is hidden, unless it's the one shown. %>
 <% counts = local_assigns.fetch(:counts, {}) %>
-<nav class="nd-pills" aria-label="Categories">
+<nav class="nd-pills" aria-label="Categories" data-controller="pill-row">
   <% Category.all.each do |category| %>
-    <%= tag.a href: directory_url_for(category:), class: "nd-pill", aria: { current: ("page" if local_assigns[:current]&.key == category.key) } do %>
-      <%= category.name %>
+    <% next if !category.plants && counts[category.key]&.zero? && local_assigns[:current]&.key != category.key %>
+    <%= tag.a href: directory_url_for(category:), class: [ "nd-pill", bucket_class(category) ], aria: { current: ("page" if local_assigns[:current]&.key == category.key) } do %>
+      <%= bucket_icon(category) %><%= category.name %>
       <% if counts[category.key] %><span class="nd-num"><%= counts[category.key] %></span><% end %>
     <% end %>
   <% end %>

@@ -4,8 +4,9 @@
 #   DirectorySnapshot.current(base_url: "https://nuclear-directory.org")
 #
 # Only what the site already shows: published companies and sites, their
-# names and page links, the eight categories (Category) with the same
-# counts as the directory's category pills, and when each was published.
+# names, page links and places ("City, ST"), the buckets that list a
+# company plus Plants and sites (Category, #281) with the same counts as the
+# directory's pills, and when each was published.
 #
 # The shape is a public contract: fields may be added, never renamed or
 # removed (the test pins it).
@@ -63,7 +64,7 @@ class DirectorySnapshot
     {
       updatedAt: updated_at.utc.iso8601,
       totalEntries: companies.count + sites.count,
-      categories: Category.all.map { |category| category_json(category) },
+      categories: Category.all.map { |category| category_json(category) }.reject { |json| json[:count].zero? && json[:slug] != "plants" },
       recentlyAdded: recently_added
     }
   end
@@ -84,18 +85,26 @@ class DirectorySnapshot
     # first published unit (#73) dates from that unit.
     def recently_added
       company_rows = companies.where.not(verified_at: nil).order(verified_at: :desc, id: :desc).limit(RECENT)
-        .map { |company| [ company.verified_at, company.name, company_category(company), @urls.company_url(company.slug, **@url_options) ] }
+        .map { |company| [ company.verified_at, company.name, company_category(company), @urls.company_url(company.slug, **@url_options), company_location(company) ] }
       site_rows = sites.select("facilities.*", "(#{site_published_sql}) AS published_at")
         .order(Arel.sql("published_at DESC NULLS LAST"), id: :desc).limit(RECENT)
         .filter_map do |site|
           next unless site.published_at
 
-          [ site.published_at, site.name, plants_category.name, @urls.plant_url(site.slug, **@url_options) ]
+          [ site.published_at, site.name, plants_category.name, @urls.plant_url(site.slug, **@url_options), site_location(site) ]
         end
 
       (company_rows + site_rows).sort_by { |at, name, *| [ -at.to_f, name ] }.first(RECENT)
-        .map { |at, name, category, url| { name:, category:, url:, addedAt: at.to_date.iso8601 } }
+        .map { |at, name, category, url, location| { name:, category:, url:, addedAt: at.to_date.iso8601, location: } }
     end
+
+    # "City, ST", or the state alone, as the page shows it (#225): a
+    # company's HQ once a source backs the company (CompanyProfile), a site's
+    # once the site itself is verified and sourced (PlantProfile). nil when
+    # the page shows none.
+    def company_location(company) = (place(company.hq_city, company.hq_state) if company.evidence.any?)
+    def site_location(site) = (place(site.city, site.state) if site.verified? && site.evidence.any?)
+    def place(city, state) = ApplicationController.helpers.place(city, state)
 
     # Sites here are public, so their verified units are published. The
     # earlier of the site's own date and its first unit's (LEAST skips nulls).

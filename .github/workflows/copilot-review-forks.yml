@@ -1,0 +1,38 @@
+# Copilot review for pull requests from forks. The "Copilot review on every
+# PR" ruleset doesn't fire for them, so this asks for one when a fork PR
+# opens, reopens, leaves draft or gets a new push, so the review is always
+# of the head commit (asking again after a review starts a fresh one).
+#
+# pull_request_target runs this file from main with a token that can write
+# to PRs, so it must never check out or run the fork's code: it only makes
+# one API call with the PR's node id. The GraphQL requestReviews call with
+# Copilot's bot id works with GITHUB_TOKEN; REST requested_reviewers
+# silently does nothing for the bot (tested 17 Oct, #356). union: true adds
+# Copilot without replacing anyone else already asked to review.
+name: Copilot review for forks
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request:
+    if: >-
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Copilot to review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE: ${{ github.event.pull_request.node_id }}
+          # copilot-pull-request-reviewer
+          COPILOT: BOT_kgDOCnlnWA
+        run: |
+          gh api graphql -f query='mutation($pr: ID!, $bot: ID!) {
+            requestReviews(input: {pullRequestId: $pr, botIds: [$bot], union: true}) { clientMutationId }
+          }' -f pr="$NODE" -f bot="$COPILOT" > /dev/null
+          echo "Copilot review requested."

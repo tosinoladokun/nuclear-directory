@@ -6,12 +6,12 @@ class HomeTest < ActionDispatch::IntegrationTest
 
   setup do
     vendor = role("reactor_vendor")
-    kairos = company("Kairos Power", roles: [ vendor ])
-    company("Oklo", roles: [ vendor ])
-    company("X-energy", roles: [ vendor ])
-    company("NuScale Power", roles: [ vendor ])
-    google = company("Google", roles: [ role("data_center_offtaker") ])
-    link(google, "offtake_with", kairos)
+    kairos = cite!(company("Kairos Power", roles: [ vendor ]))
+    cite!(company("Oklo", roles: [ vendor ]))
+    cite!(company("X-energy", roles: [ vendor ]))
+    cite!(company("NuScale Power", roles: [ vendor ]))
+    google = cite!(company("Google", roles: [ role("data_center_offtaker") ]))
+    cite!(link(google, "offtake_with", kairos))
   end
 
   test "the home page has one job: search" do
@@ -43,7 +43,8 @@ class HomeTest < ActionDispatch::IntegrationTest
   test "category boxes show the most connected verified names" do
     get root_path
 
-    assert_select "a.nd-cat", 8
+    # Developers, Plants and sites, Power buyers: empty buckets are hidden.
+    assert_select "a.nd-cat", 3
     assert_select "a.nd-cat[href=?] span", "/companies?category=reactor-developers", text: "Kairos Power, NuScale Power, Oklo"
     assert_select "a.nd-cat[href=?] span", "/companies?category=fusion", count: 0
   end
