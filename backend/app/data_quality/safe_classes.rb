@@ -191,9 +191,11 @@ module DataQuality::SafeClasses
           elsif config["index_source_kind"] && (index&.http_status != 200 || index.status_reason.present?)
             "the source's last fetch didn't return 200"
           elsif match.nil? || match.status != "succeeded" then "the last match run didn't finish"
-          # Verify saves its recommendations one claim at a time: the run's
-          # set (and so the cap) is only whole once it's done.
+          # Verify saves its recommendations one claim at a time, and a run
+          # that fails or is cut off keeps what it saved: the run's set (and
+          # so the cap) is only whole once its latest run has succeeded.
           elsif verify&.status == "running" then "the verifier is still checking this source"
+          elsif verify.nil? || verify.status != "succeeded" then "the verifier's last run didn't finish"
           end
         { firsts: DataQuality::Review.first_batches, run_problem: problem,
           checked_sources: Array(match&.stats&.dig("dropped_checked_source_ids")).to_set }

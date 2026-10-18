@@ -23,6 +23,7 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
     first = claim({ "description" => FIRST, "started_on" => "2021-01-01" }, crawl_run: @first_run)
     assert DataQuality::Review.approve([ first.id ], by: "human:tosin").sole.ok?
     @run = crawl_run!("crawl")
+    crawl_run!("verify")
     crawl_run!("match", stats: { "dropped_check_skipped" => 3, "dropped_checked_source_ids" => [ @source.id ] })
   end
 
@@ -252,6 +253,9 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
     @index.update_columns(status_reason: nil)
     CrawlRun.create!(stage: "verify", source_kind: "usaspending_doe_awards", status: "running", started_at: Time.current)
     assert_equal "the verifier is still checking this source", why(candidate)
+
+    CrawlRun.where(stage: "verify", status: "running").update_all(status: "failed")
+    assert_equal "the verifier's last run didn't finish", why(candidate), "a failed run keeps the recommendations it saved, a partial set"
   end
 
   test "G4: a report on a company merged into the link's company still counts" do

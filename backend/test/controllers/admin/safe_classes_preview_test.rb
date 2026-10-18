@@ -23,6 +23,7 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
     CrawlRun.create!(stage: "match", source_kind: "usaspending_doe_awards", status: "succeeded", started_at: 1.hour.ago,
       stats: { "dropped_checked_source_ids" => [ @source.id ] })
     @claim = claim(SECOND, run: crawl_run!("crawl", 1.hour.ago))
+    crawl_run!("verify", 1.hour.ago)
     sign_in_as users(:admin)
   end
 
