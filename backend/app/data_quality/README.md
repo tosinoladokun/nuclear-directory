@@ -279,7 +279,16 @@ Two tests keep the module and the directory in step:
 - It also checks that the fakes in `support/fake_directory.rb` have the same
   method signatures as the real interfaces.
 
-## Giving others a source
+## DOE Isotope Program: production sites (#276)
+
+`plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
+It takes names only from the page's own sentences: each lab named as "<Name> National Laboratory (ABBR)"
+(or Y-12's "National Security Complex") in a sentence about producing or processing isotopes, and each
+school in the sentence listing DOE's University Isotope Network. Each gives a company (its abbreviation as
+an alias), the `isotopes` category and, where its own name says so, `national_lab` or `university`, quoting
+that sentence. Verify holds a university's isotopes claim for a person (`hold_for_review`, after match
+attached it), since network membership alone doesn't say it produces isotopes. No model is asked. Companies DOE names in its news come in a second part.
+
 
 Sources belong to this module. Code outside it (e.g. the seed loader) gets one
 with `DataQuality::Sources.find_or_create(url:, source_kind:, published_on:)`,
