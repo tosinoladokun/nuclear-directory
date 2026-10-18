@@ -8,6 +8,9 @@ class Directory::SecFieldsTest < ActiveSupport::TestCase
   setup do
     @source = sources(:press_release)
     @company = Organization.create!(name: "Kairos Power", verification_status: "verified", verified_by: BY)
+    # Names are found through aliases, so its own name is one: a name lookup
+    # really finds it, and the CIK tests below are a real conflict.
+    @company.aliases.create!(alias: "Kairos Power")
   end
 
   def form_d(**attributes)
@@ -26,7 +29,47 @@ class Directory::SecFieldsTest < ActiveSupport::TestCase
     assert_nil Organization.new(sec_cik: "").sec_cik
     assert_not Organization.new(name: "B", sec_cik: "12-345").valid?
     assert_not Organization.new(name: "C", sec_cik: "1234567").valid?, "taken"
-    assert_raises(ActiveRecord::StatementInvalid) { Organization.new(name: "D").tap { |o| o.save!(validate: false) }.update_columns(sec_cik: "123") }
+    id = Organization.create!(name: "D").id
+    error = assert_raises(ActiveRecord::StatementInvalid) { Organization.connection.execute("UPDATE organizations SET sec_cik = '123' WHERE id = #{id}") }
+    assert_match "organizations_sec_cik_check", error.message
+  end
+
+  test "a bare CIK prefix is refused, never taken as clearing the CIK" do
+    @company.update!(sec_cik: "1820953")
+    assert_not @company.update(sec_cik: "CIK"), "\"CIK\" alone isn't a CIK"
+    assert_equal "0001820953", @company.reload.sec_cik
+  end
+
+  test "a seed sets the CIK, and a later seed without one leaves it" do
+    @company.destroy! # the seed creates it, as on a fresh database
+    dir = Dir.mktmpdir("orgs")
+    write_seed = ->(extra) { File.write(File.join(dir, "kairos-power.yml"), { "name" => "Kairos Power", "status" => "active", **extra }.to_yaml) }
+    write_seed.({ "sec_cik" => "1820953" })
+    Seed::OrganizationLoader.new(dir, facilities: nil).load!
+    company = Organization.find_by!(slug: "kairos-power")
+    assert_equal "0001820953", company.sec_cik
+
+    write_seed.({})
+    Seed::OrganizationLoader.new(dir, facilities: nil).load!
+    assert_equal "0001820953", company.reload.sec_cik, "a seed without a CIK doesn't clear it"
+  ensure
+    FileUtils.rm_rf(dir)
+  end
+
+  test "match finds a company by its CIK before its name, as FactWriter does" do
+    by_cik = Organization.create!(name: "Kairos Power Holdings", sec_cik: "1820953", verification_status: "verified", verified_by: BY)
+    match = DataQuality::Stages::Match.new(plugin: nil)
+    found = match.send(:resolve_organization, { "name" => "Kairos Power", "sec_cik" => "0001820953" })
+
+    assert_equal [ by_cik.id, "SEC CIK" ], [ found.record.id, found.by ], "the name would have found the other Kairos Power"
+  end
+
+  test "a link's company end is found by its CIK first when the link is confirmed" do
+    by_cik = Organization.create!(name: "Kairos Power Holdings", sec_cik: "1820953", verification_status: "verified", verified_by: BY)
+    ends = ->(named) { DataQuality::DirectoryClient.new.send(:link_end_ids, { "organization" => named })[:organization_id] }
+
+    assert_equal by_cik.id, ends.({ "sec_cik" => "1820953" }), "a CIK-only end"
+    assert_equal by_cik.id, ends.({ "sec_cik" => "1820953", "name" => "Kairos Power" }), "the CIK wins over a name naming another company"
   end
 
   test "FactWriter finds a company by its CIK before its name" do
@@ -51,9 +94,11 @@ class Directory::SecFieldsTest < ActiveSupport::TestCase
 
   test "only a funding round can sit on a company, in the model and the database" do
     assert_not DealTerm.new(link: @company, term_type: "award", amount_usd: 1, starts_on: "2024-01-01", external_id: "X").valid?
-    assert_raises(ActiveRecord::StatementInvalid) do
-      DealTerm.new(link: @company, term_type: "offtake", capacity_mw: 1).tap { |t| t.save!(validate: false) }
+    term = DealTerm.create!(link: @company, term_type: "funding_round", round: "Seed")
+    error = assert_raises(ActiveRecord::StatementInvalid) do
+      DealTerm.connection.execute("UPDATE deal_terms SET term_type = 'offtake', capacity_mw = 1 WHERE id = #{term.id}")
     end
+    assert_match "deal_terms_company_round_check", error.message
   end
 
   test "a company's round is public with the company, and not through a closed one" do

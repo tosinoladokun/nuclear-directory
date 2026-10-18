@@ -441,6 +441,7 @@ class DataQuality::DirectoryClient
               (facility(eia_plant_id: named["eia_plant_id"]) if named["eia_plant_id"].present?) ||
               (facility(name: named["name"]) if named["name"].present?)
           else
+            # The SEC's CIK first, as Match and FactWriter find a company (#129).
             (organization(sec_cik: named["sec_cik"]) if named["sec_cik"].present?) ||
               (organization(name: named["name"]) if named["name"].present?) ||
               (organization(domain: named["domain"]) if named["domain"].present?)

@@ -3,7 +3,7 @@ require "test_helper"
 class CategoryTest < ActiveSupport::TestCase
   test "nine buckets and Plants and sites, in display order" do
     assert_equal [ "Developers", "Fuel and materials", "Components and manufacturing", "Waste and decommissioning",
-      "Utilities and operators", "Plants and sites", "Power buyers", "Services and engineering", "Investors",
+      "Power plant owners and operators", "Plants and sites", "Power buyers", "Services and engineering", "Investors",
       "Government and research" ], Category.all.map(&:name)
     assert_equal 9, Category.buckets.size
     assert_not_includes Category.buckets.map(&:key), "plants"

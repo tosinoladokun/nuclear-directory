@@ -328,15 +328,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     def resolve_organization(payload)
-      name = payload["name"].presence
-      # An SEC CIK is a government ID, ranked above names (#396): EDGAR's
-      # spelling ("KAIROS POWER LLC") never makes a duplicate.
-      if (cik = payload["sec_cik"].presence) && (by_cik = directory.organization(sec_cik: cik))
-        by_name = directory.organization(name:) if name
-        return Review.new("SEC CIK matches #{by_cik.name} but name matches #{by_name.name}") if by_name && by_name.id != by_cik.id
+      # The SEC's CIK is exact and ranks above any name (PM, #129), as in FactWriter.
+      by_cik = directory.organization(sec_cik: payload["sec_cik"]) if payload["sec_cik"].present?
+      return Found.new(by_cik, "SEC CIK") if by_cik
 
-        return Found.new(by_cik, "SEC CIK")
-      end
+      name = payload["name"].presence
       # FactWriter derives a domain from the website unless domain was supplied.
       domain = payload.key?("domain") ? payload["domain"].presence : payload["website"].presence
       by_name = directory.organization(name:) if name

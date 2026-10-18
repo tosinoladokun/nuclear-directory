@@ -28,7 +28,7 @@ class BucketTest < ActiveSupport::TestCase
     assert_equal [ "Elementl Power" ], in_bucket("reactor-developers"), "Developers includes project developers (Tosin, 16 Oct)"
   end
 
-  test "utilities and operators: the role, or a current owns or operates link to an operating power plant" do
+  test "power plant owners and operators: the role, or a current owns or operates link to an operating power plant" do
     cite!(company("Duke Energy", roles: [ @utility ]))
     cite!(link(company("Southern Nuclear").then { |org| cite!(org) }, "operates", @vogtle))
     unit = cite!(plant("Vogtle Unit 3", parent: cite!(plant("Vogtle Site")), facility_type: "power_reactor", status: "operating"))

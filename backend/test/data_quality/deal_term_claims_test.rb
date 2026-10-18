@@ -53,14 +53,13 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     assert_equal 1, Organization.count { |org| org.sec_cik == CIK }, "EDGAR's spelling made no second company"
   end
 
-  test "a CIK and a name that name different companies go to a person" do
-    company
+  test "a CIK and a name that name different companies: the CIK wins (showing the conflict is #402)" do
+    issuer = company
     company(name: "New Era Helium", sec_cik: nil)
     c = claim(round(organization: { "name" => "New Era Helium", "sec_cik" => CIK }))
     run_stage("match")
 
-    assert c.reload.status_needs_review?
-    assert_match "SEC CIK matches New Era Energy & Digital but name matches New Era Helium", c.notes
+    assert_equal issuer.id, DealTerm.find(c.reload.subject_id).link_id
   end
 
   test "a company with no CIK on record is found by name, as before" do

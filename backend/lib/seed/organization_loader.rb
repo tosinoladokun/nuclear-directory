@@ -167,6 +167,9 @@ module Seed
           hq_city: hq.filter_map { |entry| entry["city"].presence }.last, hq_state: hq.filter_map { |entry| entry["state"].presence }.last
         }
         attributes[:domain] = nil if shared.include?(Organization.domain_from(doc["website"]))
+        # An identifier, set only when the file gives it: a seed without one
+        # never clears a CIK set in the admin (#129).
+        attributes[:sec_cik] = doc["sec_cik"].to_s if doc["sec_cik"].present?
 
         items = [ *hq, *description_items(doc), legal ].compact.uniq
         # An unquoted legal name still finds a record an earlier seed loaded

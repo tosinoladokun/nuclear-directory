@@ -116,7 +116,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     assert_not_includes names, "Pending Co"
     assert_not_includes names, "Gone Co"
     assert_equal [ "Duke Energy", "NuScale Power", "Kairos Power", "Vogtle" ], body["recentlyAdded"].map { |e| e["name"] }
-    assert_equal [ "Utilities and operators", "Developers", "Developers", "Plants and sites" ],
+    assert_equal [ "Power plant owners and operators", "Developers", "Developers", "Plants and sites" ],
       body["recentlyAdded"].map { |e| e["category"] }
     assert_equal 1.day.ago.to_date.iso8601, body["recentlyAdded"].first["addedAt"]
     assert_equal [ "Duke Energy" ], body["categories"].find { |c| c["slug"] == "investors" }["examples"]

@@ -57,8 +57,10 @@ class Category
     new(key: "waste-decommissioning", name: "Waste and decommissioning", short: "Waste", role_keys: %w[waste_decommissioning],
       title: "Nuclear waste and decommissioning companies in the US",
       about: "companies storing and moving spent fuel and decommissioning US nuclear plants"),
-    new(key: "utilities", name: "Utilities and operators", short: "Plant operators", role_keys: %w[utility operator], links: :operating_plants,
-      title: "US nuclear utilities and plant operators",
+    # Tosin, 17 Oct: named for what puts a company here, owning or running a
+    # power plant. The slug predates the rename and stays.
+    new(key: "utilities", name: "Power plant owners and operators", short: "Plant operators", role_keys: %w[utility operator], links: :operating_plants,
+      title: "US nuclear power plant owners and operators",
       about: "utilities and companies that own or run US nuclear power plants"),
     # Every kind of site: power plants, test reactors, fuel plants, mines (VOICE.md).
     new(key: "plants", name: "Plants and sites", plants: true,

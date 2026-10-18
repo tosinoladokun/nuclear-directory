@@ -315,7 +315,7 @@ A crawler can propose a deal term: today, a company's own funding round from a F
 ```
 
 - **Match** finds the company by its SEC CIK first (a government ID, ranked above names), then by name or
-  alias. A CIK and a name that name different companies go to review. It finds the term by its link, type
+  alias; the CIK wins over a name that names another company (showing that conflict is #402). It finds the term by its link, type
   and external ID, so a Form D/A (which carries its original's accession number) lands on the same round.
   A new term is proposed pending with its values, since a round needs its amount to exist.
 - **Verify** describes it ("… has a funding round, with filing …, amount sold $37,000,000 …"), and a value

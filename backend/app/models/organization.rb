@@ -33,8 +33,9 @@ class Organization < ApplicationRecord
   # 10 digits, zero-padded, or nil when blank. Anything that isn't 1 to 10
   # digits (after a "CIK" prefix) is kept as given, so validation refuses it.
   def self.cik_from(value)
-    text = value.to_s.strip.sub(/\ACIK/i, "").presence or return
-    text.match?(/\A\d{1,10}\z/) ? text.rjust(10, "0") : text
+    text = value.to_s.strip.presence or return
+    digits = text.sub(/\ACIK/i, "")
+    digits.match?(/\A\d{1,10}\z/) ? digits.rjust(10, "0") : text
   end
 
   def self.domain_from(url_or_domain)
