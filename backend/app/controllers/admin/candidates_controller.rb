@@ -133,7 +133,9 @@ class Admin::CandidatesController < Admin::BaseController
     end
 
     # The claim's own values; link ends were matched and can't be edited here.
+    # Never a link end or what identifies the fact (a role, a deal term's
+    # filing), which an edit can't change: the form doesn't send them.
     def editable_fields(item)
-      item.payload.keys - DataQuality::Review::NOT_EDITABLE
+      item.payload.keys - DataQuality::Review::NOT_EDITABLE - DataQuality::Review::IDENTIFYING.fetch(item.kind.to_s, [])
     end
 end

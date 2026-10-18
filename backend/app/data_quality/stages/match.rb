@@ -246,7 +246,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
       # A new term is written with its values (a round needs its amount or
       # round to exist), pending until a person approves it.
-      return write(candidate, attributes.merge(payload.except(*LINK_ENDS.fetch(candidate.kind).keys).symbolize_keys)) if candidate.kind == "deal_term"
+      # What match resolved wins: a payload never names the record, its company or its id.
+      if candidate.kind == "deal_term"
+        values = payload.except(*LINK_ENDS.fetch(candidate.kind).keys, *DataQuality::DirectoryClient::WRITE_SKIPPED).symbolize_keys
+        return write(candidate, values.merge(attributes))
+      end
 
       write(candidate, attributes, evidence: false)
     end

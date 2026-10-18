@@ -77,8 +77,9 @@ module DataQuality::Review
   # A company's role or technology is what that fact is (a plant's
   # technology is an ordinary value).
   IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology],
-    # A deal term is the same one only by its link, type and external ID (DATA.md).
-    "deal_term" => %w[link_type term_type external_id] }.freeze
+    # A deal term is the same one only by its link (and the company or link it
+    # belongs to), type and external ID (DATA.md): an edit never moves a round.
+    "deal_term" => %w[link_type link_id term_type external_id] }.freeze
 
   # The hold Data Quality's review lifts (#306): a source's first batch.
   FIRST_BATCH = "it's from this source's first batch".freeze

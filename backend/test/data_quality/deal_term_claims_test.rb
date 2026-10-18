@@ -143,4 +143,19 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     assert_equal [ [ "New Era Energy & Digital", CIK ] ],
       DataQuality::DirectoryClient.new.organizations_with_sec_cik.map { |ref| [ ref.name, ref.sec_cik ] }
   end
+
+  test "a payload never moves a round: what match resolved wins, and an edit can't change its company" do
+    issuer = company
+    other = company(name: "Another Co", sec_cik: "0009999999")
+    c = claim(round.merge("link_id" => other.id, "id" => 999_999))
+    run_stage("match")
+
+    term = DealTerm.find(c.reload.subject_id)
+    assert_equal issuer.id, term.link_id, "the company found by its CIK, never the payload's link_id"
+    Evidence.create!(subject: term, source:, quote: FormD::QUOTE, found_by: "crawler")
+
+    result = DataQuality::Review.approve_fact(type: "DealTerm", id: term.id, by: BY, attributes: { link_id: other.id })
+    assert_not result.ok?
+    assert_equal issuer.id, term.reload.link_id
+  end
 end
