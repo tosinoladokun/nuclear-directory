@@ -82,6 +82,7 @@ A failed write changes nothing and returns errors. It does not raise.
 | `facility` | `name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket eia_plant_id city state country_code latitude longitude aliases` | NRC docket, then EIA plant ID (sites only), then name or any alias (a site's name or alias for an EIA site) |
 | `relationship` | `from_organization_id to_organization_id relationship_type description started_on ended_on` | from + to + type |
 | `facility_relationship` | `organization_id facility_id relationship_type ownership_pct description started_on ended_on` | organization + facility + type |
+| `deal_term` | `link_type link_id term_type external_id amount_usd capacity_mw signed_on starts_on ends_on status program round lead_investor_ids` | link + term type + `external_id` (no `external_id`: always a new row) |
 
 Pass `id:` to update a fact you already know. Get ids for other records from
 `Directory::Lookup`.
@@ -228,6 +229,31 @@ Directory::Lookup.verification_history(type: "Organization", id: 12)
 Directory::Lookup.evidence(type: "Relationship", id: 72)
 # => [EvidenceRef(source_id:, quote:, found_by:, confidence:, crawl_run_id:), …] oldest first
 ```
+
+### Deal terms (#256)
+
+One award, offtake or funding round under the link it belongs to: "U.S.
+Department of Energy funds X-energy" is a `Relationship`; each DOE award to
+X-energy is a `DealTerm` with its own amount, dates, award ID and evidence.
+`link_type` is `Relationship` or `FacilityRelationship`; `term_type` is
+`award` (needs `amount_usd`, `starts_on`, `external_id`), `offtake` (needs
+`capacity_mw` or `amount_usd`) or `funding_round` (needs `amount_usd` or
+`round`). A term is a fact like any other: verified by a human, written with
+evidence, and never moved off a closed link. A changed value on a
+human-verified term comes back as a conflict. It's public only when it's
+verified and its link is published.
+
+```ruby
+Directory::FactWriter.write(:deal_term, { link_type: "Relationship", link_id: 7, term_type: "award",
+  external_id: "ASST_NON_DENE0009040_8900", amount_usd: "80000000.00", starts_on: "2020-10-13", program: "81.121" },
+  evidence: [ { source_id: 9, quote: "<the USAspending row>", found_by: "crawler" } ])
+Directory::Lookup.deal_terms(link_type: "Relationship", link_id: 7)
+# => [DealTermRef(term_type:, external_id:, amount_usd:, starts_on:, ends_on:, program:, source_urls:, …), …] oldest first
+```
+
+Awards #260 stored before deal terms existed are written once with
+`BY=human:<name> [APPLY=1] bin/rails directory:backfill_award_terms` (a dry
+run without `APPLY`; safe to rerun).
 
 ### Pending facts (the review queue)
 

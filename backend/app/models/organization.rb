@@ -21,11 +21,22 @@ class Organization < ApplicationRecord
 
   validates :name, presence: true
   validates :domain, uniqueness: true, allow_nil: true
+  # The SEC's Central Index Key (#129), stored as EDGAR writes it: 10 digits,
+  # zero-padded ("320193" and "CIK0000320193" are "0000320193").
+  normalizes :sec_cik, with: ->(cik) { Organization.cik_from(cik) }
+  validates :sec_cik, format: { with: /\A\d{10}\z/ }, uniqueness: true, allow_nil: true
   # Blank when no source states it yet.
   validates :country_code, length: { is: 2 }, allow_nil: true
   validates :founded_year, numericality: { only_integer: true, in: 1800..2100 }, allow_nil: true
 
   # "https://www.TerraPower.com/news" and " terrapower.com " both give "terrapower.com".
+  # 10 digits, zero-padded, or nil when blank. Anything that isn't 1 to 10
+  # digits (after a "CIK" prefix) is kept as given, so validation refuses it.
+  def self.cik_from(value)
+    text = value.to_s.strip.sub(/\ACIK/i, "").presence or return
+    text.match?(/\A\d{1,10}\z/) ? text.rjust(10, "0") : text
+  end
+
   def self.domain_from(url_or_domain)
     text = url_or_domain.to_s.strip
     host = text.include?("://") ? URI.parse(text).host : text.split("/").first

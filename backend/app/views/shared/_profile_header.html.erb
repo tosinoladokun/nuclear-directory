@@ -16,7 +16,9 @@
   <div class="nd-profile__main">
     <h1 id="<%= heading_id %>" class="nd-profile__name"><%= name %></h1>
     <% if local_assigns[:description].present? %>
-      <p class="nd-profile__desc"><%= description %><% Array(local_assigns[:citations]).each do |number, source| %><%= render "shared/source_chip", number:, source:, compact: true %><% end %></p>
+      <%# The last word and its source numbers stay on one line (nd-keep), so a number never starts a line alone. %>
+      <% head, _, last = description.to_s.rpartition(" ") %>
+      <p class="nd-profile__desc"><% if local_assigns[:citations].present? %><%= head %><%= " " if head.present? %><span class="nd-keep"><%= last %><% Array(local_assigns[:citations]).each do |number, source| %><%= render "shared/source_chip", number:, source:, compact: true %><% end %></span><% else %><%= description %><% end %></p>
     <% end %>
     <% if local_assigns[:tags].present? %>
       <div class="nd-row gap-2"><% tags.each do |tag_label| %><span class="nd-tag"><%= tag_label %></span><% end %></div>

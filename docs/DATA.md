@@ -17,7 +17,7 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 | Reactor unit (`Facility` with a parent) | One reactor under its site: licensed, or planned with a unit its developer identifies ("Palisades Pioneer Unit 1") | Vogtle 3 | A design (AP1000), or a project with no identified unit |
 | Plant link (`FacilityRelationship`) | A company's role at a plant | Southern Nuclear operates Vogtle 3 | A deal between two companies |
 | Company link (`Relationship`) | A deal or tie between two companies | Centrus supplies TRISO-X | A role at a plant |
-| Deal term (`DealTerm`, once #264 merges) | One award, power deal or funding round under its link, with amount and dates | A DOE award (ID, amount, start date) under "DOE funds X-energy" | The link itself |
+| Deal term (`DealTerm`) | One award, power deal or funding round under its link, with amount and dates; or a company's own funding round when its filing names no investors (Form D) | A DOE award (ID, amount, start date) under "DOE funds X-energy"; a Form D round on the company that raised it | The link itself |
 | Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor developer; SMR | A tag inferred without a quote |
 
 ### Site or unit
@@ -34,9 +34,9 @@ The pipeline and FactWriter find an existing record by these, in this order. A r
 |---|---|
 | Unit | NRC docket; then a unit name or alias (e.g. a planned unit before it has a docket) |
 | Site | EIA plant ID; then a site name or alias |
-| Company | A normalized name or alias (`OrganizationAlias.normalize`: case, punctuation and Inc./LLC/Co. dropped); then the website domain, unless several companies share it. A same-brand match ("Duke Energy Carolinas, LLC" → Duke Energy) is used by matching only, to propose; it never merges on its own |
+| Company | Its SEC CIK (`sec_cik`, 10 digits) when it has one; then a normalized name or alias (`OrganizationAlias.normalize`: case, punctuation and Inc./LLC/Co. dropped); then the website domain, unless several companies share it. A same-brand match ("Duke Energy Carolinas, LLC" → Duke Energy) is used by matching only, to propose; it never merges on its own |
 | Link | Both ends and the type |
-| Deal term | The link, the term type and the external ID (award ID) |
+| Deal term | The link (or, for a company's own round, the company), the term type and the external ID (award ID, or the original Form D's accession number) |
 
 Coordinates are not an identity: two live sites within 50 m are flagged for a person (section 6), never matched automatically. Neighbouring plants within a kilometre (Salem and Hope Creek; Nine Mile Point and FitzPatrick) are different sites: never merge on distance alone. A duplicate is merged by a person, with `FactWriter.merge_organization` or `merge_facility`; the merged-away record keeps its history and its old address redirects.
 
@@ -64,6 +64,8 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | `subsidiary_of` | is a subsidiary of | Points from the child to its parent | Georgia Power is a subsidiary of Southern Company | A partnership or joint venture |
 
 **Deal stage** goes in the link's description ("MOU", "framework", "signed PPA") and, once #264 merges, in the deal term's `status`: `announced`, `signed`, `active`, `completed` or `terminated`. An MOU or framework is `announced`, with "MOU" or "framework" in the description. Deal amounts and dates are deal terms (#264), never free text alone.
+
+**Funding rounds from Form D (PM, 18 Oct, #129):** a Form D states a round's amount sold, the amount offered and the date of first sale, but names no investors. It's recorded as a funding round on the company itself (`amount_usd` = sold, `amount_offered_usd` = offered, `starts_on` = first sale, `external_id` = the original filing's accession number, so a Form D/A amends the same round). It's never recorded as a link to a placeholder such as "undisclosed investors". An investor named by another primary source is a separate `invests_in` or `funds` link. A company's own round counts toward the company's funding, never toward an investor's total.
 
 **Counting deals (Tosin, 15 Oct: "just facts, not opinions"):**
 - A **deal** in counts and data pieces is a **signed** power deal: a PPA, a supply agreement or a tariff subscription.
@@ -204,7 +206,8 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 - **Links:** unique per ends and type; no self-links; both ends required (#226, #231); no automated link to a rejected or unpublished company or plant, or under a closed site; `ownership_pct` only on `owns`, 0–100.
 - **Decisions:** only a person unpublishes, merges, or changes a fact that's already rejected or unpublished. The pipeline may reject only what it proposed itself. A human-verified value is never overwritten; a disagreement becomes a conflict for review. Every decision is an append-only history event; merges record `merged_into`.
 - **Publishing:** a fact is public only through its model's `.published` scope: a unit when verified under an open site; a pending site when it has such a unit; a link only when both ends are public; a deal term only with its link.
-- **Deal terms (once #264 merges):** one term per link, kind and award ID; an award needs an amount, a start date and an award ID; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
+- **Deal terms:** one term per link (or company), kind and award ID; an award needs an amount, a start date and an award ID; a term on a company itself is a funding round; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
+- **SEC CIK:** 10 digits, zero-padded, unique among companies.
 
 ### Audited (planned: the Live screen and `data_quality:audit`, #277)
 
@@ -251,4 +254,6 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | Scope is the whole nuclear industry, not only power; isotopes are in | Tosin | #266 |
 | Bucket names and edge cases ("Waste and decommissioning"; universities in Government and research; fusion and uranium as tags; stable URLs) | Tosin, with Founder and GTM | #266 |
 | "Reactor developers" becomes "Developers": reactor designers plus nuclear project developers (`project_developer`), so everything building new nuclear sits together; slug unchanged. A parent never inherits its subsidiaries' buckets | Tosin | #322 |
+| A Form D round is recorded on the company itself, never as a link to a placeholder investor; named investors are separate links | PM | #129 |
+| A company's SEC CIK identifies it before its name | PM | #129 |
 | Bernhard Capital Partners is an investor (`venture_capital`): it owns Allied Power, a nuclear services company. Reverses #63's "no Bernhard role" (16 Oct 2026) | Tosin | #63, #322 |

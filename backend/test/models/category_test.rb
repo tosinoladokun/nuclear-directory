@@ -16,6 +16,12 @@ class CategoryTest < ActiveSupport::TestCase
       government-research], Category.all.map(&:key)
   end
 
+  test "short labels where only a short one fits, approved by Tosin; others keep their name" do
+    assert_equal({ "components" => "Components", "waste-decommissioning" => "Waste", "services" => "Services",
+      "government-research" => "Government", "utilities" => "Plant operators" }, Category.all.select(&:short).to_h { |c| [ c.key, c.short_name ] })
+    assert_equal "Developers", Category.find("reactor-developers").short_name
+  end
+
   test "find by key" do
     assert_equal "Fuel and materials", Category.find("fuel").name
     assert_equal "fuel", Category.find("fuel").to_param

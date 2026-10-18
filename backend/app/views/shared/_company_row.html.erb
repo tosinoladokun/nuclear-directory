@@ -8,8 +8,8 @@
   <%= link_to company_url_for(organization), class: "nd-listrow" do %>
     <span class="nd-mono" aria-hidden="true"><%= initials(organization.name) %></span>
     <span class="nd-listrow__main">
-      <span class="nd-listrow__name"><%= organization.name %></span>
-      <% if organization.description.present? %><span class="nd-listrow__desc"><%= organization.description %></span><% end %>
+      <span class="nd-listrow__name" data-truncate title="<%= organization.name %>" style="--chars: <%= organization.name.length %>"><%= organization.name %></span>
+      <% if organization.description.present? %><span class="nd-listrow__desc" data-truncate title="<%= organization.description %>" style="--chars: <%= organization.description.length %>"><%= organization.description %></span><% end %>
     </span>
     <% if where || connections %>
       <span class="nd-listrow__side">
