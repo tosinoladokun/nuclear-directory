@@ -56,7 +56,7 @@ categories:
   - key: waste-decommissioning
     name: Waste and decommissioning
     sources:
-      - { name: NRC decommissioning sites list, kind: nrc_decommissioning, status: planned, issue: 274 }
+      - { name: NRC decommissioning sites list, kind: nrc_decommissioning, status: built, issue: 312 }
       - { name: NRC ISFSI (spent-fuel storage) list, status: planned, issue: 274 }
       - { name: NRC notices in the Federal Register, status: planned, issue: 126 }
   - key: services

@@ -207,4 +207,12 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     get admin_sources_path(by: "category")
     assert_select "details#utilities .nd-cov__src", /NRC reactor list.*Built/m
   end
+
+  test "a source whose crawler exists is never listed as planned" do
+    config = YAML.load_file(Rails.root.join("config/source_coverage.yml"))
+    sources = config.fetch("categories").flat_map { |category| category.fetch("sources") } + config.fetch("general")
+    crawled = sources.select { |source| source["kind"] && "DataQuality::Plugins::#{source['kind'].camelize}".safe_constantize }
+    assert crawled.any?
+    crawled.each { |source| assert_equal "built", source["status"], "#{source['name']} has a crawler, so it's built (or live once it runs)" }
+  end
 end
