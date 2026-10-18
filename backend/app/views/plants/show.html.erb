@@ -48,6 +48,10 @@
           ] %>
     </div>
 
+    <%# Connections (#363): under the header across both columns on wide screens, after the key facts on phones. %>
+    <% map = ConnectionsMap.for_plant(p) %>
+    <%= render("shared/connections_map", map:) if map.edges.any? %>
+
     <div class="nd-columns__main">
       <% if p.links.any? %>
         <section aria-labelledby="companies-heading">
