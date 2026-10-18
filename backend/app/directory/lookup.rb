@@ -74,7 +74,7 @@ module Directory
         .map { |event| VerificationEventRef.from(event) }
     end
 
-    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship].freeze
+    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm].freeze
     # FactWriter kinds, one per fact type.
     FACT_KINDS = FACT_TYPES.map(&:underscore).freeze
 
@@ -168,9 +168,17 @@ module Directory
     PENDING_INCLUDES = {
       "organization" => [ :aliases ], "facility" => [ :parent, :technology ], "organization_role" => [ :organization, :role ],
       "organization_technology" => [ :organization, :technology ],
-      "relationship" => [ :from_organization, :to_organization ], "facility_relationship" => [ :organization, :facility ]
+      "relationship" => [ :from_organization, :to_organization ], "facility_relationship" => [ :organization, :facility ],
+      "deal_term" => [ :link ]
     }.freeze
     private_constant :PENDING_INCLUDES
+
+    # Companies with an SEC CIK (#129), live ones only (a rejected or
+    # unpublished company's filings aren't read), oldest first.
+    def organizations_with_sec_cik
+      Organization.where.not(sec_cik: nil).where.not(verification_status: Verifiable::CLOSED_STATUSES).order(:id)
+        .map { |organization| SecFilerRef.from(organization) }
+    end
 
     # Ids of companies or plants by slug, in one query: { "terrapower" => 12 }.
     def ids_by_slug(type:, slugs:)
@@ -492,6 +500,7 @@ module Directory
           values[:to_organization_name] = record.to_organization.name
         end
         values[:parent_name] = record.parent&.name if kind == "facility"
+        values[:link_name] = fact_label(record.link) if kind == "deal_term" && record.link
         values
       end
 
@@ -550,8 +559,21 @@ module Directory
           when OrganizationTechnology then "#{record.organization.name} works on #{in_sentence(record.technology.name)}"
           when Relationship then "#{record.from_organization.name} #{LINK_VERBS.fetch(record.relationship_type)} #{record.to_organization.name}"
           when FacilityRelationship then "#{record.organization.name} #{LINK_VERBS.fetch(record.relationship_type)} #{record.facility.name}"
+          # Its id (an award ID, an accession number) or round, so two terms under one link read apart.
+          when DealTerm then return deal_term_label(record)
           end
         "the fact “#{statement}”"
+      end
+
+      # "X-energy's funding round 0001234567-24-000001", or "award DE-NE0009054
+      # under the fact “U.S. Department of Energy funds X-energy”".
+      def deal_term_label(term)
+        kind = term.term_type.to_s.tr("_", " ")
+        id = [ term.external_id, term.round ].compact_blank.first
+        named = [ kind, id ].compact.join(" ")
+        return "#{term.link.name}'s #{named}" if term.link.is_a?(Organization)
+
+        term.link ? "#{named} under #{fact_label(term.link)}" : named
       end
 
       # A display name inside a sentence: lowercased, except acronyms ("SMR",

@@ -238,7 +238,7 @@ module DataQuality::Recommendations
         return "its company or plant isn't settled yet" unless candidate.subject_id
 
         held = DataQuality::Review.held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ]))
-        held unless held == DataQuality::Review::FIRST_BATCH
+        held unless DataQuality::Review::REVIEWED_HOLDS.include?(held)
       end
 
       # The claim as Data Quality saw it: what it says and what it's attached to.

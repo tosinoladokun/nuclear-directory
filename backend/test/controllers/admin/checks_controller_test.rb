@@ -127,4 +127,22 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
     assert_select ".nd-shell__nav a", /Checks/
     assert_select ".nd-shell__nav a", text: /Queue|Pending facts/, count: 0
   end
+
+  test "a waiting funding round and a pending one show under Facts, by their names" do
+    Directory::FactWriter.write(:organization, { name: "X-energy", sec_cik: "0001234567" }, verification: { status: "verified", by: "human:tosin" })
+    issuer = Organization.find_by!(name: "X-energy")
+    Directory::FactWriter.write(:deal_term, { link_type: "Organization", link_id: issuer.id, term_type: "funding_round",
+      external_id: "0001234567-24-000001", amount_usd: 50_000_000 })
+    claim = Candidate.create!(source: @web, kind: "deal_term", quote: "q", status: "needs_review", notes: "unsure", payload: {
+      "organization" => { "name" => "X-energy", "sec_cik" => "0001234567" }, "link_type" => "Organization",
+      "term_type" => "funding_round", "external_id" => "0001234567-24-000002", "amount_usd" => "25000000.0" })
+
+    get admin_checks_path(category: "facts")
+
+    assert_response :success
+    assert_includes claims_shown, claim.id
+    assert_includes response.body, "X-energy: funding round 0001234567-24-000001", "the pending term reads by its company and filing"
+    assert_includes response.body, "$50,000,000"
+    assert_not_includes response.body, "Deal term 39"
+  end
 end

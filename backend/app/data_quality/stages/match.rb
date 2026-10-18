@@ -25,28 +25,33 @@
 class DataQuality::Stages::Match < DataQuality::Stage
   # Facilities before organizations: company names are checked against the
   # plant names they may end in ("NextEra Energy Seabrook"), so plants proposed
-  # in the same run must already be known. Records before links.
+  # in the same run must already be known. Records before links, and deal
+  # terms after the links and companies they belong to (#397).
   ORDER = %w[facility organization organization_role organization_technology relationship facility_relationship
-    organization_alias].freeze
+    deal_term organization_alias].freeze
 
   # Payload keys that name another record, and what kind of record each is.
   LINK_ENDS = {
     "organization_role" => { "organization" => :organization },
     "organization_technology" => { "organization" => :organization },
     "relationship" => { "from_organization" => :organization, "to_organization" => :organization },
-    "facility_relationship" => { "organization" => :organization, "facility" => :facility }
+    "facility_relationship" => { "organization" => :organization, "facility" => :facility },
+    # A funding round on the company itself (link_type "Organization", #396).
+    "deal_term" => { "organization" => :organization }
   }.freeze
   LINK_KEYS = {
     "organization_role" => %w[role],
     "organization_technology" => %w[technology],
     "relationship" => %w[relationship_type],
-    "facility_relationship" => %w[relationship_type]
+    "facility_relationship" => %w[relationship_type],
+    # What makes a term the same one (DATA.md): its link, its type and its external ID.
+    "deal_term" => %w[link_type term_type external_id]
   }.freeze
 
   Found = Data.define(:record, :by)
   # How a found record counts as the same one: its name or an alias
   # (normalized), or an id. Not a domain, a brand or a similar name.
-  EXACT = [ "name", "NRC docket", "EIA plant ID" ].freeze
+  EXACT = [ "name", "NRC docket", "EIA plant ID", "SEC CIK" ].freeze
   Review = Data.define(:reason)
   # A new unit that belongs under an existing site record.
   Under = Data.define(:site)
@@ -185,6 +190,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # values. (A new link is pending, so nothing public is missing meanwhile;
     # like any proposal, it gets the quote as evidence.)
     def match_link(candidate, payload)
+      # Only a company's own funding rounds so far; a term under a link comes with #256.
+      if candidate.kind == "deal_term" && payload["link_type"] != "Organization"
+        return review(candidate, "a deal term under a link (#{payload['link_type'].inspect}) isn't matched yet (#256)")
+      end
+
       attributes = payload.slice(*LINK_KEYS.fetch(candidate.kind)).symbolize_keys
       closed_end = nil
 
@@ -209,6 +219,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
         end
       end
 
+      # A deal term's one end is its link: the company, for a round.
+      attributes[:link_id] = attributes.delete(:organization_id) if candidate.kind == "deal_term"
+
       # A link a human rejected or unpublished, or one whose company or plant
       # was, isn't written to. The same claim again is confirmed (it stays as
       # decided); anything else goes to review (#240).
@@ -230,6 +243,10 @@ class DataQuality::Stages::Match < DataQuality::Stage
         attach(candidate, existing, "Matched existing #{existing.name}")
         return settle(candidate, existing)
       end
+
+      # A new term is written with its values (a round needs its amount or
+      # round to exist), pending until a person approves it.
+      return write(candidate, attributes.merge(payload.except(*LINK_ENDS.fetch(candidate.kind).keys).symbolize_keys)) if candidate.kind == "deal_term"
 
       write(candidate, attributes, evidence: false)
     end
@@ -304,6 +321,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
     def resolve_organization(payload)
       name = payload["name"].presence
+      # An SEC CIK is a government ID, ranked above names (#396): EDGAR's
+      # spelling ("KAIROS POWER LLC") never makes a duplicate.
+      if (cik = payload["sec_cik"].presence) && (by_cik = directory.organization(sec_cik: cik))
+        by_name = directory.organization(name:) if name
+        return Review.new("SEC CIK matches #{by_cik.name} but name matches #{by_name.name}") if by_name && by_name.id != by_cik.id
+
+        return Found.new(by_cik, "SEC CIK")
+      end
       # FactWriter derives a domain from the website unless domain was supplied.
       domain = payload.key?("domain") ? payload["domain"].presence : payload["website"].presence
       by_name = directory.organization(name:) if name

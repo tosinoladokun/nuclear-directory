@@ -76,10 +76,17 @@ module DataQuality::Review
   DUPLICATE_NOTES = [ "but similar:", "could be the same brand" ].freeze
   # A company's role or technology is what that fact is (a plant's
   # technology is an ordinary value).
-  IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology] }.freeze
+  IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology],
+    # A deal term is the same one only by its link, type and external ID (DATA.md).
+    "deal_term" => %w[link_type term_type external_id] }.freeze
 
   # The hold Data Quality's review lifts (#306): a source's first batch.
   FIRST_BATCH = "it's from this source's first batch".freeze
+  # A deal term (an award, a round) is never approved in bulk or in a safe
+  # class (PM, 18 Oct): a person decides it, or accepts Data Quality's call on it.
+  BY_A_PERSON = "a deal term is decided by a person".freeze
+  # The holds a person's Accept of Data Quality's reviewed list lifts.
+  REVIEWED_HOLDS = [ FIRST_BATCH, BY_A_PERSON ].freeze
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
@@ -158,6 +165,7 @@ module DataQuality::Review
         decided = record&.verified_by.to_s.start_with?("human:")
       end
       return "it would change a record a person decided" if decided || candidate.notes.to_s.match?(/\Ahuman-verified /i)
+      return BY_A_PERSON if candidate.kind_deal_term?
       return FIRST_BATCH if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
 
       nil
@@ -528,7 +536,7 @@ module DataQuality::Review
             if safe_check then safe_check.call(candidate)
             elsif only_recommended then held_reason(candidate, directory:, firsts: firsts || first_batches)
             end
-          held = nil if data_quality_reviewed && held == FIRST_BATCH
+          held = nil if data_quality_reviewed && REVIEWED_HOLDS.include?(held)
           if held
             why = safe_check ? "it's no longer safe: #{held}" : "it waits for Data Quality: #{held}"
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ why ])
