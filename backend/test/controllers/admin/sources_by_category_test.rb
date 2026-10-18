@@ -197,4 +197,14 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     assert_equal "8 of 9 categories have no live source", helpers.uncovered_line(8, 9)
     assert_equal "1 of 1 category has no live source", helpers.uncovered_line(1, 1)
   end
+
+  test "a newer failed crawl isn't hidden by an earlier success" do
+    run_crawler("nrc_reactor_list", at: 1.day.ago)
+    get admin_sources_path(by: "category")
+    assert_select "details#utilities .nd-cov__src", /NRC reactor list.*Live/m
+
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_reactor_list", status: "failed", started_at: 1.hour.ago, error: "no workbook link")
+    get admin_sources_path(by: "category")
+    assert_select "details#utilities .nd-cov__src", /NRC reactor list.*Built/m
+  end
 end

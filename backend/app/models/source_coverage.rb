@@ -70,7 +70,11 @@ class SourceCoverage
     def live_kinds
       @live_kinds ||= begin
         since = LIVE_WITHIN.ago
-        crawled = CrawlRun.succeeded.stage_crawl.where(started_at: since..).distinct.pluck(:source_kind).to_set
+        # Each kind's latest finished crawl: it succeeded, and lately. A newer
+        # failed crawl isn't hidden by an earlier success.
+        latest = CrawlRun.stage_crawl.where.not(status: "running").select("DISTINCT ON (source_kind) source_kind, status, started_at")
+          .order(:source_kind, started_at: :desc, id: :desc)
+        crawled = latest.select { |run| run.status == "succeeded" && run.started_at >= since }.map(&:source_kind).to_set
         fetched = ::Source.crawl_ok.where(fetched_at: since.., status_reason: nil)
         read = fetched.where.not(content_sha256: nil).distinct.pluck(:source_kind).to_set
         # A companion is unhealthy when any of its sources has a problem or
@@ -87,8 +91,8 @@ class SourceCoverage
     # fine doesn't make it live when the newest (EIA's new monthly workbook)
     # was blocked.
     def latest_read?(kind, fetched)
-      latest = ::Source.where(source_kind: kind).where.not(fetched_at: nil).order(fetched_at: :desc, id: :desc).first
-      latest && fetched.where.not(content_sha256: nil).exists?(latest.id)
+      latest_id = ::Source.where(source_kind: kind).where.not(fetched_at: nil).order(fetched_at: :desc, id: :desc).pick(:id)
+      latest_id && fetched.where.not(content_sha256: nil).exists?(latest_id)
     end
 
     def catalog = @catalog ||= SourceCatalog.official.index_by(&:kind)
