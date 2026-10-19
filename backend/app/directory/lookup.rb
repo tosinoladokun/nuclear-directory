@@ -103,7 +103,7 @@ module Directory
 
     # Whether anyone has an unresolved correction report (open or reviewed,
     # not closed) on the public page of a fact or, for a link, of either
-    # end: a company's or a plant's page, query and fragment aside. Its
+    # end: a company's or a plant's page, query, fragment and format aside. Its
     # former addresses count too (a rename or a merge redirects them there),
     # unless another record now lives at one, since that page is the other
     # record's.
@@ -123,7 +123,8 @@ module Directory
       else company.(record.organization)
       end
       CorrectionReport.where(status: %w[open reviewed])
-        .where("split_part(split_part(page_path, '?', 1), '#', 1) IN (:pages)", pages:).exists?
+        # The page's own path: no query or fragment, and no format (/companies/x.html is /companies/x).
+        .where("regexp_replace(split_part(split_part(page_path, '?', 1), '#', 1), '\\.[a-z]+$', '') IN (:pages)", pages:).exists?
     end
 
     # A company's or a plant's public paths: today's, then its former ones

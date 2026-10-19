@@ -12,7 +12,7 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
   setup do
     text = "the award rows"
     @source = Source.create!(url: "https://api.usaspending.gov/test/recipient/2", source_kind: "usaspending_doe_awards", crawl_status: "ok",
-      http_status: 200, content_text: text, content_sha256: Digest::SHA256.hexdigest(text))
+      http_status: 200, fetched_at: Time.current, content_text: text, content_sha256: Digest::SHA256.hexdigest(text))
     Source.create!(url: "https://api.usaspending.gov/test/index", source_kind: "usaspending_api", crawl_status: "ok", http_status: 200,
       fetched_at: 1.hour.ago)
     doe = Organization.create!(name: FUNDER, verification_status: "verified", verified_by: "human:tosin")

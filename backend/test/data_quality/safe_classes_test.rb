@@ -11,7 +11,7 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
 
   setup do
     @source = Source.create!(url: "https://api.usaspending.gov/test/recipient/1", source_kind: "usaspending_doe_awards", crawl_status: "ok",
-      http_status: 200, content_text: TEXT, content_sha256: Digest::SHA256.hexdigest(TEXT))
+      http_status: 200, fetched_at: Time.current, content_text: TEXT, content_sha256: Digest::SHA256.hexdigest(TEXT))
     # The API index the crawl fetches; each recipient's page is stored from it.
     @index = Source.create!(url: "https://api.usaspending.gov/test/index", source_kind: "usaspending_api", crawl_status: "ok",
       http_status: 200, fetched_at: 1.hour.ago)
@@ -173,6 +173,22 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
     failed.update_columns(status: "succeeded")
     CrawlRun.create!(stage: "match", source_kind: "usaspending_doe_awards", status: "running", started_at: Time.current)
     assert_equal "the last match run didn't finish", why(candidate)
+  end
+
+  test "G5: a recipient the last crawl's answer left out isn't safe, though its page still reads 200" do
+    candidate = claim({ "description" => SECOND })
+    @source.update_columns(fetched_at: 2.hours.ago)
+    crawl_run!("crawl", started_at: 1.minute.ago)
+    @index.update_columns(fetched_at: Time.current)
+
+    assert_equal "its source wasn't in the last crawl's answer", why(candidate)
+  end
+
+  test "G4: a report filed from a page's .html address counts" do
+    candidate = claim({ "description" => SECOND })
+    CorrectionReport.create!(subject: @company.name, page_path: "/companies/#{@company.slug}.html", message: "The DOE total is wrong.")
+
+    assert_equal "a correction report on its page isn't resolved", why(candidate)
   end
 
   test "G4: a correction report filed at a company's old address still counts" do

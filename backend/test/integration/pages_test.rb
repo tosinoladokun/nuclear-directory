@@ -72,7 +72,9 @@ class PagesTest < ActionDispatch::IntegrationTest
 
     assert_select "pre", DataQuality::Fetcher::USER_AGENT
     assert_select "pre", /User-agent: NuclearDirectoryBot\s+Disallow: \//
-    assert_equal "https://nuclear-directory.org/bot", DataQuality::Fetcher::USER_AGENT[/\(\+(\S+)\)/, 1]
+    assert_equal [ "https://nuclear-directory.org/bot", DataQuality::Fetcher::CONTACT_EMAIL ],
+      DataQuality::Fetcher::USER_AGENT[/\((.+)\)/, 1].delete_prefix("+").split("; ")
+    assert_select "#contact + p a[href=?]", "mailto:#{DataQuality::Fetcher::CONTACT_EMAIL}"
   end
 
   test "the sitemap always lists Plants and sites, even with no public site yet" do

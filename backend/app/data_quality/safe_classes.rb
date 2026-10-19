@@ -153,6 +153,11 @@ module DataQuality::SafeClasses
         # G5, this claim's part (the run's is in context_for)
         throw :unsafe, DataQuality::Review::FIRST_BATCH if candidate.crawl_run_id && context[:firsts][candidate.source.source_kind] == candidate.crawl_run_id
         throw :unsafe, "its source's last fetch didn't return 200" unless candidate.source.http_status == 200
+        # Read in the latest crawl: an answer that leaves a recipient out
+        # leaves its page as it was, still 200 and ok, so that's not enough.
+        unless context[:crawled_at] && candidate.source.fetched_at && candidate.source.fetched_at >= context[:crawled_at]
+          throw :unsafe, "its source wasn't in the last crawl's answer"
+        end
         # The dropped-fact check is per source: a run skips it for a page
         # that still has a claim to place, or that would drop too much.
         unless context[:checked_sources].include?(candidate.source_id)
@@ -197,7 +202,7 @@ module DataQuality::SafeClasses
           elsif verify&.status == "running" then "the verifier is still checking this source"
           elsif verify.nil? || verify.status != "succeeded" then "the verifier's last run didn't finish"
           end
-        { firsts: DataQuality::Review.first_batches, run_problem: problem,
+        { firsts: DataQuality::Review.first_batches, run_problem: problem, crawled_at: crawl&.started_at,
           checked_sources: Array(match&.stats&.dig("dropped_checked_source_ids")).to_set }
       end
 

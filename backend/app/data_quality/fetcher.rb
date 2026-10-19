@@ -16,7 +16,10 @@ require "ipaddr"
 #   response = DataQuality::Fetcher.new.get(url, etag: source.etag)
 #   response.kind # => :ok, :not_modified, :blocked, :disallowed or :error
 class DataQuality::Fetcher
-  USER_AGENT = "NuclearDirectoryBot/0.1 (+https://nuclear-directory.org/bot)"
+  # Who to write to about a visit, in the user agent of every request and on
+  # /bot. SEC's fair-access policy asks for one (#129).
+  CONTACT_EMAIL = "bot@mail.nuclear-directory.org"
+  USER_AGENT = "NuclearDirectoryBot/0.1 (+https://nuclear-directory.org/bot; #{CONTACT_EMAIL})".freeze
   AGENT_TOKEN = "NuclearDirectoryBot"
   HOST_INTERVAL = 3 # seconds between requests to one host
   MAX_REDIRECTS = 3
