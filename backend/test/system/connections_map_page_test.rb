@@ -169,10 +169,14 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     assert_operator order[0], :<, order[1], "key facts first"
     assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
 
-    find(".nd-map__svg--narrow .nd-map__hit[aria-label^='Southern Nuclear']").click
+    southern = find(".nd-map__svg--narrow .nd-map__hit[aria-label^='Southern Nuclear']")
+    southern.hover
+    assert_no_selector ".nd-map__card", visible: true, wait: 0.5 # a hover never opens the sheet
+    southern.click
     assert_selector ".nd-map__card", visible: true
+    assert_selector ".nd-map__card", text: "Southern Nuclear Operating Company → Plant Vogtle"
     assert_equal "fixed", page.evaluate_script("getComputedStyle(document.querySelector('.nd-map__card')).position")
-    find(".nd-map__card .nd-map__close").native.send_keys(:enter)
+    find(".nd-map__card .nd-map__close").click
     assert_no_selector ".nd-map__card", visible: true
   end
 

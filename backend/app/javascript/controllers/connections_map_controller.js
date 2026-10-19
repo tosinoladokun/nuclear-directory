@@ -154,12 +154,18 @@ export default class extends Controller {
   }
 
   // The details card: filled while a line is hovered or focused, kept on a click or Enter.
+  // On phones the card is a sheet over the map: only a tap or Enter opens it.
+  // A hover there would cover the line under the pointer and swallow the click.
   preview(event) {
-    if (!this.pinned && !this.returning) this.show(event.currentTarget)
+    if (!this.pinned && !this.returning && !this.sheet()) this.show(event.currentTarget)
   }
 
   unpreview() {
-    if (!this.pinned) this.hide()
+    if (!this.pinned && !this.sheet()) this.hide()
+  }
+
+  sheet() {
+    return window.matchMedia("(max-width: 639px)").matches
   }
 
   pin(event) {
