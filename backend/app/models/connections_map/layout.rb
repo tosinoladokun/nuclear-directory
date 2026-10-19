@@ -116,7 +116,10 @@ class ConnectionsMap
         space = (cx - big) - (PAD + size.slot + 10 + size.node_r * 2)
         trunk_length = [ [ Layout.label_width(verb, size.label_font) + 28, 88 ].max, space - 40 ].min
         mean = nodes.sum(&:y) / nodes.size
-        junction = [ cx + sign * (big + trunk_length), mean ]
+        # A second bundle to the same nodes (owns and operates the same plants)
+        # meets at its own junction, lower down, so neither hides the other.
+        again = reuse(nodes)
+        junction = [ cx + sign * (big + trunk_length), mean + again * 48 ]
         centre_edge = towards([ cx, cy ], junction, big)
         trunk = inbound ? s_curve(junction, shorten(centre_edge, junction), push: 7) : s_curve(centre_edge, junction, push: 7)
         members = edges.zip(nodes).map do |edge, node|
@@ -216,7 +219,8 @@ class ConnectionsMap
 
         cx, cy, big = @centre.x, @centre.y, size.centre_r
         mean = nodes.sum(&:x) / nodes.size
-        junction = [ cx + (mean - cx) * 0.4, cy + sign * (big + 52) ]
+        again = reuse(nodes)
+        junction = [ cx + (mean - cx) * 0.4 + again * 64, cy + sign * (big + 52 + again * 18) ]
         centre_edge = towards([ cx, cy ], junction, big)
         trunk = inbound ? s_curve(junction, shorten(centre_edge, junction), push: 6) : s_curve(centre_edge, junction, push: 6)
         members = edges.zip(nodes).map do |edge, node|
@@ -243,6 +247,13 @@ class ConnectionsMap
         from, to = inbound ? [ node, @centre ] : [ @centre, node ]
         bow = -bow if bow && !inbound # the same side of the line whichever way it runs
         s_curve(edge_point(from, to), edge_point(to, from, tip: true), push: bow)
+      end
+
+      # How many bundles already met these same nodes.
+      def reuse(nodes)
+        @junctions ||= Hash.new(0)
+        key = nodes.map { |node| node.node.key }.sort
+        (@junctions[key] += 1) - 1
       end
 
       # The side a group goes on when one of its nodes is already in a group

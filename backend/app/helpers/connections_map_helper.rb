@@ -17,7 +17,11 @@ module ConnectionsMapHelper
 
   def map_node_icon(map, node)
     if node.fold? then "site-plant"
-    elsif node.plant? then site_icon_name(node.record.facility_type, reactor_types: [ node.record.reactor_type ].compact, status: node.record.status)
+    elsif node.plant?
+      # A site's own type and status show only once it's verified and sourced
+      # (PlantProfile#site_facts?): a pending site can be public through a unit.
+      site = node.record
+      site.verified? && site.evidence.any? ? site_icon_name(site.facility_type, reactor_types: [ site.reactor_type ].compact, status: site.status) : "site-plant"
     elsif (category = map.category(node)) then "bucket-#{category.key}"
     end
   end

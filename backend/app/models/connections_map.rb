@@ -34,8 +34,18 @@ class ConnectionsMap
 
   # facts: the links behind it (several when units fold into their site);
   # details: what the card says under the verb; sources: unique, in order.
-  Edge = Data.define(:id, :giver, :receiver, :verb, :facts, :details, :sources, :checked_on) do
-    def sentence = "#{giver.name} #{verb} #{receiver.name}"
+  # covers: on an arrow to folded plants, how many of them it's about.
+  Edge = Data.define(:id, :giver, :receiver, :verb, :facts, :details, :sources, :checked_on, :covers) do
+    def initialize(covers: nil, **fields) = super
+
+    # "Constellation owns 2 of 13 plants" when an arrow to a fold covers only some.
+    def sentence
+      fold = [ giver, receiver ].find(&:fold?)
+      return "#{giver.name} #{verb} #{receiver.name}" unless fold && covers && covers < fold.members.size
+
+      part = "#{covers} of #{fold.name}"
+      giver.fold? ? "#{part} #{verb} #{receiver.name}" : "#{giver.name} #{verb} #{part}"
+    end
   end
 
   # stage: "Framework · Oct 2024", or nil when the description names none.
@@ -62,9 +72,10 @@ class ConnectionsMap
   # A deal is an arrow once signed: a power deal only when its description
   # says "Signed"; any other deal unless it starts with an earlier stage or
   # is pending.
-  def self.signed?(deal)
+  # plant: a plant link, which only its words can make early-stage.
+  def self.signed?(deal, plant: false)
     text = deal.description.to_s.strip
-    return text.match?(/\ASigned\b/i) if deal.relationship_type == "offtake_with"
+    return text.match?(/\ASigned\b/i) if !plant && deal.relationship_type == "offtake_with"
 
     NOT_SIGNED.none? { |label| text.match?(/\A#{Regexp.escape(label)}\b/i) } && !text.match?(/\bpending\b/i)
   end
@@ -96,9 +107,10 @@ class ConnectionsMap
     fold = Node.new(key: "fold-plants", name: "#{plants.size} plants", short_name: nil, kind: :fold, record: nil, members: plants)
     others_edges = edges - plant_edges
     merged = plant_edges.group_by { |edge| [ edge.verb, edge.giver.plant? ] }.map do |(verb, from_plant), group|
+      names = group.map { |edge| (from_plant ? edge.giver : edge.receiver).name }
       Edge.new(id: "fold-#{verb.parameterize}", giver: from_plant ? fold : centre, receiver: from_plant ? centre : fold, verb:,
-        facts: group.flat_map(&:facts), details: group.map { |edge| (from_plant ? edge.giver : edge.receiver).name },
-        sources: group.flat_map(&:sources).uniq, checked_on: group.filter_map(&:checked_on).max)
+        facts: group.flat_map(&:facts), details: [ names.size < plants.size ? "#{names.size} of #{plants.size}: #{names.join(', ')}" : names.join(", ") ],
+        sources: group.flat_map(&:sources).uniq, checked_on: group.filter_map(&:checked_on).max, covers: names.size)
     end
     others_edges + merged
   end
@@ -124,12 +136,13 @@ class ConnectionsMap
   end
 
   private
-    def plant_edges = edges.select { |edge| edge.giver.plant? || edge.receiver.plant? }
+    # Arrows to neighbouring plants: on a plant page the centre is a plant too, and doesn't count.
+    def plant_edges = edges.select { |edge| [ edge.giver, edge.receiver ].any? { |node| node.plant? && node.key != centre.key } }
 
     def build_company(profile)
-      profile.parents.each { |link| add(link.to_organization, centre.record, "owns", [ link ]) }
-      profile.subsidiaries.each { |link| add(centre.record, link.from_organization, "owns", [ link ]) }
-      profile.deals.each do |deal|
+      current(profile.parents).each { |link| add(link.to_organization, centre.record, "owns", [ link ]) }
+      current(profile.subsidiaries).each { |link| add(centre.record, link.from_organization, "owns", [ link ]) }
+      current(profile.deals).each do |deal|
         next note(deal) unless self.class.signed?(deal)
 
         case deal.relationship_type
@@ -153,7 +166,11 @@ class ConnectionsMap
       case type
       when "owns", "operates" then add(company, site, type, links)
       when "vendor_for" then add(company, site, "supplies", links, lead: "Reactor design")
-      when "offtakes_from" then add(site, company, "sells power to", links)
+      when "offtakes_from"
+        # A plant power deal is an arrow unless its words say it isn't signed yet.
+        signed, early = links.partition { |link| self.class.signed?(link, plant: true) }
+        early.each { |link| note(link) }
+        add(site, company, "sells power to", signed) if signed.any?
       end
     end
 
@@ -192,7 +209,7 @@ class ConnectionsMap
         stage = [ match[1].strip, match[2].presence ].compact.join(" · ")
         text = match[3].strip.upcase_first
       end
-      @notes << Note.new(id: "note-#{deal.id}", text:, stage:, sources:, fact: deal)
+      @notes << Note.new(id: "note-#{deal.class.name.underscore.dasherize}-#{deal.id}", text:, stage:, sources:, fact: deal)
     end
 
     def node_for(record)

@@ -48,7 +48,7 @@
 
     <%# Connections (#363): under the header across both columns on wide screens, after the key facts on phones. %>
     <% map = ConnectionsMap.for_company(p) %>
-    <%= render("shared/connections_map", map:) if map.edges.any? %>
+    <%= render("shared/connections_map", map:) if map.edges.any? || map.notes.any? %>
 
     <div class="nd-columns__main">
       <% if p.deals.any? %>

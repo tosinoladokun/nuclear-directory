@@ -22,10 +22,15 @@ export default class extends Controller {
     this.done = new WeakSet()
     this.escape = (event) => { if (event.key === "Escape" && !this.cardTarget.hidden) this.close() }
     document.addEventListener("keydown", this.escape)
+    // Measure only once the web fonts are in: a fallback font's widths would stick.
+    this.fontsReady = false
     this.observer = new ResizeObserver(() => this.layOut())
     this.observer.observe(this.figureTarget)
     const fonts = document.fonts ? document.fonts.ready : Promise.resolve()
-    fonts.then(() => this.layOut())
+    fonts.then(() => {
+      this.fontsReady = true
+      this.layOut()
+    })
   }
 
   disconnect() {
@@ -35,6 +40,7 @@ export default class extends Controller {
 
   // Each drawing once, when it's first on screen (a hidden one can't be measured).
   layOut() {
+    if (!this.fontsReady) return
     this.svgTargets.forEach((svg) => {
       if (this.done.has(svg) || svg.getClientRects().length === 0) return
       this.fitNames(svg)
@@ -213,7 +219,9 @@ export default class extends Controller {
 
   fold() {
     this.swap("folded")
-    this.element.querySelector(".nd-map__view[data-view=folded] .nd-map__node--fold")?.focus()
+    // The fold node in whichever drawing is showing (wide or phone).
+    const folds = this.element.querySelectorAll(".nd-map__view[data-view=folded] .nd-map__node--fold")
+    ;[ ...folds ].find((node) => node.getClientRects().length > 0)?.focus()
   }
 
   swap(name) {

@@ -51,7 +51,8 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     folded = map.folded
     fold = folded.find { |edge| edge.receiver.fold? }.receiver
     assert_equal "13 plants", fold.name
-    assert_equal [ "Constellation operates 13 plants", "Constellation owns 13 plants" ], folded.select { |edge| edge.receiver.fold? }.map(&:sentence).sort
+    assert_equal [ "Constellation operates 13 plants", "Constellation owns 2 of 13 plants" ], folded.select { |edge| edge.receiver.fold? }.map(&:sentence).sort
+    assert_equal [ "2 of 13: Clinton Clean Energy Center, Crane Clean Energy Center" ], folded.find { |edge| edge.verb == "owns" }.details
     assert_equal 13, map.opened.count { |edge| edge.verb == "operates" }
     assert_equal 4, map.opened.count { |edge| edge.verb == "sells power to" }
     assert_equal "Announced plan · May 2023", map.notes.sole.stage
@@ -74,6 +75,52 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     map = ConnectionsMap.for_plant(PlantProfile.new(@vogtle))
 
     assert_not_includes map.edges.map { |edge| edge.giver.name }, "Dalton Utilities"
+  end
+
+  test "a plant with seven owners doesn't fold them: only neighbouring plants fold" do
+    build_vogtle
+    %w[One Two Three].each { |n| cite!(link(cite!(company("Owner #{n}")), "owns", @vogtle)).update!(ownership_pct: 0.1) }
+    map = ConnectionsMap.for_plant(PlantProfile.new(@vogtle))
+
+    assert_equal 7, map.edges.count { |edge| edge.verb == "owns" }
+    assert_not map.folds?
+  end
+
+  test "an ended deal, parent or subsidiary isn't a current arrow or note" do
+    build_terrapower
+    ended = Relationship.where(to_organization: @terrapower, relationship_type: "supplies").find { |deal| deal.description.start_with?("Signed") }
+    ended.update!(ended_on: 1.month.ago.to_date)
+    parent = cite!(company("Former Parent"))
+    cite!(link(@terrapower, "subsidiary_of", parent)).update!(ended_on: 1.year.ago.to_date)
+    map = ConnectionsMap.for_company(CompanyProfile.new(@terrapower))
+
+    assert_not_includes map.edges.map(&:sentence), "Global Nuclear Fuel–Americas supplies TerraPower"
+    assert_not_includes map.edges.map(&:sentence), "Former Parent owns TerraPower"
+  end
+
+  test "a plant power deal that isn't signed yet is a note, not an arrow" do
+    build_vogtle
+    buyer = cite!(company("Oracle"))
+    cite!(link(buyer, "offtakes_from", @vogtle)).update!(description: "Subscription for 100 MW, pending state PSC approval.")
+    map = ConnectionsMap.for_plant(PlantProfile.new(@vogtle))
+
+    assert_not map.edges.any? { |edge| edge.verb == "sells power to" }
+    assert_equal "Subscription for 100 MW, pending state PSC approval.", map.notes.sole.text
+  end
+
+  test "two bundles to the same plants meet at different junctions" do
+    company = cite!(company("Two Plant Utility", roles: [ role("utility") ]))
+    %w[North South].each do |name|
+      site = cite!(plant("#{name} Station", facility_type: "power_reactor", status: "operating"))
+      cite!(link(company, "owns", site))
+      cite!(link(company, "operates", site))
+    end
+    map = ConnectionsMap.for_company(CompanyProfile.new(company))
+    [ ConnectionsMap::Layout::WIDE, ConnectionsMap::Layout::NARROW ].each do |size|
+      trunks = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size:, prefix: "t").groups.map(&:trunk)
+
+      assert_equal 2, trunks.compact.uniq.size, size.key
+    end
   end
 
   test "short names drop the legal ending; a name without one has none" do

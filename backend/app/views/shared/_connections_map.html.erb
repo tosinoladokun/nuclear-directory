@@ -5,13 +5,14 @@
   moves colliding labels and fills the details card. Without JavaScript the
   map shows as drawn and the list below is open.
 %>
-<% views = map.folds? ? { "folded" => map.folded, "opened" => map.opened } : { "folded" => map.edges } %>
+<% views = if map.edges.empty? then {} elsif map.folds? then { "folded" => map.folded, "opened" => map.opened } else { "folded" => map.edges } end %>
 <% counts = [ (pluralize(map.companies, "company", "companies") if map.companies.positive?), (pluralize(map.plants, "plant") if map.plants.positive?) ].compact.join(" · ") %>
 <section class="nd-map<%= " nd-map--busy" if map.edges.size > 24 %>" aria-labelledby="connections-heading" data-controller="connections-map">
   <h2 id="connections-heading" class="nd-sec-h">Connections <small><%= counts %></small></h2>
-  <p class="nd-map__hint">Dots flow from giver to receiver. Hover or tap a line for its details and source.</p>
+  <% if map.edges.any? %><p class="nd-map__hint">Dots flow from giver to receiver. Hover or tap a line for its details and source.</p><% end %>
   <div class="nd-map__body">
-    <div class="nd-map__figure" data-connections-map-target="figure">
+    <%# A company with only early-stage deals has Notes and no map. %>
+    <div class="nd-map__figure" data-connections-map-target="figure"<%= " hidden" if map.edges.empty? %>>
       <% cards = {} %>
       <% views.each do |view, edges| %>
         <div class="nd-map__view" data-view="<%= view %>" data-connections-map-target="view"<%= " hidden" if view == "opened" %>>
@@ -137,6 +138,7 @@
         </section>
       <% end %>
 
+      <% if map.edges.any? %>
       <details class="nd-map__list" open data-connections-map-target="list">
         <summary>Show connections as a list</summary>
         <ul>
@@ -145,6 +147,7 @@
           <% end %>
         </ul>
       </details>
+      <% end %>
     </div>
   </div>
 </section>

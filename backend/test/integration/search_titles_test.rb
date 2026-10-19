@@ -27,7 +27,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get companies_path(tag: "fusion")
 
-    assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
+    assert_select "head > title", "Fusion energy companies in the US · Nuclear Directory"
     assert_select "h1", /Fusion/
     assert_equal "2 fusion energy companies in the US.", description
     assert_equal description, og_description
@@ -40,7 +40,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: utility.slug)
 
-    assert_select "title", "Alabama Power: utility, plants · Nuclear Directory"
+    assert_select "head > title", "Alabama Power: utility, plants · Nuclear Directory"
     assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
     assert_equal description, og_description
     assert_no_match(/Plants, sites and deals/, description)
@@ -67,7 +67,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: helion.slug)
 
     # "…, investors and deals" would run past 70 characters, so "deals" goes.
-    assert_select "title", "Helion Energy: fusion developer, investors · Nuclear Directory"
+    assert_select "head > title", "Helion Energy: fusion developer, investors · Nuclear Directory"
     assert_equal "Helion Energy: Develops fusion power plants. Investors include Lightspeed.", description
   end
 
@@ -100,7 +100,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: kairos.slug)
 
-    assert_select "title", "Kairos Power: reactor developer · Nuclear Directory"
+    assert_select "head > title", "Kairos Power: reactor developer · Nuclear Directory"
   end
 
   test "a grant or award isn't an investment, and an ended or future link isn't present tense" do
@@ -113,7 +113,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: helion.slug)
     assert_no_match(/Investors/, description)
-    assert_no_match(/investors/, css_select("title").text)
+    assert_no_match(/investors/, css_select("head > title").text)
 
     get company_path(slug: utility.slug)
     assert_no_match(/Operates|Owns/, description)
@@ -135,8 +135,8 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: Organization.find_by!(name:).slug)
 
-    assert_select "title", "#{name} · Nuclear Directory"
-    assert_operator css_select("title").text.length, :<=, 70
+    assert_select "head > title", "#{name} · Nuclear Directory"
+    assert_operator css_select("head > title").text.length, :<=, 70
   end
 
   test "a plant's title names its town and state, and owners and operator only when they're published (#291)" do
@@ -145,10 +145,10 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     bare = cite!(plant("Lone Site", facility_type: "uranium_mine", city: "Crownpoint", state: "NM"))
 
     get plant_path(slug: owned.slug)
-    assert_select "title", "Arkansas Nuclear One, Russellville, AR: owners · Nuclear Directory"
+    assert_select "head > title", "Arkansas Nuclear One, Russellville, AR: owners · Nuclear Directory"
     assert_match(/in Russellville, Arkansas\./, description)
 
     get plant_path(slug: bare.slug)
-    assert_select "title", "Lone Site, Crownpoint, NM · Nuclear Directory"
+    assert_select "head > title", "Lone Site, Crownpoint, NM · Nuclear Directory"
   end
 end

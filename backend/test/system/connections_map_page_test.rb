@@ -62,7 +62,17 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   PAGES = {
     "Plant Vogtle" => -> { "/plants/#{build_vogtle.slug}" },
     "TerraPower" => -> { "/companies/#{build_terrapower.slug}" },
-    "Constellation" => -> { "/companies/#{build_constellation.slug}" }
+    "Constellation" => -> { "/companies/#{build_constellation.slug}" },
+    # Owns and operates the same two plants: two bundles to the same nodes.
+    "A utility that owns and runs two plants" => lambda {
+      company = cite!(company("Two Plant Utility", roles: [ role("utility") ]))
+      %w[North South].each do |name|
+        site = cite!(plant("#{name} Station", facility_type: "power_reactor", status: "operating"))
+        cite!(link(company, "owns", site))
+        cite!(link(company, "operates", site))
+      end
+      "/companies/#{company.slug}"
+    }
   }.freeze
 
   PAGES.each do |title, path|
@@ -91,6 +101,30 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
 
     click_on "‹ Back to all connections"
     assert_selector ".nd-map__view[data-view=folded]", visible: true
+  end
+
+  test "on a phone, Back folds the plants again and puts focus on the visible fold node" do
+    resize_viewport(390, 844)
+    visit "/companies/#{build_constellation.slug}"
+    find(".nd-map__view[data-view=folded] .nd-map__svg--narrow .nd-map__node--fold").click
+    assert_selector ".nd-map__view[data-view=opened] .nd-map__svg--narrow[data-laid-out=true]"
+
+    click_on "‹ Back to all connections"
+    assert_equal "narrow", page.evaluate_script("document.activeElement.closest('svg')?.dataset.size")
+    assert_equal "13 plants. Show them", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
+  end
+
+  test "a company with only early-stage deals shows its Notes without a map" do
+    company = cite!(company("Early Stage Co"))
+    partner = cite!(company("Partner Co"))
+    deal(partner, "supplies", company, "MOU (2025): to explore a fuel supply agreement.")
+    visit "/companies/#{company.slug}"
+
+    within ".nd-map" do
+      assert_selector ".nd-notes__stage", text: "MOU · 2025"
+      assert_text "To explore a fuel supply agreement."
+      assert_no_selector "svg", visible: :all
+    end
   end
 
   test "a line's details: shown on hover, kept on click, closed with Esc; with its source" do
