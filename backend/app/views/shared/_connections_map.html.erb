@@ -130,7 +130,8 @@
           <ul class="nd-notes__list">
             <% map.notes.each do |note| %>
               <li class="nd-notes__item">
-                <p class="nd-notes__text"><% if note.stage %><span class="nd-notes__stage"><%= note.stage %></span><% end %><%= note.text %></p>
+                <% other_url = note.other.is_a?(Facility) ? plant_url_for(note.other) : company_url_for(note.other) %>
+                <p class="nd-notes__text"><% if note.stage %><span class="nd-notes__stage"><%= note.stage %></span><% end %><%= link_to note.other.name, other_url, class: "nd-link nd-notes__who" %>: <%= note.text %></p>
                 <%= link_to note.sources.map(&:domain).compact.uniq.join(", "), note.sources.first.url, class: "nd-notes__source", rel: "noopener noreferrer", target: "_blank" %>
               </li>
             <% end %>

@@ -122,7 +122,8 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
 
     within ".nd-map" do
       assert_selector ".nd-notes__stage", text: "MOU · 2025"
-      assert_text "To explore a fuel supply agreement."
+      assert_link "Partner Co"
+      assert_text "Partner Co: To explore a fuel supply agreement."
       assert_no_selector "svg", visible: :all
     end
   end

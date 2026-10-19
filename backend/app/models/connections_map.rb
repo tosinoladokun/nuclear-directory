@@ -49,7 +49,9 @@ class ConnectionsMap
   end
 
   # stage: "Framework · Oct 2024", or nil when the description names none.
-  Note = Data.define(:id, :text, :stage, :sources, :fact)
+  # other: the company or plant the deal is with, named first, since the
+  # description often doesn't name it ("Conditional HALEU allocation").
+  Note = Data.define(:id, :text, :stage, :sources, :fact, :other)
 
   attr_reader :centre, :edges, :notes
   # Each company's bucket by id, when they're known already (the /design example).
@@ -209,7 +211,15 @@ class ConnectionsMap
         stage = [ match[1].strip, match[2].presence ].compact.join(" · ")
         text = match[3].strip.upcase_first
       end
-      @notes << Note.new(id: "note-#{deal.class.name.underscore.dasherize}-#{deal.id}", text:, stage:, sources:, fact: deal)
+      @notes << Note.new(id: "note-#{deal.class.name.underscore.dasherize}-#{deal.id}", text:, stage:, sources:, fact: deal, other: other_party(deal))
+    end
+
+    def other_party(deal)
+      if deal.is_a?(FacilityRelationship)
+        centre.plant? ? deal.organization : (deal.facility.parent || deal.facility)
+      else
+        deal.from_organization_id == centre.record.id ? deal.to_organization : deal.from_organization
+      end
     end
 
     def node_for(record)

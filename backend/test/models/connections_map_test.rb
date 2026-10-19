@@ -27,6 +27,7 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert_equal "Conditional · Apr 2025", note.stage
     assert_equal "The Department of Energy offered HALEU fuel, subject to conditions.", note.text
     assert_equal [ "example.org" ], note.sources.map(&:domain)
+    assert_equal "U.S. Department of Energy", note.other.name, "named first: the description needn't name them"
   end
 
   test "the stage rule: a power deal needs Signed; other deals are signed unless an earlier stage or pending" do
