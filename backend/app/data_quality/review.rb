@@ -77,6 +77,9 @@ module DataQuality::Review
   # A company's role or technology is what that fact is (a plant's
   # technology is an ordinary value).
   IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology] }.freeze
+  # What a claim of this kind can't change when it's edited before approval:
+  # its link's ends and type, and what identifies it (a role's role).
+  def self.read_only_keys(kind) = NOT_EDITABLE + IDENTIFYING.fetch(kind.to_s, [])
 
   # The hold Data Quality's review lifts (#306): a source's first batch.
   FIRST_BATCH = "it's from this source's first batch".freeze
@@ -274,8 +277,11 @@ module DataQuality::Review
       human!(by)
       candidate = Candidate.find_by(id: candidate_id) or return gone(candidate_id)
       attributes = attributes.to_h.stringify_keys
-      if (locked = attributes.keys & locked_keys(candidate.kind)).any?
-        return Result.new(candidate_id:, ref: nil, errors: [ "can't edit #{locked.to_sentence} here" ])
+      # A field that can't be edited here may come back unchanged (the form
+      # shows it); only a changed one is refused.
+      locked, attributes = attributes.partition { |name, _| locked_keys(candidate.kind).include?(name) }.map(&:to_h)
+      if (changed = locked.select { |name, value| candidate.payload[name] != value }.keys).any?
+        return Result.new(candidate_id:, ref: nil, errors: [ "can't edit #{changed.to_sentence} here" ])
       end
 
       result = nil
@@ -668,7 +674,7 @@ module DataQuality::Review
       end
 
       # Keys an edit may not change for this kind of fact.
-      def locked_keys(kind) = NOT_EDITABLE + IDENTIFYING.fetch(kind.to_s, [])
+      def locked_keys(kind) = DataQuality::Review.read_only_keys(kind)
 
       def item(candidate, directory)
         record = directory.attached_record(candidate)

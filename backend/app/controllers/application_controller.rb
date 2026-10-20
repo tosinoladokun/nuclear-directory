@@ -1,8 +1,9 @@
 class ApplicationController < ActionController::Base
   include TracksAnalytics
 
-  # Only allow modern browsers supporting webp images, web push, badges, import maps, CSS nesting, and CSS :has.
-  allow_browser versions: :modern
+  # Every browser gets the pages: a public directory turns no reader away,
+  # and an older one only loses some styling. (Rails' allow_browser :modern
+  # answered 406 to Safari before 17.2, on older iPhones and Macs.)
 
   # Changes to the importmap will invalidate the etag for HTML responses
   stale_when_importmap_changes
