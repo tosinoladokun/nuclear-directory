@@ -1,7 +1,7 @@
 // Tosin's rule (DESIGN.md, #365): text inside a box never wraps, and a source
 // number never starts a line on its own. Returns what breaks it, as strings.
 (() => {
-  const ONE_LINE = ".nd-bucketchip, .nd-btn, .nd-pill, .nd-tag, .nd-sugg, .nd-cat__name, .nd-cat__examples, .nd-listrow__name, .nd-listrow__desc, .nd-catcard__name, .nd-catcard__row, .nd-sitechip, .nd-overview__line--fit"
+  const ONE_LINE = ".nd-bucketchip, .nd-btn, .nd-pill, .nd-tag, .nd-sugg, .nd-cat__name, .nd-cat__examples, .nd-listrow__name, .nd-listrow__desc, .nd-catcard__name, .nd-catcard__row, .nd-sitechip, .nd-overview__line--fit, .nd-overview dd a:not(.nd-src)"
   // Lines of text: text rects grouped by vertical overlap, so a smaller
   // count or a chip beside the text doesn't count as a line of its own.
   const lines = (el) => {

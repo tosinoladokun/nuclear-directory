@@ -332,6 +332,15 @@ A crawler can propose a deal term: today, a company's own funding round from a F
   apply to deal terms: a Form D/A on its own filing page replaces its original's values, once a person
   approves it.
 
+## NRC uranium recovery (#275)
+
+`plugins/nrc_uranium_recovery.rb` reads NRC's "Locations of Uranium Recovery Facilities" once a day, and
+only its table of NRC-licensed facilities. Each row gives the site (in situ recovery as `uranium_mine`, a
+conventional mill as `mill`; city and state from Location), its licensee, an `operates` link and the
+licensee's `mining` category, all quoting the row. A row whose type or state can't be read is held for a
+person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
+2018 and makes no claim about it. Those sites come from each state's own list (#384).
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.

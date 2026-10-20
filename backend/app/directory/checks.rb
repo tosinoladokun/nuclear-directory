@@ -23,7 +23,7 @@ module Directory::Checks
   SINGLE = %w[status].freeze
 
   # NRC and EIA re-confirm nightly; a web page or hand research is checked far less often (#241).
-  NIGHTLY_KINDS = %w[nrc_reactor_list nrc_power_status nrc_decommissioning eia_generators eia_860m_index].freeze
+  NIGHTLY_KINDS = %w[nrc_reactor_list nrc_power_status nrc_decommissioning eia_generators eia_860m_index doe_isotope_sites].freeze
   STALE_DAYS = { nightly: 14, other: 365 }.freeze
 
   OPEN = %w[new matched needs_review].freeze

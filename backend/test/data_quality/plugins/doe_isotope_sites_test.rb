@@ -40,6 +40,15 @@ class DataQuality::Plugins::DoeIsotopeSitesTest < ActiveSupport::TestCase
     assert_equal "doe_isotope_sites", page_source.source_kind
   end
 
+  test "a page someone cited by hand becomes this plug-in's, so it's extracted" do
+    Source.create!(url: Plugin::PAGE_URL, source_kind: "web_page", title: "isotopes.gov production sites (cited)")
+
+    %w[crawl extract].each { |stage| DataQuality::Pipeline.run("doe_isotope_sites", plugin:, only: stage) }
+
+    assert_equal "doe_isotope_sites", page_source.source_kind
+    assert page_source.candidates.exists?(kind: "organization")
+  end
+
   test "a blocked page stops the crawl" do
     stub_request(:get, Plugin::PAGE_URL).to_return(status: 403, body: "Access Denied")
 

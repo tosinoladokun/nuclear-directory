@@ -91,6 +91,10 @@
   .nd-overview dd { margin: 0; font-size: 14px; line-height: 20px; min-width: 0; }
   /* A value and its source numbers never part (Tosin's no-wrap rule). */
   .nd-overview__cites, .nd-keep { white-space: nowrap; }
+  /* A list wraps only between names: each linked name stays whole (Design, #394). */
+  .nd-overview dd a { white-space: nowrap; }
+  /* A name before the last is never wider than the column: "…" as the last resort. */
+  .nd-overview__line:not(.nd-overview__line--fit) > .nd-overview__val a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   /* The Type chips: under their label, across the panel, so a full-name chip fits on one line. */
   .nd-overview dt.nd-overview__stack, .nd-overview dd.nd-overview__stack { grid-column: 1 / -1; }
   .nd-overview dd.nd-overview__stack { margin-top: calc(-1 * var(--nd-space-2)); }
@@ -106,6 +110,13 @@
     font-size: clamp(13px, calc((100cqi - var(--cites) * 32px) / (var(--chars) * 0.62)), 14px); }
   .nd-overview__line--fit .nd-overview__cites { flex: none; }
   .nd-overview__line--fit .nd-overview__val:has(:focus-visible) { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
+  /* A list's last item and its numbers: bounded by the row, so a long last
+     name shrinks to an ellipsis (full name in title) and the numbers stay. */
+  .nd-overview__keep { display: inline-flex; align-items: baseline; max-width: 100%; vertical-align: bottom; }
+  .nd-overview__last { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    font-size: clamp(13px, calc((100cqi - var(--cites) * 32px) / (var(--chars) * 0.62)), 14px); }
+  .nd-overview__keep .nd-overview__cites { flex: none; }
+  .nd-overview__last:has(:focus-visible) { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
   /* Phones: each label above its value, so values get the full width. */
   @media (max-width: 479px) {
     .nd-overview dl { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }

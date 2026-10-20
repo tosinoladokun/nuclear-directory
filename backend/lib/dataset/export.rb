@@ -158,7 +158,11 @@ module Dataset
         @sourced = Hash.new { |cache, type| cache[type] = Evidence.where(subject_type: type).distinct.pluck(:subject_id).to_set }
         sites = Facility.published.where(parent_id: nil).includes(:technology).order(:slug).to_a
         @profiles = sites.to_h { |site| [ site.id, PlantProfile.new(site) ] }
-        units = @profiles.values.flat_map(&:units)
+        # Every published unit of a public site. One with no source of its own
+        # is an identity row only (its page lists only sourced units), so a
+        # sourced link to it still joins.
+        units = Facility.published.where(parent_id: sites.map(&:id)).includes(:technology, :parent).to_a
+        sourced_units = units.select { |unit| sourced?(unit) }
         facilities = (sites + units).sort_by(&:slug)
         shown_sites = sites.select { |site| @profiles.fetch(site.id).site_facts? }
         company_links = Relationship.published.includes(:from_organization, :to_organization).order(:id).select { |link| sourced?(link) }
@@ -171,7 +175,7 @@ module Dataset
           .select { |t| sourced?(t) }
         buckets = Category.buckets.map { |category| [ category.key, Organization.where(id: Bucket.organization_ids(category)).pluck(:id).to_set ] }
 
-        evidence = evidence_rows(companies: companies.select { |c| sourced?(c) }, facilities: [ *shown_sites, *units ], company_links:,
+        evidence = evidence_rows(companies: companies.select { |c| sourced?(c) }, facilities: [ *shown_sites, *sourced_units ], company_links:,
           plant_links:, roles:, technologies:)
         sources = Source.where(id: evidence.map { |row| row["source_id"] }.uniq).order(:id).to_a
 
@@ -195,7 +199,7 @@ module Dataset
           **row(company, %w[slug name]), "legal_name" => (company.legal_name if details),
           "aliases" => details ? company.aliases.map(&:alias).reject { |name| OrganizationAlias.normalize(name) == own }.sort : [],
           **row(company, COMPANY_DETAILS - %w[legal_name]).transform_values { |value| value if details },
-          "status" => company.status,
+          "status" => (company.status if details),
           "buckets" => buckets.filter_map { |key, ids| key if ids.include?(company.id) },
           "roles" => roles.select { |r| r.organization_id == company.id }.map { |r| r.role.key }.sort,
           "technologies" => technologies.select { |t| t.organization_id == company.id }.map { |t| t.technology.key }.sort,
@@ -207,16 +211,16 @@ module Dataset
 
       # A site's details as its page shows them, and its capacity as the page
       # computes it (operating units, or a standalone reactor's own figure
-      # while operating). A unit's own values.
+      # while operating). A unit's own values, when it has its own source.
       def facility_row(facility)
         profile = @profiles[facility.id] unless facility.parent_id
-        details = profile ? profile.site_facts? : true
+        details = profile ? profile.site_facts? : sourced?(facility)
         values = row(facility, SITE_DETAILS).transform_values { |value| value if details }
         {
           **row(facility, %w[slug name]), "level" => facility.parent_id ? "unit" : "site", "site_slug" => facility.parent&.slug,
           "facility_type" => values["facility_type"], "status" => values["status"], "technology" => (facility.technology&.key if details),
-          "reactor_type" => values["reactor_type"], "capacity_mw" => profile ? profile.capacity_mw : facility.capacity_mw,
-          **values.slice(*%w[nrc_docket eia_plant_id city state]), "country_code" => facility.country_code,
+          "reactor_type" => values["reactor_type"], "capacity_mw" => profile ? profile.capacity_mw : (facility.capacity_mw if details),
+          **values.slice(*%w[nrc_docket eia_plant_id city state]), "country_code" => (facility.country_code if details),
           **values.slice("latitude", "longitude"),
           "checked_on" => (profile ? profile.verified_at : facility.verified_at)&.to_date, "url" => "#{SITE}/plants/#{(facility.parent || facility).slug}"
         }

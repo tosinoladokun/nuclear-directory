@@ -79,10 +79,12 @@ Text inside a box (a card title, chip, pill, button, tab, badge, table header, m
    Fitting and the font-size check use these same floors.
 4. **Below the floor:** use the record's or category's short name, if it has one (`short_name`, or the category's `short`).
 5. **Last resort:** cut with an ellipsis (`overflow: hidden; text-overflow: ellipsis`), and keep the full text in `title` and the accessible name. For a label we write, like a category or a button, an ellipsis is a bug to fix with a short label. For a record's long name in a row, such as a company in a homepage card, the ellipsis is accepted (Tosin, 17 Oct).
+   - **A box never clips glyphs vertically** (Tosin, 18 Oct: "X-energy" lost its descenders). It only cuts horizontally, with the ellipsis. Give the one-line element a line-height of at least 1.25 times its font size, or vertical padding that holds the font's ascenders and descenders (g, y, p, j, Q). `overflow: hidden` on a box shorter than that clips them.
 6. **Checked:** a test at 1440, 1280 and 390 fails when any of these happens:
    - an HTML one-line element's `scrollWidth` is greater than its `clientWidth`. The exception is a record name that rule 5 allows to end in an ellipsis: it's marked `data-truncate`, its CSS clips on purpose, so it's checked differently. It must stay one line, keep its box inside its parent (the box's right edge doesn't pass the parent's), and carry the full name in `title` and its accessible name. A `scrollWidth` overflow on anything not marked `data-truncate` fails;
    - the text takes more than one line. Measure the text, not the element: a block or flex element (like `.nd-cat b`) reports one box even when its text wraps. Use a Range over its contents (`range.selectNodeContents(el); range.getClientRects()`) and count distinct line tops (within 4px). The fallback is the element's height compared with one computed line-height;
    - its computed font size is below the floor;
+   - its glyphs are clipped vertically: the text's Range rect (`range.getBoundingClientRect()`) reaches above or below the element's clipping box, whose `overflow` isn't `visible`;
    - an SVG label (it has no layout box) overflows. The test compares the label's `getBBox()` with its slot, and with the node circles, other labels and edges near it.
 
    `/design` shows each component with its longest real label.
@@ -336,6 +338,78 @@ Tags have their own list pages but aren't navigation (`Tag`): `/companies?tag=fu
 - **Edges:** 1px `control` lines. *Supplies* and *vendor for* are solid. *Invests in* is dashed (4 4). *Offtakes from* is dotted (1 3). *Owns* and *operates* are solid with a small arrowhead. Every edge type carries a `data-sm` label on hover; never tell types apart by color alone.
 - **Selection:** clicking a node fills it `inverse`, raises its edges to `ink` and opens its summary in the detail panel without leaving the map.
 - **Labels:** org names in `small`, `ink`, on one line, following "Text in a box stays on one line": fit by measuring, down to the floor (12px on phones), then the record's `short_name`, and an ellipsis only as the last resort, with the full name in `<title>`, the aria-label and the detail sheet. Don't hide labels at small sizes; the map uses short names instead (#363).
+
+## Components and alignment
+
+Every page is built only from these components, in the order its page entry gives (Information architecture). The canvas has each one drawn with the site's own CSS: [Components and alignment](https://claude.ai/artifact/AyVhJjG4kLvYBmXdcHeAAb) (private; ask Tosin for access), 18 Oct. Approved by Tosin, 18 Oct. Nothing a page shows today is removed by these rules; they only align, space and restyle.
+
+### Alignment rules
+
+These hold in the key facts panel and in every component that pairs a label with a value.
+
+- **Two edges, each shared.** When a value sits beside its label, every such value starts on the value column's edge. When it sits under its label (a row of chips, a list of names, and every row on phones under 480px), it starts on the label's edge. Text, a link, a list, a number and a chip all follow the same rule.
+- **Chips are optically aligned.** A chip's first glyph (its icon, or its first letter when it has none) sits on the value edge. The pill's padding hangs into the gutter. No component pushes a value right with its own padding.
+- **Label to value: 4px (`--nd-space-1`)** when the label sits above its value (phones, and any stacked row at every width). Never negative and never collapsed.
+- **Row to row: 12px**, on phones and desktop: the 4px row gap plus 8px (`--nd-space-2`) above each label.
+- **Side by side (desktop):** the label column, a 16px gap (`--nd-space-4`), then the value edge. A value that needs more room than the value column (a list of two or more names, a row of chips) goes under its label at the panel's full width, with the 4px gap.
+- **Source markers** follow their value on the same line and never start a line (the one-line rule). They never move the value edge.
+- **Checked in tests:** the no-wrap audit (`test/support/no_wrap_audit.js`) also checks that each value's first text or glyph sits on its own edge (value column or label) to within 1px, and that each label-to-value gap is the token. A hanging pill stays inside the panel at 390.
+
+### Source markers in key facts
+
+**A company's own sources show once; a row has its own markers only when that fact has its own source.**
+
+- Under the key facts, one line links the record's own evidence. It names a fact only when a check, run as the page is drawn, finds a record quote that states the value shown (#407). The loader's checks and production snapshots aren't enough, because a later edit can change a value without a new quote.
+  - **Company:** "About this company: sources 1 2 3". Once #407 lands, the line names Legal name and Headquarters when its check passes for them ("Headquarters and legal name: from these sources together 1 2 3"). Website and other names aren't named.
+  - **Plant:** "About this plant: sources 1 2", from the site's own evidence. Once #407 lands, it names Docket and Location when its check passes for them; Type and Status once #398 lands.
+- "Together" says the sources back the named facts as a set, not each source each fact. Record evidence doesn't record which field it backs yet (#398).
+- The numbers are the Sources list's, in reading order, so the description's markers and the line share them. Nothing is dropped: the line is the same set of record sources each of those rows showed.
+- Role, technology, link and unit evidence keep their markers on their own rows, and aren't repeated in the line.
+- Every source still appears once under Sources, linked, with its checked date.
+- When #398 lands and record evidence names the field it backs, each of those rows (Headquarters, Legal name, Website, Also known as; on plants Type, Status, Location, NRC docket) gets its own markers back. The line then holds only the sources that back no single field.
+
+### Type chip in key facts
+
+The Type row is stacked at every width. Its chips sit 4px under the label (no negative margin). The pill hangs left by its own 8px padding, so the category icon sits on the value edge.
+
+### Inventory
+
+Spacing in px with its token; a value with no token is listed under "Not yet to the rules", to fix when the component is next touched.
+
+| Component | Class | Anatomy | Spacing | 390 | 1440 | Not yet to the rules |
+|---|---|---|---|---|---|---|
+| Key facts panel | `nd-overview` | label (`dt`), value (`dd`), `__line`, `__val`, `__cites`; `__keep` and `__last` for a list's last name; `__stack`; `__foot`; `__fix` | padding 24 (space-6); gap 12 row, 16 column; foot 16 above | one column, label above value | label column and value column; lists and chips stacked | the stacked row's −8px margin; the 2px phone label gap |
+| Type chip | `nd-bucketchip` | category icon, `__full`, `__short` | padding 2 10 2 8; icon gap 6; chips gap 4 and 8 | stacked, full width | stacked, full width | the text starts 30px in from the value edge |
+| Source marker | `nd-src` | number linked to `#source-n`; in fact rows, the domain and checked date | padding 1 6; 4 before (space-1); 44px tap area on touch | same | same | record sources repeat on every record row |
+| Crumbs | `nd-crumbs` | links separated by " / " | none | one line | one line | no spacing tokens |
+| Profile header | `nd-profile` | mark (56px), name, summary with its sources, role tag row (`nd-tag`) | gap 16 and 20; main gap 10 | mark above the name | mark beside the name | 20 and 10 aren't tokens |
+| Fact row | `nd-factrow` | who → what, detail, quote (`nd-quote`), side (sources, confidence, Report a correction) | padding 14 0; gap 6 and 16 | one column, side wraps under | two columns | 14 and 6 aren't tokens |
+| Units table | `nd-table--cards` | header, cells; a Sources column when any unit is sourced | th 8 16; td 12 16 | each unit a card (label 9rem, value) | table | the card's value edge differs from key facts |
+| List row | `nd-listrow` | mark (40px), name, description, capacity (plants), side (place, connections) | padding 14 4; gap 4 and 16 | side moves under the text | three columns | 14 isn't a token |
+| Category pills | `nd-pill` | pill and count | padding 7 12; gap 8 | one row, scrolls, fades | wraps | 7 isn't a token |
+| Category box | `nd-cat` | name, examples, count (desktop head) | padding 14 16 (12 on phones) | stacked | grid | 14 isn't a token |
+| Section head | `nd-sec-h` | title and count | 12 above | same | same | |
+| Sources list | `nd-sources` | number, title, domain, checked date | row padding 10 0; gap 2 and 8 | a sheet on touch (`nd-sheet`) | list | 10 and 2 aren't tokens |
+| Show more | `nd-more` | button under a long list | 8 above; 44px tall | same | same | |
+| Empty state | `nd-notice` | one muted line, optional action | | same | same | |
+| Missing facts | `nd-gaps` | what isn't sourced yet, each with Report a correction | | same | same | |
+| Today steps (admin) | `nd-tiles--stages`, `nd-numtable` | four stage tiles; counts per source | td 12 14; th 10 14 | tiles become 72px rows | four tiles | 14 and 10 aren't tokens |
+| Connections map | `nd-map`, `nd-notes` (#400) | the map, then the details card, Notes and "Show connections as a list" under it | | after key facts; two or three nodes to a row, alternate rows staggered | full width under the profile header | |
+
+Every page also has the site header (`nd-sitebar`: wordmark and search box; not on Home), the footer (`nd-footer`) and the page frame (`nd-page`). Other negative margin to remove when touched: `nd-listhead` (−24px).
+
+### Components by page
+
+Square brackets mark a component shown only when its data exists, or one that's approved and coming.
+
+- **Home (`/`):** wordmark; search box (large); suggestions (one row on phones, scrolling inside itself); category cards (a zero count hides its card); footer. **A company appears in only one card** (Tosin, 18 Oct): cards fill in display order, and each skips names an earlier card already shows. A header count stays the category's real total. A card left with fewer than three names shows what's left; with none left, it keeps its header and "See all".
+- **Company list, category and tag pages (`/companies`, `?category=`, `?tag=`):** header; category pills (current on a category page); list head; filters (a sheet on phones); list rows, or the empty state; [with a search, two groups]; footer.
+- **Company profile:** header; crumbs; profile header; key facts (Type, record facts, roles, technology, headquarters, founded, parents, subsidiaries, source line); [connections map: after key facts on phones; on desktop it runs full width under the profile header, above key facts and the lists]; the category's own sections; Deals and links; Plants and sites; [missing facts]; Sources with the cite line; Report a correction; footer.
+- **Plant profile:** header; crumbs; profile header; [owner and operator sentence]; key facts ("About this plant" line); [connections map: after key facts on phones; on desktop it runs full width under the profile header, above key facts and the lists]; Companies; units table; [missing facts]; Sources; footer.
+- **Unit:** its row on the plant page, highlighted.
+- **Search:** instant results (group label, rows with a 32px mark); no results, or All results.
+- **Report a correction:** [alert]; what you're correcting; the form; Send; back link.
+- **Today (admin):** admin shell; date head; stage tiles; [counts per source]; [step 3 lists, #373].
 
 ## Iconography
 

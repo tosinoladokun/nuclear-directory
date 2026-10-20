@@ -15,16 +15,18 @@
       <% shown.each do |label, value, citations, note| %>
         <%# Text fits; a block of its own (the Type chips) lays itself out, and
             goes under its label at the panel's full width, on every screen. %>
-        <% stacked = value.to_s.include?("<ul") %>
         <% chars = strip_tags(value.to_s).length %>
-        <%# A long list of linked names keeps its last item with its numbers;
-            any other value (one name, a place with a comma) fits one line. %>
-        <% parts = split_last_item(value) if !stacked && chars > DirectoryHelper::FIT_CHARS && citations.present? %>
-        <% fit = !stacked && !parts %>
+        <%# A list of two or more linked names goes under its label too, so it
+            gets the panel's full width (Design, #394), and keeps its last item
+            with its numbers; any other value (one name, a place with a comma)
+            fits one line beside its label. %>
+        <% parts = split_last_item(value) if !value.to_s.include?("<ul") && citations.present? %>
+        <% stacked = value.to_s.include?("<ul") || parts.present? %>
+        <% fit = !stacked %>
         <%= tag.dt(label, class: ("nd-overview__stack" if stacked)) %>
         <dd<%= ' class="nd-overview__stack"'.html_safe if stacked %>><span class="nd-overview__line<%= " nd-overview__line--fit" if fit %>" style="--chars: <%= [ chars, 1 ].max %>; --cites: <%= Array(citations).size %>"><% cites = capture do %><% Array(citations).each do |number, source| %><%= render "shared/source_chip", number:, source:, compact: true %><% end %><% end %>
           <% if parts %>
-            <span class="nd-overview__val"><%= parts.first %></span><span class="nd-keep"><%= parts.last %><span class="nd-overview__cites"><%= cites %></span></span>
+            <span class="nd-overview__val"><%= parts.first %></span><span class="nd-keep nd-overview__keep" style="--chars: <%= [ strip_tags(parts.last).length, 1 ].max %>"><%= tag.span(parts.last, class: "nd-overview__last", title: strip_tags(parts.last).squish, data: { truncate: true }) %><span class="nd-overview__cites"><%= cites %></span></span>
           <% else %>
             <%= tag.span(value, class: "nd-overview__val", title: (strip_tags(value.to_s).squish if fit)) %><% if citations.present? %><span class="nd-overview__cites"><%= cites %></span><% end %>
           <% end %></span><% if note %><span class="block mt-1 type-small text-ink-muted"><%= note %></span><% end %></dd>

@@ -77,6 +77,8 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
 
     travel 1.day do
       assert_equal 0, crawl!["changed"]
+      # Still read today: safe classes' G5 asks that a claim's page was in the latest crawl's answer.
+      assert_equal Time.current.to_i, recipient(XENERGY["recipient_id"]).fetched_at.to_i
     end
   end
 

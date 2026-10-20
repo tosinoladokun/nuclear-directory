@@ -184,6 +184,17 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
     assert_equal "its source wasn't in the last crawl's answer", why(candidate)
   end
 
+  test "G5: a same-day rerun that skips the fetch doesn't make the pages it last read look left out" do
+    candidate = claim({ "description" => SECOND })
+    @source.update_columns(fetched_at: 5.minutes.ago) # read by the setup's crawl, an hour ago
+    crawl_run!("crawl", started_at: 1.minute.ago, stats: { "api" => "skipped_recent" })
+
+    assert_nil why(candidate), "the rerun read nothing, so the last fetch's answer still stands"
+
+    crawl_run!("crawl", started_at: 30.seconds.ago, stats: { "api" => "ok", "recipients" => 0 })
+    assert_equal "its source wasn't in the last crawl's answer", why(candidate)
+  end
+
   test "G4: a report filed from a page's .html address counts" do
     candidate = claim({ "description" => SECOND })
     CorrectionReport.create!(subject: @company.name, page_path: "/companies/#{@company.slug}.html", message: "The DOE total is wrong.")

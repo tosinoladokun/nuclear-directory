@@ -153,8 +153,8 @@ module DataQuality::SafeClasses
         # G5, this claim's part (the run's is in context_for)
         throw :unsafe, DataQuality::Review::FIRST_BATCH if candidate.crawl_run_id && context[:firsts][candidate.source.source_kind] == candidate.crawl_run_id
         throw :unsafe, "its source's last fetch didn't return 200" unless candidate.source.http_status == 200
-        # Read in the latest crawl: an answer that leaves a recipient out
-        # leaves its page as it was, still 200 and ok, so that's not enough.
+        # Read in the latest crawl that fetched: an answer that leaves a
+        # recipient out leaves its page as it was, still 200 and ok.
         unless context[:crawled_at] && candidate.source.fetched_at && candidate.source.fetched_at >= context[:crawled_at]
           throw :unsafe, "its source wasn't in the last crawl's answer"
         end
@@ -202,7 +202,11 @@ module DataQuality::SafeClasses
           elsif verify&.status == "running" then "the verifier is still checking this source"
           elsif verify.nil? || verify.status != "succeeded" then "the verifier's last run didn't finish"
           end
-        { firsts: DataQuality::Review.first_batches, run_problem: problem, crawled_at: crawl&.started_at,
+        # The last crawl that fetched: a same-day rerun answers "skipped_recent"
+        # and stamps nothing, so it doesn't count as the answer pages are judged by.
+        fetched = CrawlRun.where(stage: "crawl", source_kind: kind, status: "succeeded").order(started_at: :desc, id: :desc)
+          .find { |run| [ nil, "ok" ].include?(run.stats["api"]) }
+        { firsts: DataQuality::Review.first_batches, run_problem: problem, crawled_at: fetched&.started_at,
           checked_sources: Array(match&.stats&.dig("dropped_checked_source_ids")).to_set }
       end
 
