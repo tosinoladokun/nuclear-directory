@@ -198,6 +198,32 @@ The recommendation lives on the candidate: `ai_recommendation`, `ai_reason`, `ai
 `ai_checked_at` and `verify_run`. `Candidate.recommended` lists those waiting for approval, indexed by
 recommendation and run.
 
+### Safe classes (`safe_classes.rb`, #306 option A)
+
+"Accept recommendations" on Checks also takes the verifier's own recommendations in a **safe class**:
+kinds of update that can't change anything a person decided. The classes and their limits are in
+`config/safe_verifier_classes.yml`, which Data Quality owns. Each class is off until a PR there turns it
+on and Tosin merges it; while off, the preview shows its items as "Would be safe". A claim is safe only
+if every gate holds:
+- **G1** the verifier recommends it now, with at least the class's confidence (S1: 0.9)
+- **G2** it updates an existing published record (S1: a DOE `funds` link a person verified, both
+  companies public); it never creates one
+- **G3** it changes only the class's fields (S1: description, started on), each last written by the
+  pipeline from the same kind of source (`Differences.pipeline_written?`)
+- **G4** nothing else is open on its record: no claim waiting for review, no unresolved correction report
+- **G5** not from its source's first batch; the latest crawl and match attempts (whatever their status)
+  succeeded, and the match checked the claim's own source for dropped facts (`dropped_checked_source_ids`
+  in the run's stats; a run skips sources with a claim still to place); the last fetch returned 200, both the claim's page
+  and, for S1, the USAspending API index
+- **G6** its run proposes no more safe changes than the cap (20, and 25% of the source's public facts),
+  counting what the run already had approved; and the source's latest verify run has succeeded (a failed
+  or cut-off run keeps a partial set)
+
+S1 also leaves out an award total that may drop by more than 20%: the summaries round ("$1.3 million"),
+so the drop is judged at its largest. Accept asks every gate but the cap again
+under the record's lock, and records "Accepted the verifier's recommendation (safe class S1: …)" as
+Tosin's decision. One fingerprint covers Data Quality's list and the safe items.
+
 ## Review: how a human decides (`review.rb`, #85)
 
 The admin (#86) calls only `DataQuality::Review`; it never touches candidates, FactWriter or directory

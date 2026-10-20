@@ -91,11 +91,16 @@ class DataQuality::Stages::Match < DataQuality::Stage
       listed = read.distinct.pluck(:subject_type, :subject_id).to_set
       supported = from_source.where(status: %w[merged confirmed]).where.not(subject_id: nil).distinct.pluck(:subject_type, :subject_id)
       dropped = supported.reject { |pair| listed.include?(pair) }.select { |type, id| directory.published?(type:, id:) }
-      return if dropped.empty?
+      return checked_dropped(source) if dropped.empty?
       return skip_dropped_check if dropped.size > supported.size * plugin.max_dropped_share(source)
 
       dropped.each { |type, id| flag_one_dropped(source, from_source, type, id) }
+      checked_dropped(source)
     end
+
+    # The sources this run fully checked for dropped facts, by id (safe
+    # classes' G5 asks about a claim's own source).
+    def checked_dropped(source) = (@stats["dropped_checked_source_ids"] ||= []) << source.id
 
     def skip_dropped_check = @stats["dropped_check_skipped"] = @stats.fetch("dropped_check_skipped", 0) + 1
 

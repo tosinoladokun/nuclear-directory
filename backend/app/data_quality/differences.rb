@@ -48,19 +48,31 @@ module DataQuality::Differences
   def self.written_by_person(differences, candidate, record, directory:)
     return differences if differences.empty?
 
+    # A difference may be in a field the payload names another way (a
+    # domain from a website), so the differences count too.
+    pipeline_written?(candidate, record, directory:, also: differences.transform_values(&:first)) ? {} : differences
+  end
+
+  # Whether every field approving the candidate would change was last
+  # written by the pipeline from its own kind of source (the rule above).
+  # also: more fields to count, { name => stored value }.
+  def self.pipeline_written?(candidate, record, directory:, also: {})
+    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values) or return false
     # Newest first, so find gives each field's latest write.
     history = directory.verification_history(type: record.type, id: record.id)
     evidence = directory.evidence(type: record.type, id: record.id)
-    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values) or return differences
-    # A difference may be in a field the payload names another way (a
-    # domain from a website), so the differences count too.
-    fields = differences.transform_values(&:first).merge(fields)
-    pipeline = fields.all? do |name, stored|
+    also.merge(fields).all? do |name, stored|
       column = AUDITED_AS.fetch(name, name)
       index = history.index { |event| event.changed_values.to_h.key?(column) }
       index ? pipeline_write?(history[index], history.first(index), candidate, evidence) : stored.blank?
     end
-    pipeline ? {} : differences
+  end
+
+  # What approving the candidate would change on its record:
+  # { name => [stored, incoming] }, or nil when a field can't be compared.
+  def self.changes(candidate, record, directory:)
+    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values) or return
+    fields.to_h { |name, stored| [ name, [ stored, candidate.payload[name] ] ] }
   end
 
   # Each field approving the candidate would change: { name => stored value },

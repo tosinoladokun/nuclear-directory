@@ -30,7 +30,11 @@ module DataQuality::Claim
   LABELS = { "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
     "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity" }.freeze
 
-  def self.describe(candidate)
+  # One sentence: a value that ends in its own full stop ("…: DENE0009054.")
+  # doesn't get a second one.
+  def self.describe(candidate) = sentence(candidate).sub(/([.!?])\.\z/, '\1')
+
+  def self.sentence(candidate)
     payload = candidate.payload
 
     case candidate.kind
@@ -95,5 +99,5 @@ module DataQuality::Claim
 
   def self.verb(type) = RELATIONSHIP_VERBS.fetch(type.to_s, humanize(type))
   def self.humanize(value) = value.to_s.humanize(capitalize: false)
-  private_class_method :details, :value_text, :name_of, :facility_name, :unit_name, :verb, :humanize
+  private_class_method :sentence, :details, :value_text, :name_of, :facility_name, :unit_name, :verb, :humanize
 end

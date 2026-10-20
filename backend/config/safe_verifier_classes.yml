@@ -1,0 +1,31 @@
+# Safe classes (#306, option A): kinds of verifier recommendation that
+# "Accept recommendations" may take without Data Quality's list, because
+# they can't change anything a person decided. DataQuality::SafeClasses
+# applies every gate (G1-G6) to every class; a class only adds its own.
+#
+# Data Quality owns this file. A class is off until a pull request here
+# turns it on and Tosin merges it. While off, the preview shows what it
+# would take ("Would be safe"), and Accept takes none of it.
+classes:
+  S1:
+    label: USAspending update on a settled DOE link
+    enabled: false
+    source_kind: usaspending_doe_awards
+    kind: relationship
+    relationship_type: funds
+    funder: U.S. Department of Energy
+    # The only fields it may change.
+    fields: [description, started_on]
+    # The verifier's confidence, at least.
+    min_confidence: 0.9
+    # Not safe when the award total falls by more than this share.
+    max_total_drop: 0.2
+    # Its API index: a failed fetch there leaves each recipient's page as
+    # it was, so the run is checked here too.
+    index_source_kind: usaspending_api
+
+# G6: a run that proposes more safe changes than this, or more than this
+# share of its source's published facts, gets none of them taken.
+cap:
+  max_items: 20
+  max_share: 0.25
