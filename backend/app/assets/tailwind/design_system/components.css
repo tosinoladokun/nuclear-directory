@@ -287,7 +287,7 @@
      Colour only on the icon and the footer link. */
   .nd-catgrid { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
   /* /design shows three cards at the width they have on the home page at 1440. */
-  .nd-catgrid--example { max-width: 600px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nd-catgrid--example { max-width: 960px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .nd-catcard { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 12px 4px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); }
   .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit; container-type: inline-size; }
   .nd-catcard__head--toggle, .nd-catstack__all { display: none; }

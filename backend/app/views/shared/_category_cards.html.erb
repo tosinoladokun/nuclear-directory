@@ -1,8 +1,8 @@
 <%# The home page's category cards (#362): a 3-column grid (960px at most) on wide screens, an
     open stack on phones. Locals:
     cards: HomeCategories::Card list (buckets with companies, then Plants and sites)
-    Every line is one line (Tosin's rule, #365): titles use the approved short
-    label and shrink to fit; company names shrink, then end in an ellipsis
+    Every line is one line (Tosin's rule, #365): titles use the category's full
+    name and shrink to fit; company names shrink, then end in an ellipsis
     with the full name in title. The count shows once, in the wide-screen
     header; phones show none. Wide screens: the header goes to the
     category's list. Phones: the header is a heading that the catstack
@@ -15,10 +15,12 @@
   <% cards.each do |card| %>
     <% category = card.category %>
     <% noun = category.plants ? pluralize(card.count, "plant or site", plural: "plants and sites") : pluralize(card.count, "company", plural: "companies") %>
-    <% label = category.short_name %>
-    <%# Accessible names start with the visible words (WCAG 2.5.3, label in name),
-        then add the full name where a short label is shown, and the count. %>
-    <% named = category.short ? "#{label} (#{category.name})" : label %>
+    <%# The full category name (Tosin, 20 Oct: longer words are fine on the home
+        page), unless it is too long for a card at the 13px floor (over 28
+        characters): then the approved short label (DESIGN.md rule 4). The full
+        name stays in title and aria-label, with the count after it. %>
+    <% label = category.short && category.name.length > 28 ? category.short : category.name %>
+    <% named = label == category.name ? label : "#{label} (#{category.name})" %>
     <% head_name = "#{named}, #{noun}" %>
     <% title = capture do %>
       <%= bucket_icon(category, size: 24) %>
@@ -31,7 +33,7 @@
       <%= link_to directory_url_for(category:), class: "nd-catcard__head nd-catcard__head--link", title: category.name, aria: { label: head_name } do %>
         <%= title %><span class="nd-catcard__count" aria-hidden="true"><%= card.count %></span>
       <% end %>
-      <h2 class="nd-catcard__head nd-catcard__head--toggle" data-catstack-target="head" title="<%= category.name %>"><%= title %><span class="sr-only"><%= " (#{category.name})" if category.short %></span></h2>
+      <h2 class="nd-catcard__head nd-catcard__head--toggle" data-catstack-target="head" title="<%= category.name %>"><%= title %><span class="sr-only"><%= " (#{category.name})" if label != category.name %></span></h2>
       <div class="nd-catcard__body" id="cat-body-<%= category.key %>">
         <div class="nd-catcard__inner">
           <ul class="nd-catcard__rows">

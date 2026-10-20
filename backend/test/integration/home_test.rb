@@ -14,6 +14,14 @@ class HomeTest < ActionDispatch::IntegrationTest
     cite!(link(google, "offtake_with", kairos))
   end
 
+  test "card titles use the category's full name; only a name too long for a card takes its short label" do
+    shown = HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [])
+    long = HomeCategories::Card.new(category: Category.find("utilities"), count: 1, records: [])
+    html = ApplicationController.render(partial: "shared/category_cards", locals: { cards: [ shown, long ] })
+    names = Nokogiri::HTML.fragment(html).css("a.nd-catcard__head .nd-catcard__name").map(&:text)
+    assert_equal [ "Waste and decommissioning", "Plant operators" ], names
+  end
+
   test "the home page has one job: search" do
     get root_path
 
