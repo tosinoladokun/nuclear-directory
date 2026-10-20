@@ -4,6 +4,8 @@
     verified_at: when the record was last checked
     verified:    false for a page whose own record isn't verified yet (a pending
                  site shown for its units): the date is labelled as the units' (optional)
+    sources_label / sources: one line under the facts for the record's own sources
+                 ("About this company: sources 1 2 3"); numbers as in rows (optional)
     correction_url: where "Report a correction" goes (optional) %>
 <% shown = rows.select { |_, value, _| value.present? } %>
 <%# A value and its source numbers stay on one line together (Tosin: text
@@ -32,6 +34,9 @@
           <% end %></span><% if note %><span class="block mt-1 type-small text-ink-muted"><%= note %></span><% end %></dd>
       <% end %>
     </dl>
+  <% end %>
+  <% if local_assigns[:sources].present? %>
+    <p class="nd-overview__sources"><span class="nd-keep"><%= sources_label %><% number, source = sources.first %><%= render "shared/source_chip", number:, source:, compact: true %></span><% sources.drop(1).each do |number, source| %><%= render "shared/source_chip", number:, source:, compact: true %><% end %></p>
   <% end %>
   <div class="nd-overview__foot">
     <% if local_assigns.fetch(:verified, true) %>

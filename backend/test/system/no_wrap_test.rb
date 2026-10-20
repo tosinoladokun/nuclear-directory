@@ -92,6 +92,22 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "the hung Type pill stays inside the panel, and its icon sits on the label's edge, at 390 and 1440" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      edges = page.evaluate_script(<<~JS)
+        (() => {
+          const panel = document.querySelector(".nd-overview").getBoundingClientRect(), chip = document.querySelector(".nd-overview .nd-bucketchip")
+          const box = chip.getBoundingClientRect(), label = chip.closest("dd").previousElementSibling.getBoundingClientRect()
+          return [box.left >= panel.left + 1, box.right <= panel.right - 1, Math.abs(box.left + parseFloat(getComputedStyle(chip).paddingLeft) - label.left) <= 1]
+        })()
+      JS
+      assert_equal [ true, true, true ], edges, "at #{width}: inside the panel, icon on the label's edge"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"
