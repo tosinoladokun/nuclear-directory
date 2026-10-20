@@ -40,6 +40,7 @@ class SourceCatalog
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
     # The annual plant file (#319): read once a year, not by the daily crawl.
     "eia_plants" => { name: "EIA-860 plants" },
+    "eia_owners" => { name: "EIA-860 owners" },
     "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
   }.freeze
   RESEARCH_KIND = "web_page"

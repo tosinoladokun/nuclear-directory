@@ -31,6 +31,7 @@ module Dataset
       "nrc_decommissioning" => "NRC's list of reactors being decommissioned",
       "eia_generators" => "EIA's monthly generator inventory (EIA-860M)",
       "eia_plants" => "EIA's annual plant file (EIA-860)",
+      "eia_owners" => "EIA's annual generator ownership (EIA-860, Schedules 3 and 4)",
       "usaspending_doe_awards" => "DOE awards on USAspending.gov"
     }.freeze
 

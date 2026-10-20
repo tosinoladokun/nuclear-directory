@@ -200,6 +200,12 @@ module Directory
     }.freeze
     private_constant :LINK_VERBS, :ROLE_WORDS
 
+    # The companies with a published "owns" link on this plant or unit
+    # (#382), as ids.
+    def published_owner_ids(facility_id:)
+      FacilityRelationship.published.where(facility_id:, relationship_type: "owns").distinct.pluck(:organization_id)
+    end
+
     # Any fact's current decision (Directory::FactStateRef), or nil.
     # The ids of these sites' units.
     def unit_ids(site_ids:) = Facility.where(parent_id: site_ids).ids

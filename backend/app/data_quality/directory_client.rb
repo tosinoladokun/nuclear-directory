@@ -304,6 +304,9 @@ class DataQuality::DirectoryClient
     record(type, state, values: lookup.fact_attributes(type:, id:))
   end
 
+  # The companies that publicly own this plant or unit now (#382), as ids.
+  def published_owner_ids(facility_id:) = lookup.published_owner_ids(facility_id:)
+
   # Whether a fact is public now (its model's published scope).
   def published?(type:, id:) = lookup.published?(type:, id:)
 
