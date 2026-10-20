@@ -56,11 +56,15 @@ module Directory::QuoteBacking
 
     private
       # A code is matched in capitals only, so "in" or "or" in a sentence isn't
-      # Indiana or Oregon.
+      # Indiana or Oregon; nor as the end of another state's code ("W.VA.").
+      # A full name doesn't count inside a longer one ("West Virginia" isn't
+      # Virginia), though another mention in the same quote still does.
       def state?(quote, state)
         code, name = names(state.to_s.squish)
-        (code.present? && quote.to_s.match?(whole(code))) || contains?([ quote ], name) ||
-          ((ap = AP_STATES[code]) && normalize(quote).match?(/(?<![[:alnum:].])#{Regexp.escape(ap.downcase)}/))
+        text = normalize(quote)
+        (code.present? && quote.to_s.match?(/(?<![[:alnum:].])#{Regexp.escape(code)}(?![[:alnum:]])/)) ||
+          (name.present? && text.match?(/(?<![[:alnum:]])(?<!west )#{Regexp.escape(normalize(name))}(?![[:alnum:]])/)) ||
+          ((ap = AP_STATES[code]) && text.match?(/(?<![[:alnum:].])#{Regexp.escape(ap.downcase)}/))
       end
 
       # [code, full name], either of which may be unknown.
