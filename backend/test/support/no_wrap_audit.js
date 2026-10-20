@@ -49,7 +49,9 @@
     let valueEdge = null, previous = null
     pairs.forEach(({ dt, dd }) => {
       const name = dt.textContent.trim(), t = dt.getBoundingClientRect(), d = dd.getBoundingClientRect()
-      const stacked = d.top >= t.bottom - 1
+      // The layout is expected from the class and the viewport, not read off the geometry.
+      const stacked = dt.classList.contains("nd-overview__stack") || window.innerWidth < 480
+      if (stacked !== (d.top >= t.bottom - 1)) problems.push(`${stacked ? "should be stacked" : "should sit beside its label"}: ${name}`)
       if (stacked) {
         if (Math.abs(start(dd) - t.left) > 1) problems.push(`value off its label's edge: ${name}`)
         if (Math.abs(d.top - t.bottom - 4) > 1) problems.push(`label to value is not 4px: ${name} (${Math.round(d.top - t.bottom)})`)
