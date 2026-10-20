@@ -21,8 +21,8 @@ module TracksAnalytics
   end
 
   private
-    def track_search(query, results:)
-      Analytics.track_search(query, results:, visitor: visitor_properties) if trackable_request?
+    def track_search(query, results:, source: "typed")
+      Analytics.track_search(query, results:, source:, visitor: visitor_properties) if trackable_request?
     end
 
     def track_company_viewed(slug) = track("company_viewed", slug:)

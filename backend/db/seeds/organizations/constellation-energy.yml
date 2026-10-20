@@ -52,6 +52,76 @@ facilities:
   quote: the agreement supports the relicensing and continued operations of Constellation’s high-performing Clinton nuclear facility for another two decades
   published: '2025-06-03'
   confidence: 1.0
+- name: Calvert Cliffs Nuclear Power Plant
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Calvert Cliffs 1 | 05000317 | DPR-53 | PWR | 40 miles S of Annapolis, MD | Constellation Energy Generation, LLC | 1
+  confidence: 1.0
+- name: Calvert Cliffs Nuclear Power Plant
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Calvert Cliffs 2 | 05000318 | DPR-69 | PWR | 40 miles S of Annapolis, MD | Constellation Energy Generation, LLC | 1
+  confidence: 1.0
+- name: Braidwood Generation Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Braidwood 1 | 05000456 | NPF-72 | PWR | 20 miles SSW of Joliet, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: Braidwood Generation Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Braidwood 2 | 05000457 | NPF-77 | PWR | 20 miles SSW of Joliet, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: Byron Generating Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Byron 1 | 05000454 | NPF-37 | PWR | 17 miles SW of Rockford, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: Byron Generating Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Byron 2 | 05000455 | NPF-66 | PWR | 17 miles SW of Rockford, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: Dresden Generating Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Dresden 2 | 05000237 | DPR-19 | BWR | 25 miles SW of Joliet, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: Dresden Generating Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Dresden 3 | 05000249 | DPR-25 | BWR | 25 miles SW of Joliet, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: James A Fitzpatrick
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: FitzPatrick | 05000333 | DPR-59 | BWR | 6 miles NE of Oswego, NY | Constellation Energy Generation, LLC | 1
+  confidence: 1.0
+- name: LaSalle Generating Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: La Salle 1 | 05000373 | NPF-11 | BWR | 11 miles SE of Ottawa, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: LaSalle Generating Station
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: La Salle 2 | 05000374 | NPF-18 | BWR | 11 miles SE of Ottawa, IL | Constellation Energy Generation, LLC | 3
+  confidence: 1.0
+- name: Limerick
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Limerick 1 | 05000352 | NPF-39 | BWR | 21 miles NW of Philadelphia, PA | Constellation Energy Generation, LLC | 1
+  confidence: 1.0
+- name: Limerick
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Limerick 2 | 05000353 | NPF-85 | BWR | 21 miles NW of Philadelphia, PA | Constellation Energy Generation, LLC | 1
+  confidence: 1.0
+- name: R E Ginna Nuclear Power Plant
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Ginna | 05000244 | DPR-18 | PWR | 20 miles NE of Rochester, NY | Constellation Energy Generation, LLC | 1
+  confidence: 1.0
 notes: 'Ownership vs. operation of Crane and Clinton both attributed to Constellation by its own releases (''Constellation''s ... Clinton nuclear facility''); ''owns'' used. Constellation also announced PPAs with Amazon (Calvert Cliffs, 190 MW) and Google (890 MW, PJM) per related-links on its newsroom; not researched/cited here. #63: Plant mix from same boilerplate: "With 55 gigawatts of capacity from nuclear, natural gas, oil, geothermal, hydro, wind and solar facilities". HQ already sourced in seed.'
 description:
   text: Power producer with nuclear, gas, hydro, wind and solar plants; the largest nuclear energy company in the U.S.

@@ -62,6 +62,8 @@
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
           <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
+          <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
+          <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
           <label class="nd-select"><b>Technology</b>
             <%= select_tag :technology, options_for_select(listing.technology_options, listing.technology), include_blank: "Any", class: "type-input" %>
           </label>
