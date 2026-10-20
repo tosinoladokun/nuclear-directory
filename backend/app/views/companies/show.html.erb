@@ -31,7 +31,7 @@
       <%= render "shared/overview_panel", verified_at: p.verified_at, correction_url: correction_url_for(p.name), sources_label: t("profile.sources.company"), sources: record_citations, rows: [
             [ "Type", (tag.ul(class: "nd-bucketchips") { safe_join(p.buckets.map { |b| tag.li { link_to(directory_url_for(category: b), class: [ "nd-bucketchip", bucket_class(b) ], aria: { label: b.name }, title: b.name) { bucket_icon(b) + tag.span(b.name, class: "nd-bucketchip__full") + (tag.span(b.short_name, class: "nd-bucketchip__short", aria: { hidden: true }) if b.short) } } }) } if p.buckets.any?) ],
             [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), p.website, class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) ],
-            [ "Also known as", p.aliases.join(", ").presence ],
+            [ "Also known as", (p.aliases.size > 1 ? safe_join(p.aliases.map { |name| tag.span(name, class: "nd-overview__name", title: name, data: { truncate: true }) }, ", ") : p.aliases.first.presence), nil, nil, p.aliases.size > 1 ],
             [ "Legal name", p.legal_name ],
             [ role_tags.size > 1 ? "Roles" : "Role", role_tags.join(", ").presence, p.shown_roles.flat_map { |r| p.citations_for(r) }.uniq(&:first) ],
             [ "Technology", tech_tags.join(", ").presence, p.technologies.flat_map { |t| p.citations_for(t) }.uniq(&:first) ],

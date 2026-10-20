@@ -108,6 +108,23 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "two or more other names go under their label at 1440 and 390, each on one line with its full text in title" do
+    [ "Allied Power", "Allied Power Services, a Bernhard Capital Partners company", "APS Holdings" ].each { |name| @allied.aliases.create!(alias: name) }
+    [ [ 1440, 900 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => el.textContent.trim() === "Also known as"), dd = dt.nextElementSibling
+          const names = [...dd.querySelectorAll(".nd-overview__name")]
+          return [dt.classList.contains("nd-overview__stack"), names.length, names.every((n) => n.title === n.textContent && "truncate" in n.dataset), dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ true, 3, true, true ], row, "at #{width}: stacked under the label, three names, each with its full text in title"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"

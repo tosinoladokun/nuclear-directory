@@ -93,6 +93,8 @@
   .nd-overview__cites, .nd-keep { white-space: nowrap; }
   /* A list wraps only between names: each linked name stays whole (Design, #394). */
   .nd-overview dd a { white-space: nowrap; }
+  /* A list of plain names (Also known as) wraps between names, like links; one longer than the column ends in an ellipsis. */
+  .nd-overview__name { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; line-height: 1.4; }
   /* A name before the last is never wider than the column: "…" as the last resort. */
   .nd-overview__line:not(.nd-overview__line--fit) > .nd-overview__val a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   /* The Type chips: under their label, across the panel, so a full-name chip fits on one line. */

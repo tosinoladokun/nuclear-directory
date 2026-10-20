@@ -1,6 +1,7 @@
 <%# The side panel of key facts on company and power plant pages. Locals:
-    rows:        [[label, value, citations, note], ...]; a row with a blank value is
-                 skipped. The note (optional) is a line of small print under the value
+    rows:        [[label, value, citations, note, stack], ...]; a row with a blank value is
+                 skipped. stack (optional) puts a list of two or more names under its
+                 label, like a list of links. The note (optional) is a line of small print under the value
     verified_at: when the record was last checked
     verified:    false for a page whose own record isn't verified yet (a pending
                  site shown for its units): the date is labelled as the units' (optional)
@@ -14,7 +15,7 @@
 <aside class="nd-overview" aria-label="Key facts">
   <% if shown.any? %>
     <dl>
-      <% shown.each do |label, value, citations, note| %>
+      <% shown.each do |label, value, citations, note, stack| %>
         <%# Text fits; a block of its own (the Type chips) lays itself out, and
             goes under its label at the panel's full width, on every screen. %>
         <% chars = strip_tags(value.to_s).length %>
@@ -23,7 +24,7 @@
             with its numbers; any other value (one name, a place with a comma)
             fits one line beside its label. %>
         <% parts = split_last_item(value) if !value.to_s.include?("<ul") && citations.present? %>
-        <% stacked = value.to_s.include?("<ul") || parts.present? %>
+        <% stacked = value.to_s.include?("<ul") || parts.present? || stack %>
         <% fit = !stacked %>
         <%= tag.dt(label, class: ("nd-overview__stack" if stacked)) %>
         <dd<%= ' class="nd-overview__stack"'.html_safe if stacked %>><span class="nd-overview__line<%= " nd-overview__line--fit" if fit %>" style="--chars: <%= [ chars, 1 ].max %>; --cites: <%= Array(citations).size %>"><% cites = capture do %><% Array(citations).each do |number, source| %><%= render "shared/source_chip", number:, source:, compact: true %><% end %><% end %>
