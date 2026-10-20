@@ -264,9 +264,6 @@ module Directory
     # "PLANT VOGTLE" alike).
     def normalize_facility_name(name) = FacilityAlias.normalize(name.to_s)
 
-    # The EIA plant IDs the directory's sites have (#319).
-    def eia_plant_ids = Facility.where(parent_id: nil).where.not(eia_plant_id: [ nil, "" ]).distinct.pluck(:eia_plant_id)
-
     # Power plants with no EIA plant ID that aren't rejected or taken off:
     # top-level records (a site, or a one-unit plant kept as one record,
     # like Columbia), each as { id:, state:, site:, names: [name, *aliases] },

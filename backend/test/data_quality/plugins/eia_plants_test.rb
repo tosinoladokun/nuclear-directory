@@ -2,11 +2,12 @@ require "test_helper"
 require_relative "../support/dummy_plugin"
 
 # EIA-860's annual Plant file (#319): each nuclear plant's city. The zip and
-# its plant workbook are built here, laid out like EIA's 2025 file (checked
-# against the real one, 17 Oct 2026): a title row, then the header, one row
-# per plant. Vogtle and Columbia are their real rows, cut to these columns.
-# The Duane Arnold row is made up: the real 2025 file doesn't list the plant
-# (retired in 2020), so it stands for any site found by name.
+# its workbooks are built here, laid out like EIA's 2025 file (checked
+# against the real one, 17 and 19 Oct 2026): a title row, then the header,
+# one row per plant (or generator). Vogtle and Columbia are their real
+# rows, cut to these columns. The Duane Arnold row is made up: the real 2025
+# file doesn't list the plant (retired in 2020), so it stands for any site
+# found by name.
 class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
   include ReviewHelpers
   Plugin = DataQuality::Plugins::EiaPlants
@@ -18,31 +19,51 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
   DUANE = [ "9999", "NextEra Energy Duane Arnold LLC", "1060", "Duane Arnold Energy Center", "3277 DAEC Road", "Palo", "IA", "52324", "Linn", "42.1" ].freeze
   COAL = [ "195", "Alabama Power Co", "3", "Barry", "North Highway 43", "Bucks", "AL", "36512", "Mobile", "31.0" ].freeze
   NO_CITY = [ "7140", "Georgia Power Co", "6051", "Hatch", "", "", "GA", "31513", "Appling", "31.9" ].freeze
+  ROBINSON = [ "3046", "Duke Energy Progress - (NC)", "3251", "H B Robinson", "3581 West Entrance Road", "Hartsville", "SC", "29550", "Darlington", "34.4" ].freeze
+  KEMMERER = [ "65467", "US SFR Owner LLC", "68635", "Kemmerer Unit 1", "", "Kemmerer", "WY", "83101", "Lincoln", "41.8" ].freeze
+  GENERATOR_HEADER = [ "Utility ID", "Utility Name", "Plant Code", "Plant Name", "State", "Generator ID", "Technology" ].freeze
+  # [plant code, technology] per generator: the coal plant's isn't nuclear.
+  OPERABLE = [ %w[649 Nuclear], %w[371 Nuclear], %w[1060 Nuclear], %w[6051 Nuclear], %w[3251 Nuclear], [ "3", "Conventional Steam Coal" ] ].freeze
+  PROPOSED = [ %w[68635 Nuclear] ].freeze
 
-  def plant_workbook(rows)
-    cols = ("A".."J").to_a
+  # An .xlsx with these sheets: { name => [title, header, *rows] }.
+  def workbook(sheets)
     cell = ->(col, r, text) { %(<c r="#{col}#{r}" t="inlineStr"><is><t>#{text}</t></is></c>) }
-    row = ->(r, values) { %(<row r="#{r}">#{values.each_with_index.map { |v, i| cell.(cols[i], r, v) unless v.empty? }.join}</row>) }
-    sheet = [ row.(1, [ "Form EIA-860 Data - Schedule 2 - 'Plant Data'" ]), row.(2, HEADER), *rows.each_with_index.map { |v, i| row.(i + 3, v) } ]
+    row = ->(r, values) { %(<row r="#{r}">#{values.each_with_index.map { |v, i| cell.(("A".."Z").to_a[i], r, v) unless v.to_s.empty? }.join}</row>) }
     ns = %(xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main")
     Zip::OutputStream.write_buffer do |zip|
       zip.put_next_entry("xl/workbook.xml")
-      zip.write(%(<workbook #{ns} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">) +
-        %(<sheets><sheet name="Plant" sheetId="1" r:id="rId1"/></sheets></workbook>))
+      zip.write(%(<workbook #{ns} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>) +
+        sheets.keys.each_with_index.map { |name, i| %(<sheet name="#{name}" sheetId="#{i + 1}" r:id="rId#{i + 1}"/>) }.join + "</sheets></workbook>")
       zip.put_next_entry("xl/_rels/workbook.xml.rels")
       zip.write(%(<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">) +
-        %(<Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>))
-      zip.put_next_entry("xl/worksheets/sheet1.xml")
-      zip.write(%(<worksheet #{ns}><sheetData>#{sheet.join}</sheetData></worksheet>))
+        sheets.keys.each_index.map { |i| %(<Relationship Id="rId#{i + 1}" Target="worksheets/sheet#{i + 1}.xml"/>) }.join + "</Relationships>")
+      sheets.values.each_with_index do |rows, i|
+        zip.put_next_entry("xl/worksheets/sheet#{i + 1}.xml")
+        zip.write(%(<worksheet #{ns}><sheetData>#{rows.each_with_index.map { |values, r| row.(r + 1, values) }.join}</sheetData></worksheet>))
+      end
     end.string
   end
 
-  def yearly_zip(rows = [ VOGTLE, COLUMBIA, DUANE, COAL, NO_CITY ])
+  def plant_workbook(rows) = workbook("Plant" => [ [ "Form EIA-860 Data - Schedule 2 - 'Plant Data'" ], HEADER, *rows ])
+
+  def generator_rows(generators) = generators.map { |code, technology| [ "1", "Utility", code, "Plant #{code}", "XX", "1", technology ] }
+
+  def generator_workbook(operable = OPERABLE, proposed = PROPOSED)
+    workbook("Operable" => [ [ "Form EIA-860 Data - Schedule 3 - 'Generator Data' (Operable Units Only)" ], GENERATOR_HEADER, *generator_rows(operable) ],
+      "Proposed" => [ [ "Form EIA-860 Data - Schedule 3 - 'Generator Data' (Proposed Units Only)" ], GENERATOR_HEADER, *generator_rows(proposed) ])
+  end
+
+  def yearly_zip(rows = [ VOGTLE, COLUMBIA, DUANE, COAL, NO_CITY, ROBINSON, KEMMERER ], generators: generator_workbook)
     Zip::OutputStream.write_buffer do |zip|
       zip.put_next_entry("1___Utility_Y2025.xlsx")
       zip.write("not read")
       zip.put_next_entry("2___Plant_Y2025.xlsx")
       zip.write(plant_workbook(rows))
+      if generators
+        zip.put_next_entry("3_1_Generator_Y2025.xlsx")
+        zip.write(generators)
+      end
     end.string
   end
 
@@ -57,6 +78,7 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     @file = stub_request(:get, FILE).to_return(body: yearly_zip)
     # Sites as the directory has them: Vogtle by EIA plant ID; Columbia and
     # Duane Arnold with none (Columbia is one record with its NRC docket).
+    # Robinson and Kemmerer aren't in the directory.
     @vogtle = Facility.create!(name: "Plant Vogtle", eia_plant_id: "649", state: "GA", facility_type: "power_reactor",
       verification_status: "verified", verified_by: "human:tosin")
     @columbia = Facility.create!(name: "Columbia Generating Station", nrc_docket: "05000397", state: "WA",
@@ -79,27 +101,34 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     assert_instance_of Plugin, DataQuality::Plugin.for("eia_plants")
   end
 
-  test "reads the newest final yearly zip from EIA's own site, and keeps only nuclear plants' rows" do
+  test "reads the newest final yearly zip from EIA's own site, and keeps the rows of plants with a nuclear generator" do
     stats = crawl!
 
     assert_equal FILE, stats["file"]
     assert_equal "EIA-860 annual plant file, 2025", source.title
-    assert_equal %w[649 371 1060 6051], stored.map { |row| row["eia_plant_id"] },
-      "by EIA plant ID (Vogtle, Hatch), or by name and state (Columbia, Duane Arnold); not the coal plant"
+    assert_equal %w[649 371 1060 6051 3251 68635], stored.map { |row| row["eia_plant_id"] },
+      "operable or proposed (Kemmerer) nuclear generators, whether or not the directory has the plant; not the coal plant"
     assert_equal({ "eia_plant_id" => "371", "plant_name" => "Columbia Generating Station", "street_address" => "76 N Power Plant Loop",
       "city" => "Richland", "state" => "WA", "zip" => "99352", "county" => "Benton" }, stored.second)
-    assert_equal 4, stats["plants"]
+    assert_equal 6, stats["plants"]
   end
 
-  test "a plant in EIA's newest monthly file is kept though no site has its ID yet" do
-    Source.create!(url: "https://www.eia.gov/electricity/data/eia860m/xls/august_generator2026.xlsx", source_kind: "eia_generators",
-      crawl_status: "ok", fetched_at: 1.day.ago, content_text: "eia_plant_id,plant_name\n3,Barry\n")
+  test "what's stored depends on the file alone: a site added after the first read still gets its row when the file is unchanged" do
+    crawl!
+    robinson = Facility.create!(name: "H. B. Robinson", eia_plant_id: "3251", state: "SC", facility_type: "power_reactor",
+      verification_status: "verified", verified_by: "human:tosin")
+    source.update!(fetched_at: 1.day.ago, etag: '"2025"')
+    stub_request(:get, FILE).with(headers: { "If-None-Match" => '"2025"' }).to_return(status: 304)
+
     crawl!
 
-    assert_includes stored.map { |row| row["eia_plant_id"] }, "3"
+    assert_equal "ok", source.reload.crawl_status
+    payload = plugin.extract(source, nil).find { |candidate| candidate[:payload].dig("identify", "eia_plant_id") == "3251" }&.dig(:payload)
+    assert_equal({ "identify" => { "eia_plant_id" => "3251", "name" => "H B Robinson" }, "city" => "Hartsville" }, payload)
+    assert robinson.persisted?
   end
 
-  test "fetches at most once a day, and a zip without the plant workbook needs a human" do
+  test "fetches at most once a day, and a zip without the plant or generator workbook needs a human" do
     crawl!
     crawl!
     assert_requested @file, times: 1
@@ -109,6 +138,18 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     stats = crawl!
     assert_equal "needs_human", stats["snapshot"]
     assert_match "No plant workbook", source.reload.status_reason
+
+    source.update!(fetched_at: 1.day.ago)
+    stub_request(:get, FILE).to_return(body: yearly_zip(generators: nil))
+    crawl!
+    assert_match "No generator workbook", source.reload.status_reason
+  end
+
+  test "a file with no nuclear generator is unreadable, not an empty list" do
+    stub_request(:get, FILE).to_return(body: yearly_zip(generators: generator_workbook([ [ "3", "Conventional Steam Coal" ] ], [])))
+
+    assert_equal "needs_human", crawl!["snapshot"]
+    assert_match "No nuclear generators", source.status_reason
   end
 
   test "a zip past the Fetcher's usual 20 MB is read, up to the plug-in's limit" do
@@ -128,7 +169,7 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     crawl!
     candidates = plugin.extract(source, nil).index_by { |candidate| candidate[:payload].dig("identify", "eia_plant_id") }
 
-    assert_equal %w[1060 371 649], candidates.keys.sort, "Hatch's row has no city"
+    assert_equal %w[1060 3251 371 649 68635], candidates.keys.sort, "Hatch's row has no city"
     assert_equal({ "identify" => { "eia_plant_id" => "649", "name" => "Vogtle" }, "city" => "Waynesboro" }, candidates["649"][:payload])
     assert_equal({ "identify" => { "eia_plant_id" => "371", "name" => "Columbia Generating Station", "site_id" => @columbia.id },
       "city" => "Richland" }, candidates["371"][:payload], "one record with its docket: it can't take a plant ID")
@@ -159,22 +200,37 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     assert_equal [ "Palo", "1060" ], @duane.reload.values_at(:city, :eia_plant_id)
   end
 
-  test "a city a person set is never overwritten: a different one comes back as a difference" do
+  test "a city a person set is never overwritten: a different one goes to review with both cities, before any approval" do
     @vogtle.update!(city: "Augusta")
     run!
     candidate = Candidate.find_by!(subject_type: "Facility", subject_id: @vogtle.id)
-    result = DataQuality::Review.approve([ candidate.id ], by: "human:tosin").sole
 
+    assert candidate.status_needs_review?, "never recommended over a person's city"
+    assert_match "Augusta", candidate.notes
+    assert_match "Waynesboro", candidate.notes
+    assert_equal({ "city" => [ "Augusta", "Waynesboro" ] },
+      DataQuality::Differences.with_human_verified(candidate, DataQuality::DirectoryClient.new.attached_record(candidate)))
     assert_equal "Augusta", @vogtle.reload.city
-    assert result.errors.any? || result.conflicts.any?, "the difference is reported, not written"
   end
 
   test "never creates a site: a plant row with no site waits" do
-    Source.create!(url: "https://www.eia.gov/electricity/data/eia860m/xls/august_generator2026.xlsx", source_kind: "eia_generators",
-      crawl_status: "ok", fetched_at: 1.day.ago, content_text: "eia_plant_id,plant_name\n3,Barry\n")
-
     assert_no_difference("Facility.count") { run! }
-    assert_match "No site for EIA plant 3", Candidate.find { |c| c.payload.dig("identify", "eia_plant_id") == "3" }.notes
+    assert_match "No site for EIA plant 3251", Candidate.find { |c| c.payload.dig("identify", "eia_plant_id") == "3251" }.notes
+  end
+
+  test "a newer yearly file withdraws the older file's open claims and warns on ones waiting for a person" do
+    older = Source.create!(url: "https://www.eia.gov/electricity/data/eia860/archive/xls/eia8602024.zip", source_kind: "eia_plants",
+      crawl_status: "ok", content_text: "x", title: "EIA-860 annual plant file, 2024")
+    open = Candidate.create!(source: older, kind: "facility", status: "matched", subject: @vogtle, payload: { "city" => "Waynesboro" }, quote: "x")
+    held = Candidate.create!(source: older, kind: "facility", status: "needs_review", subject: @duane, notes: "Found by name",
+      payload: { "city" => "Palo" }, quote: "x")
+
+    assert_equal 1, crawl!["superseded"]
+    crawl! && source.update!(fetched_at: 1.day.ago) && crawl!
+
+    assert open.reload.status_rejected?
+    assert held.reload.status_needs_review?, "a claim waiting for a person keeps its place"
+    assert_equal "Found by name. A newer EIA-860 file exists: EIA-860 annual plant file, 2025", held.notes, "warned once"
   end
 
   test "tells the verifier what the file is, for the file only" do

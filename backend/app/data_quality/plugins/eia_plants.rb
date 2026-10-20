@@ -10,9 +10,10 @@
 #
 # Crawl reads the EIA-860 page to find the newest yearly zip, fetches it (at
 # most once a day, with ETag and Last-Modified; it changes about once a
-# year), and stores just the rows of nuclear plants as CSV: plants in EIA's
-# latest monthly file, plants the directory has by EIA plant ID, and power
-# plants it has without one, by name and state. One source per yearly file.
+# year), and stores just the rows of nuclear plants as CSV: every plant the
+# same file lists with a nuclear generator, operable or proposed. What's
+# stored depends on the file alone, never on the directory, so a "not
+# modified" answer can't keep a stale selection. One source per yearly file.
 class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
   INDEX_URL = "https://www.eia.gov/electricity/data/eia860/"
   # The EIA-860 page is snapshotted as its own source (never extracted), so
@@ -23,7 +24,8 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
   FILE_LINK = %r{(?:\A|/)xls/eia860(\d{4})\.zip\z}i
   # The 2025 zip is about 24 MB, past the Fetcher's usual 20 MB.
   MAX_BYTES = 60.megabytes
-  MONTHLY_KIND = "eia_generators"
+  # Added to an older file's claim still waiting for a person.
+  NEWER_FILE = "A newer EIA-860 file exists"
 
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new)
     @fetcher = fetcher
@@ -44,9 +46,8 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
       new_source.title = "EIA-860 annual plant file, #{url[FILE_LINK, 1]}"
     end
 
-    keep = nuclear_plant(@directory.eia_plant_ids.to_set | monthly_plant_ids, plants_by_name)
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true, max_bytes: MAX_BYTES) do |bytes|
-      PlantFile.to_csv(PlantFile.plants(bytes, keep:))
+      PlantFile.to_csv(PlantFile.plants(bytes))
     end
     { "file" => url, "snapshot" => result.to_s, "plants" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
       "superseded" => (supersede_older_files(source) if source.crawl_ok?) }.compact
@@ -93,17 +94,6 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
   end
 
   private
-    # Whether a plant row is a nuclear plant the directory can use.
-    def nuclear_plant(plant_ids, by_name)
-      ->(plant) { plant_ids.include?(plant["eia_plant_id"]) || by_name.key?(name_key(plant["plant_name"], plant["state"])) }
-    end
-
-    # The plant IDs in EIA's newest monthly file, all nuclear (EiaGenerators).
-    def monthly_plant_ids
-      latest = Source.where(source_kind: MONTHLY_KIND, crawl_status: "ok").where.not(content_text: nil).order(:fetched_at, :id).last
-      CSV.parse(latest&.content_text.to_s, headers: true).filter_map { |row| row["eia_plant_id"].presence }.to_set
-    end
-
     # { [name, state] => { id:, site: } } for power plants with no EIA plant
     # ID. A name two plants share in one state finds neither.
     def plants_by_name
@@ -119,14 +109,21 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
 
     # Once a newer yearly file is read, candidates from older ones that
     # nobody has decided yet are withdrawn: an older year's address mustn't
-    # be approved over the newer one.
+    # be approved over the newer one. A claim already waiting for a person
+    # (found by name) stays where it is, with a warning on it, as
+    # EiaGenerators does; the newer file's own claim sits next to it.
     def supersede_older_files(source)
       year = source.url[FILE_LINK, 1].to_i
       older = Source.where(source_kind:).where.not(id: source.id).select { |other| other.url[FILE_LINK, 1].to_i < year }
       return 0 if older.empty?
 
-      Candidate.where(source_id: older.map(&:id), status: %w[new matched])
-        .update_all(status: "rejected", notes: "Superseded by the newer #{source.title}", updated_at: Time.current)
+      Candidate.transaction do
+        waiting = Candidate.where(source_id: older.map(&:id))
+        waiting.where(status: "needs_review").where.not("notes LIKE ?", "%#{NEWER_FILE}%")
+          .update_all([ "notes = COALESCE(notes || '. ', '') || ?, updated_at = ?", "#{NEWER_FILE}: #{source.title}", Time.current ])
+        waiting.where(status: %w[new matched])
+          .update_all(status: "rejected", notes: "Superseded by the newer #{source.title}", updated_at: Time.current)
+      end
     end
 
     # The newest final yearly zip linked from the page, as an https URL on

@@ -9,7 +9,7 @@ module DataQuality::Differences
   # expected, and aliases cover them.
   COMPARED = {
     "organization" => %w[domain],
-    "facility" => %w[nrc_docket eia_plant_id facility_type status state country_code],
+    "facility" => %w[nrc_docket eia_plant_id facility_type status city state country_code],
     # A link's type and ends say which link it is; these are its details.
     "relationship" => %w[description started_on ended_on],
     "facility_relationship" => %w[ownership_pct description started_on ended_on]
