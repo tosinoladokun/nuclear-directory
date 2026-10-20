@@ -140,6 +140,19 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert_match "needs an NRC record", result.errors.join
   end
 
+  test "on govinfo.gov only a Federal Register package counts, never the Congressional Record or a hearing" do
+    record = Source.create!(url: "https://www.govinfo.gov/content/pkg/CREC-2025-05-16/html/CREC-2025-05-16-pt1-PgS1.htm",
+      domain: "govinfo.gov", source_kind: "web_page")
+    hearing = Source.create!(url: "https://www.govinfo.gov/content/pkg/CHRG-118shrg123/html/CHRG-118shrg123.htm",
+      domain: "govinfo.gov", source_kind: "web_page")
+
+    [ record, hearing ].each do |document|
+      result = write(source: document, verification: { status: "verified", by: BY })
+      assert_match "needs an NRC record", result.errors.join, document.url
+    end
+    assert_not LicensingStage.nrc_record?(domain: "govinfo.gov", url: record.url, quote: "the NRC issued a permit")
+  end
+
   test "a government notice whose quote names the NRC is an NRC record" do
     notice = Source.create!(url: "https://www.govinfo.gov/content/pkg/FR-2025-05-16/html/2025-07729.htm",
       domain: "govinfo.gov", source_kind: "web_page")

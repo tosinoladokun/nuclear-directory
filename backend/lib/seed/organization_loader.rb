@@ -78,8 +78,7 @@ module Seed
         doc = read(path)
         slug = File.basename(path, ".yml")
         Array(doc["licensing"]).filter_map do |item|
-          # A pending lead may cite a press release; it's never verified from one.
-          next if item["pending"] || nrc_record?(item["source_url"], item["quote"])
+          next if nrc_record?(item["source_url"], item["quote"])
 
           on = item["design_name"].present? ? "design #{item["design_name"].inspect}" : "facility #{item["facility"].inspect}"
           "#{slug}.yml: licensing #{item["stage"].inspect} for #{on}, docket #{item["nrc_docket"]}, " \
@@ -97,7 +96,9 @@ module Seed
         ""
       end
 
-      LicensingStage.nrc_record?(domain:, url:, quote:)
+      # A source already stored may be named by its title (a Federal Register
+      # notice whose address is only a number), as FactWriter reads it.
+      LicensingStage.nrc_record?(domain:, url:, title: Source.find_by(url: url.to_s.strip)&.title, quote:)
     end
 
     # An EIA plant ID another site holds (#229): merge that site in first.
@@ -264,6 +265,14 @@ module Seed
       # is on the unit that holds the docket, or on the developer for a
       # design approval.
       def write_licensing_stage(slug, organization, item, sources)
+        # A pending stage couldn't be reviewed: licensing stages aren't in
+        # the admin's review list yet. Leave a lead out until an NRC record
+        # states the stage.
+        if item["pending"]
+          return @errors << "#{slug}: licensing #{item['stage'].inspect}: pending: isn't supported for licensing stages; " \
+            "add the stage once an NRC record states it"
+        end
+
         attributes = { stage: item["stage"], nrc_docket: item["nrc_docket"], effective_on: item["effective_on"] }
         attributes[:expires_on] = item["expires_on"] if item["expires_on"].present?
         if item["design_name"].present?
@@ -283,9 +292,7 @@ module Seed
           attributes[:facility_id] = facility.id
         end
 
-        # pending: true holds it for a person, as for a plant link: a lead
-        # (a press release) can be recorded without being verified.
-        write(slug, :licensing_stage, attributes, evidence(item, sources), pending: item["pending"])
+        write(slug, :licensing_stage, attributes, evidence(item, sources))
       end
 
       # merges: names of organizations an earlier seed loaded as their own

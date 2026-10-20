@@ -192,7 +192,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 
 Not a source: anything behind a login or paywall, AI-written summaries, a page that only lists names together, and personal data of any kind.
 
-**Licensing stages are stricter (#379):** only NRC records count, any page on nrc.gov (a project page, ADAMS) or an NRC notice in the Federal Register. A press release or a news article is a lead: it can be attached, but it never makes a stage public, and FactWriter refuses to verify a stage without an NRC record behind it.
+**Licensing stages are stricter (#379):** only NRC records count, any page on nrc.gov (a project page, ADAMS) or an NRC notice in the Federal Register (on federalregister.gov, or its copy on govinfo.gov; other govinfo.gov publications, such as the Congressional Record, don't count). A licensing stage isn't seeded as pending: until stages can be reviewed in the admin, a lead stays out of the seed. A press release or a news article is a lead: it can be attached, but it never makes a stage public, and FactWriter refuses to verify a stage without an NRC record behind it.
 
 ### Quotes
 

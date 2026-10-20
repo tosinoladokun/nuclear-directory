@@ -33,9 +33,11 @@ class LicensingStage < ApplicationRecord
   # for a stage.
   NRC_DOMAIN = "nrc.gov".freeze
   # Where an NRC notice is published: the Federal Register, and the
-  # government's own copy of it. A notice is the NRC's when it names the
-  # agency.
+  # government's own copy of it on govinfo.gov, where only Federal Register
+  # packages count ("/content/pkg/FR-2025-05-16/…"), never the Congressional
+  # Record or a hearing. A notice is the NRC's when it names the agency.
   NOTICE_DOMAINS = %w[federalregister.gov govinfo.gov].freeze
+  GOVINFO_NOTICE = %r{/(?:content/pkg|app/details)/FR-\d{4}-\d{2}-\d{2}/}i
   # The agency, as it writes itself: "NRC" or the full name.
   AGENCY = /\bNRC\b|nuclear[\s\-_]+regulatory[\s\-_]+commission/i
 
@@ -74,6 +76,7 @@ class LicensingStage < ApplicationRecord
     domain = domain.to_s.downcase.delete_prefix("www.")
     return true if domain == NRC_DOMAIN || domain.end_with?(".#{NRC_DOMAIN}")
     return false unless NOTICE_DOMAINS.any? { |name| domain == name || domain.end_with?(".#{name}") }
+    return false if (domain == "govinfo.gov" || domain.end_with?(".govinfo.gov")) && !url.to_s.match?(GOVINFO_NOTICE)
 
     [ url, title, quote ].compact.any? { |text| text.match?(AGENCY) }
   end
@@ -83,8 +86,9 @@ class LicensingStage < ApplicationRecord
   # evidence's quote column, when the quote counts too.
   def self.nrc_record_sql(quote_column: nil)
     nrc = "sources.domain = 'nrc.gov' OR sources.domain LIKE '%.nrc.gov'"
-    notice = "(sources.domain IN ('federalregister.gov', 'govinfo.gov') OR sources.domain LIKE '%.federalregister.gov' " \
-      "OR sources.domain LIKE '%.govinfo.gov')"
+    notice = "(sources.domain = 'federalregister.gov' OR sources.domain LIKE '%.federalregister.gov' " \
+      "OR ((sources.domain = 'govinfo.gov' OR sources.domain LIKE '%.govinfo.gov') " \
+      "AND sources.url ~* '/(content/pkg|app/details)/FR-[0-9]{4}-[0-9]{2}-[0-9]{2}/'))"
     agency = [ "sources.url ~* '\\mNRC\\M'", "sources.title ~* '\\mNRC\\M'",
       "sources.url ~* 'nuclear[\\s\\-_]+regulatory[\\s\\-_]+commission'",
       "sources.title ~* 'nuclear[\\s\\-_]+regulatory[\\s\\-_]+commission'" ]

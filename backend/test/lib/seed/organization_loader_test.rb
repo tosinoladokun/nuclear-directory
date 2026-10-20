@@ -468,15 +468,22 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal unit, LicensingStage.sole.facility
   end
 
-  test "a pending licensing entry is held for a person, and seed:check lets its lead source through" do
+  test "a pending licensing entry is refused: nobody could review it in the admin yet" do
     lead = licensing(pending: true, source_url: "https://world-nuclear-news.org/articles/permit", quote: "A permit.")
     write_file("acme", org("Acme", website: "https://acme.com", facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ lead ]))
 
-    loader = Seed::OrganizationLoader.new(@dir)
-    assert_empty loader.licensing_source_problems
-    loader.load!
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "pending: isn't supported for licensing stages", error.message
+    assert_equal 0, LicensingStage.count
+  end
 
-    assert LicensingStage.sole.pending?
+  test "seed:check reads a stored notice's title, as FactWriter does" do
+    url = "https://public-inspection.federalregister.gov/2026-10073.pdf"
+    Source.create!(url:, source_kind: "web_page", title: "Long Mott Energy, LLC; Nuclear Regulatory Commission notice")
+    write_file("acme", org("Acme", website: "https://acme.com", facilities: [ item(name: "Hermes 1", type: "owns") ],
+      licensing: [ licensing(source_url: url, quote: "The application was docketed.") ]))
+
+    assert_empty Seed::OrganizationLoader.new(@dir).licensing_source_problems
   end
 
   test "a licensing stage can name a plant a later file defines" do
