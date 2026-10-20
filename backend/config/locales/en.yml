@@ -29,3 +29,9 @@
 
 en:
   hello: "Hello world"
+  # The two reviewers on the admin's Today page (#373), admin only, never on
+  # the public site. Swapping who's who is a one-word change here.
+  admin:
+    reviewers:
+      checker: "Joy"
+      reviewer: "Aminah"
