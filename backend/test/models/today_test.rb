@@ -145,6 +145,35 @@ class TodayTest < ActiveSupport::TestCase
     assert_nil problems["eia_generators"], "read, then skipped: still fine"
   end
 
+  test "each read keeps its own last outcome when a rerun skips some reads and makes others" do
+    at = ->(hour) { Time.utc(2026, 10, 20, hour) }
+    run = ->(kind, hour, stats) { CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: at.(hour), stats:) }
+    # The list was blocked; the retry skipped it and read the status file.
+    run.("nrc_reactor_list", 7, { "list" => "blocked", "stopped" => "list page blocked" })
+    run.("nrc_reactor_list", 8, { "list" => "skipped_recent", "status_file" => "changed" })
+    # The list was read; the retry skipped it and the status file failed.
+    run.("nrc_power_status", 7, { "list" => "changed", "status_file" => "changed" })
+    run.("nrc_power_status", 8, { "list" => "skipped_recent", "status_file" => "error" })
+
+    problems = today.crawl_rows.to_h { |row| [ row.source_kind, row.problem ] }
+    assert_equal "a page was blocked", problems["nrc_reactor_list"], "the list was never read again"
+    assert_equal "a page didn't answer", problems["nrc_power_status"], "a fresh failure isn't hidden by a skipped read"
+  end
+
+  test "failed reads counted inside a stat count; zero failures don't" do
+    run = ->(kind, site_pages) do
+      CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
+        stats: { "list" => "changed", "site_pages" => site_pages })
+    end
+    run.("nrc_decommissioning", { "changed" => 19, "error" => 1 })
+    run.("nrc_uranium_recovery", { "unchanged" => 4, "disallowed" => 1 })
+    run.("doe_isotope_sites", { "changed" => 3, "error" => 0 })
+
+    problems = today.crawl_rows.to_h { |row| [ row.source_kind, row.problem ] }
+    assert_equal [ "a page didn't answer", "robots.txt refused a page", nil ],
+      problems.values_at("nrc_decommissioning", "nrc_uranium_recovery", "doe_isotope_sites")
+  end
+
   test "marking a step reads the counts again, so facts added since keep step 3 open" do
     nothing_waiting!
     t = today

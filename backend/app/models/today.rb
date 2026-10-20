@@ -74,43 +74,64 @@ class Today
     reset
   end
 
-  # Last night's crawl, one row per kind of source, judged by its latest
-  # finished run that read something. A same-day rerun that skipped its
-  # fetch ("skipped_recent") read nothing, so it neither clears an earlier
-  # problem nor makes one.
+  # Last night's crawl, one row per kind of source. Its problem comes from
+  # the last real outcome of each read its runs made (Today.outcomes), so a
+  # same-day rerun that skipped a read ("skipped_recent") neither clears that
+  # read's failure nor hides a fresh failure of another read.
   def crawl_rows
     @crawl_rows ||= CrawlRun.where(stage: "crawl", started_at: crawl_window).order(:started_at, :id).to_a
       .group_by(&:source_kind).map do |kind, runs|
-        judged = runs.reject { |run| run.status == "running" || skipped?(run) }.last
-        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem: (problem(judged) if judged),
+        finished = runs.reject { |run| run.status == "running" }
+        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem: self.class.problem(finished),
           running: runs.last.status == "running")
       end.sort_by(&:source_kind)
   end
 
-  # What a fetch can answer that means it didn't read the page
-  # (DataQuality::Snapshot, and a plug-in's own reads): blocked, refused by
-  # robots.txt, an HTTP error or timeout, or a file left for a person.
+  # A fetch's answers (DataQuality::Snapshot, and plug-ins' own reads): read,
+  # skipped as already read today, or not read, with why.
+  READ = %w[ok changed unchanged].freeze
+  SKIPPED = "skipped_recent".freeze
   FAILED_READS = {
     "blocked" => "a page was blocked", "disallowed" => "robots.txt refused a page",
     "error" => "a page didn't answer", "needs_human" => "a file it couldn't read needs a person"
   }.freeze
 
-  # Why a finished crawl run didn't read its source, or nil. A run can
-  # succeed while its plug-in stopped ("stopped", e.g. NRC's list page
-  # blocked), a fetch failed (any stat: "snapshot", "status_file", "list",
-  # …), or an API didn't answer ("api").
-  def self.problem(run)
-    stats = run.stats.to_h
-    failed = stats.values.find { |value| FAILED_READS.key?(value) }
-    if run.status == "failed" then run.error.presence || "the crawl failed"
-    elsif stats["stopped"].present? then stats["stopped"]
-    elsif failed then FAILED_READS.fetch(failed)
-    elsif stats.key?("api") && !%w[ok skipped_recent].include?(stats["api"]) then "the API answered #{stats['api']}"
+  # Why last night's runs of one kind didn't read their source, or nil.
+  # Runs are taken in order; each read (a stat such as "list",
+  # "status_file", "snapshot", "api" or "site_pages") keeps its last real
+  # outcome. A run that failed outright, or that its plug-in stopped
+  # ("stopped"), is a problem until a later run reads something cleanly.
+  def self.problem(runs)
+    outcomes = {}
+    halted = nil
+    runs.each do |run|
+      stats = run.stats.to_h
+      fresh = outcomes_of(stats)
+      outcomes.merge!(fresh)
+      if run.status == "failed" then halted = run.error.presence || "the crawl failed"
+      elsif stats["stopped"].present? then halted = stats["stopped"]
+      # A run that only skipped reads read nothing, so it clears nothing.
+      elsif fresh.any? || !stats.values.include?(SKIPPED) then halted = nil
+      end
     end
+    halted || outcomes.values.compact.first
   end
 
-  def self.skipped?(run) = run.status == "succeeded" && run.stats.to_h.values.include?("skipped_recent") &&
-    run.stats.to_h.values.none? { |value| %w[ok changed unchanged].include?(value) }
+  # { read => why it failed, or nil when it read } for the reads a run's
+  # stats report this time; skipped reads are left out.
+  def self.outcomes_of(stats)
+    stats.each_with_object({}) do |(key, value), outcomes|
+      case value
+      when SKIPPED then next
+      when *READ then outcomes[key] = nil
+      when *FAILED_READS.keys then outcomes[key] = FAILED_READS.fetch(value)
+      when Hash # counts by outcome, e.g. site_pages: { "changed" => 19, "error" => 1 }
+        failed = FAILED_READS.keys.find { |outcome| value[outcome].to_i.positive? }
+        outcomes[key] = (FAILED_READS.fetch(failed) if failed) if (value.keys & (READ + FAILED_READS.keys)).any?
+      else outcomes[key] = "the API answered #{value}" if key == "api"
+      end
+    end
+  end
 
   def crawl_problems = crawl_rows.count(&:failed)
 
@@ -124,8 +145,6 @@ class Today
   private
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
 
-    def problem(run) = self.class.problem(run)
-    def skipped?(run) = self.class.skipped?(run)
 
     def finished_by_itself?(key)
       case key
