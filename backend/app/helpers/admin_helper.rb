@@ -32,7 +32,8 @@ module AdminHelper
     [
       { label: "Overview", path: admin_root_path, current: controller_name == "overview" },
       { label: "Sources", path: admin_sources_path, count: counts[:sources], current: controller_name == "sources" },
-      { label: "Checks", path: admin_checks_path, count: counts[:checks], current: %w[checks candidates pending_facts].include?(controller_name) },
+      # Today (#373) leads to Checks, its step 3, so it stays current there.
+      { label: "Today", path: admin_today_path, count: counts[:today], current: %w[today checks candidates pending_facts recommendations].include?(controller_name) },
       { label: "Live", path: admin_live_path, count: counts[:live], current: %w[live records].include?(controller_name) },
       { label: "Removed", soon: true },
       { label: "Where it appears", soon: true },
@@ -99,7 +100,8 @@ module AdminHelper
       sources: SourceCatalog.total,
       checks: DataQuality::Review.counts.values.sum + DataQuality::Review.pending_count,
       live: Organization.published.count + Facility.published.where(parent_id: nil).count,
-      corrections: CorrectionReport.where(status: %w[open reviewed]).count
+      corrections: CorrectionReport.where(status: %w[open reviewed]).count,
+      today: Today.new.nav_count
     }
   end
 

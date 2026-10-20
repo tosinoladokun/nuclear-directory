@@ -1,0 +1,6 @@
+<%# Step 3: the facts waiting. Until the review page (#373 part C), it opens Checks, with Aminah's list and its Accept. %>
+<p class="type-body m-0"><%= pluralize(today.undecided, "fact") %> <%= today.undecided == 1 ? "is" : "are" %> waiting for your Accept or Reject.</p>
+<div class="nd-today__actions">
+  <%= link_to "Start reviewing ›", admin_checks_path, class: "nd-btn nd-btn--primary type-ui" %>
+  <%= link_to "#{aminah}'s list ›", admin_recommendations_path, class: "nd-btn nd-btn--outline type-ui" %>
+</div>

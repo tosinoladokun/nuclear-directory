@@ -45,6 +45,11 @@ Rails.application.routes.draw do
     get "sources/search" => "sources#search", as: :sources_search
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
     get "status", to: redirect("/admin/sources")
+    # Today (#373): the day's review in four steps. Checks stays as step 3's list.
+    get "today" => "today#show", as: :today
+    post "today/list" => "today#list", as: :today_list
+    post "today/steps/:step" => "today#done", as: :today_step, constraints: { step: /crawl|list/ }
+    delete "today/steps/:step" => "today#undo", constraints: { step: /crawl|list/ }
     get "checks" => "checks#show", as: :checks
     # Data Quality's recommendations (#306): paste its list, see exactly
     # what Accept will do, then accept them as one decision.

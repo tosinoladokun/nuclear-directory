@@ -142,6 +142,27 @@ class Today
   # Step 4: correction requests visitors sent that aren't closed.
   def left_count = @left_count ||= CorrectionReport.where(status: %w[open reviewed]).count
 
+  # Step 4's items, oldest first.
+  def left_items = CorrectionReport.where(status: %w[open reviewed]).order(:created_at, :id)
+
+  # When Joy (the verify stage) last finished a run last night, or nil.
+  def checker_ran_at
+    CrawlRun.where(stage: "verify", status: "succeeded", started_at: crawl_window).maximum(:finished_at)
+  end
+
+  # The daily crawl (config/recurring.yml): every day at 3am Eastern.
+  def self.next_crawl_at(now = Time.current)
+    at = now.in_time_zone("America/New_York").change(hour: 3)
+    at > now ? at : at + 1.day
+  end
+
+  # This day's decisions on claims: how many went live, were rejected, and
+  # were decided by `by`.
+  def decisions(by:)
+    decided = Candidate.where(reviewed_at: on.in_time_zone(ZONE).all_day)
+    { live: decided.where(status: "merged").count, rejected: decided.where(status: "rejected").count, by_you: decided.where(reviewed_by: by).count }
+  end
+
   private
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
 

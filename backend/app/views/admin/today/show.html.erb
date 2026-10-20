@@ -1,0 +1,61 @@
+<% content_for :title, "Today" %>
+<%
+  joy = t("admin.reviewers.checker")
+  aminah = t("admin.reviewers.reviewer")
+  titles = { "crawl" => "Crawled and checked by #{joy}", "list" => "#{aminah}'s review", "review" => "Review and accept", "left" => "Left for you" }
+  minutes = ->(n) { n.zero? ? "under a minute" : "about #{pluralize(n, 'min')}" }
+  subs = {
+    "crawl" => "#{pluralize(@today.crawl_rows.size, 'source')} · #{pluralize(@today.crawl_problems, 'problem')} · about 1 min",
+    "list" => (@today.step("list").note == "no_list" ? "No list today" : "Paste #{aminah}'s list · about 1 min"),
+    "review" => "#{pluralize(@today.undecided, 'fact')} · #{minutes.(@today.step('review').minutes)}",
+    "left" => "#{pluralize(@today.left_count, 'item')} · #{minutes.(@today.step('left').minutes)}"
+  }
+%>
+
+<header class="nd-stack">
+  <h1 class="type-admin-h1">Here's what you need to do today, <%= Current.user.handle.capitalize %></h1>
+  <p class="type-body m-0">4 steps · about <%= pluralize(@today.minutes_total, "minute") %>. Nothing goes live until you click.</p>
+  <p class="type-data text-ink-muted m-0" id="today-progress"><%= @today.done_count %> of 4 done</p>
+  <details class="type-body">
+    <summary class="nd-link">Who are <%= joy %> and <%= aminah %>?</summary>
+    <div class="nd-stack max-w-prose">
+      <p class="m-0"><strong><%= joy %></strong> is the app's own checker. Every night, after the crawlers read the official sources, <%= joy %> compares each new or changed fact with its source and says accept or reject. <%= joy %> runs on the site by itself.</p>
+      <p class="m-0"><strong><%= aminah %></strong> is Data Quality, the careful second reviewer. Each morning she looks again at what's new, especially the tricky cases (same company under another name, scope, early-stage deals), and writes her list into your Todoist. You paste it in step 2.</p>
+      <p class="m-0">Neither of them publishes anything. You decide every fact with Accept or Reject.</p>
+    </div>
+  </details>
+</header>
+
+<ol class="nd-today" aria-label="Today's steps">
+  <% @today.steps.each do |step| %>
+    <li class="nd-today__step nd-today__step--<%= step.state %>" id="step-<%= step.key %>" <%= 'aria-current="step"'.html_safe if step.current? %>>
+      <div class="nd-today__row">
+        <span class="nd-today__check" aria-hidden="true"><%= icon("check", size: 16) if step.done? %></span>
+        <h2 class="nd-today__title type-body-strong"><%= step.number %> <%= titles.fetch(step.key) %><span class="sr-only">, <%= { done: "done", current: "to do now", later: "later" }.fetch(step.state) %></span></h2>
+        <% if step.done? && step.done_by && %w[crawl list].include?(step.key) %>
+          <%= button_to "Undo", admin_today_step_path(step.key), method: :delete, class: "nd-btn nd-btn--outline type-ui" %>
+        <% end %>
+        <p class="nd-today__sub type-data-sm"><%= subs.fetch(step.key) %></p>
+      </div>
+
+      <% if step.current? %>
+        <div class="nd-today__body">
+          <%= render "admin/today/#{step.key}", today: @today, joy:, aminah: %>
+        </div>
+      <% end %>
+    </li>
+  <% end %>
+</ol>
+
+<% if @today.done? %>
+  <section class="nd-stack" aria-labelledby="done-heading" id="done">
+    <h2 class="type-admin-h2" id="done-heading">You're done for today.</h2>
+    <p class="type-body m-0">The next crawl runs at <%= Today.next_crawl_at.in_time_zone(Today::ZONE).strftime("%-l:%M %P") %> tomorrow morning.</p>
+    <section class="nd-tiles" aria-label="Today's decisions">
+      <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">Went live</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:live]) %></span></div>
+      <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">Rejected</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:rejected]) %></span></div>
+      <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">By you</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:by_you]) %></span></div>
+    </section>
+    <p class="m-0"><%= link_to "See what changed today ›", admin_live_path, class: "nd-link type-ui" %></p>
+  </section>
+<% end %>
