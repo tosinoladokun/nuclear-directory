@@ -98,6 +98,42 @@ class TodayTest < ActiveSupport::TestCase
     assert_equal [ 3, 1 ], [ today.step("crawl").count, today.crawl_problems ]
   end
 
+  test "a failure stays a problem while its retry is still running" do
+    crawl!("eia_generators", Time.utc(2026, 10, 20, 7), status: "failed")
+    crawl!("eia_generators", Time.utc(2026, 10, 20, 7, 30), status: "running")
+
+    row = today.crawl_rows.sole
+    assert [ row.failed, row.running ].all?
+  end
+
+  test "a run that succeeded but didn't read its source is a problem" do
+    { "nrc_reactor_list" => { "list" => "blocked", "stopped" => "list page blocked" },
+      "eia_generators" => { "file" => "https://www.eia.gov/x.xlsx", "snapshot" => "needs_human" },
+      "usaspending_doe_awards" => { "api" => "failed" },
+      "eia_860m_index" => { "api" => "skipped_recent" } }.each do |kind, stats|
+      CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: Time.utc(2026, 10, 20, 7), stats:)
+    end
+
+    problems = today.crawl_rows.to_h { |row| [ row.source_kind, row.problem ] }
+    assert_equal "list page blocked", problems["nrc_reactor_list"]
+    assert_equal "a file it couldn't read needs a person", problems["eia_generators"]
+    assert_equal "the API answered failed", problems["usaspending_doe_awards"]
+    assert_nil problems["eia_860m_index"], "a same-day rerun that skipped the fetch isn't a problem"
+    assert_equal 3, today.crawl_problems
+  end
+
+  test "marking a step reads the counts again, so facts added since keep step 3 open" do
+    nothing_waiting!
+    t = today
+    assert t.step("review").done?, "nothing waits yet"
+
+    Organization.create!(name: "Pending From The List Co")
+    t.mark_done!("crawl", by: BY)
+    t.mark_done!("list", by: BY)
+    assert_equal :current, t.step("review").state
+    assert_not t.done?
+  end
+
   test "the reviewers' names come from one place each" do
     assert_equal [ "Joy", "Aminah" ], [ I18n.t("admin.reviewers.checker"), I18n.t("admin.reviewers.reviewer") ]
   end

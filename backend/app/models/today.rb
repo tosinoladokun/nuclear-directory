@@ -23,8 +23,12 @@ class Today
     def done? = state == :done
     def current? = state == :current
   end
-  # One kind of source in last night's crawl: did its latest run fail.
-  CrawlRow = Data.define(:source_kind, :started_at, :failed)
+  # One kind of source in last night's crawl. problem: why its latest
+  # finished run didn't read it, or nil. running: a run (a retry, say) is
+  # still going; a problem stays until a run finishes without one.
+  CrawlRow = Data.define(:source_kind, :started_at, :problem, :running) do
+    def failed = problem.present?
+  end
 
   def self.date(now = Time.current) = now.in_time_zone(ZONE).to_date
 
@@ -70,11 +74,28 @@ class Today
     reset
   end
 
-  # Last night's crawl, one row per kind of source (its latest run).
+  # Last night's crawl, one row per kind of source, judged by its latest
+  # finished run.
   def crawl_rows
-    @crawl_rows ||= CrawlRun.where(stage: "crawl", started_at: crawl_window).order(:started_at).to_a
-      .group_by(&:source_kind).map { |kind, runs| CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, failed: runs.last.status == "failed") }
-      .sort_by(&:source_kind)
+    @crawl_rows ||= CrawlRun.where(stage: "crawl", started_at: crawl_window).order(:started_at, :id).to_a
+      .group_by(&:source_kind).map do |kind, runs|
+        finished = runs.reject { |run| run.status == "running" }.last
+        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem: (problem(finished) if finished),
+          running: runs.last.status == "running")
+      end.sort_by(&:source_kind)
+  end
+
+  # Why a finished crawl run didn't read its source, or nil. A run can
+  # succeed while its plug-in stopped on a blocked page ("stopped"), left a
+  # file for a person ("needs_human") or got no answer from an API ("api").
+  def self.problem(run)
+    stats = run.stats.to_h
+    if run.status == "failed" then run.error.presence || "the crawl failed"
+    elsif stats["stopped"].present? then stats["stopped"]
+    elsif stats.values.include?("needs_human") then "a file it couldn't read needs a person"
+    elsif stats.values.include?("blocked") then "a page was blocked"
+    elsif stats.key?("api") && !%w[ok skipped_recent].include?(stats["api"]) then "the API answered #{stats['api']}"
+    end
   end
 
   def crawl_problems = crawl_rows.count(&:failed)
@@ -88,6 +109,8 @@ class Today
 
   private
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
+
+    def problem(run) = self.class.problem(run)
 
     def finished_by_itself?(key)
       case key
@@ -118,7 +141,8 @@ class Today
       start..[ start + 1.day + CRAWL_MARGIN, @now ].min
     end
 
+    # Everything read from the database: marking or undoing a step reads it all again.
     def reset
-      @steps = @marked = nil
+      @steps = @marked = @undecided = @left_count = @crawl_rows = nil
     end
 end
