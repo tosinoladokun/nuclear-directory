@@ -122,6 +122,29 @@ class TodayTest < ActiveSupport::TestCase
     assert_equal 3, today.crawl_problems
   end
 
+  test "a fetch that errored or that robots.txt refused is a problem, whichever stat holds it" do
+    CrawlRun.create!(stage: "crawl", source_kind: "eia_generators", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
+      stats: { "file" => "https://www.eia.gov/x.xlsx", "snapshot" => "error" })
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_power_status", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
+      stats: { "status_file" => "disallowed" })
+
+    assert_equal({ "eia_generators" => "a page didn't answer", "nrc_power_status" => "robots.txt refused a page" },
+      today.crawl_rows.to_h { |row| [ row.source_kind, row.problem ] })
+  end
+
+  test "a same-day rerun that skipped its fetch neither clears a problem nor makes one" do
+    blocked = { "api" => "blocked" }
+    skipped = { "api" => "skipped_recent" }
+    CrawlRun.create!(stage: "crawl", source_kind: "usaspending_doe_awards", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7), stats: blocked)
+    CrawlRun.create!(stage: "crawl", source_kind: "usaspending_doe_awards", status: "succeeded", started_at: Time.utc(2026, 10, 20, 8), stats: skipped)
+    CrawlRun.create!(stage: "crawl", source_kind: "eia_generators", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7), stats: { "snapshot" => "changed" })
+    CrawlRun.create!(stage: "crawl", source_kind: "eia_generators", status: "succeeded", started_at: Time.utc(2026, 10, 20, 8), stats: { "snapshot" => "skipped_recent" })
+
+    problems = today.crawl_rows.to_h { |row| [ row.source_kind, row.problem ] }
+    assert_equal "a page was blocked", problems["usaspending_doe_awards"], "blocked, then skipped: still blocked"
+    assert_nil problems["eia_generators"], "read, then skipped: still fine"
+  end
+
   test "marking a step reads the counts again, so facts added since keep step 3 open" do
     nothing_waiting!
     t = today

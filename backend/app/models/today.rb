@@ -75,28 +75,42 @@ class Today
   end
 
   # Last night's crawl, one row per kind of source, judged by its latest
-  # finished run.
+  # finished run that read something. A same-day rerun that skipped its
+  # fetch ("skipped_recent") read nothing, so it neither clears an earlier
+  # problem nor makes one.
   def crawl_rows
     @crawl_rows ||= CrawlRun.where(stage: "crawl", started_at: crawl_window).order(:started_at, :id).to_a
       .group_by(&:source_kind).map do |kind, runs|
-        finished = runs.reject { |run| run.status == "running" }.last
-        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem: (problem(finished) if finished),
+        judged = runs.reject { |run| run.status == "running" || skipped?(run) }.last
+        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem: (problem(judged) if judged),
           running: runs.last.status == "running")
       end.sort_by(&:source_kind)
   end
 
+  # What a fetch can answer that means it didn't read the page
+  # (DataQuality::Snapshot, and a plug-in's own reads): blocked, refused by
+  # robots.txt, an HTTP error or timeout, or a file left for a person.
+  FAILED_READS = {
+    "blocked" => "a page was blocked", "disallowed" => "robots.txt refused a page",
+    "error" => "a page didn't answer", "needs_human" => "a file it couldn't read needs a person"
+  }.freeze
+
   # Why a finished crawl run didn't read its source, or nil. A run can
-  # succeed while its plug-in stopped on a blocked page ("stopped"), left a
-  # file for a person ("needs_human") or got no answer from an API ("api").
+  # succeed while its plug-in stopped ("stopped", e.g. NRC's list page
+  # blocked), a fetch failed (any stat: "snapshot", "status_file", "list",
+  # …), or an API didn't answer ("api").
   def self.problem(run)
     stats = run.stats.to_h
+    failed = stats.values.find { |value| FAILED_READS.key?(value) }
     if run.status == "failed" then run.error.presence || "the crawl failed"
     elsif stats["stopped"].present? then stats["stopped"]
-    elsif stats.values.include?("needs_human") then "a file it couldn't read needs a person"
-    elsif stats.values.include?("blocked") then "a page was blocked"
+    elsif failed then FAILED_READS.fetch(failed)
     elsif stats.key?("api") && !%w[ok skipped_recent].include?(stats["api"]) then "the API answered #{stats['api']}"
     end
   end
+
+  def self.skipped?(run) = run.status == "succeeded" && run.stats.to_h.values.include?("skipped_recent") &&
+    run.stats.to_h.values.none? { |value| %w[ok changed unchanged].include?(value) }
 
   def crawl_problems = crawl_rows.count(&:failed)
 
@@ -111,6 +125,7 @@ class Today
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
 
     def problem(run) = self.class.problem(run)
+    def skipped?(run) = self.class.skipped?(run)
 
     def finished_by_itself?(key)
       case key
