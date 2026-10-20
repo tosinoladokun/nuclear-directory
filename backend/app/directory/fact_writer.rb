@@ -227,8 +227,8 @@ module Directory
     # counterpart of merge_organization: a human's decision, in one
     # transaction that locks both. into gets from's blank-on-into fields (its
     # EIA plant ID first, cleared on from so the unique index holds), its
-    # units, its aliases and its name as an alias, its company links,
-    # evidence and the candidates attached to it. A link into already has
+    # units, its aliases and its name as an alias, its company links, its own
+    # licensing stages (#379), evidence and the candidates attached to it. A link into already has
     # stays on from and is rejected, and a closed link stays where it was
     # decided; values into already has are kept, and filled ones are on
     # into's history. Two sites with different EIA plant IDs are two plants
@@ -297,6 +297,8 @@ module Directory
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Facility", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
+        # Its own licensing stages move with it (#379), unless into has that docket at that stage.
+        moved["licensing_stages"] += move_licensing_stages(from, into)
 
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this link") unless row.closed? }
         from.unpublish!(by:, reason: [ reason, "#{note}. Moved: #{merge_summary(moved, filled)}" ].compact.join(". "),
@@ -847,6 +849,7 @@ module Directory
 
           moved["facility_relationships"] += 1
         end
+        moved["licensing_stages"] += licensing_stages_moving(from, into).size
         evidence_and_claims(from, into, moved)
         merge_summary(moved, filled)
       end
@@ -924,29 +927,36 @@ module Directory
         end
       end
 
-      # A developer's design approvals that move to the kept company (#379):
-      # all but one the kept company already has for that design and stage;
-      # none from a closed company.
+      # The licensing stages that move with a merge (#379): a company's
+      # design approvals, or a plant's own stages. All but one the kept
+      # record already has (the same design and stage, or the same docket and
+      # stage); none to a closed record.
       def licensing_stages_moving(from, into)
         return [] if into.closed?
 
-        LicensingStage.where(organization_id: from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES).reject do |stage|
-          LicensingStage.exists?(organization_id: into.id, design_name: stage.design_name, stage: stage.stage)
+        owner = from.is_a?(Organization) ? :organization_id : :facility_id
+        LicensingStage.where(owner => from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES).reject do |stage|
+          kept_licensing_stage?(stage, owner, into)
         end
       end
 
-      # Moves a developer's design approvals to the kept company (#379). Each
-      # is locked and read again before it moves, so a person's decision on it
-      # meanwhile stands; one the kept company already has for that design and
-      # stage stays and is retired with the company.
+      # Moves them to the kept record. Each is locked and read again before
+      # it moves, so a person's decision on it meanwhile stands; one the kept
+      # record already has stays, and is retired with the merged record.
       def move_licensing_stages(from, into)
+        owner = from.is_a?(Organization) ? :organization_id : :facility_id
         licensing_stages_moving(from, into).count do |stage|
           stage.lock!
-          next false if stage.closed? || stage.organization_id != from.id
-          next false if LicensingStage.exists?(organization_id: into.id, design_name: stage.design_name, stage: stage.stage)
+          next false if stage.closed? || stage.public_send(owner) != from.id
+          next false if kept_licensing_stage?(stage, owner, into)
 
-          stage.update!(organization: into)
+          stage.update!(owner => into.id)
         end
+      end
+
+      def kept_licensing_stage?(stage, owner, into)
+        same = owner == :organization_id ? { design_name: stage.design_name } : { nrc_docket: stage.nrc_docket }
+        LicensingStage.exists?(owner => into.id, stage: stage.stage, **same)
       end
 
       # Finds the existing row for this fact, or nil.

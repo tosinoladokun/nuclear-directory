@@ -69,8 +69,8 @@ module Seed
       end + plant_id_collisions
     end
 
-    # A licensing stage the seed would write from a source that isn't an NRC
-    # record (#379). The write itself refuses to verify such a stage, so
+    # A licensing stage the seed would verify from a source that isn't an
+    # NRC record (#379). The write itself refuses to verify such a stage, so
     # this lists them before the load, while it can still be fixed. Reads
     # the files; writes nothing.
     def licensing_source_problems
@@ -78,7 +78,8 @@ module Seed
         doc = read(path)
         slug = File.basename(path, ".yml")
         Array(doc["licensing"]).filter_map do |item|
-          next if nrc_record?(item["source_url"], item["quote"])
+          # A pending lead may cite a press release; it's never verified from one.
+          next if item["pending"] || nrc_record?(item["source_url"], item["quote"])
 
           on = item["design_name"].present? ? "design #{item["design_name"].inspect}" : "facility #{item["facility"].inspect}"
           "#{slug}.yml: licensing #{item["stage"].inspect} for #{on}, docket #{item["nrc_docket"]}, " \
@@ -269,7 +270,11 @@ module Seed
           attributes[:organization_id] = organization.id
           attributes[:design_name] = item["design_name"]
         else
-          facility = Directory::Lookup.facility(name: item["facility"])
+          # The docket first, as everywhere (DATA.md, The same record): a
+          # name can belong to an older site as well as the docketed unit.
+          docket = LicensingStage.normalize_docket(item["nrc_docket"])
+          facility = (Directory::Lookup.facility(nrc_docket: docket) if docket) ||
+            (Directory::Lookup.facility(name: item["facility"]) if item["facility"].present?)
           unless facility
             @errors << "#{slug}: licensing: unknown facility #{item["facility"].inspect}"
             return
@@ -278,7 +283,9 @@ module Seed
           attributes[:facility_id] = facility.id
         end
 
-        write(slug, :licensing_stage, attributes, evidence(item, sources))
+        # pending: true holds it for a person, as for a plant link: a lead
+        # (a press release) can be recorded without being verified.
+        write(slug, :licensing_stage, attributes, evidence(item, sources), pending: item["pending"])
       end
 
       # merges: names of organizations an earlier seed loaded as their own

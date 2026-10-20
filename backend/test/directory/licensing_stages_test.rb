@@ -216,6 +216,30 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert LicensingStage.find(id).rejected?
   end
 
+  test "the read never shows a verified stage with no NRC record behind it, however it was verified" do
+    id = write(source: @press, verification: { status: "pending", by: BY }).id
+    LicensingStage.find(id).verify!(by: BY) # past FactWriter's check, straight on the model
+
+    assert LicensingStage.find(id).verified?
+    assert_empty Directory::Lookup.licensing_stages(facility_id: @unit.id)
+  end
+
+  test "a plant merge moves the plant's own stages, keeps one the kept plant has, and the preview counts them" do
+    plant = Facility.create!(name: "Acme Test Reactor", verification_status: "verified", verified_by: BY)
+    duplicate = Facility.create!(name: "Acme Test Reactor Site", verification_status: "verified", verified_by: BY)
+    assert write(stage(facility_id: duplicate.id, nrc_docket: "50-9999"), verification: { status: "verified", by: BY }).ok?
+    assert write(stage(facility_id: plant.id, nrc_docket: "50-9998"), verification: { status: "verified", by: BY }).ok?
+    kept_behind = write(stage(facility_id: duplicate.id, nrc_docket: "50-9998"), verification: { status: "verified", by: BY })
+
+    _, preview = Directory::FactWriter.merge_preview(type: "Facility", from_id: duplicate.id, into_id: plant.id)
+    assert Directory::FactWriter.merge_facility(from_id: duplicate.id, into_id: plant.id, by: BY).ok?
+
+    assert_equal %w[05009998 05009999], LicensingStage.where(facility_id: plant.id).pluck(:nrc_docket).sort
+    assert_equal duplicate.id, LicensingStage.find(kept_behind.id).facility_id, "the kept plant already has that docket at that stage"
+    assert_match "1 licensing stage", preview
+    assert_equal preview, duplicate.verification_events.order(:id).last.reason[/Moved: (.*)\z/, 1]
+  end
+
   test "a stage needs one of the two records" do
     assert_match "needs a facility or an organization", write(stage(facility_id: nil)).errors.join
   end

@@ -458,6 +458,27 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal "Acme", stage.organization.name
   end
 
+  test "a licensing stage finds its unit by docket before name" do
+    Facility.create!(name: "Hermes 1", verification_status: "verified", verified_by: "human:tosin") # an older record of that name
+    unit = Facility.create!(name: "Hermes Unit 1", nrc_docket: "05007513", verification_status: "verified", verified_by: "human:tosin")
+    write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    assert_equal unit, LicensingStage.sole.facility
+  end
+
+  test "a pending licensing entry is held for a person, and seed:check lets its lead source through" do
+    lead = licensing(pending: true, source_url: "https://world-nuclear-news.org/articles/permit", quote: "A permit.")
+    write_file("acme", org("Acme", website: "https://acme.com", facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ lead ]))
+
+    loader = Seed::OrganizationLoader.new(@dir)
+    assert_empty loader.licensing_source_problems
+    loader.load!
+
+    assert LicensingStage.sole.pending?
+  end
+
   test "a licensing stage can name a plant a later file defines" do
     write_file("a-developer", org("A Developer", website: "https://developer.com", licensing: [ licensing ]))
     write_file("z-owner", org("Z Owner", website: "https://owner.com", facilities: [ item(name: "Hermes 1", type: "owns") ]))
