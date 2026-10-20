@@ -360,9 +360,30 @@ These hold in the key facts panel and in every component that pairs a label with
 **A company's own sources show once; a row has its own markers only when that fact has its own source.**
 
 - Under the key facts, one line links the record's own evidence. It names a fact only when a check, run as the page is drawn, finds a record quote that states the value shown (#407). The loader's checks and production snapshots aren't enough, because a later edit can change a value without a new quote.
-  - **Company:** "About this company: sources 1 2 3". Once #407 lands, the line names Legal name and Headquarters when its check passes for them ("Headquarters and legal name: from these sources together 1 2 3"). Website and other names aren't named.
-  - **Plant:** "About this plant: sources 1 2", from the site's own evidence. Once #407 lands, it names Docket and Location when its check passes for them; Type and Status once #398 lands.
+  - **The check (#407):** `CompanyProfile#quoted_facts` returns `:headquarters` and/or `:legal_name`, and `PlantProfile#quoted_facts` returns `:docket` and/or `:location`. Each is there only when the page shows that value and one of the record's own quotes states it: a docket or legal name as written (case and spacing aside), a place as its city plus its state code or full state name in one quote, whole words only.
+  - **Company,** from the record's own evidence. The words follow the key-fact labels.
+
+    | `quoted_facts` | Line |
+    |---|---|
+    | none | About this company: sources 1 2 3 |
+    | headquarters | Headquarters: from these sources 1 2 3 |
+    | legal name | Legal name: from these sources 1 2 3 |
+    | both | Headquarters and legal name: from these sources together 1 2 3 |
+
+    Website and other names are never named: nothing guarantees a quote for them.
+  - **Plant,** from the site's own evidence:
+
+    | `quoted_facts` | Line |
+    |---|---|
+    | none | About this plant: sources 1 2 |
+    | docket | NRC docket: from these sources 1 2 |
+    | location | Location: from these sources 1 2 |
+    | both | NRC docket and location: from these sources together 1 2 |
+
+    Type and Status are named once #398 lands.
+  - The line lists the same sources in every case. Only its words change.
 - "Together" says the sources back the named facts as a set, not each source each fact. Record evidence doesn't record which field it backs yet (#398).
+- The words come from i18n keys, one per case, so the line never names a fact by string building. On a phone the line may wrap like body text: it's a sentence, not a box (the one-line rule doesn't apply). Its markers follow the last word and never start a line.
 - The numbers are the Sources list's, in reading order, so the description's markers and the line share them. Nothing is dropped: the line is the same set of record sources each of those rows showed.
 - Role, technology, link and unit evidence keep their markers on their own rows, and aren't repeated in the line.
 - Every source still appears once under Sources, linked, with its checked date.
