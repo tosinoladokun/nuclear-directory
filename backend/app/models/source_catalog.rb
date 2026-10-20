@@ -37,7 +37,8 @@ class SourceCatalog
     "usaspending_doe_awards" => { name: "USAspending", daily: true },
     "usaspending_api" => { name: "USAspending API", note: "the award search", daily: true },
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
-    "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true }
+    "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
+    "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze

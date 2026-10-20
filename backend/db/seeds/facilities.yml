@@ -579,6 +579,7 @@ facilities:
   other_names:
   - Crane Clean Energy Center (Three Mile Island Unit 1)
   - Three Mile Island Unit 1
+  - Three Mile Island
   - TMI-1
   eia_plant_id: '8011'
 # EIA plant IDs (#229): EIA's crawl finds these sites by ID instead of
