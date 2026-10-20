@@ -118,7 +118,7 @@ module Directory::Checks
           Tag.new("unquoted-docket-place", "Docket or place unquoted", "flags", 8, "A plant's docket or place isn't in any of its own quotes",
             { "Facility" => lambda {
               unquoted.call(sites.call) do |site, quotes|
-                (site.nrc_docket.blank? || backing.contains?(quotes, site.nrc_docket)) &&
+                (site.nrc_docket.blank? || backing.docket?(quotes, site.nrc_docket)) &&
                   ((site.city.blank? && site.state.blank?) || backing.place?(quotes, city: site.city, state: site.state))
               end
             } }),

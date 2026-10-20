@@ -20,6 +20,22 @@ class Directory::QuoteBackingTest < ActiveSupport::TestCase
     assert_not Backing.contains?([ "anything" ], nil)
   end
 
+  test "a docket in NRC's short forms counts too, but not another number" do
+    assert Backing.docket?([ "Docket No. 50-254" ], "05000254")
+    assert Backing.docket?([ "Docket 050-00254 (Quad Cities)" ], "05000254")
+    assert Backing.docket?([ "Docket 50-7513" ], "05007513")
+    assert_not Backing.docket?([ "Docket 50-2541" ], "05000254")
+    assert_not Backing.docket?([ "Docket 150-254" ], "05000254")
+    assert_not Backing.docket?([ "Docket 70-254" ], "05000254"), "another kind of license"
+  end
+
+  test "a state in AP style counts; dashes of any kind are one" do
+    assert Backing.place?([ "Oak Ridge, Tenn." ], city: "Oak Ridge", state: "TN")
+    assert Backing.place?([ "DAVIDSON, N.C. (BUSINESS WIRE)" ], city: "Davidson", state: "NC")
+    assert_not Backing.place?([ "Morgantown, W.Va." ], city: "Morgantown", state: "VA"), "W.Va. isn't Va."
+    assert Backing.contains?([ "Northern States Power Company - Minnesota" ], "Northern States Power Company – Minnesota")
+  end
+
   test "a place: the city and the state, as its code or its full name, in one quote" do
     assert Backing.place?([ "Cordova, IL 61242" ], city: "Cordova", state: "IL")
     assert Backing.place?([ "located in Cordova, Illinois" ], city: "Cordova", state: "IL"), "the state by its full name"

@@ -110,7 +110,7 @@ class PlantProfile
   def quoted_facts
     @quoted_facts ||= begin
       quotes = site_facts? ? site.evidence.map(&:quote).compact : []
-      [ (:docket if Directory::QuoteBacking.contains?(quotes, nrc_docket)),
+      [ (:docket if Directory::QuoteBacking.docket?(quotes, nrc_docket)),
         (:location if Directory::QuoteBacking.place?(quotes, city:, state:)) ].compact
     end
   end
