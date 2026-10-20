@@ -170,6 +170,9 @@ module Seed
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
         attributes[:sec_cik] = doc["sec_cik"].to_s if doc["sec_cik"].present?
+        # A display label, set only when the file gives one: a seed without
+        # it never clears a short name set in the admin.
+        attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
 
         items = [ *hq, *description_items(doc), legal ].compact.uniq
         # An unquoted legal name still finds a record an earlier seed loaded
@@ -297,6 +300,10 @@ module Seed
         end
         if entry["other_names"].present?
           write("facilities.yml", :facility, { id: facility.id, aliases: entry["other_names"] }, [])
+        end
+        # A display label, not a sourced fact (DATA.md, Names): no evidence.
+        if entry["short_name"].present?
+          write("facilities.yml", :facility, { id: facility.id, short_name: entry["short_name"] }, [])
         end
         # An identifier, like its names: EIA's crawl finds the site by it
         # instead of proposing a second one (#229).

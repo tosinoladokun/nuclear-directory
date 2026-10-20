@@ -60,13 +60,13 @@ module Directory
     KINDS = {
       organization: {
         model: Organization,
-        attributes: %i[name slug legal_name website domain sec_cik description hq_city hq_state country_code founded_year status aliases]
+        attributes: %i[name short_name slug legal_name website domain sec_cik description hq_city hq_state country_code founded_year status aliases]
       },
       organization_role: { model: OrganizationRole, attributes: %i[organization_id role] },
       organization_technology: { model: OrganizationTechnology, attributes: %i[organization_id technology] },
       facility: {
         model: Facility,
-        attributes: %i[name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket
+        attributes: %i[name short_name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket
           eia_plant_id city state country_code latitude longitude aliases]
       },
       relationship: {

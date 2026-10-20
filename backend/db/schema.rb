@@ -191,6 +191,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "eia_plant_id"
+    t.string "short_name"
     t.index ["eia_plant_id"], name: "index_facilities_on_eia_plant_id_for_sites", unique: true, where: "((parent_id IS NULL) AND (eia_plant_id IS NOT NULL))"
     t.index ["nrc_docket"], name: "index_facilities_on_nrc_docket", unique: true, where: "(nrc_docket IS NOT NULL)"
     t.index ["parent_id"], name: "index_facilities_on_parent_id"
@@ -199,6 +200,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
     t.index ["verification_status"], name: "index_facilities_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "facilities_confidence_check"
     t.check_constraint "facility_type::text = ANY (ARRAY['power_reactor'::character varying::text, 'research_reactor'::character varying::text, 'fuel_facility'::character varying::text, 'enrichment'::character varying::text, 'fusion_facility'::character varying::text, 'other'::character varying::text, 'uranium_mine'::character varying::text, 'mill'::character varying::text])", name: "facilities_facility_type_check"
+    t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "facilities_short_name_check"
     t.check_constraint "status::text = ANY (ARRAY['operating'::character varying, 'under_construction'::character varying, 'planned'::character varying, 'shut_down'::character varying, 'decommissioning'::character varying, 'not_operating'::character varying]::text[])", name: "facilities_status_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "facilities_verification_status_check"
   end
@@ -310,12 +312,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "sec_cik"
+    t.string "short_name"
     t.index ["domain"], name: "index_organizations_on_domain", unique: true
     t.index ["sec_cik"], name: "index_organizations_on_sec_cik", unique: true, where: "(sec_cik IS NOT NULL)"
     t.index ["slug"], name: "index_organizations_on_slug", unique: true
     t.index ["verification_status"], name: "index_organizations_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "organizations_confidence_check"
     t.check_constraint "sec_cik IS NULL OR sec_cik::text ~ '^[0-9]{10}$'::text", name: "organizations_sec_cik_check"
+    t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "organizations_short_name_check"
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying::text, 'acquired'::character varying::text, 'defunct'::character varying::text])", name: "organizations_status_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "organizations_verification_status_check"
   end

@@ -86,6 +86,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 
   Matching treats all three the same. Only `former` changes what a page says, so only `former` needs its own source.
 - **Plant display name: the operator's name for the plant** ("Plant Vogtle", "Susquehanna Steam Electric Station"). NRC and EIA spellings ("Vogtle", "TalenEnergy Susquehanna") become aliases.
+- **Short name** (`short_name`, optional, up to 30 characters): a display label for tight spots (the connections map, home lists, chips, crumbs), preferably the company's own common usage: "Oglethorpe", "MEAG", "DOE", "Vogtle". **It's never an identity key and never matched on.** Matching uses the name and aliases; a short name a source uses goes in the aliases too. It needs no quote, since it labels a record rather than stating a fact, and a person sets it (seeds or the admin). *(PM, 18 Oct.)*
 - **Unit names follow NRC's list** ("Vogtle 3", "Hope Creek 1"). A single-unit plant may share its unit's name ("Callaway").
 - **Casing:** as the owner writes it. No all-caps unless it's an acronym (TVA, NRC). Keep accents and en dashes as published ("Global Nuclear Fuel–Americas").
 - **Abbreviations** are aliases, not display names: "NCP", "INL", "GNF-A".
@@ -256,6 +257,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | "Reactor developers" becomes "Developers": reactor designers plus nuclear project developers (`project_developer`), so everything building new nuclear sits together; slug unchanged. A parent never inherits its subsidiaries' buckets | Tosin | #322 |
 | A Form D round is recorded on the company itself, never as a link to a placeholder investor; named investors are separate links | PM | #129 |
 | A company's SEC CIK identifies it before its name | PM | #129 |
+| A short name is a display label only: never an identity key, never matched on | PM | #363 |
 | Meta–TerraPower (Jan 2026) is Meta funding TerraPower (`funds`), not a power deal: Meta pays for early development of up to eight Natrium units, and its rights to their energy are in the description. A deal whose main term is money for development is `funds`; a signed purchase of power is `offtake_with` (17 Oct 2026) | Tosin | #393 |
 | "Utilities and operators" becomes "Power plant owners and operators" (17 Oct 2026): named for what puts a company there; same rule, slug `utilities` unchanged. The homepage's short label is "Plant operators" | Tosin | #367 |
 | Bernhard Capital Partners is an investor (`venture_capital`): it owns Allied Power, a nuclear services company. Reverses #63's "no Bernhard role" (16 Oct 2026) | Tosin | #63, #322 |
