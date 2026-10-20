@@ -13,13 +13,16 @@ module Directory
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
     # domain accepts a bare domain or a URL.
-    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
+    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
       scope =
-        case one_of!(id:, slug:, name:, domain:, sec_cik:)
+        case one_of!(id:, slug:, name:, domain:, sec_cik:, eia_utility_id:)
         in [ :id, value ] then Organization.where(id: value)
         in [ :sec_cik, value ]
           cik = Organization.cik_from(value) or return
           Organization.where(sec_cik: cik)
+        in [ :eia_utility_id, value ]
+          utility = Organization.normalize_value_for(:eia_utility_id, value) or return
+          Organization.where(eia_utility_id: utility)
         in [ :slug, value ] then Organization.where(slug: value)
         in [ :name, value ]
           normalized = OrganizationAlias.normalize(value).presence or return

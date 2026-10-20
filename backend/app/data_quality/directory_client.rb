@@ -50,8 +50,8 @@ class DataQuality::DirectoryClient
   end
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
-  def organization(name: nil, domain: nil, sec_cik: nil)
-    record("Organization", lookup.organization(name:, domain:, sec_cik:))
+  def organization(name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
+    record("Organization", lookup.organization(name:, domain:, sec_cik:, eia_utility_id:))
   end
 
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
@@ -435,8 +435,9 @@ class DataQuality::DirectoryClient
               (facility(eia_plant_id: named["eia_plant_id"]) if named["eia_plant_id"].present?) ||
               (facility(name: named["name"]) if named["name"].present?)
           else
-            # The SEC's CIK first, as Match and FactWriter find a company (#129).
+            # Government IDs first (the SEC's CIK, EIA's utility ID), as Match and FactWriter find a company.
             (organization(sec_cik: named["sec_cik"]) if named["sec_cik"].present?) ||
+              (organization(eia_utility_id: named["eia_utility_id"]) if named["eia_utility_id"].present?) ||
               (organization(name: named["name"]) if named["name"].present?) ||
               (organization(domain: named["domain"]) if named["domain"].present?)
           end

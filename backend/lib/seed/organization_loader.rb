@@ -170,6 +170,7 @@ module Seed
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
         attributes[:sec_cik] = doc["sec_cik"].to_s if doc["sec_cik"].present?
+        attributes[:eia_utility_id] = doc["eia_utility_id"].to_s if doc["eia_utility_id"].present?
         # A display label, set only when the file gives one: a seed without
         # it never clears a short name set in the admin.
         attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
