@@ -458,6 +458,15 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal "Acme", stage.organization.name
   end
 
+  test "a licensing stage can name a plant a later file defines" do
+    write_file("a-developer", org("A Developer", website: "https://developer.com", licensing: [ licensing ]))
+    write_file("z-owner", org("Z Owner", website: "https://owner.com", facilities: [ item(name: "Hermes 1", type: "owns") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    assert_equal "Hermes 1", LicensingStage.sole.facility.name
+  end
+
   test "a licensing stage for a plant the seed doesn't have fails the load and names it" do
     write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing ]))
 

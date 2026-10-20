@@ -638,7 +638,7 @@ module Directory
         # ends: retiring a proposal whose company was closed must still work.
         rejecting_only = !created && attributes.keys == [ :id ] && verification.to_h.symbolize_keys[:status].to_s == "rejected"
         check_link_ends(kind, attributes, record) if protect_human_verified && !rejecting_only
-        check_licensing_stage_ends(attributes, record) if kind == :licensing_stage && protect_human_verified
+        check_licensing_stage_ends(attributes, record) if kind == :licensing_stage && protect_human_verified && !rejecting_only
         curated = protect_human_verified && !created && record.human_reviewed?
         changes = model_attributes(kind, attributes)
         # A plant found by its docket, name or an alias keeps its name: writing
@@ -1160,19 +1160,21 @@ module Directory
       end
 
       # The record a licensing stage hangs on must be open (#379): no
-      # automated stage under a rejected or unpublished plant or company.
+      # automated stage under a rejected or unpublished plant or company, or
+      # on a unit whose site is. The unit and its site are locked in id
+      # order, as check_link_ends locks them, so the two can't deadlock.
       def check_licensing_stage_ends(attributes, record)
         if (id = attributes.key?(:facility_id) ? attributes[:facility_id] : record.facility_id)
-          finish = Facility.lock.find_by(id:) or return
-          raise Invalid, "#{finish.name} was #{finish.verification_status} by #{finish.verified_by || 'review'}; no stage added" if finish.closed?
-
+          site_id = Facility.where(id:).pick(:parent_id)
+          records = [ id, site_id ].compact.uniq.sort_by(&:to_i).filter_map { |each_id| Facility.lock.find_by(id: each_id) }
+        elsif (id = attributes.key?(:organization_id) ? attributes[:organization_id] : record.organization_id)
+          records = [ Organization.lock.find_by(id:) ].compact
+        else
           return
         end
-        id = attributes.key?(:organization_id) ? attributes[:organization_id] : record.organization_id
-        return unless id
 
-        finish = Organization.lock.find_by(id:) or return
-        raise Invalid, "#{finish.name} was #{finish.verification_status} by #{finish.verified_by || 'review'}; no stage added" if finish.closed?
+        closed = records.find(&:closed?) or return
+        raise Invalid, "#{closed.name} was #{closed.verification_status} by #{closed.verified_by || 'review'}; no stage added"
       end
 
       # A licensing stage is verified only from an NRC record (#379): a page

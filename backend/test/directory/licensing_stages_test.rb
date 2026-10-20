@@ -196,6 +196,26 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert_equal 0, LicensingStage.count
   end
 
+  test "no automated stage on an open unit whose site was rejected" do
+    @site.reject!(by: BY)
+
+    result = write(verification: { status: "verified", by: BY }, protect_human_verified: true)
+
+    assert_match "Hermes was rejected", result.errors.join
+    assert_equal 0, LicensingStage.count
+  end
+
+  test "a pending stage can still be retired after its plant is closed" do
+    id = write(verification: { status: "pending", by: "agent:pipeline" }).id
+    @unit.reject!(by: BY)
+
+    result = Directory::FactWriter.write(:licensing_stage, { id: }, verification: { status: "rejected", by: "agent:pipeline" },
+      protect_human_verified: true)
+
+    assert result.ok?, result.errors.inspect
+    assert LicensingStage.find(id).rejected?
+  end
+
   test "a stage needs one of the two records" do
     assert_match "needs a facility or an organization", write(stage(facility_id: nil)).errors.join
   end

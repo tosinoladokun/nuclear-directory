@@ -134,6 +134,9 @@ module Seed
         docs.each { |slug, doc| write_facts(slug, doc, sources) }
         in_docs = docs.values.flat_map { |doc| Array(doc["facilities"]).map { |item| item["name"] } }.to_set
         facilities.each { |facility| write_facility_details(facility, sources, in_docs) }
+        # Last, once every file's plants exist: a stage can name a plant
+        # another company's file defines (#379).
+        docs.each { |slug, doc| write_licensing_stages(slug, doc, sources) }
 
         raise Error, "Seed failed, nothing was written:\n  #{@errors.join("\n  ")}" if @errors.any?
       end
@@ -247,6 +250,10 @@ module Seed
             relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] },
             evidence(item, sources), pending: item["pending"], hold: hold_reason(organization.id, facility.id, item))
         end
+      end
+
+      def write_licensing_stages(slug, doc, sources)
+        organization = Directory::Lookup.organization(slug:) or return
 
         Array(doc["licensing"]).each { |item| write_licensing_stage(slug, organization, item, sources) }
       end
