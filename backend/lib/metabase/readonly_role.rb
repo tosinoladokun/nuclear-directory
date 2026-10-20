@@ -23,7 +23,7 @@ module Metabase
     # new table is a decision.
     READABLE_TABLES = %w[
       organizations organization_aliases organization_roles organization_technologies
-      facilities facility_aliases facility_relationships relationships deal_terms
+      facilities facility_aliases facility_relationships relationships deal_terms licensing_stages
       roles technologies sources evidence former_slugs verification_events candidates crawl_runs
     ].freeze
     # Never readable through Metabase: sign-in data, visitors' correction

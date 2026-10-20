@@ -18,6 +18,7 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 | Plant link (`FacilityRelationship`) | A company's role at a plant | Southern Nuclear operates Vogtle 3 | A deal between two companies |
 | Company link (`Relationship`) | A deal or tie between two companies | Centrus supplies TRISO-X | A role at a plant |
 | Deal term (`DealTerm`) | One award, power deal or funding round under its link, with amount and dates; or a company's own funding round when its filing names no investors (Form D) | A DOE award (ID, amount, start date) under "DOE funds X-energy"; a Form D round on the company that raised it | The link itself |
+| Licensing stage (`LicensingStage`) | One stage a reactor project or plant has reached with the NRC, with its docket and the date: pre-application, application accepted, construction permit, operating licence, design approval, withdrawn or denied | Hermes 1: construction permit, 14 Dec 2023, 50-7513 | A press release's say-so; the current stage as one field that overwrites the last |
 | Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor developer; SMR | A tag inferred without a quote |
 
 ### Site or unit
@@ -37,6 +38,7 @@ The pipeline and FactWriter find an existing record by these, in this order. A r
 | Company | Its SEC CIK (`sec_cik`, 10 digits) when it has one; then a normalized name or alias (`OrganizationAlias.normalize`: case, punctuation and Inc./LLC/Co. dropped); then the website domain, unless several companies share it. A same-brand match ("Duke Energy Carolinas, LLC" → Duke Energy) is used by matching only, to propose; it never merges on its own |
 | Link | Both ends and the type |
 | Deal term | The link (or, for a company's own round, the company), the term type and the external ID (award ID, or the original Form D's accession number) |
+| Licensing stage | The unit that holds the docket, the docket and the stage; for a design approval, the developer, the design and the stage |
 
 Coordinates are not an identity: two live sites within 50 m are flagged for a person (section 6), never matched automatically. Neighbouring plants within a kilometre (Salem and Hope Creek; Nine Mile Point and FitzPatrick) are different sites: never merge on distance alone. A duplicate is merged by a person, with `FactWriter.merge_organization` or `merge_facility`; the merged-away record keeps its history and its old address redirects.
 
@@ -190,6 +192,8 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 
 Not a source: anything behind a login or paywall, AI-written summaries, a page that only lists names together, and personal data of any kind.
 
+**Licensing stages are stricter (#379):** only NRC records count, any page on nrc.gov (a project page, ADAMS) or an NRC notice in the Federal Register. A press release or a news article is a lead: it can be attached, but it never makes a stage public, and FactWriter refuses to verify a stage without an NRC record behind it.
+
 ### Quotes
 
 - **The quote states the value.** "Oglethorpe Power (30%)" supports `owns 30%`; a page that only lists Oglethorpe as a partner doesn't.
@@ -209,6 +213,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 - **Publishing:** a fact is public only through its model's `.published` scope: a unit when verified under an open site; a pending site when it has such a unit; a link only when both ends are public; a deal term only with its link.
 - **Deal terms:** one term per link (or company), kind and award ID; an award needs an amount, a start date and an award ID; a term on a company itself is a funding round; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
 - **SEC CIK:** 10 digits, zero-padded, unique among companies.
+- **Licensing stages:** exactly one of a unit or a developer, and a developer only for a design approval, with its design named; one stage per unit, docket and stage; a stage is verified only from an NRC record; no automated stage under a rejected or unpublished plant or company.
 
 - **Read-only access:** Metabase's read-only role reads only the tables on `Metabase::ReadonlyRole::READABLE_TABLES`, never sign-in data, visitors' correction reports or the deploy's records. There are no default privileges. A migration that creates a public-data table adds it to the list and grants it (`Metabase::ReadonlyRole.grant!`); a test fails while any table is on neither list (PM and Data Quality, 18 Oct).
 
@@ -263,3 +268,4 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | Meta–TerraPower (Jan 2026) is Meta funding TerraPower (`funds`), not a power deal: Meta pays for early development of up to eight Natrium units, and its rights to their energy are in the description. A deal whose main term is money for development is `funds`; a signed purchase of power is `offtake_with` (17 Oct 2026) | Tosin | #393 |
 | "Utilities and operators" becomes "Power plant owners and operators" (17 Oct 2026): named for what puts a company there; same rule, slug `utilities` unchanged. The homepage's short label is "Plant operators" | Tosin | #367 |
 | Bernhard Capital Partners is an investor (`venture_capital`): it owns Allied Power, a nuclear services company. Reverses #63's "no Bernhard role" (16 Oct 2026) | Tosin | #63, #322 |
+| A licensing stage is sourced only from NRC records, never from a press release or news; a stage with no NRC record behind it is never public | Tosin | #379 |

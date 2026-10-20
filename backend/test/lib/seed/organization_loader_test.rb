@@ -424,4 +424,63 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_nil Organization.find_by(slug: "acme-fuel"), "nothing is written"
     assert_equal 0, Source.where(url: "https://example.com/news").count
   end
+
+  # A licensing stage (#379): the NRC stage a project has reached, with its
+  # docket and date, from an NRC record.
+  def licensing(**extra)
+    { stage: "construction_permit", nrc_docket: "50-7513", effective_on: Date.new(2023, 12, 14),
+      facility: "Hermes 1", source_url: "https://www.nrc.gov/reactors/operating/list-power-reactor-units.html",
+      quote: "NRC issued a construction permit to Hermes 1." }.merge(extra)
+  end
+
+  test "a licensing stage is written on the unit that holds the docket, with its evidence" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ licensing ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    stage = LicensingStage.sole
+    assert_equal [ "construction_permit", "05007513", Date.new(2023, 12, 14) ],
+      [ stage.stage, stage.nrc_docket, stage.effective_on ]
+    assert_equal "Hermes 1", stage.facility.name
+    assert_equal "human:tosin", stage.verified_by
+    assert_equal "NRC issued a construction permit to Hermes 1.", stage.evidence.sole.quote
+  end
+
+  test "a design approval is written on the developer, with its design" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      licensing: [ licensing(stage: "design_approval", design_name: "US460", facility: nil) ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    stage = LicensingStage.sole
+    assert_equal [ "design_approval", "US460" ], [ stage.stage, stage.design_name ]
+    assert_equal "Acme", stage.organization.name
+  end
+
+  test "a licensing stage for a plant the seed doesn't have fails the load and names it" do
+    write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing ]))
+
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match 'unknown facility "Hermes 1"', error.message
+  end
+
+  test "seed:check lists a licensing stage that isn't cited to an NRC record" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      facilities: [ item(name: "Hermes 1", type: "owns") ],
+      licensing: [ licensing(source_url: "https://world-nuclear-news.org/articles/permit", quote: "A permit.") ]))
+
+    problems = Seed::OrganizationLoader.new(@dir).licensing_source_problems
+
+    assert_equal 1, problems.size
+    assert_match "acme: licensing \"construction_permit\"", problems.first
+    assert_match "isn't cited to an NRC record", problems.first
+  end
+
+  test "seed:check is quiet when every licensing stage is cited to an NRC record" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ licensing ]))
+
+    assert_empty Seed::OrganizationLoader.new(@dir).licensing_source_problems
+  end
 end
