@@ -472,9 +472,17 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
 
     problems = Seed::OrganizationLoader.new(@dir).licensing_source_problems
 
-    assert_equal 1, problems.size
-    assert_match "acme: licensing \"construction_permit\"", problems.first
-    assert_match "isn't cited to an NRC record", problems.first
+    assert_equal [ 'acme.yml: licensing "construction_permit" for facility "Hermes 1", docket 50-7513, ' \
+      'isn\'t cited to an NRC record: "https://world-nuclear-news.org/articles/permit"' ], problems
+  end
+
+  test "seed:check names a design approval by its design" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      licensing: [ licensing(stage: "design_approval", design_name: "US460", facility: nil, nrc_docket: "52-048",
+        source_url: "https://example.com/news") ]))
+
+    assert_match 'acme.yml: licensing "design_approval" for design "US460", docket 52-048',
+      Seed::OrganizationLoader.new(@dir).licensing_source_problems.sole
   end
 
   test "seed:check is quiet when every licensing stage is cited to an NRC record" do

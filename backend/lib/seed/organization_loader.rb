@@ -80,7 +80,9 @@ module Seed
         Array(doc["licensing"]).filter_map do |item|
           next if nrc_record?(item["source_url"], item["quote"])
 
-          "#{slug}: licensing #{item["stage"].inspect} (#{item["nrc_docket"]}) isn't cited to an NRC record: #{item["source_url"].inspect}"
+          on = item["design_name"].present? ? "design #{item["design_name"].inspect}" : "facility #{item["facility"].inspect}"
+          "#{slug}.yml: licensing #{item["stage"].inspect} for #{on}, docket #{item["nrc_docket"]}, " \
+            "isn't cited to an NRC record: #{item["source_url"].inspect}"
         end
       end
     end
