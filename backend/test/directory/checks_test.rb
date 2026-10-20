@@ -11,8 +11,25 @@ class Directory::ChecksTest < ActiveSupport::TestCase
 
   test "every tag has a key, a label and a group; flags are ordered by severity" do
     assert Directory::Checks.all.all? { |tag| tag.key.present? && tag.label.present? && Directory::Checks::GROUPS.key?(tag.group) }
-    assert_equal %w[no-quote source-disagrees dropped-by-source stale single-source in-review low-confidence],
-      Directory::Checks.in_group("flags").map(&:key)
+    assert_equal %w[no-quote source-disagrees dropped-by-source stale single-source in-review low-confidence
+      unquoted-docket-place unquoted-hq unquoted-legal-name], Directory::Checks.in_group("flags").map(&:key)
+  end
+
+  test "flags: a docket, place, headquarters or legal name no own quote states" do
+    nrc = source("https://www.nrc.gov/q", kind: "nrc_reactor_list")
+    stated = Facility.create!(name: "Stated Site", nrc_docket: "05000111", city: "Cordova", state: "IL", **VERIFIED)
+    Evidence.create!(subject: stated, source: nrc, quote: "docket 05000111, Cordova, Illinois", found_by: "crawler")
+    drifted = Facility.create!(name: "Drifted Site", nrc_docket: "05000222", city: "Byron", state: "IL", **VERIFIED)
+    Evidence.create!(subject: drifted, source: nrc, quote: "docket 05000222", found_by: "crawler")
+    bwxt = Organization.create!(name: "BWXT", legal_name: "BWX Technologies, Inc.", hq_city: "Lynchburg", hq_state: "VA", **VERIFIED)
+    Evidence.create!(subject: bwxt, source: nrc, quote: "BWX Technologies, Inc., of Lynchburg, VA", found_by: "crawler")
+    edited = Organization.create!(name: "Edited Co", legal_name: "Edited Holdings LLC", hq_city: "Austin", hq_state: "TX", **VERIFIED)
+    Evidence.create!(subject: edited, source: nrc, quote: "Edited Co, Dallas, TX", found_by: "crawler")
+
+    assert_equal [ drifted.id ], ids("unquoted-docket-place", Facility) & [ stated.id, drifted.id ]
+    assert_equal [ edited.id ], ids("unquoted-hq", Organization) & [ bwxt.id, edited.id ]
+    assert_equal [ edited.id ], ids("unquoted-legal-name", Organization) & [ bwxt.id, edited.id ]
+    assert_empty ids("unquoted-hq", Facility), "each applies to its own kind of record"
   end
 
   test "status: live, hidden, merged" do

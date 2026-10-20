@@ -103,6 +103,18 @@ class PlantProfile
   # The site's own evidence backs its type, status and place.
   def site_citations = site_facts? ? citations_for(site) : []
 
+  # The facts the line under the key facts may name (#407): of :docket and
+  # :location, those shown that one of the site's own quotes states. Checked
+  # as the page is drawn, so a value edited since stops being named. Type and
+  # status wait for #398.
+  def quoted_facts
+    @quoted_facts ||= begin
+      quotes = site_facts? ? site.evidence.map(&:quote).compact : []
+      [ (:docket if Directory::QuoteBacking.contains?(quotes, nrc_docket)),
+        (:location if Directory::QuoteBacking.place?(quotes, city:, state:)) ].compact
+    end
+  end
+
   private
     def number_sources
       cite(site) if site_fields_shown?

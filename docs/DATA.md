@@ -224,6 +224,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | duplicate site | High | Two live sites share an EIA plant ID or coordinates within 50 m |
 | duplicate company | High | Two live companies share a normalized name, alias or domain |
 | `single-source` | Low | Rests on one source |
+| `unquoted-docket-place`, `unquoted-hq`, `unquoted-legal-name` | Low | A plant's docket or place, or a company's headquarters or legal name, that none of the record's own quotes states (#407). A docket or legal name must appear as written, case and spacing aside. A place needs the city as written and the state as its code or full name, in one quote. The page leaves such a fact out of the line under its key facts. Also counted by `seed:check`, which doesn't fail on them |
 | `idle-all-year` | High | A reactor marked `operating` that NRC's daily status report shows at 0% on all of the last 365 days (#296) |
 | `no-operator` | Medium | An operating reactor or plant with no published operator, on it or its site |
 | `no-capacity` | Medium | An operating reactor with no capacity |

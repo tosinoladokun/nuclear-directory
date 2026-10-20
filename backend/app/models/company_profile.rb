@@ -119,6 +119,17 @@ class CompanyProfile
   # The record's own evidence backs its description and headquarters.
   def description_citations = description.present? ? citations_for(organization) : []
 
+  # The facts the line under the key facts may name (#407): of :headquarters
+  # and :legal_name, those shown that one of the record's own quotes states.
+  # Checked as the page is drawn, so a value edited since stops being named.
+  def quoted_facts
+    @quoted_facts ||= begin
+      quotes = sourced? ? organization.evidence.map(&:quote).compact : []
+      [ (:headquarters if Directory::QuoteBacking.place?(quotes, city: hq_city, state: hq_state)),
+        (:legal_name if Directory::QuoteBacking.contains?(quotes, legal_name)) ].compact
+    end
+  end
+
   private
     # The company record's own evidence backs its description and the key
     # facts stored on it (website, aliases, legal name, headquarters, founded).

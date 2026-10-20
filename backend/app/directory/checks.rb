@@ -98,7 +98,42 @@ module Directory::Checks
             each_model do |model|
               model.where("#{model.table_name}.verified_by IS NULL OR #{model.table_name}.verified_by NOT LIKE 'human:%'")
                 .where("#{model.table_name}.confidence < 0.7")
-            end)
+            end),
+          *unquoted_tags
+        ]
+      end
+
+      # A value the page shows under the key facts that none of the record's
+      # own quotes states, by the rule the pages use (Directory::QuoteBacking,
+      # #407): the page then leaves it out of its source line.
+      def unquoted_tags
+        backing = Directory::QuoteBacking
+        unquoted = lambda do |scope, &stated|
+          ids = scope.where(id: evidence(scope.model).select(:subject_id)).includes(:evidence)
+            .reject { |record| stated.call(record, record.evidence.map(&:quote).compact) }.map(&:id)
+          scope.model.where(id: ids)
+        end
+        sites = -> { Facility.published.where(verification_status: "verified", parent_id: nil).where("facilities.nrc_docket IS NOT NULL OR facilities.city IS NOT NULL OR facilities.state IS NOT NULL") }
+        [
+          Tag.new("unquoted-docket-place", "Docket or place unquoted", "flags", 8, "A plant's docket or place isn't in any of its own quotes",
+            { "Facility" => lambda {
+              unquoted.call(sites.call) do |site, quotes|
+                (site.nrc_docket.blank? || backing.contains?(quotes, site.nrc_docket)) &&
+                  ((site.city.blank? && site.state.blank?) || backing.place?(quotes, city: site.city, state: site.state))
+              end
+            } }),
+          Tag.new("unquoted-hq", "HQ unquoted", "flags", 9, "A company's headquarters isn't in any of its own quotes",
+            { "Organization" => lambda {
+              unquoted.call(Organization.published.where("organizations.hq_city IS NOT NULL OR organizations.hq_state IS NOT NULL")) do |company, quotes|
+                (company.hq_city.blank? && company.hq_state.blank?) || backing.place?(quotes, city: company.hq_city, state: company.hq_state)
+              end
+            } }),
+          Tag.new("unquoted-legal-name", "Legal name unquoted", "flags", 10, "A company's legal name isn't in any of its own quotes",
+            { "Organization" => lambda {
+              unquoted.call(Organization.published.where.not(legal_name: nil)) do |company, quotes|
+                company.legal_name.blank? || backing.contains?(quotes, company.legal_name)
+              end
+            } })
         ]
       end
 
