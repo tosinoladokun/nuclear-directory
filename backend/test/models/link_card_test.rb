@@ -109,10 +109,10 @@ class LinkCardTest < ActiveSupport::TestCase
     profile.category = nil
     assert_equal "Molten salt coolant · Alameda, CA", LinkCard.for_company(profile).label, "no category: its first role"
 
-    # In Utilities and operators through an operating plant it owns, not a role:
+    # In Power plant owners and operators through an operating plant it owns, not a role:
     # the bucket names it, never a role from a bucket it's excluded from.
     profile.category = Category.find("utilities")
-    assert_equal "Utilities and operators · Alameda, CA", LinkCard.for_company(profile).label
+    assert_equal "Power plant owners and operators · Alameda, CA", LinkCard.for_company(profile).label
   end
 
   test "the footer drops a whole fact rather than cut one, as drawn" do

@@ -10,8 +10,8 @@ module FakeDirectory
       @facilities = facilities
     end
 
-    def organization(id: nil, slug: nil, name: nil, domain: nil)
-      one_of!(id:, slug:, name:, domain:)
+    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
+      one_of!(id:, slug:, name:, domain:, sec_cik:)
       Directory::OrganizationRef.new(id: @organizations[name], slug: nil, name: name, domain: nil,
         verification_status: "verified", verified_by: nil, verified_at: nil) if @organizations.key?(name)
     end
@@ -34,6 +34,7 @@ module FakeDirectory
     def fact_attributes(type:, id:) = nil
     def published?(type:, id:) = false
     def sourced?(type:, id:) = true
+    def evidence(type:, id:) = []
     def similar_facilities(name) = []
     def facility_units(name:, state: nil) = []
 

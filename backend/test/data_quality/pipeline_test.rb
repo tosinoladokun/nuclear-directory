@@ -54,7 +54,7 @@ class DataQuality::PipelineTest < ActiveSupport::TestCase
     assert_equal [ "crawler", existing.source_id, "Acme Nuclear", 0.9 ],
       [ evidence[:found_by], evidence[:source_id], evidence[:quote], evidence[:confidence].to_f ]
     assert_equal runs.last.id, evidence[:crawl_run_id], "the run that judged it"
-    assert_equal({ status: "verified", by: "human:tosin", context: { "candidate_id" => existing.id, "crawl_run_id" => runs.last.id } },
+    assert_equal({ status: "verified", by: "human:tosin", context: { "candidate_id" => existing.id, "crawl_run_id" => runs.last.id, "edited" => false } },
       write[:verification])
     assert_equal 1001, approve_writes.second[:attributes][:id]
   end

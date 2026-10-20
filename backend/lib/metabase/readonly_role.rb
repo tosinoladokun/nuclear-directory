@@ -5,20 +5,31 @@
 #
 # Writes fail twice over: its transactions are read-only by default, and the
 # role has no INSERT, UPDATE, DELETE or DDL grants anyway (so turning
-# read-only off doesn't help). It can't read private tables (PRIVATE_TABLES:
-# sign-in data, visitors' correction messages and contacts, and the job,
-# cache and cable tables, whose rows can carry those), and it's granted
-# nothing on any other database (e.g. the preview's). Safe to rerun: it updates the password
-# and reapplies the grants. A restore from backup (pg_dump --no-owner
+# read-only off doesn't help). It reads only the tables on READABLE_TABLES,
+# never PRIVATE_TABLES (sign-in data, visitors' correction messages and
+# contacts, the deploy's records, and the job, cache and cable tables, whose
+# rows can carry those), and it's granted nothing on any other database (e.g.
+# the preview's). Safe to rerun: it updates the password and reapplies the
+# grants. A migration that creates a public-data table adds it to
+# READABLE_TABLES and calls `grant!`, so no console step is needed. A restore from backup (pg_dump --no-owner
 # --no-acl) doesn't carry roles or grants, so rerun it after one.
 module Metabase
   module ReadonlyRole
     NAME = "metabase_ro"
-    # Never readable through Metabase. Tables are granted when this runs, not
-    # by default privileges, so a table added later stays unreadable until
-    # it's rerun; a new table with sign-in or personal data goes here before
-    # that.
-    PRIVATE_TABLES = %w[users sessions correction_reports].freeze
+    # The tables it may read: an allow-list (Data Quality and PM, 18 Oct
+    # 2026). No default privileges, so a table added later stays unreadable
+    # until it's added here on purpose and granted by its own migration
+    # (`grant!`). A test fails while any table is in neither list, so each
+    # new table is a decision.
+    READABLE_TABLES = %w[
+      organizations organization_aliases organization_roles organization_technologies
+      facilities facility_aliases facility_relationships relationships deal_terms
+      roles technologies sources evidence former_slugs verification_events candidates crawl_runs
+    ].freeze
+    # Never readable through Metabase: sign-in data, visitors' correction
+    # messages and contacts, and the deploy's own records (their reports and
+    # errors). Rails' Solid tables too (PRIVATE_PREFIXES).
+    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations].freeze
     # Rails' own Solid Queue, Cache and Cable tables (job arguments can hold
     # an email address).
     PRIVATE_PREFIXES = %w[solid_].freeze
@@ -52,7 +63,7 @@ module Metabase
 
         connection.execute("GRANT CONNECT ON DATABASE #{database} TO #{role}")
         connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
-        readable = connection.tables - private_tables(connection)
+        readable = connection.tables & READABLE_TABLES
         connection.execute("GRANT SELECT ON #{readable.map { |t| connection.quote_table_name(t) }.join(', ')} TO #{role}") if readable.any?
       end
     end
@@ -80,6 +91,20 @@ module Metabase
         "ALTER ROLE #{role} SET default_transaction_read_only = on",
         "ALTER ROLE #{role} SET statement_timeout = '60s'"
       ].compact
+    end
+
+    # Grants SELECT on these tables to the role, if it exists. A migration
+    # that creates a public-data table calls this; in tests and CI there's no
+    # role, so it does nothing. Only tables on the allow-list. Returns what
+    # it granted.
+    def grant!(tables, name: NAME, connection: ActiveRecord::Base.connection)
+      unknown = tables - READABLE_TABLES
+      raise ArgumentError, "not on the read-only allow-list: #{unknown.join(', ')}" if unknown.any?
+      return [] unless connection.select_value("SELECT 1 FROM pg_roles WHERE rolname = #{connection.quote(name)}")
+
+      role = connection.quote_column_name(name)
+      tables.each { |table| connection.execute("GRANT SELECT ON #{connection.quote_table_name(table)} TO #{role}") }
+      tables
     end
 
     def private_tables(connection)

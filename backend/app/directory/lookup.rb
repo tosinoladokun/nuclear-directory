@@ -13,10 +13,13 @@ module Directory
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
     # domain accepts a bare domain or a URL.
-    def organization(id: nil, slug: nil, name: nil, domain: nil)
+    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
       scope =
-        case one_of!(id:, slug:, name:, domain:)
+        case one_of!(id:, slug:, name:, domain:, sec_cik:)
         in [ :id, value ] then Organization.where(id: value)
+        in [ :sec_cik, value ]
+          cik = Organization.cik_from(value) or return
+          Organization.where(sec_cik: cik)
         in [ :slug, value ] then Organization.where(slug: value)
         in [ :name, value ]
           normalized = OrganizationAlias.normalize(value).presence or return
@@ -35,7 +38,9 @@ module Directory
     # unpublished one, newest first, since a time. A merge says what the
     # record went into. Reads only.
     def exits(since:, limit: 50)
-      events = VerificationEvent.where(to_status: %w[rejected unpublished], created_at: since..).order(created_at: :desc, id: :desc).limit(limit).to_a
+      # The fact types the admin lists (a deal term's decisions show with its link, #256).
+      events = VerificationEvent.where(subject_type: FACT_TYPES, to_status: %w[rejected unpublished], created_at: since..)
+        .order(created_at: :desc, id: :desc).limit(limit).to_a
       records = events.group_by(&:subject_type).to_h do |type, group|
         # With what each label names (a role's company, a link's ends), loaded in one go.
         [ type, type.constantize.where(id: group.map(&:subject_id)).includes(*PENDING_INCLUDES.fetch(type.underscore)).index_by(&:id) ]
@@ -49,6 +54,16 @@ module Directory
 
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
+
+    # The awards, offtakes or rounds under one link (#256), oldest first.
+    # published: true (the default) gives only what public pages may show.
+    def deal_terms(link_type:, link_id:, published: true)
+      raise ArgumentError, "not a link type: #{link_type.inspect}" unless DealTerm::LINK_TYPES.include?(link_type.to_s)
+
+      scope = published ? DealTerm.published : DealTerm.where.not(verification_status: Verifiable::CLOSED_STATUSES)
+      scope.where(link_type: link_type.to_s, link_id:).includes(evidence: :source)
+        .order(Arel.sql("COALESCE(starts_on, signed_on) ASC NULLS LAST"), :id).map { |term| DealTermRef.from(term) }
+    end
 
     # Every change of a fact's verification, newest first, as plain values:
     # who, when, from -> to, why. type is the fact's class name ("Organization").
@@ -77,6 +92,13 @@ module Directory
         { title: source.title, url: source.url, source_kind: source.source_kind,
           checked_at: rows.map { |row| row.last_confirmed_at || row.created_at }.max }
       end.sort_by { |row| -row[:checked_at].to_f }
+    end
+
+    # A fact's evidence, as Directory::EvidenceRef values.
+    def evidence(type:, id:)
+      raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
+
+      Evidence.where(subject_type: type.to_s, subject_id: id).order(:id).map { |row| EvidenceRef.from(row) }
     end
 
     # How many public facts (any type) have evidence from these sources.

@@ -16,7 +16,8 @@
     <tbody>
       <% units.each do |unit| %>
         <tr id="unit-<%= unit.slug %>">
-          <th scope="row"><%= unit.name %></th>
+          <%# An older anchor for this row (#333), so links made before the unit moved still land here. %>
+          <th scope="row"><% unit.unit_anchors(units.map(&:slug) - [ unit.slug ]).drop(1).each do |anchor| %><span id="<%= anchor %>"></span><% end %><%= unit.name %></th>
           <% columns.each do |heading, value| %>
             <td data-label="<%= heading %>"<% if heading.in?([ "Capacity", "NRC docket" ]) %> class="type-data"<% end %>><%= value.(unit) %></td>
           <% end %>

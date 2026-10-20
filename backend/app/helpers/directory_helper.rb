@@ -109,8 +109,10 @@ module DirectoryHelper
     case facility_type.to_s
     when "power_reactor"
       types = reactor_types.compact_blank.map(&:upcase)
-      if types.any? { |type| type.include?("BWR") } then "site-bwr"
-      elsif types.any? { |type| type.match?(/PWR|AP1000/) } then "site-pwr"
+      bwr, pwr = types.any? { |type| type.include?("BWR") }, types.any? { |type| type.match?(/PWR|AP1000/) }
+      if bwr && pwr then "site-plant" # mixed: the generic power plant
+      elsif bwr then "site-bwr"
+      elsif pwr then "site-pwr"
       elsif types.any? || status.to_s.in?(%w[planned under_construction]) then "site-advanced"
       else "site-plant"
       end
@@ -169,6 +171,36 @@ module DirectoryHelper
     operators = profile.current_companies_for("operates").any?
     who = [ ("owners" if owners), ("operator" if operators) ].compact.join(" and ").presence
     [ [ profile.name, place(profile.city, profile.state) ].compact.join(", "), who ].compact.join(": ")
+  end
+
+  # A list value ("A, B, C", names possibly links) split before its last
+  # item, so that item can stay on a line with its source numbers. Only a
+  # ", " between items counts, never one inside a name or a link ("Southern
+  # Nuclear Operating Co., Inc."). Only a list of two or more linked names
+  # counts: a single value with a comma ("Baton Rouge Metropolitan Area, LA")
+  # isn't one. Returns [head, last] as HTML, or nil when it isn't a list.
+  def split_last_item(value)
+    return unless value.html_safe?
+
+    nodes = Nokogiri::HTML::DocumentFragment.parse(value.to_s).children.to_a
+    return if nodes.count(&:element?) < 2
+    index = nodes.rindex { |node| node.text? && node.text.include?(", ") }
+    return unless index
+
+    # A name before the last can still be longer than the column: it may end
+    # in "…", so it carries its full name (Tosin's no-wrap rule).
+    nodes[0...index].each do |node|
+      next unless node.element?
+
+      node["title"] ||= node.text.squish
+      node["data-truncate"] = ""
+    end
+    before, _, after = nodes[index].text.rpartition(", ")
+    escape = ->(text) { ERB::Util.html_escape(text).to_str }
+    render = ->(list) { list.map { |node| node.text? ? escape.(node.text) : node.to_html }.join }
+    head = render.(nodes[0...index]) + escape.(before) + ", "
+    last = escape.(after) + render.(nodes[(index + 1)..])
+    [ head.html_safe, last.html_safe ] # rubocop:disable Rails/OutputSafety
   end
 
   UNIT_STATUS_ORDER = %w[operating not_operating under_construction planned shut_down decommissioning].freeze

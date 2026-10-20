@@ -35,7 +35,12 @@ class SourceCatalog
     "nrc_power_status" => { name: "NRC power status", note: "cross-check only", daily: true },
     "eia_860m_index" => { name: "EIA-860M index", note: "finds the monthly file", daily: true },
     "usaspending_doe_awards" => { name: "USAspending", daily: true },
-    "usaspending_api" => { name: "USAspending API", note: "the award search", daily: true }
+    "usaspending_api" => { name: "USAspending API", note: "the award search", daily: true },
+    "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
+    "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
+    # The annual plant file (#319): read once a year, not by the daily crawl.
+    "eia_plants" => { name: "EIA-860 plants" },
+    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze

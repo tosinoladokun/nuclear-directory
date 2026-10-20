@@ -98,6 +98,23 @@ namespace :directory do
     puts found.any? ? found : "No published operates links rest on EIA alone."
   end
 
+  # Awards #260 stored before deal terms existed (#256): each DOE "funds"
+  # link sums its awards in its description; this writes one award term per
+  # award, from the rows on that link's own sources (the recipient pages), never
+  # by name. A term is verified only if a human verified its link; otherwise it
+  # waits with the link. Re-running finds each term by its award ID.
+  desc "Write award deal terms from stored USAspending rows, audited: BY=human:<name> [APPLY=1] (#256)"
+  task backfill_award_terms: :environment do
+    by = ENV["BY"].to_s
+    abort "Usage: BY=human:<handle> [APPLY=1] bin/rails directory:backfill_award_terms" unless by.match?(/\Ahuman:\S+\z/)
+
+    apply = ENV["APPLY"] == "1"
+    result = Directory::AwardBackfill.new(by:).run(apply:)
+    result.lines.each { |line| puts line }
+    result.summary(apply:).each { |line| puts line }
+    puts "Dry run: nothing changed. Run again with APPLY=1 to apply." unless apply
+  end
+
   # Merges before #166 recorded where a record went only in their reason
   # ("… Merged into Urenco (#41). Moved: …"). This adds the same, structured,
   # to those events' context ({ "merged_into" => { "type", "id" } }), as

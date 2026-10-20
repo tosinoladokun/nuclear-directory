@@ -27,9 +27,9 @@ relationships:
   quote: 'Constellation (Nasdaq: CEG) and Meta have signed a 20-year power purchase agreement (PPA) for the output of the Clinton Clean Energy Center to support Meta’s clean energy goals and operations in the region with 1,121 megawatts of emissions-free nuclear energy.'
   published: '2025-06-03'
   confidence: 1.0
-- type: offtake_with
+- type: funds
   to: TerraPower, LLC
-  description: "Agreement (Jan 2026): Meta funds early development of two Natrium units (up to 690 MW, as early as 2032) and has rights to energy from up to six more units (2.1 GW by 2035)."
+  description: 'Funding agreement (Jan 2026): Meta funds early development of two Natrium units (up to 690 MW, as early as 2032) and has rights to energy from up to six more units (2.1 GW by 2035).'
   source_url: https://world-nuclear-news.org/articles/meta-announces-landmark-agreements-for-new-nuclear
   quote: 'TerraPower: funding to support the development of up to eight Natrium sodium fast reactors - two new units capable of generating up to 690 MW of firm power with delivery as early as 2032, plus the rights for energy from up to six other Natrium units capable of producing 2.1 GW and targeted for delivery by 2035.'
   published: '2026-01-09'
@@ -41,11 +41,18 @@ relationships:
   quote: 'Through additional 20-year nuclear energy agreements, we will purchase more than 2.1 GW of energy from two operating Vistra nuclear power plants in Ohio (Perry and Davis-Besse)'
   published: '2026-01-09'
   confidence: 1.0
-- type: offtake_with
+- type: funds
   to: TerraPower, LLC
-  description: 'Agreement (Jan 2026): Meta funds early development of two Natrium units (up to 690 MW, as early as 2032) and has rights to energy from up to six more units (2.1 GW by 2035).'
+  description: 'Funding agreement (Jan 2026): Meta funds early development of two Natrium units (up to 690 MW, as early as 2032) and has rights to energy from up to six more units (2.1 GW by 2035).'
   source_url: https://www.terrapower.com/terrapower-announces-deal-with-meta
-  quote: 'TerraPower, a nuclear innovation company, and Meta announced today an agreement to develop up to 8 Natrium reactor'
+  quote: 'Under this commercial agreement, Meta will provide funding to support the deployment of the Natrium plants, with delivery of initial units as early as 2032.'
+  published: '2026-01-09'
+  confidence: 1.0
+- type: funds
+  to: TerraPower, LLC
+  description: 'Funding agreement (Jan 2026): Meta funds early development of two Natrium units (up to 690 MW, as early as 2032) and has rights to energy from up to six more units (2.1 GW by 2035).'
+  source_url: https://www.terrapower.com/terrapower-announces-deal-with-meta
+  quote: 'This agreement supports the early development activities for two new Natrium units with rights for energy provided to Meta for up to six additional Natrium units.'
   published: '2026-01-09'
   confidence: 1.0
 - type: offtake_with

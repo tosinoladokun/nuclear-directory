@@ -65,6 +65,15 @@ class Directory::ChecksTest < ActiveSupport::TestCase
     assert_not_includes ids("stale", Organization), old_web.id
   end
 
+  test "flags: NRC's decommissioning list is NRC too, stale after 14 days" do
+    list = source("https://www.nrc.gov/decommissioning", kind: "nrc_decommissioning")
+    old_unit = Facility.create!(name: "Old Decommissioning 1", **VERIFIED)
+    travel_to(20.days.ago) { Evidence.create!(subject: old_unit, source: list, quote: "x", found_by: "crawler") }
+
+    assert_includes ids("stale", Facility), old_unit.id
+    assert_includes ids("nrc", Facility), old_unit.id
+  end
+
   test "gaps: no operator, no category, no links, no share" do
     plant = Facility.create!(name: "Lonely Plant", status: "operating", **VERIFIED)
     operated = Facility.create!(name: "Run Plant", status: "operating", **VERIFIED)
