@@ -375,14 +375,23 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     # A plant-level enrichment (EIA-860's Plant file, #319) adds values to a
-    # site and never creates one. identify: { "eia_plant_id", "name", and
-    # "site_id" when the plug-in found a site with no EIA plant ID by name }.
-    # The site with that EIA plant ID wins; site_id counts only while that
-    # site still has no EIA plant ID. No site yet: retried on the next run.
+    # site and never creates one. identify: { "eia_plant_id", "name",
+    # "state", and "site_id" once a site with no EIA plant ID was found by
+    # name }. The site with that EIA plant ID wins; else a power plant with
+    # no EIA plant ID by name and state, looked up again on every run, so a
+    # plant added after the file was read is still found (the claim then
+    # records site_id, and for a site the plant ID to set, for verify's hold).
+    # site_id counts only while that site still has no EIA plant ID. No site
+    # yet: retried on the next run.
     def match_site_enrichment(candidate, identify)
-      plant, name, site_id = identify.values_at("eia_plant_id", "name", "site_id")
+      plant, name, state, site_id = identify.values_at("eia_plant_id", "name", "state", "site_id")
       label = "EIA plant #{plant} (#{name})"
       site = directory.facility(eia_plant_id: plant) if plant.present?
+      if site.nil? && site_id.blank? && (found = plant_by_name(name, state))
+        candidate.update!(payload: candidate.payload.merge("identify" => identify.merge("site_id" => found[:id]),
+          "eia_plant_id" => (plant if found[:site])).compact)
+        site_id = found[:id]
+      end
       if site.nil? && site_id.present?
         by_name = directory.facility(id: site_id)
         site = by_name if by_name && by_name.eia_plant_id.blank?
@@ -397,6 +406,21 @@ class DataQuality::Stages::Match < DataQuality::Stage
         attach(candidate, site, "#{label} is #{site.name}#{' (by name)' if site.eia_plant_id.blank?}")
         settle(candidate, site)
       end
+    end
+
+    # The power plant with no EIA plant ID that has this name (or an alias)
+    # in this state, as { id:, site: }, when exactly one does. Read once per
+    # run.
+    def plant_by_name(name, state)
+      key = plant_name_key(name, state) or return
+      @plants_by_name ||= directory.plants_without_eia_plant_id
+        .flat_map { |plant| plant[:names].map { |each| [ plant_name_key(each, plant[:state]), plant.slice(:id, :site) ] } }
+        .group_by(&:first).filter_map { |each_key, found| [ each_key, found.first.last ] if each_key && found.map(&:last).uniq.one? }.to_h
+      @plants_by_name[key]
+    end
+
+    def plant_name_key(name, state)
+      [ directory.normalize_facility_name(name), state.to_s.strip.upcase ] if name.present? && state.present?
     end
 
     # [units that fit the name, those of them with this unit number]

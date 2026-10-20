@@ -64,16 +64,14 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
       "plant's address."
   end
 
+  # Match finds the site: by EIA plant ID, or a power plant with none by
+  # name and state, looked up on every run (Match#match_site_enrichment).
   def extract(source, _run)
-    by_name = plants_by_name
     CSV.parse(source.content_text.to_s, headers: true).filter_map do |row|
       next if row["city"].blank?
 
-      plant = row["eia_plant_id"]
-      found = by_name[name_key(row["plant_name"], row["state"])] unless @directory.facility(eia_plant_id: plant)
-      identify = { "eia_plant_id" => plant, "name" => row["plant_name"], "site_id" => found&.dig(:id) }.compact
-      { kind: "facility", quote: row.to_csv.chomp,
-        payload: { "identify" => identify, "city" => row["city"], "eia_plant_id" => (plant if found&.dig(:site)) }.compact }
+      identify = { "eia_plant_id" => row["eia_plant_id"], "name" => row["plant_name"], "state" => row["state"] }.compact
+      { kind: "facility", quote: row.to_csv.chomp, payload: { "identify" => identify, "city" => row["city"] } }
     end
   end
 
@@ -94,19 +92,6 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
   end
 
   private
-    # { [name, state] => { id:, site: } } for power plants with no EIA plant
-    # ID. A name two plants share in one state finds neither.
-    def plants_by_name
-      keys = @directory.plants_without_eia_plant_id.flat_map do |plant|
-        plant[:names].map { |name| [ name_key(name, plant[:state]), plant.slice(:id, :site) ] }
-      end
-      keys.group_by(&:first).filter_map { |key, found| [ key, found.first.last ] if key && found.map(&:last).uniq.one? }.to_h
-    end
-
-    def name_key(name, state)
-      [ @directory.normalize_facility_name(name), state.to_s.strip.upcase ] if name.present? && state.present?
-    end
-
     # Once a newer yearly file is read, candidates from older ones that
     # nobody has decided yet are withdrawn: an older year's address mustn't
     # be approved over the newer one. A claim already waiting for a person

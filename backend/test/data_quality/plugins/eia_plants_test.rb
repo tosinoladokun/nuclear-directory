@@ -124,7 +124,7 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
 
     assert_equal "ok", source.reload.crawl_status
     payload = plugin.extract(source, nil).find { |candidate| candidate[:payload].dig("identify", "eia_plant_id") == "3251" }&.dig(:payload)
-    assert_equal({ "identify" => { "eia_plant_id" => "3251", "name" => "H B Robinson" }, "city" => "Hartsville" }, payload)
+    assert_equal({ "identify" => { "eia_plant_id" => "3251", "name" => "H B Robinson", "state" => "SC" }, "city" => "Hartsville" }, payload)
     assert robinson.persisted?
   end
 
@@ -170,11 +170,8 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     candidates = plugin.extract(source, nil).index_by { |candidate| candidate[:payload].dig("identify", "eia_plant_id") }
 
     assert_equal %w[1060 3251 371 649 68635], candidates.keys.sort, "Hatch's row has no city"
-    assert_equal({ "identify" => { "eia_plant_id" => "649", "name" => "Vogtle" }, "city" => "Waynesboro" }, candidates["649"][:payload])
-    assert_equal({ "identify" => { "eia_plant_id" => "371", "name" => "Columbia Generating Station", "site_id" => @columbia.id },
-      "city" => "Richland" }, candidates["371"][:payload], "one record with its docket: it can't take a plant ID")
-    assert_equal({ "identify" => { "eia_plant_id" => "1060", "name" => "Duane Arnold Energy Center", "site_id" => @duane.id },
-      "city" => "Palo", "eia_plant_id" => "1060" }, candidates["1060"][:payload], "a site: its plant ID comes with the city")
+    assert_equal({ "identify" => { "eia_plant_id" => "649", "name" => "Vogtle", "state" => "GA" }, "city" => "Waynesboro" },
+      candidates["649"][:payload], "match finds the site, by EIA plant ID or by name and state")
     assert candidates.values.all? { |candidate| plugin.quote_in_source?(source, candidate[:quote]) }
     assert_equal stored.first.values.to_csv.chomp, candidates["649"][:quote]
   end
@@ -198,6 +195,34 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     assert approved.all? { |result| result.errors.empty? }, approved.flat_map(&:errors).to_sentence
     assert_equal [ "Richland", nil ], @columbia.reload.values_at(:city, :eia_plant_id)
     assert_equal [ "Palo", "1060" ], @duane.reload.values_at(:city, :eia_plant_id)
+  end
+
+  test "match records what it found by name: the site and its plant ID, or only the site for a one-record plant" do
+    run!
+
+    columbia = Candidate.find_by!(subject_type: "Facility", subject_id: @columbia.id)
+    duane = Candidate.find_by!(subject_type: "Facility", subject_id: @duane.id)
+    assert_equal({ "eia_plant_id" => "371", "name" => "Columbia Generating Station", "state" => "WA", "site_id" => @columbia.id },
+      columbia.payload["identify"])
+    assert_nil columbia.payload["eia_plant_id"], "one record with its docket: it can't take a plant ID"
+    assert_equal "1060", duane.payload["eia_plant_id"], "a site: its plant ID comes with the city"
+  end
+
+  test "a plant added after the file was read is still found by name, though the file isn't read again" do
+    @duane.destroy!
+    run!
+    waiting = Candidate.find { |c| c.payload.dig("identify", "eia_plant_id") == "1060" }
+    assert_match "No site for EIA plant 1060", waiting.notes
+
+    duane = Facility.create!(name: "Duane Arnold Energy Center", state: "IA", facility_type: "power_reactor",
+      verification_status: "verified", verified_by: "human:tosin")
+    run! # the same file: not fetched or extracted again, only matched
+
+    assert_requested @file, times: 1
+    waiting.reload
+    assert_equal [ "Facility", duane.id ], [ waiting.subject_type, waiting.subject_id ]
+    assert waiting.status_needs_review?, "found by name: held for a person"
+    assert_match "Approving sets that EIA plant ID and the city", waiting.notes
   end
 
   test "a city a person set is never overwritten: a different one goes to review with both cities, before any approval" do
