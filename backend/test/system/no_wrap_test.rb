@@ -125,6 +125,22 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "a company with many roles lists them under the label, none overflowing, at 360 and 390" do
+    ge = cite!(company("GE Vernova Hitachi Nuclear Energy", roles: %w[reactor_vendor fuel components reactor_services waste_decommissioning].map { |key| Role.find_by(key:) || role(key) }))
+    [ [ 360, 800 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{ge.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => /^Roles?$/.test(el.textContent.trim())), dd = dt.nextElementSibling
+          return [dt.textContent.trim(), dt.classList.contains("nd-overview__stack"), dd.querySelectorAll(".nd-overview__name").length > 1, dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ "Roles", true, true, true ], row, "at #{width}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"
