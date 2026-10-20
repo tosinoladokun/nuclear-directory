@@ -42,9 +42,20 @@
   document.querySelectorAll(".nd-overview dl").forEach((dl) => {
     if (!visible(dl)) return
     const pairs = [...dl.querySelectorAll(":scope > dt")].map((dt) => ({ dt, dd: dt.nextElementSibling })).filter(({ dd }) => dd && dd.matches("dd"))
-    const start = (dd) => {
-      const chip = dd.querySelector(".nd-bucketchip")
-      return chip ? chip.getBoundingClientRect().left + parseFloat(getComputedStyle(chip).paddingLeft) : dd.getBoundingClientRect().left
+    // Where a value's first glyph is drawn (its icon, for a chip): padding, margin
+    // or an indent on the value moves this, not the box around it.
+    const start = (el) => {
+      const chip = el.querySelector(".nd-bucketchip")
+      if (chip) return chip.getBoundingClientRect().left + parseFloat(getComputedStyle(chip).paddingLeft)
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const rect = [...range.getClientRects()].find((r) => r.width > 0)
+        if (rect) return rect.left
+      }
+      return el.getBoundingClientRect().left
     }
     let valueEdge = null, previous = null
     pairs.forEach(({ dt, dd }) => {
@@ -53,10 +64,10 @@
       const stacked = dt.classList.contains("nd-overview__stack") || window.innerWidth < 480
       if (stacked !== (d.top >= t.bottom - 1)) problems.push(`${stacked ? "should be stacked" : "should sit beside its label"}: ${name}`)
       if (stacked) {
-        if (Math.abs(start(dd) - t.left) > 1) problems.push(`value off its label's edge: ${name}`)
+        if (Math.abs(start(dd) - start(dt)) > 1) problems.push(`value off its label's edge: ${name}`)
         if (Math.abs(d.top - t.bottom - 4) > 1) problems.push(`label to value is not 4px: ${name} (${Math.round(d.top - t.bottom)})`)
       } else {
-        const edge = d.left
+        const edge = start(dd)
         if (valueEdge === null) valueEdge = edge
         else if (Math.abs(edge - valueEdge) > 1) problems.push(`value off the value column's edge: ${name}`)
       }

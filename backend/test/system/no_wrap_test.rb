@@ -141,6 +141,17 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "the key-facts edge check sees an inset value, stacked or beside its label" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}: clean before the inset"
+      page.execute_script("document.querySelector('.nd-overview .nd-overview__val:not(:has(ul))').style.paddingLeft = '6px'")
+      found = page.evaluate_script(AUDIT)
+      assert found.any? { |problem| problem.include?("edge") }, "at #{width}: a value inset by padding is reported, got #{found.inspect}"
+    end
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"
