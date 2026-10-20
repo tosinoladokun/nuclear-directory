@@ -326,6 +326,10 @@ class DataQuality::DirectoryClient
   # A fact's evidence (Directory::EvidenceRef).
   def evidence(type:, id:) = lookup.evidence(type:, id:)
 
+  # Whether a correction report on the fact's public page (a link's, either
+  # end's) is still unresolved.
+  def open_corrections?(type:, id:) = lookup.open_corrections?(type:, id:)
+
   MERGES = { "Organization" => :merge_organization, "Facility" => :merge_facility }.freeze
 
   # A person's merge of one company or plant site into another (#142), as the

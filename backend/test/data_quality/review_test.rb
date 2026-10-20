@@ -139,6 +139,22 @@ class DataQuality::ReviewTest < ActiveSupport::TestCase
       attributes: { role: "utility" }).errors.join
   end
 
+  test "an unchanged role or technology, sent back by the edit form, is approved" do
+    vendor = Role.create!(key: "reactor_vendor", name: "Reactor vendor")
+    fusion = Technology.create!(key: "fusion", name: "Fusion")
+    role = candidate("organization_role", { "organization" => { "name" => "TerraPower" }, "role" => "reactor_vendor" })
+    tech = candidate("organization_technology", { "organization" => { "name" => "TerraPower" }, "technology" => "fusion" })
+    # As match leaves them: attached to the pending fact each proposes.
+    role.update!(status: "matched", subject: OrganizationRole.create!(organization: organizations(:terrapower), role: vendor))
+    tech.update!(status: "matched", subject: OrganizationTechnology.create!(organization: organizations(:terrapower), technology: fusion))
+
+    [ [ role, { "role" => "reactor_vendor" } ], [ tech, { "technology" => "fusion" } ] ].each do |claim, unchanged|
+      result = Review.edit_and_approve(claim.id, attributes: unchanged, by: BY)
+      assert result.ok?, result.errors.to_sentence
+      assert claim.reload.status_merged?
+    end
+  end
+
   test "id can't be edited, and an id in a payload never picks the record written" do
     c = candidate("organization", { "name" => "Imaginary Fission Co" })
     assert_match "can't edit id", Review.edit_and_approve(c.id, attributes: { "id" => organizations(:terrapower).id }, by: BY).errors.join
