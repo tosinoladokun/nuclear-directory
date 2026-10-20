@@ -89,6 +89,39 @@
   .nd-overview dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--nd-space-3) var(--nd-space-4); }
   .nd-overview dt { font: 600 11px/20px var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
   .nd-overview dd { margin: 0; font-size: 14px; line-height: 20px; min-width: 0; }
+  /* A value and its source numbers never part (Tosin's no-wrap rule). */
+  .nd-overview__cites, .nd-keep { white-space: nowrap; }
+  /* A list wraps only between names: each linked name stays whole (Design, #394). */
+  .nd-overview dd a { white-space: nowrap; }
+  /* A name before the last is never wider than the column: "…" as the last resort. */
+  .nd-overview__line:not(.nd-overview__line--fit) > .nd-overview__val a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  /* The Type chips: under their label, across the panel, so a full-name chip fits on one line. */
+  .nd-overview dt.nd-overview__stack, .nd-overview dd.nd-overview__stack { grid-column: 1 / -1; }
+  .nd-overview dd.nd-overview__stack { margin-top: calc(-1 * var(--nd-space-2)); }
+  /* A short value fits the row's width less its numbers (about 26px each),
+     down to 13px; an ellipsis only as the last resort. */
+  .nd-overview dd { container-type: inline-size; }
+  /* The numbers keep their own width and the value shrinks beside them
+     (flex), sized from the row's width less about 32px per number, down to
+     13px, then an ellipsis with the full text in title. A focused link inside
+     gets its ring on the wrapper, since the clipping would hide its own. */
+  .nd-overview__line--fit { display: flex; align-items: baseline; min-width: 0; white-space: nowrap; }
+  .nd-overview__line--fit .nd-overview__val { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    font-size: clamp(13px, calc((100cqi - var(--cites) * 32px) / (var(--chars) * 0.62)), 14px); }
+  .nd-overview__line--fit .nd-overview__cites { flex: none; }
+  .nd-overview__line--fit .nd-overview__val:has(:focus-visible) { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
+  /* A list's last item and its numbers: bounded by the row, so a long last
+     name shrinks to an ellipsis (full name in title) and the numbers stay. */
+  .nd-overview__keep { display: inline-flex; align-items: baseline; max-width: 100%; vertical-align: bottom; }
+  .nd-overview__last { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    font-size: clamp(13px, calc((100cqi - var(--cites) * 32px) / (var(--chars) * 0.62)), 14px); }
+  .nd-overview__keep .nd-overview__cites { flex: none; }
+  .nd-overview__last:has(:focus-visible) { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
+  /* Phones: each label above its value, so values get the full width. */
+  @media (max-width: 479px) {
+    .nd-overview dl { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
+    .nd-overview dd + dt { margin-top: var(--nd-space-2); }
+  }
   .nd-overview__foot { margin-top: var(--nd-space-4); padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; justify-content: space-between; align-items: center; gap: var(--nd-space-2); }
 
 }
@@ -133,25 +166,33 @@
   .nd-pill .nd-ic { align-self: center; color: var(--nd-cat, currentColor); }
   .nd-pill[class*="nd-bucket--"][aria-current="page"] { background: var(--nd-cat-tint); border-color: var(--nd-cat); color: var(--nd-cat); }
   .nd-pill[class*="nd-bucket--"][aria-current="page"] .nd-num { opacity: 1; } /* 4.5:1 on the tint needs the full accent */
-  .nd-bucketchips { display: flex; flex-wrap: wrap; gap: var(--nd-space-1) var(--nd-space-2); margin: 0; padding: 0; list-style: none; }
+  .nd-bucketchips { width: 100%; container-type: inline-size; display: flex; flex-wrap: wrap; gap: var(--nd-space-1) var(--nd-space-2); margin: 0; padding: 0; list-style: none; }
+  .nd-bucketchips li { max-width: 100%; }
+  /* A chip is one line (Tosin): where the full name can't fit, the approved
+     short label stands in, then an ellipsis as the last resort. */
+  .nd-bucketchip { max-width: 100%; box-sizing: border-box; white-space: nowrap; overflow: hidden; }
+  .nd-bucketchip__full, .nd-bucketchip__short { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .nd-bucketchip__short { display: none; }
+  @container (max-width: 240px) {
+    .nd-bucketchip:has(.nd-bucketchip__short) .nd-bucketchip__full { display: none; }
+    .nd-bucketchip__short { display: inline; }
+  }
   .nd-bucketchip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: 999px; background: var(--nd-cat-tint); color: var(--nd-cat); font: 500 13px/20px var(--font-text); text-decoration: none; }
   .nd-bucketchip:hover { text-decoration: underline; text-underline-offset: 2px; }
 
-  .nd-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--nd-space-3); }
-  .nd-cat { display: flex; flex-direction: column; gap: var(--nd-space-1); padding: 14px var(--nd-space-4); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); background: var(--nd-paper-raised); color: var(--nd-ink); text-decoration: none; transition: border-color .12s ease-out; }
-  .nd-cat:hover { border-color: var(--nd-ink); }
-  .nd-cat b { display: flex; align-items: center; gap: var(--nd-space-2); font-weight: 600; font-size: 15px; line-height: 20px; }
-  .nd-cat b .nd-ic { color: var(--nd-cat, currentColor); }
-  .nd-cat b { overflow-wrap: anywhere; hyphens: auto; } /* "decommissioning" at 390px (Design QA) */
-  .nd-cat span { font-size: 13px; line-height: 18px; color: var(--nd-ink-muted); }
 
   .nd-list { list-style: none; margin: 0; padding: 0; }
   .nd-listrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: var(--nd-space-1) var(--nd-space-4); align-items: center; padding: 14px var(--nd-space-1); border-bottom: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink); text-decoration: none; }
   .nd-listrow:hover { background: var(--nd-paper-raised); }
   .nd-listrow:hover .nd-listrow__name { text-decoration: underline; text-underline-offset: 3px; }
-  .nd-listrow__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .nd-listrow__name { font: 600 16px/22px var(--font-text); }
-  .nd-listrow__desc { font-size: 14px; line-height: 20px; color: var(--nd-ink-muted); }
+  .nd-listrow__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; container-type: inline-size; }
+  /* One line each (Tosin): the name and the line under it shrink to fit the
+     row, down to 13px, then end in an ellipsis; the full text is in the
+     title, and on the record's own page. */
+  .nd-listrow__name, .nd-listrow__desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nd-listrow__name { font: 600 clamp(13px, calc(100cqi / (var(--chars, 20) * 0.6)), 16px)/22px var(--font-text); }
+  .nd-listrow__desc { font-size: clamp(13px, calc(100cqi / (var(--chars, 40) * 0.56)), 14px); line-height: 20px; color: var(--nd-ink-muted); }
+  @container (max-width: 300px) { .nd-listrow__cap { display: none; } }
   .nd-listrow__side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; font-size: 13px; line-height: 18px; color: var(--nd-ink-muted); }
   .nd-listrow__side .nd-num { font-size: 11px; }
 
@@ -219,12 +260,137 @@
 
 /* Home page and instant search (#41). */
 @layer components {
-  .nd-home { min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 28px; padding: clamp(80px, 18vh, 180px) clamp(16px, 4vw, 32px) 80px; }
+  /* Home layout. B-fit (#362: no scroll at 1440x900) is retired for Tosin's
+     compact grid (19 Oct): 3 columns, 960px at most, so the page scrolls on
+     a laptop screen (about 1157px tall at 1440x900). Phones scroll anyway. */
+  body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
+  body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
+  .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
-  /* 55px tall matches 64px Anton; 34px (40px Anton) on phones. */
-  .nd-home__wordmark .nd-wordmark__svg { height: 55px; max-width: 100%; }
-  .nd-home__search { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: var(--nd-space-4); }
-  .nd-home__cats { width: 100%; max-width: 880px; margin-top: var(--nd-space-6); }
+  /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
+  .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
+  .nd-home__search { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 14px; }
+  /* Compact, as before the cards (Tosin, 19 Oct): never wider than 960px, centred. */
+  .nd-home__cats { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
+  .nd-home .nd-searchbox--large .nd-search { height: 52px; }
+  .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+  @media (min-width: 1440px) {
+    .nd-home { padding: 40px 120px 14px; }
+    .nd-home__wordmark .nd-wordmark__svg { height: 60px; }
+    .nd-home .nd-searchbox--large .nd-search { height: 56px; }
+  }
+
+  /* Category cards (#362). Wide screens: 3 columns of compact cards in a grid 960px wide at most,
+     equal heights (nd-catgrid, nd-catcard--rows --compact). Phones: an open
+     stack with sticky headers that collapse (nd-catstack, nd-catcard--stack).
+     No lines between rows: spacing separates them, and a row tints on hover.
+     Colour only on the icon and the footer link. */
+  .nd-catgrid { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+  /* /design shows three cards at the width they have on the home page at 1440. */
+  .nd-catgrid--example { max-width: 600px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nd-catcard { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 12px 4px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); }
+  .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit; container-type: inline-size; }
+  .nd-catcard__head--toggle, .nd-catstack__all { display: none; }
+  .nd-catcard__head .nd-ic { width: 20px; height: 20px; color: var(--nd-cat, var(--nd-ink)); }
+  .nd-catcard__head--link:hover .nd-catcard__name { text-decoration: underline; text-underline-offset: 2px; }
+  /* One line (Tosin): the title fits the header less its icon and count. */
+  .nd-catcard__name { flex: 1; min-width: 0; font: 600 clamp(13px, calc((100cqi - 50px) / (var(--chars) * 0.6)), 15px)/20px var(--font-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .nd-catcard__count { font: 400 12px/20px var(--font-mono); color: var(--nd-ink-muted); }
+  .nd-catcard__body { flex: 1; display: flex; flex-direction: column; }
+  .nd-catcard__inner { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+  .nd-catcard__rows { flex: 1; margin: 0; padding: 0; list-style: none; }
+  .nd-catcard__row, .nd-catcard__filler, .nd-catcard__more { display: flex; align-items: center; box-sizing: border-box; height: 30px; margin: 0 -6px; padding: 0 6px; border-radius: var(--nd-radius-sm); }
+  /* A row reads as a link at rest (the muted ›), tints on hover and
+     underlines its name on hover or focus. Its name fits the row, then ends
+     in an ellipsis with the full name in title. */
+  .nd-catcard__row { gap: var(--nd-space-1); color: var(--nd-ink); text-decoration: none; font: 400 14px/1 var(--font-text); cursor: pointer; container-type: inline-size; }
+  .nd-catcard__row:hover .nd-catcard__rowname, .nd-catcard__row:focus-visible .nd-catcard__rowname { text-decoration: underline; text-underline-offset: 2px; }
+  .nd-catcard__row:hover, .nd-catcard__row:active, .nd-catcard__more:hover, .nd-catcard__more:active { background: var(--nd-paper-sunken); }
+  /* line-height 1.4: the row's font is set at line-height 1, and the
+     ellipsis needs overflow hidden, which would clip descenders ("X-energy"). */
+  .nd-catcard__rowname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4;
+    font-size: clamp(13px, calc((100cqi - 24px) / (var(--chars) * 0.5)), 14px); }
+  .nd-catcard__chev { flex: none; color: var(--nd-ink-muted); }
+  .nd-catcard__more { font: 500 14px/1 var(--font-text); color: var(--nd-cat, var(--nd-ink)); text-decoration: none; }
+  @media (min-width: 1440px) {
+    .nd-catgrid { gap: 14px; }
+    .nd-catcard__row, .nd-catcard__filler, .nd-catcard__more { height: 32px; }
+  }
+  /* The home grid is 960px wide at most, so it is 3 columns from 1024px up;
+     /design's example grid sets its own. */
+  @media (min-width: 1024px) {
+    .nd-home .nd-catgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  /* More air between the rows of cards (Tosin, 19 Oct); the column gap stays.
+     Phones keep their stack's own gap. */
+  @media (min-width: 640px) {
+    .nd-home .nd-catgrid { row-gap: var(--nd-space-6); }
+  }
+  /* Tablets: 2 columns of the same cards; scrolling is fine here. */
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .nd-catgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  /* Touch screens keep 44px targets, even if that means scrolling. */
+  @media (pointer: coarse) and (min-width: 640px) {
+    .nd-catcard__head, .nd-catcard__row, .nd-catcard__more { min-height: 44px; height: auto; }
+    .nd-catcard__head { align-items: center; }
+  }
+  /* Phones: built for scrolling. Every card starts open; its header stays at
+     the top while its own rows scroll under it, and opens or closes the card. */
+  @media (max-width: 639px) {
+    .nd-catstack { display: flex; flex-direction: column; gap: var(--nd-space-4); }
+    .nd-catstack__all:not([hidden]) { display: inline-flex; align-self: flex-end; align-items: center; min-height: 44px; padding: 0; border: 0; background: none;
+      color: var(--nd-ink-muted); font: 400 14px/20px var(--font-text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+    .nd-catcard--stack { padding: 0; }
+    .nd-catcard--stack .nd-catcard__head--link { display: none; }
+    .nd-catcard--stack .nd-catcard__head--toggle { display: block; position: sticky; top: 0; z-index: 1; min-height: 52px;
+      background: var(--nd-paper-raised); border-bottom: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md) var(--nd-radius-md) 0 0; }
+    /* Without JavaScript the heading itself lays out its icon, name and count. */
+    .nd-catcard--stack .nd-catcard__head--toggle, .nd-catcard__toggle { align-items: center; gap: var(--nd-space-3); padding: 0 14px; }
+    .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { display: flex; }
+    /* With the button in it, the heading has no padding: the button fills it edge to edge, so all of it is tappable. */
+    .nd-catcard--stack .nd-catcard__head--toggle:has(.nd-catcard__toggle) { padding: 0; }
+    .nd-catcard__toggle { display: flex; width: 100%; min-height: 52px; border: 0; background: none; color: var(--nd-ink); font: inherit; cursor: pointer; }
+    .nd-catcard__caret { width: 8px; height: 8px; border: solid var(--nd-ink-muted); border-width: 0 2px 2px 0; transform: rotate(45deg); margin: 0 4px 4px 0; transition: transform 180ms ease-out; }
+    .nd-catcard--stack.is-collapsed .nd-catcard__caret { transform: rotate(-45deg); margin: 0 6px 0 0; }
+    .nd-catcard--stack.is-collapsed .nd-catcard__head--toggle { border-bottom-color: transparent; border-radius: var(--nd-radius-md); }
+    .nd-catcard--stack .nd-catcard__head .nd-ic { width: 24px; height: 24px; }
+    .nd-catcard--stack .nd-catcard__name { font: 600 clamp(13px, calc((100cqi - 80px) / (var(--chars) * 0.6)), 17px)/22px var(--font-text); }
+    .nd-catcard__toggle { container-type: inline-size; }
+    /* Collapsing: the body's row shrinks to nothing over 180ms. */
+    .nd-catcard--stack .nd-catcard__body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 180ms ease-out, visibility 180ms; }
+    .nd-catcard--stack.is-collapsed .nd-catcard__body { grid-template-rows: 0fr; visibility: hidden; }
+    .nd-catcard--stack .nd-catcard__inner { min-height: 0; overflow: hidden; gap: 6px; padding: 6px 0; }
+    .nd-catcard--stack.is-collapsed .nd-catcard__inner { padding: 0; }
+    .nd-catcard--stack .nd-catcard__row { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; }
+    .nd-catcard--stack .nd-catcard__rowname { font-size: clamp(13px, calc((100cqi - 52px) / (var(--chars) * 0.5)), 16px); }
+    .nd-catcard--stack .nd-catcard__filler { display: none; }
+    .nd-catcard--stack .nd-catcard__more { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; font-size: 15px; }
+    /* The rows run edge to edge and the card's wrapper clips what is drawn
+       outside them, so the focus ring goes inside the row: it stays whole. */
+    .nd-catcard--stack .nd-catcard__row:focus-visible, .nd-catcard--stack .nd-catcard__more:focus-visible { outline-offset: -2px; }
+    /* The suggested searches stay (nothing live is removed): one 28px row at
+       13px that scrolls inside itself, faded at the edge, never a second line. */
+    .nd-home__search { gap: var(--nd-space-4); }
+    /* The 8px above and below (taken back by the margin) leave room for each
+       pill's 44px tap area, which the scrolling row would otherwise clip. */
+    .nd-home .nd-suggs { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; padding-right: var(--nd-space-8);
+      padding-block: 8px; margin-block: -8px;
+      mask-image: linear-gradient(to right, #000 85%, transparent); -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); }
+    .nd-home .nd-suggs::-webkit-scrollbar { display: none; }
+    .nd-home .nd-sugg { flex: none; white-space: nowrap; }
+    /* The row scrolls inside itself and clips whatever is drawn outside it,
+       so the focus ring goes inside the pill. */
+    .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
+    .nd-home__wordmark .nd-wordmark__svg { height: 34px; }
+    /* Search near the top, so the keyboard doesn't cover the results. */
+    .nd-home { padding: max(var(--nd-space-6), env(safe-area-inset-top)) var(--nd-space-4) var(--nd-space-4); gap: var(--nd-space-4); }
+    .nd-home .nd-searchbox--large .nd-search { height: 48px; }
+  }
+  @media (max-width: 639px) and (prefers-reduced-motion: reduce) {
+    .nd-catcard--stack .nd-catcard__body, .nd-catcard__caret { transition: none; }
+  }
 
   .nd-searchbox { position: relative; width: 100%; }
   .nd-sitebar .nd-searchbox { flex: 1 1 320px; max-width: 560px; }
@@ -253,24 +419,21 @@
 /* Phones and touch screens (#90). */
 @layer components {
   @media (max-width: 560px) {
-    /* Search near the top, so the keyboard doesn't cover the results. */
-    .nd-home { min-height: 0; padding-top: max(var(--nd-space-12), env(safe-area-inset-top)); gap: var(--nd-space-6); }
     .nd-searchbox__results { max-height: 60vh; }
     .nd-searchbox--large .nd-search { height: 52px; padding: 0 var(--nd-space-4); gap: var(--nd-space-3); }
-    .nd-cats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nd-space-2); }
-    .nd-cat { padding: var(--nd-space-3); }
     /* One scrolling row of pills, faded at the edge so more is visible. */
     .nd-pills { flex-wrap: nowrap; scroll-snap-type: x proximity; padding-right: var(--nd-space-8);
       mask-image: linear-gradient(to right, #000 85%, transparent); -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); }
     .nd-pill { scroll-snap-align: start; }
-    .nd-home__wordmark .nd-wordmark__svg { height: 34px; }
   }
 
   /* 44px tap targets on touch screens, without changing how small parts look. */
   @media (any-pointer: coarse) {
     .nd-pill, .nd-sugg, .nd-select, .nd-instant__row, .nd-instant__all { min-height: 44px; }
-    .nd-src, .nd-wordmark { position: relative; }
-    .nd-src::after, .nd-wordmark::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+    /* The home suggestions stay 28px as drawn; their tap area grows instead. */
+    .nd-home .nd-sugg { min-height: 0; }
+    .nd-src, .nd-wordmark, .nd-home .nd-sugg { position: relative; }
+    .nd-src::after, .nd-wordmark::after, .nd-home .nd-sugg::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   }
 }
 
@@ -849,3 +1012,7 @@
 
 @keyframes nd-map-flow { 0% { offset-distance: 0%; opacity: 0; } 12% { opacity: .55; } 88% { opacity: .55; } 100% { offset-distance: 100%; opacity: 0; } }
 @keyframes nd-map-flow-on { 0% { offset-distance: 0%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+
+/* The phone suggestions at the 13px floor. Outside the layers on purpose: the
+   pills' type-ui utility sets their size, and utilities outrank components. */
+@media (max-width: 639px) { .nd-home .nd-sugg { font-size: 13px; } }

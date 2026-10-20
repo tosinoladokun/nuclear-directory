@@ -147,10 +147,14 @@ Disallow: /</pre>
     </div>
 
     <div class="flex flex-col gap-2">
-      <span class="type-label">Category pills (with and without counts) and boxes</span>
+      <span class="type-label">Category pills (with and without counts) and the home page's category cards</span>
       <%= render "shared/category_pills", current: Category.find("reactor-developers"), counts: { "fuel" => 11, "reactor-developers" => 9, "plants" => 28 } %>
       <%= render "shared/category_pills", current: nil %>
-      <%= render "shared/category_boxes", examples: { "fuel" => [ "Centrus Energy", "Urenco USA" ], "reactor-developers" => [ "Kairos Power", "X-energy", "TerraPower" ] } %>
+      <%= render "shared/category_cards", grid_class: "nd-catgrid--example", cards: [
+            HomeCategories::Card.new(category: Category.find("reactor-developers"), count: 20, records: [ m[:company], m[:company_sparse], m[:company] ]),
+            HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [ m[:company_sparse] ]),
+            HomeCategories::Card.new(category: Category.find("plants"), count: 79, records: [ m[:plant] ])
+          ] %>
     </div>
 
     <div class="flex flex-col gap-2">

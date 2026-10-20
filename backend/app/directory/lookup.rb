@@ -13,10 +13,13 @@ module Directory
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
     # domain accepts a bare domain or a URL.
-    def organization(id: nil, slug: nil, name: nil, domain: nil)
+    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
       scope =
-        case one_of!(id:, slug:, name:, domain:)
+        case one_of!(id:, slug:, name:, domain:, sec_cik:)
         in [ :id, value ] then Organization.where(id: value)
+        in [ :sec_cik, value ]
+          cik = Organization.cik_from(value) or return
+          Organization.where(sec_cik: cik)
         in [ :slug, value ] then Organization.where(slug: value)
         in [ :name, value ]
           normalized = OrganizationAlias.normalize(value).presence or return
@@ -89,6 +92,13 @@ module Directory
         { title: source.title, url: source.url, source_kind: source.source_kind,
           checked_at: rows.map { |row| row.last_confirmed_at || row.created_at }.max }
       end.sort_by { |row| -row[:checked_at].to_f }
+    end
+
+    # A fact's evidence, as Directory::EvidenceRef values.
+    def evidence(type:, id:)
+      raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
+
+      Evidence.where(subject_type: type.to_s, subject_id: id).order(:id).map { |row| EvidenceRef.from(row) }
     end
 
     # How many public facts (any type) have evidence from these sources.

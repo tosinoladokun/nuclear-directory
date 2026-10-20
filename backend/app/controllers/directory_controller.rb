@@ -17,6 +17,8 @@ class DirectoryController < ApplicationController
     @plants = @listing.plants.to_a
     @counts = DirectoryListing.category_counts
 
-    track_search(@listing.query, results: @companies.size + @plants.size) if @listing.searching?
+    # A suggested search on the home page says so (from=suggestion).
+    source = params[:from] == "suggestion" ? "suggestion" : "typed"
+    track_search(@listing.query, results: @companies.size + @plants.size, source:) if @listing.searching?
   end
 end

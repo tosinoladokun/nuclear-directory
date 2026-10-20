@@ -41,7 +41,7 @@ class DesignSystemTest < ActionDispatch::IntegrationTest
     get design_system_path
 
     within_parts = "#page-parts"
-    %w[nd-sitebar nd-pills nd-cats nd-listrow nd-profile nd-factrow nd-gaps nd-sources nd-notice nd-overview].each do |part|
+    %w[nd-sitebar nd-pills nd-catgrid nd-listrow nd-profile nd-factrow nd-gaps nd-sources nd-notice nd-overview].each do |part|
       assert_select "#{within_parts} .#{part}", { minimum: 1 }, "missing #{part}"
     end
     assert_select "#{within_parts} .nd-listrow", 4

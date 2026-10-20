@@ -539,7 +539,7 @@ module DataQuality::Review
           # The evidence belongs to the run that judged it (verify), else the one that found it.
           run = candidate.verify_run || candidate.crawl_run
           confidence = edited ? nil : supporting_confidence(candidate)
-          result = directory.write_fact(candidate, confidence:, crawl_run: run, by:, reason:)
+          result = directory.write_fact(candidate, confidence:, crawl_run: run, by:, reason:, edited:)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: result.errors) unless result.success?
 
           candidate.update!(status: "merged", subject_type: result.ref.type, subject_id: result.ref.id,

@@ -97,13 +97,41 @@ class Metabase::ReadonlyRoleTest < ActiveSupport::TestCase
     assert_equal "1", session.exec("SELECT 1").getvalue(0, 0), "and the role still signs in with the password"
   end
 
-  test "a table added later stays hidden until the task is rerun" do
+  test "a table added later stays hidden, even after a rerun, until it's on the allow-list" do
     ActiveRecord::Base.connection.execute("CREATE TABLE metabase_later_table (id int)")
     assert_match "permission denied", refused("SELECT count(*) FROM metabase_later_table").message
 
     Metabase::ReadonlyRole.apply!(name: @name, password: PASSWORD)
-    assert_equal "0", session.exec("SELECT count(*) FROM metabase_later_table").getvalue(0, 0)
+    assert_match "permission denied", refused("SELECT count(*) FROM metabase_later_table").message, "no default privileges"
     assert_raises(ArgumentError) { Metabase::ReadonlyRole.apply!(name: @name, password: "short") }
+  end
+
+  test "every table is a decision: readable, or private" do
+    tables = ActiveRecord::Base.connection.tables - %w[schema_migrations ar_internal_metadata metabase_later_table]
+    undecided = tables - Metabase::ReadonlyRole::READABLE_TABLES - Metabase::ReadonlyRole.private_tables(ActiveRecord::Base.connection)
+
+    assert_empty undecided, "add each new table to READABLE_TABLES (and grant it in its migration) or to PRIVATE_TABLES"
+    assert_empty Metabase::ReadonlyRole::READABLE_TABLES & Metabase::ReadonlyRole::PRIVATE_TABLES
+    sensitive = %w[users sessions correction_reports data_deploys data_migrations solid_queue_jobs solid_cache_entries]
+    assert_empty Metabase::ReadonlyRole::READABLE_TABLES & sensitive
+  end
+
+  test "it reads deal terms and the deploy's records stay hidden" do
+    assert_equal "0", session.exec("SELECT count(*) FROM deal_terms WHERE id = 0").getvalue(0, 0)
+    %w[data_deploys data_migrations].each do |table|
+      assert_match "permission denied", refused("SELECT * FROM #{table}").message, table
+    end
+  end
+
+  test "grant! adds one allow-listed table to an existing role, and refuses anything else" do
+    connection = ActiveRecord::Base.connection
+    connection.execute("REVOKE SELECT ON deal_terms FROM #{connection.quote_column_name(@name)}")
+    assert_match "permission denied", refused("SELECT count(*) FROM deal_terms").message
+
+    assert_equal %w[deal_terms], Metabase::ReadonlyRole.grant!(%w[deal_terms], name: @name)
+    assert_equal "0", session.exec("SELECT count(*) FROM deal_terms WHERE id = 0").getvalue(0, 0)
+    assert_raises(ArgumentError) { Metabase::ReadonlyRole.grant!(%w[correction_reports], name: @name) }
+    assert_equal [], Metabase::ReadonlyRole.grant!(%w[deal_terms], name: "no_such_role_#{Process.pid}"), "no role, no grant"
   end
 
   test "a rerun takes away rights granted by hand in between" do

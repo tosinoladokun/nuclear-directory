@@ -36,7 +36,7 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
     assert recurring.valid?, recurring.errors.full_messages.to_sentence
     assert_equal "DataQuality::DailyCrawlJob", task["class"]
     DataQuality::DailyCrawlJob::SOURCE_KINDS.each { |kind| assert DataQuality::Plugin.for(kind), "#{kind} has a plug-in" }
-    assert_equal "usaspending_doe_awards", DataQuality::DailyCrawlJob::SOURCE_KINDS.last, "DOE awards run daily, after NRC and EIA (#260)"
+    assert_equal "nrc_uranium_recovery", DataQuality::DailyCrawlJob::SOURCE_KINDS.last, "NRC uranium recovery runs daily, last (#275)"
   end
 
   test "it runs once a day at 3am Eastern, through the change back from daylight saving time" do
@@ -50,17 +50,17 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
     assert_equal [ 3 ] * 6, local.map(&:hour)
   end
 
-  test "it runs the whole pipeline for NRC, then EIA, then DOE awards" do
+  test "it runs the whole pipeline for NRC, then EIA, then DOE awards, NRC decommissioning, DOE isotope sites and NRC uranium recovery" do
     ran, error = run_daily
 
     assert_nil error
-    assert_equal [ [ "nrc_reactor_list", nil ], [ "eia_generators", nil ], [ "usaspending_doe_awards", nil ] ], ran
+    assert_equal [ [ "nrc_reactor_list", nil ], [ "eia_generators", nil ], [ "usaspending_doe_awards", nil ], [ "nrc_decommissioning", nil ], [ "doe_isotope_sites", nil ], [ "nrc_uranium_recovery", nil ] ], ran
   end
 
   test "a failing source doesn't stop the next one, and the job still fails" do
     ran, error = run_daily(fail: { "nrc_reactor_list" => RuntimeError.new("NRC page changed") })
 
-    assert_equal %w[nrc_reactor_list eia_generators usaspending_doe_awards], ran.map(&:first)
+    assert_equal %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery], ran.map(&:first)
     assert_equal "NRC page changed", error.message
   end
 
@@ -71,20 +71,20 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
 
     assert_equal %w[nrc_reactor_list eia_generators], ran.map(&:first)
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery], { attempt: 2 } ]
   end
 
   test "a busy source doesn't run the ones after it alongside, and earlier failures still fail the job" do
     ran, error = run_daily(fail: { "nrc_reactor_list" => DataQuality::Pipeline::AlreadyRunning.new })
     assert_equal %w[nrc_reactor_list], ran.map(&:first), "EIA waits for NRC"
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery], { attempt: 2 } ]
 
     clear_enqueued_jobs
     _, error = run_daily(fail: { "nrc_reactor_list" => RuntimeError.new("NRC page changed"),
       "eia_generators" => DataQuality::Pipeline::AlreadyRunning.new })
     assert_equal "NRC page changed", error.message
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery], { attempt: 2 } ]
   end
 
   test "after the last attempt a busy source fails the job" do
@@ -101,6 +101,6 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
 
     assert_equal %w[nrc_reactor_list eia_generators], ran.map(&:first)
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery], { attempt: 2 } ]
   end
 end

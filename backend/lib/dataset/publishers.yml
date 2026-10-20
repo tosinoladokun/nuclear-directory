@@ -1,0 +1,45 @@
+# Who publishes each source the open dataset cites (#254), by domain. A
+# subdomain falls back to its parent ("news.microsoft.com" → "microsoft.com").
+# A company in the directory is found by its own domain, so it needn't be
+# listed here; this list is for agencies, news sites and companies whose
+# pages live on another domain. An unlisted domain is shown as the domain
+# itself and named in the export's report, so a person adds it here.
+#
+# kind: agency (government), news (named reporting), company (a company's own site)
+
+# Agencies
+energy.gov: { name: "U.S. Department of Energy", kind: agency }
+osti.gov: { name: "U.S. Department of Energy, Office of Scientific and Technical Information", kind: agency }
+ornl.gov: { name: "Oak Ridge National Laboratory", kind: agency }
+nrc.gov: { name: "U.S. Nuclear Regulatory Commission", kind: agency }
+eia.gov: { name: "U.S. Energy Information Administration", kind: agency }
+usaspending.gov: { name: "USAspending.gov", kind: agency }
+sec.gov: { name: "U.S. Securities and Exchange Commission", kind: agency }
+federalregister.gov: { name: "Federal Register", kind: agency }
+govinfo.gov: { name: "U.S. Government Publishing Office", kind: agency }
+bpa.gov: { name: "Bonneville Power Administration", kind: agency }
+fs.usda.gov: { name: "USDA Forest Service", kind: agency }
+
+# News and trade press
+world-nuclear-news.org: { name: "World Nuclear News", kind: news }
+ans.org: { name: "American Nuclear Society", kind: news }
+powermag.com: { name: "POWER", kind: news }
+bicmagazine.com: { name: "BIC Magazine", kind: news }
+businessreport.com: { name: "Greater Baton Rouge Business Report", kind: news }
+
+# Shared hosts, by the start of the path (host and path, no scheme): each
+# account or folder belongs to a different publisher. Checked before domains.
+content.govdelivery.com/accounts/USDOEINL/: { name: "Idaho National Laboratory", kind: agency }
+content.govdelivery.com/accounts/USDOEOS/: { name: "U.S. Department of Energy, Office of Science", kind: agency }
+s205.q4cdn.com/611413639/: { name: "Dominion Energy", kind: company }
+
+# Companies whose pages live on another domain, or that aren't in the directory
+x-energy.com: { name: "X-energy", kind: company }
+gevernova.com: { name: "GE Vernova", kind: company }
+hitachi-hgne.co.jp: { name: "Hitachi-GE Nuclear Energy", kind: company }
+newsroom.kiewit.com: { name: "Kiewit", kind: company }
+tdk-ventures.com: { name: "TDK Ventures", kind: company }
+aboutamazon.com: { name: "Amazon", kind: company }
+blog.google: { name: "Google", kind: company }
+fb.com: { name: "Meta", kind: company }
+about.meta.com: { name: "Meta", kind: company }

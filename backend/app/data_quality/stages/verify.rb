@@ -6,6 +6,9 @@
 #    after match attached it: review, naming that decision.
 # 2. It disagrees with a value a human verified on its record: review,
 #    showing both values ("human-verified state is NJ; this source says DE").
+#    Unless every value it would change was last written from this kind of
+#    source, approved unedited (Differences.written_by_person): then the
+#    source is updating its own value, and the verifier checks it.
 # 3. Its quote isn't in the source's stored content (plug-in's
 #    quote_in_source?): review, without asking any model.
 # 4. Its plug-in holds it for a person (hold_for_review), with the reason.
@@ -94,6 +97,7 @@ class DataQuality::Stages::Verify < DataQuality::Stage
       return closed if closed
 
       differences = DataQuality::Differences.with_human_verified(candidate, record)
+      differences = DataQuality::Differences.written_by_person(differences, candidate, record, directory:)
       return [ "conflicts", DataQuality::Differences.describe(differences) ] if differences.any?
 
       unless quote_found?(candidate)

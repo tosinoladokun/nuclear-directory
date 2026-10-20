@@ -23,7 +23,7 @@ module Directory::Checks
   SINGLE = %w[status].freeze
 
   # NRC and EIA re-confirm nightly; a web page or hand research is checked far less often (#241).
-  NIGHTLY_KINDS = %w[nrc_reactor_list nrc_power_status eia_generators eia_860m_index].freeze
+  NIGHTLY_KINDS = %w[nrc_reactor_list nrc_power_status nrc_decommissioning eia_generators eia_860m_index doe_isotope_sites nrc_uranium_recovery].freeze
   STALE_DAYS = { nightly: 14, other: 365 }.freeze
 
   OPEN = %w[new matched needs_review].freeze
@@ -144,7 +144,7 @@ module Directory::Checks
         from_kinds = ->(kinds) { each_model { |model| model.where(id: evidence(model).joins(:source).where(sources: { source_kind: kinds }).select(:subject_id)) } }
         domains = ->(model) { evidence(model).joins(:source).group(:subject_id).having("COUNT(DISTINCT COALESCE(sources.domain, sources.url)) >= 2").select(:subject_id) }
         [
-          Tag.new("nrc", "NRC", "source", nil, "Quoted from NRC", from_kinds.call(%w[nrc_reactor_list nrc_power_status])),
+          Tag.new("nrc", "NRC", "source", nil, "Quoted from NRC", from_kinds.call(%w[nrc_reactor_list nrc_power_status nrc_decommissioning nrc_uranium_recovery])),
           Tag.new("eia", "EIA", "source", nil, "Quoted from EIA-860M", from_kinds.call(%w[eia_generators])),
           Tag.new("doe", "USAspending", "source", nil, "Quoted from USAspending.gov", from_kinds.call(%w[usaspending_doe_awards])),
           Tag.new("web", "Web", "source", nil, "Quoted from a page the crawler found",

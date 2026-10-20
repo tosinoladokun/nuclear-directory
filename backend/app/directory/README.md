@@ -225,6 +225,9 @@ with:
 Directory::Lookup.verification_history(type: "Organization", id: 12)
 # => [VerificationEventRef(from_status:, to_status:, by:, reason:, context:, changed_values:, at:), …] newest first
 # changed_values: { "hq_state" => ["DE", "WA"] }
+
+Directory::Lookup.evidence(type: "Relationship", id: 72)
+# => [EvidenceRef(source_id:, quote:, found_by:, confidence:, crawl_run_id:), …] oldest first
 ```
 
 ### Deal terms (#256)

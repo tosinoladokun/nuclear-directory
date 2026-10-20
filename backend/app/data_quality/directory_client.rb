@@ -50,8 +50,8 @@ class DataQuality::DirectoryClient
   end
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
-  def organization(name: nil, domain: nil)
-    record("Organization", lookup.organization(name:, domain:))
+  def organization(name: nil, domain: nil, sec_cik: nil)
+    record("Organization", lookup.organization(name:, domain:, sec_cik:))
   end
 
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
@@ -148,10 +148,10 @@ class DataQuality::DirectoryClient
   # the record's verification alone, since it doesn't vouch for the record
   # itself; even when a human approves it, it doesn't overwrite a
   # human-verified value (that comes back as a conflict).
-  def write_fact(candidate, confidence:, crawl_run:, by: nil, reason: nil)
+  def write_fact(candidate, confidence:, crawl_run:, by: nil, reason: nil, edited: false)
     # The record written is the one match attached, never an id, a link end or
     # a slug in the payload (payloads aren't validated; Review locks these too).
-    attributes = candidate.payload.except(*LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY).symbolize_keys
+    attributes = candidate.payload.except(*WRITE_SKIPPED).symbolize_keys
     attributes[:id] = candidate.subject_id if candidate.subject_id
     if candidate.kind == "organization"
       # The name it was found under becomes an alias only once a verdict accepts
@@ -166,7 +166,10 @@ class DataQuality::DirectoryClient
     verification =
       if enrichment then nil
       elsif by
-        { status: "verified", by:, reason:, context: { "candidate_id" => candidate.id, "crawl_run_id" => crawl_run&.id } }.compact
+        # edited: whether a person changed the values first, which makes
+        # them the person's (Differences.written_by_person).
+        context = { "candidate_id" => candidate.id, "crawl_run_id" => crawl_run&.id, "edited" => edited }
+        { status: "verified", by:, reason:, context: }.compact
       else
         { status: "verified", by: "agent:verifier/#{crawl_run&.model || 'unknown'}" }
       end
@@ -215,7 +218,7 @@ class DataQuality::DirectoryClient
     return unless fact_id
     return if candidate.source.status_reason.present?
 
-    attributes = candidate.payload.except(*LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY).symbolize_keys.merge(id: fact_id)
+    attributes = candidate.payload.except(*WRITE_SKIPPED).symbolize_keys.merge(id: fact_id)
     # A link's ends as the payload names them, found afresh, so a claim
     # attached to the wrong link (#226) doesn't pass as the same claim.
     attributes.merge!(link_end_ids(candidate.payload)) if LINK_KINDS.include?(candidate.kind)
@@ -239,6 +242,8 @@ class DataQuality::DirectoryClient
   # Payload key of an enrichment candidate: how to find the existing record
   # it adds values to. Enrichment never creates records.
   ENRICHMENT_KEY = "identify"
+  # Payload keys a write never stores as values.
+  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY ].freeze
 
   def enrichment?(candidate) = candidate.payload.to_h.key?(ENRICHMENT_KEY)
 
@@ -317,6 +322,9 @@ class DataQuality::DirectoryClient
 
   # Every verification decision on a fact, newest first (Directory::VerificationEventRef).
   def verification_history(type:, id:) = lookup.verification_history(type:, id:)
+
+  # A fact's evidence (Directory::EvidenceRef).
+  def evidence(type:, id:) = lookup.evidence(type:, id:)
 
   MERGES = { "Organization" => :merge_organization, "Facility" => :merge_facility }.freeze
 
@@ -422,7 +430,9 @@ class DataQuality::DirectoryClient
               (facility(eia_plant_id: named["eia_plant_id"]) if named["eia_plant_id"].present?) ||
               (facility(name: named["name"]) if named["name"].present?)
           else
-            (organization(name: named["name"]) if named["name"].present?) ||
+            # The SEC's CIK first, as Match and FactWriter find a company (#129).
+            (organization(sec_cik: named["sec_cik"]) if named["sec_cik"].present?) ||
+              (organization(name: named["name"]) if named["name"].present?) ||
               (organization(domain: named["domain"]) if named["domain"].present?)
           end
         ids[:"#{key}_id"] = found&.id

@@ -57,7 +57,7 @@ class Directory::DealTermsTest < ActiveSupport::TestCase
 
   test "a term needs its link, its link's type and its kind" do
     assert_match "needs both ends", write(award(link_id: nil)).errors.join
-    assert_match "link's type", write(award(link_type: "Organization")).errors.join
+    assert_match "link's type", write(award(link_type: "Facility")).errors.join
     assert_match "term type", write(award(term_type: nil)).errors.join
     assert_equal 0, DealTerm.count
   end
@@ -95,7 +95,7 @@ class Directory::DealTermsTest < ActiveSupport::TestCase
 
     ref = Directory::Lookup.deal_terms(link_type: "Relationship", link_id: @funds.id).sole
     assert_equal [ "award", "81.121", [ @source.url ] ], [ ref.term_type, ref.program, ref.source_urls ]
-    assert_raises(ArgumentError) { Directory::Lookup.deal_terms(link_type: "Organization", link_id: 1) }
+    assert_raises(ArgumentError) { Directory::Lookup.deal_terms(link_type: "Facility", link_id: 1) }
   end
 
   test "an unknown link type on an update is a refusal, not an exception" do

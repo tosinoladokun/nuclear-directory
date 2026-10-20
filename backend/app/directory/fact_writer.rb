@@ -60,13 +60,13 @@ module Directory
     KINDS = {
       organization: {
         model: Organization,
-        attributes: %i[name slug legal_name website domain description hq_city hq_state country_code founded_year status aliases]
+        attributes: %i[name short_name slug legal_name website domain sec_cik description hq_city hq_state country_code founded_year status aliases]
       },
       organization_role: { model: OrganizationRole, attributes: %i[organization_id role] },
       organization_technology: { model: OrganizationTechnology, attributes: %i[organization_id technology] },
       facility: {
         model: Facility,
-        attributes: %i[name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket
+        attributes: %i[name short_name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket
           eia_plant_id city state country_code latitude longitude aliases]
       },
       relationship: {
@@ -80,7 +80,7 @@ module Directory
       # One award, offtake or funding round under its link (#256).
       deal_term: {
         model: DealTerm,
-        attributes: %i[link_type link_id term_type external_id amount_usd capacity_mw signed_on starts_on ends_on status
+        attributes: %i[link_type link_id term_type external_id amount_usd amount_offered_usd capacity_mw signed_on starts_on ends_on status
           program round lead_investor_ids]
       }
     }.freeze
@@ -147,6 +147,10 @@ module Directory
           from.update_columns(domain: nil)
           into.update!(domain:) && moved["domain"] += 1 if into.domain.blank?
         end
+        if (cik = from.sec_cik)
+          from.update_columns(sec_cik: nil)
+          into.update!(sec_cik: cik) && moved["SEC CIK"] += 1 if into.sec_cik.blank?
+        end
         retired = []
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
@@ -185,6 +189,8 @@ module Directory
         moved["lead investors"] = DealTerm.where("? = ANY (lead_investor_ids)", from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES)
           .update_all([ "lead_investor_ids = ARRAY(SELECT id FROM unnest(array_replace(lead_investor_ids, ?::bigint, ?::bigint)) " \
             "WITH ORDINALITY AS t(id, n) GROUP BY id ORDER BY min(n))", from.id, into.id ])
+        # Its own rounds (a Form D names no investors, #129) move with it.
+        moved["deal_terms"] += move_deal_terms(from, into)
 
         note = "Merged into #{into.name} (##{into.id})"
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this, or it would point at itself") unless row.closed? }
@@ -761,6 +767,7 @@ module Directory
         others = Organization.where.not(id: [ from.id, into.id ]).pluck(:name).map { |other| OrganizationAlias.normalize(other) }
         moved["aliases"] += 1 unless name == OrganizationAlias.normalize(into.name) || OrganizationAlias.exists?(normalized_alias: name) || others.include?(name)
         moved["domain"] += 1 if from.domain && into.domain.blank?
+        moved["SEC CIK"] += 1 if from.sec_cik && into.sec_cik.blank?
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
           from.public_send(table).each do |row|
@@ -790,6 +797,7 @@ module Directory
         end
         evidence_and_claims(from, into, moved)
         moved["lead investors"] = DealTerm.where("? = ANY (lead_investor_ids)", from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES).count
+        moved["deal_terms"] += deal_terms_moving(from, into).size
         merge_summary(moved)
       end
 
@@ -918,7 +926,10 @@ module Directory
 
         case kind
         when :organization
-          ref = [ attrs[:name], *attrs[:aliases] ].compact.lazy.filter_map { |name| Lookup.organization(name:) }.first
+          # An exact government ID first (PM, 18 Oct 2026): the SEC's CIK
+          # outranks any name, as NRC dockets and EIA plant IDs do.
+          ref = Lookup.organization(sec_cik: attrs[:sec_cik]) if attrs[:sec_cik].present?
+          ref ||= [ attrs[:name], *attrs[:aliases] ].compact.lazy.filter_map { |name| Lookup.organization(name:) }.first
           domain = attrs.key?(:domain) ? attrs[:domain] : Organization.domain_from(attrs[:website])
           ref ||= Lookup.organization(domain:) if domain.present?
           Organization.find(ref.id) if ref

@@ -65,6 +65,21 @@ facilities:
   quote: 'Through a new power purchase agreement (PPA) between Kairos Power and TVA, Kairos Power’s Hermes 2 Plant in Oak Ridge, Tenn., will deliver up to 50 megawatts (MW) of reliable, 24/7 energy to the TVA grid that powers Google data centers'
   published: '2025-08-18'
   confidence: 1.0
+- name: Browns Ferry
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Browns Ferry 1 | 05000259 | DPR-33 | BWR | 32 miles W of Huntsville, AL | Tennessee Valley Authority | 2
+  confidence: 1.0
+- name: Browns Ferry
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Browns Ferry 2 | 05000260 | DPR-52 | BWR | 32 miles W of Huntsville, AL | Tennessee Valley Authority | 2
+  confidence: 1.0
+- name: Browns Ferry
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Browns Ferry 3 | 05000296 | DPR-68 | BWR | 32 miles W of Huntsville, AL | Tennessee Valley Authority | 2
+  confidence: 1.0
 notes: 'TVA is a federal corporation (''a corporate agency of the United States'' per its boilerplate on Type One''s page) but tagged utility, not government_agency. TVA role quote is TVA boilerplate hosted on Type One Energy''s site (0.8). HQ not verified in this session. TVA-Type One LOI is non-binding; recorded only as a facility link, not an org-org relationship. #63: tva.com and tva.gov return 403 (blocked). Source is the 2002-03 U.S. Government Manual on govinfo.gov (dated; facts used are stable). Wholesale wording from same page: "The Authority is the wholesale power supplier for 158 local municipal and cooperative electric systems". Worth re-sourcing from tva.com when reachable.'
 description:
   text: Federally owned corporation, created in 1933, that supplies wholesale electric power in the Tennessee Valley region.

@@ -244,6 +244,10 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     def resolve_organization(payload)
+      # The SEC's CIK is exact and ranks above any name (PM, #129), as in FactWriter.
+      by_cik = directory.organization(sec_cik: payload["sec_cik"]) if payload["sec_cik"].present?
+      return Found.new(by_cik, "SEC CIK") if by_cik
+
       name = payload["name"].presence
       # FactWriter derives a domain from the website unless domain was supplied.
       domain = payload.key?("domain") ? payload["domain"].presence : payload["website"].presence

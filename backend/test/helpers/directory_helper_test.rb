@@ -84,6 +84,7 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_equal "site-pwr", site_icon_name("power_reactor", reactor_types: [ "PWR", nil ])
     assert_equal "site-pwr", site_icon_name("power_reactor", reactor_types: [ "AP1000" ])
     assert_equal "site-bwr", site_icon_name("power_reactor", reactor_types: [ "BWR" ])
+    assert_equal "site-plant", site_icon_name("power_reactor", reactor_types: [ "BWR", "PWR" ]), "mixed types: the generic plant"
     assert_equal "site-advanced", site_icon_name("power_reactor", reactor_types: [ "Natrium" ])
     assert_equal "site-plant", site_icon_name("power_reactor")
     assert_equal "site-advanced", site_icon_name("power_reactor", status: "planned"), "Long Mott, before a type is stated"
@@ -96,6 +97,20 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_equal "site-enrichment", site_icon_name("enrichment")
     assert_equal "site-fuel", site_icon_name("fuel_facility")
     assert_equal "site-plant", site_icon_name(nil)
+  end
+
+  test "a list splits before its last item, never at a comma inside a name or link" do
+    links = safe_join([ link_to("Georgia Power", "/a"), ", ", link_to("Southern Nuclear Operating Co., Inc.", "/b") ])
+    head, last = split_last_item(links)
+    assert_equal '<a href="/a" title="Georgia Power" data-truncate="">Georgia Power</a>, ', head, "a name before the last carries its full name, in case it's cut"
+    assert_equal '<a href="/b">Southern Nuclear Operating Co., Inc.</a>', last
+    assert head.html_safe? && last.html_safe?
+
+    assert_nil split_last_item("Fission, <b>SMR</b>"), "plain text is never split (nor trusted as HTML)"
+    assert_nil split_last_item("Baton Rouge Metropolitan Area, LA"), "a place with a comma isn't a list"
+
+    assert_nil split_last_item(link_to("Southern Nuclear Operating Co., Inc.", "/b")), "one name with a comma isn't a list"
+    assert_nil split_last_item("Bernhard Capital Partners Management")
   end
 
   test "relationship verbs read left to right in visitors' words" do

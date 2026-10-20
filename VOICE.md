@@ -39,6 +39,7 @@ The database says "organization", "facility" and "role". Visitors don't. On scre
 | isotopes | isotope producer |
 | waste_decommissioning | waste and decommissioning |
 | research_organization | research organization |
+| utilities (bucket) | power plant owners and operators; "plant operators" where only a short label fits (homepage) |
 | data center offtaker | power buyer |
 | offtake agreement | power deal in navigation and suggestions; offtake agreement in the fact itself |
 
