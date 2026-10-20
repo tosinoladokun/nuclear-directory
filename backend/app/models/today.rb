@@ -82,8 +82,8 @@ class Today
     @crawl_rows ||= CrawlRun.where(stage: "crawl", started_at: crawl_window).order(:started_at, :id).to_a
       .group_by(&:source_kind).map do |kind, runs|
         finished = runs.reject { |run| run.status == "running" }
-        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem: self.class.problem(finished),
-          running: runs.last.status == "running")
+        problem = self.class.problem(finished) || flagged[kind]
+        CrawlRow.new(source_kind: kind, started_at: runs.last.started_at, problem:, running: runs.last.status == "running")
       end.sort_by(&:source_kind)
   end
 
@@ -145,6 +145,17 @@ class Today
   private
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
 
+    # Kinds with a source the crawl read but flagged as blocked or needing a
+    # person (a page whose rows or tables it couldn't use, say), with why:
+    # its runs can look clean when the read worked and the check after it didn't.
+    def flagged
+      @flagged ||= ::Source.where(crawl_status: DataQuality::Status::ATTENTION, fetched_at: crawl_window).order(:id)
+        .group_by(&:source_kind).transform_values do |sources|
+          source = sources.first
+          source.status_reason.presence || (source.crawl_blocked? ? "a page was blocked" : "a page needs a person")
+        end
+    end
+
 
     def finished_by_itself?(key)
       case key
@@ -177,6 +188,6 @@ class Today
 
     # Everything read from the database: marking or undoing a step reads it all again.
     def reset
-      @steps = @marked = @undecided = @left_count = @crawl_rows = nil
+      @steps = @marked = @undecided = @left_count = @crawl_rows = @flagged = nil
     end
 end

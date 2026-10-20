@@ -160,6 +160,21 @@ class TodayTest < ActiveSupport::TestCase
     assert_equal "a page didn't answer", problems["nrc_power_status"], "a fresh failure isn't hidden by a skipped read"
   end
 
+  test "a page the crawl read but flagged for a person is a problem, though its run looks clean" do
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_uranium_recovery", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
+      stats: { "page" => "changed", "sites" => 2, "unreadable_rows" => 1 })
+    Source.create!(url: "https://www.nrc.gov/test/uranium", source_kind: "nrc_uranium_recovery", crawl_status: "needs_human",
+      status_reason: "A row on the page couldn't be read", fetched_at: Time.utc(2026, 10, 20, 7, 1))
+    CrawlRun.create!(stage: "crawl", source_kind: "eia_generators", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
+      stats: { "snapshot" => "changed" })
+    Source.create!(url: "https://www.eia.gov/test/old.xlsx", source_kind: "eia_generators", crawl_status: "needs_human",
+      fetched_at: Time.utc(2026, 10, 1)) # flagged weeks ago, not last night
+
+    problems = today.crawl_rows.to_h { |row| [ row.source_kind, row.problem ] }
+    assert_equal "A row on the page couldn't be read", problems["nrc_uranium_recovery"]
+    assert_nil problems["eia_generators"]
+  end
+
   test "failed reads counted inside a stat count; zero failures don't" do
     run = ->(kind, site_pages) do
       CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
