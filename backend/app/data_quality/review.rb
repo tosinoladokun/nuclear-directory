@@ -28,6 +28,12 @@ module DataQuality::Review
   Result = Data.define(:candidate_id, :ref, :errors) do
     def ok? = errors.empty?
   end
+  # A record added by hand (#202): ref when it was written (or, in a dry
+  # run, would be), errors, and the record of the same name if one exists.
+  Added = Data.define(:ref, :errors, :existing) do
+    def ok? = errors.empty?
+  end
+  ADDED_REASON = "Added by hand".freeze
 
   # A candidate as the admin shows it. record: the directory fact it's
   # attached to (DirectoryClient::Record: name, decision, values), or nil.
@@ -470,6 +476,45 @@ module DataQuality::Review
     end
 
     def nrc_status_quote(name, directory: DataQuality::DirectoryClient.new) = directory.nrc_status_quote(name)
+
+    # Adds a company (with its first role) or a plant site by hand (#202),
+    # as `by`'s, from a public source and its quote. It starts unpublished
+    # (pending): publishing it is a separate decision. dry_run: everything is
+    # checked and written, then rolled back, for the preview. Returns Added.
+    def add_record(kind:, name:, url:, quote:, by:, website: nil, role: nil, facility_type: nil, dry_run: false,
+      directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      name, url, quote = name.to_s.squish, url.to_s.strip, quote.to_s.squish
+      errors = [ ("Give it a name" if name.empty?),
+        ("Choose what it does" if kind == "organization" && role.blank?),
+        ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
+        ("Copy the sentence from the source that names it" if quote.empty?) ].compact
+      errors << "Choose a company or a plant" unless %w[organization facility].include?(kind)
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      existing = kind == "organization" ? directory.organization(name:) : directory.facility(name:)
+      return Added.new(ref: nil, errors: [ "#{name} is already in the directory" ], existing:) if existing
+
+      added = nil
+      ApplicationRecord.transaction do
+        source = DataQuality::Sources.find_or_create(url:)
+        unless source.ok?
+          added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
+        attributes = kind == "organization" ? { name:, website: website.to_s.strip.presence } : { name:, facility_type: facility_type.presence }
+        written = directory.add_fact(kind.to_sym, attributes.compact, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        if written.success? && kind == "organization"
+          role_written = directory.add_fact(:organization_role, { organization_id: written.ref.id, role: }, source_id: source.ref.id, quote:, by:,
+            reason: ADDED_REASON)
+          written = role_written.success? ? written : role_written
+        end
+        added = Added.new(ref: (written.ref if written.success?), errors: written.errors, existing: nil)
+        raise ActiveRecord::Rollback if dry_run || !added.ok?
+      end
+      added
+    end
 
     # Merges a company or plant site into another, as a person's decision
     # (#142): a reason is required; dry_run says what would move and changes

@@ -56,6 +56,9 @@ Rails.application.routes.draw do
     # Live (#201 part 2): every record with Data Quality's tag filters, and
     # a company's or plant's Record page.
     get "live" => "live#show", as: :live
+    # Add a record by hand (#202): previewed with a GET, created with a POST.
+    get "records/new" => "new_records#new", as: :new_record
+    post "records" => "new_records#create", as: :new_records
     scope "records/:type/:id", as: :record, constraints: { type: /Organization|Facility/, id: /\d+/ } do
       get "/" => "records#show"
       get "edit" => "records#edit", as: :edit

@@ -379,6 +379,15 @@ class DataQuality::DirectoryClient
     write_result(result)
   end
 
+  # A record or fact a person adds by hand (#202): written pending, with
+  # its source's quote as evidence, recorded as `by`. Publishing it is a
+  # separate decision. Returns a WriteResult.
+  def add_fact(kind, attributes, source_id:, quote:, by:, reason:)
+    result = fact_writer.write(kind, attributes.to_h.symbolize_keys,
+      evidence: [ { source_id:, quote:, found_by: "human" } ], verification: { status: "pending", by:, reason: })
+    write_result(result)
+  end
+
   # What setting these plant records (a site and its units) to status would
   # change, without writing. Returns a StatusResult.
   def status_change_plan(ids:, status:) = status_result { status_change.plan(ids:, status:) }
