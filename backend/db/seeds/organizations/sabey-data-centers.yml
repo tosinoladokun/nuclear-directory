@@ -11,7 +11,7 @@ technologies: []
 relationships:
 - type: offtake_with
   to: TerraPower
-  description: 'MOU (Jan 2025): to develop a strategic collaboration agreement on Natrium plants for Sabey data centers, including new plants in the Rocky Mountain region and Texas. No capacity or price stated.'
+  description: 'MOU (Jan 2025): to develop a strategic collaboration agreement on Natrium plants for Sabey data centers. No capacity or price stated.'
   source_url: https://www.terrapower.com/terrapower-and-sabey-data-centers-agreement-for-natrium-wide-scale-deployment
   quote: TerraPower, a nuclear innovation company, and Sabey Data Centers (SDC), a leading data center developer, owner and operator, announced today a memorandum of understanding to develop a strategic collaboration agreement to leverage advanced nuclear Natrium plants into SDC’s current and future data center operations.
   published: '2025-01-21'

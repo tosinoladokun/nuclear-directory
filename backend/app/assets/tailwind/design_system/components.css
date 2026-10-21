@@ -277,6 +277,8 @@
   body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
+  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor: less side padding there. */
+  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-4); } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
@@ -298,7 +300,7 @@
      Colour only on the icon and the footer link. */
   .nd-catgrid { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
   /* /design shows three cards at the width they have on the home page at 1440. */
-  .nd-catgrid--example { max-width: 600px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nd-catgrid--example { max-width: 960px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .nd-catcard { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 12px 4px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); }
   .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit; container-type: inline-size; }
   .nd-catcard__head--toggle, .nd-catstack__all { display: none; }
@@ -601,6 +603,9 @@
   .nd-live__table td:first-child { white-space: normal; }
   .nd-live__table td { text-align: left; }
   .nd-live__table th { text-align: left; }
+  /* Where it appears (#166): what each output shows is long-form, so it wraps. */
+  .nd-outputs td:first-child { white-space: nowrap; }
+  .nd-outputs td:nth-child(3) { white-space: normal; min-width: 14rem; }
   @media (max-width: 560px) {
     .nd-live__filters > summary { display: inline-flex; list-style: none; }
     .nd-live__filters > summary::-webkit-details-marker { display: none; }
@@ -616,6 +621,7 @@
     /* The whole stacked row is the link (44px and more), not just the name. */
     .nd-live__table tr { position: relative; min-height: 44px; }
     .nd-live__table td:first-child a::after { content: ""; position: absolute; inset: 0; }
+    .nd-outputs td a { display: inline-flex; align-items: center; min-height: 44px; }
     .nd-live__foot a, .nd-split__main > .nd-shell__head a { display: inline-flex; align-items: center; min-height: 44px; }
   }
 
@@ -785,11 +791,17 @@
   .nd-prose ol { list-style: decimal; }
   .nd-prose li::marker { color: var(--nd-ink-muted); }
   .nd-code { margin: 0; padding: var(--nd-space-3) var(--nd-space-4); background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-direction: column; gap: var(--nd-space-2); }
+  .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--nd-space-6); row-gap: 0; padding-block: var(--nd-space-4) var(--nd-space-6); }
   .nd-footer p { margin: 0; }
-  .nd-footer__links { display: flex; flex-wrap: wrap; gap: var(--nd-space-2) var(--nd-space-4); }
+  /* One calm line on desktop: the links left, the Render credit right. Each
+     item stays whole; on a phone they wrap as items, never as words. */
+  .nd-footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--nd-space-6); }
+  .nd-footer__links a, .nd-footer__credit { white-space: nowrap; }
+  @media (max-width: 639px) { .nd-footer { flex-direction: column; align-items: flex-start; } .nd-footer__links { gap: 0 var(--nd-space-4); } }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
+    /* The credit stays a paragraph (a flex row would eat the space before the link); its link takes the 44px, in the row's own height, so it never overlaps the links above. */
+    .nd-footer__credit a { display: inline-block; padding-block: 13px; }
   }
 }
 
@@ -909,6 +921,66 @@
     .nd-sources--list .nd-sources__run { position: relative; z-index: 1; }
     .nd-sources--list .nd-sources__run > summary { min-height: 44px; display: flex; align-items: center; }
     .nd-sources__blank { display: none !important; }
+  }
+}
+
+/* Sources by category (#166, Design's spec): a segmented switch between
+   the two views, the "no live source" flag (critical, with a diamond),
+   and one folded row per category with its sources inside. On phones the
+   switch goes full width and rows stack. */
+@layer components {
+  .nd-seg { display: inline-flex; border: var(--nd-hairline) solid var(--nd-control); }
+  .nd-seg a { display: flex; align-items: center; min-height: 44px; padding: 0 var(--nd-space-4); color: var(--nd-ink); text-decoration: none; }
+  .nd-seg a[aria-current="page"] { background: var(--nd-inverse); color: var(--nd-on-inverse); }
+  .nd-seg__short { display: none; }
+  .nd-flag { display: inline-flex; align-items: center; gap: 6px; color: var(--nd-critical); }
+  .nd-flag::before { content: ""; width: 8px; height: 8px; background: var(--nd-critical); transform: rotate(45deg); flex: none; }
+  .nd-cov__head, .nd-cov__cat > summary { display: grid; grid-template-columns: minmax(0, 1fr) 110px 100px 90px 170px 28px; gap: var(--nd-space-3); align-items: center; padding: 0 var(--nd-space-4); }
+  .nd-cov__head { padding-block: 10px; background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-cov__head span:nth-child(n+2):nth-child(-n+4), .nd-cov__num { text-align: right; }
+  .nd-cov__cat { background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-top: 0; }
+  .nd-cov__cat--first { border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-cov__cat > summary { min-height: 52px; cursor: pointer; list-style: none; }
+  .nd-cov__cat > summary::-webkit-details-marker { display: none; }
+  .nd-cov__cat > summary::after { content: "+"; justify-self: end; color: var(--nd-ink-muted); }
+  .nd-cov__cat[open] > summary::after { content: "–"; }
+  .nd-cov__num i { font-style: normal; color: var(--nd-ink-muted); }
+  .nd-cov__stack { display: none; }
+  .nd-cov__short { display: none; }
+  .nd-cov__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-cov__src { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: var(--nd-space-3); align-items: center; min-height: 44px; padding: 0 var(--nd-space-4) 0 var(--nd-space-8); border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-cov__note { margin-left: var(--nd-space-2); }
+
+  /* The fixed columns, gaps and padding take 590px, and a category name
+     needs about 210px more on one line: below 800px of the list's own width
+     (a tablet with the sidebar is narrower than its screen), rows stack. */
+  .nd-cov { container-type: inline-size; }
+  /* Just above the stack, the longest full name ("Power plant owners and
+     operators", about 270px) no longer fits: the short name, never an ellipsis. */
+  @container (max-width: 900px) {
+    .nd-cov__long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .nd-cov__short { display: inline; }
+  }
+  @container (max-width: 800px) {
+    .nd-cov__head { display: none; }
+    .nd-cov__cat > summary { grid-template-columns: minmax(0, 1fr) auto 20px; padding-block: 10px; row-gap: 2px; }
+    .nd-cov__cat > summary .nd-cov__num { display: none; }
+    /* The short name on one line; the long one stays for screen readers. */
+    .nd-cov__long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .nd-cov__short { display: inline; }
+    .nd-cov__cat > summary .nd-cov__stack { display: block; grid-column: 1 / -1; grid-row: 2; }
+    .nd-cov__src { grid-template-columns: 1fr; gap: 2px; padding: 10px var(--nd-space-4) 10px var(--nd-space-6); }
+  }
+  /* A phone's list: names down to the 13px floor before any would clip. */
+  @container (max-width: 440px) {
+    .nd-cov__name > span { font-size: 13px; }
+  }
+
+  @media (max-width: 560px) {
+    .nd-seg { display: flex; flex-basis: 100%; }
+    .nd-seg a { flex: 1; justify-content: center; }
+    .nd-seg__long { display: none; }
+    .nd-seg__short { display: inline; }
   }
 }
 

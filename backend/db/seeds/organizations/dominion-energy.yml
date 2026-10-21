@@ -2,6 +2,7 @@
 name: Dominion Energy
 aliases:
 - Dominion Energy Virginia
+- Dominion Nuclear Connecticut
 website: https://www.dominionenergy.com
 hq:
   city: Richmond
@@ -56,6 +57,11 @@ facilities:
   ownership_pct: 88.4
   source_url: https://www.dominionenergy.com/about/making-energy/nuclear-facilities/north-anna-power-station
   quote: North Anna is owned by Dominion Energy and Old Dominion Electric Cooperative (ODEC). Dominion Energy owns 88.4% and ODEC owns 11.6%. Dominion Energy also operates the station.
+  confidence: 1.0
+- name: Millstone 1
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/millstone-unit-1
+  quote: Owner responsibility for the Millstone site was transferred from Northeast Utilities to Dominion Nuclear Connecticut on March 31, 2001.
   confidence: 1.0
 notes: 'Amazon-Dominion MOU (Oct 2024) to explore an SMR of ~300 MW near North Anna is non-binding and doesn''t fit the relationship types; source: WNN 2024-10-16 ''A memorandum of understanding has also been signed with utility company Dominion Energy to look into the development of an SMR project near the company''s existing North Anna nuclear power station.'' HQ not verified. #63: Source is the "About Dominion Energy" boilerplate in a July 2025 press release PDF on Dominion investor-relations CDN (q4cdn). news.dominionenergy.com and investors.dominionenergy.com returned 403. #60 (North Anna Power Station owns): Seed currently links Dominion to North Anna only with ''operates''; add ''owns'' 88.4%.'
 description:

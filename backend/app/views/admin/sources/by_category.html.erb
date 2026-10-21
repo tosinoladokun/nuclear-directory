@@ -1,0 +1,59 @@
+<% content_for :title, "Sources by category" %>
+<%
+  num = ->(n) { n.nil? ? "—" : number_with_delimiter(n) }
+  first_live = @coverage.categories.find(&:live?)
+  uncovered = @coverage.uncovered_count
+  total = @coverage.categories.size
+%>
+
+<div class="nd-shell__head">
+  <h1 class="type-admin-h1">Sources <span class="type-count"><%= number_with_delimiter(SourceCatalog.total) %></span></h1>
+  <%= render "admin/sources/switch", by: "category" %>
+  <%= render "admin/sources/search_box", query: nil, back: admin_sources_path(by: "category") %>
+</div>
+
+<% if uncovered.positive? %>
+  <p class="type-body m-0"><span class="nd-flag"><%= uncovered_line(uncovered, total) %></span></p>
+<% end %>
+
+<div class="nd-cov" data-controller="open-hash">
+  <div class="nd-cov__head type-label" aria-hidden="true"><span>Category</span><span>Live sources</span><span>Documents</span><span>Facts</span><span>Coverage</span><span></span></div>
+  <% @coverage.categories.each do |category| %>
+    <details class="nd-cov__cat" id="<%= category.key %>" <%= "open" if category == first_live %>>
+      <summary>
+        <%# On a narrow list, the homepage's short name keeps it to one line; the full name stays in title and for screen readers. %>
+        <span class="type-body-strong nd-cov__name" title="<%= category.name %>"><span class="nd-cov__long"><%= category.name %></span><span class="nd-cov__short" aria-hidden="true"><%= ::Category.find(category.key)&.short_name || category.name %></span></span>
+        <span class="nd-cov__num type-cell-num"><span class="sr-only">Live sources: </span><%= category.live_count %> <i>of <%= category.sources.size %></i></span>
+        <span class="nd-cov__num type-cell-num"><span class="sr-only">Documents: </span><%= num.(category.documents) %></span>
+        <span class="nd-cov__num type-cell-num"><span class="sr-only">Facts: </span><%= num.(category.facts) %></span>
+        <span class="type-body"><% if category.live? %><span class="nd-dot">Live</span><% else %><span class="nd-flag">No live source</span><% end %></span>
+        <span class="nd-cov__stack type-small text-ink-muted">
+          <%= category.live_count %> of <%= category.sources.size %> live<% if category.documents %> · <%= pluralize(number_with_delimiter(category.documents), "document") %> · <%= pluralize(number_with_delimiter(category.facts), "fact") %><% end %>
+        </span>
+      </summary>
+      <% category.sources.each do |source| %>
+        <%= render "admin/sources/coverage_source", source: %>
+      <% end %>
+    </details>
+  <% end %>
+</div>
+
+<section class="nd-cov nd-stack" aria-labelledby="general-heading">
+  <h2 class="type-admin-h2 m-0" id="general-heading">General <span class="type-data text-ink-muted">whole industry</span></h2>
+  <% general = @coverage.general %>
+  <details class="nd-cov__cat nd-cov__cat--first" open>
+    <summary>
+      <span class="type-body-strong">All categories</span>
+      <span class="nd-cov__num type-cell-num"><span class="sr-only">Live sources: </span><%= general.count(&:live?) %> <i>of <%= general.size %></i></span>
+      <span class="nd-cov__num type-cell-num"><span class="sr-only">Documents: </span><%= number_with_delimiter(general.sum { |source| source.documents.to_i }) %></span>
+      <span class="nd-cov__num type-cell-num"><span class="sr-only">Facts: </span>—</span>
+      <span class="type-body text-ink-muted"><%= general.any?(&:live?) ? tag.span("Live", class: "nd-dot") : "Hand research only" %></span>
+      <span class="nd-cov__stack type-small text-ink-muted"><%= general.count(&:live?) %> of <%= general.size %> live · <%= pluralize(number_with_delimiter(general.sum { |source| source.documents.to_i }), "document") %></span>
+    </summary>
+    <% general.each do |source| %>
+      <%= render "admin/sources/coverage_source", source: %>
+    <% end %>
+  </details>
+</section>
+
+<p class="type-small text-ink-muted m-0">Hand-research pages count in the category of the company or plant they back.</p>

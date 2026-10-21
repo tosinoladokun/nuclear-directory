@@ -35,13 +35,6 @@ relationships:
   quote: Equinix signed an agreement to procure 500MW of energy from Oklo's next-generation fission Aurora powerhouses.
   published: '2025-08-14'
   confidence: 1.0
-- type: offtake_with
-  to: Radiant
-  description: 'Preorder (Aug 2025): Equinix agreed to buy 20 of Radiant''s Kaleidos microreactors.'
-  source_url: https://investor.equinix.com/news-events/press-releases/detail/1079/equinix-collaborates-with-leading-alternative-energy
-  quote: Today Equinix announced a preorder agreement for the purchase of 20 of Radiant's Kaleidos microreactors.
-  published: '2025-08-14'
-  confidence: 1.0
 facilities: []
 notes: 'Oklo deal quote is from Oklo''s Q3 2024 shareholder letter (SEC exhibit, not char-verified live; matched against a copy fetched earlier this session). Neither source gives the month the agreement was signed; Equinix says only "In 2024", so the description says 2024. The Radiant preorder is recorded in radiant.yml as Radiant supplies Equinix (#253). Equinix''s release also names agreements with ULC-Energy and Stellaria (Europe, out of US scope). HQ not added: the release dateline is Redwood City, Calif., but no page fetched says headquarters.'
 description:

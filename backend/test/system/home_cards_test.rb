@@ -90,6 +90,14 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal "Search a company, plant or site", find(".nd-home input[type=search]")[:placeholder]
   end
 
+  test "just past the phone breakpoint (640 to 699) every card title still fits on one line" do
+    [ 640, 670, 699 ].each do |width|
+      resize_viewport(width, 900)
+      visit root_path
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
   test "on a phone the whole card header is the button, edge to edge" do
     resize_viewport(390, 844)
     visit root_path
@@ -196,7 +204,7 @@ class HomeCardsTest < ApplicationSystemTestCase
 
     toggle = find("section[data-key=fuel] .nd-catcard__toggle")
     assert_equal "true", toggle["aria-expanded"]
-    assert_equal "Fuel and materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
+    assert_equal "Fuel and Materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
     toggle.click
     assert_equal "false", toggle["aria-expanded"]
     assert_no_selector "section[data-key=fuel] a.nd-catcard__row", visible: true

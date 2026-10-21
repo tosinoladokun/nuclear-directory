@@ -20,12 +20,12 @@ class Admin::SourcesControllerTest < ActionDispatch::IntegrationTest
     saved.nil? ? ENV.delete(name) : ENV[name] = saved
   end
 
-  test "needs a signed-in admin; the old address leads to Sources" do
+  test "needs a signed-in admin; the old status address leads to Overview, where the pipeline's health is" do
     get admin_sources_path
     assert_redirected_to new_session_path
 
     get "/admin/status"
-    assert_redirected_to admin_sources_path
+    assert_redirected_to admin_root_path
   end
 
   VERIFIED = { verification_status: "verified", verified_by: "human:tosin" }.freeze
@@ -231,7 +231,7 @@ class Admin::SourcesControllerTest < ActionDispatch::IntegrationTest
       finished_at: 30.minutes.ago + 7, error: "RuntimeError: Error pulling: -1")
     sign_in_as users(:admin)
 
-    with_env("POSTHOG_DASHBOARD_URL", nil) { get admin_sources_path }
+    with_env("POSTHOG_DASHBOARD_URL", nil) { get admin_root_path }
 
     assert_response :success
     assert_select "details summary", /Needs attention\s+1/
@@ -254,7 +254,7 @@ class Admin::SourcesControllerTest < ActionDispatch::IntegrationTest
       finished_at: 1.hour.ago + 42.9, stats: { "ai_check" => { "agreed" => 95, "made_up" => 0 } })
     sign_in_as users(:admin)
 
-    get admin_sources_path
+    get admin_root_path
 
     assert_select ".nd-fold__row .text-critical", /Failed/
     assert_select ".nd-fold__row", /72 min/
@@ -265,26 +265,40 @@ class Admin::SourcesControllerTest < ActionDispatch::IntegrationTest
   test "spend: a plain line from 80%, a status message (not an alert) once it's used up" do
     sign_in_as users(:admin)
     spent!(4.2)
-    get admin_sources_path
+    get admin_root_path
     assert_select "p", /\$4\.20 of \$5\.00 used; model calls stop at 100%/
     assert_select ".nd-flash", 0
 
     spent!(1.0)
-    get admin_sources_path
+    get admin_root_path
     assert_select "p[role=status]", /budget is used up/
     assert_select "[role=alert]", 0
   end
 
   test "a budget of 0 refuses every call, so it reads as used up" do
     sign_in_as users(:admin)
-    with_env("DATA_QUALITY_MONTHLY_BUDGET", "0") { get admin_sources_path }
+    with_env("DATA_QUALITY_MONTHLY_BUDGET", "0") { get admin_root_path }
     assert_select "p[role=status]", /budget is used up/
   end
 
   test "links the PostHog dashboard when one is configured" do
     sign_in_as users(:admin)
-    with_env("POSTHOG_DASHBOARD_URL", "https://us.posthog.com/project/1/dashboard/2") { get admin_sources_path }
+    with_env("POSTHOG_DASHBOARD_URL", "https://us.posthog.com/project/1/dashboard/2") { get admin_root_path }
 
     assert_select "a[href=?]", "https://us.posthog.com/project/1/dashboard/2", text: /Visitors on PostHog/
+  end
+
+  test "Sources lists only the sources; the pipeline's health is on Overview" do
+    sign_in_as users(:admin)
+    get admin_sources_path
+    assert_select "details summary", text: /Needs attention|Last run per stage|Model spend/, count: 0
+
+    assert_select "[data-controller=moved-anchor][data-moved-anchor-to-value=?]", admin_root_path
+
+    get admin_root_path
+    assert_select "details summary", /Needs attention/
+    assert_select ".nd-fold__row", /Nothing needs attention\.\s+\d+ (not fetched yet|OK)/ if css_select(".nd-fold__row").text.include?("Nothing needs")
+    assert_select "details summary", /Last run per stage/
+    assert_select "details summary", /Model spend/
   end
 end
