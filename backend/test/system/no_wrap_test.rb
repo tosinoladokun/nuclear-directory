@@ -92,6 +92,121 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "the hung Type pill stays inside the panel, and its icon sits on the label's edge, at 390 and 1440" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      edges = page.evaluate_script(<<~JS)
+        (() => {
+          const panel = document.querySelector(".nd-overview").getBoundingClientRect(), chip = document.querySelector(".nd-overview .nd-bucketchip")
+          const box = chip.getBoundingClientRect(), label = chip.closest("dd").previousElementSibling.getBoundingClientRect()
+          return [box.left >= panel.left + 1, box.right <= panel.right - 1, Math.abs(box.left + parseFloat(getComputedStyle(chip).paddingLeft) - label.left) <= 1]
+        })()
+      JS
+      assert_equal [ true, true, true ], edges, "at #{width}: inside the panel, icon on the label's edge"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "two or more other names go under their label at 1440 and 390, each on one line with its full text in title" do
+    [ "Allied Power", "Allied Power Services, a Bernhard Capital Partners company", "APS Holdings" ].each { |name| @allied.aliases.create!(alias: name) }
+    [ [ 1440, 900 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => el.textContent.trim() === "Also known as"), dd = dt.nextElementSibling
+          const names = [...dd.querySelectorAll(".nd-overview__name")]
+          return [dt.classList.contains("nd-overview__stack"), names.length, names.every((n) => n.title === n.textContent && "truncate" in n.dataset), dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ true, 3, true, true ], row, "at #{width}: stacked under the label, three names, each with its full text in title"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "a company with many roles lists them under the label, none overflowing, at 360 and 390" do
+    ge = cite!(company("GE Vernova Hitachi Nuclear Energy", roles: %w[reactor_vendor fuel components reactor_services waste_decommissioning].map { |key| Role.find_by(key:) || role(key) }))
+    [ [ 360, 800 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{ge.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => /^Roles?$/.test(el.textContent.trim())), dd = dt.nextElementSibling
+          return [dt.textContent.trim(), dt.classList.contains("nd-overview__stack"), dd.querySelectorAll(".nd-overview__name").length > 1, dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ "Roles", true, true, true ], row, "at #{width}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "the key-facts edge check sees an inset value, stacked or beside its label" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}: clean before the inset"
+      page.execute_script("document.querySelector('.nd-overview .nd-overview__val:not(:has(ul))').style.paddingLeft = '6px'")
+      found = page.evaluate_script(AUDIT)
+      assert found.any? { |problem| problem.include?("edge") }, "at #{width}: a value inset by padding is reported, got #{found.inspect}"
+    end
+  end
+
+  test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
+    resize_viewport(1440, 900)
+    visit "/plants/#{@plant.slug}"
+
+    row = page.evaluate_script(<<~JS)
+      (() => {
+        const keep = document.querySelector(".nd-overview__keep")
+        const dd = keep.closest("dd"), dt = dd.previousElementSibling, last = keep.querySelector(".nd-overview__last")
+        return [getComputedStyle(dt).gridColumnStart, getComputedStyle(dd).gridColumnStart, last.textContent,
+          last.scrollWidth <= last.clientWidth, parseFloat(getComputedStyle(last).fontSize) >= 13]
+      })()
+    JS
+    assert_equal [ "1", "1", "Southern Nuclear Operating Co., Inc.", true, true ], row, "stacked at the panel's width, the last owner uncut"
+    assert_empty page.evaluate_script(AUDIT)
+  end
+
+  test "a long owner before the last ends in an ellipsis inside the column, with its full name in title" do
+    long = "Constellation Energy Generation Company of Illinois, Maryland, New York and Pennsylvania, LLC"
+    Organization.find_by!(name: "Constellation Energy Generation").update!(name: long)
+    [ [ 1440, 900 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/plants/#{@plant.slug}"
+
+      fits = page.evaluate_script(<<~JS)
+        (() => {
+          const keep = document.querySelector(".nd-overview__keep")
+          const dd = keep.closest("dd"), first = dd.querySelector(".nd-overview__val a")
+          return [dd.scrollWidth <= dd.clientWidth, first.getBoundingClientRect().right <= dd.getBoundingClientRect().right + 1, first.title, "truncate" in first.dataset]
+        })()
+      JS
+      assert_equal [ true, true, long, true ], fits, "at #{width}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "a long last owner and its numbers stay inside the key facts column at 1440" do
+    # Last in the list, by name.
+    Organization.find_by!(name: "Southern Nuclear Operating Co., Inc.").update!(name: "Southern Nuclear Operating Company of Alabama, Georgia and Mississippi, Inc.")
+    resize_viewport(1440, 900)
+    visit "/plants/#{@plant.slug}"
+
+    keep = page.evaluate_script(<<~JS)
+      (() => {
+        const keep = document.querySelector(".nd-overview__keep")
+        const dd = keep.closest("dd"), last = keep.querySelector(".nd-overview__last"), cites = keep.querySelector(".nd-overview__cites")
+        const box = dd.getBoundingClientRect()
+        return [dd.scrollWidth <= dd.clientWidth, keep.getBoundingClientRect().right <= box.right + 1,
+          cites.getBoundingClientRect().right <= box.right + 1, cites.getBoundingClientRect().width > 0, last.title]
+      })()
+    JS
+    assert_equal [ true, true, true, true ], keep.first(4), "the last owner and its numbers fit the column"
+    assert_match(/Southern Nuclear Operating Company of Alabama/, keep.last)
+    assert_empty page.evaluate_script(AUDIT)
+  end
+
   [ [ 360, 800 ], [ 390, 844 ] ].each do |width, height|
     test "nothing wraps and no source number stands alone at #{width}" do
       resize_viewport(width, height)

@@ -50,8 +50,8 @@ class DataQuality::DirectoryClient
   end
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
-  def organization(name: nil, domain: nil)
-    record("Organization", lookup.organization(name:, domain:))
+  def organization(name: nil, domain: nil, sec_cik: nil)
+    record("Organization", lookup.organization(name:, domain:, sec_cik:))
   end
 
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
@@ -326,6 +326,10 @@ class DataQuality::DirectoryClient
   # A fact's evidence (Directory::EvidenceRef).
   def evidence(type:, id:) = lookup.evidence(type:, id:)
 
+  # Whether a correction report on the fact's public page (a link's, either
+  # end's) is still unresolved.
+  def open_corrections?(type:, id:) = lookup.open_corrections?(type:, id:)
+
   MERGES = { "Organization" => :merge_organization, "Facility" => :merge_facility }.freeze
 
   # A person's merge of one company or plant site into another (#142), as the
@@ -430,7 +434,9 @@ class DataQuality::DirectoryClient
               (facility(eia_plant_id: named["eia_plant_id"]) if named["eia_plant_id"].present?) ||
               (facility(name: named["name"]) if named["name"].present?)
           else
-            (organization(name: named["name"]) if named["name"].present?) ||
+            # The SEC's CIK first, as Match and FactWriter find a company (#129).
+            (organization(sec_cik: named["sec_cik"]) if named["sec_cik"].present?) ||
+              (organization(name: named["name"]) if named["name"].present?) ||
               (organization(domain: named["domain"]) if named["domain"].present?)
           end
         ids[:"#{key}_id"] = found&.id

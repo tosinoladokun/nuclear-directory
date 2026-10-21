@@ -225,7 +225,9 @@ class DirectoryRakeTest < ActiveSupport::TestCase
     verified.evidence.create!(source: xenergy_page, quote: "row", found_by: "crawler", confidence: 1)
     pending.evidence.create!(source: kairos_page, quote: "row", found_by: "crawler", confidence: 1)
 
-    assert_output(/3 award terms would be written, 0 already there.\nDry run/) { backfill_award_terms(BY: by) }
+    assert_output(/3 award terms would be written, 0 already there.\n2 on verified links \(written verified\), 1 on pending links \(written pending\).\nDry run/) do
+      backfill_award_terms(BY: by)
+    end
     assert_equal 0, DealTerm.count
 
     assert_output(/3 award terms written, 0 already there/) { backfill_award_terms(BY: by, APPLY: "1") }

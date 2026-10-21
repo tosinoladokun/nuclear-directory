@@ -13,10 +13,13 @@ module Directory
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
     # domain accepts a bare domain or a URL.
-    def organization(id: nil, slug: nil, name: nil, domain: nil)
+    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
       scope =
-        case one_of!(id:, slug:, name:, domain:)
+        case one_of!(id:, slug:, name:, domain:, sec_cik:)
         in [ :id, value ] then Organization.where(id: value)
+        in [ :sec_cik, value ]
+          cik = Organization.cik_from(value) or return
+          Organization.where(sec_cik: cik)
         in [ :slug, value ] then Organization.where(slug: value)
         in [ :name, value ]
           normalized = OrganizationAlias.normalize(value).presence or return
@@ -97,6 +100,45 @@ module Directory
 
       Evidence.where(subject_type: type.to_s, subject_id: id).order(:id).map { |row| EvidenceRef.from(row) }
     end
+
+    # Whether anyone has an unresolved correction report (open or reviewed,
+    # not closed) on the public page of a fact or, for a link, of either
+    # end: a company's or a plant's page, query, fragment and format aside. Its
+    # former addresses count too (a rename or a merge redirects them there),
+    # unless another record now lives at one, since that page is the other
+    # record's.
+    def open_corrections?(type:, id:)
+      raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
+
+      record = type.to_s.constantize.find_by(id:) or return false
+      company = ->(organization) { addresses("companies", organization) }
+      # A unit's own addresses redirect to its site's page, so a report filed
+      # there (before it was grouped, say) is about it too.
+      plant = ->(facility) { addresses("plants", facility) + (facility.parent ? addresses("plants", facility.parent) : []) }
+      pages = case record
+      when Organization then company.(record)
+      when Facility then plant.(record)
+      when Relationship then company.(record.from_organization) + company.(record.to_organization)
+      when FacilityRelationship then company.(record.organization) + plant.(record.facility)
+      else company.(record.organization)
+      end
+      CorrectionReport.where(status: %w[open reviewed])
+        # The page's own path: no query or fragment, no trailing slash and no
+        # format (/companies/x/ and /companies/x.html are /companies/x).
+        .where("regexp_replace(regexp_replace(split_part(split_part(page_path, '?', 1), '#', 1), '/+$', ''), '\\.[a-z]+$', '') IN (:pages)", pages:)
+        .exists?
+    end
+
+    # A company's or a plant's public paths: today's, then its former ones
+    # that no published record holds now. A merged company keeps its slug
+    # on its unpublished row, and its address redirects to the survivor, so
+    # only a published one wins the address (as the public pages decide).
+    def addresses(prefix, record)
+      former = record.former_slugs.pluck(:slug)
+      former -= record.class.published.where(slug: former).pluck(:slug)
+      [ record.slug, *former ].map { |slug| "/#{prefix}/#{slug}" }
+    end
+    private :addresses
 
     # How many public facts (any type) have evidence from these sources.
     def published_count_backed_by(source_ids:)

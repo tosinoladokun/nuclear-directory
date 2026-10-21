@@ -173,10 +173,6 @@ module DirectoryHelper
     [ [ profile.name, place(profile.city, profile.state) ].compact.join(", "), who ].compact.join(": ")
   end
 
-  # Values up to this many characters stay on one line in the key facts,
-  # shrinking to fit; longer ones (lists) wrap (Tosin's no-wrap rule).
-  FIT_CHARS = 32
-
   # A list value ("A, B, C", names possibly links) split before its last
   # item, so that item can stay on a line with its source numbers. Only a
   # ", " between items counts, never one inside a name or a link ("Southern
@@ -191,6 +187,14 @@ module DirectoryHelper
     index = nodes.rindex { |node| node.text? && node.text.include?(", ") }
     return unless index
 
+    # A name before the last can still be longer than the column: it may end
+    # in "…", so it carries its full name (Tosin's no-wrap rule).
+    nodes[0...index].each do |node|
+      next unless node.element?
+
+      node["title"] ||= node.text.squish
+      node["data-truncate"] = ""
+    end
     before, _, after = nodes[index].text.rpartition(", ")
     escape = ->(text) { ERB::Util.html_escape(text).to_str }
     render = ->(list) { list.map { |node| node.text? ? escape.(node.text) : node.to_html }.join }

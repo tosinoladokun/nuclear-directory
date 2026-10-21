@@ -62,7 +62,27 @@ with_retries "prepare ${schema}" "
       EXECUTE format('DROP SCHEMA %I CASCADE', s);
     END LOOP;
   END \$\$;"
-PGOPTIONS="$timeouts -c search_path=${schema}" bin/rails db:schema:load db:seed
+# The build. Seeding takes plant-name advisory locks, which cover the whole
+# database, not one schema, so a write on the old preview (still serving, for
+# example an admin action during QA) can hold one past lock_timeout (17 Oct,
+# #320). On a failure: end the old instance's sessions, start the schema
+# afresh and try again. After 3 tries this start fails and the old preview
+# keeps serving.
+built=""
+for attempt in 1 2 3; do
+  if PGOPTIONS="$timeouts -c search_path=${schema}" bin/rails db:schema:load db:seed; then
+    built=1
+    break
+  fi
+  [[ $attempt == 3 ]] && break
+  echo "preview-start: building the preview data failed (attempt ${attempt}); retrying in $((attempt * 5))s." >&2
+  sleep $((attempt * 5))
+  with_retries "reset ${schema}" "DROP SCHEMA IF EXISTS ${schema} CASCADE; CREATE SCHEMA ${schema};" || exit 1
+done
+if [[ -z "$built" ]]; then
+  echo "preview-start: couldn't build the preview data after 3 tries; the old preview keeps serving." >&2
+  exit 1
+fi
 
 # The preview's admin login, from PREVIEW_ADMIN_PASSWORD. A problem here (unset
 # or rejected password) is logged and never stops the preview.

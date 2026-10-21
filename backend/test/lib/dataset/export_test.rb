@@ -129,17 +129,24 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     assert_includes file("LICENSE"), "https://creativecommons.org/licenses/by/4.0/legalcode"
   end
 
-  test "shows what the site shows: an unsourced company keeps only its identity; unsourced tags, units and links are left out" do
-    @doe.update!(description: "Funds research.", website: "https://www.energy.gov") # no evidence on DOE itself
-    unsourced_unit = Facility.create!(name: "Hermes 1", parent: @site, nrc_docket: "05007513", verification_status: "verified", verified_by: BY)
+  test "shows what the site shows: an unsourced company or unit keeps only its identity; unsourced tags are left out" do
+    @doe.update!(description: "Funds research.", website: "https://www.energy.gov", status: "defunct") # no evidence on DOE itself
+    unsourced_unit = Facility.create!(name: "Hermes 1", parent: @site, nrc_docket: "05007513", status: "under_construction", capacity_mw: 35,
+      verification_status: "verified", verified_by: BY)
+    unit_link = FacilityRelationship.create!(organization: @kairos, facility: unsourced_unit, relationship_type: "operates",
+      verification_status: "verified", verified_by: BY)
+    unit_link.evidence.create!(source: @source, quote: "Kairos Power operates Hermes 1.", found_by: "human", confidence: 1)
     @kairos.organization_technologies.create!(technology: Technology.find_or_create_by!(key: "fission") { |t| t.name = "Fission" },
       verification_status: "verified", verified_by: BY)
     export
     companies = JSON.parse(file("companies.json")).index_by { |row| row["slug"] }
 
-    assert_equal [ "U.S. Department of Energy", nil, nil ], companies["u-s-department-of-energy"].values_at("name", "description", "website")
+    assert_equal [ "U.S. Department of Energy", nil, nil, nil ], companies["u-s-department-of-energy"].values_at("name", "description", "website", "status"),
+      "nor its status, which needs a source like its other details"
     assert_empty companies["kairos-power"]["technologies"], "a technology without a quote isn't listed"
-    assert_not_includes read("facilities").map { |row| row["slug"] }, unsourced_unit.slug
+    unit = read("facilities").find { |row| row["slug"] == unsourced_unit.slug }
+    assert_equal [ "unit", @site.slug, nil, nil, nil ], unit.fields("level", "site_slug", "status", "capacity_mw", "country_code"), "an identity row"
+    assert_includes read("relationships").map { |row| row["id"] }, "facility-#{unit_link.id}", "its sourced link is kept"
   end
 
   test "a pending site public through its unit shows only its identity, and the unit in full" do
@@ -151,7 +158,8 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     export
     rows = read("facilities").index_by { |row| row["slug"] }
 
-    assert_equal [ "site", nil, nil, nil ], rows[site.slug].fields("level", "facility_type", "state", "city"), "a pending site's details stay hidden"
+    assert_equal [ "site", nil, nil, nil, nil ], rows[site.slug].fields("level", "facility_type", "state", "city", "country_code"),
+      "a pending site's details, its country included, stay hidden"
     assert_equal [ "unit", site.slug, "operating", "1114.0" ], rows[unit.slug].fields("level", "site_slug", "status", "capacity_mw")
     assert_not read("evidence").any? { |row| row["fact_key"] == site.slug }, "nor is its evidence listed"
   end

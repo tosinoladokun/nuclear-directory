@@ -40,6 +40,8 @@ class DataQuality::Plugins::DoeIsotopeSites < DataQuality::Plugin
       source.source_kind = source_kind
       source.title = "DOE Isotope Program: production sites"
     end
+    # A page someone cited by hand (a plain web_page source) becomes this plug-in's, so it's extracted.
+    page.update!(source_kind:) if page.source_kind == "web_page"
     stats = { "page" => DataQuality::Snapshot.take(page, fetcher: @fetcher).to_s }
     return stats.merge("stopped" => "page blocked") if stats["page"] == "blocked"
     return stats unless page.crawl_ok? && page.content_text.present?

@@ -21,7 +21,7 @@ class DataQuality::FetcherTest < ActiveSupport::TestCase
 
   test "identifies itself honestly and returns the page with its validators" do
     stub = stub_request(:get, PAGE)
-      .with(headers: { "User-Agent" => "NuclearDirectoryBot/0.1 (+https://nuclear-directory.org/bot)" })
+      .with(headers: { "User-Agent" => "NuclearDirectoryBot/0.1 (+https://nuclear-directory.org/bot; bot@mail.nuclear-directory.org)" })
       .to_return(body: "<p>hi</p>", headers: { "ETag" => '"v1"', "Last-Modified" => "Fri, 09 Oct 2026 20:40:21 GMT",
         "Content-Type" => "text/html; charset=utf-8" })
 

@@ -6,7 +6,9 @@
 class DealTerm < ApplicationRecord
   include Verifiable
 
-  LINK_TYPES = %w[Relationship FacilityRelationship].freeze
+  # A Form D round names no investors, so it sits on the company itself
+  # (PM, 18 Oct 2026, #129): link_type "Organization", rounds only.
+  LINK_TYPES = %w[Relationship FacilityRelationship Organization].freeze
 
   enum :term_type, %w[award offtake funding_round].index_by(&:itself), validate: true
   enum :status, %w[announced signed active completed terminated].index_by(&:itself), validate: { allow_nil: true },
@@ -22,7 +24,9 @@ class DealTerm < ApplicationRecord
   validates :link_type, inclusion: { in: LINK_TYPES }
   validates :link, presence: true, if: -> { LINK_TYPES.include?(link_type) }
   validates :external_id, uniqueness: { scope: %i[link_type link_id term_type] }, allow_nil: true
-  validates :amount_usd, :capacity_mw, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :amount_usd, :amount_offered_usd, :capacity_mw, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :term_type, inclusion: { in: %w[funding_round], message: "on a company itself must be a funding round" },
+    if: -> { link_type == "Organization" }
   validates :amount_usd, :starts_on, :external_id, presence: true, if: :award?
   validate :what_an_offtake_needs, if: :offtake?
   validate :what_a_round_needs, if: :funding_round?
@@ -32,6 +36,7 @@ class DealTerm < ApplicationRecord
   def self.published
     verified.where(link_type: "Relationship", link_id: Relationship.published.select(:id))
       .or(verified.where(link_type: "FacilityRelationship", link_id: FacilityRelationship.published.select(:id)))
+      .or(verified.where(link_type: "Organization", link_id: Organization.published.select(:id)))
   end
 
   private

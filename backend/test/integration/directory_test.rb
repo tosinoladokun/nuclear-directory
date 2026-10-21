@@ -165,16 +165,19 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "#plants-heading", count: 0
   end
 
-  # Path data of the site icons, to tell which one a ring holds.
-  PWR_ICON = "M5 20v-7a7 7 0 0 1 14 0v7"
-  BWR_ICON = "M4 20V9h10v11"
+  # Path data of the site icons, to tell which one a ring holds. All three
+  # power plant glyphs share a cooling tower; the reactor building tells them
+  # apart: a dome (PWR), a box (BWR), a low turbine hall (type unknown).
+  PWR_ICON = "M13 20v-4a4 4 0 0 1 8 0v4"
+  BWR_ICON = "M13 20v-8h8v8"
+  PLANT_ICON = "M12 20v-5h9v5"
 
   test "a pending site whose own type isn't public keeps the plain icon, whatever its units' reactor types" do
     site = plant("Quiet Research Site", verified: false, facility_type: "research_reactor")
     cite!(plant("Quiet Research Site Reactor", parent: site, reactor_type: "TRIGA"))
     get companies_path(category: "plants")
 
-    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-ring").to_s, "M4 20c1.2-4 1.2-8 0-12h6", "site-plant"
+    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-ring").to_s, PLANT_ICON, "site-plant"
   end
 
   test "an unsourced site's own status doesn't pick its icon, in the directory or instant search" do

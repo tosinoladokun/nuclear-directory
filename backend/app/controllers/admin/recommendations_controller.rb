@@ -2,6 +2,9 @@
 # (one call per claim), sees exactly which claims Accept will decide and
 # which are left for him and why, then accepts them in one click. Each is
 # recorded as his decision, "Accepted Data Quality's recommendation: …".
+# The same click takes the verifier's recommendations in a safe class
+# that's on (DataQuality::SafeClasses), recorded as "Accepted the
+# verifier's recommendation (safe class S1: …)".
 class Admin::RecommendationsController < Admin::BaseController
   def show
     @plan = DataQuality::Recommendations.plan
@@ -27,12 +30,12 @@ class Admin::RecommendationsController < Admin::BaseController
   # since, nothing is accepted.
   def accept
     plan = DataQuality::Recommendations.plan
-    if plan.accept.empty?
+    if plan.nothing?
       flash[:alert] = "Nothing to accept."
     elsif params[:shown] != plan.fingerprint
       flash[:alert] = "The list changed since you opened it, so nothing was accepted. Check it and try again."
     else
-      results = DataQuality::Recommendations.accept(plan.accept, by: actor)
+      results = DataQuality::Recommendations.accept(plan.accept, by: actor) + DataQuality::SafeClasses.accept(plan.safe_accept, by: actor)
       done, failed = results.partition(&:ok?)
       flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'recommendation')}." if done.any?
       flash[:alert] = failed.map { |result| "Claim #{result.candidate_id}: #{result.errors.to_sentence}" }.join(" ") if failed.any?
