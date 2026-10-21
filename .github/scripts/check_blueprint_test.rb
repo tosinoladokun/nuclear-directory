@@ -72,6 +72,29 @@ class CheckBlueprintTest < Minitest::Test
     assert_includes output, "the preview must not set SOME_NEW_SETTING"
   end
 
+  # #147: the Host-header allowlist.
+  def test_the_web_service_must_name_our_domain_in_app_hosts
+    ok, output = check_blueprint do |blueprint|
+      web_vars(blueprint).delete_if { |var| var.is_a?(Hash) && var["key"] == "APP_HOSTS" }
+    end
+    refute ok
+    assert_includes output, "nuclear-directory's APP_HOSTS must be a plain value including nuclear-directory.org"
+  end
+
+  def test_the_web_service_app_hosts_must_be_a_plain_value_not_a_reference
+    ok, output = check_blueprint do |blueprint|
+      web_vars(blueprint).find { |var| var["key"] == "APP_HOSTS" }
+        .replace("key" => "APP_HOSTS", "fromGroup" => "hosts")
+    end
+    refute ok
+    assert_includes output, "nuclear-directory's APP_HOSTS must be a plain value including nuclear-directory.org"
+  end
+
+  def test_the_preview_can_set_app_hosts
+    ok, _output = check_preview { |vars| vars << { "key" => "APP_HOSTS", "value" => "nuclear-directory-preview.onrender.com" } }
+    assert ok
+  end
+
   def test_the_preview_admin_password_is_set_by_hand
     ok, output = check_preview do |vars|
       vars.find { |var| var["key"] == "PREVIEW_ADMIN_PASSWORD" }.replace("key" => "PREVIEW_ADMIN_PASSWORD", "value" => "in-the-repo")

@@ -14,7 +14,7 @@ class DataQuality::Repairs::ApproveAll20261016Test < ActiveSupport::TestCase
       ActiveRecord::Base.connection.execute("SELECT setval('#{table}_id_seq', GREATEST(1000, (SELECT last_value FROM #{table}_id_seq)))")
     end
     @doe = Organization.create!(name: "U.S. Department of Energy", **VERIFIED)
-    @terrapower = Organization.create!(name: "TerraPower", **VERIFIED)
+    @terrapower = Organization.create!(name: "TerraPower", slug: "terrapower-repair", **VERIFIED)
     @restored = link(@terrapower, "#{Repair::FUNDER}$1.7 billion, 2021: DENE0009054.", started_on: Date.new(2021, 1, 1))
     @bwxt = Organization.create!(name: "BWXT NUCLEAR ENERGY, INC.", **VERIFIED)
     @bwxt_link = link(@bwxt, "#{Repair::FUNDER}$99.9 million, 2023: 89233123FNA400535.", started_on: Date.new(2023, 1, 1))
