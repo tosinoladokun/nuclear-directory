@@ -2,13 +2,8 @@
 # on every deploy (preview URLs and the real domain alike).
 class SitemapsController < ApplicationController
   def show
-    @companies = Organization.published.select(:slug).order(:slug)
-    @plants = Facility.published.where(parent_id: nil).select(:slug).order(:slug)
-    # Buckets and tag pages that list someone (#281); an empty one isn't
-    # linked anywhere. Plants and sites always is.
-    counts = DirectoryListing.category_counts
-    @categories = Category.all.select { |category| category.plants || counts[category.key].to_i.positive? }
-    @tags = Tag.all.select { |tag| Organization.where(id: tag.organization_ids).exists? }
+    pages = PublicPages.new
+    @companies, @plants, @categories, @tags = pages.companies, pages.plants, pages.categories, pages.tags
     expires_in 1.hour, public: true
   end
 
