@@ -46,6 +46,8 @@ Rails.application.routes.draw do
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
     get "status", to: redirect("/admin/sources")
     get "checks" => "checks#show", as: :checks
+    # Where it appears (#166): what the public sees of the directory, and where.
+    get "where-it-appears" => "outputs#show", as: :outputs
     # Data Quality's recommendations (#306): paste its list, see exactly
     # what Accept will do, then accept them as one decision.
     scope "checks/recommendations", as: :recommendations do
