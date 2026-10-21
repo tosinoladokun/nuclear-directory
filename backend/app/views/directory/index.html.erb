@@ -69,6 +69,7 @@
         <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#count" } do %>
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
           <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
+          <%# A category's role (Reactor designer, Project developer) stays through the filters and their count. %>
           <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
           <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>

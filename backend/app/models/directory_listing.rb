@@ -13,7 +13,7 @@ class DirectoryListing
   SORTS = { "name" => "A to Z", "connections" => "Most connected" }.freeze
 
   # The Developers category is one list told apart by role (Tosin, 21 Oct): a
-  # reactor designer or a project developer. Only it has the role filter.
+  # reactor designer or a project developer. Its rows show the role as a chip.
   ROLE_FILTER_CATEGORY = "reactor-developers"
 
   attr_reader :category, :tag, :query, :technology, :state, :sort, :role
@@ -21,7 +21,6 @@ class DirectoryListing
   # Unknown values are ignored rather than raising: these come from the URL.
   def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil)
     @category = Category.find(category)
-    @role = role.to_s.presence&.presence_in(role_options) if @category&.key == ROLE_FILTER_CATEGORY
     # A tag narrows companies, so it's ignored on Plants and sites.
     @tag = Tag.find(tag) unless @category&.plants
     @query = q.to_s.strip.first(100).presence
@@ -30,6 +29,9 @@ class DirectoryListing
     @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last))
     @state = state.to_s.strip.upcase.presence&.presence_in(state_options)
     @sort = SORTS.key?(sort.to_s) ? sort.to_s : "name"
+    # A bucket made of several roles narrows to one of them (Developers:
+    # reactor designers or project developers). Any other value is dropped.
+    @role = role.to_s.presence&.presence_in(@category.role_keys) if @category && @category.role_keys.size > 1
   end
 
   # Number of published companies in each bucket, and of plants and sites,
@@ -62,10 +64,10 @@ class DirectoryListing
     scope = Organization.published
     scope = scope.where(id: Bucket.organization_ids(category)) if category
     scope = scope.where(id: tag.organization_ids) if tag
+    scope = scope.where(id: Bucket.role_member_ids(role)) if role
     scope = matching_companies(scope) if query
     scope = with_technology(scope) if technology
     scope = scope.where(hq_state: state) if state
-    scope = scope.where(id: OrganizationRole.published.joins(:role).where(roles: { key: role }).select(:organization_id)) if role
     scope
   end
 
