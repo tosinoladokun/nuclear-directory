@@ -43,6 +43,19 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     assert_empty page.evaluate_script(AUDIT)
   end
 
+  test "a keyboard user who activates Show more keeps their place: focus lands on the first new result and Tab goes on from there" do
+    visit companies_path
+    assert page.evaluate_script("typeof Turbo !== 'undefined' && !!document.querySelector('turbo-frame#directory-rows[data-controller=keep-scroll]')")
+    page.execute_script("[...document.querySelectorAll('a')].find((el) => el.textContent.trim() === 'Show more').focus()")
+    page.send_keys(:enter)
+    assert_selector "main ul.nd-list > li", count: DirectoryController::PAGE + 8, wait: 20
+
+    focused = page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')], i = rows.indexOf(document.activeElement); return [i, rows.length] })()")
+    assert_equal [ DirectoryController::PAGE, DirectoryController::PAGE + 8 ], focused, "the first newly shown company has focus"
+    page.send_keys(:tab)
+    assert_equal DirectoryController::PAGE + 1, page.evaluate_script("[...document.querySelectorAll('ul.nd-list a.nd-listrow')].indexOf(document.activeElement)"), "Tab moves to the next company"
+  end
+
   test "a company link in the list opens its page, not a frame" do
     visit companies_path
     first("main ul.nd-list > li a").click
