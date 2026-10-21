@@ -603,6 +603,9 @@
   .nd-live__table td:first-child { white-space: normal; }
   .nd-live__table td { text-align: left; }
   .nd-live__table th { text-align: left; }
+  /* Where it appears (#166): what each output shows is long-form, so it wraps. */
+  .nd-outputs td:first-child { white-space: nowrap; }
+  .nd-outputs td:nth-child(3) { white-space: normal; min-width: 14rem; }
   @media (max-width: 560px) {
     .nd-live__filters > summary { display: inline-flex; list-style: none; }
     .nd-live__filters > summary::-webkit-details-marker { display: none; }
@@ -618,6 +621,7 @@
     /* The whole stacked row is the link (44px and more), not just the name. */
     .nd-live__table tr { position: relative; min-height: 44px; }
     .nd-live__table td:first-child a::after { content: ""; position: absolute; inset: 0; }
+    .nd-outputs td a { display: inline-flex; align-items: center; min-height: 44px; }
     .nd-live__foot a, .nd-split__main > .nd-shell__head a { display: inline-flex; align-items: center; min-height: 44px; }
   }
 

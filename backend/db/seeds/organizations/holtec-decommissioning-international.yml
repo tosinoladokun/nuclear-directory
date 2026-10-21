@@ -22,7 +22,12 @@ relationships:
   source_url: https://holtecinternational.com/company/divisions/hdi/
   quote: Holtec Decommissioning International, a wholly-owned subsidiary of Holtec International
   confidence: 1.0
-facilities: []
+facilities:
+- name: Pilgrim Nuclear Power Station
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/pilg
+  quote: The PNPS and the Pilgrim ISFSI are currently owned by Holtec International, and the licensed decommissioning operator is Holtec Decommissioning International, LLC (HDI).
+  confidence: 1.0
 notes: 'Decision for the HDI claims in Checks (1273, 1279, 1287, 1291 and the links that wait on them): HDI is its own company with its own site, and Holtec states it is a wholly owned subsidiary, so it is a company linked by subsidiary_of, not an alias of Holtec International. HQ and country left blank: no page read states where it is based. The operator links for Indian Point 2 and 3 and Oyster Creek stay with the pipeline: their NRC quotes are transfer applications, not the completed transfer.'
 description:
   text: Decommissioning company, a wholly owned subsidiary of Holtec International, for shut-down nuclear power plants.
