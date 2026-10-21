@@ -44,7 +44,7 @@ Rails.application.routes.draw do
     get "sources" => "sources#index", as: :sources
     get "sources/search" => "sources#search", as: :sources_search
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
-    get "status", to: redirect("/admin/sources")
+    get "status", to: redirect("/admin")
     # Today (#373): the day's review in four steps. Checks stays as step 3's list.
     get "today" => "today#show", as: :today
     post "today/list" => "today#list", as: :today_list
