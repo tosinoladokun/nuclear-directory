@@ -76,4 +76,15 @@ class Admin::RemovedTest < ActionDispatch::IntegrationTest
     css = Rails.root.join("app/assets/tailwind/design_system/components.css").read
     assert_includes css, ".nd-removed td:not(:first-child) a, .nd-removed td form { position: relative; z-index: 1; }"
   end
+
+  test "a record or link opened from Removed leads back to Removed" do
+    get admin_removed_path
+    record = css_select("#row-Organization-#{@taken.id} td:first-child a").first["href"]
+    link = css_select("#row-Relationship-#{@link.id} td:first-child a").first["href"]
+
+    get record
+    assert_select ".nd-crumbs a", text: "Removed"
+    get link
+    assert_select ".nd-crumbs a[href^=?]", "/admin/removed", text: "Removed"
+  end
 end

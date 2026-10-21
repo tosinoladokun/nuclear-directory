@@ -101,11 +101,12 @@ module AdminHelper
 
   # Where a Live row opens: a company's or plant's Record page, else the
   # fact page; either with a way back to this list.
-  def live_row_path(row, back)
+  # from: the list it's opened from ("live" or "removed"), for its back link.
+  def live_row_path(row, back, from: "live")
     if row.type == "Organization" || (row.type == "Facility" && row.kind == "Plant")
-      admin_record_path(type: row.type, id: row.id, back:)
+      admin_record_path(type: row.type, id: row.id, back:, from: (from unless from == "live"))
     else
-      admin_fact_path(type: row.type, id: row.id, from: "live", back:)
+      admin_fact_path(type: row.type, id: row.id, from:, back:)
     end
   end
 

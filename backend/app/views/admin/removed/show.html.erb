@@ -20,7 +20,7 @@
       <tbody>
         <% @rows.each do |row| %>
           <tr id="row-<%= row.type %>-<%= row.id %>">
-            <td class="type-body"><%= link_to row.name, live_row_path(row, request.fullpath), class: "nd-link" %></td>
+            <td class="type-body"><%= link_to row.name, live_row_path(row, request.fullpath, from: "removed"), class: "nd-link" %></td>
             <td class="type-body">
               <%= row.kind %> <span class="text-ink-muted">· <%= row.what %></span>
               <% if (into = row.merged_into) && into.last %>
