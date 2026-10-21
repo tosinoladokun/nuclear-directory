@@ -26,6 +26,7 @@ class DirectoryController < ApplicationController
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
-    track_search(@listing.query, results: @companies_total + @plants_total, source:) if @listing.searching?
+    # Show more (?shown=2) is the same search, expanded: not a new one.
+    track_search(@listing.query, results: @companies_total + @plants_total, source:) if @listing.searching? && params[:shown].blank?
   end
 end
