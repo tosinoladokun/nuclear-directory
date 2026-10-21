@@ -173,4 +173,31 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_equal "Can't undo this: it changed since, so it can't be undone here.", flash[:alert]
     assert @only_joy.reload.status_rejected?
   end
+
+  test "the same fact from another page is one row, decided in one click" do
+    other = Source.create!(url: "https://www.doe.gov/test/today-review.html", source_kind: "web_page", crawl_status: "ok", title: "DOE page", content_sha256: "sha")
+    again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also listed.", crawl_run: @only_joy.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "recommend_publish",
+      ai_reason: "DOE lists it.", ai_confidence: 0.9, ai_source_sha256: "sha")
+
+    get admin_today_review_path
+    assert_select "h2", /Only Joy checked\s+2/
+    assert_select "#fact-#{again.id}", /Also on 1 other page: nrc\.gov ↗\. One decision covers both\./
+    assert_select "#fact-#{@only_joy.id}", 0
+
+    post admin_today_review_decide_path(candidate_id: again.id, decision: "reject"), params: { same: [ again.id, @only_joy.id ] }
+    assert again.reload.status_rejected?
+    assert @only_joy.reload.status_rejected?
+  end
+
+  test "a new company several pages propose is one decision" do
+    proposals = [ @source, Source.create!(url: "https://example.com/news", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha") ].map do |source|
+      Candidate.create!(source:, kind: "organization", payload: { "name" => "Brand New Fission" }, quote: "Brand New Fission was founded.",
+        crawl_run: @both.crawl_run, status: "needs_review", notes: "new company", ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    end
+
+    get admin_today_review_path
+    assert_select "li.nd-verdict", text: /Brand New Fission/, count: 1
+    assert_select "li.nd-verdict", /Brand New Fission.*One decision covers both/m
+  end
 end

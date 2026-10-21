@@ -55,6 +55,11 @@
               <% if item.differences.any? %>
                 <p class="type-small m-0">Accepting replaces the checked <%= item.differences.map { |name, (stored, incoming)| "#{field_label(name).downcase_first} (#{stored} → #{incoming})" }.to_sentence %>.</p>
               <% end %>
+              <% if row.others.any? %>
+                <p class="type-small m-0">Also on <%= pluralize(row.others.size, "other page") %>:
+                  <%= safe_join(row.others.map { |other| (url = safe_url(other.source.url)) ? link_to("#{source_host(url)} ↗", url, class: "nd-link", target: "_blank", rel: "noopener") : other.source.url }, ", ") %>.
+                  One decision covers <%= row.others.one? ? "both" : "all #{row.others.size + 1}" %>.</p>
+              <% end %>
               <details class="type-small">
                 <summary class="nd-link">Why, and the source</summary>
                 <p class="m-0"><%= joy %>: <%= item.ai_reason.presence || "no reason given" %></p>
@@ -65,9 +70,9 @@
               </details>
             </div>
             <div class="nd-wait__actions nd-verdict__actions">
-              <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept", shown:),
+              <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept", shown:), params: { same: row.candidate_ids },
                 class: "nd-btn #{row.agree? ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui" %>
-              <%= button_to row.item.differences.any? ? "Keep" : "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject", shown:),
+              <%= button_to row.item.differences.any? ? "Keep" : "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject", shown:), params: { same: row.candidate_ids },
                 class: "nd-btn nd-btn--outline type-ui" %>
             </div>
           </li>

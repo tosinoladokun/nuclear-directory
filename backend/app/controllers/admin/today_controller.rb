@@ -46,11 +46,18 @@ class Admin::TodayController < Admin::BaseController
   # Accept or Reject one fact, as the admin's decision (every check still runs).
   def decide
     id = params[:candidate_id].to_i
-    before = DataQuality::Review.undo_state(id)
-    result = if params[:decision] == "accept"
-      DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today").first
+    # The same fact from other pages is decided with it (each checked as usual).
+    same = Array(params[:same]).map(&:to_i) - [ id ]
+    before = DataQuality::Review.undo_state(id) if same.empty?
+    results = if params[:decision] == "accept"
+      DataQuality::Review.approve([ id, *same ], by: actor, reason: "Accepted in Today")
     else
-      DataQuality::Review.reject([ id ], by: actor, reason: "Rejected in Today").first
+      DataQuality::Review.reject([ id, *same ], by: actor, reason: "Rejected in Today")
+    end
+    result = results.find { |r| r.candidate_id == id } || results.first
+    if result&.ok? && (stopped = results.reject(&:ok?)).any?
+      result = DataQuality::Review::Result.new(candidate_id: id, ref: nil,
+        errors: stopped.map { |r| "##{r.candidate_id}: #{Array(r.errors).to_sentence}" })
     end
     if result&.ok?
       flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
@@ -66,7 +73,7 @@ class Admin::TodayController < Admin::BaseController
   end
 
   # Undo the last Accept or Reject, while nothing else has changed it.
-  def undo
+  def undo_decision
     state = undo_verifier.verified(params[:token].to_s)
     result = state && DataQuality::Review.undo(state, by: actor)
     if result&.ok?

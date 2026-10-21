@@ -14,8 +14,12 @@
 class TodayReview
   GROUPS = %w[agree only_joy disagree].freeze
   PAGE = 50
-  Row = Data.define(:item, :joy, :aminah, :group) do
+  # others: the same fact from other pages (or the same new company
+  # several pages propose), decided with it in one click.
+  Row = Data.define(:item, :joy, :aminah, :group, :others) do
+    def initialize(others: [], **) = super
     def candidate_id = item.candidate_id
+    def candidate_ids = [ item, *others ].map(&:candidate_id)
     def agree? = group == "agree"
   end
 
@@ -35,10 +39,11 @@ class TodayReview
 
   def rows(group)
     @rows ||= {}
-    @rows[group] ||= DataQuality::Review.items(ids.fetch(group).first(shown(group)), directory: @directory).map do |item|
-      joy, aminah = verdicts(item)
-      Row.new(item:, joy:, aminah:, group:)
-    end
+    @rows[group] ||= DataQuality::Review.items(ids.fetch(group).first(shown(group)), directory: @directory)
+      .group_by { |item| same_fact(item) }.values.map do |item, *others|
+        joy, aminah = verdicts(item)
+        Row.new(item:, joy:, aminah:, group:, others:)
+      end
   end
 
   def shown(group) = @shown.fetch(group) * PAGE
@@ -50,8 +55,8 @@ class TodayReview
   # Aminah's recommendations on the agreed rows shown, as her list's Accept
   # takes them (checked again under the decision's locks).
   def agreed_items
-    rows("agree").map do |row|
-      candidate = Candidate.find(row.candidate_id)
+    rows("agree").flat_map(&:candidate_ids).map do |id|
+      candidate = Candidate.find(id)
       DataQuality::Recommendations::Item.new(candidate_id: candidate.id, call: candidate.dq_recommendation, reason: candidate.dq_reason,
         snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
     end
@@ -60,6 +65,16 @@ class TodayReview
   def fingerprint = DataQuality::Recommendations.fingerprint(agreed_items)
 
   private
+    # One fact, whichever page states it: the same kind of claim on the same
+    # record with the same values, or, for a new company several pages
+    # propose, the same kind and name.
+    def same_fact(item)
+      values = item.payload.to_h.except("quote").transform_values { |value| value.is_a?(String) ? value.squish.downcase : value }
+      if item.subject_id then [ item.kind, item.subject_type, item.subject_id, values.sort ]
+      else [ item.kind, values["name"] || item.candidate_id ]
+      end
+    end
+
     # [joy, aminah] for a candidate or a Checks item. Aminah's call counts
     # only while it stands (the fact hasn't changed since she made it).
     def verdicts(record)
