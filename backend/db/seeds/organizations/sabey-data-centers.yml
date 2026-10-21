@@ -1,0 +1,24 @@
+# Seed research for #253 (hyperscaler and data-center nuclear deals) - 20 Oct 2026. Quotes copied from TerraPower's release of 21 Jan 2025, read this session.
+name: Sabey Data Centers
+aliases:
+- SDC
+website: https://sabeydatacenters.com
+hq: null
+country_code: null
+status: active
+roles: []
+technologies: []
+relationships:
+- type: offtake_with
+  to: TerraPower
+  description: 'MOU (Jan 2025): to develop a strategic collaboration agreement on Natrium plants for Sabey data centers, including new plants in the Rocky Mountain region and Texas. No capacity or price stated.'
+  source_url: https://www.terrapower.com/terrapower-and-sabey-data-centers-agreement-for-natrium-wide-scale-deployment
+  quote: TerraPower, a nuclear innovation company, and Sabey Data Centers (SDC), a leading data center developer, owner and operator, announced today a memorandum of understanding to develop a strategic collaboration agreement to leverage advanced nuclear Natrium plants into SDC’s current and future data center operations.
+  published: '2025-01-21'
+  confidence: 1.0
+facilities: []
+notes: 'An MOU, so recorded as an announced deal outside the headline count (DATA.md). No role is set: an MOU is not an agreement to buy power. HQ and country left blank: the release states no location.'
+description:
+  text: Data center developer, owner and operator.
+  source_url: https://www.terrapower.com/terrapower-and-sabey-data-centers-agreement-for-natrium-wide-scale-deployment
+  quote: Sabey Data Centers (SDC), a leading data center developer, owner and operator
