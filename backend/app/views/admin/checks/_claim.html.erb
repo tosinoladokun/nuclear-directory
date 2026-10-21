@@ -21,7 +21,6 @@
         <p class="m-0"><span class="nd-tag">Waiting for Data Quality</span></p>
       <% end %>
       <% step = check_next_step(item, restating: local_assigns[:restating]) %>
-      <p class="type-small m-0 nd-next-step"><strong><%= step.verb %>:</strong> <%= step.why %></p>
       <p class="type-subject">
         <% if item.subject_id %>
           <%= link_to check_subject(item), admin_fact_path(type: item.subject_type, id: item.subject_id, from: "checks", back: request.fullpath, claim: item.candidate_id), class: "nd-link" %>
@@ -29,6 +28,7 @@
           <%= check_subject(item) %>
         <% end %>
       </p>
+      <p class="type-small m-0 nd-next-step"><strong><%= step.verb %>:</strong> <%= step.why %></p>
       <details>
         <summary class="type-small">Details</summary>
         <div class="nd-wait__more">
