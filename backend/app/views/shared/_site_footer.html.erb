@@ -4,7 +4,7 @@
     <%= link_to "Privacy", privacy_path, class: "nd-link nd-link--muted" %>
     <%= link_to "Disclaimer", disclaimer_path, class: "nd-link nd-link--muted" %>
     <%= link_to "Our crawler", bot_path, class: "nd-link nd-link--muted" %>
-    <%= mail_to DirectoryHelper::CORRECTIONS_EMAIL, nil, class: "nd-link nd-link--muted" %>
+    <%= mail_to DirectoryHelper::CORRECTIONS_EMAIL, "Contact us", class: "nd-link nd-link--muted" %>
   </nav>
   <p class="nd-footer__credit type-small text-ink-muted">Hosting supported by <%= link_to "Render", "https://render.com", class: "nd-link nd-link--muted", rel: "noopener noreferrer", target: "_blank" %>.</p>
 </footer>

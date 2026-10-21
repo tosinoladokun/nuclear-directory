@@ -26,7 +26,7 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select "a[href='/privacy']", "Privacy"
       assert_select "a[href='/disclaimer']", "Disclaimer"
       assert_select "a[href='/bot']", "Our crawler"
-      assert_select "a[href='mailto:hello@nuclear-directory.org']"
+      assert_select "a[href='mailto:hello@nuclear-directory.org']", "Contact us"
     end
     assert_select "footer.nd-footer p", count: 1, text: /\AHosting supported by Render\.\z/ do
       assert_select "a[href='https://render.com'][rel~=noopener]", "Render"
