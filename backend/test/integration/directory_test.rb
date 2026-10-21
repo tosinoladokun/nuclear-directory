@@ -92,6 +92,17 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "a.nd-listrow", text: /Pending Reactors/, count: 0
   end
 
+  test "a category narrows to one of its roles, with its canonical address the whole category" do
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_response :success
+    assert_select "a.nd-listrow[href='/companies/kairos-power']", 0
+    assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies?category=reactor-developers", 1
+    assert_select "meta[name=robots][content=noindex]"
+
+    get companies_path(category: "reactor-developers", role: "reactor_vendor")
+    assert_select "a.nd-listrow[href='/companies/kairos-power']"
+  end
+
   test "a company without a description or HQ still lists" do
     get companies_path(category: "reactor-developers")
 
