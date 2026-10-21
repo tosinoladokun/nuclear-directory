@@ -57,6 +57,9 @@ module Directory
 
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
+    # A website's domain as a company's domain is stored (www. and the path dropped).
+    def domain_from(url) = Organization.domain_from(url)
+
     def deal_terms(link_type:, link_id:, published: true)
       raise ArgumentError, "not a link type: #{link_type.inspect}" unless DealTerm::LINK_TYPES.include?(link_type.to_s)
 

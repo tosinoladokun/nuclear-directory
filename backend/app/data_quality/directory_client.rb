@@ -379,6 +379,9 @@ class DataQuality::DirectoryClient
     write_result(result)
   end
 
+  # A website's domain, as a company's is stored and matched.
+  def domain_from(url) = lookup.domain_from(url)
+
   # A record or fact a person adds by hand (#202): written pending, with
   # its source's quote as evidence, recorded as `by`. Publishing it is a
   # separate decision. Returns a WriteResult.

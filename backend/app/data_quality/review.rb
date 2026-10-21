@@ -497,7 +497,7 @@ module DataQuality::Review
 
       # A company is also the same one by its website's domain: writing it
       # would update that company (rename it, set it pending) instead.
-      domain = (Organization.domain_from(website.to_s.strip) if kind == "organization" && website.present?)
+      domain = (directory.domain_from(website.to_s.strip) if kind == "organization" && website.present?)
       if domain && (same_site = directory.organization(domain:))
         return Added.new(ref: nil, errors: [ "#{same_site.name} already has the website #{domain}" ], existing: same_site)
       end
