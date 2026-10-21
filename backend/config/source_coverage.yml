@@ -43,7 +43,7 @@ categories:
       - { name: DOE HALEU pages, status: planned, issue: 124 }
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
       - { name: DOE Isotope Program (isotope producers), kind: doe_isotope_sites, status: built, issue: 276 }
-      - { name: NRC uranium recovery sites (mines and mills), status: planned, issue: 275 }
+      - { name: NRC uranium recovery sites (mines and mills), kind: nrc_uranium_recovery, status: built, issue: 275 }
   - key: components
     name: Components and manufacturing
     sources:

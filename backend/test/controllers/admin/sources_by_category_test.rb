@@ -228,4 +228,11 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     assert_select "details#government-research .nd-cov__src", /DOE Isotope Program \(national labs and universities\).*Live/m
     assert_select "details#fuel .nd-cov__src", /DOE Isotope Program \(isotope producers\).*Live/m
   end
+
+  test "every crawler in the code is listed under its own kind, so a built one never reads Planned" do
+    kinds = SourceCoverage.new.categories.flat_map(&:sources).filter_map(&:kind) + SourceCoverage.new.general.filter_map(&:kind)
+    crawlers = Dir[Rails.root.join("app/data_quality/plugins/*.rb")].map { |path| File.basename(path, ".rb") }
+
+    assert_empty crawlers - kinds, "add these to config/source_coverage.yml with kind: and status: built"
+  end
 end
