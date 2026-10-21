@@ -277,6 +277,8 @@
   body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
+  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor: less side padding there. */
+  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-4); } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
