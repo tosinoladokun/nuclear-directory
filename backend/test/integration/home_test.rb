@@ -19,6 +19,12 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_match(/font-family: "Roboto Mono".*?font-display: optional/, response.body)
   end
 
+  test "no font is preloaded: the preload shared slow-4G bandwidth with the CSS and cost LCP 0.4 s" do
+    get root_path
+    assert_select "link[rel=preload][as=font]", count: 0
+    assert_match(/font-family: "Roboto Serif".*?font-display: optional/, response.body, "a swapped-in serif moved the page (CLS 0.25 in CI)")
+  end
+
   test "card titles are the home page's proper-noun labels; the category's name stays in title" do
     shown = HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [])
     long = HomeCategories::Card.new(category: Category.find("utilities"), count: 1, records: [])

@@ -50,14 +50,18 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 102, Organization.verified.count
-    assert_equal 118, OrganizationRole.verified.count
+    assert_equal 120, Organization.verified.count
+    assert_equal 137, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
+    # Each operator company the NRC list row named carries that row as its own evidence.
+    %w[ameren-ue arizona-public-service-co dte-electric-company duke-energy-florida duke-energy energy-harbor-nuclear-corp firstenergy-nuclear-operating-co indiana-michigan-power-co nebraska-public-power-district northern-states-power-company-minnesota pacific-gas-electric-co pseg-nuclear-llc south-carolina-electric-gas-co southern-nuclear-operating-co stp-nuclear-operating-co susquehanna-nuclear-llc wolf-creek-nuclear-operating-corp].each do |slug|
+      assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
+    end
     # A company the NRC decommissioning crawl found carries its NRC identity quote on its own record.
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 76, Relationship.verified.count
+    assert_equal 77, Relationship.verified.count
     assert_equal 52, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
     assert_equal [ 75, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]

@@ -8,7 +8,11 @@ website: https://www.nexteraenergy.com
 hq: null
 country_code: US
 status: active
-roles: []
+roles:
+- key: operator
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Point Beach 1 | 05000266 | DPR-24 | PWR | 13 miles NNW of Manitowoc, WI | NextEra Energy Point Beach, LLC | 3
+  confidence: 1.0
 technologies: []
 relationships: []
 facilities:
