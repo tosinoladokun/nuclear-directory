@@ -946,6 +946,8 @@
   .nd-cov__cat[open] > summary::after { content: "–"; }
   .nd-cov__num i { font-style: normal; color: var(--nd-ink-muted); }
   .nd-cov__stack { display: none; }
+  .nd-cov__short { display: none; }
+  .nd-cov__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-cov__src { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: var(--nd-space-3); align-items: center; min-height: 44px; padding: 0 var(--nd-space-4) 0 var(--nd-space-8); border-top: var(--nd-hairline) solid var(--nd-rule); }
   .nd-cov__note { margin-left: var(--nd-space-2); }
 
@@ -953,12 +955,25 @@
      needs about 210px more on one line: below 800px of the list's own width
      (a tablet with the sidebar is narrower than its screen), rows stack. */
   .nd-cov { container-type: inline-size; }
+  /* Just above the stack, the longest full name ("Power plant owners and
+     operators", about 270px) no longer fits: the short name, never an ellipsis. */
+  @container (max-width: 900px) {
+    .nd-cov__long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .nd-cov__short { display: inline; }
+  }
   @container (max-width: 800px) {
     .nd-cov__head { display: none; }
     .nd-cov__cat > summary { grid-template-columns: minmax(0, 1fr) auto 20px; padding-block: 10px; row-gap: 2px; }
     .nd-cov__cat > summary .nd-cov__num { display: none; }
+    /* The short name on one line; the long one stays for screen readers. */
+    .nd-cov__long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .nd-cov__short { display: inline; }
     .nd-cov__cat > summary .nd-cov__stack { display: block; grid-column: 1 / -1; grid-row: 2; }
     .nd-cov__src { grid-template-columns: 1fr; gap: 2px; padding: 10px var(--nd-space-4) 10px var(--nd-space-6); }
+  }
+  /* A phone's list: names down to the 13px floor before any would clip. */
+  @container (max-width: 440px) {
+    .nd-cov__name > span { font-size: 13px; }
   }
 
   @media (max-width: 560px) {
