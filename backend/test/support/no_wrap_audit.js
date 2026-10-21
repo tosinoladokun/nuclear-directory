@@ -58,8 +58,50 @@
       else if (el.getAttribute("title") !== el.textContent.trim()) problems.push(`no full text in title: ${label(el)}`)
     }
   })
+  // Key facts (DESIGN.md "Components and alignment", #406). A value beside its
+  // label starts on the value column's edge; a stacked value, and every value
+  // under 480px, starts on the label's edge (a hung Type pill by its icon).
+  // Label to value is 4px when stacked; row to row is 12px. Within 1px.
+  document.querySelectorAll(".nd-overview dl").forEach((dl) => {
+    if (!visible(dl)) return
+    const pairs = [...dl.querySelectorAll(":scope > dt")].map((dt) => ({ dt, dd: dt.nextElementSibling })).filter(({ dd }) => dd && dd.matches("dd"))
+    // Where a value's first glyph is drawn (its icon, for a chip): padding, margin
+    // or an indent on the value moves this, not the box around it.
+    const start = (el) => {
+      const chip = el.querySelector(".nd-bucketchip")
+      if (chip) return chip.getBoundingClientRect().left + parseFloat(getComputedStyle(chip).paddingLeft)
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const rect = [...range.getClientRects()].find((r) => r.width > 0)
+        if (rect) return rect.left
+      }
+      return el.getBoundingClientRect().left
+    }
+    let valueEdge = null, previous = null
+    pairs.forEach(({ dt, dd }) => {
+      const name = dt.textContent.trim(), t = dt.getBoundingClientRect(), d = dd.getBoundingClientRect()
+      // The layout is expected from the class and the viewport, not read off the geometry.
+      const stacked = dt.classList.contains("nd-overview__stack") || window.innerWidth < 480
+      if (stacked !== (d.top >= t.bottom - 1)) problems.push(`${stacked ? "should be stacked" : "should sit beside its label"}: ${name}`)
+      if (stacked) {
+        if (Math.abs(start(dd) - start(dt)) > 1) problems.push(`value off its label's edge: ${name}`)
+        if (Math.abs(d.top - t.bottom - 4) > 1) problems.push(`label to value is not 4px: ${name} (${Math.round(d.top - t.bottom)})`)
+      } else {
+        const edge = start(dd)
+        if (valueEdge === null) valueEdge = edge
+        else if (Math.abs(edge - valueEdge) > 1) problems.push(`value off the value column's edge: ${name}`)
+      }
+      if (previous && Math.abs(Math.min(t.top, d.top) - previous - 12) > 1) problems.push(`row gap is not 12px before: ${name} (${Math.round(Math.min(t.top, d.top) - previous)})`)
+      previous = Math.max(t.bottom, d.bottom)
+    })
+  })
   document.querySelectorAll(".nd-src").forEach((chip) => {
     if (!visible(chip)) return
+    // Numbers in the sources line wrap as whole numbers after the first one.
+    if (chip.parentElement.matches(".nd-overview__sources") && chip.previousElementSibling?.matches(".nd-src, .nd-keep")) return
     let prev = chip.previousSibling
     while (prev && prev.nodeType === 3 && !prev.textContent.trim()) prev = prev.previousSibling
     if (!prev) {

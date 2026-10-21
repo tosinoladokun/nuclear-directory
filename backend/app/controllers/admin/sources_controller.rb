@@ -6,7 +6,13 @@
 class Admin::SourcesController < Admin::BaseController
   STATUS_CHIPS = %w[pending ok blocked needs_human].freeze
 
+  # ?by=category: Sources by category (#166), which categories have a live source.
   def index
+    if params[:by] == "category"
+      @coverage = SourceCoverage.new
+      return render :by_category
+    end
+
     @official = SourceCatalog.official
     @research = SourceCatalog.research
     @runs_by_kind = DataQuality::Status.by_kind.index_by(&:source_kind)
