@@ -343,6 +343,17 @@ Extract writes `candidates` (`kind`, `payload`, `quote`, `source_id`). Match
 | **New unit of a known site** | an NRC unit (has a docket) whose only similar record is a site (no docket, no parent) that covers it | `matched`, subject = a new **pending** unit with `parent_id` = the site |
 | **Ambiguous** | identifiers point at different records, or a similar record exists | `needs_review`, with the reason in `notes`. Never merged automatically. |
 
+A link claim that went to review because a company or plant had no exact match ("to_organization: no
+exact match for …", "… isn't in the directory yet") is **matched again** on a later run once every end
+has an exact one: a name, an alias or an id, never a domain, brand or similar name. It's then an ordinary
+claim, verified and approved by a person; nothing is approved on its own. Dropped and extracted review
+items, and claims with an end still in question, stay as they are.
+
+A link claim that would change a link which already cites **another page of the same kind of source**
+goes to review instead of attaching ("… already cites …, another page of this source"), because
+approving it would replace what that page says: two USAspending recipients that are one company each
+describe only their own awards (#390). A page that only restates the link isn't held.
+
 "Similar" means the same leading distinctive word, ignoring unit numbers and
 generic words ("Vogtle 3" vs "Plant Vogtle Units 3 & 4", "Southern Nuclear
 Operating Co." vs "Southern Company"). Facilities with different NRC dockets
