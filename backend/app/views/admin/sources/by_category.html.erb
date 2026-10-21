@@ -43,7 +43,7 @@
   <% general = @coverage.general %>
   <details class="nd-cov__cat nd-cov__cat--first" open>
     <summary>
-      <span class="type-body-strong">Across all categories</span>
+      <span class="type-body-strong">All categories</span>
       <span class="nd-cov__num type-cell-num"><span class="sr-only">Live sources: </span><%= general.count(&:live?) %> <i>of <%= general.size %></i></span>
       <span class="nd-cov__num type-cell-num"><span class="sr-only">Documents: </span><%= number_with_delimiter(general.sum { |source| source.documents.to_i }) %></span>
       <span class="nd-cov__num type-cell-num"><span class="sr-only">Facts: </span>—</span>
