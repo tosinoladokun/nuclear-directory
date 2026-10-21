@@ -46,6 +46,7 @@ class Admin::TodayController < Admin::BaseController
   # Accept or Reject one fact, as the admin's decision (every check still runs).
   def decide
     id = params[:candidate_id].to_i
+    before = DataQuality::Review.undo_state(id)
     result = if params[:decision] == "accept"
       DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today").first
     else
@@ -53,8 +54,25 @@ class Admin::TodayController < Admin::BaseController
     end
     if result&.ok?
       flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
+      if (undoable = DataQuality::Review.undoable(before, decision: params[:decision]))
+        flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour)
+      elsif params[:decision] == "accept"
+        flash[:notice] += " It changed a value someone had checked, so there's no Undo; edit the record to change it back."
+      end
     else
       flash[:alert] = "Can't #{params[:decision] == 'accept' ? 'publish' : 'reject'} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
+    end
+    redirect_after admin_today_review_path(shown: shown_counts.presence)
+  end
+
+  # Undo the last Accept or Reject, while nothing else has changed it.
+  def undo
+    state = undo_verifier.verified(params[:token].to_s)
+    result = state && DataQuality::Review.undo(state, by: actor)
+    if result&.ok?
+      flash[:notice] = "Undone. It's waiting again."
+    else
+      flash[:alert] = "Can't undo this: #{Array(result&.errors).to_sentence.presence || 'the Undo has expired'}."
     end
     redirect_after admin_today_review_path(shown: shown_counts.presence)
   end
@@ -80,6 +98,8 @@ class Admin::TodayController < Admin::BaseController
   end
 
   private
+    def undo_verifier = Rails.application.message_verifier(:today_undo)
+
     # How many pages of each run are shown: ?shown[agree]=2.
     def shown_counts
       shown = params[:shown]

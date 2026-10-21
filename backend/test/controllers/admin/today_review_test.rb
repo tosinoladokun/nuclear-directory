@@ -133,4 +133,44 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_select "#fact-#{changed.id}", /Accepting replaces the checked state \(NJ → DE\)/
     assert_select "#fact-#{changed.id} button", "Keep"
   end
+
+  def undo_token = flash[:undo].tap { |token| assert token, "an Undo is offered" }
+
+  test "Undo a Reject: it's waiting again, as it was" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    post admin_today_review_undo_path, params: { token: }
+
+    assert_equal "Undone. It's waiting again.", flash[:notice]
+    assert @only_joy.reload.status_matched?
+    assert_nil @only_joy.reviewed_by
+  end
+
+  test "Undo an Accept that made a waiting fact public: it's waiting again" do
+    post admin_today_review_decide_path(candidate_id: @both.id, decision: "accept")
+    assert @both.reload.status_merged?, flash[:alert]
+    token = undo_token
+
+    post admin_today_review_undo_path, params: { token: }
+    assert_equal "Undone. It's waiting again.", flash[:notice]
+    assert @both.reload.status_matched?
+    assert_equal "pending", Organization.find(@both.subject_id).verification_status
+  end
+
+  test "an Accept on a fact already checked has no Undo, and says how to change it back" do
+    Organization.find(@both.subject_id).update_columns(verification_status: "verified", verified_by: "human:tosin")
+    post admin_today_review_decide_path(candidate_id: @both.id, decision: "accept")
+    assert_nil flash[:undo]
+    assert_match "there's no Undo; edit the record to change it back", flash[:notice]
+  end
+
+  test "Undo works only while nothing else has changed it" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    @only_joy.reload.update!(notes: "decided again elsewhere")
+
+    post admin_today_review_undo_path, params: { token: }
+    assert_equal "Can't undo this: it changed since, so it can't be undone here.", flash[:alert]
+    assert @only_joy.reload.status_rejected?
+  end
 end

@@ -51,6 +51,7 @@ Rails.application.routes.draw do
     # Step 3 (#373 part C): each fact with Joy's and Aminah's verdicts, decided here.
     get "today/review" => "today#review", as: :today_review
     post "today/review/agreed" => "today#agreed", as: :today_review_agreed
+    post "today/review/undo" => "today#undo", as: :today_review_undo
     post "today/review/:candidate_id/:decision" => "today#decide", as: :today_review_decide,
       constraints: { candidate_id: /\d+/, decision: /accept|reject/ }
     post "today/steps/:step" => "today#done", as: :today_step, constraints: { step: /crawl|list/ }
