@@ -35,7 +35,7 @@ module AdminHelper
       { label: "Checks", path: admin_checks_path, count: counts[:checks], current: %w[checks candidates pending_facts].include?(controller_name) },
       { label: "Live", path: admin_live_path, count: counts[:live], current: %w[live records].include?(controller_name) },
       { label: "Removed", soon: true },
-      { label: "Where it appears", soon: true },
+      { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
         current: controller_name == "corrections" }
     ]
@@ -122,7 +122,8 @@ module AdminHelper
       sources: SourceCatalog.total,
       checks: DataQuality::Review.counts.values.sum + DataQuality::Review.pending_count,
       live: Organization.published.count + Facility.published.where(parent_id: nil).count,
-      corrections: CorrectionReport.where(status: %w[open reviewed]).count
+      corrections: CorrectionReport.where(status: %w[open reviewed]).count,
+      outputs: PublicPages.new.count
     }
   end
 
