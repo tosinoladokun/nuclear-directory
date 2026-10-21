@@ -11,3 +11,6 @@ technologies: []
 relationships: []
 facilities: []
 notes: Operator role from the NRC list row for one of its units (the column is Owner/Operator, the licensee). Name unchanged here; the D1 brand renames are a separate PR.
+description:
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: South Texas 1 | 05000498 | NPF-76 | PWR | 90 miles SW of Houston, TX | STP Nuclear Operating Co. | 4

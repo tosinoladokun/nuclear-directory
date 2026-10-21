@@ -11,3 +11,6 @@ technologies: []
 relationships: []
 facilities: []
 notes: Operator role from the NRC list row for one of its units (the column is Owner/Operator, the licensee). Name unchanged here; the D1 brand renames are a separate PR.
+description:
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Hope Creek 1 | 05000354 | NPF-57 | BWR | 18 miles SE of Wilmington, DE | PSEG Nuclear, LLC | 1

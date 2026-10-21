@@ -11,3 +11,6 @@ technologies: []
 relationships: []
 facilities: []
 notes: Operator role from the NRC list row for one of its units (the column is Owner/Operator, the licensee). Name unchanged here; the D1 brand renames are a separate PR.
+description:
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: D.C. Cook 1 | 05000315 | DPR-58 | PWR | 13 miles S of Benton Harbor, MI | Indiana/Michigan Power Co. | 3
