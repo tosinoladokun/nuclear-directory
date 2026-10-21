@@ -379,6 +379,11 @@ class DataQuality::DirectoryClient
     write_result(result)
   end
 
+  # Add a fact and Publish (#202): see Directory::Lookup.
+  def company_fact_key?(kind, key) = lookup.company_fact_key?(kind, key)
+  def company_fact_status(organization_id:, kind:, key:) = lookup.company_fact_status(organization_id:, kind:, key:)
+  def publish_counts(type:, id:, added_reason:) = lookup.publish_counts(type:, id:, added_reason:)
+
   # A website's domain, as a company's is stored and matched.
   def domain_from(url) = lookup.domain_from(url)
 

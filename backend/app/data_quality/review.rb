@@ -38,8 +38,8 @@ module DataQuality::Review
   # with it, and the facts added by hand with it that are still waiting
   # ([[type, id, name], …]).
   PublishPlan = Data.define(:goes_live_with, :added_with)
-  # What a company's Add a fact can add (#202): [fact kind, the model its key names].
-  COMPANY_FACTS = { "role" => [ :organization_role, Role ], "technology" => [ :organization_technology, Technology ] }.freeze
+  # What a company's Add a fact can add (#202): its fact kind.
+  COMPANY_FACTS = { "role" => :organization_role, "technology" => :organization_technology }.freeze
 
   # A candidate as the admin shows it. record: the directory fact it's
   # attached to (DirectoryClient::Record: name, decision, values), or nil.
@@ -543,17 +543,17 @@ module DataQuality::Review
 
     def add_company_fact(organization_id:, kind:, key:, url:, quote:, by:, dry_run: false, directory: DataQuality::DirectoryClient.new)
       human!(by)
-      fact_kind, model = COMPANY_FACTS[kind]
+      fact_kind = COMPANY_FACTS[kind]
       url, quote = url.to_s.strip, quote.to_s.squish
       errors = [ ("Choose a role or a technology" unless fact_kind),
-        ("Choose which #{kind}" if fact_kind && !model.exists?(key: key.to_s)),
+        ("Choose which #{kind}" if fact_kind && !directory.company_fact_key?(kind, key)),
         ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
         ("Copy the sentence from the source that states it" if quote.empty?) ].compact
       return Added.new(ref: nil, errors:, existing: nil) if errors.any?
 
       column = fact_kind == :organization_role ? :role : :technology
-      if (same = fact_kind.to_s.camelize.constantize.find_by(organization_id:, column => model.find_by(key: key.to_s)))
-        word = same.verification_status.in?(Verifiable::CLOSED_STATUSES) ? "was removed; put it back from Removed" : "is already listed"
+      if (status = directory.company_fact_status(organization_id:, kind:, key:))
+        word = %w[rejected unpublished].include?(status) ? "was removed; put it back from Removed" : "is already listed"
         return Added.new(ref: nil, errors: [ "That #{kind} #{word}" ], existing: nil)
       end
 
@@ -576,20 +576,9 @@ module DataQuality::Review
     # What publishing this record would put on the site (#202): its approved
     # facts go public with it; the facts added by hand with it (Add a record,
     # Add a fact) are still waiting, and publish with it only if asked.
-    def publish_plan(type:, id:)
-      record = type.constantize.find(id)
-      live = if record.is_a?(Organization)
-        [ record.organization_roles, record.organization_technologies, record.facility_relationships,
-          Relationship.where(from_organization: record).or(Relationship.where(to_organization: record)) ]
-      else
-        [ Facility.where(parent: record), record.facility_relationships ]
-      end
-      added = record.is_a?(Organization) ? [ record.organization_roles, record.organization_technologies ] : []
-      added_with = added.flat_map do |scope|
-        scope.where(verification_status: "pending").select { |fact| fact.verification_events.order(:id).last&.reason == ADDED_REASON }
-          .map { |fact| [ fact.class.name, fact.id, fact.respond_to?(:role) ? fact.role.name : fact.technology.name ] }
-      end
-      PublishPlan.new(goes_live_with: live.sum { |scope| scope.where(verification_status: "verified").count }, added_with:)
+    def publish_plan(type:, id:, directory: DataQuality::DirectoryClient.new)
+      goes_live_with, added_with = directory.publish_counts(type:, id:, added_reason: ADDED_REASON)
+      PublishPlan.new(goes_live_with:, added_with:)
     end
 
     # Publishes a record not yet public (#202): it's approved as `by`'s
@@ -602,7 +591,7 @@ module DataQuality::Review
         result = approve_fact(type:, id:, by:, reason: "Published", directory:)
         raise ActiveRecord::Rollback unless result.ok?
 
-        (with_added ? publish_plan(type:, id:).added_with : []).each do |fact_type, fact_id, name|
+        (with_added ? publish_plan(type:, id:, directory:).added_with : []).each do |fact_type, fact_id, name|
           added = approve_fact(type: fact_type, id: fact_id, by:, reason: "Published with its record", directory:)
           next if added.ok?
 
