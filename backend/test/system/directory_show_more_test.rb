@@ -56,6 +56,20 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     assert_equal DirectoryController::PAGE + 1, page.evaluate_script("[...document.querySelectorAll('ul.nd-list a.nd-listrow')].indexOf(document.activeElement)"), "Tab moves to the next company"
   end
 
+  test "with companies and plants both expanding, keyboard focus lands on a new result that is on screen" do
+    Facility.insert_all((DirectoryController::PAGE + 6).times.map { |i| { name: "Paged Station #{i}", slug: "paged-station-#{i}", facility_type: "power_reactor", status: "operating",
+      verification_status: "verified", verified_by: "human:tosin", created_at: Time.current, updated_at: Time.current } })
+    visit companies_path(q: "Paged")
+    assert page.evaluate_script("typeof Turbo !== 'undefined' && !!document.querySelector('turbo-frame#directory-rows[data-controller=keep-scroll]')")
+    before = page.evaluate_script("document.querySelectorAll('ul.nd-list a.nd-listrow').length")
+    page.execute_script("const link = [...document.querySelectorAll('a')].find((el) => el.textContent.trim() === 'Show more'); link.scrollIntoView({ block: 'end' }); link.focus()")
+    page.send_keys(:enter)
+    assert_selector "ul.nd-list > li", count: before + 14, wait: 20
+
+    state = page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')], i = rows.indexOf(document.activeElement), r = document.activeElement.getBoundingClientRect(); const page = #{DirectoryController::PAGE}; return [(i >= page && i < page + 8) || i >= page + 8 + page, r.top >= 0 && r.bottom <= innerHeight] })()")
+    assert_equal [ true, true ], state, "focus is on a newly shown row that is inside the viewport"
+  end
+
   test "a company link in the list opens its page, not a frame" do
     visit companies_path
     first("main ul.nd-list > li a").click
