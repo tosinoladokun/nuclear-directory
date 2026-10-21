@@ -253,6 +253,17 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
     assert_raises(Workbook::Unreadable) { Workbook.nuclear_generators(bytes) }
   end
 
+  test "a failed index fetch that falls back on yesterday's copy is reported, and Today flags it" do
+    crawl!
+    Source.where(url: [ INDEX, FILE ]).update_all(fetched_at: 2.days.ago)
+    stub_request(:get, INDEX).to_return(status: 503)
+
+    stats = crawl!
+    assert_equal "error", stats["index"]
+    assert_equal FILE, stats["file"], "yesterday's links still used"
+    assert_equal "a page didn't answer", Today.problem([ CrawlRun.new(status: "succeeded", stats:) ])
+  end
+
   test "EIA's index page is fetched at most once a day, like any source" do
     crawl!
     crawl!
