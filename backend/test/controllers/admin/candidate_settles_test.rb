@@ -75,4 +75,19 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
     assert_match "is in the directory already; pick it with Same as", flash[:alert]
     assert_equal "needs_review", @link.reload.status
   end
+
+  test "Same as refuses a name that's already another company's other name; New and Subsidiary use the item's own quote" do
+    OrganizationAlias.create!(organization: @matter, alias: "GENERAL ATOMICS INC")
+    post settle_path, params: { choice: "same", record_id: @ga.id }
+    assert_match "is already General Matter's name or another name", flash[:alert]
+    assert_equal "needs_review", @link.reload.status
+
+    OrganizationAlias.delete_all
+    post settle_path, params: { choice: "subsidiary", record_id: @ga.id }
+    made = Organization.find_by!(name: "GENERAL ATOMICS INC")
+    link = Relationship.find_by!(from_organization: made)
+    assert_equal [ "Acme funds GENERAL ATOMICS." ], made.evidence.map(&:quote)
+    assert_equal [ "Acme funds GENERAL ATOMICS." ], link.evidence.map(&:quote)
+    assert_equal "pending", link.verification_status
+  end
 end

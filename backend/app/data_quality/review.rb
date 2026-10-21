@@ -353,6 +353,12 @@ module DataQuality::Review
           next result = fail_with.("pick the company")
         end
 
+        # The claim's name becomes another name of X (on approval); never one
+        # that's already another company's name or other name (DQ's rule).
+        if choice == "same" && (owner = directory.organization(name:)) && owner.id != other.id
+          next result = fail_with.("“#{name}” is already #{owner.name}'s name or another name; pick #{owner.name}, or ask Data Quality")
+        end
+
         company = if choice == "same" then other
         elsif %w[new subsidiary].include?(choice)
           made = directory.add_fact(:organization, { name: }, source_id: candidate.source_id, quote: candidate.quote, by:, reason: ADDED_REASON)
