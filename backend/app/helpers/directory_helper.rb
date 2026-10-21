@@ -391,7 +391,7 @@ module DirectoryHelper
     uri = URI.parse(url.to_s.strip)
     return url unless %w[http https].include?(uri.scheme&.downcase) && uri.host.present?
 
-    keys = uri.query.to_s.split("&").map { |pair| pair.split("=", 2).first.to_s }
+    keys = uri.query.to_s.split("&").map { |pair| CGI.unescape(pair.split("=", 2).first.to_s.b).force_encoding(Encoding::UTF_8).scrub }
     added = []
     added << [ "utm_source", "nuclear-directory" ] unless keys.include?("utm_source")
     added << [ "utm_medium", "referral" ] unless keys.include?("utm_medium")

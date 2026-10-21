@@ -214,6 +214,14 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_includes url, "utm_campaign=company-page"
   end
 
+  test "with_referral_utm sees percent-encoded UTM names as the ones the URL already carries" do
+    url = with_referral_utm("https://example.com/?utm%5Fsource=theirs", campaign: "company-page")
+
+    assert url.start_with?("https://example.com/?utm%5Fsource=theirs&")
+    assert_not_includes url, "utm_source=nuclear-directory"
+    assert_includes url, "utm_medium=referral"
+  end
+
   test "with_referral_utm leaves non-http URLs and blanks alone (safety: no javascript: links)" do
     assert_equal "", with_referral_utm("")
     assert_nil with_referral_utm(nil)
