@@ -77,6 +77,8 @@ module Directory
         model: FacilityRelationship,
         attributes: %i[organization_id facility_id relationship_type ownership_pct description started_on ended_on]
       },
+      # A news item for "Latest" (#137), the same one by its link.
+      news_item: { model: NewsItem, attributes: %i[url title publisher published_on summary] },
       # One award, offtake or funding round under its link (#256).
       deal_term: {
         model: DealTerm,
@@ -107,6 +109,15 @@ module Directory
     end
     def self.merge_organization(...) = new.merge_organization(...)
 
+    # Says a news item is about a company or plant (#137): a unit's news is
+    # its site's. Idempotent. Returns the NewsMention.
+    def self.mention_news(news_item_id:, subject_type:, subject_id:)
+      raise Invalid, "news is about a company or a plant, not a #{subject_type}" unless NewsMention::SUBJECT_TYPES.include?(subject_type.to_s)
+
+      subject_id = Facility.where(id: subject_id).pick(:parent_id) || subject_id if subject_type.to_s == "Facility"
+      NewsMention.find_or_create_by!(news_item_id:, subject_type: subject_type.to_s, subject_id:)
+    end
+
     # Merges one organization into another (one company per brand, decision
     # #23): a human's decision, so by: must start with "human:". In one
     # transaction that locks both, everything about from moves to into:
@@ -117,6 +128,14 @@ module Directory
     # on from and is rejected, and a closed fact stays where it was decided
     # (#229). Then from is unpublished, and the audit reason
     # says where it went and what moved. Returns a Result for into.
+    # A merged record's news is the record kept's (#137): each mention moves,
+    # or goes when into has it already. Returns how many moved.
+    def move_news_mentions(from, into)
+      NewsMention.where(subject: from).sum do |mention|
+        NewsMention.exists?(news_item_id: mention.news_item_id, subject: into) ? (mention.destroy! && 0) : (mention.update!(subject: into) && 1)
+      end
+    end
+
     def merge_organization(from_id:, into_id:, by:, reason: nil)
       raise Invalid, "a merge is a human's decision (by: \"human:…\")" unless by.to_s.start_with?("human:")
       raise Invalid, "can't merge an organization into itself" if from_id == into_id
@@ -184,6 +203,7 @@ module Directory
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Organization", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
+        moved["news"] = move_news_mentions(from, into)
         # A round that names from as a lead investor names into instead, once
         # each and in its order. A closed term stays as it was decided.
         moved["lead investors"] = DealTerm.where("? = ANY (lead_investor_ids)", from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES)
@@ -289,6 +309,7 @@ module Directory
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Facility", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
+        moved["news"] = move_news_mentions(from, into)
 
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this link") unless row.closed? }
         from.unpublish!(by:, reason: [ reason, "#{note}. Moved: #{merge_summary(moved, filled)}" ].compact.join(". "),
@@ -798,6 +819,9 @@ module Directory
         summary.join(", ").presence || "nothing"
       end
 
+      # How many of from's news mentions would move (into hasn't them already).
+      def news_moving(from, into) = NewsMention.where(subject: from).where.not(news_item_id: NewsMention.where(subject: into).select(:news_item_id)).count
+
       # merge_organization's counts, read only.
       def organization_merge_counts(from, into)
         moved = Hash.new(0)
@@ -808,6 +832,7 @@ module Directory
         moved["aliases"] += 1 unless name == OrganizationAlias.normalize(into.name) || OrganizationAlias.exists?(normalized_alias: name) || others.include?(name)
         moved["domain"] += 1 if from.domain && into.domain.blank?
         moved["SEC CIK"] += 1 if from.sec_cik && into.sec_cik.blank?
+        moved["news"] = news_moving(from, into)
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
           from.public_send(table).each do |row|
@@ -853,6 +878,7 @@ module Directory
         moved = Hash.new(0)
         filled = SITE_FIELDS.select { |name| into.public_send(name).blank? && from.public_send(name).present? }
         moved["units"] = from.children.count
+        moved["news"] = news_moving(from, into)
         # from's own aliases are dropped before its names are added to into.
         taken = FacilityAlias.where.not(facility_id: from.id).pluck(:normalized_alias).to_set
         others = Facility.where.not(id: [ from.id, into.id ]).pluck(:name).map { |other| FacilityAlias.normalize(other) }.to_set
@@ -988,6 +1014,8 @@ module Directory
           model.find_by(attrs.slice(:from_organization_id, :to_organization_id, :relationship_type))
         when :facility_relationship
           model.find_by(attrs.slice(:organization_id, :facility_id, :relationship_type))
+        when :news_item
+          model.find_by(url: attrs[:url].to_s.strip) if attrs[:url].present?
         when :deal_term
           # A term is the same one only under the same link, of the same kind,
           # with the same source id (an award ID); without one it's always new.

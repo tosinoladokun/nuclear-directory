@@ -59,6 +59,16 @@ module Directory
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
 
+    # A company's or plant's "Latest" (#137): its approved news, newest first.
+    # A unit's news is its site's.
+    def latest_news(type:, id:, limit: 10)
+      raise ArgumentError, "news is about a company or a plant, not a #{type}" unless NewsMention::SUBJECT_TYPES.include?(type.to_s)
+
+      record = type.to_s.constantize.find_by(id:) or return []
+      record = record.parent if record.is_a?(Facility) && record.parent
+      NewsItem.latest_for(record).limit(limit).map { |item| NewsItemRef.from(item) }
+    end
+
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
     def deal_terms(link_type:, link_id:, published: true)
