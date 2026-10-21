@@ -24,10 +24,20 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     assert_equal DirectoryController::PAGE, rows
     assert_empty page.evaluate_script(AUDIT)
 
-    page.execute_script("window.scrollTo(0, document.body.scrollHeight)")
+    # Turbo and the controllers are loaded as modules; click once they are.
+    assert page.evaluate_script("typeof Turbo !== 'undefined' && !!document.querySelector('turbo-frame#directory-rows[data-controller=keep-scroll]')")
+    button = find("a", text: "Show more")
+    page.execute_script("arguments[0].scrollIntoView({ block: 'center' })", button)
+    covered = page.evaluate_script("(() => { const a = [...document.querySelectorAll('a')].find((el) => el.textContent.trim() === 'Show more'), r = a.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) !== a })()")
+    assert_not covered, "nothing covers the Show more button"
     before = page.evaluate_script("Math.round(window.scrollY)")
-    click_on "Show more"
-    assert_selector "main ul.nd-list > li", count: DirectoryController::PAGE + 8, wait: 15
+    page.execute_script("window.__turbo = []; ['turbo:before-fetch-request', 'turbo:before-fetch-response', 'turbo:frame-render', 'turbo:frame-missing', 'turbo:fetch-request-error'].forEach((name) => document.addEventListener(name, (event) => window.__turbo.push(name + ':' + (event.detail?.fetchResponse?.statusCode || ''))))")
+    button.click
+    begin
+      assert_selector "main ul.nd-list > li", count: DirectoryController::PAGE + 8, wait: 20
+    rescue Minitest::Assertion
+      flunk "Show more did not load the next page. Turbo saw: #{page.evaluate_script('JSON.stringify(window.__turbo)')}, frame src: #{page.evaluate_script("document.getElementById('directory-rows').getAttribute('src')")}, url: #{page.current_url}, rows: #{rows}"
+    end
     assert_operator page.evaluate_script("Math.round(window.scrollY)"), :>=, before - 5, "the page didn't jump to the top"
     assert_no_selector "a", text: "Show more"
     assert_empty page.evaluate_script(AUDIT)
