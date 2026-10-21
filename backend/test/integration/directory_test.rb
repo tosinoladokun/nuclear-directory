@@ -101,6 +101,12 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     get companies_path(category: "reactor-developers", role: "reactor_vendor")
     assert_select "a.nd-listrow[href='/companies/kairos-power']"
+    assert_select "form.nd-filters input[type=hidden][name=role][value=reactor_vendor]"
+
+    get companies_path(category: "reactor-developers", role: "project_developer", format: :json)
+    project = response.parsed_body["count"]
+    get companies_path(category: "reactor-developers", format: :json)
+    assert_operator project, :<, response.parsed_body["count"], "the filter sheet's count keeps the role"
   end
 
   test "a company without a description or HQ still lists" do
