@@ -159,7 +159,6 @@
 
   .nd-pills { display: flex; gap: var(--nd-space-2); overflow-x: auto; padding-bottom: var(--nd-space-1); }
   .nd-pill { display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 12px; border: var(--nd-hairline) solid var(--nd-rule); border-radius: 999px; color: var(--nd-ink); font: 400 14px/20px var(--font-text); text-decoration: none; white-space: nowrap; }
-  .nd-pills--roles { margin-top: var(--nd-space-2); }
   .nd-pill:hover { border-color: var(--nd-ink); }
   .nd-pill[aria-current="page"] { background: var(--nd-inverse); border-color: var(--nd-inverse); color: var(--nd-on-inverse); }
   .nd-pill .nd-num { font-size: 11px; line-height: 1; opacity: .7; }

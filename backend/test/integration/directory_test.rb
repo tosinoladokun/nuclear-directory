@@ -20,7 +20,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_redirected_to companies_url(state: "CA", sort: "connections", tag: "fusion")
   end
 
-  test "the Developers list shows each company's role and can be narrowed to reactor designers or project developers" do
+  test "the Developers list shows each company's role, and ?role= narrows it to reactor designers or project developers (no filter UI)" do
     designer = Role.find_by!(key: "reactor_vendor")
     developer = role("project_developer")
     both = cite!(company("Both Roles Inc", roles: [ designer, developer ]))
@@ -28,14 +28,12 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "reactor-developers")
 
     assert_response :success
-    assert_equal [ "All developers", "Reactor designers", "Project developers" ], css_select("nav[aria-label=Role] a.nd-pill").map { |el| el.text.strip }
-    assert_select "nav[aria-label=Role] a[aria-current=page]", "All developers"
+    assert_select "nav[aria-label=Role]", 0, "no role filter in the page (the ?role= param still works)"
     assert_equal [ "Reactor designer" ], css_select("a[href='/companies/kairos-power'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
     assert_equal [ "Reactor designer", "Project developer" ], css_select("a[href='/companies/#{both.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
     assert_equal [ "Project developer" ], css_select("a[href='/companies/#{builder.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
 
     get companies_path(category: "reactor-developers", role: "project_developer")
-    assert_select "nav[aria-label=Role] a[aria-current=page]", "Project developers"
     assert_select "a.nd-listrow", 2
     assert_select "a[href='/companies/#{builder.slug}']"
     assert_select "a[href='/companies/kairos-power']", 0
@@ -47,7 +45,6 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "a[href='/companies/kairos-power']"
 
     get companies_path(category: "reactor-developers", role: "utility")
-    assert_select "nav[aria-label=Role] a[aria-current=page]", "All developers"
     assert_select "a.nd-listrow", 4
   end
 

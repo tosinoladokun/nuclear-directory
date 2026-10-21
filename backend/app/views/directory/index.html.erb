@@ -37,14 +37,6 @@
 
 <main class="nd-page">
   <%= render "shared/category_pills", current: listing.category, counts: @counts %>
-  <% if listing.role_options.any? %>
-    <nav class="nd-pills nd-pills--roles" aria-label="Role" data-controller="pill-row">
-      <% [ [ nil, "All developers" ], *listing.role_options.map { |key| [ key, role_label(key).pluralize ] } ].each do |key, label| %>
-        <%= tag.a label, href: directory_url_for(category: listing.category, q: listing.query, technology: listing.technology, state: listing.state,
-              sort: (listing.sort unless listing.sort == "name"), role: key), class: "nd-pill", aria: { current: ("page" if listing.role == key) } %>
-      <% end %>
-    </nav>
-  <% end %>
 
   <div class="nd-listhead">
     <h1 class="type-title-md nd-listhead__title"><%= heading %> <span class="type-data nd-listhead__count"><%= pluralize(total, noun, plural:) %></span></h1>
