@@ -37,6 +37,39 @@ class Admin::TodayController < Admin::BaseController
     render :show, status: :unprocessable_content
   end
 
+  # Step 3: the facts waiting, each with Joy's and Aminah's verdicts.
+  def review
+    @review = TodayReview.new
+  end
+
+  # Accept or Reject one fact, as the admin's decision (every check still runs).
+  def decide
+    id = params[:candidate_id].to_i
+    result = if params[:decision] == "accept"
+      DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today").first
+    else
+      DataQuality::Review.reject([ id ], by: actor, reason: "Rejected in Today").first
+    end
+    if result&.ok?
+      flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
+    else
+      flash[:alert] = "Can't #{params[:decision] == 'accept' ? 'publish' : 'reject'} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
+    end
+    redirect_after admin_today_review_path
+  end
+
+  # The shortcut: every fact Joy and Aminah both say to accept, each checked again.
+  def agreed
+    ids = TodayReview.new.rows("agree").map(&:candidate_id)
+    # Aminah reviewed each, so the first-batch hold she exists for is lifted, as Data Quality's Accept does.
+    results = DataQuality::Review.approve(ids, by: actor, reason: "Accepted in Today: Joy and Aminah agree", only_recommended: true,
+      data_quality_reviewed: true)
+    done, stopped = results.partition(&:ok?)
+    flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?
+    flash[:alert] = "#{helpers.pluralize(stopped.size, 'fact')} can't be published yet; #{stopped.one? ? 'it stays' : 'they stay'} below with why." if stopped.any?
+    redirect_after admin_today_review_path
+  end
+
   private
     def load_today
       @today = Today.new

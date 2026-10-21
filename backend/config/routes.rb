@@ -48,6 +48,11 @@ Rails.application.routes.draw do
     # Today (#373): the day's review in four steps. Checks stays as step 3's list.
     get "today" => "today#show", as: :today
     post "today/list" => "today#list", as: :today_list
+    # Step 3 (#373 part C): each fact with Joy's and Aminah's verdicts, decided here.
+    get "today/review" => "today#review", as: :today_review
+    post "today/review/agreed" => "today#agreed", as: :today_review_agreed
+    post "today/review/:candidate_id/:decision" => "today#decide", as: :today_review_decide,
+      constraints: { candidate_id: /\d+/, decision: /accept|reject/ }
     post "today/steps/:step" => "today#done", as: :today_step, constraints: { step: /crawl|list/ }
     delete "today/steps/:step" => "today#undo", constraints: { step: /crawl|list/ }
     get "checks" => "checks#show", as: :checks

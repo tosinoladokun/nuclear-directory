@@ -1,6 +1,7 @@
-<%# Step 3: the facts waiting. Until the review page (#373 part C), it opens Checks, with Aminah's list and its Accept. %>
-<p class="type-body m-0"><%= pluralize(today.undecided, "fact") %> <%= today.undecided == 1 ? "is" : "are" %> waiting for your Accept or Reject.</p>
+<%# Step 3: the facts waiting, with Joy's and Aminah's verdicts, decided on the review page. %>
+<% review = TodayReview.new %>
+<p class="type-body m-0"><%= pluralize(review.size, "fact") %>. <%= joy %> and <%= aminah %> agree on <%= review.count("agree") %>; <%= review.count("disagree") %> <%= review.count("disagree") == 1 ? "has" : "have" %> different verdicts; <%= aminah %> didn't see <%= review.count("only_joy") %>.</p>
 <div class="nd-today__actions">
-  <%= link_to "Start reviewing ›", admin_checks_path, class: "nd-btn nd-btn--primary type-ui" %>
-  <%= link_to "#{aminah}'s list ›", admin_recommendations_path, class: "nd-btn nd-btn--outline type-ui" %>
+  <%= link_to "Start reviewing ›", admin_today_review_path, class: "nd-btn nd-btn--primary type-ui" %>
+  <%= link_to "The full list in Checks ›", admin_checks_path, class: "nd-btn nd-btn--outline type-ui" %>
 </div>

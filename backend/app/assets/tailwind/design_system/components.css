@@ -660,11 +660,20 @@
   .nd-today__body { margin: var(--nd-space-3) 0 0 calc(24px + var(--nd-space-3)); display: flex; flex-direction: column; gap: var(--nd-space-3); }
   .nd-today__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3); }
   .nd-today__actions .nd-btn, .nd-today__row .nd-btn { white-space: nowrap; }
+  /* Today's step 3: a fact with Joy's and Aminah's verdicts (#373). */
+  .nd-verdict__chips { display: flex; flex-wrap: wrap; gap: var(--nd-space-2); }
+  .nd-verdict__chips .nd-tag { white-space: nowrap; }
+  .nd-verdict__chip--muted { border-style: dashed; color: var(--nd-ink-muted); }
+  .nd-verdict__actions { display: flex; gap: var(--nd-space-2); }
+  .nd-verdict__actions .nd-btn { min-width: 104px; min-height: 44px; justify-content: center; white-space: nowrap; }
   .nd-today__row > form { grid-column: 3; grid-row: 1 / span 2; }
   @media (max-width: 639px) {
     /* Undo goes under the sub-line, so a step's title keeps the row. */
     .nd-today__row > form { grid-column: 2; grid-row: 3; justify-self: start; }
     .nd-today__body { margin-left: 0; }
+    .nd-verdict__actions { flex-basis: 100%; }
+    .nd-verdict__actions > form { flex: 1; }
+    .nd-verdict__actions .nd-btn { width: 100%; }
     .nd-today__actions > .nd-btn, .nd-today__actions > form, .nd-today__actions > form .nd-btn { width: 100%; justify-content: center; }
   }
   .nd-record__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
