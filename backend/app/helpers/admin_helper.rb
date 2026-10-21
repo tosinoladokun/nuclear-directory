@@ -37,6 +37,7 @@ module AdminHelper
       { label: "Live", path: admin_live_path, count: counts[:live], current: %w[live records].include?(controller_name) },
       { label: "Removed", path: admin_removed_path, count: counts[:removed], current: controller_name == "removed" },
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
+      { label: "Search gaps", path: admin_search_gaps_path, count: counts[:gaps], current: controller_name == "search_gaps" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
         current: controller_name == "corrections" }
     ]
@@ -131,6 +132,7 @@ module AdminHelper
         corrections:,
         outputs: PublicPages.new.count,
         removed: Directory::RemovedList.total,
+        gaps: SearchGap.waiting.count,
         today: DataQuality::Review.check_counts["all"] + pending + corrections
       }
     end

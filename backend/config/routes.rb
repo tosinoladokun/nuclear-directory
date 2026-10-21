@@ -61,6 +61,10 @@ Rails.application.routes.draw do
     get "where-it-appears" => "outputs#show", as: :outputs
     # Removed (#166): everything off the site now, with the decision that took it off.
     get "removed" => "removed#show", as: :removed
+    # Search gaps (#483): searches on the site that found nothing.
+    get "search-gaps" => "search_gaps#index", as: :search_gaps
+    post "search-gaps/:id/:decision" => "search_gaps#decide", as: :search_gap_decide,
+      constraints: { id: /\d+/, decision: /research|covered|ignored/ }
     # Data Quality's recommendations (#306): paste its list, see exactly
     # what Accept will do, then accept them as one decision.
     scope "checks/recommendations", as: :recommendations do

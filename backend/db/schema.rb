@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_035000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -356,6 +356,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_035000) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_roles_on_key", unique: true
     t.index ["parent_id"], name: "index_roles_on_parent_id"
+  end
+
+  create_table "search_gaps", force: :cascade do |t|
+    t.string "query", null: false
+    t.integer "searches_count", default: 1, null: false
+    t.date "first_searched_on", null: false
+    t.date "last_searched_on", null: false
+    t.string "status", default: "open", null: false
+    t.string "decided_by"
+    t.datetime "decided_at"
+    t.datetime "closed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["query"], name: "index_search_gaps_on_query", unique: true
+    t.index ["status", "searches_count"], name: "index_search_gaps_on_status_and_searches_count"
+    t.check_constraint "char_length(query::text) >= 3 AND char_length(query::text) <= 100", name: "search_gaps_query_length_check"
+    t.check_constraint "searches_count >= 1", name: "search_gaps_count_check"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'research'::character varying, 'covered'::character varying, 'ignored'::character varying, 'closed'::character varying]::text[])", name: "search_gaps_status_check"
   end
 
   create_table "sessions", force: :cascade do |t|

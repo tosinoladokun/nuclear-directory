@@ -22,7 +22,11 @@ module TracksAnalytics
 
   private
     def track_search(query, results:, source: "typed")
-      Analytics.track_search(query, results:, source:, visitor: visitor_properties) if trackable_request?
+      return unless trackable_request?
+
+      Analytics.track_search(query, results:, source:, visitor: visitor_properties)
+      # Our own list of searches that found nothing (#483): the query only, never the visitor.
+      SearchGap.record(query, results:)
     end
 
     def track_company_viewed(slug) = track("company_viewed", slug:)

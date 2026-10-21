@@ -1,0 +1,49 @@
+<% content_for :title, "Search gaps" %>
+
+<div class="nd-stack">
+  <div class="nd-shell__head">
+    <h1 class="type-admin-h1">Search gaps <span class="type-count"><%= number_with_delimiter(@waiting.size) %></span></h1>
+  </div>
+  <p class="type-body m-0">What visitors searched for on the site and didn't find, most searched first. Only the words searched are kept, never who searched. A gap closes on its own once the same search finds something.</p>
+
+  <% if @waiting.empty? %>
+    <p class="type-body text-ink-muted">No open gaps.</p>
+  <% else %>
+    <div class="overflow-x-auto">
+      <table class="nd-numtable nd-gaps">
+        <thead><tr><th scope="col">Searched for</th><th scope="col">Times</th><th scope="col">Last</th><th scope="col"><span class="sr-only">Decide</span></th></tr></thead>
+        <tbody>
+          <% @waiting.each do |gap| %>
+            <tr id="gap-<%= gap.id %>">
+              <td class="type-body"><%= link_to gap.query, companies_path(q: gap.query), class: "nd-link", target: "_blank", rel: "noopener" %>
+                <% if gap.status_research? %> <span class="nd-tag">To research</span><% end %></td>
+              <td class="type-cell-num"><%= number_with_delimiter(gap.searches_count) %></td>
+              <td class="type-data text-ink-muted"><%= gap.last_searched_on.strftime("%-d %b") %></td>
+              <td>
+                <div class="nd-row nd-gaps__actions">
+                  <% SearchGap::DECISIONS.each do |status, label| %>
+                    <% next if status == "research" && gap.status_research? %>
+                    <%= button_to label, admin_search_gap_decide_path(id: gap.id, decision: status), class: "nd-btn nd-btn--outline type-ui",
+                      "aria-label": "#{label}: #{gap.query}" %>
+                  <% end %>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% if @decided.any? %>
+    <details class="nd-fold">
+      <summary class="type-body">Covered, ignored or found since <span class="type-data nd-num"><%= @decided.size %></span></summary>
+      <div class="nd-fold__body">
+        <% @decided.each do |gap| %>
+          <p class="nd-fold__row type-body"><span><%= gap.query %></span>
+            <span class="type-small text-ink-muted"><%= { "covered" => "Covered", "ignored" => "Ignored", "closed" => "Finds a result now" }.fetch(gap.status) %> · <%= pluralize(gap.searches_count, "search") %></span></p>
+        <% end %>
+      </div>
+    </details>
+  <% end %>
+</div>
