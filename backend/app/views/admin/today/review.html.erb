@@ -13,7 +13,9 @@
   <%= render "admin/crumbs", parent_label: "Today", parent_path: admin_today_path, current: "Review and accept" %>
   <h1 class="type-admin-h1 m-0">Review and accept</h1>
   <% if flash[:undo] %>
-    <%= button_to "Undo", admin_today_review_undo_path(shown:), params: { token: flash[:undo] }, class: "nd-btn nd-btn--outline type-ui" %>
+    <% content_for :flash_action do %>
+      <%= button_to "Undo", admin_today_review_undo_path(shown:), params: { token: flash[:undo] }, class: "nd-link nd-flash__action type-body", form_class: "nd-flash__undo" %>
+    <% end %>
   <% end %>
   <p class="type-body m-0"><%= pluralize(review.size, "fact") %> · about <%= pluralize([ minutes, 1 ].max, "minute") %>. Nothing goes live until you click.</p>
 

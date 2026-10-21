@@ -139,6 +139,9 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
   test "Undo a Reject: it's waiting again, as it was" do
     post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
     token = undo_token
+    follow_redirect!
+    assert_select ".nd-flash[role=status]", /Rejected\.\s*Undo/
+    assert_select ".nd-flash form.nd-flash__undo button", "Undo"
     post admin_today_review_undo_path, params: { token: }
 
     assert_equal "Undone. It's waiting again.", flash[:notice]
