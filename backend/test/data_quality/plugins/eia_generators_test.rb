@@ -25,8 +25,17 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
   def crawl! = plugin.crawl(CrawlRun.create!(stage: "crawl", source_kind: "eia_generators"))
   def source = Source.find_by!(url: FILE)
 
-  def nrc_unit(name, docket, state, **attributes)
-    Facility.create!(name: name, nrc_docket: docket, state: state, facility_type: "power_reactor", **attributes)
+  # Enrichment attaches only to a verified NRC unit (#118); real NRC units
+  # reach this point through their own publication pipeline, so the helper
+  # creates them verified by default. Agent-verified by default, so EIA can
+  # still fill in or overwrite the fixture's placeholder values (NRC state
+  # for a border plant, say) without the protect_human_verified check
+  # treating them as a person's decision. Tests that need a human decision
+  # pass verified_by: "human:…" or call verify!/reject! themselves. Pass
+  # verified: false to simulate a unit still in review.
+  def nrc_unit(name, docket, state, verified: true, **attributes)
+    status = verified ? { verification_status: "verified", verified_by: "agent:test", verified_at: Time.current } : {}
+    Facility.create!(name: name, nrc_docket: docket, state: state, facility_type: "power_reactor", **status, **attributes)
   end
 
   # Extract, match and verify, then a human approves what verify recommended
@@ -272,6 +281,20 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
     assert_match "which was rejected", vogtle_1.notes
   end
 
+  # #118: an unpublished unit is a person's decision (e.g. a merged-away
+  # duplicate) that won't come back on its own, so the enrichment claim
+  # settles instead of waiting forever on every run.
+  test "an unpublished unit isn't enriched either; the generator goes to review" do
+    nrc_unit("Vogtle 1", "05000424", "GA").unpublish!(by: "human:tosin")
+    crawl!
+
+    match_and_verify!
+
+    vogtle_1 = Candidate.where(source: source).find { |c| c.payload["identify"]&.values_at("name", "unit") == %w[Vogtle 1] }
+    assert vogtle_1.status_needs_review?
+    assert_match "which was unpublished", vogtle_1.notes
+  end
+
   test "a workbook that can't be read marks the source for a human" do
     stub_request(:get, FILE).to_return(body: "<html>maintenance</html>")
 
@@ -403,8 +426,22 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
       match_and_verify!
     end
 
-    assert unit.reload.pending?, "EIA values don't verify the NRC unit"
+    assert unit.reload.verified?, "EIA values don't re-decide the NRC unit"
     assert_equal [ "crawler" ], unit.evidence.distinct.pluck(:found_by)
+  end
+
+  # #118: enriching a pending unit would push EIA's values onto a record
+  # that isn't public yet. Wait instead, as for a unit that doesn't exist.
+  test "EIA waits for a pending NRC unit; values don't attach to a record that isn't public yet (#118)" do
+    pending_unit = nrc_unit("Vogtle 1", "05000424", "GA", verified: false)
+    crawl!
+    match_and_verify!
+
+    assert pending_unit.reload.pending?
+    assert_empty pending_unit.evidence, "no values attached until the NRC unit is verified"
+    waiting = Candidate.where(source: source).find { |c| c.payload["identify"]&.values_at("name", "unit") == %w[Vogtle 1] }
+    assert waiting.status_new?
+    assert_match "isn't verified yet", waiting.notes
   end
 
   test "each plant proposes its site and no operator: Entity Name is the reporting utility (#121, #227)" do

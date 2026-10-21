@@ -86,18 +86,25 @@
   /* Overview panel */
   .nd-overview { width: 100%; max-width: var(--nd-overview-width); background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); padding: var(--nd-space-6); box-sizing: border-box; }
   .nd-overview h3 { margin: 0 0 var(--nd-space-4); font: 600 20px/28px var(--font-text); }
-  .nd-overview dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--nd-space-3) var(--nd-space-4); }
+  .nd-overview dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--nd-space-1) var(--nd-space-4); }
   .nd-overview dt { font: 600 11px/20px var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
   .nd-overview dd { margin: 0; font-size: 14px; line-height: 20px; min-width: 0; }
   /* A value and its source numbers never part (Tosin's no-wrap rule). */
   .nd-overview__cites, .nd-keep { white-space: nowrap; }
   /* A list wraps only between names: each linked name stays whole (Design, #394). */
   .nd-overview dd a { white-space: nowrap; }
+  /* A list of plain names (Also known as) wraps between names, like links; one longer than the column ends in an ellipsis. */
+  .nd-overview__name { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; line-height: 1.4; }
   /* A name before the last is never wider than the column: "…" as the last resort. */
   .nd-overview__line:not(.nd-overview__line--fit) > .nd-overview__val a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   /* The Type chips: under their label, across the panel, so a full-name chip fits on one line. */
   .nd-overview dt.nd-overview__stack, .nd-overview dd.nd-overview__stack { grid-column: 1 / -1; }
-  .nd-overview dd.nd-overview__stack { margin-top: calc(-1 * var(--nd-space-2)); }
+  /* Label to value 4px (the row gap); row to row 12px: the 4px gap plus 8px
+     above each label, and above its value when they share a row (#406). */
+  .nd-overview dd + dt, .nd-overview dd + dt:not(.nd-overview__stack) + dd { margin-top: var(--nd-space-2); }
+  /* The Type chips hang left by the pill's own 8px padding, so the category
+     icon sits on the label's edge. */
+  .nd-overview .nd-bucketchips { width: calc(100% + var(--nd-space-2)); margin-left: calc(-1 * var(--nd-space-2)); }
   /* A short value fits the row's width less its numbers (about 26px each),
      down to 13px; an ellipsis only as the last resort. */
   .nd-overview dd { container-type: inline-size; }
@@ -119,9 +126,13 @@
   .nd-overview__last:has(:focus-visible) { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
   /* Phones: each label above its value, so values get the full width. */
   @media (max-width: 479px) {
-    .nd-overview dl { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
-    .nd-overview dd + dt { margin-top: var(--nd-space-2); }
+    .nd-overview dl { grid-template-columns: minmax(0, 1fr); }
+    .nd-overview dd + dt:not(.nd-overview__stack) + dd { margin-top: 0; }
   }
+  /* The record's own sources, once, under the facts. The label stays with the
+     first number; the rest wrap as whole numbers. */
+  .nd-overview__sources { margin: var(--nd-space-3) 0 0; font: 400 13px/20px var(--font-text); color: var(--nd-ink-muted); }
+  .nd-overview__sources .nd-src { margin-left: var(--nd-space-1); }
   .nd-overview__foot { margin-top: var(--nd-space-4); padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; justify-content: space-between; align-items: center; gap: var(--nd-space-2); }
 
 }
