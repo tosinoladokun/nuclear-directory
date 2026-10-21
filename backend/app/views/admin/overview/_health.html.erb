@@ -3,7 +3,8 @@
   <summary class="type-body">Needs attention <span class="type-data nd-num"><%= @attention.attention.size %></span></summary>
   <div class="nd-fold__body">
     <% if @attention.attention.empty? %>
-      <p class="nd-fold__row type-body text-ink-muted">Nothing. <%= safe_join(@attention.by_status.map { |status, n| "#{crawl_status_label(status)} #{n}" }, " · ") %></p>
+      <p class="nd-fold__row type-body text-ink-muted">Nothing needs attention.<br>
+        <%= safe_join(@attention.by_status.map { |status, n| label = crawl_status_label(status); "#{number_with_delimiter(n)} #{label == 'OK' ? label : label.downcase}" }, " · ") %></p>
     <% end %>
     <% @attention.attention.each do |source| %>
       <% url = safe_url(source.url) %>

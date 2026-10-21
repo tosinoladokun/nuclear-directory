@@ -297,6 +297,7 @@ class Admin::SourcesControllerTest < ActionDispatch::IntegrationTest
 
     get admin_root_path
     assert_select "details summary", /Needs attention/
+    assert_select ".nd-fold__row", /Nothing needs attention\.\s+\d+ (not fetched yet|OK)/ if css_select(".nd-fold__row").text.include?("Nothing needs")
     assert_select "details summary", /Last run per stage/
     assert_select "details summary", /Model spend/
   end
