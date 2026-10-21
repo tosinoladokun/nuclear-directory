@@ -3,6 +3,7 @@
 
 <div class="nd-shell__head">
   <h1 class="type-admin-h1">Sources <span class="type-count"><%= number_with_delimiter(SourceCatalog.total) %></span></h1>
+  <%= render "admin/sources/switch", by: "type" %>
   <%= render "admin/sources/search_box", query: nil %>
 </div>
 

@@ -1,6 +1,7 @@
-<%# "Search all sources" (#201 part 2b): a GET, so Back and Forward work. Locals: query. %>
+<%# "Search all sources" (#201 part 2b): a GET, so Back and Forward work. Locals: query, back (the Sources view to return to, optional). %>
 <%= form_with url: admin_sources_search_path, method: :get, class: "nd-search nd-sources__search", role: "search" do %>
   <%= icon("magnifying-glass", size: 16) %>
+  <%= hidden_field_tag :back, local_assigns[:back], id: nil if local_assigns[:back].present? %>
   <label for="sources-q" class="sr-only">Search all sources</label>
   <input type="search" id="sources-q" name="q" value="<%= query %>" placeholder="Search all sources" class="type-input">
 <% end %>
