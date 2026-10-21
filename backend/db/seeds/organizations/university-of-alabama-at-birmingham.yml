@@ -14,4 +14,8 @@ roles:
 technologies: []
 relationships: []
 facilities: []
-notes: 'Named in DOE''s University Isotope Network on isotopes.gov. No isotopes role: the page says DOE partners with these universities to develop production capabilities, not that they produce isotopes. No description or website set: uab.edu''s about page read returned no usable text.'
+notes: 'Named in DOE''s University Isotope Network on isotopes.gov. No isotopes role: the page says DOE partners with these universities to develop production capabilities, not that they produce isotopes. No website set: uab.edu''s about page read returned no usable text.'
+description:
+  text: University named in DOE's University Isotope Network.
+  source_url: https://www.isotopes.gov/production-network
+  quote: 'The DOE IRP’s University Isotope Network (UIN) comprises six schools: the University of Washington, the University of Missouri Research Reactor Center, the University of Wisconsin, University of Alabama-Birmingham, Texas A&M University and Michigan State University.'
