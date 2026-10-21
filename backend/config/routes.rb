@@ -23,6 +23,7 @@ Rails.application.routes.draw do
   get "bot" => "pages#bot", as: :bot
   get "sitemap.xml" => "sitemaps#show", as: :sitemap, format: false, defaults: { format: :xml }
   get "robots.txt" => "sitemaps#robots", as: :robots, format: false
+  get "llms.txt" => "sitemaps#llms", as: :llms, format: false
   # A public JSON summary for other sites (#193). GET only.
   get "api/snapshot.json" => "api/snapshots#show", as: :api_snapshot, format: false, defaults: { format: :json }
   # The browser's PostHog traffic, through our site with the visitor's country (#205).

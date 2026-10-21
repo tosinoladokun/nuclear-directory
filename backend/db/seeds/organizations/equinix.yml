@@ -28,6 +28,13 @@ relationships:
   source_url: https://www.sec.gov/Archives/edgar/data/1849056/000162828024047882/oklo_shareholder-letterx.htm
   quote: Oklo has a partnership with Equinix, Inc. that includes a $25M pre-payment for a future 20-year PPA for up to 500 MW of power for its data centers.
   confidence: 0.9
+- type: offtake_with
+  to: Oklo
+  description: 'Prepayment (2024): $25M toward a future 20-year PPA for up to 500 MW for Equinix data centers.'
+  source_url: https://investor.equinix.com/news-events/press-releases/detail/1079/equinix-collaborates-with-leading-alternative-energy
+  quote: Equinix signed an agreement to procure 500MW of energy from Oklo's next-generation fission Aurora powerhouses.
+  published: '2025-08-14'
+  confidence: 1.0
 facilities: []
 notes: 'Oklo deal quote is from Oklo''s Q3 2024 shareholder letter (SEC exhibit, not char-verified live; matched against a copy fetched earlier this session). Neither source gives the month the agreement was signed; Equinix says only "In 2024", so the description says 2024. The Radiant preorder is recorded in radiant.yml as Radiant supplies Equinix (#253). Equinix''s release also names agreements with ULC-Energy and Stellaria (Europe, out of US scope). HQ not added: the release dateline is Redwood City, Calif., but no page fetched says headquarters.'
 description:
