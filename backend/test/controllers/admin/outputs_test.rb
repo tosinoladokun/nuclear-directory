@@ -18,7 +18,9 @@ class Admin::OutputsTest < ActionDispatch::IntegrationTest
     assert_select "h1", /Where it appears\s+#{in_sitemap}/
     assert_select "#output-pages", /Public pages\s+#{in_sitemap}/
     pages = PublicPages.new
-    assert_select "#output-previews", /Link previews\s+#{pages.companies.count + pages.plants.count + pages.categories.size + 1}/
+    assert_operator Category.all.size, :>, pages.categories.size, "some categories are empty here"
+    assert_select "#output-previews", /Link previews\s+#{pages.companies.count + pages.plants.count + Category.all.size + 1}/,
+      "an empty category's page still has its own card"
     assert_select "#output-snapshot", /Snapshot API\s+Updated \d+ \w{3}, /
     assert_select "#output-snapshot a[href=?]", api_snapshot_path
     assert_select "#output-dataset", /Open dataset\s+Later/

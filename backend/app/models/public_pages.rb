@@ -22,7 +22,8 @@ class PublicPages
 
   def count = FIXED + categories.size + tags.size + companies.count + plants.count
 
-  # Pages a link preview card is drawn for: each company, plant and category
-  # page, and the default card every other page shares.
-  def link_previews = companies.count + plants.count + categories.size + 1
+  # Cards a link preview can draw: one per company, plant and category page
+  # (an empty category's page has one too, though the sitemap leaves it
+  # out), and the default card every other page shares.
+  def link_previews = companies.count + plants.count + Category.all.size + 1
 end
