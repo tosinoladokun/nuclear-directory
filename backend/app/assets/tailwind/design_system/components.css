@@ -286,7 +286,14 @@
   /* Compact, as before the cards (Tosin, 19 Oct): never wider than 960px, centred. */
   .nd-home__cats { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
   .nd-home .nd-searchbox--large .nd-search { height: 52px; }
-  .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+  .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
+  .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
+  .nd-sugg[hidden] { display: none; }
+  /* One line of suggestions at every width, never a second line or a scroll
+     (Tosin, 21 Oct: show fewer). The fit-row controller hides the pills that
+     wrap; without it the row clips them. The 8px above and below, taken back
+     by the margin, leave room for each pill's 44px tap area inside the clip. */
+  .nd-home .nd-suggs { flex-wrap: wrap; justify-content: center; row-gap: 16px; height: 44px; box-sizing: border-box; padding-block: 8px; margin-block: -8px; overflow: hidden; }
   @media (min-width: 1440px) {
     .nd-home { padding: 40px 120px 14px; }
     .nd-home__wordmark .nd-wordmark__svg { height: 60px; }
@@ -383,18 +390,7 @@
     /* The rows run edge to edge and the card's wrapper clips what is drawn
        outside them, so the focus ring goes inside the row: it stays whole. */
     .nd-catcard--stack .nd-catcard__row:focus-visible, .nd-catcard--stack .nd-catcard__more:focus-visible { outline-offset: -2px; }
-    /* The suggested searches stay (nothing live is removed): one 28px row at
-       13px that scrolls inside itself, faded at the edge, never a second line. */
     .nd-home__search { gap: var(--nd-space-4); }
-    /* The 8px above and below (taken back by the margin) leave room for each
-       pill's 44px tap area, which the scrolling row would otherwise clip. */
-    .nd-home .nd-suggs { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; padding-right: var(--nd-space-8);
-      padding-block: 8px; margin-block: -8px;
-      mask-image: linear-gradient(to right, #000 85%, transparent); -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); }
-    .nd-home .nd-suggs::-webkit-scrollbar { display: none; }
-    .nd-home .nd-sugg { flex: none; white-space: nowrap; }
-    /* The row scrolls inside itself and clips whatever is drawn outside it,
-       so the focus ring goes inside the pill. */
     .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
     .nd-home__wordmark .nd-wordmark__svg { height: 34px; }
     /* Search near the top, so the keyboard doesn't cover the results. */

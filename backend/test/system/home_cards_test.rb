@@ -19,22 +19,37 @@ class HomeCardsTest < ApplicationSystemTestCase
 
   def cards = page.evaluate_script("[...document.querySelectorAll('section.nd-catcard')].map((c) => [c.dataset.key, c.querySelectorAll('a.nd-catcard__row').length])")
 
-  test "phones keep the suggested searches: one 28px row under the search box, scrolling inside itself, never the page" do
-    [ [ 360, 780 ], [ 390, 844 ] ].each do |width, height|
+  test "the suggested searches are one line at every width: the ones that don't fit are hidden, never wrapped or scrolled" do
+    [ [ 360, 780 ], [ 390, 844 ], [ 640, 900 ], [ 700, 900 ], [ 1440, 900 ] ].each do |width, height|
       resize_viewport(width, height)
       visit root_path
 
       row = page.evaluate_script(<<~JS)
         (() => {
-          const row = document.querySelector(".nd-home .nd-suggs"), pills = [...row.querySelectorAll(".nd-sugg")]
-          const tops = new Set(pills.map((pill) => Math.round(pill.getBoundingClientRect().top)))
-          return [pills.length, tops.size, Math.max(...pills.map((pill) => Math.round(pill.getBoundingClientRect().height))),
-            parseFloat(getComputedStyle(pills[0]).fontSize), document.documentElement.scrollWidth <= innerWidth]
+          const row = document.querySelector(".nd-home .nd-suggs"), all = [...row.querySelectorAll(".nd-sugg")]
+          const shown = all.filter((pill) => !pill.hidden), tops = new Set(shown.map((pill) => Math.round(pill.getBoundingClientRect().top)))
+          const rowBox = row.getBoundingClientRect()
+          return [all.length, shown.length >= 2, tops.size, Math.max(...shown.map((pill) => Math.round(pill.getBoundingClientRect().height))),
+            parseFloat(getComputedStyle(shown[0]).fontSize) >= 13, shown.every((pill) => pill.getBoundingClientRect().right <= rowBox.right + 1 && pill.getBoundingClientRect().left >= rowBox.left - 1),
+            row.scrollWidth <= row.clientWidth, document.documentElement.scrollWidth <= innerWidth]
         })()
       JS
-      assert_equal [ HomeSuggestions::SHOWN, 1, 28, 13.0, true ], row, "at #{width}: five pills, one row, 28px, 13px, no sideways page scroll"
+      assert_equal [ HomeSuggestions::SHOWN, true, 1, 28, true, true, true, true ], row, "at #{width}: at least two pills, one line, 28px, inside the row, no scroll anywhere"
       assert_empty page.evaluate_script(AUDIT), "at #{width}"
     end
+  end
+
+  test "a narrow phone shows fewer suggestions than a wide screen, and the hidden ones are out of the tab order" do
+    resize_viewport(360, 780)
+    visit root_path
+    narrow = page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length")
+    resize_viewport(1440, 900)
+    wide = page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length")
+    assert_equal HomeSuggestions::SHOWN, wide, "all of them fit on a wide screen"
+    assert_operator narrow, :<, wide, "fewer fit at 360"
+    resize_viewport(360, 780)
+    assert_equal narrow, page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length"), "the same on the way back"
+    assert page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg[hidden]')].every((pill) => pill.offsetParent === null)"), "hidden pills take no space and can't be tabbed to"
   end
 
   test "on a touch screen the suggestions stay 28px tall, with a 44px tap area" do
@@ -144,7 +159,7 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal 0, inset, "the row runs edge to edge, so only an inside ring survives"
   end
 
-  test "on a phone the focus ring on a suggestion pill is drawn inside the pill, so the scrolling row can't cut it" do
+  test "on a phone the focus ring on a suggestion pill is drawn inside the pill, so the row's clip can't cut it" do
     resize_viewport(390, 844)
     visit root_path
 
