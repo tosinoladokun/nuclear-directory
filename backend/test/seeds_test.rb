@@ -53,6 +53,10 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal 105, Organization.verified.count
     assert_equal 118, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
+    # A company the NRC decommissioning crawl found carries its NRC identity quote on its own record.
+    %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
+      assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
+    end
     assert_equal 76, Relationship.verified.count
     assert_equal 60, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
