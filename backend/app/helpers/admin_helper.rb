@@ -124,7 +124,7 @@ module AdminHelper
       checks: DataQuality::Review.counts.values.sum + DataQuality::Review.pending_count,
       live: Organization.published.count + Facility.published.where(parent_id: nil).count,
       corrections: CorrectionReport.where(status: %w[open reviewed]).count,
-      removed: Directory::RemovedList.new.total
+      removed: Directory::RemovedList.total
     }
   end
 

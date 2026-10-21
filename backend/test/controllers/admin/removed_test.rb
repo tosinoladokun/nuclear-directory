@@ -87,4 +87,9 @@ class Admin::RemovedTest < ActionDispatch::IntegrationTest
     get link
     assert_select ".nd-crumbs a[href^=?]", "/admin/removed", text: "Removed"
   end
+
+  test "the badge counts in the database, the same as the list: without loading the events" do
+    assert_equal Directory::RemovedList.new.total, Directory::RemovedList.total
+    assert_equal 3, Directory::RemovedList.total
+  end
 end
