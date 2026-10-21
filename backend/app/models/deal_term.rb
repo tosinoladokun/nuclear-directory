@@ -14,6 +14,15 @@ class DealTerm < ApplicationRecord
   enum :status, %w[announced signed active completed terminated].index_by(&:itself), validate: { allow_nil: true },
     prefix: :status
 
+  # The form of agreement (#256, #255). A signed power deal is counted:
+  # a PPA, supply agreement or tariff subscription that's signed, active or
+  # completed. The rest (development agreements, frameworks, MOUs, letters
+  # of intent, options, preorders) are listed by stage (docs/DATA.md section 2).
+  AGREEMENTS = %w[ppa supply_agreement tariff_subscription development_agreement framework mou loi option preorder].freeze
+  COUNTED_AGREEMENTS = %w[ppa supply_agreement tariff_subscription].freeze
+  COUNTED_STATUSES = %w[signed active completed].freeze
+  validates :agreement, inclusion: { in: AGREEMENTS }, allow_nil: true
+
   # Optional here so an unknown link_type is a validation error (the
   # inclusion check below), never a NameError resolving it.
   belongs_to :link, polymorphic: true, optional: true
@@ -38,6 +47,9 @@ class DealTerm < ApplicationRecord
       .or(verified.where(link_type: "FacilityRelationship", link_id: FacilityRelationship.published.select(:id)))
       .or(verified.where(link_type: "Organization", link_id: Organization.published.select(:id)))
   end
+
+  # A signed power deal, in the data piece's headline count.
+  def counted? = COUNTED_AGREEMENTS.include?(agreement) && COUNTED_STATUSES.include?(status)
 
   private
     def what_an_offtake_needs

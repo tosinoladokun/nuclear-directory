@@ -123,8 +123,9 @@ module Seed
       end
 
       def evidence_items(doc)
-        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *doc["relationships"],
-          *doc["facilities"] ].compact.select { |item| item["source_url"] }
+        links = [ *doc["relationships"], *doc["facilities"] ].compact
+        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links,
+          *links.flat_map { |link| Array(link["terms"]) } ].compact.select { |item| item["source_url"] }
       end
 
       # The description's quote, plus any "also" quotes that support the rest
@@ -207,9 +208,10 @@ module Seed
           # same link (same from/to/type) doesn't clear a value another
           # entry set. The seed describes what's known; a missing key is
           # "nothing to say", not "clear it".
-          write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
+          link = write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
             relationship_type: item["type"], description: item["description"] }.compact,
             evidence(item, sources))
+          write_terms(slug, "Relationship", link, item, sources)
         end
 
         Array(doc["facilities"]).each do |item|
@@ -222,9 +224,40 @@ module Seed
           # entry about the same owns-link that omits a share doesn't
           # clear the share another entry set, which was rewriting the
           # value and logging four verification events on every re-seed.
-          write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
+          link = write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
             relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] }.compact,
             evidence(item, sources), pending: item["pending"], hold: hold_reason(organization.id, facility.id, item))
+          write_terms(slug, "FacilityRelationship", link, item, sources)
+        end
+      end
+
+      # A deal's terms (#256): each one agreement under its link, with its
+      # MW, money, dates, form of agreement and status, so the data piece
+      # (#255) and the export (#254) read them as data. A term's key is its
+      # stable id (stored as external_id), so a re-seed updates it rather than
+      # adding another. Its evidence is its own quote, else the link's.
+      #   terms:
+      #   - key: constellation-uprates-ppa-2026
+      #     agreement: ppa
+      #     status: signed
+      #     capacity_mw: 890
+      #     signed_on: 2026-10-01
+      #     starts_on: 2026-10-01
+      #     ends_on: 2046-09-30
+      def write_terms(slug, link_type, link, item, sources)
+        terms = Array(item["terms"])
+        return if terms.empty? || !link&.ok?
+
+        terms.each do |term|
+          unless term["key"].to_s.strip.present?
+            @errors << "#{slug}: a deal term under #{item['to'] || item['name']} needs a key (a stable id, e.g. google-kairos-mpda-2024)"
+            next
+          end
+
+          attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip,
+            agreement: term["agreement"], status: term["status"], capacity_mw: term["capacity_mw"], amount_usd: term["amount_usd"],
+            signed_on: term["signed_on"], starts_on: term["starts_on"], ends_on: term["ends_on"] }.compact
+          write(slug, :deal_term, attributes, evidence(term["source_url"] ? term : item, sources), pending: item["pending"])
         end
       end
 
@@ -389,7 +422,7 @@ module Seed
         if result.ok?
           count(kind, result.id, result.created ? :created : (result.changed ? :changed : :unchanged))
         else
-          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type]}: " \
+          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type] || attributes[:external_id]}: " \
             "#{result.errors.join("; ")}"
         end
         result

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_015644) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -133,9 +133,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.decimal "amount_offered_usd", precision: 16, scale: 2
+    t.string "agreement"
     t.index ["link_type", "link_id", "term_type", "external_id"], name: "index_deal_terms_uniqueness", unique: true, where: "(external_id IS NOT NULL)"
     t.index ["link_type", "link_id"], name: "index_deal_terms_on_link_type_and_link_id"
     t.index ["verification_status"], name: "index_deal_terms_on_verification_status"
+    t.check_constraint "agreement IS NULL OR (agreement::text = ANY (ARRAY['ppa'::character varying, 'supply_agreement'::character varying, 'tariff_subscription'::character varying, 'development_agreement'::character varying, 'framework'::character varying, 'mou'::character varying, 'loi'::character varying, 'option'::character varying, 'preorder'::character varying]::text[]))", name: "deal_terms_agreement_check"
     t.check_constraint "amount_offered_usd IS NULL OR amount_offered_usd >= 0::numeric", name: "deal_terms_amount_offered_check"
     t.check_constraint "amount_usd IS NULL OR amount_usd >= 0::numeric", name: "deal_terms_amount_check"
     t.check_constraint "capacity_mw IS NULL OR capacity_mw >= 0::numeric", name: "deal_terms_capacity_check"
