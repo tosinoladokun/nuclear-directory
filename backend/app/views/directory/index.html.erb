@@ -30,7 +30,7 @@
 %>
 <% content_for :head do %>
   <meta name="description" content="<%= description %>">
-  <% if listing.searching? || listing.filtered? %><meta name="robots" content="noindex"><% end %>
+  <% if listing.searching? || listing.filtered? || @shown > DirectoryController::PAGE %><meta name="robots" content="noindex"><% end %>
   <%# Search and filters point back to the plain list or category. %>
   <link rel="canonical" href="<%= listing.category ? companies_url(category: listing.category.to_param) : listing.tag ? companies_url(tag: listing.tag.to_param) : companies_url %>">
 <% end %>
@@ -83,6 +83,11 @@
     </div>
   </div>
 
+  <%# The rows and Show more are one Turbo frame: Show more swaps the next page in
+      place, so the page doesn't jump (advancing the address would scroll to the
+      top). The link is still a real page (?shown=2) for crawlers and without
+      JavaScript. %>
+  <turbo-frame id="directory-rows" data-controller="keep-scroll">
   <% if total.zero? %>
     <% if listing.searching? %>
       <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{list_page.name}" if list_page}.",
@@ -117,6 +122,7 @@
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
       state: listing.state, sort: (listing.sort unless listing.sort == "name"), shown: @shown / DirectoryController::PAGE + 1),
-      class: "nd-btn nd-btn--outline type-ui", rel: "nofollow" %></p>
+      class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
+  </turbo-frame>
 </main>
