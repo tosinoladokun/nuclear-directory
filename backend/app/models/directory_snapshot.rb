@@ -40,6 +40,14 @@ class DirectorySnapshot
 
   def self.generation = @lock.synchronize { @generation }
 
+  # When the directory last changed, as the snapshot's updatedAt says (also
+  # shown on the admin's Where it appears, #166).
+  def self.updated_at
+    recorded = CHANGES.read(CHANGED_AT)&.then { |seconds| Time.zone.at(seconds) }
+    times = FACT_MODELS.filter_map { |model| model.maximum(model == VerificationEvent ? :created_at : :updated_at) }
+    [ *times, recorded ].compact.max || Time.current
+  end
+
   # Called after any fact is saved or deleted (Verifiable). Also records the
   # time durably (the app's database-backed cache), so updatedAt moves
   # forward for a deletion and survives a restart.
@@ -134,9 +142,5 @@ class DirectorySnapshot
     FACT_MODELS = [ Organization, Facility, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship,
       VerificationEvent ].freeze
 
-    def updated_at
-      recorded = CHANGES.read(CHANGED_AT)&.then { |seconds| Time.zone.at(seconds) }
-      times = FACT_MODELS.filter_map { |model| model.maximum(model == VerificationEvent ? :created_at : :updated_at) }
-      [ *times, recorded ].compact.max || Time.current
-    end
+    def updated_at = self.class.updated_at
 end
