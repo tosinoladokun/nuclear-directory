@@ -50,7 +50,7 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 120, Organization.verified.count
+    assert_equal 121, Organization.verified.count
     assert_equal 137, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
@@ -61,7 +61,7 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 77, Relationship.verified.count
+    assert_equal 78, Relationship.verified.count
     assert_equal 52, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
     assert_equal [ 75, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
