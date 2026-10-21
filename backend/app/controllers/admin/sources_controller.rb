@@ -15,7 +15,8 @@ class Admin::SourcesController < Admin::BaseController
 
     @official = SourceCatalog.official
     @research = SourceCatalog.research
-    @runs_by_kind = DataQuality::Status.by_kind.index_by(&:source_kind)
+    @rows = DataQuality::Status.by_kind
+    @runs_by_kind = @rows.index_by(&:source_kind)
   end
 
   def show

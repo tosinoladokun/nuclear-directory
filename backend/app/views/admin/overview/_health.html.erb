@@ -1,5 +1,5 @@
 <%# The pipeline's health (#201, moved from Sources by Tosin, 21 Oct): what needs attention, the last run per stage, model spend, and visitors on PostHog. %>
-<details class="nd-fold">
+<details class="nd-fold" open>
   <summary class="type-body">Needs attention <span class="type-data nd-num"><%= @attention.attention.size %></span></summary>
   <div class="nd-fold__body">
     <% if @attention.attention.empty? %>
@@ -19,7 +19,7 @@
   </div>
 </details>
 
-<details class="nd-fold">
+<details class="nd-fold" open>
   <summary class="type-body">Last run per stage <span class="type-data nd-num"><%= @runs.running.size + @runs.latest.size %></span></summary>
   <div class="nd-fold__body">
     <% if @runs.latest.empty? && @runs.running.empty? %>
@@ -38,6 +38,10 @@
   </div>
 </details>
 
+<% if @analytics_url %>
+  <p class="type-body"><%= link_to @analytics_url, class: "nd-link", target: "_blank", rel: "noopener" do %>Visitors on PostHog <%= icon("arrow-square-out", size: 12) %><% end %></p>
+<% end %>
+
 <details class="nd-fold">
   <summary class="type-body">Model spend <span class="type-data nd-num"><%= money(@spend.cost) %></span></summary>
   <div class="nd-fold__body">
@@ -53,7 +57,3 @@
     <% end %>
   </div>
 </details>
-
-<% if @analytics_url %>
-  <p class="type-body"><%= link_to @analytics_url, class: "nd-link", target: "_blank", rel: "noopener" do %>Visitors on PostHog <%= icon("arrow-square-out", size: 12) %><% end %></p>
-<% end %>

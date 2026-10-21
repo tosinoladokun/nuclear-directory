@@ -2,7 +2,7 @@
 <% counts = admin_nav_counts %>
 
 <div class="nd-shell__head nd-shell__head--date">
-  <h1 class="type-admin-h1">Today</h1>
+  <h1 class="type-admin-h1">Overview</h1>
   <span class="type-kicker text-ink-muted"><%= Date.current.strftime("%-d %b") %></span>
 </div>
 
@@ -13,22 +13,5 @@
   <%= link_to admin_corrections_path, class: "nd-tile", title: "From visitors" do %><span class="type-stage text-ink-muted max-md:text-ink">Correction requests</span> <span class="type-tile"><%= counts[:corrections] %></span><% end %>
 </section>
 
-<% if @rows.any? %>
-  <div class="overflow-x-auto">
-    <table class="nd-numtable">
-      <thead><tr><th scope="col">Source</th><th scope="col">Read</th><th scope="col">Same</th><th scope="col">Changed</th></tr></thead>
-      <tbody>
-        <% @rows.each do |row| %>
-          <tr>
-            <td class="type-body"><%= source_kind_label(row.source_kind) %></td>
-            <td class="type-cell-num"><%= row.read ? number_with_delimiter(row.read) : "—" %></td>
-            <td class="type-cell-num"><%= row.same ? number_with_delimiter(row.same) : "—" %></td>
-            <td class="type-cell-num"><%= row.changed.positive? ? link_to(number_with_delimiter(row.changed), admin_checks_path(source: row.source_kind), class: "nd-link") : "0" %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  </div>
-<% end %>
 
 <%= render "admin/overview/health" %>

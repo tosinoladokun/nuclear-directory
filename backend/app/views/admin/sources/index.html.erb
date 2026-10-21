@@ -7,6 +7,30 @@
   <%= render "admin/sources/search_box", query: nil %>
 </div>
 
+<% if @rows.any? %>
+  <%# What each crawler read, found the same and changed on its last run (moved from Overview, #166). %>
+  <details class="nd-fold" open data-controller="desktop-open">
+    <summary class="type-body">Read, same, changed</summary>
+    <div class="nd-fold__body">
+  <div class="overflow-x-auto">
+    <table class="nd-numtable">
+      <thead><tr><th scope="col">Source</th><th scope="col">Read</th><th scope="col">Same</th><th scope="col">Changed</th></tr></thead>
+      <tbody>
+        <% @rows.each do |row| %>
+          <tr>
+            <td class="type-body"><%= source_kind_label(row.source_kind) %></td>
+            <td class="type-cell-num"><%= row.read ? number_with_delimiter(row.read) : "—" %></td>
+            <td class="type-cell-num"><%= row.same ? number_with_delimiter(row.same) : "—" %></td>
+            <td class="type-cell-num"><%= row.changed.positive? ? link_to(number_with_delimiter(row.changed), admin_checks_path(source: row.source_kind), class: "nd-link") : "0" %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+    </div>
+  </details>
+<% end %>
+
 <div class="overflow-x-auto">
   <table class="nd-numtable nd-stack-table nd-sources nd-sources--list">
     <thead>
