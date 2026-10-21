@@ -93,6 +93,9 @@ Rails.application.routes.draw do
       get "/" => "status_changes#edit"
       patch "/" => "status_changes#update"
     end
+    # "Same as…" (#391): settle a claim's company that's still a question.
+    get "candidates/:id/settle" => "candidate_settles#show", as: :candidate_settle, constraints: { id: /\d+/ }
+    post "candidates/:id/settle" => "candidate_settles#create", constraints: { id: /\d+/ }
     resources :candidates, only: %i[index edit update] do
       collection do
         post :approve

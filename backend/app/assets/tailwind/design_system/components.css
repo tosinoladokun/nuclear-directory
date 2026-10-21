@@ -156,6 +156,9 @@
   @media (max-width: 560px) { .nd-search--short { max-width: none; } }
   .nd-search--short input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
   .nd-claim-no { white-space: nowrap; }
+  /* Same as… (#391): a company with its two choices. */
+  .nd-settle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nd-space-2) var(--nd-space-4); }
+  .nd-settle .nd-btn { white-space: nowrap; }
   /* Checks' folded group: its rows sit straight in the fold, not as cards in a card. */
   .nd-fold__body > .nd-waits .nd-wait { background: none; border-width: 0; border-top: var(--nd-hairline) solid var(--nd-rule); padding-inline: 0; }
   .nd-kick { display: flex; gap: var(--nd-space-2); align-items: baseline; }

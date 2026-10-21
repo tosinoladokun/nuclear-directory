@@ -78,6 +78,9 @@
       <button type="submit" class="nd-btn nd-btn--outline" name="candidate_id" value="<%= item.candidate_id %>"
         formaction="<%= reject_admin_candidates_path(filters) %>"><%= item.differences.any? ? "Keep" : "Reject" %></button>
       <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, **filters, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
+      <% if DataQuality::Review.open_company_ends(item).any? %>
+        <%= link_to "Same as…", admin_candidate_settle_path(item.candidate_id, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
+      <% end %>
     </div>
     <% end %>
   <% end %>

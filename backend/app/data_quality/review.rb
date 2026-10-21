@@ -319,6 +319,84 @@ module DataQuality::Review
       result
     end
 
+    # The company ends a waiting claim leaves as a question (#391): link ends
+    # with no exact match, or a company claim with only similar names.
+    # Returns [[end key or nil for the claim's own company, the name it gives]].
+    def open_company_ends(candidate)
+      return [] unless candidate.status.to_s == "needs_review" && candidate.subject_id.nil?
+
+      if candidate.kind == "organization"
+        return candidate.notes.to_s.include?("no exact match for") ? [ [ nil, candidate.payload["name"].to_s ] ] : []
+      end
+      ends = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {}).select { |_, type| type == :organization }.keys
+      ends.filter_map do |key|
+        name = candidate.payload.dig(key, "name").to_s
+        [ key, name ] if name.present? && candidate.notes.to_s.match?(/\A#{Regexp.escape(key)}(: no exact match for| ".*" isn't in the directory yet)/)
+      end
+    end
+
+    # Settles one company end of a waiting claim as a person's decision
+    # (#391): choice "same" (record_id is that company), "new" (a company
+    # by the name it gives, not public yet) or "subsidiary" (that new
+    # company, plus "subsidiary of" record_id, not public yet). The claim
+    # then goes back to match and verify for its source (queued now), never
+    # approved here. Returns a Result.
+    def settle_company(candidate_id, end_key:, choice:, by:, record_id: nil, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      fail_with = ->(why) { Result.new(candidate_id:, ref: nil, errors: [ why ]) }
+      result = nil
+      Candidate.transaction do
+        candidate = Candidate.lock.find_by(id: candidate_id) or next result = fail_with.("it no longer exists")
+        name = open_company_ends(candidate).to_h[end_key.presence] or next result = fail_with.("its company was settled already")
+        other = (directory.fact(type: "Organization", id: record_id) if record_id.present?)
+        if %w[same subsidiary].include?(choice) && !(other && %w[verified pending].include?(other.verification_status))
+          next result = fail_with.("pick the company")
+        end
+
+        company = if choice == "same" then other
+        elsif %w[new subsidiary].include?(choice)
+          made = directory.add_fact(:organization, { name: }, source_id: candidate.source_id, quote: candidate.quote, by:, reason: ADDED_REASON)
+          unless made.success?
+            taken = made.errors.join.match?(/already been taken/)
+            next result = fail_with.(taken ? "a company named #{name} is in the directory already; pick it with Same as" : made.errors.to_sentence)
+          end
+          unless made.created
+            # It found one by that name (its evidence was added): undone.
+            result = fail_with.("a company named #{name} is in the directory already; pick it with Same as")
+            raise ActiveRecord::Rollback
+          end
+
+          if choice == "subsidiary"
+            link = directory.add_fact(:relationship, { from_organization_id: made.ref.id, to_organization_id: other.id, relationship_type: "subsidiary_of" },
+              source_id: candidate.source_id, quote: candidate.quote, by:, reason: ADDED_REASON)
+            unless link.success?
+              result = fail_with.(link.errors.to_sentence)
+              raise ActiveRecord::Rollback
+            end
+          end
+          directory.fact(type: "Organization", id: made.ref.id)
+        else next result = fail_with.("choose same as, new company or subsidiary")
+        end
+
+        what = { "same" => "the same as #{company.name}", "new" => "a new company", "subsidiary" => "a new company, a subsidiary of #{other&.name}" }.fetch(choice)
+        note = "#{by.delete_prefix('human:')} settled #{name.inspect} as #{what}"
+        if end_key.blank?
+          # The claim's own company: attached to it, as match would.
+          candidate.update!(status: "matched", subject_type: "Organization", subject_id: company.id, proposed_subject: false,
+            notes: "#{note}. Was: #{candidate.notes}", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        else
+          # A link end: named exactly as the company now, its own name kept
+          # as another name, and matched again.
+          payload = candidate.payload.deep_dup
+          payload[end_key] = payload[end_key].merge("name" => company.name, "aliases" => [ *payload[end_key]["aliases"], (name unless name.casecmp?(company.name)) ].compact.uniq)
+          candidate.update!(status: "new", payload:, notes: "#{note}. Was: #{candidate.notes}", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        end
+        result = Result.new(candidate_id:, ref: company.ref, errors: [])
+      end
+      DataQuality::RunJob.perform_later(Candidate.joins(:source).where(id: candidate_id).pick("sources.source_kind"), only: %w[match verify]) if result&.ok?
+      result
+    end
+
     # Of these candidates, the ones that only restate a fact already on the
     # site as decided: what Close (confirm_identical) would close. A dry run,
     # so the label and the action agree. Returns a Set of ids.

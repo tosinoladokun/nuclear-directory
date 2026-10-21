@@ -144,6 +144,10 @@ module AdminHelper
     joy, aminah = t("admin.reviewers.checker"), t("admin.reviewers.reviewer")
     held = item.held unless item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH
     return NextStep.new(group: "ready", verb: "Close", why: "already on the site") if restating
+    # A company still in question is the admin's to settle (#391), whatever else holds it.
+    if (open = DataQuality::Review.open_company_ends(item).first)
+      return NextStep.new(group: "decide", verb: "Decide", why: "which company is “#{open.last}”? Pick it with Same as…")
+    end
     return NextStep.new(group: "not_yours", verb: "Wait", why: held == DataQuality::Review::FIRST_BATCH ? "#{aminah} hasn't checked it yet" : held) if held
 
     joy_accepts = item.ai_recommendation == "recommend_publish"
