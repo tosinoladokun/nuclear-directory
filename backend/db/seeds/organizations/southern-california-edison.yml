@@ -1,0 +1,33 @@
+# Seed research - 20 Oct 2026 (Checks clean-up). Description quote from sce.com; operator links quote NRC's own SONGS pages (stored in production).
+name: Southern California Edison
+aliases:
+- Southern California Edison (SCE)
+- SCE
+website: https://www.sce.com
+hq: null
+country_code: US
+status: active
+roles: []
+technologies: []
+relationships: []
+facilities:
+- name: San Onofre 1
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/san-onofre-unit-1
+  quote: The San Onofre Nuclear Generating Station (SONGS), operated by Southern California Edison (SCE) is approximately 100 km (60 mi) south of Los Angeles, 6.5 km (4 mi) south of San Clemente, CA.
+  confidence: 1.0
+- name: San Onofre 2
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/san-onofre-units-2-3
+  quote: Southern California Edison retains the SONGS licenses and maintains the overall lead for the site's decommissioning.
+  confidence: 1.0
+- name: San Onofre 3
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/san-onofre-units-2-3
+  quote: Southern California Edison retains the SONGS licenses and maintains the overall lead for the site's decommissioning.
+  confidence: 1.0
+notes: 'A new company for the SONGS claims in Checks (1294 1296 1295 1297 1298). ''Retains the SONGS licenses'' is NRC''s wording for the licensee, so the link is operates. HQ left blank: sce.com''s page read states no headquarters.'
+description:
+  text: Electric utility that delivers electricity to communities in its Southern California service region.
+  source_url: https://www.sce.com/about-us/who-we-are
+  quote: Southern California Edison, our mission is to safely deliver reliable, clean and affordable electricity to the communities that make our region great.

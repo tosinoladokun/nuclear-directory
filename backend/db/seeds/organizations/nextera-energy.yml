@@ -22,6 +22,16 @@ facilities:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Point Beach 2 | 05000301 | DPR-27 | PWR | 13 miles NNW of Manitowoc, WI | NextEra Energy Point Beach, LLC | 3
   confidence: 1.0
+- name: Duane Arnold 1
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/duan
+  quote: The Duane Arnold Energy Center (DAEC) is a 1,912 MWt boiling water reactor that began operation in 1974 and is owned and operated by NextEra Energy Duane Arnold, LLC (NextEra).
+  confidence: 1.0
+- name: Duane Arnold 1
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/duan
+  quote: The Duane Arnold Energy Center (DAEC) is a 1,912 MWt boiling water reactor that began operation in 1974 and is owned and operated by NextEra Energy Duane Arnold, LLC (NextEra).
+  confidence: 1.0
 notes: 'HQ not set: the company page fetched does not state it. Parent of Florida Power & Light (subsidiary_of link in florida-power-light-co.yml, #322); it does not inherit FPL''s buckets. Google power deal (Duane Arnold) is recorded in google.yml (#253).'
 description:
   text: Energy company building generation of all kinds, including nuclear.
