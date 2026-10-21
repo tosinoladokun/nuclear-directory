@@ -68,8 +68,8 @@
     <% end %>
   <% else %>
     <% if link_kind %>
-      <p class="type-body m-0"><span class="nd-tag nd-one-line" title="<%= @other.name %>"><%= @other.name %></span>
-        <%= link_to "Change", page.(other: nil), class: "nd-link" %></p>
+      <p class="type-body m-0 nd-chosen"><span class="nd-tag nd-one-line" title="<%= @other.name %>"><%= @other.name %></span>
+        <%= link_to "Change", page.(other: nil), class: "nd-link nd-tap" %></p>
     <% end %>
 
     <%= form_with url: admin_record_new_fact_path(type: @type, id: @record.id, anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>

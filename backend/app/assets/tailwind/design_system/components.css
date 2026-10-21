@@ -673,6 +673,8 @@
   .nd-today__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3); }
   .nd-today__actions .nd-btn, .nd-today__row .nd-btn { white-space: nowrap; }
   /* Today's step 3: a fact with Joy's and Aminah's verdicts (#373). */
+  /* Add a fact: the company chosen, with Change beside it (44px to tap on touch). */
+  .nd-chosen { display: flex; align-items: center; gap: var(--nd-space-4); min-height: 44px; }
   .nd-verdict__chips { display: flex; flex-wrap: wrap; gap: var(--nd-space-2); }
   .nd-verdict__chips .nd-tag { white-space: nowrap; }
   .nd-verdict__chip--muted { border-style: dashed; color: var(--nd-ink-muted); }
