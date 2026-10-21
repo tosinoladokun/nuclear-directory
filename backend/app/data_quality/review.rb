@@ -34,6 +34,10 @@ module DataQuality::Review
     def ok? = errors.empty?
   end
   ADDED_REASON = "Added by hand".freeze
+  # Publishing a record (#202): how many of its approved facts go public
+  # with it, and the facts added by hand with it that are still waiting
+  # ([[type, id, name], …]).
+  PublishPlan = Data.define(:goes_live_with, :added_with)
   # What a company's Add a fact can add (#202): [fact kind, the model its key names].
   COMPANY_FACTS = { "role" => [ :organization_role, Role ], "technology" => [ :organization_technology, Technology ] }.freeze
 
@@ -567,6 +571,46 @@ module DataQuality::Review
         raise ActiveRecord::Rollback if dry_run || !added.ok?
       end
       added
+    end
+
+    # What publishing this record would put on the site (#202): its approved
+    # facts go public with it; the facts added by hand with it (Add a record,
+    # Add a fact) are still waiting, and publish with it only if asked.
+    def publish_plan(type:, id:)
+      record = type.constantize.find(id)
+      live = if record.is_a?(Organization)
+        [ record.organization_roles, record.organization_technologies, record.facility_relationships,
+          Relationship.where(from_organization: record).or(Relationship.where(to_organization: record)) ]
+      else
+        [ Facility.where(parent: record), record.facility_relationships ]
+      end
+      added = record.is_a?(Organization) ? [ record.organization_roles, record.organization_technologies ] : []
+      added_with = added.flat_map do |scope|
+        scope.where(verification_status: "pending").select { |fact| fact.verification_events.order(:id).last&.reason == ADDED_REASON }
+          .map { |fact| [ fact.class.name, fact.id, fact.respond_to?(:role) ? fact.role.name : fact.technology.name ] }
+      end
+      PublishPlan.new(goes_live_with: live.sum { |scope| scope.where(verification_status: "verified").count }, added_with:)
+    end
+
+    # Publishes a record not yet public (#202): it's approved as `by`'s
+    # decision (it needs a source), and with_added: the facts added by hand
+    # with it too. All or nothing. Returns a Result.
+    def publish(type:, id:, by:, with_added: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      result = nil
+      ApplicationRecord.transaction do
+        result = approve_fact(type:, id:, by:, reason: "Published", directory:)
+        raise ActiveRecord::Rollback unless result.ok?
+
+        (with_added ? publish_plan(type:, id:).added_with : []).each do |fact_type, fact_id, name|
+          added = approve_fact(type: fact_type, id: fact_id, by:, reason: "Published with its record", directory:)
+          next if added.ok?
+
+          result = Result.new(candidate_id: nil, ref: nil, errors: added.errors.map { |error| "#{name}: #{error}" })
+          raise ActiveRecord::Rollback
+        end
+      end
+      result
     end
 
     # Merges a company or plant site into another, as a person's decision

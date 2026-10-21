@@ -57,6 +57,9 @@
       <%= link_to "Merge into…", admin_record_merge_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--outline type-ui" %>
     <% end %>
 
+    <% if @fact.verification_status == "pending" && !@fact.published %>
+      <%= link_to "Publish", admin_record_publish_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--primary type-ui" %>
+    <% end %>
     <% if @fact.verification_status == "verified" || @fact.published %>
       <details class="nd-takeoff">
         <summary class="nd-btn nd-btn--danger type-ui">Take off</summary>

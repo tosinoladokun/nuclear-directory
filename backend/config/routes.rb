@@ -69,6 +69,9 @@ Rails.application.routes.draw do
       # Add a fact by hand (#202): previewed with a GET, added with a POST.
       get "facts/new" => "record_facts#new", as: :new_fact
       post "facts" => "record_facts#create", as: :facts
+      # Publish a record not yet public (#202): previewed, then confirmed.
+      get "publish" => "record_publish#show", as: :publish
+      post "publish" => "record_publish#create"
     end
     # Change status on a plant or a unit (#316): the form previews with a GET.
     scope "facilities/:id/status", as: :facility_status, constraints: { id: /\d+/ } do
