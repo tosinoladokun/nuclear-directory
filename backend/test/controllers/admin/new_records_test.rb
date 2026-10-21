@@ -8,7 +8,8 @@ class Admin::NewRecordsTest < ActionDispatch::IntegrationTest
 
   setup do
     sign_in_as users(:admin)
-    Role.create!(key: "reactor_vendor", name: "Reactor developer")
+    # As seeded; the site calls it "Reactor developer" (role_label, VOICE.md).
+    Role.create!(key: "reactor_vendor", name: "Reactor vendor")
   end
 
   test "Live's Add a record opens the form" do
