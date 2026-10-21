@@ -1,0 +1,59 @@
+<%# The pipeline's health (#201, moved from Sources by Tosin, 21 Oct): what needs attention, the last run per stage, model spend, and visitors on PostHog. %>
+<details class="nd-fold">
+  <summary class="type-body">Needs attention <span class="type-data nd-num"><%= @attention.attention.size %></span></summary>
+  <div class="nd-fold__body">
+    <% if @attention.attention.empty? %>
+      <p class="nd-fold__row type-body text-ink-muted">Nothing. <%= safe_join(@attention.by_status.map { |status, n| "#{crawl_status_label(status)} #{n}" }, " · ") %></p>
+    <% end %>
+    <% @attention.attention.each do |source| %>
+      <% url = safe_url(source.url) %>
+      <div class="nd-fold__row type-body" id="source-<%= source.id %>">
+        <p>
+          <%= crawl_status_label(source.crawl_status) %>:
+          <% if url %><%= link_to url, class: "nd-link", target: "_blank", rel: "noopener" do %><%= source.title.presence || source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %><% else %><%= source.url %><% end %>
+          <br><span class="type-small text-ink-muted"><%= source.status_reason.presence || "No reason recorded." %><% if source.blocked_streak.to_i.positive? %> Blocked <%= pluralize(source.blocked_streak, "day") %> in a row.<% end %></span>
+        </p>
+        <span class="type-data text-ink-muted"><%= source.fetched_at&.utc&.strftime("%-d %b %H:%M") %></span>
+      </div>
+    <% end %>
+  </div>
+</details>
+
+<details class="nd-fold">
+  <summary class="type-body">Last run per stage <span class="type-data nd-num"><%= @runs.running.size + @runs.latest.size %></span></summary>
+  <div class="nd-fold__body">
+    <% if @runs.latest.empty? && @runs.running.empty? %>
+      <p class="nd-fold__row type-body text-ink-muted">No runs yet.</p>
+    <% end %>
+    <% (@runs.running + @runs.latest).each do |run| %>
+      <div class="nd-fold__row type-body">
+        <p>
+          <span class="type-data"><%= run.source_kind %></span> · <%= run.stage.humanize %> ·
+          <% if run.failed? %><span class="text-critical"><%= icon("warning-circle") %> Failed</span><% else %><%= run.status.humanize %><% end %>
+          <br><span class="type-small text-ink-muted"><%= run.failed? ? run.error.to_s.truncate(160) : run_detail(run.stats) %></span>
+        </p>
+        <span class="type-data text-ink-muted"><%= run.started_at.utc.strftime("%-d %b %H:%M") %> · <%= run_duration(run.duration) %></span>
+      </div>
+    <% end %>
+  </div>
+</details>
+
+<details class="nd-fold">
+  <summary class="type-body">Model spend <span class="type-data nd-num"><%= money(@spend.cost) %></span></summary>
+  <div class="nd-fold__body">
+    <p class="nd-fold__row type-body">
+      <span><%= Time.current.strftime("%B %Y") %>: <span class="nd-num"><%= number_with_delimiter(@spend.calls) %></span> <%= "call".pluralize(@spend.calls) %>, <span class="nd-num"><%= number_with_delimiter(@spend.total_tokens) %></span> <%= "token".pluralize(@spend.total_tokens) %></span>
+      <span class="type-data"><%= money(@spend.cost) %> of $<%= format("%.2f", @spend.budget) %> (<%= (@spend.share * 100).floor %>%)</span>
+    </p>
+    <%# Present when the page loads, so status rather than alert (an alert is for the result of an action). %>
+    <% if @spend.share >= 1 %>
+      <p class="nd-fold__row type-body" role="status">The budget is used up. Model calls are refused until next month or until the budget is raised.</p>
+    <% elsif @spend.share >= 0.8 %>
+      <p class="nd-fold__row type-body"><%= money(@spend.cost).upcase_first %> of <%= money(@spend.budget) %> used; model calls stop at 100%.</p>
+    <% end %>
+  </div>
+</details>
+
+<% if @analytics_url %>
+  <p class="type-body"><%= link_to @analytics_url, class: "nd-link", target: "_blank", rel: "noopener" do %>Visitors on PostHog <%= icon("arrow-square-out", size: 12) %><% end %></p>
+<% end %>

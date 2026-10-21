@@ -1,8 +1,8 @@
 # Sources (#201 part 2b, Design's spec on #166): one row per source,
 # grouped (official records by crawler, hand research by publisher), then
-# every document in one, and a search across all of them. Below the list,
-# folded: what needs attention, the last run per stage and model spend
-# (the admin's view of data_quality:status).
+# every document in one, and a search across all of them. The pipeline's
+# health (needs attention, last run per stage, model spend, visitors) is on
+# Overview.
 class Admin::SourcesController < Admin::BaseController
   STATUS_CHIPS = %w[pending ok blocked needs_human].freeze
 
@@ -16,10 +16,6 @@ class Admin::SourcesController < Admin::BaseController
     @official = SourceCatalog.official
     @research = SourceCatalog.research
     @runs_by_kind = DataQuality::Status.by_kind.index_by(&:source_kind)
-    @attention = DataQuality::Status.sources
-    @runs = DataQuality::Status.runs
-    @spend = DataQuality::Status.spend
-    @analytics_url = ENV["POSTHOG_DASHBOARD_URL"].presence
   end
 
   def show
