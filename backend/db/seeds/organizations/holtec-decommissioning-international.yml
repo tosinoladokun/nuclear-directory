@@ -23,16 +23,6 @@ relationships:
   quote: Holtec Decommissioning International, a wholly-owned subsidiary of Holtec International
   confidence: 1.0
 facilities:
-- name: Indian Point 2
-  type: operates
-  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/ip2
-  quote: to Holtec, as the licensed owner, and to Holtec Decommissioning International (HDI), as the licensed operator. On November 23, 2020, the NRC issued an order approving the transfer and draft conforming license amendments
-  confidence: 1.0
-- name: Indian Point 3
-  type: operates
-  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/ip3
-  quote: to Holtec, as the licensed owner, and to Holtec Decommissioning International (HDI), as the licensed operator. On November 23, 2020, the NRC issued an order approving the transfer and draft conforming license amendments
-  confidence: 1.0
 - name: Pilgrim Nuclear Power Station
   type: operates
   source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/pilg
