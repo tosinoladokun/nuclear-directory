@@ -34,6 +34,8 @@ module DataQuality::Review
     def ok? = errors.empty?
   end
   ADDED_REASON = "Added by hand".freeze
+  # What a company's Add a fact can add (#202): [fact kind, the model its key names].
+  COMPANY_FACTS = { "role" => [ :organization_role, Role ], "technology" => [ :organization_technology, Technology ] }.freeze
 
   # A candidate as the admin shows it. record: the directory fact it's
   # attached to (DirectoryClient::Record: name, decision, values), or nil.
@@ -524,6 +526,44 @@ module DataQuality::Review
           written = role_written.success? ? written : role_written
         end
         added = Added.new(ref: (written.ref if written.success?), errors: written.errors, existing: nil)
+        raise ActiveRecord::Rollback if dry_run || !added.ok?
+      end
+      added
+    end
+
+    # Adds a role or a technology to a company by hand (#202), as `by`'s,
+    # from a public source and its quote: written pending (publishing it is
+    # the usual approval), only ever as a new fact. kind: "role" or
+    # "technology"; key: the role's or technology's key. dry_run: checked and
+    # written, then rolled back, for the preview. Returns Added.
+
+    def add_company_fact(organization_id:, kind:, key:, url:, quote:, by:, dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      fact_kind, model = COMPANY_FACTS[kind]
+      url, quote = url.to_s.strip, quote.to_s.squish
+      errors = [ ("Choose a role or a technology" unless fact_kind),
+        ("Choose which #{kind}" if fact_kind && !model.exists?(key: key.to_s)),
+        ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
+        ("Copy the sentence from the source that states it" if quote.empty?) ].compact
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      column = fact_kind == :organization_role ? :role : :technology
+      if (same = fact_kind.to_s.camelize.constantize.find_by(organization_id:, column => model.find_by(key: key.to_s)))
+        word = same.verification_status.in?(Verifiable::CLOSED_STATUSES) ? "was removed; put it back from Removed" : "is already listed"
+        return Added.new(ref: nil, errors: [ "That #{kind} #{word}" ], existing: nil)
+      end
+
+      added = nil
+      ApplicationRecord.transaction do
+        source = DataQuality::Sources.find_or_create(url:)
+        unless source.ok?
+          added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
+        written = directory.add_fact(fact_kind, { organization_id:, column => key.to_s }, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        errors = written.success? ? (written.created ? [] : [ "That #{kind} is already listed" ]) : written.errors
+        added = Added.new(ref: (written.ref if errors.empty?), errors:, existing: nil)
         raise ActiveRecord::Rollback if dry_run || !added.ok?
       end
       added

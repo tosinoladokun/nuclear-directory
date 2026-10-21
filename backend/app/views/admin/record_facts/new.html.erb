@@ -1,0 +1,72 @@
+<% content_for :title, "Add a fact to #{@company.name}" %>
+<%
+  role_kind = @kind == "role"
+  roles = Role.where(key: Category.buckets.flat_map(&:role_keys)).index_by(&:key)
+  options = if role_kind
+    grouped_options_for_select(Category.buckets.filter_map { |category|
+      choices = category.role_keys.filter_map { |key| roles[key] && [ roles[key].name, key ] }
+      [ category.name, choices ] if choices.any?
+    }, params[:key])
+  else
+    options_for_select(Technology.order(:name).map { |technology| [ technology.name, technology.key ] }, params[:key])
+  end
+  chosen = (role_kind ? Role : Technology).find_by(key: params[:key].to_s)
+  record = admin_record_path(type: "Organization", id: @company.id, back: params[:back].presence)
+%>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: @company.name, parent_path: record, current: "Add a fact" %>
+  <h1 class="type-admin-h1 m-0">Add a fact</h1>
+  <nav class="nd-fchips type-ui" aria-label="Kind of fact">
+    <% { "role" => "What it does", "technology" => "Technology" }.each do |kind, label| %>
+      <%= link_to label, admin_record_new_fact_path(type: "Organization", id: @company.id, kind:, back: params[:back].presence), class: "nd-fchip nd-fchip--tab",
+        aria: { current: ("page" if kind == @kind) } %>
+    <% end %>
+  </nav>
+
+  <% if @added && !@added.ok? %>
+    <div class="nd-alert" role="alert">
+      <p class="type-body-strong">Not added yet. Fix this first:</p>
+      <ul class="type-body"><% @added.errors.each do |error| %><li><%= error %></li><% end %></ul>
+    </div>
+  <% end %>
+
+  <%= form_with url: admin_record_new_fact_path(type: "Organization", id: @company.id, anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>
+    <%= hidden_field_tag :preview, 1, id: nil %>
+    <%= hidden_field_tag :kind, @kind, id: nil %>
+    <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
+    <div class="nd-field">
+      <label for="key" class="type-body-strong"><%= role_kind ? "What it does" : "Technology" %></label>
+      <%= select_tag :key, options, include_blank: (role_kind ? "Choose what it does" : "Choose a technology"), class: "nd-input type-input", required: true %>
+    </div>
+    <div class="nd-field">
+      <label for="url" class="type-body-strong">Link <span class="type-small text-ink-muted">(a public page that states it)</span></label>
+      <%= url_field_tag :url, params[:url], class: "nd-input type-input", placeholder: "https://", required: true %>
+    </div>
+    <div class="nd-field">
+      <label for="quote" class="type-body-strong">Quote <span class="type-small text-ink-muted">(the sentence from the source that states it)</span></label>
+      <%= text_field_tag :quote, params[:quote], class: "nd-input type-input", required: true %>
+    </div>
+    <div class="nd-row">
+      <button type="submit" class="nd-btn nd-btn--outline type-ui">Preview</button>
+      <%= link_to "Cancel", record, class: "nd-btn nd-btn--outline type-ui" %>
+    </div>
+  <% end %>
+
+  <% if @added&.ok? %>
+    <section class="nd-panel nd-stack" aria-labelledby="preview-heading">
+      <h2 id="preview-heading" class="type-admin-h2 m-0">What will be added</h2>
+      <ul class="type-body">
+        <li><%= @company.name %>: <strong><%= role_kind ? "what it does: #{chosen.name}" : "works on #{chosen.name}" %></strong></li>
+        <li>Starts unpublished: it's published like any fact waiting</li>
+        <li>Source: <span class="type-data"><%= params[:url].strip %></span><br><span class="text-ink-muted">“<%= params[:quote].to_s.squish %>”</span></li>
+      </ul>
+      <%= form_with url: admin_record_facts_path(type: "Organization", id: @company.id) do %>
+        <% { kind: @kind, key: params[:key], url: params[:url], quote: params[:quote], back: params[:back].presence }.compact.each do |name, value| %>
+          <%= hidden_field_tag name, value, id: nil %>
+        <% end %>
+        <button type="submit" class="nd-btn nd-btn--primary type-ui">Add fact</button>
+      <% end %>
+    </section>
+  <% end %>
+</div>

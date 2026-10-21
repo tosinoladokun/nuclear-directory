@@ -66,6 +66,9 @@ Rails.application.routes.draw do
       # Merge into… (#142): pick the record it's the same as, see what moves, confirm.
       get "merge" => "records#merge", as: :merge
       post "merge" => "records#perform_merge"
+      # Add a fact by hand (#202): previewed with a GET, added with a POST.
+      get "facts/new" => "record_facts#new", as: :new_fact
+      post "facts" => "record_facts#create", as: :facts
     end
     # Change status on a plant or a unit (#316): the form previews with a GET.
     scope "facilities/:id/status", as: :facility_status, constraints: { id: /\d+/ } do
