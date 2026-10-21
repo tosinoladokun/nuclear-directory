@@ -293,6 +293,8 @@ class Admin::SourcesControllerTest < ActionDispatch::IntegrationTest
     get admin_sources_path
     assert_select "details summary", text: /Needs attention|Last run per stage|Model spend/, count: 0
 
+    assert_select "[data-controller=moved-anchor][data-moved-anchor-to-value=?]", admin_root_path
+
     get admin_root_path
     assert_select "details summary", /Needs attention/
     assert_select "details summary", /Last run per stage/

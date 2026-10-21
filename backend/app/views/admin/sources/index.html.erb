@@ -1,7 +1,8 @@
 <% content_for :title, "Sources" %>
 <% num = ->(n) { n.nil? ? "—" : number_with_delimiter(n) } %>
 
-<div class="nd-shell__head">
+<%# Needs attention moved to Overview: an old /admin/sources#source-N link goes to its row there. %>
+<div class="nd-shell__head" data-controller="moved-anchor" data-moved-anchor-pattern-value="^source-\d+$" data-moved-anchor-to-value="<%= admin_root_path %>">
   <h1 class="type-admin-h1">Sources <span class="type-count"><%= number_with_delimiter(SourceCatalog.total) %></span></h1>
   <%= render "admin/sources/switch", by: "type" %>
   <%= render "admin/sources/search_box", query: nil %>
