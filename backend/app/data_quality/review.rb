@@ -551,6 +551,10 @@ module DataQuality::Review
             next Result.new(candidate_id: candidate.id, ref: nil,
               errors: [ "its source changed after the verifier checked it; the next verify run checks it again" ])
           end
+          if (other = other_page(candidate, directory))
+            next Result.new(candidate_id: candidate.id, ref: nil,
+              errors: [ "its link already cites #{other.title.presence || other.url}, another page of this source; approving this would replace what that page says (#390)" ])
+          end
 
           # The evidence belongs to the run that judged it (verify), else the one that found it.
           run = candidate.verify_run || candidate.crawl_run
@@ -649,6 +653,17 @@ module DataQuality::Review
         ->(quote) { plugin.quote_in_source?(candidate.source, quote) }
       rescue DataQuality::Plugin::UnknownSourceKind
         nil
+      end
+
+      # Match's guard again, at the decision (#392): another page of the same
+      # source kind that the claim's link cites now, which the claim would
+      # replace. Two claims can attach before either page's evidence is there.
+      def other_page(candidate, directory)
+        return unless %w[relationship facility_relationship].include?(candidate.kind) && candidate.subject_id
+
+        directory.lock_fact(type: candidate.subject_type, id: candidate.subject_id)
+        existing = directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return
+        DataQuality::Stages::Match.other_page_on(candidate, existing, directory:)
       end
 
       def lock_for_decision(candidate)

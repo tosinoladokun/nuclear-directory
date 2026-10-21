@@ -15,6 +15,25 @@
 class HomeCategories
   SHOWN = 3
 
+  # What each card's title says (Tosin, 20 Oct): proper nouns, longer words.
+  # Home page only: category pages, links and slugs keep the category's name.
+  # Plant owners and operators is too long for a card at the 13px floor, so
+  # it keeps its short label.
+  LABELS = {
+    "reactor-developers" => "Reactor Developers",
+    "fuel" => "Fuel and Materials",
+    "components" => "Components and Parts",
+    "waste-decommissioning" => "Waste and Decommissioning",
+    "utilities" => "Plant Operators",
+    "plants" => "Plants and Sites",
+    "power-buyers" => "Power Buyers",
+    "services" => "Services and Engineering",
+    "investors" => "Investors",
+    "government-research" => "Government and Research"
+  }.freeze
+
+  def self.label(category) = LABELS.fetch(category.key, category.name)
+
   # records: Organizations or Facilities (sites), in order.
   Card = Data.define(:category, :count, :records) do
     def more? = count > records.size
