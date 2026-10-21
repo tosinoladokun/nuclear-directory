@@ -54,11 +54,16 @@ class HomeTest < ActionDispatch::IntegrationTest
   test "five suggested searches from the pool, picked on the server, each leading to results" do
     get root_path
 
-    labels = css_select(".nd-suggs a.nd-sugg").map { |link| link.text.strip }
+    labels = css_select(".nd-suggs a.nd-sugg:not(.nd-sugg--spare)").map { |link| link.text.strip }
     assert_equal HomeSuggestions::SHOWN, labels.size
     assert_empty labels - HomeSuggestions::POOL.map(&:label)
     assert_equal labels, labels.sort_by { |label| HomeSuggestions::POOL.index { |s| s.label == label } }, "in pool order"
     css_select(".nd-suggs a.nd-sugg").each { |link| assert_match(%r{\A/companies\?from=suggestion&q=}, link["href"]) }
+
+    spares = css_select(".nd-suggs a.nd-sugg--spare")
+    assert_equal HomeSuggestions::POOL.size - HomeSuggestions::SHOWN, spares.size, "the rest of the pool is on the page, hidden"
+    assert(spares.all? { |link| link["hidden"] }, "spares are hidden until the row needs them")
+    assert_equal spares.map { |link| link.text.strip.length }, spares.map { |link| link.text.strip.length }.sort, "shortest first"
   end
 
   test "a seeded pick is the same every load; different seeds show different pills" do

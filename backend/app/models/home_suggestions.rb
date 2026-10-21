@@ -1,7 +1,8 @@
 # The searches suggested under the home page's search box. Change the pool
 # here; nothing else needs to. Each page load shows SHOWN of them, picked at
 # random on the server (no layout shift), favouring the heavier ones, and
-# listed in pool order. Searches from these links are tracked with source
+# listed in pool order. A narrow screen shows MINIMUM of them, swapping in
+# shorter ones from the pool if the picked ones are too wide. Searches from these links are tracked with source
 # "suggestion", so they don't look like typed demand and their clicks can be
 # compared. Every query must find 3 or more results (test/seeds_test.rb).
 #
@@ -34,4 +35,12 @@ module HomeSuggestions
   def self.pick(count = SHOWN, random: Random.new)
     POOL.max_by(count) { |suggestion| random.rand**(1.0 / suggestion.weight) }.sort_by { |suggestion| POOL.index(suggestion) }
   end
+
+  # The rest of the pool, shortest label first. They are on the page but hidden:
+  # on a narrow screen the row must still show MINIMUM, so when the picked
+  # ones are too wide the fit-row controller swaps in the shortest of all.
+  def self.spares(picked) = (POOL - picked).sort_by { |suggestion| [ suggestion.label.length, POOL.index(suggestion) ] }
+
+  # Phones show at least this many (Tosin, 21 Oct: four).
+  MINIMUM = 4
 end
