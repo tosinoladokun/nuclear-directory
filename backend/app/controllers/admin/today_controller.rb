@@ -63,13 +63,14 @@ class Admin::TodayController < Admin::BaseController
   # each accepted as Aminah's list's Accept does: her call, reason and the
   # fact checked again under the decision's locks.
   def agreed
-    review = TodayReview.new(shown: shown_counts)
-    if params[:shown_set] != review.fingerprint
+    # One snapshot: the same items are fingerprinted and accepted.
+    items = TodayReview.new(shown: shown_counts).agreed_items
+    if params[:shown_set] != DataQuality::Recommendations.fingerprint(items)
       flash[:alert] = "The list changed since you opened it, so nothing was accepted. Check it and try again."
       return redirect_after(admin_today_review_path(shown: shown_counts.presence))
     end
 
-    results = DataQuality::Recommendations.accept(review.agreed_items, by: actor)
+    results = DataQuality::Recommendations.accept(items, by: actor)
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?
     if stopped.any?

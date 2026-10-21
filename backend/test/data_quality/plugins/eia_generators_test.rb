@@ -264,6 +264,18 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
     assert_equal "a page didn't answer", Today.problem([ CrawlRun.new(status: "succeeded", stats:) ])
   end
 
+  test "a failed index read stays flagged after a same-day rerun that skips it" do
+    crawl!
+    Source.where(url: [ INDEX, FILE ]).update_all(fetched_at: 2.days.ago)
+    stub_request(:get, INDEX).to_timeout
+
+    failed = crawl!
+    rerun = crawl!
+    assert_equal "skipped_recent", rerun["index"]
+    runs = [ failed, rerun ].map { |stats| CrawlRun.new(status: "succeeded", stats:) }
+    assert_equal "a page didn't answer", Today.problem(runs)
+  end
+
   test "EIA's index page is fetched at most once a day, like any source" do
     crawl!
     crawl!

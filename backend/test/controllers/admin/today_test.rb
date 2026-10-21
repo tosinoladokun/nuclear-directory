@@ -13,6 +13,7 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
   def nothing_waiting! = [ Organization, Facility ].each { |model| model.update_all(verification_status: "verified", verified_by: "human:tosin") }
 
   test "the greeting, the four steps and their times; the first is open with last night's crawl" do
+    travel_to Time.find_zone(Today::ZONE).local(2026, 10, 21, 9, 0) # a morning: last night's crawl window is the same at any run time
     CrawlRun.create!(stage: "crawl", source_kind: "nrc_reactor_list", status: "succeeded", started_at: 2.hours.ago)
     CrawlRun.create!(stage: "crawl", source_kind: "eia_generators", status: "succeeded", started_at: 2.hours.ago, stats: { "snapshot" => "error" })
     CorrectionReport.create!(subject: "TerraPower", page_path: "/companies/terrapower", message: "The city is wrong.")
@@ -74,7 +75,16 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
 
     assert_select "#step-review.nd-today__step--done"
     assert_select "#left-report-#{report.id}", /TerraPower.*The city is wrong/m
-    assert_select "#left-report-#{report.id} a[href=?]", admin_corrections_path(anchor: "report-#{report.id}"), text: "Open the request ›"
+    assert_select "#left-report-#{report.id} a[href=?]", admin_corrections_path(report: report.id), text: "Open the request ›"
+  end
+
+  test "a correction request past the first page opens on its own page" do
+    nothing_waiting!
+    reports = 51.times.map { |i| CorrectionReport.create!(subject: "Co #{i}", page_path: "/", message: "Fix #{i}.", created_at: i.minutes.ago) }
+    last = reports.max_by { |report| [ -report.created_at.to_f, report.id ] }
+    get admin_corrections_path(report: last.id)
+    follow_redirect! while response.redirect?
+    assert_select "#report-#{last.id}"
   end
 
   test "done for today when every step is done" do
