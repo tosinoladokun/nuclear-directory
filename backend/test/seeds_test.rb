@@ -51,7 +51,7 @@ class SeedsTest < ActiveSupport::TestCase
     load_seeds
 
     assert_equal 121, Organization.verified.count
-    assert_equal 138, OrganizationRole.verified.count
+    assert_equal 137, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
     %w[ameren-ue arizona-public-service-co dte-electric-company duke-energy-florida duke-energy energy-harbor-nuclear-corp firstenergy-nuclear-operating-co indiana-michigan-power-co nebraska-public-power-district northern-states-power-company-minnesota pacific-gas-electric-co pseg-nuclear-llc south-carolina-electric-gas-co southern-nuclear-operating-co stp-nuclear-operating-co susquehanna-nuclear-llc wolf-creek-nuclear-operating-corp].each do |slug|
