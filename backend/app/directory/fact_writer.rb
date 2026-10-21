@@ -603,6 +603,7 @@ module Directory
         record = find(kind, spec[:model], attributes) || spec[:model].new
         created = record.new_record?
         @evidence_changed = @aliases_changed = false
+        skipped_alias = nil
         # Locked, so a human's decision made while this write runs is seen
         # before the checks below, and two decisions at once are recorded in
         # the order they happen.
@@ -636,7 +637,10 @@ module Directory
         # "Three Mile Island Unit 1" updates Crane, it doesn't rename it. Only a
         # write by id renames.
         changes.delete(:name) if kind == :facility && !created && !attributes.key?(:id)
-        lock_facility_names([ changes[:name], *Array(attributes[:aliases]) ]) if kind == :facility
+        # A rename also locks the name being given up: it becomes an alias below,
+        # so a rename into it (A → B while C → A) must wait for this one (#287).
+        former_name = record.name if kind == :facility && !created && changes[:name]
+        lock_facility_names([ changes[:name], former_name, *Array(attributes[:aliases]) ]) if kind == :facility
         check_facility_name(record, changes[:name]) if kind == :facility && changes[:name]
         if curated && (conflicts = conflicts_with(record, changes)).any?
           raise Conflict.new(record.id, conflicts)
@@ -652,7 +656,9 @@ module Directory
           # company (#287), so a source still using it still finds this
           # record. Merging already does this; plain renames didn't.
           renamed_from = record.name_before_last_save if !created && record.saved_change_to_name? && record.name_before_last_save.present?
-          extra_alias = renamed_from unless renamed_from && organization_alias_taken_elsewhere?(record, renamed_from)
+          holder = renamed_from && organization_alias_holder(record, renamed_from)
+          extra_alias = renamed_from unless holder
+          skipped_alias = { "skipped_alias" => renamed_from, "held_by" => holder } if holder
           write_aliases(record, [ record.name, *attributes[:aliases], *Array(extra_alias) ])
           dropped = Array(remove_aliases).map { |name| OrganizationAlias.normalize(name) } - [ OrganizationAlias.normalize(record.name) ]
           record.aliases.where(normalized_alias: dropped).delete_all if dropped.any?
@@ -670,13 +676,21 @@ module Directory
           # (as a name or alias), leave the collision in place rather than
           # fail the save.
           renamed_from = record.name_before_last_save if !created && record.saved_change_to_name? && record.name_before_last_save.present?
-          extra_alias = renamed_from unless renamed_from && alias_taken_elsewhere?(record, renamed_from)
+          holder = renamed_from && facility_alias_holder(record, renamed_from)
+          extra_alias = renamed_from unless holder
+          skipped_alias = { "skipped_alias" => renamed_from, "held_by" => holder } if holder
           write_facility_aliases(record, Array(attributes[:aliases]) + Array(extra_alias))
           aliases_after = record.aliases.reload.pluck(:alias).sort
           @aliases_changed = aliases_after != aliases_before
           edited["aliases"] = [ aliases_before, aliases_after ] if edited && aliases_after != aliases_before
         end
         Array(evidence).each { |item| write_evidence(record, item) }
+        # A former name left off as an alias because another record holds it is
+        # kept in the history, with the caller's own context (#287).
+        if skipped_alias && verification
+          verification = verification.to_h.symbolize_keys
+          verification = verification.merge(context: verification[:context].to_h.merge(skipped_alias))
+        end
         apply_verification(record, verification, edited:) if verification && !curated
         record.recompute_confidence!
         # Still under the lock, so another writer can't make a restatement look like a change, or the reverse.
@@ -987,15 +1001,15 @@ module Directory
 
       # The organization's own name is stored as an alias too, so
       # Lookup.organization(name:) only ever has to check aliases.
-      # Whether another organization already holds this normalized alias
-      # (as its own alias; organization names aren't checked here since the
+      # The name of the other organization that already holds this normalized
+      # alias, or nil (organization names aren't checked here since the
       # pipeline resolves same-named companies through aliases already). Used
       # by the rename-keeps-alias path (#287) to skip adding a colliding one.
-      def organization_alias_taken_elsewhere?(organization, name)
+      def organization_alias_holder(organization, name)
         normalized = OrganizationAlias.normalize(name)
-        return false if normalized.blank?
+        return if normalized.blank?
 
-        OrganizationAlias.where.not(organization_id: organization.id).exists?(normalized_alias: normalized)
+        OrganizationAlias.where.not(organization_id: organization.id).find_by(normalized_alias: normalized)&.organization&.name
       end
 
       def write_aliases(organization, names)
@@ -1035,15 +1049,16 @@ module Directory
         raise Invalid, "name #{name.inspect} is an alias of #{owner.facility.name}"
       end
 
-      # Whether another facility already holds this normalized alias, as
-      # its own name or in facility_aliases. Used by the rename-keeps-alias
-      # path (#287) to skip adding an alias that would collide.
-      def alias_taken_elsewhere?(facility, name)
+      # The name of the other facility that already holds this normalized alias,
+      # as its own name or in facility_aliases, or nil. Used by the
+      # rename-keeps-alias path (#287) to skip adding an alias that would collide.
+      def facility_alias_holder(facility, name)
         normalized = FacilityAlias.normalize(name)
-        return false if normalized.blank?
-        return true if FacilityAlias.where.not(facility_id: facility.id).exists?(normalized_alias: normalized)
+        return if normalized.blank?
+        owner = FacilityAlias.where.not(facility_id: facility.id).find_by(normalized_alias: normalized)
+        return owner.facility.name if owner
 
-        Facility.where.not(id: facility.id).pluck(:name).any? { |other| FacilityAlias.normalize(other) == normalized }
+        Facility.where.not(id: facility.id).pluck(:name).find { |other| FacilityAlias.normalize(other) == normalized }
       end
 
       def write_facility_aliases(facility, names)

@@ -380,9 +380,12 @@ class Directory::FactWriterTest < ActiveSupport::TestCase
     former = other.name
     kept.aliases.create!(alias: former) # another facility already lays claim
 
-    result = write(:facility, { id: other.id, name: "A Different New Name" })
+    result = write(:facility, { id: other.id, name: "A Different New Name" },
+      verification: { status: "verified", by: "human:tosin", context: { "note" => "kept" } })
 
     assert result.ok?, result.errors.inspect
+    event = other.verification_events.order(:id).last
+    assert_equal({ "note" => "kept", "skipped_alias" => former, "held_by" => "Shared Name Plant" }, event.context)
     assert_equal "A Different New Name", other.reload.name
     assert_not_includes other.aliases.pluck(:alias), former, "the collision stays on the other facility"
     assert_equal kept.id, Directory::Lookup.facility(name: former)&.id
