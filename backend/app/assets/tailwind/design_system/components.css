@@ -621,6 +621,9 @@
     .nd-live__table td:first-child a::after { content: ""; position: absolute; inset: 0; }
     /* Removed: Put back and the merged-into link sit above the row's link. */
     .nd-removed td:not(:first-child) a, .nd-removed td form { position: relative; z-index: 1; }
+    /* The name on one line (the full name in its title); who and when share a line. */
+    .nd-removed td:nth-child(3) { flex-basis: 100%; min-width: 0; }
+    .nd-removed td.nd-removed__name { min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .nd-live__foot a, .nd-split__main > .nd-shell__head a { display: inline-flex; align-items: center; min-height: 44px; }
   }
 

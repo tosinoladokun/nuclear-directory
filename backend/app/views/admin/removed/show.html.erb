@@ -20,7 +20,7 @@
       <tbody>
         <% @rows.each do |row| %>
           <tr id="row-<%= row.type %>-<%= row.id %>">
-            <td class="type-body"><%= link_to row.name, live_row_path(row, request.fullpath, from: "removed"), class: "nd-link" %></td>
+            <td class="type-body nd-removed__name"><%= link_to row.name, live_row_path(row, request.fullpath, from: "removed"), class: "nd-link", title: row.name %></td>
             <td class="type-body">
               <%= row.kind %> <span class="text-ink-muted">· <%= row.what %></span>
               <% if (into = row.merged_into) && into.last %>
@@ -28,7 +28,7 @@
               <% end %>
             </td>
             <td class="type-body"><%= row.reason.presence || "—" %></td>
-            <td class="type-data"><%= who(row.by) %></td>
+            <td class="type-data whitespace-nowrap"><%= who(row.by) %></td>
             <td class="type-data text-ink-muted whitespace-nowrap"><%= row.at.strftime("%-d %b %Y") %></td>
             <td>
               <% if row.put_back? %>
