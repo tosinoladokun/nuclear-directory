@@ -23,6 +23,10 @@ roles:
   quote: The new SMR‑300 units will be located next to the Palisades Nuclear Plant, which Holtec is in the process of bringing back online.
   published: 2026-02
   confidence: 0.8
+- key: project_developer
+  source_url: https://www.enercon.com/nrc-accepts-holtec/
+  quote: Holtec International has reached an exciting milestone in its effort to bring two new SMR‑300 small modular reactors — Pioneer Units 1 and 2 — to the Palisades Energy Center in Covert, Michigan.
+  confidence: 1.0
 technologies:
 - key: smr
   source_url: https://www.enercon.com/nrc-accepts-holtec/
