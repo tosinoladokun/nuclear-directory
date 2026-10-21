@@ -52,12 +52,20 @@ class HomeCardsTest < ApplicationSystemTestCase
     end
   end
 
-  test "a wide screen shows all five picked suggestions; the hidden ones are out of the tab order" do
+  test "a wide screen shows all five picked suggestions; on a phone the ones that don't fit are hidden, out of the tab order, and come back when it widens" do
+    count = "[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length"
     resize_viewport(1440, 900)
     visit root_path
-    picked = page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length")
-    assert_equal HomeSuggestions::SHOWN, picked
+    assert_equal HomeSuggestions::SHOWN, page.evaluate_script(count), "all five fit on a wide screen"
+
+    resize_viewport(360, 780)
+    assert_selector ".nd-home .nd-sugg[hidden]", visible: :all, minimum: 1, wait: 5
     assert page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg[hidden]')].every((pill) => pill.offsetParent === null)"), "hidden pills take no space and can't be tabbed to"
+    assert_operator page.evaluate_script(count), :<, HomeSuggestions::SHOWN
+
+    resize_viewport(1440, 900)
+    assert_equal HomeSuggestions::SHOWN, page.evaluate_script(count), "all five come back when the screen widens"
+    assert_no_selector ".nd-home .nd-sugg[hidden]", visible: :all
   end
 
   test "on a touch screen the suggestions stay 28px tall, with a 44px tap area" do
