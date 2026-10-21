@@ -28,6 +28,7 @@ class Admin::ChecksController < Admin::BaseController
     @recommended, @recommended_left = plan.accept.size + plan.safe_accept.size, plan.left.size
 
     load_page(pending.positive? && %w[all facts].include?(@category))
+    @restating = DataQuality::Review.restating_ids(@items.map(&:candidate_id), by: actor)
   end
 
   private

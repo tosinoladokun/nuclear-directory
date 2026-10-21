@@ -62,11 +62,20 @@
       </details>
     </div>
     <% if value %><p class="nd-wait__value type-change"><%= value %></p><% end %>
+    <% if local_assigns[:restating] %>
+      <p class="type-small m-0 nd-wait__note">It says what the site already shows. Closing records that and changes nothing live.</p>
+      <div class="nd-wait__actions type-ui">
+        <button type="submit" class="nd-btn nd-btn--primary" name="candidate_id" value="<%= item.candidate_id %>"
+          formaction="<%= close_admin_candidates_path(filters) %>">Close: already on the site</button>
+        <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, **filters, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
+      </div>
+    <% else %>
     <div class="nd-wait__actions type-ui">
       <button type="submit" class="nd-btn nd-btn--primary" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
       <button type="submit" class="nd-btn nd-btn--outline" name="candidate_id" value="<%= item.candidate_id %>"
         formaction="<%= reject_admin_candidates_path(filters) %>"><%= item.differences.any? ? "Keep" : "Reject" %></button>
       <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, **filters, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
     </div>
+    <% end %>
   <% end %>
 </li>

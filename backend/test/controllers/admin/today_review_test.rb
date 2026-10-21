@@ -222,4 +222,26 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert again.reload.status_rejected?
     assert @only_joy.reload.status_rejected?
   end
+
+  test "a fact that only restates what the site shows offers one action: Close, already on the site" do
+    page = Source.create!(url: "https://example.com/restated", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha",
+      content_text: "Agreed Fission Co holds a license.")
+    company = Organization.find(@both.subject_id)
+    company.verify!(by: "human:tosin")
+    Evidence.create!(subject: company, source: page, quote: @both.quote, found_by: "human")
+    same = Candidate.create!(source: page, kind: "organization", payload: @both.payload, quote: @both.quote,
+      crawl_run: @both.crawl_run, status: "matched", subject_type: "Organization", subject_id: company.id, ai_recommendation: "recommend_publish",
+      ai_reason: "Listed.", ai_source_sha256: "sha")
+    assert_includes DataQuality::Review.restating_ids([ same.id ], by: "human:tosin"), same.id, DataQuality::Review.confirm_identical([ same.id ], by: "human:tosin", dry_run: true).map(&:errors).inspect
+
+    get admin_today_review_path
+    assert_select "#fact-#{same.id}", /It says what the site already shows\. Closing records that and changes nothing live\./
+    assert_select "#fact-#{same.id} button", "Close: already on the site"
+    assert_select "#fact-#{same.id} button", text: "Reject", count: 0
+
+    post admin_today_review_decide_path(candidate_id: same.id, decision: "close")
+    assert_equal "Closed. Nothing on the site changed.", flash[:notice]
+    assert_equal "confirmed", same.reload.status
+    assert_equal "verified", company.reload.verification_status
+  end
 end

@@ -41,6 +41,7 @@ class Admin::TodayController < Admin::BaseController
   def review
     @review = TodayReview.new(shown: shown_counts)
     @pending = DataQuality::Review.pending_count
+    @restating = DataQuality::Review.restating_ids(TodayReview::GROUPS.flat_map { |group| @review.rows(group).flat_map(&:candidate_ids) }, by: actor)
   end
 
   # Accept or Reject one fact, as the admin's decision (every check still runs).
@@ -49,7 +50,9 @@ class Admin::TodayController < Admin::BaseController
     # The same fact from other pages is decided with it (each checked as usual).
     same = Array(params[:same]).map(&:to_i) - [ id ]
     before = [ id, *same ].map { |each_id| DataQuality::Review.undo_state(each_id) }
-    results = if params[:decision] == "accept"
+    results = if params[:decision] == "close"
+      DataQuality::Review.confirm_identical([ id, *same ], by: actor)
+    elsif params[:decision] == "accept"
       DataQuality::Review.approve([ id, *same ], by: actor, reason: "Accepted in Today")
     else
       DataQuality::Review.reject([ id, *same ], by: actor, reason: "Rejected in Today")
@@ -60,7 +63,7 @@ class Admin::TodayController < Admin::BaseController
         errors: stopped.map { |r| "##{r.candidate_id}: #{Array(r.errors).to_sentence}" })
     end
     if result&.ok?
-      flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
+      flash[:notice] = { "accept" => "Accepted. It's live.", "close" => "Closed. Nothing on the site changed." }.fetch(params[:decision], "Rejected.")
       # Undo restores every page's copy at once, or isn't offered.
       undoable = before.map { |state| DataQuality::Review.undoable(state, decision: params[:decision]) }
       if undoable.all?
@@ -69,7 +72,7 @@ class Admin::TodayController < Admin::BaseController
         flash[:notice] += " It changed a value someone had checked, so there's no Undo; edit the record to change it back."
       end
     else
-      flash[:alert] = "Can't #{params[:decision] == 'accept' ? 'publish' : 'reject'} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
+      flash[:alert] = "Can't #{{ 'accept' => 'publish', 'close' => 'close' }.fetch(params[:decision], 'reject')} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
     end
     redirect_after admin_today_review_path(shown: shown_counts.presence)
   end

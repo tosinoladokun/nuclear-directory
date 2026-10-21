@@ -319,6 +319,15 @@ module DataQuality::Review
       result
     end
 
+    # Of these candidates, the ones that only restate a fact already on the
+    # site as decided: what Close (confirm_identical) would close. A dry run,
+    # so the label and the action agree. Returns a Set of ids.
+    def restating_ids(candidate_ids, by:, directory: DataQuality::DirectoryClient.new)
+      return Set.new if candidate_ids.empty?
+
+      confirm_identical(candidate_ids, by:, dry_run: true, directory:).select(&:ok?).to_set(&:candidate_id)
+    end
+
     # Closes open candidates whose source just restates a fact a person
     # already decided (#240), the outcome match now gives them on its own,
     # recorded as the named person. Approving them instead would add an

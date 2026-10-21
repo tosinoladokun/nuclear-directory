@@ -71,12 +71,20 @@
                 <% end %>
               </details>
             </div>
+            <% if row.candidate_ids.all? { |id| @restating.include?(id) } %>
+              <p class="type-small m-0">It says what the site already shows. Closing records that and changes nothing live.</p>
+              <div class="nd-wait__actions nd-verdict__actions">
+                <%= button_to "Close: already on the site", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "close", shown:), params: { same: row.candidate_ids },
+                  class: "nd-btn nd-btn--primary type-ui" %>
+              </div>
+            <% else %>
             <div class="nd-wait__actions nd-verdict__actions">
               <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept", shown:), params: { same: row.candidate_ids },
                 class: "nd-btn #{row.agree? ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui" %>
               <%= button_to row.item.differences.any? ? "Keep" : "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject", shown:), params: { same: row.candidate_ids },
                 class: "nd-btn nd-btn--outline type-ui" %>
             </div>
+            <% end %>
           </li>
         <% end %>
       </ol>
