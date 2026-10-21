@@ -30,6 +30,12 @@ technologies:
   confidence: 1.0
 relationships:
 - type: supplies
+  to: ENTRA1 Energy
+  description: 'Exclusive global partner for the commercialization, distribution and deployment of NuScale''s SMR technology.'
+  source_url: https://www.nuscalepower.com/
+  quote: ENTRA1 Energy is our exclusive global partner for the commercialization, distribution, and deployment of our groundbreaking SMR technology.
+  confidence: 1.0
+- type: supplies
   to: Standard Power
   description: 'Announced plan (Oct 2023): NuScale to provide 24 of its 77 MWe modules (1,848 MWe in total) for planned SMR plants at sites in Ohio and Pennsylvania.'
   source_url: https://www.sec.gov/Archives/edgar/data/1822966/000182296623000242/a2023-10x06xstandardpowe.htm
