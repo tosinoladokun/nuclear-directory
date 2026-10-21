@@ -18,6 +18,12 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     assert_select "a[href^=?]", path, text: "Add a fact"
   end
 
+  test "a removed company has no Add fact: it's put back first" do
+    @company.update_columns(verification_status: "unpublished")
+    get admin_record_path(type: "Organization", id: @company.id)
+    assert_select ".nd-btn", text: /Add (a )?fact/, count: 0
+  end
+
   test "the preview says what will be added and writes nothing" do
     get path(**@fuel, preview: 1)
 
