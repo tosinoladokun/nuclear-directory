@@ -12,11 +12,16 @@
 class DirectoryListing
   SORTS = { "name" => "A to Z", "connections" => "Most connected" }.freeze
 
-  attr_reader :category, :tag, :query, :technology, :state, :sort
+  # The Developers category is one list told apart by role (Tosin, 21 Oct): a
+  # reactor designer or a project developer. Only it has the role filter.
+  ROLE_FILTER_CATEGORY = "reactor-developers"
+
+  attr_reader :category, :tag, :query, :technology, :state, :sort, :role
 
   # Unknown values are ignored rather than raising: these come from the URL.
-  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil)
+  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil)
     @category = Category.find(category)
+    @role = role.to_s.presence&.presence_in(role_options) if @category&.key == ROLE_FILTER_CATEGORY
     # A tag narrows companies, so it's ignored on Plants and sites.
     @tag = Tag.find(tag) unless @category&.plants
     @query = q.to_s.strip.first(100).presence
@@ -60,6 +65,7 @@ class DirectoryListing
     scope = matching_companies(scope) if query
     scope = with_technology(scope) if technology
     scope = scope.where(hq_state: state) if state
+    scope = scope.where(id: OrganizationRole.published.joins(:role).where(roles: { key: role }).select(:organization_id)) if role
     scope
   end
 
@@ -79,7 +85,19 @@ class DirectoryListing
   end
 
   def searching? = query.present?
-  def filtered? = technology.present? || state.present?
+  def filtered? = technology.present? || state.present? || role.present?
+
+  # The role keys the Developers list can be narrowed to, in the order shown.
+  def role_options = category&.key == ROLE_FILTER_CATEGORY ? category.role_keys.select { |key| %w[reactor_vendor project_developer].include?(key) } : []
+
+  # { organization id => [role keys] } for the listed companies, so each row can
+  # show its role(s) on the Developers list (one query, never per row).
+  def roles_by(organizations)
+    return {} if role_options.empty?
+
+    OrganizationRole.published.joins(:role).where(organization_id: organizations.map(&:id), roles: { key: role_options })
+      .pluck(:organization_id, "roles.key").group_by(&:first).transform_values { |pairs| role_options & pairs.map(&:last) }
+  end
 
   # Filter choices that actually occur in published data.
   # Technologies used by published companies, plants or units, plus their

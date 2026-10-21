@@ -20,6 +20,45 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_redirected_to companies_url(state: "CA", sort: "connections", tag: "fusion")
   end
 
+  test "the Developers list shows each company's role and can be narrowed to reactor designers or project developers" do
+    designer = Role.find_by!(key: "reactor_vendor")
+    developer = role("project_developer")
+    both = cite!(company("Both Roles Inc", roles: [ designer, developer ]))
+    builder = cite!(company("Blue Builder Energy", roles: [ developer ]))
+    get companies_path(category: "reactor-developers")
+
+    assert_response :success
+    assert_equal [ "All developers", "Reactor designers", "Project developers" ], css_select("nav[aria-label=Role] a.nd-pill").map { |el| el.text.strip }
+    assert_select "nav[aria-label=Role] a[aria-current=page]", "All developers"
+    assert_equal [ "Reactor designer" ], css_select("a[href='/companies/kairos-power'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
+    assert_equal [ "Reactor designer", "Project developer" ], css_select("a[href='/companies/#{both.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
+    assert_equal [ "Project developer" ], css_select("a[href='/companies/#{builder.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
+
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_select "nav[aria-label=Role] a[aria-current=page]", "Project developers"
+    assert_select "a.nd-listrow", 2
+    assert_select "a[href='/companies/#{builder.slug}']"
+    assert_select "a[href='/companies/kairos-power']", 0
+    assert_select "meta[name=robots][content=noindex]"
+    assert_select "form.nd-filters input[type=hidden][name=role][value=project_developer]"
+
+    get companies_path(category: "reactor-developers", role: "reactor_vendor")
+    assert_select "a[href='/companies/#{builder.slug}']", 0
+    assert_select "a[href='/companies/kairos-power']"
+
+    get companies_path(category: "reactor-developers", role: "utility")
+    assert_select "nav[aria-label=Role] a[aria-current=page]", "All developers"
+    assert_select "a.nd-listrow", 4
+  end
+
+  test "only the Developers list has role chips and a role filter" do
+    get companies_path(category: "fuel", role: "reactor_vendor")
+    assert_select "nav[aria-label=Role]", 0
+    get companies_path
+    assert_select ".nd-listrow__roles", 0
+    assert_select "nav[aria-label=Role]", 0
+  end
+
   test "a tag page lists the companies with that tag, under its own title and address" do
     cite!(company("Helion", techs: [ technology("fusion", "Fusion") ]))
     get companies_path(tag: "fusion")

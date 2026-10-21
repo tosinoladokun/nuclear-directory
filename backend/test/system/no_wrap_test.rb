@@ -23,11 +23,13 @@ class NoWrapTest < ApplicationSystemTestCase
     cite!(plant("Calvert Cliffs Unit 2", parent: @plant, status: "operating", reactor_type: "PWR", capacity_mw: 862))
     [ "Constellation Energy Generation", "Oglethorpe Power Corporation", "Southern Nuclear Operating Co., Inc.", "Municipal Electric Authority of Georgia" ]
       .each { |name| cite!(link(cite!(company(name, roles: [ utility ])), "owns", @plant)) }
+    cite!(company("Dual Role Reactor Designer and Project Developer Holdings International", roles: [ role("reactor_vendor"), role("project_developer") ],
+      description: "Company that designs a small modular reactor and develops the plants that will use it, in several states."))
     cite!(company("Metropolis Works Uranium Conversion Facility Operator LLC", roles: [ role("fuel") ],
       description: "Company that supplies uranium hexafluoride conversion services to nuclear power plants worldwide."))
   end
 
-  PAGES = ->(test) { [ "/", "/companies", "/companies?category=services", "/companies?category=plants",
+  PAGES = ->(test) { [ "/", "/companies", "/companies?category=reactor-developers", "/companies?category=reactor-developers&role=project_developer", "/companies?category=services", "/companies?category=plants",
     "/companies/#{test.instance_variable_get(:@allied).slug}", "/plants/#{test.instance_variable_get(:@plant).slug}" ] }
 
   test "a long value with two-digit source numbers shrinks and never pushes past its column" do

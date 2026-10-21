@@ -32,7 +32,8 @@ The database says "organization", "facility" and "role". Visitors don't. On scre
 |---|---|
 | organization | company (or the specific kind: fuel supplier, power buyer) |
 | facility | power plant, or plant and site when it includes test reactors and fuel plants |
-| reactor_vendor | reactor developer |
+| reactor_vendor | reactor designer (the role label and chip; prose may say "reactor developer" where a claim's wording needs it, e.g. "is the reactor developer for") |
+| project_developer | project developer (builds and develops plants; with reactor_vendor it makes the Developers category, a company with both shows both) |
 | project_developer | project developer |
 | reactor_services | repair and services |
 | components | component maker |

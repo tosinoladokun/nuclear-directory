@@ -37,6 +37,14 @@
 
 <main class="nd-page">
   <%= render "shared/category_pills", current: listing.category, counts: @counts %>
+  <% if listing.role_options.any? %>
+    <nav class="nd-pills nd-pills--roles" aria-label="Role" data-controller="pill-row">
+      <% [ [ nil, "All developers" ], *listing.role_options.map { |key| [ key, role_label(key).pluralize ] } ].each do |key, label| %>
+        <%= tag.a label, href: directory_url_for(category: listing.category, q: listing.query, technology: listing.technology, state: listing.state,
+              sort: (listing.sort unless listing.sort == "name"), role: key), class: "nd-pill", aria: { current: ("page" if listing.role == key) } %>
+      <% end %>
+    </nav>
+  <% end %>
 
   <div class="nd-listhead">
     <h1 class="type-title-md nd-listhead__title"><%= heading %> <span class="type-data nd-listhead__count"><%= pluralize(total, noun, plural:) %></span></h1>
@@ -61,6 +69,7 @@
         <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#count" } do %>
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
           <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
+          <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
           <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
           <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
@@ -98,7 +107,7 @@
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
         <h2 id="companies-heading" class="nd-label mb-1">Companies</h2>
-        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %></ul>
+        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %></ul>
       </section>
     <% end %>
     <% if @plants.any? %>
@@ -109,7 +118,7 @@
     <% end %>
   <% else %>
     <ul class="nd-list">
-      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
+      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %>
       <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
     </ul>
   <% end %>
