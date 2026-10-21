@@ -46,6 +46,15 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
     assert_equal [ true, false ], [ ppa.counted?, framework.counted? ]
   end
 
+  test "a term's own quote without a URL is from its link's page; a URL without a quote takes the link's citation" do
+    seed([ PPA.merge(quote: "200 MW from the first plant"), FRAMEWORK.merge(quote: nil) ])
+
+    ppa, framework = %w[searchco-fusion-ppa-2025 searchco-fusion-framework-2025].map { |key| DealTerm.find_by!(external_id: key) }
+    assert_equal [ [ "https://example.com/deal", "200 MW from the first plant" ] ], ppa.evidence.map { |e| [ e.source.url, e.quote ] }
+    assert_equal [ [ "https://example.com/deal", "signed a PPA for 200 MW" ] ], framework.evidence.map { |e| [ e.source.url, e.quote ] },
+      "never a cited page with no quote"
+  end
+
   test "a re-seed updates a term by its key instead of adding another" do
     seed([ PPA ])
     loader = seed([ PPA.merge(capacity_mw: 210) ])

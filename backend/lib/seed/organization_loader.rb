@@ -235,7 +235,7 @@ module Seed
       # MW, money, dates, form of agreement and status, so the data piece
       # (#255) and the export (#254) read them as data. A term's key is its
       # stable id (stored as external_id), so a re-seed updates it rather than
-      # adding another. Its evidence is its own quote, else the link's.
+      # adding another. Its evidence is its own quote, else the link's (citation).
       #   terms:
       #   - key: constellation-uprates-ppa-2026
       #     agreement: ppa
@@ -257,7 +257,7 @@ module Seed
           attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip,
             agreement: term["agreement"], status: term["status"], capacity_mw: term["capacity_mw"], amount_usd: term["amount_usd"],
             signed_on: term["signed_on"], starts_on: term["starts_on"], ends_on: term["ends_on"] }.compact
-          write(slug, :deal_term, attributes, evidence(term["source_url"] ? term : item, sources), pending: item["pending"])
+          write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"])
         end
       end
 
@@ -361,6 +361,15 @@ module Seed
         item.slice("name", "facility_type", "status", "city", "state")
           .transform_values { |value| value.is_a?(String) ? value.strip : value }
           .compact_blank.symbolize_keys
+      end
+
+      # A term's citation: its own quote (from its own page, else its link's),
+      # or with no quote of its own, its link's whole citation.
+      def citation(term, link)
+        return link if term["quote"].to_s.strip.empty?
+
+        { "source_url" => term["source_url"] || link["source_url"], "quote" => term["quote"],
+          "confidence" => term.fetch("confidence", link["confidence"]) }
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).
