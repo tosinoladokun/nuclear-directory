@@ -20,18 +20,13 @@ class Admin::NavigationTest < ActionDispatch::IntegrationTest
       **(recommended ? { status: "matched", ai_recommendation: "recommend_publish" } : { status: "needs_review", notes: "unsure" }))
   end
 
-  test "the nav lists every stage; unbuilt ones are marked Soon and aren't links" do
+  test "the nav lists every stage, each a link" do
     get admin_root_path
 
     labels = css_select(".nd-shell__nav > *").map { |item| item.text.squish }
     assert_equal [ "Overview", "Sources", "Today", "Live", "Removed", "Where it appears", "Correction requests" ],
       labels.map { |label| label.sub(/ \d+\z/, "") }
-    [ "Where it appears" ].each do |stage|
-      assert_select ".nd-shell__nav span.nd-shell__soon", /#{stage}/ do
-        assert_select ".nd-tag", "Soon"
-      end
-      assert_select ".nd-shell__nav a", text: /#{stage}/, count: 0
-    end
+    assert_select ".nd-shell__nav span.nd-shell__soon", 0
   end
 
   test "a fact opened from Checks has a breadcrumb back to that list, and Previous and Next through it in its order" do
