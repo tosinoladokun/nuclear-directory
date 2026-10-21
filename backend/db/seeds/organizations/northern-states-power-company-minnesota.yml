@@ -1,0 +1,15 @@
+# Seed research - 21 Oct 2026. Adds the name the DOE award uses as an alias so claim 1166 (DOE award DE-NE0009038) attaches here. Source: USAspending's award record lists the recipient "NORTHERN STATES POWER COMPANY" at Welch, Minnesota (Goodhue County), where Prairie Island is.
+name: Northern States Power Company – Minnesota
+aliases:
+- Northern States Power Company
+country_code: US
+status: active
+roles:
+- key: operator
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Prairie Island 1 | 05000282 | DPR-42 | PWR | 28 miles SE of Minneapolis, MN | Northern States Power Company – Minnesota | 3
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: The alias is the recipient name on DOE award DE-NE0009038 (USAspending). The recipient address there is Welch, Minnesota, so it is the Minnesota company, not Northern States Power Company (Wisconsin). Existing record. Operator role from the NRC list row (the column is Owner/Operator, the licensee).

@@ -50,8 +50,8 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 102, Organization.verified.count
-    assert_equal 118, OrganizationRole.verified.count
+    assert_equal 103, Organization.verified.count
+    assert_equal 119, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
     # A company the NRC decommissioning crawl found carries its NRC identity quote on its own record.
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
