@@ -6,6 +6,9 @@
       edit_admin_candidate_path(item.candidate_id, back: admin_recommendations_path)
   end
   call_word = { "approve" => "Approve", "reject" => "Reject" }
+  # A safe item's claim: on its link's page, where it waits.
+  safe_path = ->(item) { admin_fact_path(type: item.subject_type, id: item.subject_id, claim: item.candidate_id, from: "checks", back: admin_recommendations_path) }
+  safe_shown = @plan.safe_accept + @plan.safe_dry
 %>
 
 <div class="nd-stack">
@@ -28,20 +31,22 @@
 
   <section class="nd-stack" aria-labelledby="accept-heading">
     <div class="nd-shell__head">
-      <h2 class="type-admin-h2 m-0" id="accept-heading">To accept <span class="type-count"><%= @plan.accept.size %></span></h2>
-      <% if @plan.accept.any? %>
+      <h2 class="type-admin-h2 m-0" id="accept-heading">To accept <span class="type-count"><%= @plan.accept.size + @plan.safe_accept.size %></span></h2>
+      <% unless @plan.nothing? %>
         <% approvals, rejections = @plan.accept.partition { |item| item.call == "approve" }.map(&:size) %>
+        <% approvals += @plan.safe_accept.size %>
         <% label = "Accept: #{[ ("approve #{approvals}" if approvals.positive?), ("reject #{rejections}" if rejections.positive?) ].compact.join(', ')}" %>
         <div class="nd-recs__accept">
-          <p class="type-small text-ink-muted m-0">Each is recorded as yours, with Data Quality's reason.</p>
+          <p class="type-small text-ink-muted m-0">Each is recorded as yours, with its reason.</p>
           <%= button_to label, admin_recommendations_accept_path, params: { shown: @plan.fingerprint },
             class: "nd-btn nd-btn--primary type-ui",
             form: { data: { turbo_confirm: "#{label}? Approvals publish, and each is checked again as it's decided." } } %>
         </div>
       <% end %>
     </div>
+    <h3 class="type-body-strong m-0">Data Quality recommends <span class="text-ink-muted"><%= @plan.accept.size %></span></h3>
     <% if @plan.accept.empty? %>
-      <p class="type-body text-ink-muted">Nothing to accept. Paste Data Quality's list below.</p>
+      <p class="type-body text-ink-muted">Nothing from Data Quality. Paste its list below.</p>
     <% else %>
       <table class="nd-numtable nd-stack-table nd-recs">
         <thead><tr><th scope="col">Claim</th><th scope="col" class="nd-l">Decision</th><th scope="col" class="nd-l">Data Quality's reason</th></tr></thead>
@@ -49,12 +54,50 @@
           <% @plan.accept.each do |item| %>
             <tr id="rec-<%= item.candidate_id %>">
               <td class="type-body nd-l"><%= link_to item.claim.to_s.upcase_first, claim_path.(item), class: "nd-link" %> <span class="type-data-sm text-ink-muted">Claim <%= item.candidate_id %></span></td>
-              <td class="type-body-strong nd-l"><%= call_word.fetch(item.call) %></td>
+              <td class="type-body-strong nd-l whitespace-nowrap"><%= call_word.fetch(item.call) %></td>
               <td class="type-body nd-l"><%= item.reason %></td>
             </tr>
           <% end %>
         </tbody>
       </table>
+    <% end %>
+
+    <%# The verifier's own recommendations in a safe class (config/safe_verifier_classes.yml). A class that's off shows what Accept would take. %>
+    <%# The rows below, taken or not: a class that's off still lists what it would take. %>
+    <h3 class="type-body-strong m-0" id="safe-heading">Verifier, safe classes <span class="text-ink-muted"><%= safe_shown.size %></span></h3>
+    <% if safe_shown.empty? %>
+      <p class="type-body text-ink-muted">No safe updates from the verifier.</p>
+    <% else %>
+      <% if @plan.safe_dry.any? %>
+        <p class="type-body text-ink-muted m-0">A class marked “Would be safe” is off: Accept doesn't take it until Data Quality turns it on.</p>
+      <% end %>
+      <table class="nd-numtable nd-stack-table nd-recs">
+        <thead><tr><th scope="col">Claim</th><th scope="col" class="nd-l">Class</th><th scope="col" class="nd-l">Changes</th></tr></thead>
+        <tbody>
+          <% safe_shown.each do |item| %>
+            <tr id="safe-<%= item.candidate_id %>">
+              <td class="type-body nd-l"><%= link_to item.claim.to_s.upcase_first, safe_path.(item), class: "nd-link" %> <span class="type-data-sm text-ink-muted">Claim <%= item.candidate_id %></span></td>
+              <td class="type-body-strong nd-l"><span class="nd-tag"><%= item.enabled ? "Safe: #{item.klass}" : "Would be safe: #{item.klass}" %></span></td>
+              <td class="type-body nd-l">
+                <% item.changes.each do |name, (before, after)| %>
+                  <span class="type-label"><%= field_label(name) %></span> <%= field_value(before) %> → <%= field_value(after) %><br>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+    <% if @plan.safe_left.any? %>
+      <details class="nd-fold">
+        <summary class="type-body">Not safe <%= @plan.safe_left.size %>: the verifier recommends them, but you decide each</summary>
+        <ul class="nd-fold__body type-body">
+          <% @plan.safe_left.each do |item| %>
+            <li id="safe-<%= item.candidate_id %>"><%= link_to item.claim.to_s.upcase_first, (item.subject_id ? safe_path.(item) : edit_admin_candidate_path(item.candidate_id, back: admin_recommendations_path)), class: "nd-link" %>
+              <span class="text-ink-muted">· <%= item.klass %>: <%= item.why %></span></li>
+          <% end %>
+        </ul>
+      </details>
     <% end %>
   </section>
 

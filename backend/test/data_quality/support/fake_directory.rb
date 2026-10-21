@@ -35,6 +35,7 @@ module FakeDirectory
     def published?(type:, id:) = false
     def sourced?(type:, id:) = true
     def evidence(type:, id:) = []
+    def open_corrections?(type:, id:) = false
     def similar_facilities(name) = []
     def facility_units(name:, state: nil) = []
 

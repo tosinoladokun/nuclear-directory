@@ -79,6 +79,19 @@ class DataQuality::DirectoryClientTest < ActiveSupport::TestCase
     assert_equal "verified", terrapower.verification_status
   end
 
+  # Brand names (D1) are a person's: a licensee's legal name never replaces one.
+  test "a matched company keeps its name when a person approves; the name it was found under becomes an alias" do
+    terrapower = organizations(:terrapower)
+    terrapower.verify!(by: "human:tosin")
+    matched = candidate("organization", { "name" => "TP Fuel Holdings" })
+    matched.update!(status: "matched", subject_type: "Organization", subject_id: terrapower.id)
+
+    assert @client.write_fact(matched, confidence: 0.9, crawl_run: @run, by: "human:tosin", reason: "Approved").success?
+
+    assert_equal "TerraPower", terrapower.reload.name
+    assert_includes terrapower.aliases.pluck(:alias), "TP Fuel Holdings"
+  end
+
   test "a matched existing facility keeps its attributes and verification when published" do
     vogtle = facilities(:vogtle)
     vogtle.verify!(by: "human:tosin")
@@ -211,6 +224,8 @@ class DataQuality::DirectoryClientTest < ActiveSupport::TestCase
       # FactWriter.write forwards (...) to the instance method, which has the real signature.
       "Lookup.fact_state" => [ Directory::Lookup.method(:fact_state), FakeDirectory::Lookup.instance_method(:fact_state) ],
       "Lookup.published?" => [ Directory::Lookup.method(:published?), FakeDirectory::Lookup.instance_method(:published?) ],
+      "Lookup.open_corrections?" => [ Directory::Lookup.method(:open_corrections?),
+        FakeDirectory::Lookup.instance_method(:open_corrections?) ],
       "Lookup.evidence" => [ Directory::Lookup.method(:evidence), FakeDirectory::Lookup.instance_method(:evidence) ],
       "Lookup.sourced?" => [ Directory::Lookup.method(:sourced?), FakeDirectory::Lookup.instance_method(:sourced?) ],
       "Lookup.fact_attributes" => [ Directory::Lookup.method(:fact_attributes),

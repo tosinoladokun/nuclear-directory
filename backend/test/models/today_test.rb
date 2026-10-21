@@ -175,6 +175,19 @@ class TodayTest < ActiveSupport::TestCase
     assert_nil problems["eia_generators"]
   end
 
+  test "a page that failed stays a problem while a rerun's counts skip pages" do
+    run = ->(hour, site_pages) do
+      CrawlRun.create!(stage: "crawl", source_kind: "nrc_decommissioning", status: "succeeded", started_at: Time.utc(2026, 10, 20, hour),
+        stats: { "list" => "changed", "site_pages" => site_pages })
+    end
+    run.(7, { "changed" => 19, "error" => 1 })
+    run.(8, { "skipped_recent" => 19, "changed" => 1 })
+    assert_equal "a page didn't answer", today.crawl_rows.sole.problem, "the failed page may be one of those skipped"
+
+    run.(9, { "changed" => 20 })
+    assert_nil Today.new(on: Date.new(2026, 10, 20), now: NOW).crawl_rows.sole.problem, "a run that read every page clears it"
+  end
+
   test "failed reads counted inside a stat count; zero failures don't" do
     run = ->(kind, site_pages) do
       CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),

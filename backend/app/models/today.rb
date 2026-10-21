@@ -127,7 +127,13 @@ class Today
       when *FAILED_READS.keys then outcomes[key] = FAILED_READS.fetch(value)
       when Hash # counts by outcome, e.g. site_pages: { "changed" => 19, "error" => 1 }
         failed = FAILED_READS.keys.find { |outcome| value[outcome].to_i.positive? }
-        outcomes[key] = (FAILED_READS.fetch(failed) if failed) if (value.keys & (READ + FAILED_READS.keys)).any?
+        if failed then outcomes[key] = FAILED_READS.fetch(failed)
+        # Counts don't say which pages were skipped: a page that failed
+        # earlier may be among them, so only a run that skipped none clears it
+        # (#429 records failed pages by id).
+        elsif value[SKIPPED].to_i.positive? then next
+        elsif (value.keys & READ).any? then outcomes[key] = nil
+        end
       else outcomes[key] = "the API answered #{value}" if key == "api"
       end
     end

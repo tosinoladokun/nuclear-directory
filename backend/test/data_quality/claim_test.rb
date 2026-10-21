@@ -8,6 +8,12 @@ class DataQuality::ClaimTest < ActiveSupport::TestCase
       claim("facility", { "name" => "Vogtle 3", "nrc_docket" => "05200025", "facility_type" => "power_reactor", "status" => "operating" })
   end
 
+  test "a value that ends in a full stop doesn't get a second one" do
+    assert_equal "U.S. Department of Energy funds TerraPower, with description 1 award totaling $80.0 million, 2020: DENE0009054.",
+      claim("relationship", { "from_organization" => { "name" => "U.S. Department of Energy" }, "to_organization" => { "name" => "TerraPower" },
+        "relationship_type" => "funds", "description" => "1 award totaling $80.0 million, 2020: DENE0009054." })
+  end
+
   test "an EIA update names the unit it's for, not an empty plant name" do
     assert_equal "The plant “Surry” unit 1 (VA, EIA plant 3806) has capacity 838.0 MW, state VA, latitude 37.1661, and longitude -76.6986.",
       claim("facility", { "identify" => { "name" => "Surry", "unit" => "1", "state" => "VA", "eia_plant_id" => "3806" },

@@ -7,6 +7,12 @@ class DataQuality::Repairs::ApproveAll20261016Test < ActiveSupport::TestCase
   VERIFIED = { verification_status: "verified", verified_by: "agent:approve-all" }.freeze
 
   setup do
+    # The repair pins production ids (links 45 to 92, companies 92 to 116).
+    # Rows made here start past them, so none lands on a pinned id by chance:
+    # which id a row got depended on the order the tests ran in.
+    %w[organizations relationships].each do |table|
+      ActiveRecord::Base.connection.execute("SELECT setval('#{table}_id_seq', GREATEST(1000, (SELECT last_value FROM #{table}_id_seq)))")
+    end
     @doe = Organization.create!(name: "U.S. Department of Energy", **VERIFIED)
     @terrapower = Organization.create!(name: "TerraPower", **VERIFIED)
     @restored = link(@terrapower, "#{Repair::FUNDER}$1.7 billion, 2021: DENE0009054.", started_on: Date.new(2021, 1, 1))
