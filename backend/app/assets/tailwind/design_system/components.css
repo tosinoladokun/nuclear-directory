@@ -86,18 +86,25 @@
   /* Overview panel */
   .nd-overview { width: 100%; max-width: var(--nd-overview-width); background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); padding: var(--nd-space-6); box-sizing: border-box; }
   .nd-overview h3 { margin: 0 0 var(--nd-space-4); font: 600 20px/28px var(--font-text); }
-  .nd-overview dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--nd-space-3) var(--nd-space-4); }
+  .nd-overview dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--nd-space-1) var(--nd-space-4); }
   .nd-overview dt { font: 600 11px/20px var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
   .nd-overview dd { margin: 0; font-size: 14px; line-height: 20px; min-width: 0; }
   /* A value and its source numbers never part (Tosin's no-wrap rule). */
   .nd-overview__cites, .nd-keep { white-space: nowrap; }
   /* A list wraps only between names: each linked name stays whole (Design, #394). */
   .nd-overview dd a { white-space: nowrap; }
+  /* A list of plain names (Also known as) wraps between names, like links; one longer than the column ends in an ellipsis. */
+  .nd-overview__name { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; line-height: 1.4; }
   /* A name before the last is never wider than the column: "…" as the last resort. */
   .nd-overview__line:not(.nd-overview__line--fit) > .nd-overview__val a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
   /* The Type chips: under their label, across the panel, so a full-name chip fits on one line. */
   .nd-overview dt.nd-overview__stack, .nd-overview dd.nd-overview__stack { grid-column: 1 / -1; }
-  .nd-overview dd.nd-overview__stack { margin-top: calc(-1 * var(--nd-space-2)); }
+  /* Label to value 4px (the row gap); row to row 12px: the 4px gap plus 8px
+     above each label, and above its value when they share a row (#406). */
+  .nd-overview dd + dt, .nd-overview dd + dt:not(.nd-overview__stack) + dd { margin-top: var(--nd-space-2); }
+  /* The Type chips hang left by the pill's own 8px padding, so the category
+     icon sits on the label's edge. */
+  .nd-overview .nd-bucketchips { width: calc(100% + var(--nd-space-2)); margin-left: calc(-1 * var(--nd-space-2)); }
   /* A short value fits the row's width less its numbers (about 26px each),
      down to 13px; an ellipsis only as the last resort. */
   .nd-overview dd { container-type: inline-size; }
@@ -119,9 +126,13 @@
   .nd-overview__last:has(:focus-visible) { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
   /* Phones: each label above its value, so values get the full width. */
   @media (max-width: 479px) {
-    .nd-overview dl { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
-    .nd-overview dd + dt { margin-top: var(--nd-space-2); }
+    .nd-overview dl { grid-template-columns: minmax(0, 1fr); }
+    .nd-overview dd + dt:not(.nd-overview__stack) + dd { margin-top: 0; }
   }
+  /* The record's own sources, once, under the facts. The label stays with the
+     first number; the rest wrap as whole numbers. */
+  .nd-overview__sources { margin: var(--nd-space-3) 0 0; font: 400 13px/20px var(--font-text); color: var(--nd-ink-muted); }
+  .nd-overview__sources .nd-src { margin-left: var(--nd-space-1); }
   .nd-overview__foot { margin-top: var(--nd-space-4); padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; justify-content: space-between; align-items: center; gap: var(--nd-space-2); }
 
 }
@@ -287,7 +298,7 @@
      Colour only on the icon and the footer link. */
   .nd-catgrid { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
   /* /design shows three cards at the width they have on the home page at 1440. */
-  .nd-catgrid--example { max-width: 600px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nd-catgrid--example { max-width: 960px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .nd-catcard { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 12px 4px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); }
   .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit; container-type: inline-size; }
   .nd-catcard__head--toggle, .nd-catstack__all { display: none; }
@@ -898,6 +909,51 @@
     .nd-sources--list .nd-sources__run { position: relative; z-index: 1; }
     .nd-sources--list .nd-sources__run > summary { min-height: 44px; display: flex; align-items: center; }
     .nd-sources__blank { display: none !important; }
+  }
+}
+
+/* Sources by category (#166, Design's spec): a segmented switch between
+   the two views, the "no live source" flag (critical, with a diamond),
+   and one folded row per category with its sources inside. On phones the
+   switch goes full width and rows stack. */
+@layer components {
+  .nd-seg { display: inline-flex; border: var(--nd-hairline) solid var(--nd-control); }
+  .nd-seg a { display: flex; align-items: center; min-height: 44px; padding: 0 var(--nd-space-4); color: var(--nd-ink); text-decoration: none; }
+  .nd-seg a[aria-current="page"] { background: var(--nd-inverse); color: var(--nd-on-inverse); }
+  .nd-seg__short { display: none; }
+  .nd-flag { display: inline-flex; align-items: center; gap: 6px; color: var(--nd-critical); }
+  .nd-flag::before { content: ""; width: 8px; height: 8px; background: var(--nd-critical); transform: rotate(45deg); flex: none; }
+  .nd-cov__head, .nd-cov__cat > summary { display: grid; grid-template-columns: minmax(0, 1fr) 110px 100px 90px 170px 28px; gap: var(--nd-space-3); align-items: center; padding: 0 var(--nd-space-4); }
+  .nd-cov__head { padding-block: 10px; background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-cov__head span:nth-child(n+2):nth-child(-n+4), .nd-cov__num { text-align: right; }
+  .nd-cov__cat { background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-top: 0; }
+  .nd-cov__cat--first { border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-cov__cat > summary { min-height: 52px; cursor: pointer; list-style: none; }
+  .nd-cov__cat > summary::-webkit-details-marker { display: none; }
+  .nd-cov__cat > summary::after { content: "+"; justify-self: end; color: var(--nd-ink-muted); }
+  .nd-cov__cat[open] > summary::after { content: "–"; }
+  .nd-cov__num i { font-style: normal; color: var(--nd-ink-muted); }
+  .nd-cov__stack { display: none; }
+  .nd-cov__src { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: var(--nd-space-3); align-items: center; min-height: 44px; padding: 0 var(--nd-space-4) 0 var(--nd-space-8); border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-cov__note { margin-left: var(--nd-space-2); }
+
+  /* The fixed columns, gaps and padding take 590px, and a category name
+     needs about 210px more on one line: below 800px of the list's own width
+     (a tablet with the sidebar is narrower than its screen), rows stack. */
+  .nd-cov { container-type: inline-size; }
+  @container (max-width: 800px) {
+    .nd-cov__head { display: none; }
+    .nd-cov__cat > summary { grid-template-columns: minmax(0, 1fr) auto 20px; padding-block: 10px; row-gap: 2px; }
+    .nd-cov__cat > summary .nd-cov__num { display: none; }
+    .nd-cov__cat > summary .nd-cov__stack { display: block; grid-column: 1 / -1; grid-row: 2; }
+    .nd-cov__src { grid-template-columns: 1fr; gap: 2px; padding: 10px var(--nd-space-4) 10px var(--nd-space-6); }
+  }
+
+  @media (max-width: 560px) {
+    .nd-seg { display: flex; flex-basis: 100%; }
+    .nd-seg a { flex: 1; justify-content: center; }
+    .nd-seg__long { display: none; }
+    .nd-seg__short { display: inline; }
   }
 }
 
