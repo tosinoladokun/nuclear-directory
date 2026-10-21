@@ -616,8 +616,7 @@ module Directory
         # audited and attributed.
         human_decision = verification.to_h.symbolize_keys[:by].to_s.start_with?("human:")
         if !created && record.closed? && (protect_human_verified || !human_decision)
-          raise Invalid, "#{Lookup.fact_state(type: record.class.name, id: record.id).name.upcase_first} was " \
-            "#{record.verification_status} by #{record.verified_by || 'review'}" \
+          raise Invalid, "#{record_label(record)} was #{record.verification_status} by #{record.verified_by || 'review'}" \
             "#{" on #{record.verified_at.to_date}" if record.verified_at}; not changed"
         end
         # No automated unit under a rejected or unpublished site, whether the
@@ -710,6 +709,21 @@ module Directory
     end
 
     private
+      # Human-readable identifier for a record in error messages. Uses
+      # Lookup.fact_state's name for the records it knows; falls back on a
+      # local label for DealTerm (#377), which isn't in FACT_TYPES yet (joins
+      # when #256 lands). Any other unknown type gets "<Type> #<id>" rather
+      # than raising, so a message never crashes on a labeling helper.
+      def record_label(record)
+        if Lookup::FACT_TYPES.include?(record.class.name)
+          Lookup.fact_state(type: record.class.name, id: record.id).name.upcase_first
+        elsif record.is_a?(DealTerm)
+          [ record.term_type.to_s.humanize(capitalize: true), record.external_id, "(##{record.id})" ].compact_blank.join(" ")
+        else
+          "#{record.class.name} ##{record.id}"
+        end
+      end
+
       # Incoming values that differ from the stored ones, where both are
       # present: { "state" => ["NJ", "DE"] }. Websites compare by domain.
       def conflicts_with(record, changes)
