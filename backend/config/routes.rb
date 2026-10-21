@@ -45,6 +45,16 @@ Rails.application.routes.draw do
     get "sources/search" => "sources#search", as: :sources_search
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
     get "status", to: redirect("/admin/sources")
+    # Today (#373): the day's review in four steps. Checks stays as step 3's list.
+    get "today" => "today#show", as: :today
+    post "today/list" => "today#list", as: :today_list
+    # Step 3 (#373 part C): each fact with Joy's and Aminah's verdicts, decided here.
+    get "today/review" => "today#review", as: :today_review
+    post "today/review/agreed" => "today#agreed", as: :today_review_agreed
+    post "today/review/:candidate_id/:decision" => "today#decide", as: :today_review_decide,
+      constraints: { candidate_id: /\d+/, decision: /accept|reject/ }
+    post "today/steps/:step" => "today#done", as: :today_step, constraints: { step: /crawl|list/ }
+    delete "today/steps/:step" => "today#undo", constraints: { step: /crawl|list/ }
     get "checks" => "checks#show", as: :checks
     # Where it appears (#166): what the public sees of the directory, and where.
     get "where-it-appears" => "outputs#show", as: :outputs

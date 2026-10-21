@@ -1,0 +1,29 @@
+<%# Step 2: Aminah's list, pasted in (it decides nothing), or a quiet day. %>
+<% if @errors.present? %>
+  <div class="nd-alert" role="alert">
+    <p class="type-body-strong">
+      <%= @recorded.to_i.positive? ? "Added #{pluralize(@recorded, 'fact')} from #{aminah}." : "Nothing was added." %>
+      <%= @errors.one? ? "1 line wasn't added:" : "#{@errors.size} lines weren't added:" %>
+    </p>
+    <ul class="type-body">
+      <% @errors.each do |error| %>
+        <li><span class="type-data"><%= error.text %></span><br>Line <%= error.line %>: <%= error.problem %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+<p class="type-body m-0"><%= aminah %>'s list is her own check of the facts <%= joy %> looked at: for each one she says accept or reject, and why. Adding it decides nothing; in step 3 you see her verdict next to <%= joy %>'s on each fact.</p>
+<p class="type-body m-0">Open today's Todoist task with <%= aminah %>'s list, copy all of it, and paste it here.</p>
+<%= form_with url: admin_today_list_path, class: "nd-stack" do %>
+  <div class="nd-field">
+    <label for="list" class="type-body-strong"><%= aminah %>'s list</label>
+    <p class="nd-field__hint type-small" id="list-hint">Adding it decides nothing yet.</p>
+    <%= text_area_tag :list, @list, class: "nd-input type-input", rows: 8, aria: { describedby: "list-hint" } %>
+  </div>
+  <div class="nd-today__actions">
+    <button type="submit" class="nd-btn nd-btn--primary type-ui">Add <%= aminah %>'s list</button>
+  </div>
+<% end %>
+<div class="nd-today__actions">
+  <%= button_to "No list from #{aminah} today", admin_today_step_path("list"), params: { note: "no_list" }, class: "nd-link type-ui" %>
+</div>
