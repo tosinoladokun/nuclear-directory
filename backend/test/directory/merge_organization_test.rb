@@ -139,7 +139,7 @@ class Directory::MergeOrganizationTest < ActiveSupport::TestCase
   end
 
   test "a name that's already the kept one's, or another company's, isn't added as an alias" do
-    twin = Organization.create!(name: "ACME")
+    twin = Organization.create!(name: "ACME", slug: "acme-twin")
     Organization.create!(name: "Acme Steel") # another company's name
     # Same name on purpose (the duplicate a merge cleans up), but #154 now
     # refuses a second organization with the same slug.
