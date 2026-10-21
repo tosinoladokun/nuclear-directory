@@ -53,7 +53,9 @@ class Directory::RemovedList
         off = model.where(verification_status: %w[unpublished rejected])
         VerificationEvent.where(subject_type: model.name, subject_id: off.select(:id))
           .joins("JOIN #{model.table_name} ON #{model.table_name}.id = verification_events.subject_id")
+          # The move to that status, not a later edit that left it there.
           .where("verification_events.to_status = #{model.table_name}.verification_status")
+          .where("verification_events.from_status IS DISTINCT FROM verification_events.to_status")
           .select("DISTINCT ON (verification_events.subject_id) verification_events.*")
           .order("verification_events.subject_id, verification_events.created_at DESC, verification_events.id DESC").to_a
       end.sort_by { |event| [ -event.created_at.to_f, -event.id ] }

@@ -54,4 +54,26 @@ class Admin::RemovedTest < ActionDispatch::IntegrationTest
     get admin_removed_path
     assert_select ".nd-shell__nav a[href=?][aria-current]", admin_removed_path, /Removed\s+3/
   end
+
+  test "a later edit to a record that stays off doesn't replace why it was removed" do
+    edited = Directory::FactWriter.write(:organization, { id: @taken.id, description: "Edited while off" },
+      verification: { status: "unpublished", by: BY, reason: "Tidied the description" })
+    assert edited.ok?, edited.errors.to_sentence
+    assert_equal %w[unpublished unpublished], VerificationEvent.where(subject: @taken).order(:id).last.slice(:from_status, :to_status).values,
+      "the edit is in the history, as an unpublished-to-unpublished event"
+
+    get admin_removed_path
+    assert_select "#row-Organization-#{@taken.id}", /Taken off.*Not nuclear/m
+    assert_select "#row-Organization-#{@taken.id}", text: /Tidied the description/, count: 0
+  end
+
+  test "a page past the last shows the last page, not an empty one" do
+    get admin_removed_path(page: 5)
+    assert_select "tbody tr", 3
+  end
+
+  test "on phones, Put back and the merged-into link sit above the row's link" do
+    css = Rails.root.join("app/assets/tailwind/design_system/components.css").read
+    assert_includes css, ".nd-removed td:not(:first-child) a, .nd-removed td form { position: relative; z-index: 1; }"
+  end
 end
