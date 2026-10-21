@@ -7,7 +7,8 @@
             elsif listing.searching? then "Results for “#{listing.query}”"
             else "All companies"
             end
-  total = @companies.size + @plants.size
+  total = @companies_total + @plants_total
+  more = total > @companies.size + @plants.size
   # The plants category mixes plants, mines and test reactors (VOICE.md).
   noun, plural = if listing.category&.plants then [ "plant or site", "plants and sites" ]
                  elsif listing.searching? && list_page.nil? then [ "result", "results" ]
@@ -112,5 +113,10 @@
       <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
       <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
     </ul>
+  <% end %>
+  <% if more %>
+    <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
+      state: listing.state, sort: (listing.sort unless listing.sort == "name"), shown: @shown / DirectoryController::PAGE + 1),
+      class: "nd-btn nd-btn--outline type-ui", rel: "nofollow" %></p>
   <% end %>
 </main>
