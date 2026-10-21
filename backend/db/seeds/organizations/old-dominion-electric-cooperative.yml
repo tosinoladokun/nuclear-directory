@@ -25,3 +25,9 @@ facilities:
   quote: North Anna is owned by Dominion Energy and Old Dominion Electric Cooperative (ODEC). Dominion Energy owns 88.4% and ODEC owns 11.6%. Dominion Energy also operates the station.
   confidence: 1.0
 notes: Generation and transmission cooperative. HQ not verified (odec.com/about-odec returned 404).
+description:
+  text: Not-for-profit cooperative that buys, makes and moves power for 11 member distribution cooperatives across Virginia, Maryland and Delaware
+  source_url: https://www.odec.com/
+  quote: ODEC buys, makes, and moves power for 11 member distributions cooperatives across Virginia, Maryland, and Delaware
+  also:
+  - quote: A mission-driven, member-centered, not-for-profit organization
