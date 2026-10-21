@@ -785,9 +785,12 @@
   .nd-prose ol { list-style: decimal; }
   .nd-prose li::marker { color: var(--nd-ink-muted); }
   .nd-code { margin: 0; padding: var(--nd-space-3) var(--nd-space-4); background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-direction: column; gap: var(--nd-space-2); }
+  .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nd-space-2) var(--nd-space-6); }
   .nd-footer p { margin: 0; }
+  /* One calm line on desktop: the links left, the Render credit right. Each
+     item stays whole; on a phone they wrap as items, never as words. */
   .nd-footer__links { display: flex; flex-wrap: wrap; gap: var(--nd-space-2) var(--nd-space-4); }
+  .nd-footer__links a, .nd-footer__credit { white-space: nowrap; }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
   }
