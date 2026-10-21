@@ -4,7 +4,7 @@
   roles = Role.where(key: Category.buckets.flat_map(&:role_keys)).index_by(&:key)
   options = if role_kind
     grouped_options_for_select(Category.buckets.filter_map { |category|
-      choices = category.role_keys.filter_map { |key| roles[key] && [ roles[key].name, key ] }
+      choices = category.role_keys.filter_map { |key| roles[key] && [ role_label(roles[key]), key ] }
       [ category.name, choices ] if choices.any?
     }, params[:key])
   else
@@ -57,7 +57,7 @@
     <section class="nd-panel nd-stack" aria-labelledby="preview-heading">
       <h2 id="preview-heading" class="type-admin-h2 m-0">What will be added</h2>
       <ul class="type-body">
-        <li><%= @company.name %>: <strong><%= role_kind ? "what it does: #{chosen.name}" : "works on #{chosen.name}" %></strong></li>
+        <li><%= @company.name %>: <strong><%= role_kind ? "what it does: #{role_label(chosen)}" : "works on #{chosen.name}" %></strong></li>
         <li>Starts unpublished: it's published like any fact waiting</li>
         <li>Source: <span class="type-data"><%= params[:url].strip %></span><br><span class="text-ink-muted">“<%= params[:quote].to_s.squish %>”</span></li>
       </ul>
