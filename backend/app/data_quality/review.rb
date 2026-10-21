@@ -761,7 +761,7 @@ module DataQuality::Review
 
       def item(candidate, directory)
         record = directory.attached_record(candidate)
-        differences = DataQuality::Differences.with_human_verified(candidate, record)
+        differences = DataQuality::Differences.with_human_verified(candidate, record, directory:)
         Item.new(candidate_id: candidate.id, kind: candidate.kind, status: candidate.status, claim: DataQuality::Claim.describe(candidate),
           payload: candidate.payload, quote: candidate.quote, notes: candidate.notes,
           source: Source.new(id: candidate.source.id, url: candidate.source.url, title: candidate.source.title, source_kind: candidate.source.source_kind),
