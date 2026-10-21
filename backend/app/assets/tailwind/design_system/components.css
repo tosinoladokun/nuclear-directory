@@ -674,8 +674,6 @@
   .nd-today__body { margin: var(--nd-space-3) 0 0 calc(24px + var(--nd-space-3)); display: flex; flex-direction: column; gap: var(--nd-space-3); }
   .nd-today__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3); }
   .nd-today__actions .nd-btn, .nd-today__row .nd-btn { white-space: nowrap; }
-  /* Search gaps (#483): the decisions on one line; buttons never wrap. */
-  .nd-searchgaps__actions .nd-btn { white-space: nowrap; }
   /* Today's step 3: a fact with Joy's and Aminah's verdicts (#373). */
   .nd-verdict__chips { display: flex; flex-wrap: wrap; gap: var(--nd-space-2); }
   .nd-verdict__chips .nd-tag { white-space: nowrap; }
