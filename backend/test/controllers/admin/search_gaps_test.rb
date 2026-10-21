@@ -20,7 +20,7 @@ class Admin::SearchGapsTest < ActionDispatch::IntegrationTest
     3.times { SearchGap.record("ocean atomics", results: 0) }
     SearchGap.record("brown ferry", results: 0)
     get admin_search_gaps_path
-    assert_equal [ "ocean atomics", "brown ferry" ], css_select(".nd-gaps tbody tr td:first-child a").map { |a| a.text.squish }
+    assert_equal [ "ocean atomics", "brown ferry" ], css_select(".nd-searchgaps .type-subject a").map { |a| a.text.squish }
     assert_select ".nd-shell__nav a[href=?]", admin_search_gaps_path, /Search gaps\s+2/
 
     gap = SearchGap.find_by!(query: "brown ferry")

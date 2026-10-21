@@ -9,30 +9,22 @@
   <% if @waiting.empty? %>
     <p class="type-body text-ink-muted">No open gaps.</p>
   <% else %>
-    <div class="overflow-x-auto">
-      <table class="nd-numtable nd-gaps">
-        <thead><tr><th scope="col">Searched for</th><th scope="col">Times</th><th scope="col">Last</th><th scope="col"><span class="sr-only">Decide</span></th></tr></thead>
-        <tbody>
-          <% @waiting.each do |gap| %>
-            <tr id="gap-<%= gap.id %>">
-              <td class="type-body"><%= link_to gap.query, companies_path(q: gap.query), class: "nd-link", target: "_blank", rel: "noopener" %>
-                <% if gap.status_research? %> <span class="nd-tag">To research</span><% end %></td>
-              <td class="type-cell-num"><%= number_with_delimiter(gap.searches_count) %></td>
-              <td class="type-data text-ink-muted"><%= gap.last_searched_on.strftime("%-d %b") %></td>
-              <td>
-                <div class="nd-row nd-gaps__actions">
-                  <% SearchGap::DECISIONS.each do |status, label| %>
-                    <% next if status == "research" && gap.status_research? %>
-                    <%= button_to label, admin_search_gap_decide_path(id: gap.id, decision: status), class: "nd-btn nd-btn--outline type-ui",
-                      "aria-label": "#{label}: #{gap.query}" %>
-                  <% end %>
-                </div>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    </div>
+    <ol class="nd-waits nd-searchgaps">
+      <% @waiting.each do |gap| %>
+        <li class="nd-wait" id="gap-<%= gap.id %>">
+          <div class="nd-wait__what">
+            <p class="type-subject m-0"><%= link_to gap.query, companies_path(q: gap.query), class: "nd-link", target: "_blank", rel: "noopener" %></p>
+            <p class="type-small text-ink-muted m-0"><%= pluralize(gap.searches_count, "search") %> · last <%= gap.last_searched_on.strftime("%-d %b") %><% if gap.status_research? %> · <span class="nd-tag">To research</span><% end %></p>
+          </div>
+          <div class="nd-wait__actions nd-searchgaps__actions type-ui">
+            <% SearchGap::DECISIONS.each do |status, label| %>
+              <% next if status == "research" && gap.status_research? %>
+              <%= button_to label, admin_search_gap_decide_path(id: gap.id, decision: status), class: "nd-btn nd-btn--outline", "aria-label": "#{label}: #{gap.query}" %>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ol>
   <% end %>
 
   <% if @decided.any? %>
