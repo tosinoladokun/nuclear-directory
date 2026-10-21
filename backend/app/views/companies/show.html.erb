@@ -15,6 +15,7 @@
 <% content_for :head do %>
   <meta name="description" content="<%= description %>">
   <link rel="canonical" href="<%= company_url(slug: p.slug) %>">
+  <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
 <% end %>
 <%= render "shared/site_header" %>
 

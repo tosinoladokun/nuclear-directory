@@ -18,6 +18,7 @@
 <% content_for :head do %>
   <meta name="description" content="<%= preview %>">
   <link rel="canonical" href="<%= plant_url(slug: p.slug) %>">
+  <%= json_ld_tag(plant_json_ld(p, page_url: plant_url(slug: p.slug))) %>
 <% end %>
 <%= render "shared/site_header" %>
 
