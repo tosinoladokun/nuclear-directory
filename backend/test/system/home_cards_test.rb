@@ -90,6 +90,14 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal "Search a company, plant or site", find(".nd-home input[type=search]")[:placeholder]
   end
 
+  test "just past the phone breakpoint (640 to 699) every card title still fits on one line" do
+    [ 640, 670, 699 ].each do |width|
+      resize_viewport(width, 900)
+      visit root_path
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
   test "on a phone the whole card header is the button, edge to edge" do
     resize_viewport(390, 844)
     visit root_path
