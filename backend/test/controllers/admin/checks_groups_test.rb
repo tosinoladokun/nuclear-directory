@@ -39,6 +39,8 @@ class Admin::ChecksGroupsTest < ActionDispatch::IntegrationTest
     assert_select "section:has(#group-ready) #claim-#{@agreed.id}"
     assert_select "section:has(#group-decide) #claim-#{@split.id}"
     assert_select "#claim-#{@agreed.id} .nd-btn--primary", "Approve"
+    assert_select "section:has(#group-decide) .nd-btn--primary", 0
+    assert_select "#claim-#{@split.id} .nd-next-step + p.text-ink-muted", "Data Quality recommends rejecting: not nuclear"
   end
 
   test "oldest first within a group, and Today and Checks link to each other" do
@@ -55,5 +57,13 @@ class Admin::ChecksGroupsTest < ActionDispatch::IntegrationTest
     assert_select "details#group-not_yours #claim-#{@only_joy.id} .nd-next-step", /Wait: Aminah hasn't checked it yet/
     assert_select "details#group-not_yours #claim-#{@only_joy.id} button", text: "Approve"
     assert_select "details#group-not_yours #claim-#{@only_joy.id} .nd-btn--primary", 0
+  end
+
+  test "a fact waiting with no claim has a Decide line, outline buttons and Open" do
+    company = Organization.create!(name: "Hand Added Co")
+    get admin_checks_path
+    assert_select "#fact-Organization-#{company.id} .nd-next-step", /Decide: it has no source yet, so it can't be published\. Open it to add one, or reject it/
+    assert_select "#fact-Organization-#{company.id} a.nd-btn[href^=?]", admin_record_path(type: "Organization", id: company.id), text: "Open"
+    assert_select "#fact-Organization-#{company.id} .nd-btn--primary", 0
   end
 end

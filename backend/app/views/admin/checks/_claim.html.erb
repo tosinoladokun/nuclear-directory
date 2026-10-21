@@ -14,9 +14,6 @@
     <div class="nd-wait__what">
       <div class="nd-kick"><span class="type-kicker text-ink-muted"><%= claim_number(item.candidate_id) %></span><p class="type-kicker text-ink-muted m-0"><%= check_kicker(item) %></p></div>
       <%# Data Quality's call, while it still stands; the hold tag unless that call is what the hold waits for (a first batch). %>
-      <% if item.dq_recommendation %>
-        <p class="type-small m-0"><strong>Data Quality recommends <%= item.dq_recommendation == "approve" ? "approving" : "rejecting" %>:</strong> <%= item.dq_reason %></p>
-      <% end %>
       <% if item.held && !(item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH) %>
         <p class="m-0"><span class="nd-tag">Waiting for Data Quality</span></p>
       <% end %>
@@ -29,6 +26,10 @@
         <% end %>
       </p>
       <p class="type-small m-0 nd-next-step"><strong><%= step.verb %>:</strong> <%= step.why %></p>
+      <%# Data Quality's call, while it still stands. %>
+      <% if item.dq_recommendation %>
+        <p class="type-small text-ink-muted m-0">Data Quality recommends <%= item.dq_recommendation == "approve" ? "approving" : "rejecting" %>: <%= item.dq_reason %></p>
+      <% end %>
       <details>
         <summary class="type-small">Details</summary>
         <div class="nd-wait__more">
@@ -73,7 +74,7 @@
       </div>
     <% else %>
     <div class="nd-wait__actions type-ui">
-      <button type="submit" class="nd-btn <%= step.verb == 'Wait' ? 'nd-btn--outline' : 'nd-btn--primary' %>" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
+      <button type="submit" class="nd-btn <%= step.group == 'ready' ? 'nd-btn--primary' : 'nd-btn--outline' %>" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
       <button type="submit" class="nd-btn nd-btn--outline" name="candidate_id" value="<%= item.candidate_id %>"
         formaction="<%= reject_admin_candidates_path(filters) %>"><%= item.differences.any? ? "Keep" : "Reject" %></button>
       <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, **filters, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
