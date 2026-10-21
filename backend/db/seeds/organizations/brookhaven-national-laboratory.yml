@@ -1,0 +1,25 @@
+# Seed research - 20 Oct 2026 (Checks clean-up). Roles quote the DOE isotope programme's own page (isotopes.gov), as the claims in Checks do; the description is the organization's own site.
+name: Brookhaven National Laboratory
+aliases:
+- BNL
+website: https://www.bnl.gov
+hq: null
+country_code: US
+status: active
+roles:
+- key: isotopes
+  source_url: https://www.isotopes.gov/production-network
+  quote: Department of Energy Office of Isotope R&D and Production (DOE IRP) has stewardship over the Brookhaven Linear Isotope Producer (BLIP) Facility at Brookhaven National Laboratory (BNL); the Isotope Production Facility (IPF) at Los Alamos National Laboratory (LANL); and hot cell facilities for processing isotopes at Oak Ridge National Laboratory (ORNL), BNL, and LANL.
+  confidence: 1.0
+- key: national_lab
+  source_url: https://www.isotopes.gov/production-network
+  quote: Department of Energy Office of Isotope R&D and Production (DOE IRP) has stewardship over the Brookhaven Linear Isotope Producer (BLIP) Facility at Brookhaven National Laboratory (BNL); the Isotope Production Facility (IPF) at Los Alamos National Laboratory (LANL); and hot cell facilities for processing isotopes at Oak Ridge National Laboratory (ORNL), BNL, and LANL.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'Not Brookhaven Technology Group (a different company). HQ left blank: the About page read states none.'
+description:
+  text: U.S. Department of Energy national laboratory working on scientific discovery and technological innovation.
+  source_url: https://www.bnl.gov/about/
+  quote: Brookhaven National Laboratory, everyone has a role in accelerating pathways to scientific discovery and technological innovation that transform the world.

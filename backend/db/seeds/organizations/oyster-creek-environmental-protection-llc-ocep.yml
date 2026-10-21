@@ -1,0 +1,15 @@
+# Seed research - 20 Oct 2026 (Checks clean-up). Quote from NRC's Oyster Creek page as stored in production.
+name: Oyster Creek Environmental Protection, LLC (OCEP)
+country_code: US
+status: active
+roles: []
+technologies: []
+relationships: []
+facilities:
+- name: Oyster Creek
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/oc
+  quote: to Oyster Creek Environmental Protection, LLC (OCEP), as the licensed owner and to Holtec Decommissioning International (HDI), as the licensed operator. The license transfer was approved by the NRC staff and became effective on July 1, 2019.
+  confidence: 1.0
+  note: Licensed owner since the NRC-approved transfer took effect on 1 July 2019.
+notes: A bare record the crawler made. No website, HQ or description is stated by a page read. country_code US keeps the value the record already holds.

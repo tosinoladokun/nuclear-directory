@@ -1,0 +1,17 @@
+# Seed research - 20 Oct 2026 (Checks clean-up).
+name: University of Alabama at Birmingham
+aliases:
+- UAB
+- University of Alabama-Birmingham
+hq: null
+country_code: null
+status: active
+roles:
+- key: university
+  source_url: https://www.isotopes.gov/production-network
+  quote: 'The DOE IRP’s University Isotope Network (UIN) comprises six schools: the University of Washington, the University of Missouri Research Reactor Center, the University of Wisconsin, University of Alabama-Birmingham, Texas A&M University and Michigan State University.'
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'Named in DOE''s University Isotope Network on isotopes.gov. No isotopes role: the page says DOE partners with these universities to develop production capabilities, not that they produce isotopes. No description or website set: uab.edu''s about page read returned no usable text.'
