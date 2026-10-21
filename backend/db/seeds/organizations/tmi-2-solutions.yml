@@ -16,3 +16,7 @@ facilities:
   quote: TMI-2 Solutions is the licensee for Three Mile Island Station, Unit 2 and is authorized to conduct decommissioning of TMI-2 in accordance with NRC requirements and the TMI-2 License.
   confidence: 1.0
 notes: Operator link from NRC's own page for the unit, quote verbatim from the stored page.
+description:
+  text: Licensee of Three Mile Island Unit 2, authorized to conduct its decommissioning.
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/three-mile-island-unit-2
+  quote: TMI-2 Solutions is the licensee for Three Mile Island Station, Unit 2 and is authorized to conduct decommissioning of TMI-2 in accordance with NRC requirements and the TMI-2 License.

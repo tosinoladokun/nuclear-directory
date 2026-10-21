@@ -16,3 +16,7 @@ facilities:
   quote: ADP-CR3 became the NRC-licensed operator responsible for decommissioning and ADP-SF1 became the owner of the spent nuclear fuel.
   confidence: 1.0
 notes: Operator link from NRC's own page for the unit, quote verbatim from the stored page.
+description:
+  text: NRC-licensed operator responsible for decommissioning Crystal River 3.
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/cr3
+  quote: ADP-CR3 became the NRC-licensed operator responsible for decommissioning and ADP-SF1 became the owner of the spent nuclear fuel.
