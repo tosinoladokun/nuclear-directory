@@ -129,4 +129,16 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
   ensure
     I18n.reload!
   end
+
+  test "Read and Same come from last night's matching only: an older night's aren't shown beside a failed crawl" do
+    travel_to Time.find_zone(Today::ZONE).local(2026, 10, 21, 9, 0)
+    CrawlRun.create!(stage: "match", source_kind: "nrc_reactor_list", status: "succeeded", started_at: 2.days.ago, finished_at: 2.days.ago,
+      stats: { "candidates" => 219, "confirmed" => 219 })
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_reactor_list", status: "failed", started_at: 2.hours.ago, error: "timeout")
+
+    rows = DataQuality::Status.by_kind(within: Today.new.crawl_window).index_by(&:source_kind)
+    assert_nil rows["nrc_reactor_list"].read
+    assert_nil rows["nrc_reactor_list"].same
+    assert_equal 219, DataQuality::Status.by_kind.index_by(&:source_kind)["nrc_reactor_list"].read
+  end
 end

@@ -177,6 +177,9 @@ class Today
       by_you: decided.where(reviewed_by: by).count + direct.where(by:, to_status: %w[verified rejected]).count }
   end
 
+  # Last night's crawl: from 11pm Pacific the evening before to now.
+  def crawl_window = window
+
   private
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
 
@@ -216,7 +219,7 @@ class Today
       end
     end
 
-    def crawl_window
+    def window
       start = on.in_time_zone(ZONE).beginning_of_day - CRAWL_MARGIN
       start..[ start + 1.day + CRAWL_MARGIN, @now ].min
     end

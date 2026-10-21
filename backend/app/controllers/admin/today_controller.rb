@@ -89,7 +89,7 @@ class Admin::TodayController < Admin::BaseController
 
     def load_today
       @today = Today.new
-      @sources = DataQuality::Status.by_kind.index_by(&:source_kind)
+      @sources = DataQuality::Status.by_kind(within: @today.crawl_window).index_by(&:source_kind)
       @decisions = @today.decisions(by: actor) if @today.done?
     end
 end

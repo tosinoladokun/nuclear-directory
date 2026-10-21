@@ -565,6 +565,14 @@ module DataQuality::Review
 
       added = nil
       ApplicationRecord.transaction do
+        # The company locked and checked with the write: one taken off or
+        # merged away since the form was shown takes no new fact.
+        directory.lock_fact(type: "Organization", id: organization_id)
+        unless %w[verified pending].include?(directory.fact(type: "Organization", id: organization_id)&.verification_status)
+          added = Added.new(ref: nil, errors: [ "This company was taken off or merged since, so nothing was added" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
         source = DataQuality::Sources.find_or_create(url:)
         unless source.ok?
           added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
