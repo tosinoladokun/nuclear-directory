@@ -61,6 +61,43 @@ module Directory
 
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
+    # Facts a company can be given by hand (#202): kind => [model, its link's column].
+    COMPANY_FACT_MODELS = { "role" => [ Role, OrganizationRole, :role ], "technology" => [ Technology, OrganizationTechnology, :technology ] }.freeze
+
+    # Whether a role or technology with this key exists.
+    def company_fact_key?(kind, key)
+      model, = COMPANY_FACT_MODELS[kind.to_s]
+      model ? model.exists?(key: key.to_s) : false
+    end
+
+    # The status of that role or technology on this company, or nil when it has none.
+    def company_fact_status(organization_id:, kind:, key:)
+      model, link, column = COMPANY_FACT_MODELS.fetch(kind.to_s)
+      link.where(organization_id:, column => model.where(key: key.to_s)).pick(:verification_status)
+    end
+
+    # Publishing a record (#202): how many of its approved facts go public
+    # with it, and its waiting facts whose last decision was added_reason
+    # ([[type, id, name], …]).
+    def publish_counts(type:, id:, added_reason:)
+      record = { "Organization" => Organization, "Facility" => Facility }.fetch(type.to_s).find(id)
+      live = if record.is_a?(Organization)
+        [ record.organization_roles, record.organization_technologies, record.facility_relationships,
+          Relationship.where(from_organization: record).or(Relationship.where(to_organization: record)) ]
+      else
+        [ Facility.where(parent: record), record.facility_relationships ]
+      end
+      added = record.is_a?(Organization) ? [ record.organization_roles.includes(:role), record.organization_technologies.includes(:technology) ] : []
+      added_with = added.flat_map do |scope|
+        scope.where(verification_status: "pending").select { |fact| fact.verification_events.order(:id).last&.reason == added_reason }
+          .map { |fact| [ fact.class.name, fact.id, fact.respond_to?(:role) ? fact.role.name : fact.technology.name ] }
+      end
+      [ live.sum { |scope| scope.where(verification_status: "verified").count }, added_with ]
+    end
+
+    # A website's domain as a company's domain is stored (www. and the path dropped).
+    def domain_from(url) = Organization.domain_from(url)
+
     def deal_terms(link_type:, link_id:, published: true)
       raise ArgumentError, "not a link type: #{link_type.inspect}" unless DealTerm::LINK_TYPES.include?(link_type.to_s)
 

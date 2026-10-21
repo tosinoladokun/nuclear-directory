@@ -60,6 +60,9 @@ Rails.application.routes.draw do
     # Live (#201 part 2): every record with Data Quality's tag filters, and
     # a company's or plant's Record page.
     get "live" => "live#show", as: :live
+    # Add a record by hand (#202): previewed with a GET, created with a POST.
+    get "records/new" => "new_records#new", as: :new_record
+    post "records" => "new_records#create", as: :new_records
     scope "records/:type/:id", as: :record, constraints: { type: /Organization|Facility/, id: /\d+/ } do
       get "/" => "records#show"
       get "edit" => "records#edit", as: :edit
@@ -67,6 +70,12 @@ Rails.application.routes.draw do
       # Merge into… (#142): pick the record it's the same as, see what moves, confirm.
       get "merge" => "records#merge", as: :merge
       post "merge" => "records#perform_merge"
+      # Add a fact by hand (#202): previewed with a GET, added with a POST.
+      get "facts/new" => "record_facts#new", as: :new_fact
+      post "facts" => "record_facts#create", as: :facts
+      # Publish a record not yet public (#202): previewed, then confirmed.
+      get "publish" => "record_publish#show", as: :publish
+      post "publish" => "record_publish#create"
     end
     # Change status on a plant or a unit (#316): the form previews with a GET.
     scope "facilities/:id/status", as: :facility_status, constraints: { id: /\d+/ } do

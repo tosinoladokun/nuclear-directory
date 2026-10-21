@@ -28,6 +28,18 @@ module DataQuality::Review
   Result = Data.define(:candidate_id, :ref, :errors) do
     def ok? = errors.empty?
   end
+  # A record added by hand (#202): ref when it was written (or, in a dry
+  # run, would be), errors, and the record of the same name if one exists.
+  Added = Data.define(:ref, :errors, :existing) do
+    def ok? = errors.empty?
+  end
+  ADDED_REASON = "Added by hand".freeze
+  # Publishing a record (#202): how many of its approved facts go public
+  # with it, and the facts added by hand with it that are still waiting
+  # ([[type, id, name], …]).
+  PublishPlan = Data.define(:goes_live_with, :added_with)
+  # What a company's Add a fact can add (#202): its fact kind.
+  COMPANY_FACTS = { "role" => :organization_role, "technology" => :organization_technology }.freeze
 
   # A candidate as the admin shows it. record: the directory fact it's
   # attached to (DirectoryClient::Record: name, decision, values), or nil.
@@ -470,6 +482,125 @@ module DataQuality::Review
     end
 
     def nrc_status_quote(name, directory: DataQuality::DirectoryClient.new) = directory.nrc_status_quote(name)
+
+    # Adds a company (with its first role) or a plant site by hand (#202),
+    # as `by`'s, from a public source and its quote. It starts unpublished
+    # (pending): publishing it is a separate decision. dry_run: everything is
+    # checked and written, then rolled back, for the preview. Returns Added.
+    def add_record(kind:, name:, url:, quote:, by:, website: nil, role: nil, facility_type: nil, dry_run: false,
+      directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      name, url, quote = name.to_s.squish, url.to_s.strip, quote.to_s.squish
+      errors = [ ("Give it a name" if name.empty?),
+        ("Choose what it does" if kind == "organization" && role.blank?),
+        ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
+        ("Copy the sentence from the source that names it" if quote.empty?) ].compact
+      errors << "Choose a company or a plant" unless %w[organization facility].include?(kind)
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      existing = kind == "organization" ? directory.organization(name:) : directory.facility(name:)
+      return Added.new(ref: nil, errors: [ "#{name} is already in the directory" ], existing:) if existing
+
+      # A company is also the same one by its website's domain: writing it
+      # would update that company (rename it, set it pending) instead.
+      domain = (directory.domain_from(website.to_s.strip) if kind == "organization" && website.present?)
+      if domain && (same_site = directory.organization(domain:))
+        return Added.new(ref: nil, errors: [ "#{same_site.name} already has the website #{domain}" ], existing: same_site)
+      end
+
+      added = nil
+      ApplicationRecord.transaction do
+        source = DataQuality::Sources.find_or_create(url:)
+        unless source.ok?
+          added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
+        attributes = kind == "organization" ? { name:, website: website.to_s.strip.presence } : { name:, facility_type: facility_type.presence }
+        written = directory.add_fact(kind.to_sym, attributes.compact, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        # Only ever a new record: one the write found by another key is left as it was.
+        if written.success? && !written.created
+          added = Added.new(ref: nil, errors: [ "It matches a record already in the directory" ],
+            existing: (directory.fact(type: written.ref.type, id: written.ref.id) if written.ref))
+          raise ActiveRecord::Rollback
+        end
+        if written.success? && kind == "organization"
+          role_written = directory.add_fact(:organization_role, { organization_id: written.ref.id, role: }, source_id: source.ref.id, quote:, by:,
+            reason: ADDED_REASON)
+          written = role_written.success? ? written : role_written
+        end
+        added = Added.new(ref: (written.ref if written.success?), errors: written.errors, existing: nil)
+        raise ActiveRecord::Rollback if dry_run || !added.ok?
+      end
+      added
+    end
+
+    # Adds a role or a technology to a company by hand (#202), as `by`'s,
+    # from a public source and its quote: written pending (publishing it is
+    # the usual approval), only ever as a new fact. kind: "role" or
+    # "technology"; key: the role's or technology's key. dry_run: checked and
+    # written, then rolled back, for the preview. Returns Added.
+
+    def add_company_fact(organization_id:, kind:, key:, url:, quote:, by:, dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      fact_kind = COMPANY_FACTS[kind]
+      url, quote = url.to_s.strip, quote.to_s.squish
+      errors = [ ("Choose a role or a technology" unless fact_kind),
+        ("Choose which #{kind}" if fact_kind && !directory.company_fact_key?(kind, key)),
+        ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
+        ("Copy the sentence from the source that states it" if quote.empty?) ].compact
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      column = fact_kind == :organization_role ? :role : :technology
+      if (status = directory.company_fact_status(organization_id:, kind:, key:))
+        word = %w[rejected unpublished].include?(status) ? "was removed; put it back from Removed" : "is already listed"
+        return Added.new(ref: nil, errors: [ "That #{kind} #{word}" ], existing: nil)
+      end
+
+      added = nil
+      ApplicationRecord.transaction do
+        source = DataQuality::Sources.find_or_create(url:)
+        unless source.ok?
+          added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
+        written = directory.add_fact(fact_kind, { organization_id:, column => key.to_s }, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        errors = written.success? ? (written.created ? [] : [ "That #{kind} is already listed" ]) : written.errors
+        added = Added.new(ref: (written.ref if errors.empty?), errors:, existing: nil)
+        raise ActiveRecord::Rollback if dry_run || !added.ok?
+      end
+      added
+    end
+
+    # What publishing this record would put on the site (#202): its approved
+    # facts go public with it; the facts added by hand with it (Add a record,
+    # Add a fact) are still waiting, and publish with it only if asked.
+    def publish_plan(type:, id:, directory: DataQuality::DirectoryClient.new)
+      goes_live_with, added_with = directory.publish_counts(type:, id:, added_reason: ADDED_REASON)
+      PublishPlan.new(goes_live_with:, added_with:)
+    end
+
+    # Publishes a record not yet public (#202): it's approved as `by`'s
+    # decision (it needs a source), and with_added: the facts added by hand
+    # with it too. All or nothing. Returns a Result.
+    def publish(type:, id:, by:, with_added: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      result = nil
+      ApplicationRecord.transaction do
+        result = approve_fact(type:, id:, by:, reason: "Published", directory:)
+        raise ActiveRecord::Rollback unless result.ok?
+
+        (with_added ? publish_plan(type:, id:, directory:).added_with : []).each do |fact_type, fact_id, name|
+          added = approve_fact(type: fact_type, id: fact_id, by:, reason: "Published with its record", directory:)
+          next if added.ok?
+
+          result = Result.new(candidate_id: nil, ref: nil, errors: added.errors.map { |error| "#{name}: #{error}" })
+          raise ActiveRecord::Rollback
+        end
+      end
+      result
+    end
 
     # Merges a company or plant site into another, as a person's decision
     # (#142): a reason is required; dry_run says what would move and changes
