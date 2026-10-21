@@ -101,4 +101,21 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
     Relationship.find_by!(relationship_type: "offtake_with").unpublish!(by: "human:tosin", reason: "Test")
     assert_empty Directory::DealList.offtakes, "a term is public only with its link"
   end
+
+  test "a term's own quote on its link's page has its confidence checked like any other" do
+    error = assert_raises(Seed::OrganizationLoader::Error) { seed([ PPA.merge(quote: "signed a PPA for 200 MW", confidence: 1.5) ]) }
+    assert_match "confidence 1.5 isn't a number from 0 to 1", error.message
+  end
+
+  test "a condition met since is cleared by giving it as null; leaving it out keeps it" do
+    seed([ PPA.merge(conditions: "NRC approval") ])
+    assert_not DealTerm.sole.counted?
+
+    seed([ PPA ])
+    assert_equal "NRC approval", DealTerm.sole.conditions, "left out: nothing to say"
+
+    seed([ PPA.merge(conditions: nil) ])
+    assert_nil DealTerm.sole.conditions
+    assert DealTerm.sole.counted?
+  end
 end

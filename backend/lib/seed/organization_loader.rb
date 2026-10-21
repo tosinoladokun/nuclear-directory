@@ -124,8 +124,10 @@ module Seed
 
       def evidence_items(doc)
         links = [ *doc["relationships"], *doc["facilities"] ].compact
+        # A term's citation as it'll be written (its own quote, on its own page
+        # or its link's), so its confidence is checked and consolidated too.
         [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links,
-          *links.flat_map { |link| Array(link["terms"]) } ].compact.select { |item| item["source_url"] }
+          *links.flat_map { |link| Array(link["terms"]).map { |term| citation(term, link) } } ].compact.select { |item| item["source_url"] }
       end
 
       # The description's quote, plus any "also" quotes that support the rest
@@ -245,6 +247,8 @@ module Seed
       #     starts_on: 2026-10-01
       #     ends_on: 2046-09-30
       #     conditions: Illinois Commerce Commission approval   # optional: then not counted yet
+      TERM_FIELDS = %w[agreement status conditions capacity_mw firm_mw amount_usd signed_on starts_on ends_on term_years].freeze
+
       def write_terms(slug, link_type, link, item, sources)
         terms = Array(item["terms"])
         return if terms.empty? || !link&.ok?
@@ -255,10 +259,10 @@ module Seed
             next
           end
 
-          attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip,
-            agreement: term["agreement"], status: term["status"], conditions: term["conditions"], capacity_mw: term["capacity_mw"],
-            firm_mw: term["firm_mw"], amount_usd: term["amount_usd"], signed_on: term["signed_on"], starts_on: term["starts_on"],
-            ends_on: term["ends_on"], term_years: term["term_years"] }.compact
+          # A field the entry leaves out is "nothing to say" (#251); one it
+          # gives as null clears it (a condition met since, say).
+          attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip }
+            .merge(TERM_FIELDS.select { |field| term.key?(field) }.to_h { |field| [ field.to_sym, term[field] ] })
           write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"])
         end
       end
@@ -371,7 +375,7 @@ module Seed
         return link if term["quote"].to_s.strip.empty?
 
         { "source_url" => term["source_url"] || link["source_url"], "quote" => term["quote"],
-          "confidence" => term.fetch("confidence", link["confidence"]) }
+          "confidence" => term.fetch("confidence", link["confidence"]), "published" => term["published"] || link["published"] }.compact
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).
