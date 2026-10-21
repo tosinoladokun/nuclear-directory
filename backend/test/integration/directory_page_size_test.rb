@@ -16,6 +16,7 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
     get companies_path(q: "Paged Fission")
     assert_select "h1 .nd-listhead__count", /#{PAGE + 5} results/
     assert_equal PAGE, rows
+    assert_select "turbo-frame#directory-rows[target=_top]", 1, "company and plant links leave the frame; only Show more targets it"
     assert_select "turbo-frame#directory-rows a.nd-btn[href=?][data-turbo-frame=directory-rows]", companies_path(q: "Paged Fission", shown: 2), "Show more"
     assert_select "a.nd-btn[rel=nofollow]", count: 0, message: "crawlers may follow Show more"
     assert_select "meta[name=robots]", count: 1, message: "a search is noindex"

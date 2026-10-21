@@ -42,4 +42,11 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     assert_no_selector "a", text: "Show more"
     assert_empty page.evaluate_script(AUDIT)
   end
+
+  test "a company link in the list opens its page, not a frame" do
+    visit companies_path
+    first("main ul.nd-list > li a").click
+    assert_selector "h1#profile-name", wait: 20
+    assert_match(%r{\A/companies/paged-company}, page.current_path)
+  end
 end
