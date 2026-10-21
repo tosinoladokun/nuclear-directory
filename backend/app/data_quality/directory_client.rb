@@ -49,6 +49,9 @@ class DataQuality::DirectoryClient
     @fact_writer = fact_writer
   end
 
+  # A CIK as the directory stores it, so two spellings compare equal.
+  def normalize_cik(value) = lookup.cik(value)
+
   # Exact lookups. Pass one keyword; returns a Record or nil.
   def organization(name: nil, domain: nil, sec_cik: nil)
     record("Organization", lookup.organization(name:, domain:, sec_cik:))
