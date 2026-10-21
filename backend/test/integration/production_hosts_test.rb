@@ -16,7 +16,7 @@ class ProductionHostsTest < ActionDispatch::IntegrationTest
   def status_for(hosts:, host:, path:)
     inner = ->(_env) { [ 200, {}, [ "ok" ] ] }
     middleware = ActionDispatch::HostAuthorization.new(inner, hosts, exclude: EXCLUDE)
-    status, = middleware.call(Rack::MockRequest.env_for("http://#{host}#{path}"))
+    status, = middleware.call(Rack::MockRequest.env_for("http://#{host}#{path}", "HTTP_HOST" => host))
     status
   end
 
