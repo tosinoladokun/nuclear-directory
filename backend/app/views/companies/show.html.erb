@@ -3,6 +3,8 @@
   role_tags = p.shown_roles.map { |r| role_label(r.role) }
   tech_tags = p.technologies.map { |t| t.technology.name }
   record_citations = p.citations_for(p.organization)
+  # Two or more names go under their label, each its own no-wrap item (#406).
+  name_list = ->(names) { names.size > 1 ? safe_join(names.map { |name| tag.span(name, class: "nd-overview__name", title: name, data: { truncate: true }) }, ", ") : names.first.presence }
   # Title and description say what this page adds, from published facts (#292).
   content_for :title, company_title(p)
   content_for :og_title, p.name
@@ -28,15 +30,15 @@
   <div class="nd-columns nd-columns--profile">
     <div class="nd-columns__side">
       <%# Its buckets (#281) are computed from the roles and links below, so they carry no source of their own. %>
-      <%= render "shared/overview_panel", verified_at: p.verified_at, correction_url: correction_url_for(p.name), rows: [
+      <%= render "shared/overview_panel", verified_at: p.verified_at, correction_url: correction_url_for(p.name), sources_label: t("profile.sources.company"), sources: record_citations, rows: [
             [ "Type", (tag.ul(class: "nd-bucketchips") { safe_join(p.buckets.map { |b| tag.li { link_to(directory_url_for(category: b), class: [ "nd-bucketchip", bucket_class(b) ], aria: { label: b.name }, title: b.name) { bucket_icon(b) + tag.span(b.name, class: "nd-bucketchip__full") + (tag.span(b.short_name, class: "nd-bucketchip__short", aria: { hidden: true }) if b.short) } } }) } if p.buckets.any?) ],
-            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)), record_citations ],
-            [ "Also known as", p.aliases.join(", ").presence, record_citations ],
-            [ "Legal name", p.legal_name, record_citations ],
-            [ role_tags.size > 1 ? "Roles" : "Role", role_tags.join(", ").presence, p.shown_roles.flat_map { |r| p.citations_for(r) }.uniq(&:first) ],
-            [ "Technology", tech_tags.join(", ").presence, p.technologies.flat_map { |t| p.citations_for(t) }.uniq(&:first) ],
-            [ "Headquarters", place(p.hq_city, p.hq_state), record_citations ],
-            [ "Founded", p.founded_year, record_citations ],
+            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) ],
+            [ "Also known as", name_list.(p.aliases), nil, nil, p.aliases.size > 1 ],
+            [ "Legal name", p.legal_name ],
+            [ role_tags.size > 1 ? "Roles" : "Role", name_list.(role_tags), p.shown_roles.flat_map { |r| p.citations_for(r) }.uniq(&:first), nil, role_tags.size > 1 ],
+            [ "Technology", name_list.(tech_tags), p.technologies.flat_map { |t| p.citations_for(t) }.uniq(&:first), nil, tech_tags.size > 1 ],
+            [ "Headquarters", place(p.hq_city, p.hq_state) ],
+            [ "Founded", p.founded_year ],
             [ p.parents.size > 1 ? "Parent companies" : "Parent company",
               (safe_join(p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") }, ", ") if p.parents.any?),
               p.parents.flat_map { |l| p.citations_for(l) }.uniq(&:first) ],

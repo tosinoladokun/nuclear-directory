@@ -391,13 +391,15 @@ module DirectoryHelper
     uri = URI.parse(url.to_s.strip)
     return url unless %w[http https].include?(uri.scheme&.downcase) && uri.host.present?
 
-    params = URI.decode_www_form(uri.query.to_s)
-    keys = params.map(&:first)
-    params << [ "utm_source", "nuclear-directory" ] unless keys.include?("utm_source")
-    params << [ "utm_medium", "referral" ] unless keys.include?("utm_medium")
-    params << [ "utm_campaign", campaign ] if campaign && !keys.include?("utm_campaign")
+    keys = uri.query.to_s.split("&").map { |pair| pair.split("=", 2).first.to_s }
+    added = []
+    added << [ "utm_source", "nuclear-directory" ] unless keys.include?("utm_source")
+    added << [ "utm_medium", "referral" ] unless keys.include?("utm_medium")
+    added << [ "utm_campaign", campaign ] if campaign && !keys.include?("utm_campaign")
+    return url if added.empty?
 
-    uri.query = params.any? ? URI.encode_www_form(params) : nil
+    # The existing query is kept byte for byte; only the missing tags are appended.
+    uri.query = [ uri.query.presence, URI.encode_www_form(added) ].compact.join("&")
     uri.to_s
   rescue URI::InvalidURIError
     url

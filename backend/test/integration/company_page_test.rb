@@ -138,15 +138,20 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-overview dt", text: "Website"
     # #200: the Website link carries the referral UTM so companies see the
     # visit in their own analytics. The href starts with the website, with
-    # utm_source / utm_medium / utm_campaign on the query string.
-    assert_select ".nd-overview dd a[href^='https://kairospower.com?']", "kairospower.com" do |links|
+    # utm_source / utm_medium / utm_campaign on the query string. (No "?" in the
+    # selector: assert_select treats it as a value placeholder.)
+    assert_select ".nd-overview dd a[href^='https://kairospower.com']", "kairospower.com" do |links|
       params = URI.decode_www_form(URI.parse(links.first["href"]).query).to_h
       assert_equal "nuclear-directory", params["utm_source"]
       assert_equal "referral", params["utm_medium"]
       assert_equal "company-page", params["utm_campaign"]
     end
-    assert_select ".nd-overview dd", text: /\AKairos\s*1\z/
-    assert_select ".nd-overview dd", text: /\AAlameda, CA\s*1\z/
+    assert_select ".nd-overview dd", text: /\AKairos\z/
+    assert_select ".nd-overview dd", text: /\AAlameda, CA\z/
+    # The record's sources show once, under the facts, and name no fact.
+    assert_select ".nd-overview p.nd-overview__sources", text: /\AAbout this company: sources\s*1\z/ do
+      assert_select "a.nd-src[href='#source-1']"
+    end
     assert_select ".nd-overview dt", text: "Founded", count: 0
     assert_select ".nd-overview__foot", /checked 2026-10-09/
   end

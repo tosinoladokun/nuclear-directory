@@ -206,6 +206,14 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_equal 1, params.count { |k, _| k == "utm_source" }, "no duplicate utm_source"
   end
 
+  test "with_referral_utm keeps the existing query byte for byte, including non-UTF-8 values" do
+    url = with_referral_utm("https://example.com/?utm_source=caf%E9&q=a%20b", campaign: "company-page")
+
+    assert url.start_with?("https://example.com/?utm_source=caf%E9&q=a%20b&")
+    assert_includes url, "utm_medium=referral"
+    assert_includes url, "utm_campaign=company-page"
+  end
+
   test "with_referral_utm leaves non-http URLs and blanks alone (safety: no javascript: links)" do
     assert_equal "", with_referral_utm("")
     assert_nil with_referral_utm(nil)
