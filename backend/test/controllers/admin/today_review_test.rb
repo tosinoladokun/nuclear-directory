@@ -235,7 +235,7 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_includes DataQuality::Review.restating_ids([ same.id ], by: "human:tosin"), same.id, DataQuality::Review.confirm_identical([ same.id ], by: "human:tosin", dry_run: true).map(&:errors).inspect
 
     get admin_today_review_path
-    assert_select "#fact-#{same.id}", /It says what the site already shows\. Closing records that and changes nothing live\./
+    assert_select "#fact-#{same.id}", /It says what the site already shows\. Closing notes that in the history and changes nothing live\./
     assert_select "#fact-#{same.id} button", "Close: already on the site"
     assert_select "#fact-#{same.id} button", text: "Reject", count: 0
 

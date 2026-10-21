@@ -15,7 +15,7 @@ class Admin::CloseRestatingTest < ActionDispatch::IntegrationTest
 
   test "Checks offers Close: already on the site, says what it does, and closes it with nothing live changed" do
     get admin_checks_path
-    assert_select "#claim-#{@claim.id}", /It says what the site already shows\. Closing records that and changes nothing live\./
+    assert_select "#claim-#{@claim.id}", /It says what the site already shows\. Closing notes that in the history and changes nothing live\./
     assert_select "#claim-#{@claim.id} button", "Close: already on the site"
     assert_select "#claim-#{@claim.id} button", text: /\A(Approve|Reject)\z/, count: 0
 

@@ -72,7 +72,7 @@
               </details>
             </div>
             <% if row.candidate_ids.all? { |id| @restating.include?(id) } %>
-              <p class="type-small m-0">It says what the site already shows. Closing records that and changes nothing live.</p>
+              <p class="type-small m-0">It says what the site already shows. Closing notes that in the history and changes nothing live.</p>
               <div class="nd-wait__actions nd-verdict__actions">
                 <%= button_to "Close: already on the site", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "close", shown:), params: { same: row.candidate_ids },
                   class: "nd-btn nd-btn--primary type-ui" %>

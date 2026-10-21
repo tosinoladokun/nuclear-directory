@@ -63,7 +63,7 @@
     </div>
     <% if value %><p class="nd-wait__value type-change"><%= value %></p><% end %>
     <% if local_assigns[:restating] %>
-      <p class="type-small m-0 nd-wait__note">It says what the site already shows. Closing records that and changes nothing live.</p>
+      <p class="type-small m-0 nd-wait__note">It says what the site already shows. Closing notes that in the history and changes nothing live.</p>
       <div class="nd-wait__actions type-ui">
         <button type="submit" class="nd-btn nd-btn--primary" name="candidate_id" value="<%= item.candidate_id %>"
           formaction="<%= close_admin_candidates_path(filters) %>">Close: already on the site</button>
