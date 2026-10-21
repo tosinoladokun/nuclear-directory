@@ -24,7 +24,7 @@ class Admin::NavigationTest < ActionDispatch::IntegrationTest
     get admin_root_path
 
     labels = css_select(".nd-shell__nav > *").map { |item| item.text.squish }
-    assert_equal [ "Overview", "Sources", "Checks", "Live", "Removed, Soon", "Where it appears, Soon", "Correction requests" ],
+    assert_equal [ "Overview", "Sources", "Checks", "Live", "Removed, Soon", "Where it appears", "Correction requests" ],
       labels.map { |label| label.sub(/ \d+\z/, "") }
     %w[Removed].each do |stage|
       assert_select ".nd-shell__nav span.nd-shell__soon", /#{stage}/ do
