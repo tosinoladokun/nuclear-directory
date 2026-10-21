@@ -68,7 +68,8 @@ class TodayReview
     # [joy, aminah] for a candidate or a Checks item. Aminah's call counts
     # only while it stands (the fact hasn't changed since she made it).
     def verdicts(record)
-      joy = record.ai_recommendation == "recommend_publish" ? "accept" : "check"
+      # A claim sent back to review keeps its old verdict field; review wins.
+      joy = record.ai_recommendation == "recommend_publish" && record.status.to_s != "needs_review" ? "accept" : "check"
       return [ joy, nil ] if @no_list
       call = record.is_a?(Candidate) ? (record.dq_recommendation if DataQuality::Recommendations.current?(record)) : record.dq_recommendation
       [ joy, { "approve" => "accept", "reject" => "reject" }[call] ]

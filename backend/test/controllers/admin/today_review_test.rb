@@ -150,4 +150,10 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     post admin_today_list_path, params: { list: "999999 approve: not a real one\nnonsense" }
     assert_no_match(/\bclaims?\b/i, css_select(".nd-alert").text)
   end
+
+  test "a fact sent back to review isn't shown as Joy's accept, even with an old accept on it" do
+    @only_joy.update_columns(status: "needs_review", notes: "withdrawn: the source no longer lists it")
+    get admin_today_review_path
+    assert_select "#fact-#{@only_joy.id} .nd-tag", text: "Joy: check it"
+  end
 end
