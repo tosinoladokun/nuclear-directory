@@ -259,12 +259,17 @@ module DataQuality::Review
     # A merge locks the same rows (#325): if the two collide, the database
     # stops one, and here nothing is approved; each claim comes back with
     # BUSY, to try again.
-    def approve(candidate_ids, by:, reason: nil, only_recommended: false, data_quality_reviewed: false, directory: DataQuality::DirectoryClient.new)
+    #
+    # safe_check (a safe class, DataQuality::SafeClasses): asked under the
+    # record's lock in place of the usual holds; its answer is why the claim
+    # isn't safe, or nil.
+    def approve(candidate_ids, by:, reason: nil, only_recommended: false, data_quality_reviewed: false, safe_check: nil,
+      directory: DataQuality::DirectoryClient.new)
       human!(by)
       firsts = first_batches if only_recommended # once per bulk approval
       Candidate.transaction do
         Candidate.where(id: candidate_ids).includes(:crawl_run, :verify_run).order(:id).map do |candidate|
-          approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:, data_quality_reviewed:)
+          approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:, data_quality_reviewed:, safe_check:)
         end
       end
     rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
@@ -513,7 +518,8 @@ module DataQuality::Review
       # fact still waiting for approval.
       # only_recommended (bulk approval): checked under the lock, so a claim a
       # verify run moved to review a moment ago isn't published in bulk.
-      def approve_one(candidate, by:, reason:, directory:, edited: false, only_recommended: false, firsts: nil, data_quality_reviewed: false)
+      def approve_one(candidate, by:, reason:, directory:, edited: false, only_recommended: false, firsts: nil, data_quality_reviewed: false,
+        safe_check: nil)
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
@@ -524,10 +530,14 @@ module DataQuality::Review
           # decided since the page loaded. Its row stays locked through the
           # write, so a person's approval can't land in between.
           directory.lock_fact(type: candidate.subject_type, id: candidate.subject_id) if only_recommended && candidate.subject_id
-          held = held_reason(candidate, directory:, firsts: firsts || first_batches) if only_recommended
+          held =
+            if safe_check then safe_check.call(candidate)
+            elsif only_recommended then held_reason(candidate, directory:, firsts: firsts || first_batches)
+            end
           held = nil if data_quality_reviewed && held == FIRST_BATCH
           if held
-            next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it waits for Data Quality: #{held}" ])
+            why = safe_check ? "it's no longer safe: #{held}" : "it waits for Data Quality: #{held}"
+            next Result.new(candidate_id: candidate.id, ref: nil, errors: [ why ])
           end
           # A link is written onto the record match attached, which needs both
           # ends found. One whose company or plant is still a question has no
@@ -540,6 +550,10 @@ module DataQuality::Review
           if lapsed?(candidate)
             next Result.new(candidate_id: candidate.id, ref: nil,
               errors: [ "its source changed after the verifier checked it; the next verify run checks it again" ])
+          end
+          if (other = other_page(candidate, directory))
+            next Result.new(candidate_id: candidate.id, ref: nil,
+              errors: [ "its link already cites #{other.title.presence || other.url}, another page of this source; approving this would replace what that page says (#390)" ])
           end
 
           # The evidence belongs to the run that judged it (verify), else the one that found it.
@@ -639,6 +653,17 @@ module DataQuality::Review
         ->(quote) { plugin.quote_in_source?(candidate.source, quote) }
       rescue DataQuality::Plugin::UnknownSourceKind
         nil
+      end
+
+      # Match's guard again, at the decision (#392): another page of the same
+      # source kind that the claim's link cites now, which the claim would
+      # replace. Two claims can attach before either page's evidence is there.
+      def other_page(candidate, directory)
+        return unless %w[relationship facility_relationship].include?(candidate.kind) && candidate.subject_id
+
+        directory.lock_fact(type: candidate.subject_type, id: candidate.subject_id)
+        existing = directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return
+        DataQuality::Stages::Match.other_page_on(candidate, existing, directory:)
       end
 
       def lock_for_decision(candidate)

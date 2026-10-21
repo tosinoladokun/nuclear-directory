@@ -92,6 +92,66 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "the hung Type pill stays inside the panel, and its icon sits on the label's edge, at 390 and 1440" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      edges = page.evaluate_script(<<~JS)
+        (() => {
+          const panel = document.querySelector(".nd-overview").getBoundingClientRect(), chip = document.querySelector(".nd-overview .nd-bucketchip")
+          const box = chip.getBoundingClientRect(), label = chip.closest("dd").previousElementSibling.getBoundingClientRect()
+          return [box.left >= panel.left + 1, box.right <= panel.right - 1, Math.abs(box.left + parseFloat(getComputedStyle(chip).paddingLeft) - label.left) <= 1]
+        })()
+      JS
+      assert_equal [ true, true, true ], edges, "at #{width}: inside the panel, icon on the label's edge"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "two or more other names go under their label at 1440 and 390, each on one line with its full text in title" do
+    [ "Allied Power", "Allied Power Services, a Bernhard Capital Partners company", "APS Holdings" ].each { |name| @allied.aliases.create!(alias: name) }
+    [ [ 1440, 900 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => el.textContent.trim() === "Also known as"), dd = dt.nextElementSibling
+          const names = [...dd.querySelectorAll(".nd-overview__name")]
+          return [dt.classList.contains("nd-overview__stack"), names.length, names.every((n) => n.title === n.textContent && "truncate" in n.dataset), dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ true, 3, true, true ], row, "at #{width}: stacked under the label, three names, each with its full text in title"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "a company with many roles lists them under the label, none overflowing, at 360 and 390" do
+    ge = cite!(company("GE Vernova Hitachi Nuclear Energy", roles: %w[reactor_vendor fuel components reactor_services waste_decommissioning].map { |key| Role.find_by(key:) || role(key) }))
+    [ [ 360, 800 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{ge.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => /^Roles?$/.test(el.textContent.trim())), dd = dt.nextElementSibling
+          return [dt.textContent.trim(), dt.classList.contains("nd-overview__stack"), dd.querySelectorAll(".nd-overview__name").length > 1, dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ "Roles", true, true, true ], row, "at #{width}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "the key-facts edge check sees an inset value, stacked or beside its label" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}: clean before the inset"
+      page.execute_script("document.querySelector('.nd-overview .nd-overview__val:not(:has(ul))').style.paddingLeft = '6px'")
+      found = page.evaluate_script(AUDIT)
+      assert found.any? { |problem| problem.include?("edge") }, "at #{width}: a value inset by padding is reported, got #{found.inspect}"
+    end
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"

@@ -18,6 +18,10 @@
 #   DataQuality::Recommendations.record(text, by: "human:tosin")  # => Recorded
 #   DataQuality::Recommendations.plan                             # => Plan (accept: […], left: […])
 #   DataQuality::Recommendations.accept(plan.accept, by: "human:tosin") # => [Review::Result, …]
+#
+# The plan also lists the verifier's own recommendations in safe classes
+# (DataQuality::SafeClasses): Accept takes those of a class that's on, in
+# the same click, and one fingerprint covers both lists.
 module DataQuality::Recommendations
   CALLS = %w[approve reject].freeze
   REASON_LIMIT = 500
@@ -39,9 +43,16 @@ module DataQuality::Recommendations
   # decides from (recommended or needs review); otherwise it's decided on
   # the claim's own page.
   Item = Data.define(:candidate_id, :call, :reason, :snapshot, :claim, :subject_type, :subject_id, :why, :waiting)
-  Plan = Data.define(:accept, :left) do
-    # The exact list Accept will act on, compared on the click (as Approve all's).
-    def fingerprint = DataQuality::Recommendations.fingerprint(accept)
+  # safe: SafeClasses items, safe or not.
+  Plan = Data.define(:accept, :left, :safe) do
+    # The exact list Accept will act on, both groups, compared on the click (as Approve all's).
+    def fingerprint = DataQuality::Recommendations.fingerprint(accept, safe_accept)
+    # The verifier's safe recommendations Accept takes (their class is on).
+    def safe_accept = safe.select(&:taken?)
+    # Safe, but their class is off: shown as what Accept would take.
+    def safe_dry = safe.select { |item| item.safe? && !item.enabled }
+    def safe_left = safe.reject(&:safe?)
+    def nothing? = accept.empty? && safe_accept.empty?
   end
 
   class << self
@@ -66,7 +77,9 @@ module DataQuality::Recommendations
     # those left for a person, each with why.
     # The checks it needs are read for the whole list at once (a few
     # queries, however many recommendations), as Approve all's are.
-    def plan(directory: DataQuality::DirectoryClient.new)
+    # only_enabled_safe: leave out safe classes that are off (Checks only
+    # counts what Accept takes).
+    def plan(only_enabled_safe: false, directory: DataQuality::DirectoryClient.new)
       claims = Candidate.where(status: OPEN).where.not(dq_recommendation: nil).includes(:source).order(:id).to_a
       context = context_for(claims, directory:)
       items = claims.map do |candidate|
@@ -76,7 +89,11 @@ module DataQuality::Recommendations
       end
       items = one_approval_per_record(items)
       accept, left = items.partition { |item| item.why.nil? }
-      Plan.new(accept:, left:)
+      # The approvals Accept will make in this click take the safe classes'
+      # run allowance too, so they count before the preview is built.
+      pending = accept.select { |item| item.call == "approve" }.map(&:candidate_id)
+      safe = DataQuality::SafeClasses.items(exclude: claims.map(&:id), only_enabled: only_enabled_safe, pending:, directory:)
+      Plan.new(accept:, left:, safe: one_safe_approval_per_record(safe, accept))
     end
 
     # What the person saw: each claim, its call and reason, and the claim as Data Quality saw it.
@@ -84,7 +101,10 @@ module DataQuality::Recommendations
     # claim is as Data Quality saw it (not changed or reopened since).
     def current?(candidate) = candidate.dq_recommendation.present? && candidate.dq_payload_sha256 == digest(candidate)
 
-    def fingerprint(items) = Digest::SHA256.hexdigest(items.map { |item| [ item.candidate_id, item.call, item.reason, item.snapshot ] }.to_json)
+    def fingerprint(items, safe = [])
+      Digest::SHA256.hexdigest([ items.map { |item| [ item.candidate_id, item.call, item.reason, item.snapshot ] },
+        DataQuality::SafeClasses.fingerprint_parts(safe) ].to_json)
+    end
 
     # Accepts these recommendations (a plan's items) as `by`'s decision. Each
     # is locked as a decision locks it (its source, then the claim), checked
@@ -180,6 +200,18 @@ module DataQuality::Recommendations
           next item if seen.add?([ item.subject_type, item.subject_id ])
 
           item.with(why: "another recommendation in this list approves the same record; decide this one after it")
+        end
+      end
+
+      # The same for safe items: none approves a record that Data Quality's
+      # list, or an earlier safe item, already approves.
+      def one_safe_approval_per_record(safe, accept)
+        seen = accept.select { |item| item.call == "approve" && item.subject_id }.to_set { |item| [ item.subject_type, item.subject_id ] }
+        safe.map do |item|
+          next item unless item.safe? && item.subject_id
+          next item if seen.add?([ item.subject_type, item.subject_id ])
+
+          item.with(why: "another item in this list approves the same link; it's decided first")
         end
       end
 
