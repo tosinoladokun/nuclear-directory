@@ -48,7 +48,7 @@ class Admin::TodayController < Admin::BaseController
     id = params[:candidate_id].to_i
     # The same fact from other pages is decided with it (each checked as usual).
     same = Array(params[:same]).map(&:to_i) - [ id ]
-    before = DataQuality::Review.undo_state(id) if same.empty?
+    before = [ id, *same ].map { |each_id| DataQuality::Review.undo_state(each_id) }
     results = if params[:decision] == "accept"
       DataQuality::Review.approve([ id, *same ], by: actor, reason: "Accepted in Today")
     else
@@ -61,7 +61,9 @@ class Admin::TodayController < Admin::BaseController
     end
     if result&.ok?
       flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
-      if (undoable = DataQuality::Review.undoable(before, decision: params[:decision]))
+      # Undo restores every page's copy at once, or isn't offered.
+      undoable = before.map { |state| DataQuality::Review.undoable(state, decision: params[:decision]) }
+      if undoable.all?
         flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour)
       elsif params[:decision] == "accept"
         flash[:notice] += " It changed a value someone had checked, so there's no Undo; edit the record to change it back."
@@ -75,7 +77,7 @@ class Admin::TodayController < Admin::BaseController
   # Undo the last Accept or Reject, while nothing else has changed it.
   def undo_decision
     state = undo_verifier.verified(params[:token].to_s)
-    result = state && DataQuality::Review.undo(state, by: actor)
+    result = state && DataQuality::Review.undo_all(Array.wrap(state), by: actor)
     if result&.ok?
       flash[:notice] = "Undone. It's waiting again."
     else

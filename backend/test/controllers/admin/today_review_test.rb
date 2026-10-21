@@ -191,6 +191,11 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     post admin_today_review_decide_path(candidate_id: again.id, decision: "reject"), params: { same: [ again.id, @only_joy.id ] }
     assert again.reload.status_rejected?
     assert @only_joy.reload.status_rejected?
+
+    post admin_today_review_undo_path, params: { token: undo_token }
+    assert_equal "Undone. It's waiting again.", flash[:notice]
+    assert again.reload.status_matched?
+    assert @only_joy.reload.status_matched?
   end
 
   test "a new company several pages propose is one decision" do
@@ -202,5 +207,19 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     get admin_today_review_path
     assert_select "li.nd-verdict", text: /Brand New Fission/, count: 1
     assert_select "li.nd-verdict", /Brand New Fission.*One decision covers both/m
+  end
+
+  test "a grouped Undo restores every copy or none: one changed since, nothing is undone" do
+    other = Source.create!(url: "https://www.doe.gov/test/undo.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also.", crawl_run: @only_joy.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    post admin_today_review_decide_path(candidate_id: again.id, decision: "reject"), params: { same: [ again.id, @only_joy.id ] }
+    token = undo_token
+    @only_joy.reload.update!(notes: "changed elsewhere")
+
+    post admin_today_review_undo_path, params: { token: }
+    assert_match "it changed since", flash[:alert]
+    assert again.reload.status_rejected?
+    assert @only_joy.reload.status_rejected?
   end
 end

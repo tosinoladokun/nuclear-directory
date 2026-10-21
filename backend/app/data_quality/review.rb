@@ -404,6 +404,17 @@ module DataQuality::Review
       state.merge("decision" => decision, "stamp" => undo_stamp(candidate, directory:))
     end
 
+    # Several at once (the same fact from several pages): all or none.
+    def undo_all(states, by:, directory: DataQuality::DirectoryClient.new)
+      result = nil
+      Candidate.transaction do
+        failed = states.map { |state| undo(state, by:, directory:) }.reject(&:ok?)
+        result = failed.first || Result.new(candidate_id: states.first&.dig("id"), ref: nil, errors: [])
+        raise ActiveRecord::Rollback if failed.any?
+      end
+      result
+    end
+
     def undo(state, by:, directory: DataQuality::DirectoryClient.new)
       human!(by)
       result = nil
