@@ -1,12 +1,17 @@
-# Fills in a URL slug from the name when none is given, with "-2", "-3"...
-# when that slug is taken (an EIA site and an NRC unit can share a name).
-# A slug given explicitly must be free. Slugs are stable: renaming a record
-# doesn't change its slug. When a slug is changed on purpose, the old one is
-# kept as a FormerSlug (#143), so the old address still finds the record.
+# Fills in a URL slug from the name when none is given. For records that opt
+# in with `self.suffixes_slug = true` (Facility, where an EIA site and an NRC
+# unit can share a name), the slug falls back to "-2", "-3"... when the plain
+# one is taken (#134); without the opt-in, a taken slug fails uniqueness, so
+# duplicates can't quietly save as "name-2" (#154). A slug given explicitly
+# must be free. Slugs are stable: renaming a record doesn't change its slug.
+# When a slug is changed on purpose, the old one is kept as a FormerSlug
+# (#143), so the old address still finds the record.
 module Sluggable
   extend ActiveSupport::Concern
 
   included do
+    class_attribute :suffixes_slug, default: false
+
     has_many :former_slugs, as: :sluggable, dependent: :delete_all
 
     before_validation { self.slug = free_slug(name.parameterize) if slug.blank? && name.present? }
@@ -42,6 +47,8 @@ module Sluggable
     end
 
     def free_slug(base)
+      return base unless self.class.suffixes_slug
+
       taken = self.class.where.not(id:).where("slug = ? OR slug LIKE ?", base, "#{base}-%").pluck(:slug).to_set
       return base unless taken.include?(base)
 

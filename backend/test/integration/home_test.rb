@@ -14,6 +14,11 @@ class HomeTest < ActionDispatch::IntegrationTest
     cite!(link(google, "offtake_with", kairos))
   end
 
+  test "Roboto Mono never swaps in late: a late swap shifted the /companies list (Lighthouse 0.85)" do
+    get root_path
+    assert_match(/font-family: "Roboto Mono".*?font-display: optional/, response.body)
+  end
+
   test "card titles are the home page's proper-noun labels; the category's name stays in title" do
     shown = HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [])
     long = HomeCategories::Card.new(category: Category.find("utilities"), count: 1, records: [])

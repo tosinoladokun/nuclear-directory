@@ -1,0 +1,38 @@
+<% content_for :title, "Where it appears" %>
+<% pages = @pages %>
+
+<div class="nd-shell__head">
+  <h1 class="type-admin-h1">Where it appears <span class="type-count"><%= number_with_delimiter(pages.count) %></span></h1>
+</div>
+
+<div class="overflow-x-auto">
+  <table class="nd-numtable nd-live__table nd-outputs">
+    <thead><tr><th scope="col">Where</th><th scope="col">Count</th><th scope="col">What it shows</th><th scope="col"><span class="sr-only">Open</span></th></tr></thead>
+    <tbody>
+      <tr id="output-pages">
+        <td class="type-body-strong">Public pages</td>
+        <td class="type-data nd-num"><%= number_with_delimiter(pages.count) %></td>
+        <td class="type-body"><%= pluralize(pages.companies.count, "company") %>, <%= pluralize(pages.plants.count, "plant") %>, <%= pluralize(pages.categories.size, "category page") %>, <%= pluralize(pages.tags.size, "tag page") %> and <%= PublicPages::FIXED %> fixed pages</td>
+        <td><%= link_to "sitemap.xml ↗", sitemap_path, class: "nd-link type-ui whitespace-nowrap", target: "_blank", rel: "noopener" %></td>
+      </tr>
+      <tr id="output-previews">
+        <td class="type-body-strong">Link previews</td>
+        <td class="type-data nd-num"><%= number_with_delimiter(pages.link_previews) %></td>
+        <td class="type-body">The card a shared link shows: one per company, plant and category page, and one for every other page</td>
+        <td><%= link_to "Default card ↗", link_card_default_path(kind: "default", digest: LinkCard.default.digest), class: "nd-link type-ui whitespace-nowrap", target: "_blank", rel: "noopener" %></td>
+      </tr>
+      <tr id="output-snapshot">
+        <td class="type-body-strong">Snapshot API</td>
+        <td class="type-data whitespace-nowrap">Updated <%= @snapshot_updated_at.in_time_zone("America/Los_Angeles").strftime("%-d %b, %-l:%M %P") %></td>
+        <td class="type-body">Counts, names and page links of published companies and plants, for other sites</td>
+        <td><%= link_to "snapshot.json ↗", api_snapshot_path, class: "nd-link type-ui whitespace-nowrap", target: "_blank", rel: "noopener" %></td>
+      </tr>
+      <tr id="output-dataset">
+        <td class="type-body-strong text-ink-muted">Open dataset</td>
+        <td class="type-data text-ink-muted">Later</td>
+        <td class="type-body text-ink-muted">A downloadable, citable copy of the directory's sourced facts (#254)</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
