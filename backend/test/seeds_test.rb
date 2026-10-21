@@ -50,10 +50,10 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 109, Organization.verified.count
-    assert_equal 127, OrganizationRole.verified.count
+    assert_equal 110, Organization.verified.count
+    assert_equal 128, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
-    assert_equal 76, Relationship.verified.count
+    assert_equal 77, Relationship.verified.count
     assert_equal 44, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
     assert_equal [ 66, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]

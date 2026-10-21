@@ -28,6 +28,9 @@ module ErrorReporting
       config.release = ENV["RENDER_GIT_COMMIT"].presence
       # Errors only; tracing would use up the free plan.
       config.traces_sample_rate = nil
+      # Malformed request bodies from scanners: a 400 (BadRequestBody), never
+      # worth an alert, wherever they surface.
+      config.excluded_exceptions += [ "Rack::BadRequest" ]
 
       data = config.data_collection
       data.user_info = false
