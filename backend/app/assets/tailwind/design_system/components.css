@@ -794,8 +794,8 @@
   @media (max-width: 639px) { .nd-footer { flex-direction: column; align-items: flex-start; } .nd-footer__links { gap: 0 var(--nd-space-4); } }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
-    /* The credit stays a paragraph (a flex row would eat the space before the link); its link takes the 44px. */
-    .nd-footer__credit a { display: inline-block; padding-block: 13px; margin-block: -13px; }
+    /* The credit stays a paragraph (a flex row would eat the space before the link); its link takes the 44px, in the row's own height, so it never overlaps the links above. */
+    .nd-footer__credit a { display: inline-block; padding-block: 13px; }
   }
 }
 
