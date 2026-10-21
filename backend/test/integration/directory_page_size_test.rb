@@ -22,4 +22,16 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
     assert_equal PAGE + 5, rows
     assert_select "a", text: "Show more", count: 0
   end
+
+  test "companies and plants each get their own first page, so many companies never hide the plants" do
+    Facility.insert_all((PAGE + 3).times.map { |i| { name: "Paged Station #{i}", slug: "paged-station-#{i}", facility_type: "power_reactor", status: "operating",
+      verification_status: "verified", verified_by: "human:tosin", created_at: Time.current, updated_at: Time.current } })
+    get companies_path(q: "Paged")
+
+    assert_select "h2#plants-heading", "Plants and sites"
+    assert_equal PAGE + PAGE, rows, "50 companies and 50 plants"
+    assert_select "a", text: "Show more", count: 1
+    get companies_path(q: "Paged", shown: 2)
+    assert_equal PAGE + 5 + PAGE + 3, rows
+  end
 end

@@ -8,7 +8,7 @@
             else "All companies"
             end
   total = @companies_total + @plants_total
-  more = total > @companies.size + @plants.size
+  more = @companies_total > @companies.size || @plants_total > @plants.size
   # The plants category mixes plants, mines and test reactors (VOICE.md).
   noun, plural = if listing.category&.plants then [ "plant or site", "plants and sites" ]
                  elsif listing.searching? && list_page.nil? then [ "result", "results" ]
