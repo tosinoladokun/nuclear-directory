@@ -20,6 +20,8 @@
       <% if item.held && !(item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH) %>
         <p class="m-0"><span class="nd-tag">Waiting for Data Quality</span></p>
       <% end %>
+      <% step = check_next_step(item, restating: local_assigns[:restating]) %>
+      <p class="type-small m-0 nd-next-step"><strong><%= step.verb %>:</strong> <%= step.why %></p>
       <p class="type-subject">
         <% if item.subject_id %>
           <%= link_to check_subject(item), admin_fact_path(type: item.subject_type, id: item.subject_id, from: "checks", back: request.fullpath, claim: item.candidate_id), class: "nd-link" %>
@@ -71,7 +73,7 @@
       </div>
     <% else %>
     <div class="nd-wait__actions type-ui">
-      <button type="submit" class="nd-btn nd-btn--primary" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
+      <button type="submit" class="nd-btn <%= step.verb == 'Wait' ? 'nd-btn--outline' : 'nd-btn--primary' %>" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
       <button type="submit" class="nd-btn nd-btn--outline" name="candidate_id" value="<%= item.candidate_id %>"
         formaction="<%= reject_admin_candidates_path(filters) %>"><%= item.differences.any? ? "Keep" : "Reject" %></button>
       <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, **filters, back: request.fullpath), class: "nd-btn nd-btn--outline" %>

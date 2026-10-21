@@ -62,7 +62,7 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
 
     assert_select "#step-list.nd-today__step--done .nd-today__sub", "No list today"
     assert_select "#step-review[aria-current=step] a[href=?]", admin_today_review_path, text: "Start reviewing ›"
-    assert_select "#step-review[aria-current=step] a[href=?]", admin_checks_path, text: "The full list in Checks ›"
+    assert_select "#step-review[aria-current=step] a[href=?]", admin_checks_path, text: "Open the full list ›"
   end
 
   test "step 4 lists correction requests, each with a link to it" do

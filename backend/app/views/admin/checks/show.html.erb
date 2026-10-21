@@ -1,5 +1,6 @@
 <% content_for :title, "Checks" %>
 
+<%= render "admin/crumbs", parent_label: "Today", parent_path: admin_today_path, current: "Checks" %>
 <h1 class="type-admin-h1">Checks</h1>
 
 <section class="nd-tiles" aria-label="Last read">
@@ -41,17 +42,37 @@
 <% if @items.empty? && @facts.empty? %>
   <p class="type-body text-ink-muted">Nothing waiting.</p>
 <% else %>
-  <ol class="nd-waits">
-    <%# After a decision the list comes back at the row that followed (or the one before the last). %>
-    <% rows = @items.map { |item| "claim-#{item.candidate_id}" } + @facts.map { |fact| "fact-#{fact.type}-#{fact.id}" } %>
-    <% anchor_after = ->(i) { rows[i + 1] || (rows[i - 1] if i.positive?) } %>
-    <% @items.each_with_index do |item, i| %>
-      <%= render "claim", item:, anchor: anchor_after.(i), restating: @restating.include?(item.candidate_id) %>
+  <%# Grouped by what to do (Design's spec on #373), oldest first in each; facts added by hand are the admin's to decide. %>
+  <% grouped = @items.group_by { |item| check_next_step(item, restating: @restating.include?(item.candidate_id)).group } %>
+  <% order = AdminHelper::CHECK_GROUPS.keys.flat_map { |group| Array(grouped[group]).map { |item| "claim-#{item.candidate_id}" } + (group == "decide" ? @facts.map { |fact| "fact-#{fact.type}-#{fact.id}" } : []) } %>
+  <%# After a decision the list comes back at the row that followed (or the one before the last). %>
+  <% anchor_after = ->(id) { i = order.index(id); order[i + 1] || (order[i - 1] if i.positive?) } %>
+  <% AdminHelper::CHECK_GROUPS.each do |group, title| %>
+    <% items = Array(grouped[group]) %>
+    <% facts = group == "decide" ? @facts : [] %>
+    <% next if items.empty? && facts.empty? %>
+    <% rows = capture do %>
+      <ol class="nd-waits">
+        <% items.each do |item| %>
+          <%= render "claim", item:, anchor: anchor_after.("claim-#{item.candidate_id}"), restating: @restating.include?(item.candidate_id) %>
+        <% end %>
+        <% facts.each do |fact| %>
+          <%= render "pending_fact", fact:, anchor: anchor_after.("fact-#{fact.type}-#{fact.id}") %>
+        <% end %>
+      </ol>
     <% end %>
-    <% @facts.each_with_index do |fact, i| %>
-      <%= render "pending_fact", fact:, anchor: anchor_after.(@items.size + i) %>
+    <% if group == "not_yours" %>
+      <details class="nd-fold" id="group-<%= group %>">
+        <summary class="type-body"><%= title %> <span class="type-data nd-num"><%= items.size %></span></summary>
+        <div class="nd-fold__body"><%= rows %></div>
+      </details>
+    <% else %>
+      <section class="nd-stack" aria-labelledby="group-<%= group %>">
+        <h3 class="type-admin-h2 m-0" id="group-<%= group %>"><%= title %> <span class="type-data nd-num text-ink-muted"><%= items.size + facts.size %></span></h3>
+        <%= rows %>
+      </section>
     <% end %>
-  </ol>
+  <% end %>
   <% if @next %>
     <div><%= link_to "Next #{Admin::ChecksController::PAGE}", admin_checks_path(filters.merge(@next)), class: "nd-btn nd-btn--outline type-ui" %></div>
   <% end %>
