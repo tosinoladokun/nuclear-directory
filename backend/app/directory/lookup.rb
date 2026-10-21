@@ -81,11 +81,14 @@ module Directory
     # ([[type, id, name], …]).
     def publish_counts(type:, id:, added_reason:)
       record = { "Organization" => Organization, "Facility" => Facility }.fetch(type.to_s).find(id)
+      # A link goes public only when its other end is public too.
+      public_orgs, public_sites = Organization.published.select(:id), Facility.published.select(:id)
       live = if record.is_a?(Organization)
-        [ record.organization_roles, record.organization_technologies, record.facility_relationships,
-          Relationship.where(from_organization: record).or(Relationship.where(to_organization: record)) ]
+        [ record.organization_roles, record.organization_technologies, record.facility_relationships.where(facility_id: public_sites),
+          Relationship.where(from_organization: record, to_organization_id: public_orgs)
+            .or(Relationship.where(to_organization: record, from_organization_id: public_orgs)) ]
       else
-        [ Facility.where(parent: record), record.facility_relationships ]
+        [ Facility.where(parent: record), record.facility_relationships.where(organization_id: public_orgs) ]
       end
       added = record.is_a?(Organization) ? [ record.organization_roles.includes(:role), record.organization_technologies.includes(:technology) ] : []
       added_with = added.flat_map do |scope|

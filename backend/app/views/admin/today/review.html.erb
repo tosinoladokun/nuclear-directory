@@ -4,6 +4,7 @@
   aminah = t("admin.reviewers.reviewer")
   review = @review
   agree = review.rows("agree")
+  shown = params[:shown].respond_to?(:permit) ? params[:shown].permit(*TodayReview::GROUPS).to_h.presence : nil
   titles = { "agree" => "#{joy} and #{aminah} agree", "only_joy" => "Only #{joy} checked", "disagree" => "#{joy} and #{aminah} disagree" }
   minutes = (review.size * Today::SECONDS_PER_FACT / 60.0).ceil
 %>
@@ -15,21 +16,29 @@
 
   <% if agree.any? %>
     <section class="nd-panel nd-stack" aria-label="Shortcut">
-      <p class="type-body m-0"><%= joy %> and <%= aminah %> agree on <%= pluralize(agree.size, "fact") %>: both say accept. One click accepts them, each checked once more first. The others wait for your own Accept or Reject.</p>
-      <%= button_to "Do the #{agree.size} they agree on", admin_today_review_agreed_path, class: "nd-btn nd-btn--primary type-ui",
+      <p class="type-body m-0"><%= joy %> and <%= aminah %> agree on the <%= pluralize(agree.size, "fact") %> shown below: both say accept. One click accepts them, each checked once more first. The others wait for your own Accept or Reject.</p>
+      <%= button_to "Do the #{agree.size} they agree on", admin_today_review_agreed_path(shown:), params: { shown_set: review.fingerprint },
+        class: "nd-btn nd-btn--primary type-ui",
         form: { data: { turbo_confirm: "Accept the #{pluralize(agree.size, 'fact')} #{joy} and #{aminah} both say to accept?" } } %>
     </section>
   <% end %>
 
-  <% if review.size.zero? %>
+  <% if review.size.zero? && @pending.zero? %>
     <p class="type-body text-ink-muted">Nothing waiting. <%= link_to "Back to Today", admin_today_path, class: "nd-link" %></p>
+  <% end %>
+
+  <% if @pending.positive? %>
+    <section class="nd-panel nd-stack" aria-label="Waiting without a check">
+      <p class="type-body m-0"><%= pluralize(@pending, "fact") %> <%= @pending == 1 ? "waits" : "wait" %> without a check from <%= joy %>, such as ones added by hand. Decide them on their own list.</p>
+      <%= link_to "Decide #{@pending == 1 ? 'it' : 'them'} ›", admin_pending_facts_path, class: "nd-btn nd-btn--outline type-ui" %>
+    </section>
   <% end %>
 
   <% TodayReview::GROUPS.each do |group| %>
     <% rows = review.rows(group) %>
     <% next if rows.empty? %>
     <section class="nd-stack" aria-labelledby="run-<%= group %>">
-      <h2 class="type-admin-h2 m-0" id="run-<%= group %>"><%= titles.fetch(group) %> <span class="type-data nd-num text-ink-muted"><%= rows.size %></span></h2>
+      <h2 class="type-admin-h2 m-0" id="run-<%= group %>"><%= titles.fetch(group) %> <span class="type-data nd-num text-ink-muted"><%= review.count(group) %></span></h2>
       <ol class="nd-waits">
         <% rows.each do |row| %>
           <% item = row.item %>
@@ -40,6 +49,9 @@
                 <span class="nd-tag<%= ' nd-verdict__chip--muted' unless row.joy == 'accept' %>"><%= row.joy == "accept" ? "✓ #{joy}: accept" : "#{joy}: check it" %></span>
                 <span class="nd-tag<%= ' nd-verdict__chip--muted' if row.aminah.nil? %>"><%= { "accept" => "✓ #{aminah}: accept", "reject" => "✕ #{aminah}: reject" }.fetch(row.aminah, "#{aminah}: not reviewed") %></span>
               </p>
+              <% if item.differences.any? %>
+                <p class="type-small m-0">Accepting replaces the checked <%= item.differences.map { |name, (stored, incoming)| "#{field_label(name).downcase_first} (#{stored} → #{incoming})" }.to_sentence %>.</p>
+              <% end %>
               <details class="type-small">
                 <summary class="nd-link">Why, and the source</summary>
                 <p class="m-0"><%= joy %>: <%= item.ai_reason.presence || "no reason given" %></p>
@@ -50,14 +62,18 @@
               </details>
             </div>
             <div class="nd-wait__actions nd-verdict__actions">
-              <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept"),
+              <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept", shown:),
                 class: "nd-btn #{row.agree? ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui" %>
-              <%= button_to "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject"),
+              <%= button_to row.item.differences.any? ? "Keep" : "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject", shown:),
                 class: "nd-btn nd-btn--outline type-ui" %>
             </div>
           </li>
         <% end %>
       </ol>
+      <% if (more = review.more(group)).positive? %>
+        <p class="m-0"><%= link_to "Show #{[ more, TodayReview::PAGE ].min} more", admin_today_review_path(shown: (shown || {}).merge(group => review.pages(group) + 1), anchor: "run-#{group}"),
+          class: "nd-btn nd-btn--outline type-ui" %> <span class="type-small text-ink-muted"><%= more %> not shown</span></p>
+      <% end %>
     </section>
   <% end %>
 </div>

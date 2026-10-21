@@ -63,4 +63,11 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     get admin_record_new_fact_path(type: "Facility", id: plant.id)
     assert_response :not_found
   end
+
+  test "a removed company takes no new fact, even from an open form" do
+    @company.update_columns(verification_status: "unpublished")
+    post admin_record_facts_path(type: "Organization", id: @company.id), params: @fuel
+    assert_response :not_found
+    assert_equal 0, OrganizationRole.count
+  end
 end

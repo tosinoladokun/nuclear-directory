@@ -26,7 +26,9 @@ class Admin::RecordFactsController < Admin::BaseController
     def load_company
       raise ActiveRecord::RecordNotFound unless params[:type] == "Organization"
 
-      @company = Organization.find(params[:id])
+      # Not on a removed, rejected or merged-away company (the page shows no
+      # Add fact there either): an open form or direct request is refused too.
+      @company = Organization.where(verification_status: %w[verified pending]).find(params[:id])
     end
 
     def add(dry_run:)

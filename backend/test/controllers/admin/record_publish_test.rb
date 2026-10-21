@@ -47,4 +47,19 @@ class Admin::RecordPublishTest < ActionDispatch::IntegrationTest
     assert_redirected_to admin_record_path(type: "Organization", id: @company.id)
     assert_match "isn't waiting to be published", flash[:alert]
   end
+
+  test "Publish checks the record is still waiting, with the write: one taken off since isn't published" do
+    @company.update_columns(verification_status: "unpublished")
+    result = DataQuality::Review.publish(type: "Organization", id: @company.id, by: "human:tosin")
+    assert_equal [ "it's unpublished now, so it wasn't published" ], result.errors
+    assert_equal "unpublished", @company.reload.verification_status
+  end
+
+  test "the preview counts only links whose other end is public too" do
+    live = Organization.create!(name: "Live Partner", verification_status: "verified", verified_by: "human:tosin")
+    hidden = Organization.create!(name: "Waiting Partner", verification_status: "pending")
+    [ live, hidden ].each { |other| Relationship.create!(from_organization: @company, to_organization: other, relationship_type: "supplies", verification_status: "verified", verified_by: "human:tosin") }
+
+    assert_equal 1, DataQuality::Review.publish_plan(type: "Organization", id: @company.id).goes_live_with
+  end
 end

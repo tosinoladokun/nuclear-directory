@@ -39,7 +39,8 @@ class Admin::TodayController < Admin::BaseController
 
   # Step 3: the facts waiting, each with Joy's and Aminah's verdicts.
   def review
-    @review = TodayReview.new
+    @review = TodayReview.new(shown: shown_counts)
+    @pending = DataQuality::Review.pending_count
   end
 
   # Accept or Reject one fact, as the admin's decision (every check still runs).
@@ -55,22 +56,36 @@ class Admin::TodayController < Admin::BaseController
     else
       flash[:alert] = "Can't #{params[:decision] == 'accept' ? 'publish' : 'reject'} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
     end
-    redirect_after admin_today_review_path
+    redirect_after admin_today_review_path(shown: shown_counts.presence)
   end
 
-  # The shortcut: every fact Joy and Aminah both say to accept, each checked again.
+  # The shortcut: exactly the agreed facts the page showed (its fingerprint),
+  # each accepted as Aminah's list's Accept does: her call, reason and the
+  # fact checked again under the decision's locks.
   def agreed
-    ids = TodayReview.new.rows("agree").map(&:candidate_id)
-    # Aminah reviewed each, so the first-batch hold she exists for is lifted, as Data Quality's Accept does.
-    results = DataQuality::Review.approve(ids, by: actor, reason: "Accepted in Today: Joy and Aminah agree", only_recommended: true,
-      data_quality_reviewed: true)
+    review = TodayReview.new(shown: shown_counts)
+    if params[:shown_set] != review.fingerprint
+      flash[:alert] = "The list changed since you opened it, so nothing was accepted. Check it and try again."
+      return redirect_after(admin_today_review_path(shown: shown_counts.presence))
+    end
+
+    results = DataQuality::Recommendations.accept(review.agreed_items, by: actor)
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?
-    flash[:alert] = "#{helpers.pluralize(stopped.size, 'fact')} can't be published yet; #{stopped.one? ? 'it stays' : 'they stay'} below with why." if stopped.any?
-    redirect_after admin_today_review_path
+    if stopped.any?
+      flash[:alert] = "#{helpers.pluralize(stopped.size, 'fact')} can't be published yet, so #{stopped.one? ? 'it stays' : 'they stay'} below: " +
+        stopped.map { |result| "##{result.candidate_id}: #{Array(result.errors).to_sentence.presence || 'it was decided already'}" }.join("; ")
+    end
+    redirect_after admin_today_review_path(shown: shown_counts.presence)
   end
 
   private
+    # How many pages of each run are shown: ?shown[agree]=2.
+    def shown_counts
+      shown = params[:shown]
+      shown.respond_to?(:permit) ? shown.permit(*TodayReview::GROUPS).to_h.transform_values(&:to_i).select { |_, pages| pages > 1 } : {}
+    end
+
     def load_today
       @today = Today.new
       @sources = DataQuality::Status.by_kind.index_by(&:source_kind)

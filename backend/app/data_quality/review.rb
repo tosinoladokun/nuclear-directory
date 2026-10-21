@@ -215,6 +215,12 @@ module DataQuality::Review
     def sourced?(type:, id:, directory: DataQuality::DirectoryClient.new) = directory.sourced?(type: type.to_s, id:)
 
     # Ids of the claims a Checks filter lists, in its order (oldest first).
+    # These waiting candidates as Checks items, in the order given (Today's review, #373).
+    def items(ids, directory: DataQuality::DirectoryClient.new)
+      by_id = Candidate.where(id: ids).includes(:source, :crawl_run).index_by(&:id)
+      ids.filter_map { |id| by_id[id] }.map { |candidate| item(candidate, directory) }
+    end
+
     def check_ids(category: "all", source_kind: nil) = category_scope(category, source_kind:).order(:id).pluck(:id)
 
     # The claims a Checks filter lists, in its order, as [type, id] of the
@@ -553,7 +559,7 @@ module DataQuality::Review
 
       column = fact_kind == :organization_role ? :role : :technology
       if (status = directory.company_fact_status(organization_id:, kind:, key:))
-        word = %w[rejected unpublished].include?(status) ? "was removed; put it back from Removed" : "is already listed"
+        word = %w[rejected unpublished].include?(status) ? "was taken off this company before, so it can't be added again here" : "is already listed"
         return Added.new(ref: nil, errors: [ "That #{kind} #{word}" ], existing: nil)
       end
 
@@ -588,6 +594,13 @@ module DataQuality::Review
       human!(by)
       result = nil
       ApplicationRecord.transaction do
+        # Locked and checked with the write: a record rejected, taken off or
+        # merged since the page was shown isn't published again.
+        directory.lock_fact(type:, id:)
+        unless (now = directory.fact(type:, id:)&.verification_status) == "pending"
+          result = Result.new(candidate_id: nil, ref: nil, errors: [ "it's #{now || 'gone'} now, so it wasn't published" ])
+          raise ActiveRecord::Rollback
+        end
         result = approve_fact(type:, id:, by:, reason: "Published", directory:)
         raise ActiveRecord::Rollback unless result.ok?
 

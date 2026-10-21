@@ -45,7 +45,7 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     get admin_today_review_path
     assert_select "button", "Do the 1 they agree on"
 
-    post admin_today_review_agreed_path
+    post admin_today_review_agreed_path, params: { shown_set: TodayReview.new.fingerprint }
     assert_equal "Accepted 1 fact.", flash[:notice]
     assert @both.reload.status_merged?
     assert @only_joy.reload.status_matched?
@@ -75,5 +75,62 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     post admin_today_step_path("crawl")
     follow_redirect!
     assert_select "#step-list", /Aminah's list is her own check of the facts Joy looked at: for each one she says accept or reject, and why\. Adding it decides nothing/
+  end
+
+  test "the shortcut takes only the list the page showed: a change since refuses it" do
+    shown = TodayReview.new.fingerprint
+    DataQuality::Recommendations.record("#{@only_joy.id} approve: listed on the NRC page", by: "human:tosin")
+
+    post admin_today_review_agreed_path, params: { shown_set: shown }
+    assert_match "The list changed since you opened it", flash[:alert]
+    assert @both.reload.status_matched?
+  end
+
+  test "a fact the shortcut can't publish says why, by number" do
+    stopped = DataQuality::Review::Result.new(candidate_id: @both.id, ref: nil, errors: [ "a person decided this company today" ])
+    accept = DataQuality::Recommendations.method(:accept)
+    DataQuality::Recommendations.define_singleton_method(:accept) { |*, **| [ stopped ] }
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: TodayReview.new.fingerprint }
+    ensure
+      DataQuality::Recommendations.define_singleton_method(:accept, accept)
+    end
+    assert_equal "1 fact can't be published yet, so it stays below: ##{@both.id}: a person decided this company today", flash[:alert]
+  end
+
+  test "newest first, a page per run, with Show more and the full count" do
+    stub_const(TodayReview, :PAGE, 1) do
+      newer = fact("Newer Fission Co", joy: "recommend_publish", run: @both.crawl_run)
+      get admin_today_review_path
+      assert_select "h2", /Only Joy checked\s+2/
+      assert_select "#run-only_joy ~ ol li", 1
+      assert_select "#fact-#{newer.id}"
+      assert_select "a[href*=?]", "shown%5Bonly_joy%5D=2", text: "Show 1 more"
+
+      get admin_today_review_path(shown: { only_joy: 2 })
+      assert_select "#fact-#{@only_joy.id}"
+    end
+  end
+
+  test "facts waiting without a check are counted and linked, so the page never says nothing waits while they do" do
+    Candidate.delete_all
+    role = Role.create!(key: "fuel", name: "Fuel")
+    company = Organization.create!(name: "Hand Added Co", verification_status: "verified", verified_by: "human:tosin")
+    fact = OrganizationRole.create!(organization: company, role:, verification_status: "pending")
+    Evidence.create!(subject: fact, source: @source, quote: "Hand Added Co makes fuel.", found_by: "human")
+
+    get admin_today_review_path
+    assert_select "a[href=?]", admin_pending_facts_path, text: /Decide (it|them)/
+    assert_no_match "Nothing waiting", response.body
+  end
+
+  test "a fact that changes a checked value says what accepting replaces, and offers Keep" do
+    unit = Facility.create!(name: "Hope Creek 1", nrc_docket: "05000354", state: "NJ", verification_status: "verified", verified_by: "human:tosin")
+    changed = Candidate.create!(source: @source, kind: "facility", quote: "q", status: "needs_review", notes: "unsure", ai_recommendation: "needs_review",
+      crawl_run: @both.crawl_run, subject_type: "Facility", subject_id: unit.id, payload: { "name" => "Hope Creek 1", "nrc_docket" => "05000354", "state" => "DE" })
+
+    get admin_today_review_path
+    assert_select "#fact-#{changed.id}", /Accepting replaces the checked state \(NJ → DE\)/
+    assert_select "#fact-#{changed.id} button", "Keep"
   end
 end
