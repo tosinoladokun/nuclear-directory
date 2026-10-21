@@ -1,0 +1,35 @@
+# Nuclear Directory
+
+> A directory of the organizations and facilities in the US nuclear industry, and the agreements between them. Each fact links to the public document it came from.
+
+## What it covers
+
+- <%= number_with_delimiter(companies) %> companies: reactor developers, fuel and materials, components, waste and decommissioning, power plant owners and operators, power buyers, services, investors, and government and research.
+- <%= number_with_delimiter(plants) %> plants and sites: power plants, test reactors, fuel plants and mines, with their units, owners and operators.
+- Relationships between them, stated with fixed verbs: supplies, invests in, offtakes from, owns, operates, vendor for, subsidiary of.
+
+## How facts are sourced
+
+- Every fact on a page carries a numbered source link to the public document it came from, such as an NRC, DOE or EIA record, an SEC filing or a company release.
+- A fact with no public source is not published.
+- Each page shows when it was last checked.
+
+## Main pages
+
+- [All companies](<%= companies_url %>): the full list, with filters for technology and state.
+<% categories.each do |category| -%>
+- [<%= category.name %>](<%= companies_url(category: category.to_param) %>)
+<% end -%>
+- [Sitemap](<%= sitemap_url %>): every company and plant page.
+- Company pages are at <%= companies_url %>/{slug}, plant pages at <%= root_url.chomp("/") %>/plants/{slug}.
+- [Our crawler](<%= bot_url %>): how the directory collects its sources.
+- [Disclaimer](<%= disclaimer_url %>) and [privacy](<%= privacy_url %>).
+
+## Citing
+
+- Link the page and name the source it lists. The numbered Sources section at the foot of each page gives the title, the publisher and the link of every source.
+- Counts and dates change as records are added, so cite the page rather than a number.
+
+## Corrections
+
+- Each page has a "Report a correction" link. Or write to <%= DirectoryHelper::CORRECTIONS_EMAIL %>.
