@@ -53,6 +53,29 @@ module AdminHelper
     end
   end
 
+  ISSUES_URL = "https://github.com/tosinoladokun/nuclear-directory/issues".freeze
+
+  # "8 of 9 categories have no live source", "1 of 9 categories has …".
+  def uncovered_line(uncovered, total) = "#{uncovered} of #{total} #{'category'.pluralize(total)} #{uncovered == 1 ? 'has' : 'have'} no live source"
+
+  # A source's status on Sources by category (#166): Live with an ink dot;
+  # Built, Planned or Missing with its issue (linked, opening GitHub); Hand
+  # research with its documents.
+  def coverage_status(source)
+    issue = link_to("##{source.issue}", "#{ISSUES_URL}/#{source.issue}", class: "nd-link", target: "_blank", rel: "noopener") if source.issue
+    case source.status
+    when "live" then tag.span("Live", class: "nd-dot")
+    when "built" then tag.span(safe_join([ "Built", (safe_join([ " · ", issue ]) if issue), ", not running yet" ]), class: "text-ink-muted")
+    when "planned" then tag.span(safe_join([ "Planned · ", issue ]), class: "text-ink-muted")
+    when "hand"
+      # A count only where documents are mapped to it; otherwise it isn't known, not zero.
+      documents = (" · #{pluralize(source.documents, 'document')}" if source.documents)
+      # Its issue is the crawler that will take it over (crawler: true), or the research task.
+      tag.span(safe_join([ "Hand research#{documents}", (safe_join([ source.crawler ? " · crawler " : " · ", issue ]) if issue) ]), class: "text-ink-muted")
+    else tag.span(issue ? safe_join([ "Planned · ", issue ]) : "Missing · no issue yet", class: issue ? "text-ink-muted" : "text-critical")
+    end
+  end
+
   # Text with each match of the query marked (<mark>), escaped.
   def mark_matches(text, query)
     return text.to_s if query.blank?
