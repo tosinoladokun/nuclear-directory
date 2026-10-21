@@ -81,7 +81,7 @@ module Directory
       deal_term: {
         model: DealTerm,
         attributes: %i[link_type link_id term_type external_id amount_usd amount_offered_usd capacity_mw signed_on starts_on ends_on status
-          agreement program round lead_investor_ids]
+          agreement conditions firm_mw term_years program round lead_investor_ids]
       }
     }.freeze
 

@@ -55,6 +55,22 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
       "never a cited page with no quote"
   end
 
+  test "a signed deal waiting on an approval isn't counted yet; a framework or prepayment may state no MW" do
+    pending = PPA.merge(key: "searchco-fusion-ppa-pending", conditions: "  NRC approval ", term_years: 20, firm_mw: 150)
+    prepayment = { key: "searchco-fusion-prepay", agreement: "prepayment", status: "signed", amount_usd: 25_000_000 }
+    partnership = { key: "searchco-fusion-partnership", agreement: "framework", status: "announced" }
+    seed([ PPA, pending, prepayment, partnership ])
+
+    rows = Directory::DealList.offtakes.index_by(&:key)
+    assert rows["searchco-fusion-ppa-2025"].counted
+    assert_equal [ false, "NRC approval", 20, 150 ], rows["searchco-fusion-ppa-pending"].then { |r| [ r.counted, r.conditions, r.term_years, r.firm_mw.to_i ] }
+    assert_equal [ false, false ], [ rows["searchco-fusion-prepay"].counted, rows["searchco-fusion-partnership"].counted ]
+    assert_nil rows["searchco-fusion-partnership"].capacity_mw, "not stated stays blank"
+
+    error = assert_raises(Seed::OrganizationLoader::Error) { seed([ PPA.except(:capacity_mw).merge(key: "searchco-no-size") ]) }
+    assert_match "needs capacity_mw or amount_usd", error.message, "a deal that can be counted states its size"
+  end
+
   test "a re-seed updates a term by its key instead of adding another" do
     seed([ PPA ])
     loader = seed([ PPA.merge(capacity_mw: 210) ])

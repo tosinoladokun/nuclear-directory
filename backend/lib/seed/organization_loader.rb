@@ -244,6 +244,7 @@ module Seed
       #     signed_on: 2026-10-01
       #     starts_on: 2026-10-01
       #     ends_on: 2046-09-30
+      #     conditions: Illinois Commerce Commission approval   # optional: then not counted yet
       def write_terms(slug, link_type, link, item, sources)
         terms = Array(item["terms"])
         return if terms.empty? || !link&.ok?
@@ -255,8 +256,9 @@ module Seed
           end
 
           attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip,
-            agreement: term["agreement"], status: term["status"], capacity_mw: term["capacity_mw"], amount_usd: term["amount_usd"],
-            signed_on: term["signed_on"], starts_on: term["starts_on"], ends_on: term["ends_on"] }.compact
+            agreement: term["agreement"], status: term["status"], conditions: term["conditions"], capacity_mw: term["capacity_mw"],
+            firm_mw: term["firm_mw"], amount_usd: term["amount_usd"], signed_on: term["signed_on"], starts_on: term["starts_on"],
+            ends_on: term["ends_on"], term_years: term["term_years"] }.compact
           write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"])
         end
       end
