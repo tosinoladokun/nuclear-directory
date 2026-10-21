@@ -93,11 +93,13 @@ class DirectoryListing
   def role_options = category&.key == ROLE_FILTER_CATEGORY ? category.role_keys.select { |key| %w[reactor_vendor project_developer].include?(key) } : []
 
   # { organization id => [role keys] } for the listed companies, so each row can
-  # show its role(s) on the Developers list (one query, never per row).
+  # show its role(s) on the Developers list (one query, never per row). Only
+  # roles a source backs, as on the company's page and in the bucket.
   def roles_by(organizations)
     return {} if role_options.empty?
 
-    OrganizationRole.published.joins(:role).where(organization_id: organizations.map(&:id), roles: { key: role_options })
+    sourced = OrganizationRole.published.where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id))
+    sourced.joins(:role).where(organization_id: organizations.map(&:id), roles: { key: role_options })
       .pluck(:organization_id, "roles.key").group_by(&:first).transform_values { |pairs| role_options & pairs.map(&:last) }
   end
 

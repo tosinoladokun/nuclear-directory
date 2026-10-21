@@ -48,6 +48,20 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "a.nd-listrow", 4
   end
 
+  test "a role no source backs shows no chip and does not put the company under that role" do
+    designer = Role.find_by!(key: "reactor_vendor")
+    developer = role("project_developer")
+    half = cite!(company("Half Sourced Holdings", roles: [ designer ]))
+    unsourced = OrganizationRole.create!(organization: half, role: developer, verification_status: "verified", verified_by: "human:tosin", confidence: 1)
+    assert_empty unsourced.evidence
+
+    get companies_path(category: "reactor-developers")
+    assert_equal [ "Reactor designer" ], css_select("a[href='/companies/#{half.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
+
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_select "a[href='/companies/#{half.slug}']", 0
+  end
+
   test "only the Developers list has role chips and a role filter" do
     get companies_path(category: "fuel", role: "reactor_vendor")
     assert_select "nav[aria-label=Role]", 0
