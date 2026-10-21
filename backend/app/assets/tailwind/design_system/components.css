@@ -156,6 +156,8 @@
   @media (max-width: 560px) { .nd-search--short { max-width: none; } }
   .nd-search--short input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
   .nd-claim-no { white-space: nowrap; }
+  /* Checks' folded group: its rows sit straight in the fold, not as cards in a card. */
+  .nd-fold__body > .nd-waits .nd-wait { background: none; border-width: 0; border-top: var(--nd-hairline) solid var(--nd-rule); padding-inline: 0; }
   .nd-kick { display: flex; gap: var(--nd-space-2); align-items: baseline; }
   .nd-kick > span::after { content: " ·"; }
   .nd-sitebar .nd-search { flex: 1 1 320px; max-width: 560px; height: 42px; padding: 0 14px; background: var(--nd-paper-raised); border-color: var(--nd-ink); }
