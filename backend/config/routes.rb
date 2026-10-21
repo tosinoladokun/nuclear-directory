@@ -46,6 +46,8 @@ Rails.application.routes.draw do
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
     get "status", to: redirect("/admin/sources")
     get "checks" => "checks#show", as: :checks
+    # Removed (#166): everything off the site now, with the decision that took it off.
+    get "removed" => "removed#show", as: :removed
     # Data Quality's recommendations (#306): paste its list, see exactly
     # what Accept will do, then accept them as one decision.
     scope "checks/recommendations", as: :recommendations do

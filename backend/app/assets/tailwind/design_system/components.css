@@ -601,6 +601,9 @@
   .nd-live__table td:first-child { white-space: normal; }
   .nd-live__table td { text-align: left; }
   .nd-live__table th { text-align: left; }
+  /* Removed (#166): the reason is long-form, so it wraps; the name keeps room. */
+  .nd-removed td:first-child { min-width: 12rem; }
+  .nd-removed td:nth-child(3) { white-space: normal; min-width: 14rem; }
   @media (max-width: 560px) {
     .nd-live__filters > summary { display: inline-flex; list-style: none; }
     .nd-live__filters > summary::-webkit-details-marker { display: none; }

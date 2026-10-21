@@ -1,0 +1,53 @@
+<% content_for :title, "Removed" %>
+<% list = @list %>
+
+<div class="nd-shell__head">
+  <h1 class="type-admin-h1">Removed <span class="type-count"><%= number_with_delimiter(list.count("all")) %></span></h1>
+</div>
+
+<nav class="nd-fchips type-ui" aria-label="Why it's off the site">
+  <% Directory::RemovedList::TABS.each do |tab, label| %>
+    <%= link_to admin_removed_path(tab: (tab unless tab == "all")), class: "nd-fchip nd-fchip--tab", aria: { current: ("page" if tab == list.tab) } do %><%= label %> <span class="type-data nd-num"><%= number_with_delimiter(list.count(tab)) %></span><% end %>
+  <% end %>
+</nav>
+
+<% if @rows.empty? %>
+  <p class="type-body text-ink-muted">Nothing here.</p>
+<% else %>
+  <div class="overflow-x-auto">
+    <table class="nd-numtable nd-live__table nd-removed">
+      <thead><tr><th scope="col">Name</th><th scope="col">What</th><th scope="col">Reason</th><th scope="col">Who</th><th scope="col">When</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead>
+      <tbody>
+        <% @rows.each do |row| %>
+          <tr id="row-<%= row.type %>-<%= row.id %>">
+            <td class="type-body"><%= link_to row.name, live_row_path(row, request.fullpath), class: "nd-link" %></td>
+            <td class="type-body">
+              <%= row.kind %> <span class="text-ink-muted">· <%= row.what %></span>
+              <% if (into = row.merged_into) && into.last %>
+                <span class="block type-small text-ink-muted">into <%= link_to into.last, admin_record_path(type: into[0], id: into[1], back: request.fullpath), class: "nd-link" %></span>
+              <% end %>
+            </td>
+            <td class="type-body"><%= row.reason.presence || "—" %></td>
+            <td class="type-data"><%= who(row.by) %></td>
+            <td class="type-data text-ink-muted whitespace-nowrap"><%= row.at.strftime("%-d %b %Y") %></td>
+            <td>
+              <% if row.put_back? %>
+                <%= button_to "Put back", admin_fact_republish_path(type: row.type, id: row.id), params: { next: request.fullpath },
+                  class: "nd-btn nd-btn--outline nd-btn--sm type-ui whitespace-nowrap",
+                  form: { data: { turbo_confirm: "Put #{row.name} back on the site?" } } %>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+  <% pages = (list.total / Directory::RemovedList::PAGE.to_f).ceil %>
+  <% if pages > 1 %>
+    <nav class="nd-itemnav type-ui" aria-label="Pages">
+      <% if @page > 1 %><%= link_to "‹ Previous", request.query_parameters.merge(page: @page - 1), class: "nd-btn nd-btn--ghost nd-btn--sm", rel: "prev" %><% end %>
+      <span class="type-data text-ink-muted">Page <%= @page %> of <%= pages %></span>
+      <% if @page < pages %><%= link_to "Next ›", request.query_parameters.merge(page: @page + 1), class: "nd-btn nd-btn--ghost nd-btn--sm", rel: "next" %><% end %>
+    </nav>
+  <% end %>
+<% end %>
