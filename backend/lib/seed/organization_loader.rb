@@ -213,7 +213,7 @@ module Seed
         end
 
         Array(doc["facilities"]).each do |item|
-          facility = write(slug, :facility, facility_attributes(item), evidence(item, sources))
+          facility = item["site"].present? ? write_unit(slug, item, sources) : write(slug, :facility, facility_attributes(item), evidence(item, sources))
           next unless facility&.ok?
           # A pending link a human has since rejected or unpublished stays decided.
           next if item["pending"] && closed_link?(organization.id, facility.id, item["type"])
@@ -328,6 +328,29 @@ module Seed
         item.slice("name", "facility_type", "status", "city", "state")
           .transform_values { |value| value.is_a?(String) ? value.strip : value }
           .compact_blank.symbolize_keys
+      end
+
+      # A unit given with its site ("site: Indian Point"): the site is found
+      # among sites by name, or made; the unit is found under that site by
+      # name, or made there, so a fresh load gives one site with its units,
+      # never a unit as a plant of its own. A same-name plant without a site
+      # is taken in as the unit; one under another site fails the load.
+      def write_unit(slug, item, sources)
+        site_name, name = item["site"].to_s.strip, item["name"].to_s.strip
+        site = Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", site_name).first
+        site_id = site&.id || (written = write(slug, :facility, { name: site_name }, evidence(item, sources)))&.id
+        return written unless site_id
+
+        named = Facility.where("LOWER(name) = LOWER(?)", name)
+        unit = named.find_by(parent_id: site_id)
+        if !unit && (elsewhere = named.where.not(parent_id: [ nil, site_id ]).first)
+          @errors << "#{slug}: facility #{name}: already a unit of another site (#{Facility.where(id: elsewhere.parent_id).pick(:name)}), not #{site_name}"
+          return
+        end
+
+        attributes = facility_attributes(item).merge(parent_id: site_id)
+        attributes[:id] = (unit || named.find_by(parent_id: nil))&.id
+        write(slug, :facility, attributes.compact, evidence(item, sources))
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).

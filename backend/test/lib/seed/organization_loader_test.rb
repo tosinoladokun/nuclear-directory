@@ -447,4 +447,38 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_nil Organization.find_by(slug: "acme-fuel"), "nothing is written"
     assert_equal 0, Source.where(url: "https://example.com/news").count
   end
+
+  test "a unit given with its site loads under that site: one public plant, both units under it, on a fresh load and a re-seed" do
+    write_file("holtec", org("Holtec International", website: "https://holtec.com", facilities: [
+      item(name: "Indian Point 2", site: "Indian Point", type: "owns"), item(name: "Indian Point 3", site: "Indian Point", type: "owns") ]))
+    write_file("hdi", org("Holtec Decommissioning International", website: "https://hdi.example.com", facilities: [
+      item(name: "Indian Point 2", site: "Indian Point", type: "operates") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    site = Facility.find_by!(name: "Indian Point", parent_id: nil)
+    units = Facility.where(name: [ "Indian Point 2", "Indian Point 3" ])
+    assert_equal [ site.id ], units.pluck(:parent_id).uniq
+    assert_equal 2, units.count, "one unit per name, shared by both companies"
+    assert_equal [ "Indian Point" ], DirectoryListing.new(q: "Indian Point").plants.map(&:name)
+    assert_equal 3, FacilityRelationship.where(facility: units).count
+
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal 3, Facility.where("name LIKE 'Indian Point%'").count, "a re-seed makes nothing new"
+  end
+
+  test "a same-name plant without a site is taken in as the unit; one under another site fails the load" do
+    stray = Facility.create!(name: "Duane Arnold 1")
+    write_file("nextera", org("NextEra Energy", website: "https://nextera.example.com", facilities: [
+      item(name: "Duane Arnold 1", site: "Duane Arnold Energy Center", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal Facility.find_by!(name: "Duane Arnold Energy Center").id, stray.reload.parent_id
+
+    other = Facility.create!(name: "Elsewhere")
+    Facility.create!(name: "San Onofre 1", parent: other)
+    write_file("sce", org("Southern California Edison", website: "https://sce.example.com", facilities: [
+      item(name: "San Onofre 1", site: "San Onofre", type: "operates") ]))
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "already a unit of another site (Elsewhere), not San Onofre", error.message
+  end
 end
