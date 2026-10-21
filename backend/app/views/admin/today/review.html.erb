@@ -49,6 +49,7 @@
           <% item = row.item %>
           <li class="nd-wait nd-verdict" id="fact-<%= row.candidate_id %>">
             <div class="nd-wait__what">
+              <p class="type-small text-ink-muted m-0"><%= claim_number(*row.candidate_ids) %></p>
               <p class="type-body-strong m-0"><%= item.claim %></p>
               <p class="nd-verdict__chips type-ui m-0">
                 <span class="nd-tag<%= ' nd-verdict__chip--muted' unless row.joy == 'accept' %>"><%= row.joy == "accept" ? "✓ #{joy}: accept" : "#{joy}: check it" %></span>

@@ -8,6 +8,8 @@ class Admin::ChecksController < Admin::BaseController
   CATEGORIES = [ "all", *DataQuality::Review::CATEGORIES ].freeze
 
   def show
+    return go_to_number if params.key?(:go)
+
     @category = params[:category].presence_in(CATEGORIES) || "all"
     @source_kind = params[:source].presence
     @counts = DataQuality::Review.check_counts(source_kind: @source_kind)
@@ -32,6 +34,19 @@ class Admin::ChecksController < Admin::BaseController
   end
 
   private
+    # "Go to a number": the claim's own page (its fact's page with it, or
+    # Edit for a new record it proposes), whatever its status.
+    def go_to_number
+      id = params[:go].to_s[/\d+/].to_i
+      item = (DataQuality::Review.candidate(id) if id.positive?)
+      unless item
+        flash[:alert] = "No item numbered #{params[:go].to_s.strip.presence || 'that'}."
+        return redirect_to(admin_checks_path)
+      end
+
+      redirect_to item.subject_id ? admin_fact_path(type: item.subject_type, id: item.subject_id, from: "checks", claim: id) : edit_admin_candidate_path(id)
+    end
+
     # Claims first (oldest first, by id), then pending facts kind by kind.
     # after: the last claim id shown ("done" once claims ran out);
     # pending_after: "kind:id" of the last pending fact shown.

@@ -22,6 +22,12 @@
   <% end %>
 </div>
 
+<%= form_with url: admin_checks_path, method: :get, class: "nd-search nd-search--short", role: "search" do %>
+  <span class="type-data" aria-hidden="true">#</span>
+  <label class="sr-only" for="go-number">Go to a number</label>
+  <input type="search" id="go-number" name="go" inputmode="numeric" placeholder="Go to a number, like 1234" class="type-input">
+<% end %>
+
 <nav class="nd-fchips type-ui" aria-label="Filter">
   <% AdminHelper::CHECK_CHIPS.each do |category, label| %>
     <%= link_to admin_checks_path({ category: (category unless category == "all"), source: @source_kind }.compact), class: "nd-fchip",

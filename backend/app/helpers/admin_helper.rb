@@ -131,6 +131,9 @@ module AdminHelper
     }
   end
 
+  # A claim's number as the admin sees it ("#1234"), so "do 1234" is easy to find (Tosin, 21 Oct).
+  def claim_number(*ids) = tag.span(ids.map { |id| "##{id}" }.join(", "), class: "nd-claim-no type-data nd-num")
+
   # A source's crawl status in one wording, wherever it's shown.
   def crawl_status_label(status) = CRAWL_STATUS_LABELS.fetch(status.to_s, status.to_s.humanize)
 
