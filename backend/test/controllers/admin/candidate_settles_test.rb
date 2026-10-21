@@ -23,13 +23,15 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
   test "Checks offers Same as… on it, says which company is the question, and the page shows the similar ones" do
     get admin_checks_path
     assert_select "#claim-#{@link.id} .nd-next-step", /Decide: which company is “GENERAL ATOMICS INC”\? Pick it with Same as…/
-    assert_select "#claim-#{@link.id} a[href^=?]", settle_path, text: "Same as…"
+    assert_select "#claim-#{@link.id} a.nd-btn--primary[href^=?]", settle_path, text: "Same as…"
+    assert_select "#claim-#{@link.id} .nd-wait__actions > :last-child", "Approve"
+    assert_select "#claim-#{@link.id} .nd-tag", text: "Waiting for Data Quality", count: 0
 
     get settle_path
     assert_select "h1", /Which company is “GENERAL ATOMICS INC”\?/
     assert_select "#company-#{@matter.id}", /General Matter/
     get settle_path(q: "atomics")
-    assert_select "#company-#{@ga.id} button", "Same as"
+    assert_select "#company-#{@ga.id} button[aria-label=?]", "Same as General Atomics", "Same as"
   end
 
   test "Same as: the end is named as that company, its own name kept, and it's matched again; nothing approved" do

@@ -31,8 +31,8 @@
           <p class="nd-one-line m-0" title="<%= company.name %>"><%= link_to company.name, admin_record_path(type: "Organization", id: company.id), class: "nd-link" %>
             <span class="type-small text-ink-muted"><%= company.verification_status == "pending" ? "Not public yet" : "Live" %></span></p>
           <div class="nd-row">
-            <%= button_to "Same as", here.(), params: { choice: "same", record_id: company.id }, class: "nd-btn nd-btn--outline type-ui" %>
-            <%= button_to "Subsidiary of", here.(), params: { choice: "subsidiary", record_id: company.id }, class: "nd-btn nd-btn--outline type-ui" %>
+            <%= button_to "Same as", here.(), params: { choice: "same", record_id: company.id }, class: "nd-btn nd-btn--outline type-ui", "aria-label": "Same as #{company.name}" %>
+            <%= button_to "Subsidiary of", here.(), params: { choice: "subsidiary", record_id: company.id }, class: "nd-btn nd-btn--outline type-ui", "aria-label": "Subsidiary of #{company.name}" %>
           </div>
         </div>
       <% end %>
@@ -43,6 +43,6 @@
 
   <section class="nd-panel nd-stack" aria-label="A new company">
     <p class="type-body m-0">None of these? It's a company of its own: “<%= @name %>”, added not public yet, from this item's source.</p>
-    <%= button_to "New company", here.(), params: { choice: "new" }, class: "nd-btn nd-btn--outline type-ui" %>
+    <%= button_to "New company", here.(), params: { choice: "new" }, class: "nd-btn nd-btn--outline type-ui", "aria-label": "New company: #{@name}" %>
   </section>
 </div>

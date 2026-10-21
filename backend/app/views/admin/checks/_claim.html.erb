@@ -13,11 +13,12 @@
     <%= hidden_field_tag :back, request.fullpath, id: nil %>
     <div class="nd-wait__what">
       <div class="nd-kick"><span class="type-kicker text-ink-muted"><%= claim_number(item.candidate_id) %></span><p class="type-kicker text-ink-muted m-0"><%= check_kicker(item) %></p></div>
-      <%# Data Quality's call, while it still stands; the hold tag unless that call is what the hold waits for (a first batch). %>
-      <% if item.held && !(item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH) %>
+      <% step = check_next_step(item, restating: local_assigns[:restating]) %>
+      <% question = DataQuality::Review.open_company_ends(item).any? %>
+      <%# The hold tag only where the row waits on it (Not yours yet), so it never contradicts the group. %>
+      <% if step.verb == "Wait" %>
         <p class="m-0"><span class="nd-tag">Waiting for Data Quality</span></p>
       <% end %>
-      <% step = check_next_step(item, restating: local_assigns[:restating]) %>
       <p class="type-subject">
         <% if item.subject_id %>
           <%= link_to check_subject(item), admin_fact_path(type: item.subject_type, id: item.subject_id, from: "checks", back: request.fullpath, claim: item.candidate_id), class: "nd-link" %>
@@ -64,7 +65,12 @@
         </div>
       </details>
     </div>
-    <% if value %><p class="nd-wait__value type-change"><%= value %></p><% end %>
+    <% if value && question %>
+      <%# Only a guess while its company is a question: said so, in plain type. %>
+      <p class="nd-wait__value type-body"><span class="text-ink-muted">Matched to</span> <%= value.to_s.sub(/\A\s*→\s*/, "") %></p>
+    <% elsif value %>
+      <p class="nd-wait__value type-change"><%= value %></p>
+    <% end %>
     <% if local_assigns[:restating] %>
       <p class="type-small m-0 nd-wait__note">It says what the site already shows. Closing notes that in the history and changes nothing live.</p>
       <div class="nd-wait__actions type-ui">
@@ -74,12 +80,17 @@
       </div>
     <% else %>
     <div class="nd-wait__actions type-ui">
-      <button type="submit" class="nd-btn <%= step.group == 'ready' ? 'nd-btn--primary' : 'nd-btn--outline' %>" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
+      <%# A company still in question: Same as… first and black, Approve last. %>
+      <% if question %>
+        <%= link_to "Same as…", admin_candidate_settle_path(item.candidate_id, back: request.fullpath), class: "nd-btn nd-btn--primary" %>
+      <% else %>
+        <button type="submit" class="nd-btn <%= step.group == 'ready' ? 'nd-btn--primary' : 'nd-btn--outline' %>" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
+      <% end %>
       <button type="submit" class="nd-btn nd-btn--outline" name="candidate_id" value="<%= item.candidate_id %>"
         formaction="<%= reject_admin_candidates_path(filters) %>"><%= item.differences.any? ? "Keep" : "Reject" %></button>
       <%= link_to "Edit", edit_admin_candidate_path(item.candidate_id, **filters, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
-      <% if DataQuality::Review.open_company_ends(item).any? %>
-        <%= link_to "Same as…", admin_candidate_settle_path(item.candidate_id, back: request.fullpath), class: "nd-btn nd-btn--outline" %>
+      <% if question %>
+        <button type="submit" class="nd-btn nd-btn--outline" name="candidate_id" value="<%= item.candidate_id %>">Approve</button>
       <% end %>
     </div>
     <% end %>
