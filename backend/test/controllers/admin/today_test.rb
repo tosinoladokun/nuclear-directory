@@ -98,6 +98,15 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
     assert_select "#done .nd-tile", 3
   end
 
+  test "the day's totals count a publish by hand, which has no claim, once" do
+    company = Organization.create!(name: "Hand Published Co")
+    Evidence.create!(subject: company, source: Source.create!(url: "https://example.com/hand", source_kind: "web_page"), quote: "q", found_by: "human")
+    assert DataQuality::Review.publish(type: "Organization", id: company.id, by: "human:tosin").ok?
+
+    totals = Today.new.decisions(by: "human:tosin")
+    assert_equal [ 1, 0, 1 ], totals.values_at(:live, :rejected, :by_you)
+  end
+
   test "the nav says Today, with facts waiting plus step 4's items" do
     nothing_waiting!
     Organization.create!(name: "Pending Co")

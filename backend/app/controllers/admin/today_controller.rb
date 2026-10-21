@@ -52,7 +52,7 @@ class Admin::TodayController < Admin::BaseController
       DataQuality::Review.reject([ id ], by: actor, reason: "Rejected in Today").first
     end
     if result&.ok?
-      flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
+      flash[:notice] = params[:decision] == "accept" ? "Accepted." : "Rejected."
     else
       flash[:alert] = "Can't #{params[:decision] == 'accept' ? 'publish' : 'reject'} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
     end

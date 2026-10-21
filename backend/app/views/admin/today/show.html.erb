@@ -52,7 +52,7 @@
     <h2 class="type-admin-h2" id="done-heading">You're done for today.</h2>
     <p class="type-body m-0">The next crawl runs at <%= Today.next_crawl_at.in_time_zone(Today::ZONE).strftime("%-l:%M %P") %> tomorrow morning.</p>
     <section class="nd-tiles" aria-label="Today's decisions">
-      <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">Went live</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:live]) %></span></div>
+      <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">Approved</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:live]) %></span></div>
       <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">Rejected</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:rejected]) %></span></div>
       <div class="nd-tile nd-tile--sm"><span class="type-kicker text-ink-muted">By you</span> <span class="type-tile-sm"><%= number_with_delimiter(@decisions[:by_you]) %></span></div>
     </section>
