@@ -83,7 +83,7 @@
         <% elsif params[:facility_type].present? %>
           <li>Plant type: <%= facility_type_label(params[:facility_type]) %></li>
         <% end %>
-        <li>Starts unpublished: you publish it from its page</li>
+        <li>Not public yet: you publish it from its page</li>
         <li>Source: <span class="type-data"><%= params[:url].strip %></span><br><span class="text-ink-muted">“<%= params[:quote].to_s.squish %>”</span></li>
       </ul>
       <%= form_with url: admin_new_records_path do %>
