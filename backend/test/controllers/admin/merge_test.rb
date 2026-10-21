@@ -73,7 +73,9 @@ class Admin::MergeTest < ActionDispatch::IntegrationTest
 
   test "when nothing moves, it says so rather than naming a field" do
     kept = sourced(Organization.create!(name: "Kept Co", **VERIFIED))
-    twin = Organization.create!(name: "KEPT CO") # the same name: not even an alias moves
+    # Same name on purpose (the duplicate a merge cleans up), but #154 now
+    # refuses a second organization with the same slug, so give the twin one.
+    twin = Organization.create!(name: "KEPT CO", slug: "kept-co-twin")
 
     get admin_record_merge_path(type: "Organization", id: twin.id, into: kept.id)
 
