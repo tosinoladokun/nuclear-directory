@@ -37,10 +37,15 @@ class Admin::ChecksController < Admin::BaseController
     # "Go to a number": the claim's own page (its fact's page with it, or
     # Edit for a new record it proposes), whatever its status.
     def go_to_number
-      id = params[:go].to_s[/\d+/].to_i
-      item = (DataQuality::Review.candidate(id) if id.positive?)
-      unless item
-        flash[:alert] = "No item numbered #{params[:go].to_s.strip.presence || 'that'}."
+      typed = params[:go].to_s.strip.delete_prefix("#").strip
+      unless typed.match?(/\A\d+\z/)
+        flash[:alert] = "Type a number, like 1234."
+        return redirect_to(admin_checks_path)
+      end
+
+      id = typed.to_i
+      unless (item = DataQuality::Review.candidate(id))
+        flash[:alert] = "No item numbered #{id}."
         return redirect_to(admin_checks_path)
       end
 

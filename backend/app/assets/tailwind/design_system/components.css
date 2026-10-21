@@ -153,6 +153,7 @@
   .nd-wordmark__svg { display: block; height: 19px; width: auto; overflow: visible; }
   /* Checks' "Go to a number" (Tosin, 21 Oct): a short search box. */
   .nd-search--short { max-width: 320px; height: 44px; }
+  @media (max-width: 560px) { .nd-search--short { max-width: none; } }
   .nd-search--short input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
   .nd-claim-no { white-space: nowrap; }
   .nd-kick { display: flex; gap: var(--nd-space-2); align-items: baseline; }

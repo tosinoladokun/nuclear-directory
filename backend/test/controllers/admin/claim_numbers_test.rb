@@ -34,8 +34,11 @@ class Admin::ClaimNumbersTest < ActionDispatch::IntegrationTest
     get admin_checks_path(go: @new_company.id.to_s)
     assert_redirected_to edit_admin_candidate_path(@new_company.id)
 
-    get admin_checks_path(go: "99999999")
+    get admin_checks_path(go: " # 99999999 ")
     assert_redirected_to admin_checks_path
     assert_equal "No item numbered 99999999.", flash[:alert]
+
+    get admin_checks_path(go: "abc")
+    assert_equal "Type a number, like 1234.", flash[:alert]
   end
 end
