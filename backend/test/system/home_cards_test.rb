@@ -29,23 +29,23 @@ class HomeCardsTest < ApplicationSystemTestCase
           const row = document.querySelector(".nd-home .nd-suggs"), all = [...row.querySelectorAll(".nd-sugg")]
           const shown = all.filter((pill) => !pill.hidden), tops = new Set(shown.map((pill) => Math.round(pill.getBoundingClientRect().top)))
           const rowBox = row.getBoundingClientRect()
-          return [all.length, shown.length >= 4, tops.size, Math.max(...shown.map((pill) => Math.round(pill.getBoundingClientRect().height))),
+          return [all.length, shown.length >= 3, tops.size, Math.max(...shown.map((pill) => Math.round(pill.getBoundingClientRect().height))),
             parseFloat(getComputedStyle(shown[0]).fontSize) >= 13, shown.every((pill) => pill.getBoundingClientRect().right <= rowBox.right + 1 && pill.getBoundingClientRect().left >= rowBox.left - 1),
             row.scrollWidth <= row.clientWidth, document.documentElement.scrollWidth <= innerWidth]
         })()
       JS
-      assert_equal [ HomeSuggestions::POOL.size, true, 1, 28, true, true, true, true ], row, "at #{width}: at least four pills, one line, 28px, inside the row, no scroll anywhere"
+      assert_equal [ HomeSuggestions::SHOWN, true, 1, 28, true, true, true, true ], row, "at #{width}: at least three pills, one line, 28px, inside the row, no scroll anywhere"
       assert_empty page.evaluate_script(AUDIT), "at #{width}"
     end
   end
 
-  test "a phone always shows four suggestions on one line, whichever five the server picked" do
+  test "a phone shows three or four suggestions on one line, whichever five the server picked" do
     [ [ 360, 780 ], [ 390, 844 ] ].each do |width, height|
       resize_viewport(width, height)
       8.times do |load|
         visit root_path
         shown = page.evaluate_script("(() => { const pills = [...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden); return [pills.map((pill) => pill.textContent.trim()), new Set(pills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size] })()")
-        assert_equal 4, shown[0].size, "at #{width}, load #{load}: four pills (#{shown[0].join(', ')})"
+        assert_includes 3..4, shown[0].size, "at #{width}, load #{load}: three or four pills (#{shown[0].join(', ')})"
         assert_equal 1, shown[1], "at #{width}, load #{load}: one line"
         assert_empty page.evaluate_script(AUDIT), "at #{width}, load #{load}"
       end
@@ -55,7 +55,7 @@ class HomeCardsTest < ApplicationSystemTestCase
   test "a wide screen shows all five picked suggestions; the hidden ones are out of the tab order" do
     resize_viewport(1440, 900)
     visit root_path
-    picked = page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg:not(.nd-sugg--spare)')].filter((pill) => !pill.hidden).length")
+    picked = page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length")
     assert_equal HomeSuggestions::SHOWN, picked
     assert page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg[hidden]')].every((pill) => pill.offsetParent === null)"), "hidden pills take no space and can't be tabbed to"
   end

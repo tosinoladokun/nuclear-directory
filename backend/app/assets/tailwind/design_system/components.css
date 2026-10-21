@@ -289,10 +289,8 @@
   .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
   .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
   .nd-sugg[hidden] { display: none; }
-  /* Four fit at 360 (Tosin, 21 Oct): tighter pills on the narrowest phones. */
+  /* Four on phones where they fit (Tosin, 21 Oct): tighter pills on the narrowest phones. */
   @media (max-width: 400px) { .nd-home .nd-suggs { column-gap: 6px; } .nd-home .nd-sugg { padding-inline: 9px; gap: 4px; } }
-  /* Below 380px the magnifier goes too, so four still fit when the fallback serif (wider) is in use. */
-  @media (max-width: 380px) { .nd-home .nd-sugg .nd-ic { display: none; } }
   /* One line of suggestions at every width, never a second line or a scroll
      (Tosin, 21 Oct: show fewer). The fit-row controller hides the pills that
      wrap; without it the row clips them. The 8px above and below, taken back

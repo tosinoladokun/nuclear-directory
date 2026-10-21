@@ -8,13 +8,9 @@
 
   <div class="nd-home__search">
     <%= render "shared/search_box", size: :large %>
-    <nav class="nd-suggs" aria-label="Suggested searches" data-controller="fit-row" data-fit-row-minimum-value="<%= HomeSuggestions::MINIMUM %>">
+    <nav class="nd-suggs" aria-label="Suggested searches" data-controller="fit-row">
       <% @suggestions.each do |suggestion| %>
         <%= link_to directory_url_for(q: suggestion.query, from: "suggestion"), class: "nd-sugg type-ui", data: { fit_row_target: "item" } do %><%= icon("magnifying-glass", size: 12) %><%= suggestion.label %><% end %>
-      <% end %>
-      <%# Hidden spares: shown only when the picked ones are too wide for MINIMUM pills. %>
-      <% HomeSuggestions.spares(@suggestions).each do |suggestion| %>
-        <%= link_to directory_url_for(q: suggestion.query, from: "suggestion"), class: "nd-sugg nd-sugg--spare type-ui", hidden: true, data: { fit_row_target: "item" } do %><%= icon("magnifying-glass", size: 12) %><%= suggestion.label %><% end %>
       <% end %>
     </nav>
   </div>
