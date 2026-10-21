@@ -12,7 +12,21 @@ module DirectoryBuilders
   def role(key, parent: nil) = Role.create!(key:, name: key.to_s.humanize, parent:)
   def technology(key, name = key.to_s.humanize, parent: nil) = Technology.create!(key:, name:, parent:)
 
+  # #154 turned off Sluggable's auto-suffix for organizations, so a test
+  # building a second "BWXT" would fail on the fixture's "bwxt" slug. The
+  # builder finds a free slug (the behavior the old auto-suffix gave for
+  # free), so tests keep reading as "a company named BWXT" without having
+  # to carry an explicit slug.
+  def free_organization_slug(name)
+    base = name.to_s.parameterize
+    taken = Organization.where("slug = ? OR slug LIKE ?", base, "#{base}-%").pluck(:slug).to_set
+    return base unless taken.include?(base)
+
+    (2..).lazy.map { |n| "#{base}-#{n}" }.find { |slug| !taken.include?(slug) }
+  end
+
   def company(name, state: nil, city: nil, roles: [], techs: [], aliases: [], verified: true, **attributes)
+    attributes = { slug: free_organization_slug(name) }.merge(attributes)
     org = Organization.create!(name:, hq_state: state, hq_city: city, **verification(verified), **attributes)
     ([ name ] + aliases).uniq { |alias_name| OrganizationAlias.normalize(alias_name) }
       .each { |alias_name| org.aliases.create!(alias: alias_name) }

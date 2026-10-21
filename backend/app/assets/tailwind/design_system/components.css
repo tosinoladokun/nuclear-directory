@@ -277,6 +277,8 @@
   body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
+  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor: less side padding there. */
+  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-4); } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
@@ -789,11 +791,17 @@
   .nd-prose ol { list-style: decimal; }
   .nd-prose li::marker { color: var(--nd-ink-muted); }
   .nd-code { margin: 0; padding: var(--nd-space-3) var(--nd-space-4); background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-direction: column; gap: var(--nd-space-2); }
+  .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--nd-space-6); row-gap: 0; padding-block: var(--nd-space-4) var(--nd-space-6); }
   .nd-footer p { margin: 0; }
-  .nd-footer__links { display: flex; flex-wrap: wrap; gap: var(--nd-space-2) var(--nd-space-4); }
+  /* One calm line on desktop: the links left, the Render credit right. Each
+     item stays whole; on a phone they wrap as items, never as words. */
+  .nd-footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--nd-space-6); }
+  .nd-footer__links a, .nd-footer__credit { white-space: nowrap; }
+  @media (max-width: 639px) { .nd-footer { flex-direction: column; align-items: flex-start; } .nd-footer__links { gap: 0 var(--nd-space-4); } }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
+    /* The credit stays a paragraph (a flex row would eat the space before the link); its link takes the 44px, in the row's own height, so it never overlaps the links above. */
+    .nd-footer__credit a { display: inline-block; padding-block: 13px; }
   }
 }
 

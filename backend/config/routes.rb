@@ -44,7 +44,7 @@ Rails.application.routes.draw do
     get "sources" => "sources#index", as: :sources
     get "sources/search" => "sources#search", as: :sources_search
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
-    get "status", to: redirect("/admin/sources")
+    get "status", to: redirect("/admin")
     get "checks" => "checks#show", as: :checks
     # Where it appears (#166): what the public sees of the directory, and where.
     get "where-it-appears" => "outputs#show", as: :outputs

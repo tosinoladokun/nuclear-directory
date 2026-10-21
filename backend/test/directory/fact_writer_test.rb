@@ -358,4 +358,47 @@ class Directory::FactWriterTest < ActiveSupport::TestCase
 
     assert write(:facility_relationship, { id: link.id, description: "Runs it." }).ok?
   end
+
+  # #287: renaming a plant on its Record would lose the old name a crawler
+  # still uses, since Lookup.facility only searches current names and
+  # aliases. Keep the old name as an alias in the same audited write.
+  test "renaming a plant keeps the old name as an alias, so a crawler still using it finds the plant" do
+    plant = Facility.create!(name: "Old Name Plant")
+    former = plant.name
+
+    result = write(:facility, { id: plant.id, name: "New Name Plant" })
+
+    assert result.ok?, result.errors.inspect
+    assert_equal "New Name Plant", plant.reload.name
+    assert_includes plant.aliases.pluck(:alias), former
+    assert_equal plant.id, Directory::Lookup.facility(name: former)&.id, "the old name resolves to this plant"
+  end
+
+  test "a plant rename whose old name is another facility's doesn't fail; the collision stays as it was" do
+    kept = Facility.create!(name: "Shared Name Plant")
+    other = Facility.create!(name: "Will Be Renamed")
+    former = other.name
+    kept.aliases.create!(alias: former) # another facility already lays claim
+
+    result = write(:facility, { id: other.id, name: "A Different New Name" },
+      verification: { status: "verified", by: "human:tosin", context: { "note" => "kept" } })
+
+    assert result.ok?, result.errors.inspect
+    event = other.verification_events.order(:id).last
+    assert_equal({ "note" => "kept", "skipped_alias" => former, "held_by" => "Shared Name Plant" }, event.context)
+    assert_equal "A Different New Name", other.reload.name
+    assert_not_includes other.aliases.pluck(:alias), former, "the collision stays on the other facility"
+    assert_equal kept.id, Directory::Lookup.facility(name: former)&.id
+  end
+
+  test "renaming a company keeps the old name as an alias too (#287)" do
+    company = Organization.create!(name: "Old Co Name")
+    former = company.name
+
+    result = write(:organization, { id: company.id, name: "New Co Name" })
+
+    assert result.ok?, result.errors.inspect
+    assert_includes company.reload.aliases.pluck(:alias), former
+    assert_equal company.id, Directory::Lookup.organization(name: former)&.id
+  end
 end
