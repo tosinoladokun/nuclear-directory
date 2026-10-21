@@ -66,4 +66,34 @@ class Admin::NewRecordsTest < ActionDispatch::IntegrationTest
     assert_redirected_to admin_record_path(type: "Facility", id: plant.id)
     assert_equal [ "power_reactor", "pending" ], [ plant.facility_type, plant.verification_status ]
   end
+
+  test "a new name with a company's website isn't added, and leaves that company as it was" do
+    existing = organizations(:terrapower)
+    post admin_new_records_path, params: COMPANY.merge(name: "TerraPower Holdings", website: "https://www.terrapower.com/about")
+
+    assert_response :unprocessable_content
+    assert_select ".nd-alert", /TerraPower already has the website terrapower\.com/
+    assert_select ".nd-alert a[href=?]", admin_record_path(type: "Organization", id: existing.id)
+    assert_equal [ "TerraPower", "pending" ], existing.reload.slice(:name, :verification_status).values
+    assert_empty existing.organization_roles
+  end
+
+  test "a duplicate name that's a reactor unit links to its fact page" do
+    site = Facility.create!(name: "Imaginary Point")
+    unit = Facility.create!(name: "Imaginary Point 1", parent: site)
+    get admin_new_record_path(kind: "facility", name: unit.name, url: "https://example.com/p", quote: "q", preview: 1)
+
+    assert_select ".nd-alert a[href=?]", admin_fact_path(type: "Facility", id: unit.id)
+  end
+
+  test "Live's filters come back through the preview, the create and the record it opens" do
+    back = admin_live_path(tab: "companies", q: "fission")
+    get admin_new_record_path(COMPANY.merge(preview: 1, back:))
+    assert_select "form[method=get] input[name=back][value=?]", back
+    assert_select "form[action=?] input[name=back][value=?]", admin_new_records_path, back
+    assert_select ".nd-crumbs a[href=?]", back
+
+    post admin_new_records_path, params: COMPANY.merge(back:)
+    assert_redirected_to admin_record_path(type: "Organization", id: Organization.find_by!(name: COMPANY[:name]).id, back:)
+  end
 end

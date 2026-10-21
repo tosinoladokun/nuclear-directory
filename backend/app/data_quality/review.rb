@@ -495,6 +495,13 @@ module DataQuality::Review
       existing = kind == "organization" ? directory.organization(name:) : directory.facility(name:)
       return Added.new(ref: nil, errors: [ "#{name} is already in the directory" ], existing:) if existing
 
+      # A company is also the same one by its website's domain: writing it
+      # would update that company (rename it, set it pending) instead.
+      domain = (Organization.domain_from(website.to_s.strip) if kind == "organization" && website.present?)
+      if domain && (same_site = directory.organization(domain:))
+        return Added.new(ref: nil, errors: [ "#{same_site.name} already has the website #{domain}" ], existing: same_site)
+      end
+
       added = nil
       ApplicationRecord.transaction do
         source = DataQuality::Sources.find_or_create(url:)
@@ -505,6 +512,12 @@ module DataQuality::Review
 
         attributes = kind == "organization" ? { name:, website: website.to_s.strip.presence } : { name:, facility_type: facility_type.presence }
         written = directory.add_fact(kind.to_sym, attributes.compact, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        # Only ever a new record: one the write found by another key is left as it was.
+        if written.success? && !written.created
+          added = Added.new(ref: nil, errors: [ "It matches a record already in the directory" ],
+            existing: (directory.fact(type: written.ref.type, id: written.ref.id) if written.ref))
+          raise ActiveRecord::Rollback
+        end
         if written.success? && kind == "organization"
           role_written = directory.add_fact(:organization_role, { organization_id: written.ref.id, role: }, source_id: source.ref.id, quote:, by:,
             reason: ADDED_REASON)

@@ -21,7 +21,7 @@ class Admin::NewRecordsController < Admin::BaseController
     end
 
     flash[:notice] = "Added #{params[:name].to_s.squish}. It isn't published yet."
-    redirect_after admin_record_path(type: @added.ref.type, id: @added.ref.id)
+    redirect_after admin_record_path(type: @added.ref.type, id: @added.ref.id, back: params[:back].presence)
   end
 
   private

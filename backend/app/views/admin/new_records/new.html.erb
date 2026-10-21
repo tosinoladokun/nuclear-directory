@@ -25,7 +25,9 @@
       <ul class="type-body">
         <% @added.errors.each do |error| %><li><%= error %></li><% end %>
         <% if (existing = @added.existing) %>
-          <li><%= link_to "Open #{existing.name}", admin_record_path(type: existing.type, id: existing.id), class: "nd-link" %></li>
+          <%# A reactor unit has no Record page of its own: its fact page. %>
+          <% path = existing.type == "Facility" && existing.parent_id ? admin_fact_path(type: existing.type, id: existing.id) : admin_record_path(type: existing.type, id: existing.id) %>
+          <li><%= link_to "Open #{existing.name}", path, class: "nd-link" %></li>
         <% end %>
       </ul>
     </div>
@@ -34,6 +36,7 @@
   <%# Preview lands on "What will be created", so it's in view on a phone. %>
   <%= form_with url: admin_new_record_path(anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>
     <%= hidden_field_tag :preview, 1, id: nil %>
+    <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
     <%= hidden_field_tag :kind, @kind, id: nil %>
     <div class="nd-field">
       <label for="name" class="type-body-strong">Name</label>
@@ -85,6 +88,7 @@
       </ul>
       <%= form_with url: admin_new_records_path do %>
         <% Admin::NewRecordsController::FIELDS.each do |field| %><%= hidden_field_tag field, (field == :kind ? @kind : params[field]), id: nil %><% end %>
+        <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
         <button type="submit" class="nd-btn nd-btn--primary type-ui">Create record</button>
       <% end %>
     </section>
