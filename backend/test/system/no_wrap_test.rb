@@ -152,6 +152,22 @@ class NoWrapTest < ApplicationSystemTestCase
     end
   end
 
+  test "on a touch phone the footer credit keeps the space before its link and the link is 44px tall" do
+    resize_viewport(390, 844)
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" }, { name: "pointer", value: "coarse" } ])
+    visit root_path
+    credit = page.evaluate_script("(() => { const p = document.querySelector('.nd-footer__credit'); return [p.innerText, Math.round(p.querySelector('a').getBoundingClientRect().height), matchMedia('(pointer: coarse)').matches] })()")
+    assert_equal [ "Hosting supported by Render.", true ], [ credit[0], credit[2] ]
+    assert_operator credit[1], :>=, 43, "the Render link is a 44px tap target"
+    apart = page.evaluate_script("(() => { const credit = document.querySelector('.nd-footer__credit a').getBoundingClientRect(); return [...document.querySelectorAll('.nd-footer__links a')].every((a) => { const r = a.getBoundingClientRect(); return r.bottom <= credit.top + 0.5 || r.top >= credit.bottom - 0.5 || r.right <= credit.left || r.left >= credit.right }) })()")
+    assert apart, "tap areas of the footer links and the credit never overlap"
+    assert_empty page.evaluate_script(AUDIT)
+  ensure
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"
