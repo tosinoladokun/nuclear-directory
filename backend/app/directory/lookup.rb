@@ -9,6 +9,10 @@ module Directory
   module Lookup
     extend self
 
+    # A CIK as the directory stores it: 10 zero-padded digits ("320193" is
+    # "0000320193"), nil when blank.
+    def cik(value) = Organization.cik_from(value)
+
     # Pass exactly one of id, slug, name or domain.
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".

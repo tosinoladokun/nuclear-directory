@@ -28,7 +28,8 @@ module DataQuality::Claim
     "national_lab" => "a national lab", "waste_decommissioning" => "a waste and decommissioning company"
   }.freeze
   LABELS = { "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
-    "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity" }.freeze
+    "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity",
+    "sec_cik" => "SEC CIK" }.freeze
 
   # One sentence: a value that ends in its own full stop ("…: DENE0009054.")
   # doesn't get a second one.
