@@ -125,6 +125,15 @@ class AnalyticsEventsTest < ActionDispatch::IntegrationTest
     assert_equal %w[suggestion suggestion typed], sources
   end
 
+  test "Show more on a search is the same search, expanded: one search event, not two" do
+    get companies_path(q: "HALEU", from: "suggestion"), headers: { "User-Agent" => BROWSER }
+    get companies_path(q: "HALEU", from: "suggestion", shown: 2), headers: { "User-Agent" => BROWSER }
+
+    assert_equal 1, posthog.events.count { |event| event[:event] == "search" }
+    assert_select "a[href*='shown=3']", count: 0
+    assert_equal [ "suggestion" ], css_select("form.nd-filters input[name=from]").map { |input| input["value"] }, "the marker survives on the expanded page"
+  end
+
   test "a correction that doesn't save sends nothing" do
     post corrections_path, params: { subject: "Plant Vogtle", page_path: "/plants/plant-vogtle", message: "" },
       headers: { "User-Agent" => BROWSER }

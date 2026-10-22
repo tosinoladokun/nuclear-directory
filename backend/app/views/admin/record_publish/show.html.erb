@@ -18,6 +18,7 @@
       <% if @plan.added_with.any? %>
         <label class="nd-row nd-choice type-body flex-nowrap">
           <%= check_box_tag :with_added, "1", true, class: "nd-check" %>
+          <% @plan.added_with.each do |fact_type, fact_id, _| %><%= hidden_field_tag "added[]", "#{fact_type}:#{fact_id}", id: nil %><% end %>
           <span class="min-w-0">Also publish what you added with it by hand: <%= @plan.added_with.map(&:last).to_sentence %></span>
         </label>
       <% end %>

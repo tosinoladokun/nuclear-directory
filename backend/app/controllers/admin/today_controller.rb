@@ -60,7 +60,7 @@ class Admin::TodayController < Admin::BaseController
         errors: stopped.map { |r| "##{r.candidate_id}: #{Array(r.errors).to_sentence}" })
     end
     if result&.ok?
-      flash[:notice] = params[:decision] == "accept" ? "Accepted. It's live." : "Rejected."
+      flash[:notice] = params[:decision] == "accept" ? "Accepted." : "Rejected."
       # Undo restores every page's copy at once, or isn't offered.
       undoable = before.map { |state| DataQuality::Review.undoable(state, decision: params[:decision]) }
       if undoable.all?
@@ -90,13 +90,14 @@ class Admin::TodayController < Admin::BaseController
   # each accepted as Aminah's list's Accept does: her call, reason and the
   # fact checked again under the decision's locks.
   def agreed
-    review = TodayReview.new(shown: shown_counts)
-    if params[:shown_set] != review.fingerprint
+    # One snapshot: the same items are fingerprinted and accepted.
+    items = TodayReview.new(shown: shown_counts).agreed_items
+    if params[:shown_set] != DataQuality::Recommendations.fingerprint(items)
       flash[:alert] = "The list changed since you opened it, so nothing was accepted. Check it and try again."
       return redirect_after(admin_today_review_path(shown: shown_counts.presence))
     end
 
-    results = DataQuality::Recommendations.accept(review.agreed_items, by: actor)
+    results = DataQuality::Recommendations.accept(items, by: actor)
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?
     if stopped.any?
@@ -117,7 +118,7 @@ class Admin::TodayController < Admin::BaseController
 
     def load_today
       @today = Today.new
-      @sources = DataQuality::Status.by_kind.index_by(&:source_kind)
+      @sources = DataQuality::Status.by_kind(within: @today.crawl_window).index_by(&:source_kind)
       @decisions = @today.decisions(by: actor) if @today.done?
     end
 end

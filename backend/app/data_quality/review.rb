@@ -625,6 +625,14 @@ module DataQuality::Review
 
       added = nil
       ApplicationRecord.transaction do
+        # The company locked and checked with the write: one taken off or
+        # merged away since the form was shown takes no new fact.
+        directory.lock_fact(type: "Organization", id: organization_id)
+        unless %w[verified pending].include?(directory.fact(type: "Organization", id: organization_id)&.verification_status)
+          added = Added.new(ref: nil, errors: [ "This company was taken off or merged since, so nothing was added" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
         source = DataQuality::Sources.find_or_create(url:)
         unless source.ok?
           added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
@@ -664,8 +672,21 @@ module DataQuality::Review
         result = approve_fact(type:, id:, by:, reason: "Published", directory:)
         raise ActiveRecord::Rollback unless result.ok?
 
-        (with_added ? publish_plan(type:, id:, directory:).added_with : []).each do |fact_type, fact_id, name|
-          added = approve_fact(type: fact_type, id: fact_id, by:, reason: "Published with its record", directory:)
+        # with_added: the facts the preview listed ("Type:id"), or a falsy
+        # value for none. Only exactly those: a fact added since isn't taken.
+        added_with = with_added ? publish_plan(type:, id:, directory:).added_with : []
+        if with_added.is_a?(Array) && with_added.map(&:to_s).sort != added_with.map { |fact_type, fact_id, _| "#{fact_type}:#{fact_id}" }.sort
+          result = Result.new(candidate_id: nil, ref: nil, errors: [ "what was added with it changed since the preview; check it again" ])
+          raise ActiveRecord::Rollback
+        end
+        added_with.each do |fact_type, fact_id, name|
+          # Each locked and still waiting, as the record is.
+          directory.lock_fact(type: fact_type, id: fact_id)
+          added = if directory.fact(type: fact_type, id: fact_id)&.verification_status == "pending"
+            approve_fact(type: fact_type, id: fact_id, by:, reason: "Published with its record", directory:)
+          else
+            Result.new(candidate_id: nil, ref: nil, errors: [ "it was decided since the preview" ])
+          end
           next if added.ok?
 
           result = Result.new(candidate_id: nil, ref: nil, errors: added.errors.map { |error| "#{name}: #{error}" })
