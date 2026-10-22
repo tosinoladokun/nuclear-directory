@@ -235,4 +235,13 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
 
     assert_empty crawlers - kinds, "add these to config/source_coverage.yml with kind: and status: built"
   end
+
+  test "a category with a short name shows it on a narrow list, keeping the full name for screen readers and in its title" do
+    sign_in_as users(:admin) unless respond_to?(:signed_in?) && signed_in?
+    get admin_sources_path(by: "category")
+    assert_select "#utilities .nd-cov__name[title=?]", "Power plant owners and operators" do
+      assert_select ".nd-cov__long", "Power plant owners and operators"
+      assert_select ".nd-cov__short[aria-hidden=true]", "Plant operators"
+    end
+  end
 end

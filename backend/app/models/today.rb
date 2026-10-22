@@ -162,12 +162,23 @@ class Today
     at > now ? at : at + 1.day
   end
 
-  # This day's decisions on claims: how many went live, were rejected, and
-  # were decided by `by`.
+  # This day's decisions: on claims, and a person's direct decisions on facts
+  # with no claim behind them (Publish, Add a fact's approval). A claim's own
+  # approval records its claim on the fact's event, so it isn't counted twice.
+  # How many were approved, were rejected, and were decided by `by`.
   def decisions(by:)
-    decided = Candidate.where(reviewed_at: on.in_time_zone(ZONE).all_day)
-    { live: decided.where(status: "merged").count, rejected: decided.where(status: "rejected").count, by_you: decided.where(reviewed_by: by).count }
+    day = on.in_time_zone(ZONE).all_day
+    decided = Candidate.where(reviewed_at: day)
+    direct = VerificationEvent.where(created_at: day).where("verification_events.by LIKE 'human:%'")
+      .where("verification_events.from_status IS DISTINCT FROM verification_events.to_status")
+      .where("NOT (COALESCE(verification_events.context, '{}'::jsonb) ? 'candidate_id')")
+    { live: decided.where(status: "merged").count + direct.where(to_status: "verified").count,
+      rejected: decided.where(status: "rejected").count + direct.where(to_status: "rejected").count,
+      by_you: decided.where(reviewed_by: by).count + direct.where(by:, to_status: %w[verified rejected]).count }
   end
+
+  # Last night's crawl: from 11pm Pacific the evening before to now.
+  def crawl_window = window
 
   private
     def marked = @marked ||= TodayStep.where(on:).index_by(&:step)
@@ -208,7 +219,7 @@ class Today
       end
     end
 
-    def crawl_window
+    def window
       start = on.in_time_zone(ZONE).beginning_of_day - CRAWL_MARGIN
       start..[ start + 1.day + CRAWL_MARGIN, @now ].min
     end

@@ -26,7 +26,12 @@ class TodayReview
   def initialize(shown: {}, directory: DataQuality::DirectoryClient.new)
     @shown = GROUPS.to_h { |group| [ group, shown[group].to_i.clamp(1, 1000) ] }
     @directory = directory
+    # "No list from Aminah today" (step 2): her earlier calls don't count today.
+    @no_list = TodayStep.exists?(on: Today.date, step: "list", note: "no_list")
   end
+
+  # Aminah's reason for a row, unless today has no list from her.
+  def aminah_reason(item) = (item.dq_reason unless @no_list)
 
   # { group => [candidate id, …] }, newest first.
   def ids
@@ -78,7 +83,9 @@ class TodayReview
     # [joy, aminah] for a candidate or a Checks item. Aminah's call counts
     # only while it stands (the fact hasn't changed since she made it).
     def verdicts(record)
-      joy = record.ai_recommendation == "recommend_publish" ? "accept" : "check"
+      # A claim sent back to review keeps its old verdict field; review wins.
+      joy = record.ai_recommendation == "recommend_publish" && record.status.to_s != "needs_review" ? "accept" : "check"
+      return [ joy, nil ] if @no_list
       call = record.is_a?(Candidate) ? (record.dq_recommendation if DataQuality::Recommendations.current?(record)) : record.dq_recommendation
       [ joy, { "approve" => "accept", "reject" => "reject" }[call] ]
     end

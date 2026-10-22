@@ -13,6 +13,7 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
   def nothing_waiting! = [ Organization, Facility ].each { |model| model.update_all(verification_status: "verified", verified_by: "human:tosin") }
 
   test "the greeting, the four steps and their times; the first is open with last night's crawl" do
+    travel_to Time.find_zone(Today::ZONE).local(2026, 10, 21, 9, 0) # a morning: last night's crawl window is the same at any run time
     CrawlRun.create!(stage: "crawl", source_kind: "nrc_reactor_list", status: "succeeded", started_at: 2.hours.ago)
     CrawlRun.create!(stage: "crawl", source_kind: "eia_generators", status: "succeeded", started_at: 2.hours.ago, stats: { "snapshot" => "error" })
     CorrectionReport.create!(subject: "TerraPower", page_path: "/companies/terrapower", message: "The city is wrong.")
@@ -74,7 +75,16 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
 
     assert_select "#step-review.nd-today__step--done"
     assert_select "#left-report-#{report.id}", /TerraPower.*The city is wrong/m
-    assert_select "#left-report-#{report.id} a[href=?]", admin_corrections_path(anchor: "report-#{report.id}"), text: "Open the request ›"
+    assert_select "#left-report-#{report.id} a[href=?]", admin_corrections_path(report: report.id), text: "Open the request ›"
+  end
+
+  test "a correction request past the first page opens on its own page" do
+    nothing_waiting!
+    reports = 51.times.map { |i| CorrectionReport.create!(subject: "Co #{i}", page_path: "/", message: "Fix #{i}.", created_at: i.minutes.ago) }
+    last = reports.max_by { |report| [ -report.created_at.to_f, report.id ] }
+    get admin_corrections_path(report: last.id)
+    follow_redirect! while response.redirect?
+    assert_select "#report-#{last.id}"
   end
 
   test "done for today when every step is done" do
@@ -86,6 +96,15 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
     assert_select "#today-progress", "4 of 4 done"
     assert_select "#done h2", "You're done for today."
     assert_select "#done .nd-tile", 3
+  end
+
+  test "the day's totals count a publish by hand, which has no claim, once" do
+    company = Organization.create!(name: "Hand Published Co")
+    Evidence.create!(subject: company, source: Source.create!(url: "https://example.com/hand", source_kind: "web_page"), quote: "q", found_by: "human")
+    assert DataQuality::Review.publish(type: "Organization", id: company.id, by: "human:tosin").ok?
+
+    totals = Today.new.decisions(by: "human:tosin")
+    assert_equal [ 1, 0, 1 ], totals.values_at(:live, :rejected, :by_you)
   end
 
   test "the nav says Today, with facts waiting plus step 4's items" do
@@ -109,5 +128,17 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
     assert_select "#step-crawl .nd-today__title", /Crawled and checked by Ada/
   ensure
     I18n.reload!
+  end
+
+  test "Read and Same come from last night's matching only: an older night's aren't shown beside a failed crawl" do
+    travel_to Time.find_zone(Today::ZONE).local(2026, 10, 21, 9, 0)
+    CrawlRun.create!(stage: "match", source_kind: "nrc_reactor_list", status: "succeeded", started_at: 2.days.ago, finished_at: 2.days.ago,
+      stats: { "candidates" => 219, "confirmed" => 219 })
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_reactor_list", status: "failed", started_at: 2.hours.ago, error: "timeout")
+
+    rows = DataQuality::Status.by_kind(within: Today.new.crawl_window).index_by(&:source_kind)
+    assert_nil rows["nrc_reactor_list"].read
+    assert_nil rows["nrc_reactor_list"].same
+    assert_equal 219, DataQuality::Status.by_kind.index_by(&:source_kind)["nrc_reactor_list"].read
   end
 end
