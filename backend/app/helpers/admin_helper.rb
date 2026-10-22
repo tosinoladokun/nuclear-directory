@@ -32,9 +32,10 @@ module AdminHelper
     [
       { label: "Overview", path: admin_root_path, current: controller_name == "overview" },
       { label: "Sources", path: admin_sources_path, count: counts[:sources], current: controller_name == "sources" },
-      { label: "Checks", path: admin_checks_path, count: counts[:checks], current: %w[checks candidates pending_facts].include?(controller_name) },
+      # Today (#373) leads to Checks, its step 3, so it stays current there.
+      { label: "Today", path: admin_today_path, count: counts[:today], current: %w[today checks candidates pending_facts recommendations].include?(controller_name) },
       { label: "Live", path: admin_live_path, count: counts[:live], current: %w[live records].include?(controller_name) },
-      { label: "Removed", soon: true },
+      { label: "Removed", path: admin_removed_path, count: counts[:removed], current: controller_name == "removed" },
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
         current: controller_name == "corrections" }
@@ -101,11 +102,12 @@ module AdminHelper
 
   # Where a Live row opens: a company's or plant's Record page, else the
   # fact page; either with a way back to this list.
-  def live_row_path(row, back)
+  # from: the list it's opened from ("live" or "removed"), for its back link.
+  def live_row_path(row, back, from: "live")
     if row.type == "Organization" || (row.type == "Facility" && row.kind == "Plant")
-      admin_record_path(type: row.type, id: row.id, back:)
+      admin_record_path(type: row.type, id: row.id, back:, from: (from unless from == "live"))
     else
-      admin_fact_path(type: row.type, id: row.id, from: "live", back:)
+      admin_fact_path(type: row.type, id: row.id, from:, back:)
     end
   end
 
@@ -118,13 +120,20 @@ module AdminHelper
 
   # Counts for the nav and the Overview tiles, once per request.
   def admin_nav_counts
-    @admin_nav_counts ||= {
-      sources: SourceCatalog.total,
-      checks: DataQuality::Review.counts.values.sum + DataQuality::Review.pending_count,
-      live: Organization.published.count + Facility.published.where(parent_id: nil).count,
-      corrections: CorrectionReport.where(status: %w[open reviewed]).count,
-      outputs: PublicPages.new.count
-    }
+    @admin_nav_counts ||= begin
+      # Each count once: Today's is the waiting facts plus step 4's requests.
+      pending = DataQuality::Review.pending_count
+      corrections = CorrectionReport.where(status: %w[open reviewed]).count
+      {
+        sources: SourceCatalog.total,
+        checks: DataQuality::Review.counts.values.sum + pending,
+        live: Organization.published.count + Facility.published.where(parent_id: nil).count,
+        corrections:,
+        outputs: PublicPages.new.count,
+        removed: Directory::RemovedList.total,
+        today: DataQuality::Review.check_counts["all"] + pending + corrections
+      }
+    end
   end
 
   # A source's crawl status in one wording, wherever it's shown.

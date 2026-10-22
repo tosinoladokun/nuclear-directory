@@ -18,6 +18,10 @@ roles:
   quote: This LOI with TVA, and the role it establishes for Type One Energy as the fusion technology provider for their Infinity Two project, is therefore fully aligned with our goal of pursuing the lowest-risk approach to commercializing fusion energy.
   published: '2025-09-19'
   confidence: 1.0
+- key: reactor_vendor
+  source_url: https://typeoneenergy.com/
+  quote: Type One Energy is the technology provider and original equipment manufacturer to the Tennessee Valley Authority’s Infinity Two project, the world’s first grid-scale, commercial fusion power plant.
+  confidence: 1.0
 technologies:
 - key: fusion
   source_url: https://typeoneenergy.com/insights-announcements/tva-type-one-energy-accelerate-fusion-commercialization-tennessee/

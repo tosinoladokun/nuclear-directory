@@ -28,9 +28,11 @@ module DataQuality::Status
   ATTENTION = %w[blocked needs_human].freeze
 
   # A row per kind of source that has run or has claims, by last read.
-  def self.by_kind(live: false, directory: DataQuality::DirectoryClient.new)
+  # within: only match runs started then count for Read and Same (Today's
+  # crawl window): none then gives no counts, not an older night's.
+  def self.by_kind(live: false, within: nil, directory: DataQuality::DirectoryClient.new)
     crawls = latest(CrawlRun.where(stage: "crawl"))
-    matches = latest(CrawlRun.where(stage: "match"))
+    matches = latest(CrawlRun.where(stage: "match").then { |runs| within ? runs.where(started_at: within) : runs })
     claims = ->(scope) { Candidate.where(id: scope.select(:id)).joins(:source).group("sources.source_kind").count }
     waiting = claims.call(Candidate.where(id: Candidate.recommended.select(:id)).or(Candidate.status_needs_review))
     approved = claims.call(Candidate.status_merged)
