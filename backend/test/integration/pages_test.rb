@@ -26,7 +26,10 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select "a[href='/privacy']", "Privacy"
       assert_select "a[href='/disclaimer']", "Disclaimer"
       assert_select "a[href='/bot']", "Our crawler"
-      assert_select "a[href='mailto:hello@nuclear-directory.org']"
+      assert_select "a[href='mailto:hello@nuclear-directory.org']", "Contact us"
+    end
+    assert_select "footer.nd-footer p", count: 1, text: /\AHosting supported by Render\.\z/ do
+      assert_select "a[href='https://render.com'][rel~=noopener]", "Render"
     end
 
     { privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
@@ -114,5 +117,34 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_equal "text/plain", response.media_type
     %w[/admin /corrections /search /design].each { |path| assert_includes response.body, "Disallow: #{path}\n" }
     assert_includes response.body, "Sitemap: http://www.example.com/sitemap.xml"
+  end
+
+  test "robots.txt names the search and AI crawlers as allowed, each with the same disallows (#185)" do
+    get "/robots.txt"
+
+    groups = response.body.split("\n\n").to_h { |group| [ group[/User-agent: (.+)/, 1], group ] }
+    %w[GPTBot OAI-SearchBot ChatGPT-User ClaudeBot Claude-SearchBot Claude-User PerplexityBot Perplexity-User Google-Extended Applebot-Extended].each do |agent|
+      assert_includes groups.fetch(agent), "Allow: /\n", agent
+      %w[/admin /corrections /search /design].each { |path| assert_includes groups.fetch(agent), "Disallow: #{path}", "#{agent} keeps out of #{path}" }
+    end
+    assert_not_includes groups.fetch("*"), "Allow: /"
+  end
+
+  test "llms.txt is a plain-text guide: what it covers, how facts are sourced, main pages, citing, corrections" do
+    cite!(company("Kairos Power", roles: [ role("reactor_vendor") ]))
+    cite!(plant("Hermes 2", facility_type: "power_reactor", status: "under_construction"))
+    get "/llms.txt"
+
+    assert_response :success
+    assert_equal "text/plain", response.media_type
+    body = response.body
+    assert_match(/\A# Nuclear Directory\n\n> A directory of the organizations and facilities in the US nuclear industry/, body)
+    assert_includes body, "- 1 companies:"
+    assert_includes body, "- 1 plants and sites:"
+    assert_includes body, "A fact with no public source is not published."
+    assert_includes body, "[Developers](http://www.example.com/companies?category=reactor-developers)"
+    assert_includes body, "(http://www.example.com/sitemap.xml)"
+    assert_includes body, DirectoryHelper::CORRECTIONS_EMAIL
+    assert_not_includes body, "—"
   end
 end

@@ -1,0 +1,19 @@
+# Seed research - 20 Oct 2026. PM decision: keep Duke Energy Florida as its own record and link it to Duke Energy (no merge). Quote: Duke Energy's own news release of 16 Oct 2026.
+name: Duke Energy Florida
+country_code: US
+status: active
+roles: []
+technologies: []
+relationships:
+- type: subsidiary_of
+  to: Duke Energy
+  description: Duke Energy's Florida electric utility.
+  source_url: https://news.duke-energy.com/releases/duke-energy-florida-launches-new-solar-site-in-jefferson-county
+  quote: Duke Energy Florida, a subsidiary of Duke Energy
+  published: '2026-10-16'
+  confidence: 1.0
+facilities: []
+notes: A bare record the crawler made from the NRC Crystal River 3 page. No website, HQ or description is stated by a page read here, so none is set. The Crystal River 3 owner claim is separate (ADP-CR3 holds the license).
+description:
+  source_url: https://news.duke-energy.com/releases/duke-energy-florida-launches-new-solar-site-in-jefferson-county
+  quote: Duke Energy Florida, a subsidiary of Duke Energy

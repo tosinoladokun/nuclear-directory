@@ -16,6 +16,10 @@ roles:
   quote: Commonwealth Fusion Systems (CFS), the largest and leading private fusion company, today announced that it raised $863 million in a Series B2 fundraising round as it moves closer to being the first in the world to commercialize fusion power.
   published: '2025-08-28'
   confidence: 1.0
+- key: reactor_vendor
+  source_url: https://cfs.energy/
+  quote: CFS has assembled a world-class team working to design, build, and scale fusion power plants that will deliver cost competitive, clean fusion energy to combat climate change.
+  confidence: 1.0
 technologies:
 - key: fusion
   source_url: https://cfs.energy/news-and-media/commonwealth-fusion-systems-raises-863-million-series-b2-round-to-accelerate-the-commercialization-of-fusion-energy

@@ -120,15 +120,20 @@ module AdminHelper
 
   # Counts for the nav and the Overview tiles, once per request.
   def admin_nav_counts
-    @admin_nav_counts ||= {
-      sources: SourceCatalog.total,
-      checks: DataQuality::Review.counts.values.sum + DataQuality::Review.pending_count,
-      live: Organization.published.count + Facility.published.where(parent_id: nil).count,
-      corrections: CorrectionReport.where(status: %w[open reviewed]).count,
-      outputs: PublicPages.new.count,
-      removed: Directory::RemovedList.total,
-      today: Today.new.nav_count
-    }
+    @admin_nav_counts ||= begin
+      # Each count once: Today's is the waiting facts plus step 4's requests.
+      pending = DataQuality::Review.pending_count
+      corrections = CorrectionReport.where(status: %w[open reviewed]).count
+      {
+        sources: SourceCatalog.total,
+        checks: DataQuality::Review.counts.values.sum + pending,
+        live: Organization.published.count + Facility.published.where(parent_id: nil).count,
+        corrections:,
+        outputs: PublicPages.new.count,
+        removed: Directory::RemovedList.total,
+        today: DataQuality::Review.check_counts["all"] + pending + corrections
+      }
+    end
   end
 
   # A claim's number as the admin sees it ("#1234"), so "do 1234" is easy to find (Tosin, 21 Oct).

@@ -27,3 +27,7 @@ facilities:
   confidence: 0.9
   note: "Plant Vogtle is co-owned by Georgia Power, Oglethorpe Power, MEAG Power and Dalton Utilities; the ownership shares are for Units 3 and 4."
 notes: Alias 'Municipal Electric Authority of Georgia' is the commonly used full name; not quoted from a fetched page this session - verify before loading the alias. HQ not verified. Stake % from 2018 WNN (some 2022 AP copies say 22.3%, per search snippets - not fetched).
+description:
+  text: Wholesale electric power provider to 49 public power communities in Georgia
+  source_url: https://www.meagpower.org/
+  quote: MEAG Power provides reliable, competitively priced, wholesale electric power to 49 Participant public power communities throughout Georgia.

@@ -66,7 +66,7 @@
               <details class="type-small">
                 <summary class="nd-link">Why, and the source</summary>
                 <p class="m-0"><%= joy %>: <%= item.ai_reason.presence || "no reason given" %></p>
-                <p class="m-0"><%= aminah %>: <%= item.dq_reason.presence || "#{aminah} didn't review this one." %></p>
+                <p class="m-0"><%= aminah %>: <%= review.aminah_reason(item).presence || "#{aminah} didn't review this one." %></p>
                 <% if (url = safe_url(item.source.url)) %>
                   <p class="m-0"><%= link_to "#{source_host(url)} ↗", url, class: "nd-link", target: "_blank", rel: "noopener" %></p>
                 <% end %>
