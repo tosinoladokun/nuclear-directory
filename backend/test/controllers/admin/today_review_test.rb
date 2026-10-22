@@ -67,7 +67,8 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     post admin_today_step_path("list"), params: { note: "no_list" }
     follow_redirect!
 
-    assert_select "#step-review", /3 facts\. Joy and Aminah agree on 1; 1 has different verdicts; Aminah didn't see 1\./
+    # "No list from Aminah today": her earlier calls don't count today.
+    assert_select "#step-review", /3 facts\. Joy and Aminah agree on 0; 0 have different verdicts; Aminah didn't see 3\./
     assert_select "#step-review a[href=?]", admin_today_review_path, text: "Start reviewing ›"
   end
 
@@ -132,5 +133,27 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     get admin_today_review_path
     assert_select "#fact-#{changed.id}", /Accepting replaces the checked state \(NJ → DE\)/
     assert_select "#fact-#{changed.id} button", "Keep"
+  end
+
+  test "with no list from Aminah today, her earlier calls show as not reviewed and the shortcut takes none" do
+    post admin_today_step_path("crawl")
+    post admin_today_step_path("list"), params: { note: "no_list" }
+    get admin_today_review_path
+    assert_select "#fact-#{@both.id} .nd-tag", text: "Aminah: not reviewed"
+    assert_select "#fact-#{@both.id} details", /Aminah: Aminah didn't review this one\./
+    assert_select "button", text: /they agree on/, count: 0
+    assert_empty TodayReview.new.agreed_items
+  end
+
+  test "a list's problems say fact, not claim" do
+    post admin_today_step_path("crawl")
+    post admin_today_list_path, params: { list: "999999 approve: not a real one\nnonsense" }
+    assert_no_match(/\bclaims?\b/i, css_select(".nd-alert").text)
+  end
+
+  test "a fact sent back to review isn't shown as Joy's accept, even with an old accept on it" do
+    @only_joy.update_columns(status: "needs_review", notes: "withdrawn: the source no longer lists it")
+    get admin_today_review_path
+    assert_select "#fact-#{@only_joy.id} .nd-tag", text: "Joy: check it"
   end
 end

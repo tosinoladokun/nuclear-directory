@@ -134,4 +134,21 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     added = Facility.find_by!(nrc_docket: "05000424")
     assert_equal [ site.id, "pending" ], [ added.parent_id, added.verification_status ]
   end
+
+  test "a company taken off after the form loaded takes no fact: checked under its lock with the write" do
+    @company.update_columns(verification_status: "unpublished")
+    added = DataQuality::Review.add_company_fact(organization_id: @company.id, kind: "role", key: "fuel", url: @fuel[:url], quote: @fuel[:quote], by: "human:tosin")
+    assert_equal [ "This company was taken off or merged since, so nothing was added" ], added.errors
+    assert_empty @company.organization_roles
+  end
+
+  test "a link or unit on a record taken off after the form loaded isn't added: checked under its lock with the write" do
+    site = Facility.create!(name: "Imaginary Point", verification_status: "verified", verified_by: "human:tosin")
+    site.update_columns(verification_status: "unpublished")
+    added, = DataQuality::Review.add_link(kind: "plant_link", record_id: site.id, other_id: @company.id, verb: "owns", url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
+    assert_equal [ "A record it's on was taken off or merged since, so nothing was added" ], added.errors
+    unit = DataQuality::Review.add_unit(site_id: site.id, name: "Imaginary Point 3", url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
+    assert_equal [ "A record it's on was taken off or merged since, so nothing was added" ], unit.errors
+    assert_equal 0, FacilityRelationship.count
+  end
 end
