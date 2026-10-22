@@ -3,7 +3,7 @@
 
 <div class="nd-shell__head">
   <h1 class="type-admin-h1">Live <span class="type-count"><%= number_with_delimiter(list.total) %></span></h1>
-  <span class="nd-btn nd-btn--outline type-ui text-ink-muted" aria-disabled="true" title="Adding records comes with #202">+ Add <span class="nd-tag">Soon</span></span>
+  <%= link_to "Add a record", admin_new_record_path(back: request.fullpath), class: "nd-btn nd-btn--primary type-ui" %>
 </div>
 
 <div class="nd-live__bar">

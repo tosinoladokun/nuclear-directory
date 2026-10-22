@@ -13,7 +13,7 @@
 
 <div class="nd-shell__head">
   <% trail = [ [ "Live", related_context[:live] ], [ related_context[:name], related_context[:path] ] ] if related_context %>
-  <%= render "admin/crumbs", parent_label: "Live", parent_path: back, trail:, current: @fact.name.to_s.upcase_first %>
+  <%= render "admin/crumbs", parent_label: (params[:from] == "removed" ? "Removed" : "Live"), parent_path: back, trail:, current: @fact.name.to_s.upcase_first %>
   <%= render "admin/itemnav", list: @list if @list %>
 </div>
 
@@ -48,11 +48,19 @@
         <%= link_to "Change status", admin_facility_status_path(id: @fact.id, **params.permit(:from, :section, :row, :with_removed, :back).to_h.symbolize_keys.compact_blank), class: "nd-btn nd-btn--outline type-ui" %>
       <% end %>
     <% end %>
-    <span class="nd-btn nd-btn--outline type-ui text-ink-muted" aria-disabled="true" title="Adding facts comes with #202">Add fact <span class="nd-tag">Soon</span></span>
+    <%# A removed or rejected record gets no Add fact: Put it back first. %>
+    <% if @fact.type == "Organization" && %w[verified pending].include?(@fact.verification_status) %>
+      <%= link_to "Add a fact", admin_record_new_fact_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--outline type-ui" %>
+    <% elsif %w[verified pending].include?(@fact.verification_status) %>
+      <span class="nd-btn nd-btn--outline type-ui text-ink-muted" aria-disabled="true" title="Adding a plant's facts comes next (#202)">Add fact <span class="nd-tag">Soon</span></span>
+    <% end %>
     <% if %w[verified pending].include?(@fact.verification_status) %>
       <%= link_to "Merge into…", admin_record_merge_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--outline type-ui" %>
     <% end %>
 
+    <% if @fact.verification_status == "pending" && !@fact.published %>
+      <%= link_to "Publish", admin_record_publish_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--primary type-ui" %>
+    <% end %>
     <% if @fact.verification_status == "verified" || @fact.published %>
       <details class="nd-takeoff">
         <summary class="nd-btn nd-btn--danger type-ui">Take off</summary>

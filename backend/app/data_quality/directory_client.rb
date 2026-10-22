@@ -382,6 +382,23 @@ class DataQuality::DirectoryClient
     write_result(result)
   end
 
+  # Add a fact and Publish (#202): see Directory::Lookup.
+  def company_fact_key?(kind, key) = lookup.company_fact_key?(kind, key)
+  def company_fact_status(organization_id:, kind:, key:) = lookup.company_fact_status(organization_id:, kind:, key:)
+  def publish_counts(type:, id:, added_reason:) = lookup.publish_counts(type:, id:, added_reason:)
+
+  # A website's domain, as a company's is stored and matched.
+  def domain_from(url) = lookup.domain_from(url)
+
+  # A record or fact a person adds by hand (#202): written pending, with
+  # its source's quote as evidence, recorded as `by`. Publishing it is a
+  # separate decision. Returns a WriteResult.
+  def add_fact(kind, attributes, source_id:, quote:, by:, reason:)
+    result = fact_writer.write(kind, attributes.to_h.symbolize_keys,
+      evidence: [ { source_id:, quote:, found_by: "human" } ], verification: { status: "pending", by:, reason: })
+    write_result(result)
+  end
+
   # What setting these plant records (a site and its units) to status would
   # change, without writing. Returns a StatusResult.
   def status_change_plan(ids:, status:) = status_result { status_change.plan(ids:, status:) }

@@ -27,6 +27,10 @@ roles:
   source_url: https://westinghousenuclear.com/
   quote: Westinghouse technology powers 57% of the world's nuclear power plants, maintains nearly two-thirds of the world's nuclear fleet and fuels 40% of that fleet.
   confidence: 1.0
+- key: reactor_vendor
+  source_url: https://westinghousenuclear.com/energy-systems/
+  quote: The AP1000® PWR is Westinghouse’s advanced Gen III+ large-scale modular reactor, designed to make nuclear power simpler to build, operate and maintain.
+  confidence: 1.0
 technologies:
 - key: fission
   source_url: https://info.westinghousenuclear.com/news/westinghouse-celebrates-milestone-achievement-as-ap1000-technology-powers-plant-vogtle-unit-4-into-commercial-operation

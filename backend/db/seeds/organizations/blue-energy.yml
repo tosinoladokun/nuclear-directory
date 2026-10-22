@@ -10,6 +10,10 @@ roles:
   source_url: https://www.blueenergy.co/
   quote: We are energy experts and experienced nuclear developers on a mission to scale nuclear power this decade.
   confidence: 1.0
+- key: project_developer
+  source_url: https://www.blueenergy.co
+  quote: We deliver nuclear power plants with an assembly line approach that fixes costs and schedules.
+  confidence: 1.0
 technologies: []
 relationships: []
 facilities: []
