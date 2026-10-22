@@ -70,6 +70,10 @@ class TodayReview
 
   # Aminah's recommendations on the agreed rows shown, as her list's Accept
   # takes them (checked again under the decision's locks).
+  # Each agreed fact's other copies (from other pages), approved after its
+  # first is accepted: { first id => [other ids] }.
+  def agreed_copies = rows("agree").to_h { |row| [ row.candidate_id, row.candidate_ids - [ row.candidate_id ] ] }
+
   def agreed_items
     rows("agree").flat_map(&:candidate_ids).map do |id|
       candidate = Candidate.find(id)
@@ -90,7 +94,8 @@ class TodayReview
     def same_fact(record)
       id = record.respond_to?(:candidate_id) ? record.candidate_id : record.id
       key = if record.subject_id then [ record.kind, record.subject_type, record.subject_id, record.payload.to_h.except("quote").sort ]
-      else [ record.kind, record.payload.to_h["name"].to_s.squish.downcase.presence || id ]
+      elsif record.kind == "organization" then [ record.kind, record.payload.to_h["name"].to_s.squish.downcase.presence || id ]
+      else [ :own, id ] # an unattached plant or link is decided on its own (its docket or ends may differ)
       end
       [ *key, *verdicts(record) ]
     end
