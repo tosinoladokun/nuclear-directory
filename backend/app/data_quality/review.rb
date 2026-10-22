@@ -497,11 +497,19 @@ module DataQuality::Review
 
     # Several at once (the same fact from several pages): every claim is
     # locked and checked first, then all are reopened, or none.
-    def undo_all(states, by:)
+    def undo_all(states, by:, directory: DataQuality::DirectoryClient.new)
       human!(by)
       result = nil
       Candidate.transaction do
         candidates = Candidate.where(id: states.map { |state| state["id"] }).order(:id).lock.index_by(&:id)
+        # Their records, locked after the claims as a decision locks them, and
+        # still open: one closed since (another claim's Reject retired it) can't take a claim back.
+        candidates.values.select(&:subject_id).map { |c| [ c.subject_type, c.subject_id ] }.uniq.sort.each { |type, id| directory.lock_fact(type:, id:) }
+        closed = candidates.values.find { |c| c.subject_id && directory.fact(type: c.subject_type, id: c.subject_id)&.closed? }
+        if closed
+          result = Result.new(candidate_id: closed.id, ref: nil, errors: [ "the record it was about was decided since, so it can't be undone here" ])
+          next
+        end
         changed = states.reject { |state| (candidate = candidates[state["id"]]) && undo_stamp(candidate) == state["stamp"] }
         if changed.any?
           result = Result.new(candidate_id: changed.first["id"], ref: nil, errors: [ "it changed since, so it can't be undone here" ])
@@ -986,7 +994,9 @@ module DataQuality::Review
       end
 
       # What Undo checks is unchanged: the claim as that Reject left it.
-      def undo_stamp(candidate) = [ candidate.status, candidate.reviewed_by, candidate.reviewed_at&.to_f, candidate.updated_at.to_f ].join("|")
+      # A merge repoints claims with update_all (no updated_at), so the record and proposal flag are in it too.
+      def undo_stamp(candidate) = [ candidate.status, candidate.reviewed_by, candidate.reviewed_at&.to_f, candidate.updated_at.to_f,
+        candidate.subject_type, candidate.subject_id, candidate.proposed_subject ].join("|")
 
       def decide_fact(type, id, status, by:, reason:, attributes: {}, directory:, require_source: false)
         human!(by)
