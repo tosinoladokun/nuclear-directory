@@ -33,28 +33,39 @@ class TodayReview
   # Aminah's reason for a row, unless today has no list from her.
   def aminah_reason(item) = (item.dq_reason unless @no_list)
 
-  # { group => [candidate id, …] }, newest first.
-  def ids
-    @ids ||= begin
-      waiting = DataQuality::Review.check_ids(category: "all")
-      grouped = Candidate.where(id: waiting).order(id: :desc).to_a.group_by { |candidate| group_of(*verdicts(candidate)) }
-      GROUPS.to_h { |group| [ group, Array(grouped[group]).map(&:id) ] }
+  # { group => [[candidate id, …] per fact], … }: each fact's copies
+  # together (so a page never splits a fact), newest fact first.
+  def clusters
+    @clusters ||= begin
+      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all")).order(id: :desc).to_a
+      by_group = waiting.group_by { |candidate| group_of(*verdicts(candidate)) }
+      GROUPS.to_h { |group| [ group, Array(by_group[group]).group_by { |candidate| same_fact(candidate) }.values.map { |copies| copies.map(&:id) } ] }
     end
   end
 
+  # { group => [candidate id, …] }, newest first.
+  def ids = @ids ||= clusters.transform_values(&:flatten)
+
   def rows(group)
     @rows ||= {}
-    @rows[group] ||= DataQuality::Review.items(ids.fetch(group).first(shown(group)), directory: @directory)
-      .group_by { |item| same_fact(item) }.values.map do |item, *others|
+    @rows[group] ||= begin
+      shown_ids = clusters.fetch(group).first(shown(group))
+      items = DataQuality::Review.items(shown_ids.flatten, directory: @directory).index_by(&:candidate_id)
+      shown_ids.filter_map do |copies|
+        item, *others = copies.filter_map { |id| items[id] }
+        next unless item
+
         joy, aminah = verdicts(item)
         Row.new(item:, joy:, aminah:, group:, others:)
       end
+    end
   end
 
+  # Pages count facts (each with all its copies); the heading counts claims.
   def shown(group) = @shown.fetch(group) * PAGE
   def pages(group) = @shown.fetch(group)
   def count(group) = ids.fetch(group).size
-  def more(group) = [ count(group) - shown(group), 0 ].max
+  def more(group) = [ clusters.fetch(group).size - shown(group), 0 ].max
   def size = ids.values.sum(&:size)
 
   # Aminah's recommendations on the agreed rows shown, as her list's Accept
@@ -73,11 +84,15 @@ class TodayReview
     # One fact, whichever page states it: the same kind of claim on the same
     # record with the same values, or, for a new company several pages
     # propose, the same kind and name.
-    def same_fact(item)
-      values = item.payload.to_h.except("quote").transform_values { |value| value.is_a?(String) ? value.squish.downcase : value }
-      if item.subject_id then [ item.kind, item.subject_type, item.subject_id, values.sort ]
-      else [ item.kind, values["name"] || item.candidate_id ]
+    # Copies only group when their verdicts match too, so the chips shown are
+    # true of every copy; values are exact (only a proposed new record's
+    # name is compared loosely).
+    def same_fact(record)
+      id = record.respond_to?(:candidate_id) ? record.candidate_id : record.id
+      key = if record.subject_id then [ record.kind, record.subject_type, record.subject_id, record.payload.to_h.except("quote").sort ]
+      else [ record.kind, record.payload.to_h["name"].to_s.squish.downcase.presence || id ]
       end
+      [ *key, *verdicts(record) ]
     end
 
     # [joy, aminah] for a candidate or a Checks item. Aminah's call counts
