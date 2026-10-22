@@ -172,4 +172,21 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     get admin_fact_path(type: "Facility", id: unit.id)
     assert_response :success
   end
+
+  test "a link that exists is refused untouched, whatever dates are given; its Open it shows" do
+    site = Facility.create!(name: "Dated Point", verification_status: "verified", verified_by: "human:tosin")
+    link = FacilityRelationship.create!(organization: @company, facility: site, relationship_type: "operates", started_on: Date.new(2019, 1, 1),
+      ended_on: Date.new(2021, 1, 1), verification_status: "verified", verified_by: "human:tosin")
+    post admin_record_facts_path(type: "Facility", id: site.id), params: { kind: "plant_link", other: @company.id, verb: "operates", started_on: "2024-01-01", **SRC }
+    assert_select ".nd-alert", /That link already exists/
+    assert_select ".nd-alert a[href=?]", admin_fact_path(type: "FacilityRelationship", id: link.id), text: "Open it"
+    assert_equal [ Date.new(2019, 1, 1), Date.new(2021, 1, 1) ], link.reload.values_at(:started_on, :ended_on)
+  end
+
+  test "a unit with its site's own name is added under it" do
+    site = Facility.create!(name: "Lonely Point", verification_status: "verified", verified_by: "human:tosin")
+    post admin_record_facts_path(type: "Facility", id: site.id), params: { kind: "unit", name: "Lonely Point", docket: "05000777", **SRC }
+    unit = Facility.find_by!(nrc_docket: "05000777")
+    assert_equal [ site.id, "Lonely Point" ], [ unit.parent_id, unit.name ]
+  end
 end

@@ -673,6 +673,9 @@
   .nd-today__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3); }
   .nd-today__actions .nd-btn, .nd-today__row .nd-btn { white-space: nowrap; }
   /* Today's step 3: a fact with Joy's and Aminah's verdicts (#373). */
+  /* One line that shrinks and ends in an ellipsis (the full text in its title). */
+  .nd-one-line { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nd-chosen .nd-one-line { flex: 0 1 auto; display: inline-block; }
   /* Add a fact: the company chosen, with Change beside it (44px to tap on touch). */
   .nd-chosen { display: flex; align-items: center; gap: var(--nd-space-4); min-height: 44px; }
   .nd-verdict__chips { display: flex; flex-wrap: wrap; gap: var(--nd-space-2); }

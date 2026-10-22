@@ -577,8 +577,13 @@ module Directory
     # - otherwise only blank attributes are filled, evidence is added, and the
     #   verification is left alone
     # Automated writers pass this.
+    # create_only: a fact added by hand (#202) is only ever new: one that
+    # exists already is returned as it is (created: false), never updated or
+    # locked, so a duplicate can't change it or wait on its lock. A unit
+    # under a site is the same one by its docket, or by its name under that
+    # site, never by a same-name site elsewhere.
     def write(kind, attributes, evidence: [], verification: nil, fill_blank: false, protect_human_verified: false,
-      remove_aliases: [])
+      remove_aliases: [], create_only: false)
       kind = kind.to_sym
       spec = KINDS[kind] or return failure(kind, "unknown kind #{kind.inspect}")
       human = verification.to_h.symbolize_keys[:by].to_s.start_with?("human:")
@@ -594,13 +599,17 @@ module Directory
         return failure(kind, "aliases must be a name or a list of names")
       end
 
+      if create_only && (existing = existing_for_create(kind, spec[:model], attributes))
+        return Result.new(kind:, id: existing.id, created: false, errors: [], conflicts: {}, changed: false)
+      end
+
       record = nil
       created = changed = false
       ActiveRecord::Base.transaction(requires_new: true) do
         # Checked before anything changes, even for a curated record whose
         # verification won't be applied: a bad key must never pass silently.
         check_verification!(verification) if verification
-        record = find(kind, spec[:model], attributes) || spec[:model].new
+        record = (find(kind, spec[:model], attributes) unless create_only) || spec[:model].new
         created = record.new_record?
         @evidence_changed = @aliases_changed = false
         skipped_alias = nil
@@ -995,6 +1004,18 @@ module Directory
           raise Invalid, "a deal term needs a term type" if attrs[:term_type].blank?
 
           model.find_by(attrs.slice(:link_type, :link_id, :term_type, :external_id)) if attrs[:external_id].present?
+        end
+      end
+
+      # What a create-only write would duplicate: a unit by docket or by name
+      # under its site; anything else as find finds it.
+      def existing_for_create(kind, model, attributes)
+        attrs = attributes.symbolize_keys
+        if kind == :facility && attrs[:parent_id].present?
+          (Facility.find_by(nrc_docket: attrs[:nrc_docket]) if attrs[:nrc_docket].present?) ||
+            Facility.where(parent_id: attrs[:parent_id]).where("LOWER(name) = LOWER(?)", attrs[:name].to_s).first
+        else
+          find(kind, model, attributes.compact)
         end
       end
 
