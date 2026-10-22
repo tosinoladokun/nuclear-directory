@@ -93,13 +93,23 @@ class Admin::TodayController < Admin::BaseController
   # fact checked again under the decision's locks.
   def agreed
     # One snapshot: the same items are fingerprinted and accepted.
-    items = TodayReview.new(shown: shown_counts).agreed_items
+    review = TodayReview.new(shown: shown_counts)
+    items = review.agreed_items
+    copies = review.agreed_copies
     if params[:shown_set] != DataQuality::Recommendations.fingerprint(items)
       flash[:alert] = "The list changed since you opened it, so nothing was accepted. Check it and try again."
       return redirect_after(admin_today_review_path(shown: shown_counts.presence))
     end
 
-    results = DataQuality::Recommendations.accept(items, by: actor)
+    # One copy of each fact through Aminah's Accept (her call rechecked under
+    # its locks); once that's in, the fact's other copies are approved with it
+    # (their own sources and quotes), not held back by the decision just made.
+    firsts = items.select { |item| copies.key?(item.candidate_id) }
+    results = DataQuality::Recommendations.accept(firsts, by: actor)
+    results += results.select(&:ok?).flat_map do |first|
+      rest = copies.fetch(first.candidate_id, [])
+      rest.any? ? DataQuality::Review.approve(rest, by: actor, reason: "Accepted in Today: another page of the same fact") : []
+    end
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?
     if stopped.any?

@@ -266,4 +266,44 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     get admin_today_review_path
     assert_select "#fact-#{@only_joy.id} .nd-tag", text: "Joy: check it"
   end
+
+  test "Undo is refused once the record its fact was about has been decided since" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    Organization.find(@only_joy.subject_id).tap { |c| c.update_columns(verification_status: "rejected", verified_by: "human:tosin") }
+    post admin_today_review_undo_path, params: { token: }
+    assert_match "the record it was about was decided since", flash[:alert]
+    assert @only_joy.reload.status_rejected?
+  end
+
+  test "Undo is refused after a merge moved the fact to another record" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    kept = Organization.create!(name: "Kept Fission Co")
+    Candidate.where(id: @only_joy.id).update_all(subject_id: kept.id) # as a merge repoints claims
+    post admin_today_review_undo_path, params: { token: }
+    assert_match "it changed since", flash[:alert]
+  end
+
+  test "unattached plants with the same name aren't grouped; only a new company's proposals are" do
+    a, b = 2.times.map do |i|
+      Candidate.create!(source: @source, kind: "facility", payload: { "name" => "Twin Point 1", "nrc_docket" => "0500088#{i}" }, quote: "q",
+        crawl_run: @both.crawl_run, status: "needs_review", notes: "unsure", ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    end
+    rows = TodayReview.new.rows("only_joy")
+    assert(rows.none? { |row| (row.candidate_ids & [ a.id, b.id ]).size == 2 })
+  end
+
+  test "the shortcut accepts every copy of an agreed fact, not just the first" do
+    other = Source.create!(url: "https://www.doe.gov/test/copy.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    assert_equal [ copy.id, @both.id ].sort, review.rows("agree").sole.candidate_ids.sort
+
+    post admin_today_review_agreed_path, params: { shown_set: review.fingerprint }
+    assert @both.reload.status_merged?, flash[:alert]
+    assert copy.reload.status_merged?, flash[:alert]
+  end
 end
