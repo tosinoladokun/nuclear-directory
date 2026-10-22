@@ -8,9 +8,9 @@
 
   <div class="nd-home__search">
     <%= render "shared/search_box", size: :large %>
-    <nav class="nd-suggs" aria-label="Suggested searches">
+    <nav class="nd-suggs" aria-label="Suggested searches" data-controller="fit-row">
       <% @suggestions.each do |suggestion| %>
-        <%= link_to directory_url_for(q: suggestion.query, from: "suggestion"), class: "nd-sugg type-ui" do %><%= icon("magnifying-glass", size: 12) %><%= suggestion.label %><% end %>
+        <%= link_to directory_url_for(q: suggestion.query, from: "suggestion"), class: "nd-sugg type-ui", data: { fit_row_target: "item" } do %><%= icon("magnifying-glass", size: 12) %><%= suggestion.label %><% end %>
       <% end %>
     </nav>
   </div>

@@ -35,4 +35,12 @@ class NoindexTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "User-agent: *\nDisallow: /\n", response.body
   end
+
+  test "with NOINDEX there is no llms.txt" do
+    ENV["NOINDEX"] = "1"
+
+    get "/llms.txt"
+
+    assert_response :not_found
+  end
 end
