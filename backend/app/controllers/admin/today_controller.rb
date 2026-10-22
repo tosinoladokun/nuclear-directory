@@ -2,6 +2,9 @@
 # are marked here; step 3 is Checks (the list and Aminah's Accept), and step
 # 4 is the correction requests. Nothing here decides a fact.
 class Admin::TodayController < Admin::BaseController
+  # Undo is offered for a group of at most this many copies (a small signed token).
+  UNDO_LIMIT = 20
+
   def show
     load_today
   end
@@ -45,34 +48,31 @@ class Admin::TodayController < Admin::BaseController
   end
 
   # Accept or Reject one fact, as the admin's decision (every check still runs).
+  # The same fact from other pages is decided with it (each checked as usual).
   def decide
     id = params[:candidate_id].to_i
-    # The same fact from other pages is decided with it (each checked as usual).
-    same = Array(params[:same]).map(&:to_i) - [ id ]
-    before = [ id, *same ].map { |each_id| DataQuality::Review.undo_state(each_id) }
-    results = if params[:decision] == "close"
-      DataQuality::Review.confirm_identical([ id, *same ], by: actor)
-    elsif params[:decision] == "accept"
-      DataQuality::Review.approve([ id, *same ], by: actor, reason: "Accepted in Today")
-    else
-      DataQuality::Review.reject([ id, *same ], by: actor, reason: "Rejected in Today")
+    ids = [ id, *(Array(params[:same]).map(&:to_i) - [ id ]) ]
+    before = ids.map { |each_id| DataQuality::Review.undo_state(each_id) } if params[:decision] == "reject"
+    results = case params[:decision]
+    when "accept" then DataQuality::Review.approve(ids, by: actor, reason: "Accepted in Today")
+    when "close" then DataQuality::Review.confirm_identical(ids, by: actor)
+    else DataQuality::Review.reject(ids, by: actor) # its notes kept, so Undo loses nothing
     end
-    result = results.find { |r| r.candidate_id == id } || results.first
-    if result&.ok? && (stopped = results.reject(&:ok?)).any?
-      result = DataQuality::Review::Result.new(candidate_id: id, ref: nil,
-        errors: stopped.map { |r| "##{r.candidate_id}: #{Array(r.errors).to_sentence}" })
-    end
-    if result&.ok?
+    stopped = ids.filter_map { |each_id| results.find { |r| r.candidate_id == each_id } || DataQuality::Review::Result.new(candidate_id: each_id, ref: nil, errors: [ "it was decided already" ]) }.reject(&:ok?)
+
+    if stopped.empty?
       flash[:notice] = { "accept" => "Accepted.", "close" => "Closed. Nothing on the site changed." }.fetch(params[:decision], "Rejected.")
-      # Undo restores every page's copy at once, or isn't offered.
-      undoable = before.map { |state| DataQuality::Review.undoable(state, decision: params[:decision]) }
-      if undoable.all?
+      # Undo only for a Reject, of every copy at once, while it's as left.
+      undoable = (before || []).map { |state| DataQuality::Review.undoable(state, by: actor) }
+      if params[:decision] == "reject" && undoable.all? && undoable.size <= UNDO_LIMIT
         flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour)
       elsif params[:decision] == "accept"
-        flash[:notice] += " It changed a value someone had checked, so there's no Undo; edit the record to change it back."
+        flash[:notice] += " To take it back, change it on its record."
       end
     else
-      flash[:alert] = "Can't #{{ 'accept' => 'publish', 'close' => 'close' }.fetch(params[:decision], 'reject')} this yet: #{Array(result&.errors).to_sentence.presence || 'it was decided already'}"
+      verb = { "accept" => "publish", "close" => "close" }.fetch(params[:decision], "reject")
+      flash[:alert] = "Can't #{verb} #{stopped.size == ids.size ? 'this' : "#{stopped.size} of #{ids.size}"} yet: " +
+        stopped.map { |r| "#{"##{r.candidate_id}: " if ids.size > 1}#{Array(r.errors).to_sentence.presence || 'it was decided already'}" }.join("; ")
     end
     redirect_after admin_today_review_path(shown: shown_counts.presence)
   end

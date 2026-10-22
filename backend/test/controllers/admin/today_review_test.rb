@@ -150,22 +150,43 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_nil @only_joy.reviewed_by
   end
 
-  test "Undo an Accept that made a waiting fact public: it's waiting again" do
+  test "an Accept has no Undo: it may have published or changed a record, so it's taken back on the record" do
     post admin_today_review_decide_path(candidate_id: @both.id, decision: "accept")
     assert @both.reload.status_merged?, flash[:alert]
-    token = undo_token
-
-    post admin_today_review_undo_path, params: { token: }
-    assert_equal "Undone. It's waiting again.", flash[:notice]
-    assert @both.reload.status_matched?
-    assert_equal "pending", Organization.find(@both.subject_id).verification_status
+    assert_nil flash[:undo]
+    assert_equal "Accepted. To take it back, change it on its record.", flash[:notice]
   end
 
-  test "an Accept on a fact already checked has no Undo, and says how to change it back" do
-    Organization.find(@both.subject_id).update_columns(verification_status: "verified", verified_by: "human:tosin")
-    post admin_today_review_decide_path(candidate_id: @both.id, decision: "accept")
+  test "a Reject keeps the fact's notes, so Undo loses nothing" do
+    @only_joy.update_columns(notes: "the page names it")
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    assert_equal "the page names it", @only_joy.reload.notes
+    post admin_today_review_undo_path, params: { token: undo_token }
+    assert_equal [ "matched", "the page names it" ], [ @only_joy.reload.status, @only_joy.notes ]
+  end
+
+  test "a Reject that retired the record its fact proposed has no Undo" do
+    proposed = Organization.create!(name: "Proposed Fission Co")
+    claim = Candidate.create!(source: @source, kind: "organization", payload: { "name" => proposed.name }, quote: "q", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: proposed.id, proposed_subject: true, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    post admin_today_review_decide_path(candidate_id: claim.id, decision: "reject")
+    assert claim.reload.status_rejected?
     assert_nil flash[:undo]
-    assert_match "there's no Undo; edit the record to change it back", flash[:notice]
+  end
+
+  test "copies of one fact with different verdicts are separate rows; a fact's copies are never split across pages" do
+    other = Source.create!(url: "https://www.doe.gov/test/split.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    unsure = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also.", crawl_run: @only_joy.crawl_run,
+      status: "needs_review", notes: "unsure", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    review = TodayReview.new
+    assert(review.rows("only_joy").none? { |row| row.candidate_ids.sort == [ @only_joy.id, unsure.id ].sort }, "different verdicts, different rows")
+
+    stub_const(TodayReview, :PAGE, 1) do
+      again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Again.", crawl_run: @only_joy.crawl_run,
+        status: "matched", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+      first = TodayReview.new.rows("only_joy").first
+      assert_equal [ again.id, @only_joy.id ].sort, first.candidate_ids.sort, "both copies on the first page"
+    end
   end
 
   test "Undo works only while nothing else has changed it" do
