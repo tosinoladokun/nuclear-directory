@@ -59,6 +59,21 @@ module Directory
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
 
+    # Enrich (#479): companies whose own pages were asked for and not read
+    # since, oldest request first, as [id, name, website].
+    def enrich_queue(limit: 5)
+      Organization.where("enrich_requested_at IS NOT NULL AND (enriched_at IS NULL OR enriched_at < enrich_requested_at)")
+        .where.not(website: [ nil, "" ]).order(:enrich_requested_at).limit(limit).pluck(:id, :name, :website)
+    end
+
+    # The roles and technologies a company can be given: { "role" => [[key, name]], "technology" => [[key, name]] }.
+    def company_fact_choices
+      { "role" => Role.order(:key).pluck(:key, :name), "technology" => Technology.order(:key).pluck(:key, :name) }
+    end
+
+    # Enrich (#479): its pages were read for the request now.
+    def mark_enriched(id) = Organization.where(id:).update_all(enriched_at: Time.current)
+
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
     # Facts a company can be given by hand (#202): kind => [model, its link's column].

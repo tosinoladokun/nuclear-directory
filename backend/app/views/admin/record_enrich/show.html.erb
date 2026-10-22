@@ -1,0 +1,62 @@
+<% content_for :title, "Enrich #{@company.name}" %>
+<% record = admin_record_path(type: "Organization", id: @company.id) %>
+<% joy = t("admin.reviewers.checker") %>
+
+<div class="nd-stack">
+  <%= render "admin/crumbs", parent_label: @company.name, parent_path: record, current: "Enrich" %>
+  <h1 class="type-admin-h1 m-0">Enrich <%= @company.name %></h1>
+  <p class="type-body m-0">Reads the company's own pages for what they state about it: what it does, its technologies, where it's based, when it was founded and its legal name. Each finding comes with the sentence it's from. Nothing goes live until you approve it, here or in Today.</p>
+
+  <section class="nd-panel nd-stack" aria-label="Read its pages">
+    <% if @company.website.blank? %>
+      <p class="type-body m-0">It has no website to read yet. Add one with <%= link_to "Edit", admin_record_edit_path(type: "Organization", id: @company.id), class: "nd-link" %> first.</p>
+    <% else %>
+      <p class="type-body m-0">
+        <% if @company.enrich_requested_at && (@company.enriched_at.nil? || @company.enriched_at < @company.enrich_requested_at) %>
+          Reading <span class="type-data"><%= @company.website %></span> now (asked <%= time_ago_in_words(@company.enrich_requested_at) %> ago).
+        <% elsif @company.enriched_at %>
+          Last read <%= time_ago_in_words(@company.enriched_at) %> ago, from <span class="type-data"><%= @company.website %></span>.
+        <% else %>
+          Not read yet. It reads <span class="type-data"><%= @company.website %></span> and up to four of its own pages.
+        <% end %>
+      </p>
+      <%= button_to "Read its pages", admin_record_enrich_path(type: "Organization", id: @company.id), class: "nd-btn nd-btn--primary type-ui" %>
+    <% end %>
+  </section>
+
+  <% if @items.any? %>
+    <% if @agreed.any? %>
+      <section class="nd-panel nd-stack" aria-label="Shortcut">
+        <p class="type-body m-0"><%= joy %> agrees with <%= pluralize(@agreed.size, "finding") %> below. One click approves them, each checked once more first. A change to something a person already decided isn't in it: approve those one at a time.</p>
+        <%= button_to "Approve all #{joy} agrees with (#{@agreed.size})", admin_record_enrich_agreed_path(type: "Organization", id: @company.id),
+          params: { ids: @agreed.sort, shown: Admin::CandidatesController.fingerprint(@agreed.sort) }, class: "nd-btn nd-btn--primary type-ui" %>
+      </section>
+    <% end %>
+
+    <h2 class="type-admin-h2 m-0">What its pages state <span class="type-data nd-num text-ink-muted"><%= @items.size %></span></h2>
+    <ol class="nd-waits">
+      <% @items.each do |item| %>
+        <% joy_accepts = item.ai_recommendation == "recommend_publish" && item.status != "needs_review" %>
+        <li class="nd-wait" id="finding-<%= item.candidate_id %>">
+          <div class="nd-wait__what">
+            <p class="type-kicker text-ink-muted m-0"><span class="nd-num">#<%= item.candidate_id %></span></p>
+            <p class="type-body-strong m-0"><%= item.claim %></p>
+            <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
+            <p class="type-small m-0">
+              <% if (url = safe_url(item.source.url)) %><%= link_to "#{source_host(url)} ↗", url, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>
+              <span class="<%= 'text-ink-muted' unless joy_accepts %>"><%= joy_accepts ? "✓ #{joy}: accept" : (item.ai_recommendation ? "#{joy}: check it" : "#{joy} hasn't checked it yet") %></span>
+            </p>
+          </div>
+          <div class="nd-wait__actions type-ui">
+            <%= button_to "Approve", admin_record_enrich_decide_path(type: "Organization", id: @company.id, candidate_id: item.candidate_id, decision: "approve"),
+              class: "nd-btn #{joy_accepts ? 'nd-btn--primary' : 'nd-btn--outline'}" %>
+            <%= button_to "Reject", admin_record_enrich_decide_path(type: "Organization", id: @company.id, candidate_id: item.candidate_id, decision: "reject"),
+              class: "nd-btn nd-btn--outline" %>
+          </div>
+        </li>
+      <% end %>
+    </ol>
+  <% elsif @company.enriched_at %>
+    <p class="type-body text-ink-muted">Nothing waiting from its pages. Anything they stated has been decided, or they stated nothing on the list.</p>
+  <% end %>
+</div>

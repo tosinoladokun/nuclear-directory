@@ -38,7 +38,9 @@ class SourceCatalog
     "usaspending_api" => { name: "USAspending API", note: "the award search", daily: true },
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
-    "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true }
+    "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
+    # Enrich (#479): read only when the admin asks, one company at a time.
+    "company_pages" => { name: "Companies' own pages", note: "read on request (Enrich)" }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze

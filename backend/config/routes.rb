@@ -87,6 +87,12 @@ Rails.application.routes.draw do
       # Publish a record not yet public (#202): previewed, then confirmed.
       get "publish" => "record_publish#show", as: :publish
       post "publish" => "record_publish#create"
+      # Enrich (#479): read a company's own pages against the field list, and decide what they found here.
+      get "enrich" => "record_enrich#show", as: :enrich
+      post "enrich" => "record_enrich#create"
+      post "enrich/agreed" => "record_enrich#agreed", as: :enrich_agreed
+      post "enrich/:candidate_id/:decision" => "record_enrich#decide", as: :enrich_decide,
+        constraints: { candidate_id: /\d+/, decision: /approve|reject/ }
     end
     # Change status on a plant or a unit (#316): the form previews with a GET.
     scope "facilities/:id/status", as: :facility_status, constraints: { id: /\d+/ } do

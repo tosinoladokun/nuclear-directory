@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_035000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -313,11 +313,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_035000) do
     t.datetime "updated_at", null: false
     t.string "sec_cik"
     t.string "short_name"
+    t.datetime "enrich_requested_at"
+    t.datetime "enriched_at"
+    t.string "exchange"
+    t.string "ticker"
     t.index ["domain"], name: "index_organizations_on_domain", unique: true
+    t.index ["enrich_requested_at"], name: "index_organizations_on_enrich_requested_at", where: "(enrich_requested_at IS NOT NULL)"
+    t.index ["exchange", "ticker"], name: "index_organizations_on_exchange_and_ticker", unique: true, where: "(ticker IS NOT NULL)"
     t.index ["sec_cik"], name: "index_organizations_on_sec_cik", unique: true, where: "(sec_cik IS NOT NULL)"
     t.index ["slug"], name: "index_organizations_on_slug", unique: true
     t.index ["verification_status"], name: "index_organizations_on_verification_status"
+    t.check_constraint "(exchange IS NULL) = (ticker IS NULL)", name: "organizations_listing_check"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "organizations_confidence_check"
+    t.check_constraint "exchange IS NULL OR (exchange::text = ANY (ARRAY['NASDAQ'::character varying, 'NYSE'::character varying, 'NYSE American'::character varying, 'TSX'::character varying, 'TSXV'::character varying, 'LSE'::character varying, 'ASX'::character varying, 'OTC'::character varying]::text[]))", name: "organizations_exchange_check"
     t.check_constraint "sec_cik IS NULL OR sec_cik::text ~ '^[0-9]{10}$'::text", name: "organizations_sec_cik_check"
     t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "organizations_short_name_check"
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying::text, 'acquired'::character varying::text, 'defunct'::character varying::text])", name: "organizations_status_check"

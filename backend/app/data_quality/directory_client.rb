@@ -53,6 +53,11 @@ class DataQuality::DirectoryClient
   def normalize_cik(value) = lookup.cik(value)
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
+  # Enrich (#479): companies waiting for their pages to be read, and marking one read.
+  def enrich_queue(limit: 5) = lookup.enrich_queue(limit:)
+  def mark_enriched(id) = lookup.mark_enriched(id)
+  def company_fact_choices = lookup.company_fact_choices
+
   def organization(name: nil, domain: nil, sec_cik: nil)
     record("Organization", lookup.organization(name:, domain:, sec_cik:))
   end
