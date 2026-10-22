@@ -388,62 +388,44 @@ module DataQuality::Review
       end
     end
 
-    # Undo for Today's Accept and Reject (#373), as exact as it can be:
-    # undo_state(id) before the decision, undoable(state) after it (nil when
-    # it can't be undone), undo(undoable, by:) to reverse it. A Reject is
-    # undone unless it also retired a proposed record; an Accept only when it
-    # made a new or waiting fact public (it goes back to waiting), never one
-    # that changed values on a fact already checked. Either only while
-    # nothing else has changed the claim or its fact since.
-    def undo_state(candidate_id, directory: DataQuality::DirectoryClient.new)
+    # Undo for Today's Reject (#373): only a Reject, which changes nothing but
+    # the claims (notes are kept, so nothing is lost), and only while they're
+    # still as that Reject left them. A Reject that also retired the record
+    # its claims proposed has no Undo, and neither has an Accept: it may have
+    # published or changed a record, so it's taken back on the record (Edit,
+    # Take off), never by a blind reversal.
+    #   before = Review.undo_state(id)              # before the decision
+    #   state = Review.undoable(before, by:)        # after it; nil: no Undo
+    #   Review.undo_all([ state ], by:)             # all or none
+    def undo_state(candidate_id)
       candidate = Candidate.find_by(id: candidate_id) or return
-      fact = (directory.fact(type: candidate.subject_type, id: candidate.subject_id) if candidate.subject_id)
-      { "id" => candidate.id, "status" => candidate.status, "notes" => candidate.notes, "fact_status" => fact&.verification_status,
-        "proposed" => candidate.proposed_subject.present? }
+      { "id" => candidate.id, "status" => candidate.status }
     end
 
-    def undoable(state, decision:, directory: DataQuality::DirectoryClient.new)
-      return unless state
-      return if decision == "reject" && state["proposed"]
-      return if decision == "accept" && !state["fact_status"].in?([ nil, "pending" ])
+    def undoable(state, by:, directory: DataQuality::DirectoryClient.new)
+      candidate = (Candidate.find_by(id: state["id"]) if state) or return
+      return unless candidate.status_rejected? && candidate.reviewed_by == by
+      # The Reject retired the record it proposed (or another claim's): that stays.
+      return if candidate.subject_id && directory.fact(type: candidate.subject_type, id: candidate.subject_id)&.closed?
 
-      candidate = Candidate.find(state["id"])
-      return unless candidate.subject_id || decision == "reject"
-
-      state.merge("decision" => decision, "stamp" => undo_stamp(candidate, directory:))
+      state.merge("stamp" => undo_stamp(candidate))
     end
 
-    # Several at once (the same fact from several pages): all or none.
-    def undo_all(states, by:, directory: DataQuality::DirectoryClient.new)
-      result = nil
-      Candidate.transaction do
-        failed = states.map { |state| undo(state, by:, directory:) }.reject(&:ok?)
-        result = failed.first || Result.new(candidate_id: states.first&.dig("id"), ref: nil, errors: [])
-        raise ActiveRecord::Rollback if failed.any?
-      end
-      result
-    end
-
-    def undo(state, by:, directory: DataQuality::DirectoryClient.new)
+    # Several at once (the same fact from several pages): every claim is
+    # locked and checked first, then all are reopened, or none.
+    def undo_all(states, by:)
       human!(by)
       result = nil
       Candidate.transaction do
-        candidate = Candidate.lock.find_by(id: state["id"])
-        directory.lock_fact(type: candidate.subject_type, id: candidate.subject_id) if candidate&.subject_id
-        unless candidate && undo_stamp(candidate, directory:) == state["stamp"]
-          result = Result.new(candidate_id: state["id"], ref: nil, errors: [ "it changed since, so it can't be undone here" ])
+        candidates = Candidate.where(id: states.map { |state| state["id"] }).order(:id).lock.index_by(&:id)
+        changed = states.reject { |state| (candidate = candidates[state["id"]]) && undo_stamp(candidate) == state["stamp"] }
+        if changed.any?
+          result = Result.new(candidate_id: changed.first["id"], ref: nil, errors: [ "it changed since, so it can't be undone here" ])
           next
         end
 
-        if state["decision"] == "accept"
-          undone = decide_fact(candidate.subject_type, candidate.subject_id, "pending", by:, reason: "Undone in Today", directory:)
-          unless undone.ok?
-            result = undone
-            raise ActiveRecord::Rollback
-          end
-        end
-        candidate.update!(status: state["status"], notes: state["notes"], reviewed_by: nil, reviewed_at: nil)
-        result = Result.new(candidate_id: candidate.id, ref: nil, errors: [])
+        states.each { |state| candidates.fetch(state["id"]).update!(status: state["status"], reviewed_by: nil, reviewed_at: nil) }
+        result = Result.new(candidate_id: states.first["id"], ref: nil, errors: [])
       end
       result
     end
@@ -919,11 +901,8 @@ module DataQuality::Review
         scope.where("candidates.notes ILIKE ANY (ARRAY[?])", reason_patterns(reason))
       end
 
-      # What Undo checks is unchanged: the claim, and its fact's history.
-      def undo_stamp(candidate, directory:)
-        history = candidate.subject_id ? directory.verification_history(type: candidate.subject_type, id: candidate.subject_id).size : 0
-        [ candidate.status, candidate.updated_at.to_f, candidate.subject_type, candidate.subject_id, history ].join("|")
-      end
+      # What Undo checks is unchanged: the claim as that Reject left it.
+      def undo_stamp(candidate) = [ candidate.status, candidate.reviewed_by, candidate.reviewed_at&.to_f, candidate.updated_at.to_f ].join("|")
 
       def decide_fact(type, id, status, by:, reason:, attributes: {}, directory:, require_source: false)
         human!(by)
