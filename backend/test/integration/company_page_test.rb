@@ -132,6 +132,18 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-factrow .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
   end
 
+  test "a company with both roles shows both role labels by its name, and only there (the Developers list shows none)" do
+    designer = Role.find_or_create_by!(key: "reactor_vendor") { |role| role.name = "Reactor vendor" }
+    developer = Role.find_or_create_by!(key: "project_developer") { |role| role.name = "Project developer" }
+    both = cite!(company("Both Roles Holdings", roles: [ designer, developer ]))
+    get company_path(slug: both.slug)
+
+    assert_equal [ "Project developer", "Reactor designer" ], css_select(".nd-tag").map { |el| el.text.strip }.sort, "both role labels, in the tag row under the name"
+
+    get companies_path(category: "reactor-developers")
+    assert_select ".nd-listrow .nd-tag", 0
+  end
+
   test "key facts" do
     get company_path(slug: "kairos-power")
 
