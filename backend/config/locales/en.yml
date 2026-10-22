@@ -36,3 +36,9 @@ en:
       # facts one of the record's quotes states.
       company: "About this company: sources"
       plant: "About this plant: sources"
+  # The two reviewers on the admin's Today page (#373), admin only, never on
+  # the public site. Swapping who's who is a one-word change here.
+  admin:
+    reviewers:
+      checker: "Joy"
+      reviewer: "Aminah"
