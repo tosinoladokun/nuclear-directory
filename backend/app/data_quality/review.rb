@@ -612,7 +612,8 @@ module DataQuality::Review
       other = (directory.fact(type: "Organization", id: other_id) if other_id.present?)
       share = share.to_s.strip.presence
       starts, ends = [ started_on, ended_on ].map { |date| date.presence && (Date.iso8601(date.to_s) rescue :bad) }
-      errors = [ ("Choose the company it's linked to" unless other && open_record?(other) && other.id != record&.id),
+      # Same id means the same record only between two companies (a plant and a company are different tables).
+      errors = [ ("Choose the company it's linked to" unless other && open_record?(other) && !(company_link && other.id == record&.id)),
         ("Choose how they're linked" unless verbs.key?(verb.to_s)),
         ("A share is a number from 0 to 100" if share && !(share.match?(/\A\d+(\.\d+)?\z/) && share.to_f.between?(0, 100))),
         ("Only an owner has a share" if share && verb.to_s != "owns"),
@@ -927,6 +928,9 @@ module DataQuality::Review
       def write_added(fact_kind, attributes, url:, quote:, by:, dry_run:, duplicate:, directory:, parents: [])
         added = nil
         ApplicationRecord.transaction do
+          # In one order (table, then id), as FactWriter's link ends are, so two
+          # additions between the same records can't deadlock.
+          parents = parents.uniq.sort_by { |type, id| [ type, id ] }
           parents.each { |type, id| directory.lock_fact(type:, id:) }
           if parents.any? { |type, id| !(fact = directory.fact(type:, id:)) || !open_record?(fact) }
             added = Added.new(ref: nil, errors: [ "A record it's on was taken off or merged since, so nothing was added" ], existing: nil)

@@ -37,7 +37,7 @@
       <p class="type-body-strong">Not added yet. Fix this first:</p>
       <ul class="type-body">
         <% @added.errors.each do |error| %>
-          <li><%= error %><% if @added.existing %> <%= link_to "Open it", (%w[Organization Facility].include?(@added.existing.type) ? admin_record_path(type: @added.existing.type, id: @added.existing.id) : admin_fact_path(type: @added.existing.type, id: @added.existing.id)), class: "nd-link" %><% end %></li>
+          <li><%= error %><% if @added.existing %> <%= link_to "Open it", (@added.existing.type == "Organization" || (@added.existing.type == "Facility" && Facility.where(id: @added.existing.id).pick(:parent_id).nil?) ? admin_record_path(type: @added.existing.type, id: @added.existing.id) : admin_fact_path(type: @added.existing.type, id: @added.existing.id)), class: "nd-link" %><% end %></li>
         <% end %>
       </ul>
     </div>

@@ -37,7 +37,7 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     post admin_record_facts_path(type: "Organization", id: @company.id), params: @fuel
 
     role = @company.organization_roles.sole
-    assert_redirected_to admin_record_path(type: "Organization", id: @company.id, anchor: "item-OrganizationRole-#{role.id}")
+    assert_redirected_to admin_record_path(type: "Organization", id: @company.id)
     assert_equal [ "fuel", "pending" ], [ role.role.key, role.verification_status ]
     assert_equal [ "Imaginary Fission makes reactor fuel." ], role.evidence.map(&:quote)
     assert_equal [ "human:tosin", "Added by hand" ], role.verification_events.order(:id).last.slice(:by, :reason).values
@@ -150,5 +150,26 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     unit = DataQuality::Review.add_unit(site_id: site.id, name: "Imaginary Point 3", url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
     assert_equal [ "A record it's on was taken off or merged since, so nothing was added" ], unit.errors
     assert_equal 0, FacilityRelationship.count
+  end
+
+  test "a plant link to a company whose id equals the site's is allowed; the new link's row is the redirect's target" do
+    site = Facility.create!(name: "Same Id Point", verification_status: "verified", verified_by: "human:tosin")
+    company = Organization.create!(name: "Same Id Co", verification_status: "verified", verified_by: "human:tosin")
+    company.update_columns(id: site.id) unless company.id == site.id
+    post admin_record_facts_path(type: "Facility", id: site.id), params: { kind: "plant_link", other: site.id, verb: "operates", **SRC }
+    link = FacilityRelationship.find_by!(organization_id: site.id, facility_id: site.id)
+    assert_redirected_to admin_record_path(type: "Facility", id: site.id, anchor: "item-FacilityRelationship-#{link.id}")
+    follow_redirect!
+    assert_select "#item-FacilityRelationship-#{link.id}"
+  end
+
+  test "a docket already used by a unit opens that unit's page" do
+    site = Facility.create!(name: "Imaginary Point", verification_status: "verified", verified_by: "human:tosin")
+    other_site = Facility.create!(name: "Elsewhere")
+    unit = Facility.create!(name: "Elsewhere 1", nrc_docket: "05000998", parent: other_site)
+    get admin_record_new_fact_path(type: "Facility", id: site.id, kind: "unit", preview: 1, name: "Imaginary Point 3", docket: "05000998", **SRC)
+    assert_select ".nd-alert a[href=?]", admin_fact_path(type: "Facility", id: unit.id), text: "Open it"
+    get admin_fact_path(type: "Facility", id: unit.id)
+    assert_response :success
   end
 end

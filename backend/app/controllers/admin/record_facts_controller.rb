@@ -26,7 +26,9 @@ class Admin::RecordFactsController < Admin::BaseController
     return render(:new, status: :unprocessable_content) unless @added.ok?
 
     flash[:notice] = "Added. It isn't public yet."
-    redirect_after admin_record_path(type: @type, id: @record.id, back: params[:back].presence, anchor: "item-#{@added.ref.type}-#{@added.ref.id}")
+    # A link or unit is a row on the record's page (its anchor); a role or technology isn't listed there by itself.
+    anchor = ("item-#{@added.ref.type}-#{@added.ref.id}" if %w[Relationship FacilityRelationship Facility].include?(@added.ref.type))
+    redirect_after admin_record_path(type: @type, id: @record.id, back: params[:back].presence, anchor:)
   end
 
   private
