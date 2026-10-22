@@ -204,8 +204,8 @@
   .nd-listrow__name { font: 600 clamp(13px, calc(100cqi / (var(--chars, 20) * 0.6)), 16px)/22px var(--font-text); }
   .nd-listrow__desc { font-size: clamp(13px, calc(100cqi / (var(--chars, 40) * 0.56)), 14px); line-height: 20px; color: var(--nd-ink-muted); }
   @container (max-width: 300px) { .nd-listrow__cap { display: none; } }
-  /* The role(s) a company has in the Developers list: small chips on one line, under the name. */
-  .nd-listrow__roles { display: flex; gap: var(--nd-space-1); overflow: hidden; }
+  /* The role(s) a company has in the Developers list: small chips under the name; on a narrow screen they wrap as whole chips, never cut. */
+  .nd-listrow__roles { display: flex; flex-wrap: wrap; gap: var(--nd-space-1); }
   .nd-listrow__side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; font-size: 13px; line-height: 18px; color: var(--nd-ink-muted); }
   .nd-listrow__side .nd-num { font-size: 11px; }
 

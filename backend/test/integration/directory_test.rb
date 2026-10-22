@@ -193,6 +193,9 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "reactor-developers", q: "nothing like this", state: "CA", sort: "connections")
 
     assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&sort=connections&state=CA", text: "Clear search"
+
+    get companies_path(category: "reactor-developers", q: "nothing like this", role: "project_developer")
+    assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&role=project_developer", text: "Clear search"
   end
 
   test "search and filtered lists aren't indexed; plain lists and categories are" do

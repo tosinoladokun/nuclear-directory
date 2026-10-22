@@ -170,6 +170,20 @@ class NoWrapTest < ApplicationSystemTestCase
     page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
   end
 
+  test "a dual-role company's two role chips stay inside the row at 320, wrapping as whole chips" do
+    resize_viewport(320, 700)
+    visit "/companies?category=reactor-developers"
+    state = page.evaluate_script(<<~JS)
+      (() => {
+        const roles = [...document.querySelectorAll(".nd-listrow__roles")].find((el) => el.querySelectorAll(".nd-tag").length === 2), box = roles.getBoundingClientRect()
+        const chips = [...roles.querySelectorAll(".nd-tag")].map((chip) => chip.getBoundingClientRect())
+        return [chips.length, chips.every((r) => r.left >= box.left - 1 && r.right <= box.right + 1), roles.scrollWidth <= roles.clientWidth + 1, document.documentElement.scrollWidth <= innerWidth]
+      })()
+    JS
+    assert_equal [ 2, true, true, true ], state, "both chips whole and inside their row at 320"
+    assert_empty page.evaluate_script(AUDIT)
+  end
+
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
     resize_viewport(1440, 900)
     visit "/plants/#{@plant.slug}"
