@@ -258,6 +258,20 @@ module AdminHelper
     end
   end
 
+  # A finding on the Enrich page as its field and value: "Headquarters city:
+  # Austin", "What it does: Reactor designer" (#479). Anything else, its claim.
+  def enrich_finding(item)
+    payload = item.payload.to_h
+    case item.kind
+    when "organization"
+      field, value = payload.except("name").first
+      field ? "#{field_label(field).upcase_first}: #{field_value(value)}" : item.claim
+    when "organization_role" then "What it does: #{role_label(payload['role'])}"
+    when "organization_technology" then "Technology: #{Technology.find_by(key: payload['technology'])&.name || payload['technology']}"
+    else item.claim
+    end
+  end
+
   def field_label(name) = DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize }
 
   # A value for its field: a role in visitors' words ("Reactor developer").

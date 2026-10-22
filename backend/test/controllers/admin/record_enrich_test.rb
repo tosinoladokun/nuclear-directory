@@ -33,12 +33,16 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_enqueued_with(job: DataQuality::RunJob, args: [ "company_pages" ]) { post enrich_path }
     assert @company.reload.enrich_requested_at
     follow_redirect!
-    assert_select ".nd-panel", /Reading https:\/\/www\.acmefission\.com\/ now/
+    assert_select ".nd-panel", /Reading acmefission\.com now/
   end
 
   test "its findings, each with its quote, source and Joy's verdict, approved or rejected here" do
     get enrich_path
-    assert_select "#finding-#{@agreed.id}", /Acme Fission.*Austin.*“Acme Fission is headquartered in Austin\.”.*acmefission\.com.*✓ Joy: accept/m
+    assert_select "#finding-#{@agreed.id} .type-body-strong", "Headquarters city: Austin"
+    assert_select "#finding-#{@agreed.id}", /“Acme Fission is headquartered in Austin\.”.*acmefission\.com.*✓ Joy: accept/m
+    assert_select ".nd-panel a[href=?]", "https://www.acmefission.com/", text: "acmefission.com"
+    assert_select ".nd-panel button.nd-btn--outline", "Read its pages"
+    assert_select "p", /No “Approve all” here: Joy agrees with 1 finding, but it changes what a person already decided/
     assert_select "#finding-#{@unsure.id}", /Joy: check it/
     assert_select "#finding-#{@agreed.id} .nd-btn--primary", "Approve"
 

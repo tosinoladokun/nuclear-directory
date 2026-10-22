@@ -13,18 +13,22 @@
     <% else %>
       <p class="type-body m-0">
         <% if @company.enrich_requested_at && (@company.enriched_at.nil? || @company.enriched_at < @company.enrich_requested_at) %>
-          Reading <span class="type-data"><%= @company.website %></span> now (asked <%= time_ago_in_words(@company.enrich_requested_at) %> ago).
+          Reading <%= link_to source_host(@company.website), @company.website, class: "nd-link", target: "_blank", rel: "noopener" %> now (asked <%= time_ago_in_words(@company.enrich_requested_at) %> ago).
         <% elsif @company.enriched_at %>
-          Last read <%= time_ago_in_words(@company.enriched_at) %> ago, from <span class="type-data"><%= @company.website %></span>.
+          Last read <%= time_ago_in_words(@company.enriched_at) %> ago, from <%= link_to source_host(@company.website), @company.website, class: "nd-link", target: "_blank", rel: "noopener" %>.
         <% else %>
-          Not read yet. It reads <span class="type-data"><%= @company.website %></span> and up to four of its own pages.
+          Not read yet. It reads <%= link_to source_host(@company.website), @company.website, class: "nd-link", target: "_blank", rel: "noopener" %> and up to four of its own pages.
         <% end %>
       </p>
-      <%= button_to "Read its pages", admin_record_enrich_path(type: "Organization", id: @company.id), class: "nd-btn nd-btn--primary type-ui" %>
+      <%= button_to "Read its pages", admin_record_enrich_path(type: "Organization", id: @company.id), class: "nd-btn #{@items.any? ? 'nd-btn--outline' : 'nd-btn--primary'} type-ui" %>
     <% end %>
   </section>
 
   <% if @items.any? %>
+    <% held = @items.count { |item| item.ai_recommendation == "recommend_publish" && item.status != "needs_review" && item.held } %>
+    <% if @agreed.empty? && held.positive? %>
+      <p class="type-small text-ink-muted m-0">No “Approve all” here: <%= joy %> agrees with <%= pluralize(held, "finding") %>, but <%= held == 1 ? "it changes" : "they change" %> what a person already decided (or <%= held == 1 ? "is" : "are" %> in a first batch Data Quality reads), so <%= held == 1 ? "it's" : "they're" %> approved one at a time.</p>
+    <% end %>
     <% if @agreed.any? %>
       <section class="nd-panel nd-stack" aria-label="Shortcut">
         <p class="type-body m-0"><%= joy %> agrees with <%= pluralize(@agreed.size, "finding") %> below. One click approves them, each checked once more first. A change to something a person already decided isn't in it: approve those one at a time.</p>
@@ -40,7 +44,7 @@
         <li class="nd-wait" id="finding-<%= item.candidate_id %>">
           <div class="nd-wait__what">
             <p class="type-kicker text-ink-muted m-0"><span class="nd-num">#<%= item.candidate_id %></span></p>
-            <p class="type-body-strong m-0"><%= item.claim %></p>
+            <p class="type-body-strong m-0"><%= enrich_finding(item) %></p>
             <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
             <p class="type-small m-0">
               <% if (url = safe_url(item.source.url)) %><%= link_to "#{source_host(url)} ↗", url, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>
