@@ -27,6 +27,9 @@ class DirectoryController < ApplicationController
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
     # Show more (?shown=2) is the same search, expanded: not a new one.
-    track_search(@listing.query, results: @companies_total + @plants_total, source:) if @listing.searching? && params[:shown].blank?
+    # A gap is a search of the whole directory finding nothing: a category,
+    # tag or filter narrowing it to nothing isn't one.
+    unfiltered = !@listing.filtered? && @listing.category.nil? && @listing.tag.nil?
+    track_search(@listing.query, results: @companies_total + @plants_total, source:, gap: (params[:q].to_s if unfiltered)) if @listing.searching? && params[:shown].blank?
   end
 end

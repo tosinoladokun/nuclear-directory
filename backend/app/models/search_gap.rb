@@ -9,8 +9,11 @@
 class SearchGap < ApplicationRecord
   STATUSES = %w[open research covered ignored closed].freeze
   DECISIONS = { "research" => "Research", "covered" => "Covered", "ignored" => "Ignore" }.freeze
-  # What isn't kept: an email address or a phone number someone typed.
-  PERSONAL = /@|\d[\d\s().+-]{6,}\d/
+  # What isn't kept: an email address, or a phone number someone typed (a run
+  # of digits, spaces, brackets, dots, plus signs and dashes, Unicode dashes
+  # too, with seven digits or more).
+  PHONE_RUN = /[\d\s().+\-\u2010-\u2015\u2212]+/
+  def self.personal?(query) = query.include?("@") || query.scan(PHONE_RUN).any? { |run| run.count("0-9") >= 7 }
 
   enum :status, STATUSES.index_by(&:itself), validate: true, prefix: :status
 
@@ -22,9 +25,12 @@ class SearchGap < ApplicationRecord
 
   # Records one search: a miss is counted (a gap closed earlier opens again);
   # a hit closes the gap it was. Returns nothing.
+  # The query as typed, screened whole before it's shortened.
   def self.record(query, results:, today: Date.current)
+    return if personal?(query.to_s)
+
     query = normalize(query)
-    return if query.length < 3 || query.match?(PERSONAL)
+    return if query.length < 3
 
     if results.to_i.zero?
       now = Time.current

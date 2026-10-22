@@ -14,4 +14,14 @@ class SearchGapsTest < ActionDispatch::IntegrationTest
     get companies_path(q: "Zzyzx Fission"), headers: { "User-Agent" => "Googlebot/2.1" }
     assert_equal 2, SearchGap.sole.searches_count, "bots aren't counted"
   end
+
+  test "a filtered search that finds nothing isn't a gap; a long query with an email past 100 characters isn't kept" do
+    Organization.create!(name: "Statey Fission", hq_state: "CA", verification_status: "verified", verified_by: "human:tosin")
+    state = DirectoryListing.new.state_options.first
+    assert state, "a state to filter by"
+    get companies_path(q: "Zzyzx Fission", state:), headers: BROWSER
+    get companies_path(q: "Zzyzx Fission", category: "fuel"), headers: BROWSER
+    get companies_path(q: "#{'nuclear ' * 13}me@example.com"), headers: BROWSER
+    assert_equal 0, SearchGap.count
+  end
 end

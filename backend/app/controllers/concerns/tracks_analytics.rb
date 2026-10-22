@@ -21,12 +21,13 @@ module TracksAnalytics
   end
 
   private
-    def track_search(query, results:, source: "typed")
+    # gap: the query exactly as typed, for our own list of searches that found
+    # nothing (#483), or nil to leave the list alone (a filtered search).
+    def track_search(query, results:, source: "typed", gap: nil)
       return unless trackable_request?
 
       Analytics.track_search(query, results:, source:, visitor: visitor_properties)
-      # Our own list of searches that found nothing (#483): the query only, never the visitor.
-      SearchGap.record(query, results:)
+      SearchGap.record(gap, results:) if gap
     end
 
     def track_company_viewed(slug) = track("company_viewed", slug:)
