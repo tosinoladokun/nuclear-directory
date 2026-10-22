@@ -151,7 +151,8 @@ module AdminHelper
     return NextStep.new(group: "ready", verb: "Close", why: "already on the site") if restating
     return NextStep.new(group: "not_yours", verb: "Wait", why: held == DataQuality::Review::FIRST_BATCH ? "#{aminah} hasn't checked it yet" : held) if held
 
-    joy_accepts = item.ai_recommendation == "recommend_publish"
+    # A claim sent back to review keeps its old verdict field; review wins (as in Today).
+    joy_accepts = item.ai_recommendation == "recommend_publish" && item.status.to_s != "needs_review"
     why = case [ joy_accepts, item.dq_recommendation ]
     in [ true, "approve" ] then return NextStep.new(group: "ready", verb: "Approve", why: "#{joy} and #{aminah} agree")
     in [ true, "reject" ] then "#{joy} accepts, #{aminah} rejects"

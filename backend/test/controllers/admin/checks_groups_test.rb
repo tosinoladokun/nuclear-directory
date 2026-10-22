@@ -66,4 +66,10 @@ class Admin::ChecksGroupsTest < ActionDispatch::IntegrationTest
     assert_select "#fact-Organization-#{company.id} a.nd-btn[href^=?]", admin_record_path(type: "Organization", id: company.id), text: "Open"
     assert_select "#fact-Organization-#{company.id} .nd-btn--primary", 0
   end
+
+  test "a claim sent back to review isn't 'Joy and Aminah agree', whatever its old verdict field says" do
+    @agreed.update_columns(status: "needs_review", notes: "withdrawn")
+    get admin_checks_path
+    assert_select "#claim-#{@agreed.id} .nd-next-step", /\ADecide: Aminah accepts, Joy isn't sure/
+  end
 end
