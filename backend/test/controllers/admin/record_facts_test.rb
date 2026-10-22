@@ -70,4 +70,11 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     assert_equal 0, OrganizationRole.count
   end
+
+  test "a company taken off after the form loaded takes no fact: checked under its lock with the write" do
+    @company.update_columns(verification_status: "unpublished")
+    added = DataQuality::Review.add_company_fact(organization_id: @company.id, kind: "role", key: "fuel", url: @fuel[:url], quote: @fuel[:quote], by: "human:tosin")
+    assert_equal [ "This company was taken off or merged since, so nothing was added" ], added.errors
+    assert_empty @company.organization_roles
+  end
 end
