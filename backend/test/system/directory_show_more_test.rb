@@ -16,6 +16,13 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     end
   end
 
+  # The rows appear when Turbo renders the frame; scroll and focus are put back in the
+  # frame-render event just after. Wait for them rather than reading at once, which
+  # could land between the two.
+  def eventually(message, wait: 15)
+    page.document.synchronize(wait) { raise Capybara::ExpectationNotMet, message unless yield }
+  end
+
   def rows = page.evaluate_script("document.querySelectorAll('main ul.nd-list > li').length")
 
   test "Show more adds the next page in place, keeps the scroll position" do
@@ -38,7 +45,7 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     rescue Minitest::Assertion
       flunk "Show more did not load the next page. Turbo saw: #{page.evaluate_script('JSON.stringify(window.__turbo)')}, frame src: #{page.evaluate_script("document.getElementById('directory-rows').getAttribute('src')")}, url: #{page.current_url}, rows: #{rows}"
     end
-    assert_operator page.evaluate_script("Math.round(window.scrollY)"), :>=, before - 5, "the page didn't jump to the top"
+    eventually("the page jumped to the top (was #{before})") { page.evaluate_script("Math.round(window.scrollY)") >= before - 5 }
     assert_no_selector "a", text: "Show more"
     assert_empty page.evaluate_script(AUDIT)
   end
@@ -50,8 +57,9 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     page.send_keys(:enter)
     assert_selector "main ul.nd-list > li", count: DirectoryController::PAGE + 8, wait: 20
 
-    focused = page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')], i = rows.indexOf(document.activeElement); return [i, rows.length] })()")
-    assert_equal [ DirectoryController::PAGE, DirectoryController::PAGE + 8 ], focused, "the first newly shown company has focus"
+    eventually("the first newly shown company should have focus") do
+      page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')]; return [rows.indexOf(document.activeElement), rows.length] })()") == [ DirectoryController::PAGE, DirectoryController::PAGE + 8 ]
+    end
     page.send_keys(:tab)
     assert_equal DirectoryController::PAGE + 1, page.evaluate_script("[...document.querySelectorAll('ul.nd-list a.nd-listrow')].indexOf(document.activeElement)"), "Tab moves to the next company"
   end
@@ -66,8 +74,9 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     page.send_keys(:enter)
     assert_selector "ul.nd-list > li", count: before + 14, wait: 20
 
-    state = page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')], i = rows.indexOf(document.activeElement), r = document.activeElement.getBoundingClientRect(); const page = #{DirectoryController::PAGE}; return [(i >= page && i < page + 8) || i >= page + 8 + page, r.top >= 0 && r.bottom <= innerHeight] })()")
-    assert_equal [ true, true ], state, "focus is on a newly shown row that is inside the viewport"
+    eventually("focus should be on a newly shown row that is inside the viewport") do
+      page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')], i = rows.indexOf(document.activeElement), r = document.activeElement.getBoundingClientRect(); const page = #{DirectoryController::PAGE}; return [(i >= page && i < page + 8) || i >= page + 8 + page, r.top >= 0 && r.bottom <= innerHeight] })()") == [ true, true ]
+    end
   end
 
   test "a company link in the list opens its page, not a frame" do
