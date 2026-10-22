@@ -21,11 +21,14 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     Fields:
     - description: one neutral sentence of what the company does, copied from the page (no adjectives like leading or world-class;
       leave it null if the page only has marketing language).
-    - hq_city and hq_state: where its headquarters are, only if the page says headquarters or an office address that is clearly its main one.
+    - hq_city and hq_state: where its headquarters are, only if the page says headquarters. An office is not headquarters unless the page says so.
     - founded_year: only if the quote contains the year it was founded.
     - legal_name: only an exact legal name with its suffix (Inc., LLC, Corp.), as written.
     - roles: what the company does, from the role keys given; never from "plans to", "aims to" or "will".
     - technologies: what it works on, from the technology keys given.
+    For roles and technologies the quote itself must state the activity in a sentence: a menu heading, a navigation label or a list
+    of links is not enough.
+    If the page is about another company (a partner, parent, customer, or a press item about someone else), report nothing.
     Never report people (founders, executives, staff), investors or customers from logo lists, plant status or capacity, numbers
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
@@ -99,8 +102,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       choices = @directory.company_fact_choices.transform_values { |pairs| pairs.map(&:first) }
       fields = FIELDS.filter_map do |field|
         value, quote = found.dig(field, "value"), found.dig(field, "quote")
-        next if value.blank? || !quoted.(field == "description" ? nil : value, quote)
-        next if field == "description" && !page.include?(value.downcase.squish)
+        # Every value inside its own quote, a description included (Data Quality).
+        next if value.blank? || !quoted.(value, quote)
 
         { kind: "organization", payload: { "name" => name, field => value.to_s.strip }, quote: quote.strip }
       end

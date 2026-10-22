@@ -57,4 +57,19 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
       claims.map { |c| [ c[:kind], c[:payload].except("name", "organization").first&.then { |k, v| c[:kind] == "organization" ? k : v } ] }
     assert(claims.all? { |c| c[:quote].present? })
   end
+
+  test "a description must be inside its own quote, not just somewhere on the page" do
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    found = { "description" => { "value" => "Acme Fission Inc. designs small modular reactors.", "quote" => "Founded in 2019." },
+      "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [] }
+    assert_empty DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+  end
+
+  test "the instructions carry Data Quality's rules" do
+    rules = DataQuality::Plugins::CompanyPages::INSTRUCTIONS
+    assert_includes rules, "a menu heading, a navigation label or a list\nof links is not enough"
+    assert_includes rules, "If the page is about another company"
+    assert_includes rules, "An office is not headquarters unless the page says so."
+  end
 end
