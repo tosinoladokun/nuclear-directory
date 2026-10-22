@@ -463,7 +463,8 @@ class DataQuality::ReviewTest < ActiveSupport::TestCase
     single = Review.approve([ open_end.id ], by: BY).sole
     bulk = Review.approve([ open_end.id ], by: BY, only_recommended: true).sole
 
-    assert_match "isn't settled yet", single.errors.join
+    assert_equal [ "nothing was approved: which plant “Nine Mile Point 1” is isn't settled yet. Settle that first (Same as…, or Data Quality), then approve it" ],
+      single.errors
     assert_not bulk.ok?
     assert open_end.reload.status_needs_review?, "left for a person"
     assert_empty other.reload.evidence, "no quote added to another link"
