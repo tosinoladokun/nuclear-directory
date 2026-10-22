@@ -7,7 +7,7 @@
     </p>
     <ul class="type-body">
       <% @errors.each do |error| %>
-        <li><span class="type-data"><%= error.text %></span><br>Line <%= error.line %>: <%= error.problem %></li>
+        <li><span class="type-data"><%= error.text %></span><br>Line <%= error.line %>: <%= error.problem.gsub(/\b([Cc])laim(s?)\b/) { "#{$1 == 'C' ? 'F' : 'f'}act#{$2}" } %></li>
       <% end %>
     </ul>
   </div>

@@ -10,7 +10,7 @@ class Admin::RecordPublishController < Admin::BaseController
   end
 
   def create
-    result = DataQuality::Review.publish(type: @type, id: @record.id, by: actor, with_added: params[:with_added] == "1")
+    result = DataQuality::Review.publish(type: @type, id: @record.id, by: actor, with_added: (Array(params[:added]) if params[:with_added] == "1"))
     if result.ok?
       flash[:notice] = "Published."
     else

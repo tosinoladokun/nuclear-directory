@@ -25,7 +25,8 @@ class Admin::RecordPublishTest < ActionDispatch::IntegrationTest
   end
 
   test "Publish puts it on the site with what was added with it, as the admin" do
-    post publish_path, params: { with_added: "1" }
+    role = @company.organization_roles.sole
+    post publish_path, params: { with_added: "1", added: [ "OrganizationRole:#{role.id}" ] }
 
     assert_redirected_to admin_record_path(type: "Organization", id: @company.id)
     assert_equal "Published.", flash[:notice]
@@ -61,5 +62,27 @@ class Admin::RecordPublishTest < ActionDispatch::IntegrationTest
     [ live, hidden ].each { |other| Relationship.create!(from_organization: @company, to_organization: other, relationship_type: "supplies", verification_status: "verified", verified_by: "human:tosin") }
 
     assert_equal 1, DataQuality::Review.publish_plan(type: "Organization", id: @company.id).goes_live_with
+  end
+
+  test "Publish takes only the added facts the preview listed: one added since stops it" do
+    shown = [ "OrganizationRole:#{@company.organization_roles.sole.id}" ]
+    Technology.create!(key: "smr", name: "Small modular reactor")
+    assert DataQuality::Review.add_company_fact(organization_id: @company.id, kind: "technology", key: "smr", url: "https://example.com/smr",
+      quote: "It designs an SMR.", by: "human:tosin").ok?
+
+    result = DataQuality::Review.publish(type: "Organization", id: @company.id, by: "human:tosin", with_added: shown)
+    assert_equal [ "what was added with it changed since the preview; check it again" ], result.errors
+    assert_equal "pending", @company.reload.verification_status
+  end
+
+  test "an added fact decided since the preview isn't published with it, and nothing is" do
+    role = @company.organization_roles.sole
+    shown = [ "OrganizationRole:#{role.id}" ]
+    role.reject!(by: "human:tosin", reason: "Wrong role")
+
+    result = DataQuality::Review.publish(type: "Organization", id: @company.id, by: "human:tosin", with_added: shown)
+    assert_not result.ok?
+    assert_equal "pending", @company.reload.verification_status
+    assert_equal "rejected", role.reload.verification_status
   end
 end
