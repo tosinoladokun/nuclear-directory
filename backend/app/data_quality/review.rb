@@ -254,7 +254,7 @@ module DataQuality::Review
     # { "all" => 9, "changed" => 2, … }. Pending facts aren't included.
     # Leads (#127) are Data Quality's work, not the admin's: listed, never counted.
     def check_counts(source_kind: nil)
-      CATEGORIES.index_with { |category| category_scope(category, source_kind:).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
+      CATEGORIES.index_with { |category| category_scope(category, source_kind:).not_leads.count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
     end
 
     # Kinds of question in a queue, most common first, quoted names blanked
