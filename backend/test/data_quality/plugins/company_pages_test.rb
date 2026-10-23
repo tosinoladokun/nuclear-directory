@@ -99,7 +99,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert(claims.none? { |c| c[:payload].to_s.include?("Ghost Co") })
   end
 
-  test "part 3: a company's EDGAR record gives its legal name, listing and business address, each quoting the record" do
+  test "part 3: a company's EDGAR record gives its listing and business address (never its upper-case name as a legal name), each quoting the record" do
     edgar = "https://data.sec.gov/submissions/CIK0001849056.json"
     record = '{"cik":"0001849056","name":"OKLO INC.","tickers":["OKLO"],"exchanges":["NYSE"],"addresses":{"mailing":{"city":"X"},' \
       '"business":{"street1":"3190 Coronado Dr.","city":"SANTA CLARA","stateOrCountry":"CA","zipCode":"95054"}}}'
@@ -109,10 +109,17 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
 
     DataQuality::Plugins::CompanyPages.new.crawl(nil)
     claims = DataQuality::Plugins::CompanyPages.new.extract(Source.find_by!(url: edgar), nil)
-    assert_equal [ { "name" => "Acme Fission", "legal_name" => "OKLO INC." }, { "name" => "Acme Fission", "exchange" => "NYSE", "ticker" => "OKLO" },
+    assert_equal [ { "name" => "Acme Fission", "exchange" => "NYSE", "ticker" => "OKLO" },
       { "name" => "Acme Fission", "hq_city" => "Santa Clara", "hq_state" => "CA" } ], claims.map { |c| c[:payload] }
     assert(claims.all? { |c| record.include?(c[:quote]) }, "every quote is a fragment of the record")
     assert_requested :get, edgar
+
+    source = Source.find_by!(url: edgar)
+    [ '"tickers":["BRK-A","BRK-B"],"exchanges":["NYSE","NYSE"],"addresses":{"business":{"street1":"PO Box 12","city":"OMAHA","stateOrCountry":"NE"}}}',
+      '"tickers":["OKLO"],"exchanges":["NYSE","Nasdaq"],"addresses":{"business":{"street1":"1 Bay St","city":"TORONTO","stateOrCountry":"A6"}}}' ].each do |rest|
+      source.update_columns(content_text: '{"cik":"0001849056","name":"OKLO INC.",' + rest)
+      assert_empty DataQuality::Plugins::CompanyPages.new.extract(source, nil), "several tickers, a PO box or a non-US code give nothing"
+    end
   end
 
   test "a state by name is kept as its code; www and bare host are one site; a newer request made during a read stays waiting" do

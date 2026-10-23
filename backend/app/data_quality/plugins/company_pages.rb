@@ -113,7 +113,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
 
     # What a company's EDGAR record states, read as data (no model): its
-    # legal name, its first listing, and its business address's city and
+    # single listing and its business address's city and
     # state. Each quote is the exact fragment of the stored record.
     def edgar_claims(source)
       cik = source.url[EDGAR_URL, 1]
@@ -122,16 +122,18 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       data = JSON.parse(text) rescue (return [])
       fragment = ->(pattern) { text[pattern] }
       claims = []
-      if (name = data["name"].presence) && (quote = fragment.(/"name":\s*"#{Regexp.escape(name)}"/))
-        claims << { kind: "organization", payload: { "name" => company.name, "legal_name" => name }, quote: }
-      end
-      ticker, exchange = Array(data["tickers"]).first, EDGAR_EXCHANGES[Array(data["exchanges"]).first]
-      if ticker && exchange && (quote = fragment.(/"tickers":\s*\[[^\]]*\],\s*"exchanges":\s*\[[^\]]*\]/))
+      # EDGAR's name is upper case and sometimes shortened, so it's never a
+      # legal name (Data Quality). Several tickers (share classes) are skipped.
+      tickers, exchanges = Array(data["tickers"]), Array(data["exchanges"])
+      ticker, exchange = tickers.first, EDGAR_EXCHANGES[exchanges.first]
+      if tickers.size == 1 && exchanges.size == 1 && ticker && exchange && (quote = fragment.(/"tickers":\s*\[[^\]]*\],\s*"exchanges":\s*\[[^\]]*\]/))
         claims << { kind: "organization", payload: { "name" => company.name, "exchange" => exchange, "ticker" => ticker }, quote: }
       end
       business = data.dig("addresses", "business") || {}
       city, state = business["city"].to_s.strip, business["stateOrCountry"].to_s.strip
-      if city.present? && state.match?(/\A[A-Z]{2}\z/) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
+      street = "#{business['street1']} #{business['street2']}"
+      # Only a US state (EDGAR codes other places A1, X1…), never a PO box.
+      if city.present? && STATES.key?(state) && !street.match?(/\bP\.?\s*O\.?\s*Box\b/i) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
         claims << { kind: "organization", payload: { "name" => company.name, "hq_city" => city.titleize, "hq_state" => state }, quote: }
       end
       claims
