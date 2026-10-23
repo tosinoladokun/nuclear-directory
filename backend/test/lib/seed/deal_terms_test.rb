@@ -146,4 +146,19 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
     assert framework.reload.unpublished?
     assert_empty Directory::DealList.offtakes
   end
+
+  test "a closed term of another type with the same key doesn't stop an offtake" do
+    seed([ PPA ])
+    link = Relationship.find_by!(relationship_type: "offtake_with")
+    award = DealTerm.create!(link:, term_type: "award", external_id: PPA[:key], amount_usd: 1, starts_on: "2025-01-01",
+      verification_status: "verified", verified_by: "human:tosin")
+    award.reject!(by: "human:tosin")
+    offtake = DealTerm.find_by!(term_type: "offtake", external_id: PPA[:key])
+    offtake.update_columns(capacity_mw: 1)
+
+    load!
+
+    assert_equal 200, offtake.reload.capacity_mw.to_i, "the offtake is still updated"
+    assert award.reload.rejected?
+  end
 end
