@@ -43,4 +43,25 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
     get companies_path(q: "Paged", shown: 2)
     assert_equal PAGE + 5 + PAGE + 3, rows
   end
+
+  test "Show more keeps an active role, so the other role's companies don't join the list" do
+    designer = Role.find_or_create_by!(key: "reactor_vendor") { |role| role.name = "Reactor vendor" }
+    developer = Role.find_or_create_by!(key: "project_developer") { |role| role.name = "Project developer" }
+    now = Time.current
+    builders = (PAGE + 3).times.map { |i| Organization.create!(name: "Role Builder #{i}", slug: "role-builder-#{i}", verification_status: "verified", verified_by: "human:tosin") }
+    designers = 3.times.map { |i| Organization.create!(name: "Role Designer #{i}", slug: "role-designer-#{i}", verification_status: "verified", verified_by: "human:tosin") }
+    source = Source.create!(url: "https://example.com/roles", source_kind: "web_page")
+    (builders.map { |org| [ org, developer ] } + designers.map { |org| [ org, designer ] }).each do |org, role|
+      link = OrganizationRole.create!(organization: org, role: role, verification_status: "verified", verified_by: "human:tosin", confidence: 1)
+      link.evidence.create!(source: source, found_by: "human", confidence: 1)
+    end
+
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_select "a.nd-btn[data-turbo-frame=directory-rows][href=?]", companies_path(category: "reactor-developers", role: "project_developer", shown: 2), "Show more"
+    assert_equal PAGE, rows
+
+    get companies_path(category: "reactor-developers", role: "project_developer", shown: 2)
+    assert_equal PAGE + 3, rows, "only the project developers, none of the designers"
+    assert_select "a[href='/companies/role-designer-0']", 0
+  end
 end
