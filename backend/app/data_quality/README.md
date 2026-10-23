@@ -314,6 +314,16 @@ licensee's `mining` category, all quoting the row. A row whose type or state can
 person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
+## Company newsrooms (#128)
+
+`plugins/company_newsrooms.rb` reads each company's own news feed (RSS or Atom) in its `FEEDS` list once a
+day. A company's release is the primary source for its own announcement, so each item published in the last
+60 days becomes a `news_item` claim (#137) about that company, quoting the item's title as the feed gives it.
+No model is asked. Every item waits for a person's approval and shows in "Latest" only after it. Only feeds a
+company publishes itself, of its news or releases, that answer our bot are listed: a blocked feed is recorded
+and skipped, and a page that isn't a feed goes to a person. Feeds drop old items as new ones arrive, so an
+item leaving the feed flags nothing.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
