@@ -46,21 +46,17 @@ class DataQuality::Plugins::NrcUraniumRecoveryTest < ActiveSupport::TestCase
     assert_raises(Plugin::TableMissing) { plugin.extract(page_source, nil) }
   end
 
-  test "each NRC-licensed site gives the site, its licensee, an operates link and mining, quoting its row" do
+  test "each NRC-licensed site gives the site and its licensee, quoting its row; no link or role (DQ, 22 Oct)" do
     source = stored
     candidates = plugin.extract(source, nil)
 
-    assert_equal 12, candidates.size
+    assert_equal 6, candidates.size
     assert candidates.all? { |c| plugin.quote_in_source?(source, c[:quote]) }
     crow_butte = candidates.select { |c| c[:quote] == CROW_BUTTE }
     assert_equal [
       { kind: "facility", quote: CROW_BUTTE, payload: { "name" => "Crow Butte", "facility_type" => "uranium_mine",
         "country_code" => "US", "city" => "Chadron", "state" => "NE" } },
-      { kind: "organization", quote: CROW_BUTTE, payload: { "name" => "Crow Butte Resources, Inc." } },
-      { kind: "facility_relationship", quote: CROW_BUTTE, payload: { "organization" => { "name" => "Crow Butte Resources, Inc." },
-        "facility" => { "name" => "Crow Butte" }, "relationship_type" => "operates" } },
-      { kind: "organization_role", quote: CROW_BUTTE, payload: { "organization" => { "name" => "Crow Butte Resources, Inc." },
-        "role" => "mining" } }
+      { kind: "organization", quote: CROW_BUTTE, payload: { "name" => "Crow Butte Resources, Inc." } }
     ], crow_butte
     sites = candidates.select { |c| c[:kind] == "facility" }.map { |c| c[:payload].values_at("name", "state") }
     assert_equal [ [ "Crow Butte", "NE" ], [ "Crownpoint", "NM" ], [ "Dewey Burdock", "SD" ] ], sites
@@ -126,13 +122,13 @@ class DataQuality::Plugins::NrcUraniumRecoveryTest < ActiveSupport::TestCase
     %w[crawl extract].each { |stage| DataQuality::Pipeline.run("nrc_uranium_recovery", plugin:, only: stage) }
 
     assert_equal "nrc_uranium_recovery", page_source.source_kind
-    assert_equal 12, page_source.candidates.count
+    assert_equal 6, page_source.candidates.count
   end
 
-  test "a site gone from an approved table of three goes to a person, with its operator link" do
+  test "a site gone from an approved table of three goes to a person, with its licensee" do
     Role.find_or_create_by!(key: "mining") { |role| role.name = "Mining and milling" }
     %w[crawl extract match].each { |stage| DataQuality::Pipeline.run("nrc_uranium_recovery", plugin:, only: stage) }
-    %w[facility organization facility_relationship organization_role].each do |kind|
+    %w[facility organization].each do |kind|
       Candidate.where(kind:).order(:id).each do |claim|
         result = DataQuality::Review.approve([ claim.id ], by: "human:test").first
         assert_empty result.errors, "approving #{kind} #{claim.payload}"
@@ -147,7 +143,7 @@ class DataQuality::Plugins::NrcUraniumRecoveryTest < ActiveSupport::TestCase
     %w[crawl extract match].each { |stage| DataQuality::Pipeline.run("nrc_uranium_recovery", plugin:, only: stage) }
 
     flagged = page_source.candidates.where(review_origin: "dropped")
-    assert_equal %w[facility facility_relationship organization organization_role], flagged.map(&:kind).sort
+    assert_equal %w[facility organization], flagged.map(&:kind).sort
     assert flagged.all? { |c| c.quote.include?("Dewey Burdock") }
     assert Facility.find_by!(name: "Dewey Burdock").verified?, "nothing is unpublished; a person decides"
   end
