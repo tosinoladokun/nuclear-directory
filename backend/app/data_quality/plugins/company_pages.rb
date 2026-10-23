@@ -32,6 +32,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
   PLANT_VERBS = %w[owns operates vendor_for].freeze
+  # A link is what is so now, never a plan.
+  PLANNED = /\b(plans? to|planning to|aims? to|will|intends? to|in talks|exploring|considering)\b/i
+  # An owner's quote says it owns.
+  OWNERSHIP = /\b(own|owns|owned|owner|ownership|stake|share)\b|\d+(\.\d+)?\s?%/i
   FIELDS = %w[description hq_city hq_state founded_year legal_name].freeze
 
   INSTRUCTIONS = <<~TEXT.freeze
@@ -55,6 +59,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       (buys or sells power under an agreement), subsidiary_of (only when the page says it is a subsidiary or wholly owned), and for
       plants owns, operates, vendor_for (it designed the plant's reactor). company_first is true when this company does the verb to
       the other ("we supply X"), false when the other does it to this company ("X invested in us"). No amounts or dates here.
+      Never a link from "plans to", "aims to", "will", "intends to", "in talks" or "exploring": only what is so now.
+      An MOU, framework, letter of intent, option, term sheet or non-binding agreement is never a signed deal: report it only when
+      the quote itself says which it is, so that word stays with it.
+      owns needs an ownership statement ("owns", "owned by", a stake or share); hosting a site or campus is not owning the plant.
     Never report people (founders, executives, staff), investors or customers from logo lists, plant status or capacity, numbers
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
@@ -181,6 +189,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["links"]).each do |link|
         other, verb, quote = link["other"].to_s.strip, link["verb"], link["quote"]
         next if other.blank? || !quoted.(other, quote)
+        # The quote names both parties (this company, or "we"), states what is
+        # so now, and an owner's quote says it owns (Data Quality's rules).
+        next unless quote.downcase.include?(name.downcase) || quote.match?(/\b(we|our|us)\b/i)
+        next if quote.match?(PLANNED)
+        next if verb == "owns" && !quote.match?(OWNERSHIP)
 
         if link["other_is"] == "plant"
           next unless PLANT_VERBS.include?(verb)

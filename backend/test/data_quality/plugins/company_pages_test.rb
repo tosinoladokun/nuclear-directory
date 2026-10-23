@@ -136,4 +136,24 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [ { "name" => "Acme Fission", "hq_state" => "TX" } ], claims.map { |c| c[:payload] }
   end
+
+  test "a link needs a quote naming both parties, stating what is so now; an owner's quote says it owns" do
+    page = <<~HTML
+      <html><body><p>Bright Power supplies Dim Power.</p><p>Acme Fission plans to supply Bright Power.</p>
+      <p>Acme Fission hosts the Latest Point site.</p><p>Acme Fission owns 40% of Latest Point.</p><p>We supply fuel to Bright Power.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    link = ->(other, other_is, verb, quote) { { "other" => other, "other_is" => other_is, "verb" => verb, "company_first" => true, "quote" => quote } }
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [
+        link.("Bright Power", "company", "supplies", "Bright Power supplies Dim Power."),               # neither party is this company
+        link.("Bright Power", "company", "supplies", "Acme Fission plans to supply Bright Power."),     # a plan
+        link.("Latest Point", "plant", "owns", "Acme Fission hosts the Latest Point site."),          # hosting isn't owning
+        link.("Latest Point", "plant", "owns", "Acme Fission owns 40% of Latest Point."),
+        link.("Bright Power", "company", "supplies", "We supply fuel to Bright Power.") ] }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal [ "Acme Fission owns 40% of Latest Point.", "We supply fuel to Bright Power." ], claims.map { |c| c[:quote] }
+  end
 end
