@@ -1,8 +1,9 @@
 require "test_helper"
 require_relative "../support/directory_builders"
 
-# Search tolerates a missing letter, a plural or spacing (#431), but only when
-# the exact search finds nothing, and it says so.
+# Typo tolerance (#431): a missing or wrong letter finds the name, but only when
+# the exact search (which already ignores spacing and matches every word, #495)
+# finds nothing, and the page says so.
 class FuzzySearchTest < ActionDispatch::IntegrationTest
   include DirectoryBuilders
 
@@ -15,21 +16,32 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
 
   def names = css_select("main ul.nd-list a.nd-listrow .nd-listrow__name").map { |el| el.text.strip }
 
-  test "'brown ferry' finds Browns Ferry, and the page says these are close names" do
-    get companies_path(q: "brown ferry")
+  test "a missing letter finds the name, and the page says these are close names" do
+    get companies_path(q: "browns fery")
 
     assert_equal [ "Browns Ferry Nuclear Plant" ], names
-    assert_select ".nd-fuzzy-note", "No exact match for “brown ferry”. Showing close names."
+    assert_select ".nd-fuzzy-note", "No exact match for “browns fery”. Showing close names."
     assert_select "h1 .nd-listhead__count", /1 result/
   end
 
-  test "'westinghous' finds Westinghouse and 'next era' finds NextEra" do
-    get companies_path(q: "westinghous")
+  test "typos in a company name: 'westinghus', 'nextara energy'" do
+    get companies_path(q: "westinghus")
     assert_equal [ "Westinghouse Reactor Systems" ], names
+    assert_select ".nd-fuzzy-note"
+
+    get companies_path(q: "nextara energy")
+    assert_equal [ "NextEra Energy" ], names
+    assert_select ".nd-fuzzy-note"
+  end
+
+  test "spacing and word-order matches stay exact: no note ('brown ferry', 'next era')" do
+    get companies_path(q: "brown ferry")
+    assert_equal [ "Browns Ferry Nuclear Plant" ], names
+    assert_select ".nd-fuzzy-note", 0
 
     get companies_path(q: "next era")
     assert_equal [ "NextEra Energy" ], names
-    assert_select ".nd-fuzzy-note"
+    assert_select ".nd-fuzzy-note", 0
   end
 
   test "an exact match shows no close names and no note" do
@@ -52,8 +64,8 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
   end
 
   test "the instant results do the same, with the note, and only on a fallback" do
-    get search_path(q: "brown ferry")
-    assert_select ".nd-instant__note", "No exact match for “brown ferry”. Showing close names."
+    get search_path(q: "browns fery")
+    assert_select ".nd-instant__note", "No exact match for “browns fery”. Showing close names."
     assert_select ".nd-instant__row", /Browns Ferry Nuclear Plant/
 
     get search_path(q: "Browns")
@@ -62,8 +74,8 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
   end
 
   test "unpublished names are never suggested" do
-    company("Browne Ferrie Holdings", verified: false)
-    get companies_path(q: "brown ferry")
+    company("Browns Fery Holdings", verified: false)
+    get companies_path(q: "browns fery")
 
     assert_equal [ "Browns Ferry Nuclear Plant" ], names
   end
