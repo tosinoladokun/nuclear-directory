@@ -133,4 +133,17 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
 
     assert_empty Directory::DealList.offtakes
   end
+
+  test "a term a person rejected or unpublished stays that way through a re-seed" do
+    seed([ PPA, FRAMEWORK ])
+    ppa, framework = %w[searchco-fusion-ppa-2025 searchco-fusion-framework-2025].map { |key| DealTerm.find_by!(external_id: key) }
+    ppa.reject!(by: "human:tosin")
+    framework.unpublish!(by: "human:tosin")
+
+    load!
+
+    assert ppa.reload.rejected?
+    assert framework.reload.unpublished?
+    assert_empty Directory::DealList.offtakes
+  end
 end

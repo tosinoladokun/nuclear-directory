@@ -260,6 +260,10 @@ module Seed
             next
           end
 
+          # A term a person rejected or unpublished stays as decided, as a
+          # closed link does: a re-seed never brings it back.
+          next if DealTerm.find_by(link_type:, link_id: link.id, external_id: term["key"].to_s.strip)&.closed?
+
           # A field the entry leaves out is "nothing to say" (#251); one it
           # gives as null clears it (a condition met since, say).
           attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip }
