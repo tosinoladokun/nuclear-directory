@@ -31,6 +31,11 @@ class Bucket
     Category.buckets.select { |category| Organization.where(id: organization.id).where(id: finder.ids(category)).exists? }
   end
 
+  # Ids, as a subquery, of companies with this role or one of its sub-roles,
+  # published and sourced as the buckets count it: a bucket's sub-type
+  # filter (Developers: ?role=reactor_vendor, Tosin 21 Oct).
+  def self.role_member_ids(key) = new.send(:with_roles, [ key.to_s ])
+
   def self.counts
     finder = new
     Category.buckets.to_h { |category| [ category.key, Organization.published.where(id: finder.ids(category)).count ] }

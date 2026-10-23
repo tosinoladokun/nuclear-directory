@@ -852,8 +852,11 @@ module DataQuality::Review
           # link yet; without this check the write would find any link of the
           # same type and add the quote to it.
           if DataQuality::DirectoryClient::LINK_KINDS.include?(candidate.kind) && candidate.subject_id.nil?
+            key, type = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {}).find { |end_key, _| candidate.notes.to_s.start_with?(end_key) }
+            name = (candidate.payload.dig(key, "name") if key)
+            which = name ? "#{type == :facility ? 'plant' : 'company'} “#{name}” is" : "company or plant it names"
             next Result.new(candidate_id: candidate.id, ref: nil,
-              errors: [ "its company or plant isn't settled yet; decide that, and the next match run links it" ])
+              errors: [ "nothing was approved: which #{which} isn't settled yet. Settle that first (Same as…, or Data Quality), then approve it" ])
           end
           if lapsed?(candidate)
             next Result.new(candidate_id: candidate.id, ref: nil,

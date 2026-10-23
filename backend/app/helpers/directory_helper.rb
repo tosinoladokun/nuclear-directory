@@ -45,7 +45,7 @@ module DirectoryHelper
     "conversion" => "Uranium conversion",
     "enrichment" => "Enrichment",
     "fabrication" => "Fuel fabrication",
-    "reactor_vendor" => "Reactor developer",
+    "reactor_vendor" => "Reactor designer",
     "project_developer" => "Project developer",
     "reactor_services" => "Repair and services",
     "components" => "Component maker",
