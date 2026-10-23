@@ -19,7 +19,8 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
   def crawl = DataQuality::Stages::Crawl.call(plugin:)
   def stored(url, content = html(FILES[url])) = Source.create!(url:, source_kind: "doe_programs", crawl_status: "ok",
     content_text: content, content_sha256: Digest::SHA256.hexdigest(content))
-  def links(url) = plugin.extract(stored(url), nil).select { |c| c[:kind] == "relationship" }
+  def stored_again(url) = Source.find_by(url:) || stored(url)
+  def links(url) = plugin.extract(stored_again(url), nil).select { |c| c[:kind] == "relationship" }
     .map { |c| [ c[:payload]["to_organization"]["name"], c[:payload]["relationship_type"], c[:payload]["description"] ] }
 
   test "is the plug-in for doe_programs" do
@@ -52,15 +53,34 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_raises(Plugin::LayoutChanged) { plugin.extract(source, nil) }
   end
 
-  test "enrichment: each company DOE selected, and each task order, funded by DOE, quoting its item" do
+  test "enrichment: one DOE funds link per company, summing up every list that names it, quoting its first item" do
+    selected = "HALEU enrichment services contract: selected in 2024 to bid on task orders"
+    ordered = "HALEU enrichment services task order, finalized January 5, 2026"
     assert_equal [
-      [ "American Centrifuge Operating, LLC", "funds", "HALEU enrichment services contract: selected in 2024 to bid on task orders" ],
-      [ "General Matter Inc.", "funds", "HALEU enrichment services contract: selected in 2024 to bid on task orders" ],
-      [ "Louisiana Energy Services, LLC", "funds", "HALEU enrichment services contract: selected in 2024 to bid on task orders" ],
-      [ "Orano Federal Services, LLC", "funds", "HALEU enrichment services contract: selected in 2024 to bid on task orders" ],
-      [ "American Centrifuge Operating", "funds", "HALEU enrichment services task order, finalized January 5, 2026" ],
-      [ "General Matter", "funds", "HALEU enrichment services task order, finalized January 5, 2026" ]
+      [ "American Centrifuge Operating, LLC", "funds", "#{selected}; #{ordered}" ],
+      [ "General Matter Inc.", "funds", "#{selected}; #{ordered}" ],
+      [ "Louisiana Energy Services, LLC", "funds", selected ],
+      [ "Orano Federal Services, LLC", "funds", selected ]
     ], links(ENRICHMENT)
+    context = plugin.verification_context(stored_again(ENRICHMENT), "General Matter Inc.")
+    assert_match "DOE selected four companies", context
+    assert_match "finalized task orders", context
+    assert_match "General Matter ($900 million)", context
+  end
+
+  test "a heading's date is read from the page: a changed date is a change, and the description follows it" do
+    source = stored(ALLOCATION)
+    moved = Source.new(url: ALLOCATION, content_text: source.content_text.sub("Round 3 Conditional Selections (July 23, 2026)", "Round 3 Conditional Selections (August 23, 2026)"))
+
+    refute_equal plugin.rows_sha256(source), plugin.rows_sha256(moved)
+    assert_includes plugin.extract(moved, nil).filter_map { |c| c[:payload]["description"] }, "Conditional HALEU allocation, round 3 (August 23, 2026)"
+  end
+
+  test "a list that's there but names no one is a changed layout, not a complete read" do
+    emptied = Source.new(url: DECONVERSION, content_text: Nokogiri::HTML(html(FILES[DECONVERSION])).tap { |doc| doc.css("li").each(&:remove) }.to_html)
+
+    assert_nil plugin.rows_sha256(emptied)
+    assert_raises(Plugin::LayoutChanged) { plugin.extract(emptied, nil) }
   end
 
   test "allocations: DOE supplies HALEU to each conditional selection; a joint entry is two companies" do
@@ -77,8 +97,10 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_match "HALEU allocation process", plugin.source_facts(source)
   end
 
-  test "deconversion: six companies, no roles" do
-    candidates = plugin.extract(stored(DECONVERSION), nil)
+  test "deconversion: six companies, no roles; the verifier reads that DOE awarded them contracts" do
+    source = stored(DECONVERSION)
+    candidates = plugin.extract(source, nil)
+    assert_match "awarded contracts with 6 companies", plugin.verification_context(source, "Framatome Inc.")
 
     assert_equal 6, candidates.count { |c| c[:kind] == "organization" }
     assert_empty candidates.select { |c| c[:kind] == "organization_role" }

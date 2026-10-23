@@ -30,7 +30,7 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
         List.new(after: /DOE selected four companies and allocated \$2 million to each vendor/, relationship_type: "funds",
           description: "HALEU enrichment services contract: selected in 2024 to bid on task orders"),
         List.new(after: /DOE finalized task orders with the following companies/, relationship_type: "funds",
-          description: "HALEU enrichment services task order, finalized January 5, 2026")
+          description: "HALEU enrichment services task order, finalized %<date>s")
       ]
     },
     "https://www.energy.gov/ne/haleu-deconversion-services" => {
@@ -43,9 +43,9 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
     "https://www.energy.gov/ne/us-department-energy-haleu-allocation-process" => {
       title: "DOE: HALEU allocation process",
       lists: [
-        List.new(after: /\ARound 1 Conditional Selections/, relationship_type: "supplies", description: "Conditional HALEU allocation, round 1 (April 9, 2025)"),
-        List.new(after: /\ARound 2 Conditional Selections/, relationship_type: "supplies", description: "Conditional HALEU allocation, round 2 (August 26, 2025)"),
-        List.new(after: /\ARound 3 Conditional Selections/, relationship_type: "supplies", description: "Conditional HALEU allocation, round 3 (July 23, 2026)")
+        List.new(after: /\ARound 1 Conditional Selections/, relationship_type: "supplies", description: "Conditional HALEU allocation, round 1 (%<date>s)"),
+        List.new(after: /\ARound 2 Conditional Selections/, relationship_type: "supplies", description: "Conditional HALEU allocation, round 2 (%<date>s)"),
+        List.new(after: /\ARound 3 Conditional Selections/, relationship_type: "supplies", description: "Conditional HALEU allocation, round 3 (%<date>s)")
       ]
     }
   }.freeze
@@ -81,34 +81,35 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
   def extract(source, _run)
     items = items(source) or raise LayoutChanged, "#{LAYOUT_CHANGED} (#{source.url})"
 
-    items.flat_map do |quote, name, list|
-      [
-        { kind: "organization", quote:, payload: { "name" => name } },
-        { kind: "relationship", quote:, payload: { "from_organization" => { "name" => DOE }, "to_organization" => { "name" => name },
-          "relationship_type" => list.relationship_type, "description" => list.description } }
-      ]
+    companies = items.map { |item| { kind: "organization", quote: item.quote, payload: { "name" => item.name } } }
+    # One link per company and kind of link on a page, however many of its
+    # lists name it: a second claim would replace the first one's description.
+    links = items.group_by { |item| [ key(item.name), item.list.relationship_type ] }.map do |_, group|
+      { kind: "relationship", quote: group.first.quote, payload: { "from_organization" => { "name" => DOE },
+        "to_organization" => { "name" => group.first.name }, "relationship_type" => group.first.list.relationship_type,
+        "description" => group.map(&:description).uniq.join("; ") } }
     end
+    companies + links
   end
 
   # A few lists per page: a company leaving one is a real change for a person to see.
   def max_dropped_share(_source) = 1.0
 
-  # Only the lists extract reads, so the page's news panel changing isn't a change.
+  # The lists extract reads, with the sentence or heading each follows, so
+  # the page's news panel changing isn't a change and a heading's changing is.
   def rows_sha256(source)
     items = items(source) or return
-    Digest::SHA256.hexdigest(items.map { |quote, _, list| [ list.description, quote ].join("\t") }.join("\n"))
+    Digest::SHA256.hexdigest(items.map { |item| [ item.context, item.quote ].join("\t") }.join("\n"))
   end
 
-  def quote_in_source?(source, quote) = Array(items(source)).any? { |each, _, _| each == quote.to_s.squish }
+  def quote_in_source?(source, quote) = Array(items(source)).any? { |item| item.quote == quote.to_s.squish }
 
-  # The item with the sentence or heading its list follows.
+  # The item with what the page says before its list, for every list that
+  # names the same company: what the claim's description sums up.
   def verification_context(source, quote)
-    blocks = blocks(source)
-    Array(items(source)).filter_map do |each, _, list|
-      next unless each == quote.to_s.squish
-
-      [ blocks.find { |block| block.match?(list.after) }, each ].compact.join("\n")
-    end.uniq.join("\n\n").presence
+    items = Array(items(source))
+    named = items.select { |item| item.quote == quote.to_s.squish }.map { |item| key(item.name) }
+    items.select { |item| named.include?(key(item.name)) }.map { |item| [ item.context, item.quote ].join("\n") }.uniq.join("\n\n").presence
   end
 
   def source_facts(source)
@@ -118,39 +119,58 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
   end
 
   private
-    # [[quote, company name, List]] for the page's lists, or nil when one is missing.
+    Item = Data.define(:quote, :name, :list, :context, :description)
+
+    # The page's lists' items, or nil when a list is missing, names no one,
+    # or its heading no longer gives the date its description needs.
     def items(source)
       page = @pages[source.url] or return []
       lists = lists(source)
       page[:lists].each_with_object([]) do |list, found|
-        ul = lists.find { |heading, _| heading.match?(list.after) }&.last or return nil
+        context, ul = lists.find { |heading, _, _| heading.match?(list.after) }&.then { |heading, before, each| [ [ before, heading ].compact.join("\n"), each ] }
+        return nil unless ul
 
-        ul.css("li").each do |li|
-          quote = li.text.gsub(/[[:space:]]+/, " ").strip
-          next if quote.empty?
+        description = describe(list, context) or return nil
+        entries = ul.css("li").map { |li| li.text.gsub(/[[:space:]]+/, " ").strip }.reject(&:empty?)
+        return nil if entries.empty?
 
-          names(quote).each { |name| found << [ quote, name, list ] }
-        end
+        entries.each { |quote| names(quote).each { |name| found << Item.new(quote:, name:, list:, context:, description:) } }
       end
+    end
+
+    DATE = /\b((?:January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4})\b/
+
+    def describe(list, context)
+      return list.description unless list.description.include?("%<date>s")
+
+      date = context[DATE, 1] or return
+      format(list.description, date:)
     end
 
     # "American Centrifuge Operating ($900 million)" => American Centrifuge
     # Operating; "Abilene Christian University/Natura Resources LLC" => both.
     def names(quote) = quote.sub(/\s*\([^)]*\)\s*\z/, "").split("/").map(&:strip).reject(&:empty?)
 
-    # [[text before it, ul]]: each list with the paragraph, or accordion
-    # heading, that comes right before it on the page.
+    # A name without its legal words, to see two spellings are one company
+    # on a page ("General Matter Inc." and "General Matter").
+    def key(name) = name.downcase.sub(/,?\s+(?:inc|llc|l\.l\.c|corp|corporation|company|co|ltd)\.?\z/, "").squish
+
+    # [[the paragraph or accordion heading right before it, the paragraph
+    # before that (what it says DOE did), ul]] for each list on the page.
     def lists(source)
       doc(source).css("ul").filter_map do |ul|
         next if ul.ancestors("nav, header, footer").any?
 
-        before = ul.xpath("preceding-sibling::*[1]").first&.text
-        before = ul.ancestors("[id^='energy-accordion']").first&.xpath("preceding-sibling::*[1]")&.text if before.blank?
-        [ before.to_s.gsub(/[[:space:]]+/, " ").strip, ul ] if before.present?
+        anchor = ul.xpath("preceding-sibling::*[1]").first&.text.present? ? ul : ul.ancestors("[id^='energy-accordion']").first
+        heading = anchor&.xpath("preceding-sibling::*[1]")&.first
+        next if heading.nil? || heading.text.blank?
+
+        before = heading.xpath("preceding-sibling::*[1]").first&.text
+        [ text(heading.text), (text(before) if before.present?), ul ]
       end
     end
 
-    def blocks(source) = lists(source).map(&:first)
+    def text(value) = value.to_s.gsub(/[[:space:]]+/, " ").strip
 
     def doc(source)
       @docs ||= {}
