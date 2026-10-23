@@ -98,4 +98,20 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_includes claims.map { |c| c[:payload] }, { "organization" => { "name" => "Acme Fission" }, "facility" => { "name" => "Latest Point" }, "relationship_type" => "operates" }
     assert(claims.none? { |c| c[:payload].to_s.include?("Ghost Co") })
   end
+
+  test "part 3: a company's EDGAR record gives its legal name, listing and business address, each quoting the record" do
+    edgar = "https://data.sec.gov/submissions/CIK0001849056.json"
+    record = '{"cik":"0001849056","name":"OKLO INC.","tickers":["OKLO"],"exchanges":["NYSE"],"addresses":{"mailing":{"city":"X"},' \
+      '"business":{"street1":"3190 Coronado Dr.","city":"SANTA CLARA","stateOrCountry":"CA","zipCode":"95054"}}}'
+    stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, edgar).to_return(body: record, headers: { "Content-Type" => "application/json" })
+    @company.update_columns(enrich_requested_at: Time.current, sec_cik: "0001849056")
+
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    claims = DataQuality::Plugins::CompanyPages.new.extract(Source.find_by!(url: edgar), nil)
+    assert_equal [ { "name" => "Acme Fission", "legal_name" => "OKLO INC." }, { "name" => "Acme Fission", "exchange" => "NYSE", "ticker" => "OKLO" },
+      { "name" => "Acme Fission", "hq_city" => "Santa Clara", "hq_state" => "CA" } ], claims.map { |c| c[:payload] }
+    assert(claims.all? { |c| record.include?(c[:quote]) }, "every quote is a fragment of the record")
+    assert_requested :get, edgar
+  end
 end

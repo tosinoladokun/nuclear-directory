@@ -19,8 +19,8 @@ class Admin::RecordEnrichController < Admin::BaseController
   end
 
   def create
-    if @company.website.blank?
-      flash[:alert] = "It has no website to read yet. Add one with Edit first."
+    if @company.website.blank? && @company.sec_cik.blank?
+      flash[:alert] = "It has no website or SEC number to read yet. Add one with Edit first."
     else
       @company.update_columns(enrich_requested_at: Time.current)
       DataQuality::RunJob.perform_later(SOURCE_KIND)
@@ -71,6 +71,8 @@ class Admin::RecordEnrichController < Admin::BaseController
       @finding_ids ||= begin
         domain = @company.domain.presence
         pages = domain ? Source.where(source_kind: SOURCE_KIND, domain: [ domain, "www.#{domain}" ]) : Source.none
+        # Its SEC record too (part 3), when it has a CIK.
+        pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i))) if @company.sec_cik.present?
         Candidate.where(source: pages, status: %w[new matched needs_review]).order(:id).ids
       end
     end

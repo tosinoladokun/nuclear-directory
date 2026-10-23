@@ -5,10 +5,10 @@
 <div class="nd-stack">
   <%= render "admin/crumbs", parent_label: @company.name, parent_path: record, current: "Enrich" %>
   <h1 class="type-admin-h1 m-0">Enrich <%= @company.name %></h1>
-  <p class="type-body m-0">Reads the company's own pages for what they state about it: what it does, its technologies, where it's based, when it was founded and its legal name. Each finding comes with the sentence it's from. Nothing goes live until you approve it, here or in Today.</p>
+  <p class="type-body m-0">Reads the company's own pages, and its SEC record if it's public, for what they state about it: what it does, its technologies, where it's based, when it was founded, its legal name, its stock listing and its links to other companies and plants. Each finding comes with the sentence it's from. Nothing goes live until you approve it, here or in Today.</p>
 
   <section class="nd-panel nd-stack" aria-label="Read its pages">
-    <% if @company.website.blank? %>
+    <% if @company.website.blank? && @company.sec_cik.blank? %>
       <p class="type-body m-0">It has no website to read yet. Add one with <%= link_to "Edit", admin_record_edit_path(type: "Organization", id: @company.id), class: "nd-link" %> first.</p>
     <% else %>
       <p class="type-body m-0">

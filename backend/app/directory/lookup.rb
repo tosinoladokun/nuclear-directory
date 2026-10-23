@@ -59,11 +59,11 @@ module Directory
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
 
-    # Enrich (#479): companies whose own pages were asked for and not read
-    # since, oldest request first, as [id, name, website].
+    # Enrich (#479): companies whose own pages (or SEC record) were asked for
+    # and not read since, oldest request first, as [id, name, website, sec_cik].
     def enrich_queue(limit: 5)
       Organization.where("enrich_requested_at IS NOT NULL AND (enriched_at IS NULL OR enriched_at < enrich_requested_at)")
-        .where.not(website: [ nil, "" ]).order(:enrich_requested_at).limit(limit).pluck(:id, :name, :website)
+        .where("COALESCE(website, '') <> '' OR sec_cik IS NOT NULL").order(:enrich_requested_at).limit(limit).pluck(:id, :name, :website, :sec_cik)
     end
 
     # The roles and technologies a company can be given: { "role" => [[key, name]], "technology" => [[key, name]] }.

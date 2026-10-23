@@ -9,6 +9,10 @@
 # Part 1: description, HQ, founded year, legal name, roles, technologies.
 class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PAGES = 4
+  EDGAR = "https://data.sec.gov/submissions/CIK%010d.json".freeze
+  EDGAR_URL = %r{\Ahttps://data\.sec\.gov/submissions/CIK(\d{10})\.json\z}
+  # EDGAR's exchange names, as the listing column has them.
+  EDGAR_EXCHANGES = { "Nasdaq" => "NASDAQ", "NYSE" => "NYSE", "NYSE American" => "NYSE American", "OTC" => "OTC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
   PROMPT_VERSION = "company_pages-2".freeze
@@ -49,13 +53,20 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
-    @directory.enrich_queue.each do |id, _name, website|
-      home = page(website) or next
-      DataQuality::Snapshot.take(home, fetcher: @fetcher)
-      stats["pages"] += 1
-      own_links(home).first(PAGES).each do |url|
-        DataQuality::Snapshot.take(page(url), fetcher: @fetcher)
+    @directory.enrich_queue.each do |id, _name, website, sec_cik|
+      # Part 3: a public company's SEC record (EDGAR), the primary source for
+      # its legal name, listing and headquarters address (Data Quality).
+      if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))
+        DataQuality::Snapshot.take(edgar, fetcher: @fetcher)
         stats["pages"] += 1
+      end
+      if (home = page(website))
+        DataQuality::Snapshot.take(home, fetcher: @fetcher)
+        stats["pages"] += 1
+        own_links(home).first(PAGES).each do |url|
+          DataQuality::Snapshot.take(page(url), fetcher: @fetcher)
+          stats["pages"] += 1
+        end
       end
       @directory.mark_enriched(id)
       stats["companies"] += 1
@@ -64,6 +75,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   end
 
   def extract(source, run)
+    return edgar_claims(source) if source.url.match?(EDGAR_URL)
+
     company = @directory.organization(domain: source.domain) or return []
     text = visible_text(source)
     return [] if text.blank?
@@ -76,6 +89,31 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   private
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
+
+    # What a company's EDGAR record states, read as data (no model): its
+    # legal name, its first listing, and its business address's city and
+    # state. Each quote is the exact fragment of the stored record.
+    def edgar_claims(source)
+      cik = source.url[EDGAR_URL, 1]
+      company = @directory.organization(sec_cik: cik) or return []
+      text = source.content_text.to_s
+      data = JSON.parse(text) rescue (return [])
+      fragment = ->(pattern) { text[pattern] }
+      claims = []
+      if (name = data["name"].presence) && (quote = fragment.(/"name":\s*"#{Regexp.escape(name)}"/))
+        claims << { kind: "organization", payload: { "name" => company.name, "legal_name" => name }, quote: }
+      end
+      ticker, exchange = Array(data["tickers"]).first, EDGAR_EXCHANGES[Array(data["exchanges"]).first]
+      if ticker && exchange && (quote = fragment.(/"tickers":\s*\[[^\]]*\],\s*"exchanges":\s*\[[^\]]*\]/))
+        claims << { kind: "organization", payload: { "name" => company.name, "exchange" => exchange, "ticker" => ticker }, quote: }
+      end
+      business = data.dig("addresses", "business") || {}
+      city, state = business["city"].to_s.strip, business["stateOrCountry"].to_s.strip
+      if city.present? && state.match?(/\A[A-Z]{2}\z/) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
+        claims << { kind: "organization", payload: { "name" => company.name, "hq_city" => city.titleize, "hq_state" => state }, quote: }
+      end
+      claims
+    end
 
     # A page of this kind, made or taken over from a page cited by hand.
     def page(url)
