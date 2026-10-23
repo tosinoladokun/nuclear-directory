@@ -508,4 +508,26 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
     assert_equal "NY", Facility.find_by!(name: "Indian Point", parent_id: nil).state
   end
+
+  test "an older same-name NRC unit never takes its site's details; a loose unit is taken in by its alias; new sites and units count as created" do
+    Facility.create!(name: "Callaway", nrc_docket: "05000483")
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "Callaway 1", site: "Callaway", type: "operates") ]))
+    File.write(facilities_file, { "facilities" => [ {
+      "name" => "Callaway", "state" => { "value" => "MO", "source_url" => "https://example.com/where", "quote" => "Callaway is in Missouri." }
+    } ] }.to_yaml)
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file)
+    loader.load!
+    site = Facility.find_by!(name: "Callaway", nrc_docket: nil)
+    assert_equal "MO", site.state
+    assert_nil Facility.find_by!(nrc_docket: "05000483").state, "the docketed record isn't the site"
+    created = loader.results.dig(:facility, :created) || loader.results.dig("facility", "created")
+    assert created.to_i >= 2, "the new site and unit count as created: #{loader.results.inspect}"
+
+    loose = Facility.create!(name: "San Onofre 2")
+    loose.aliases.create!(alias: "SONGS 2")
+    write_file("sce", org("Southern California Edison", website: "https://sce.example.com", facilities: [ item(name: "SONGS 2", site: "San Onofre", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal Facility.find_by!(name: "San Onofre").id, loose.reload.parent_id, "taken in by its alias, keeping its name"
+    assert_not Facility.exists?(name: "SONGS 2")
+  end
 end

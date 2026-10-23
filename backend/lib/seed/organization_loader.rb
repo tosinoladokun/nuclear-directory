@@ -69,6 +69,14 @@ module Seed
       end + plant_id_collisions
     end
 
+    # A plant (site) by name: one with no parent first, as write_unit finds
+    # a site (undocketed before docketed), so a same-name NRC unit never
+    # takes the site's details.
+    def plant_named(name)
+      Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
+        Directory::Lookup.facility(name:)
+    end
+
     # An EIA plant ID another site holds (#229): merge that site in first.
     def plant_id_collisions
       facilities = File.exist?(@facilities_file.to_s) ? Array(read(@facilities_file)["facilities"]) : []
@@ -76,7 +84,7 @@ module Seed
         holder = Facility.find_by(parent_id: nil, eia_plant_id: entry["eia_plant_id"].to_s) or next
         # The site the loader would write to, found as it finds it: by its
         # name, then by a former one (rename_from_former_name).
-        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first
+        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -300,7 +308,7 @@ module Seed
         return @errors << "facilities.yml: #{name.inspect} isn't in any organization file" unless in_docs.include?(name)
 
         # Its organization-file write failed (already in @errors): nothing to fill.
-        facility = Directory::Lookup.facility(name:) or return
+        facility = plant_named(name) or return
 
         FACILITY_FIELDS.each do |field|
           detail = entry[field]
@@ -348,6 +356,7 @@ module Seed
         unless site
           # A new site, sourced and decided like any written by this load.
           site = Facility.create!(name: site_name)
+          count(:facility, site.id, :created)
           site_result = write(slug, :facility, { id: site.id }, evidence(item, sources))
           return site_result unless site_result&.ok?
         end
@@ -365,8 +374,13 @@ module Seed
           end
           # A plant of its own by that name (an older fresh load) is taken in;
           # never the site itself, or a docketed unit of another plant.
-          unit = Facility.where(parent_id: nil).where.not(id: site.id).where("LOWER(name) = LOWER(?)", name).first ||
-            Facility.create!(name:, parent_id: site.id)
+          loose = Facility.where(parent_id: nil).where.not(id: site.id)
+          unit = loose.where("LOWER(name) = LOWER(?)", name).first ||
+            loose.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(name)).select(:facility_id)).first
+          unless unit
+            unit = Facility.create!(name:, parent_id: site.id)
+            count(:facility, unit.id, :created)
+          end
         end
         write(slug, :facility, facility_attributes(item).except(:name).merge(id: unit.id, parent_id: site.id), evidence(item, sources))
       end
