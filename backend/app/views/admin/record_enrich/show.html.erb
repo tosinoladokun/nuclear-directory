@@ -65,6 +65,10 @@
         </li>
       <% end %>
     </ol>
+  <% elsif @extract&.running? %>
+    <p class="type-body text-ink-muted">Its pages were read. Working out what they state now; findings appear here in a few minutes.</p>
+  <% elsif @extract&.failed? %>
+    <p class="type-body">Its pages were read, but working out what they state stopped with an error. Read its pages again to retry.</p>
   <% elsif @company.enriched_at %>
     <p class="type-body text-ink-muted">Nothing waiting from its pages. Anything they stated has been decided, or they stated nothing on the list.</p>
   <% end %>
