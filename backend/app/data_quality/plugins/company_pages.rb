@@ -9,6 +9,18 @@
 # Part 1: description, HQ, founded year, legal name, roles, technologies.
 class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PAGES = 4
+  # US states: code => code, and name => code.
+  STATES = %w[AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT
+    VA WA WV WI WY DC].to_h { |code| [ code, code ] }.freeze
+  STATE_CODES = { "alabama" => "AL", "alaska" => "AK", "arizona" => "AZ", "arkansas" => "AR", "california" => "CA", "colorado" => "CO",
+    "connecticut" => "CT", "delaware" => "DE", "florida" => "FL", "georgia" => "GA", "hawaii" => "HI", "idaho" => "ID", "illinois" => "IL",
+    "indiana" => "IN", "iowa" => "IA", "kansas" => "KS", "kentucky" => "KY", "louisiana" => "LA", "maine" => "ME", "maryland" => "MD",
+    "massachusetts" => "MA", "michigan" => "MI", "minnesota" => "MN", "mississippi" => "MS", "missouri" => "MO", "montana" => "MT",
+    "nebraska" => "NE", "nevada" => "NV", "new hampshire" => "NH", "new jersey" => "NJ", "new mexico" => "NM", "new york" => "NY",
+    "north carolina" => "NC", "north dakota" => "ND", "ohio" => "OH", "oklahoma" => "OK", "oregon" => "OR", "pennsylvania" => "PA",
+    "rhode island" => "RI", "south carolina" => "SC", "south dakota" => "SD", "tennessee" => "TN", "texas" => "TX", "utah" => "UT",
+    "vermont" => "VT", "virginia" => "VA", "washington" => "WA", "west virginia" => "WV", "wisconsin" => "WI", "wyoming" => "WY",
+    "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview/i
   PROMPT_VERSION = "company_pages-1".freeze
@@ -39,7 +51,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
-    @directory.enrich_queue.each do |id, _name, website|
+    @directory.enrich_queue.each do |id, _name, website, requested_at|
       home = page(website) or next
       DataQuality::Snapshot.take(home, fetcher: @fetcher)
       stats["pages"] += 1
@@ -47,7 +59,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         DataQuality::Snapshot.take(page(url), fetcher: @fetcher)
         stats["pages"] += 1
       end
-      @directory.mark_enriched(id)
+      @directory.mark_enriched(id, requested_at)
       stats["companies"] += 1
     end
     stats
@@ -81,11 +93,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     def own_links(home)
       return [] unless home.crawl_ok? && home.content_text.present?
 
-      host = URI(home.url).host
+      host = URI(home.url).host.to_s.downcase.delete_prefix("www.")
       Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(home.url, link["href"]).to_s.split("#").first rescue next
         uri = URI(url)
-        url if uri.host == host && uri.scheme == "https" && url != home.url && "#{uri.path} #{link.text}".match?(LINK)
+        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && url != home.url && "#{uri.path} #{link.text}".match?(LINK)
       end.uniq
     end
 
@@ -105,7 +117,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         # Every value inside its own quote, a description included (Data Quality).
         next if value.blank? || !quoted.(value, quote)
 
-        { kind: "organization", payload: { "name" => name, field => value.to_s.strip }, quote: quote.strip }
+        value = value.to_s.strip
+        # The directory keeps a state as its two-letter code ("Texas" in the quote is TX).
+        value = (STATES[value.upcase] || STATE_CODES[value.downcase] or next) if field == "hq_state"
+        { kind: "organization", payload: { "name" => name, field => value }, quote: quote.strip }
       end
       { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|

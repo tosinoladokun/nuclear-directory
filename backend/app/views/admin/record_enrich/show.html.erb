@@ -14,6 +14,8 @@
       <p class="type-body m-0">
         <% if @company.enrich_requested_at && (@company.enriched_at.nil? || @company.enriched_at < @company.enrich_requested_at) %>
           Reading <%= link_to source_host(@company.website), @company.website, class: "nd-link", target: "_blank", rel: "noopener" %> now (asked <%= time_ago_in_words(@company.enrich_requested_at) %> ago).
+        <% elsif @company.enriched_at && @home && !@home.crawl_ok? %>
+          Its site couldn't be read <%= time_ago_in_words(@company.enriched_at) %> ago<%= ": #{@home.status_reason}" if @home.status_reason.present? %>. Try Read its pages again later.
         <% elsif @company.enriched_at %>
           Last read <%= time_ago_in_words(@company.enriched_at) %> ago, from <%= link_to source_host(@company.website), @company.website, class: "nd-link", target: "_blank", rel: "noopener" %>.
         <% else %>
@@ -45,6 +47,9 @@
           <div class="nd-wait__what">
             <p class="type-kicker text-ink-muted m-0"><span class="nd-num">#<%= item.candidate_id %></span></p>
             <p class="type-body-strong m-0"><%= enrich_finding(item) %></p>
+            <% if item.kind == "organization" && (field = item.payload.to_h.except("name").keys.first) && @company.has_attribute?(field) && @company[field].present? %>
+              <p class="type-small m-0">Now: <%= @company[field] %>. Approving replaces it.</p>
+            <% end %>
             <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
             <p class="type-small m-0">
               <% if (url = safe_url(item.source.url)) %><%= link_to "#{source_host(url)} ↗", url, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>

@@ -16,6 +16,8 @@ class Admin::RecordEnrichController < Admin::BaseController
     # at a time, as on Checks).
     @agreed = @items.select { |item| item.ai_recommendation == "recommend_publish" && item.status != "needs_review" && item.held.nil? }.map(&:candidate_id)
     @runs = CrawlRun.where(source_kind: SOURCE_KIND).order(started_at: :desc).limit(4)
+    # Its home page, when the last read couldn't use it (blocked, an error): said, with Read again.
+    @home = Source.find_by(url: @company.website.to_s.strip) if @company.website.present?
   end
 
   def create
@@ -71,7 +73,10 @@ class Admin::RecordEnrichController < Admin::BaseController
       @finding_ids ||= begin
         domain = @company.domain.presence
         pages = domain ? Source.where(source_kind: SOURCE_KIND, domain: [ domain, "www.#{domain}" ]) : Source.none
-        Candidate.where(source: pages, status: %w[new matched needs_review]).order(:id).ids
+        # Only what this request found (since it was asked); older findings stay in Checks.
+        scope = Candidate.where(source: pages, status: %w[new matched needs_review])
+        scope = scope.where(created_at: @company.enrich_requested_at..) if @company.enrich_requested_at
+        scope.order(:id).ids
       end
     end
 end
