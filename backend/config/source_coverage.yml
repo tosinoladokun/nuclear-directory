@@ -33,7 +33,7 @@ categories:
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
       - { name: SBIR awards, status: planned, issue: 125 }
       - { name: GAIN directory, status: planned, issue: 257, leads: true }
-      - { name: NRC construction-permit notices in the Federal Register, status: planned, issue: 126, note: project developers }
+      - { name: NRC notices in the Federal Register (news), kind: federal_register_nrc, status: built, issue: 126, note: project developers }
       - { name: SEC filings, status: planned, issue: 129, note: project developers }
       - { name: Company newsrooms (news), kind: company_newsrooms, status: built, issue: 128 }
   - key: fuel

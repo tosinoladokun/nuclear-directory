@@ -324,6 +324,14 @@ company publishes itself, of its news or releases, that answer our bot are liste
 and skipped, and a page that isn't a feed goes to a person. Feeds drop old items as new ones arrive, so an
 item leaving the feed flags nothing.
 
+## NRC notices in the Federal Register (#126)
+
+`plugins/federal_register_nrc.rb` asks the Federal Register API once a day for the NRC's notices of the last 60
+days. A notice whose title names its subject the NRC's way ("<licensee>; <plant>; <action>") becomes a
+`news_item` claim about what its title names; match keeps the names it finds in the directory. A notice the
+NRC repeats weekly is proposed once, from its first date. Forms, biweekly lists and titles naming the
+Commissioners are left out. Only news: no fact is proposed from a notice. Every item waits for a person.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
