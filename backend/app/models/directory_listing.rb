@@ -328,7 +328,10 @@ class DirectoryListing
     # in the name ("brown ferry" finds Browns Ferry) (#431).
     def loose_name(column)
       compact = query.downcase.gsub(/[^a-z0-9]/, "")
-      words = query.downcase.scan(/[a-z0-9]+/).select { |word| word.length >= 2 }
+      tokens = query.downcase.scan(/[a-z0-9]+/)
+      # A short token ("5" in "Vogtle Unit 5") would match anywhere, so the
+      # every-word match isn't used then: it would find Unit 3.
+      words = tokens.any? { |word| word.length < 2 } ? [] : tokens
       sql = [ "#{column} ILIKE ?" ]
       binds = [ like(query) ]
       if compact.length >= 3

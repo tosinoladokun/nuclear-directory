@@ -373,5 +373,8 @@ class DirectoryListingTest < ActiveSupport::TestCase
     assert_includes names(DirectoryListing.new(q: "Next-Era")), "NextEra Energy"
     assert_includes DirectoryListing.new(q: "brown ferry").plants.map(&:name), browns.name
     assert_empty names(DirectoryListing.new(q: "next banana")), "every word must be in the name"
+    unit_three = plant("Browns Unit 3", parent: browns)
+    assert_not_includes DirectoryListing.new(q: "Browns Unit 5").plants.map(&:name), browns.name, "a unit number must match, not any unit"
+    assert unit_three
   end
 end
