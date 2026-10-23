@@ -23,15 +23,10 @@ class Admin::RecordEnrichController < Admin::BaseController
   end
 
   def create
-<<<<<<< HEAD
     if @company.website.blank? && @company.sec_cik.blank?
       flash[:alert] = "It has no website or SEC number to read yet. Add one with Edit first."
-=======
-    if @company.website.blank?
-      flash[:alert] = "It has no website to read yet. Add one with Edit first."
-    elsif !@company.website.to_s.strip.match?(%r{\Ahttps://[^\s/]+}i)
+    elsif @company.website.present? && !@company.website.to_s.strip.match?(%r{\Ahttps://[^\s/]+}i)
       flash[:alert] = "Its website needs to start with https:// before its pages can be read. Fix it with Edit first."
->>>>>>> origin/feat/479-enrich
     else
       @company.update_columns(enrich_requested_at: Time.current)
       DataQuality::RunJob.perform_later(SOURCE_KIND)
