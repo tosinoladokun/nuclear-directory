@@ -68,4 +68,22 @@ class NewsItemTest < ActiveSupport::TestCase
     result = Directory::FactWriter.write(:news_item, { url: "ftp://x", title: "", published_on: nil }, verification: { status: "pending", by: BY })
     assert_not result.ok?
   end
+
+  test "an item an agent verified isn't public: a person approves each" do
+    news = item.tap { |n| n.verify!(by: "agent:verifier/model") }
+    Directory::FactWriter.mention_news(news_item_id: news.id, subject_type: "Organization", subject_id: @company.id)
+    assert_empty NewsItem.published
+  end
+
+  test "news on a standalone unit moves to its site when the unit gains one" do
+    unit = Facility.create!(name: "Lone Unit 1").tap { |f| f.verify!(by: BY) }
+    news = item.tap { |n| n.verify!(by: BY) }
+    Directory::FactWriter.mention_news(news_item_id: news.id, subject_type: "Facility", subject_id: unit.id)
+    site = Facility.create!(name: "Lone Point").tap { |f| f.verify!(by: BY) }
+
+    assert Directory::FactWriter.write(:facility, { id: unit.id, parent_id: site.id }, fill_blank: true).ok?
+    assert_equal [ [ "Facility", site.id ] ], NewsMention.where(news_item: news).pluck(:subject_type, :subject_id)
+    assert_equal [ news.id ], Directory::Lookup.latest_news(type: "Facility", id: unit.id).map(&:id)
+    assert_equal [ news.id ], Directory::Lookup.latest_news(type: "Facility", id: site.id).map(&:id)
+  end
 end

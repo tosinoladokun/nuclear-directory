@@ -667,7 +667,10 @@ module Directory
         end
         changes = changes.select { |name, _| record.public_send(name).blank? } if (fill_blank || curated) && !created
         record.assign_attributes(changes)
+        gained_site = kind == :facility && !created && record.parent_id_changed? && record.parent_id_was.nil? && record.parent_id
         record.save!
+        # A unit that gains its site: its news is the site's now (#137), moved once.
+        move_news_mentions(record, Facility.find(record.parent_id)) if gained_site
         edited = audited_values(record) unless created
 
         if kind == :organization
