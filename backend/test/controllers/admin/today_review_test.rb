@@ -231,6 +231,15 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_select "li.nd-verdict", /Brand New Fission.*One decision covers both/m
   end
 
+  test "a new company proposed with different values on two pages is two decisions" do
+    [ [ @source, "brandnew.com" ], [ Source.create!(url: "https://example.com/news2", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha"), "other.com" ] ].each do |source, domain|
+      Candidate.create!(source:, kind: "organization", payload: { "name" => "Brand New Fission", "domain" => domain }, quote: "Brand New Fission was founded.",
+        crawl_run: @both.crawl_run, status: "needs_review", notes: "new company", ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    end
+    get admin_today_review_path
+    assert_select "li.nd-verdict", text: /Brand New Fission/, count: 2
+  end
+
   test "a grouped Undo restores every copy or none: one changed since, nothing is undone" do
     other = Source.create!(url: "https://www.doe.gov/test/undo.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
     again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also.", crawl_run: @only_joy.crawl_run,
