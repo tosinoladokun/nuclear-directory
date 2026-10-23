@@ -34,7 +34,11 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
     assert_select ".nd-fuzzy-note"
   end
 
-  test "spacing and word-order matches stay exact: no note ('brown ferry', 'next era')" do
+  test "spacing, every-word and cut-off matches stay exact: no note ('next era', 'brown ferry', 'westinghous')" do
+    get companies_path(q: "westinghous")
+    assert_equal [ "Westinghouse Reactor Systems" ], names
+    assert_select ".nd-fuzzy-note", 0
+
     get companies_path(q: "brown ferry")
     assert_equal [ "Browns Ferry Nuclear Plant" ], names
     assert_select ".nd-fuzzy-note", 0
