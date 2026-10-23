@@ -23,11 +23,13 @@ class NoWrapTest < ApplicationSystemTestCase
     cite!(plant("Calvert Cliffs Unit 2", parent: @plant, status: "operating", reactor_type: "PWR", capacity_mw: 862))
     [ "Constellation Energy Generation", "Oglethorpe Power Corporation", "Southern Nuclear Operating Co., Inc.", "Municipal Electric Authority of Georgia" ]
       .each { |name| cite!(link(cite!(company(name, roles: [ utility ])), "owns", @plant)) }
+    cite!(company("Dual Role Reactor Designer and Project Developer Holdings International", roles: [ role("reactor_vendor"), role("project_developer") ],
+      description: "Company that designs a small modular reactor and develops the plants that will use it, in several states."))
     cite!(company("Metropolis Works Uranium Conversion Facility Operator LLC", roles: [ role("fuel") ],
       description: "Company that supplies uranium hexafluoride conversion services to nuclear power plants worldwide."))
   end
 
-  PAGES = ->(test) { [ "/", "/companies", "/companies?category=services", "/companies?category=plants",
+  PAGES = ->(test) { [ "/", "/companies", "/companies?category=reactor-developers", "/companies?category=reactor-developers&role=project_developer", "/companies?category=services", "/companies?category=plants",
     "/companies/#{test.instance_variable_get(:@allied).slug}", "/plants/#{test.instance_variable_get(:@plant).slug}" ] }
 
   test "a long value with two-digit source numbers shrinks and never pushes past its column" do
@@ -150,6 +152,36 @@ class NoWrapTest < ApplicationSystemTestCase
       found = page.evaluate_script(AUDIT)
       assert found.any? { |problem| problem.include?("edge") }, "at #{width}: a value inset by padding is reported, got #{found.inspect}"
     end
+  end
+
+  test "on a touch phone the footer credit keeps the space before its link and the link is 44px tall" do
+    resize_viewport(390, 844)
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" }, { name: "pointer", value: "coarse" } ])
+    visit root_path
+    credit = page.evaluate_script("(() => { const p = document.querySelector('.nd-footer__credit'); return [p.innerText, Math.round(p.querySelector('a').getBoundingClientRect().height), matchMedia('(pointer: coarse)').matches] })()")
+    assert_equal [ "Hosting supported by Render.", true ], [ credit[0], credit[2] ]
+    assert_operator credit[1], :>=, 43, "the Render link is a 44px tap target"
+    apart = page.evaluate_script("(() => { const credit = document.querySelector('.nd-footer__credit a').getBoundingClientRect(); return [...document.querySelectorAll('.nd-footer__links a')].every((a) => { const r = a.getBoundingClientRect(); return r.bottom <= credit.top + 0.5 || r.top >= credit.bottom - 0.5 || r.right <= credit.left || r.left >= credit.right }) })()")
+    assert apart, "tap areas of the footer links and the credit never overlap"
+    assert_empty page.evaluate_script(AUDIT)
+  ensure
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
+  end
+
+  test "a dual-role company's two role chips stay inside the row at 320, wrapping as whole chips" do
+    resize_viewport(320, 700)
+    visit "/companies?category=reactor-developers"
+    state = page.evaluate_script(<<~JS)
+      (() => {
+        const roles = [...document.querySelectorAll(".nd-listrow__roles")].find((el) => el.querySelectorAll(".nd-tag").length === 2), box = roles.getBoundingClientRect()
+        const chips = [...roles.querySelectorAll(".nd-tag")].map((chip) => chip.getBoundingClientRect())
+        return [chips.length, chips.every((r) => r.left >= box.left - 1 && r.right <= box.right + 1), roles.scrollWidth <= roles.clientWidth + 1, document.documentElement.scrollWidth <= innerWidth]
+      })()
+    JS
+    assert_equal [ 2, true, true, true ], state, "both chips whole and inside their row at 320"
+    assert_empty page.evaluate_script(AUDIT)
   end
 
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do

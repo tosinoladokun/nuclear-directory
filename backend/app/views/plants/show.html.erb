@@ -39,7 +39,7 @@
             [ "Location", where ],
             [ owners.size > 1 ? "Owners" : "Owner", company_links.(owners), cited.("owns") ],
             [ operators.size > 1 ? "Operators" : "Operator", company_links.(operators), cited.("operates") ],
-            [ vendors.size > 1 ? "Reactor developers" : "Reactor developer", company_links.(vendors), cited.("vendor_for") ],
+            [ vendors.size > 1 ? "Reactor designers" : "Reactor designer", company_links.(vendors), cited.("vendor_for") ],
             [ buyers.size > 1 ? "Power buyers" : "Power buyer", company_links.(buyers), cited.("offtakes_from") ],
             [ "Technology", p.technologies.join(", ").presence, details_cited ],
             [ p.reactor_types.size > 1 ? "Reactor types" : "Reactor type", p.reactor_types.join(", ").presence, details_cited ],

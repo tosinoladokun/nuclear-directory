@@ -1,0 +1,25 @@
+# Seed research - 20 Oct 2026 (Checks clean-up). Roles quote the DOE isotope programme's own page (isotopes.gov), as the claims in Checks do; the description is the organization's own site.
+name: Pacific Northwest National Laboratory
+aliases:
+- PNNL
+website: https://www.pnnl.gov
+hq: null
+country_code: US
+status: active
+roles:
+- key: isotopes
+  source_url: https://www.isotopes.gov/production-network
+  quote: 'Additionally, the program supports the production of isotopes at a number of other facilities: the High Flux Isotope Reactor (HFIR) at ORNL, the Advanced Test Reactor (ATR) at Idaho National Laboratory (INL), the Tritium Facility at Savannah River National Laboratory (SRNL), the Low-Energy Accelerator Facility (LEAF) at Argonne National Laboratory (ANL), Y-12 National Security Complex (Y-12), and Pacific Northwest National Laboratory (PNNL).'
+  confidence: 1.0
+- key: national_lab
+  source_url: https://www.isotopes.gov/production-network
+  quote: 'Additionally, the program supports the production of isotopes at a number of other facilities: the High Flux Isotope Reactor (HFIR) at ORNL, the Advanced Test Reactor (ATR) at Idaho National Laboratory (INL), the Tritium Facility at Savannah River National Laboratory (SRNL), the Low-Energy Accelerator Facility (LEAF) at Argonne National Laboratory (ANL), Y-12 National Security Complex (Y-12), and Pacific Northwest National Laboratory (PNNL).'
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'HQ left blank: the pages read state none.'
+description:
+  text: National laboratory for scientific discovery in chemistry, data analytics and Earth science, and for energy resilience and national security.
+  source_url: https://www.pnnl.gov/
+  quote: Pacific Northwest National Laboratory is a leading center for scientific discovery in chemistry, data analytics, and Earth science, and for technological innovation in energy resilience and national security.

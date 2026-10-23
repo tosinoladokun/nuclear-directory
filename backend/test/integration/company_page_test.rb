@@ -39,7 +39,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select "main", 1
     assert_select "h1#profile-name", "Kairos Power"
     assert_select ".nd-profile__desc", /Develops salt-cooled reactors./
-    assert_select ".nd-tag", "Reactor developer"
+    assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
@@ -81,7 +81,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
 
     assert_select "body", text: /Google/, count: 0
     assert_select "body", text: /Hermes/, count: 0
-    assert_select "body", text: /Reactor developer/, count: 0
+    assert_select "body", text: /Reactor designer/, count: 0
 
     @google.verify!(by: "human:test")
     get company_path(slug: "kairos-power")
@@ -166,7 +166,15 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "kairos-power")
 
     assert_select ".nd-overview dt", text: "Website"
-    assert_select ".nd-overview dd a[href='https://kairospower.com']", "kairospower.com"
+    # #200: the Website link carries the referral UTM so companies see the
+    # visit in their own analytics. The href starts with the website, with
+    # utm_source / utm_medium / utm_campaign on the query string.
+    assert_select ".nd-overview dd a[href^='https://kairospower.com?']", text: "kairospower.com"
+    link = css_select(".nd-overview dd a[href^='https://kairospower.com?']").first
+    params = URI.decode_www_form(URI.parse(link["href"]).query).to_h
+    assert_equal "nuclear-directory", params["utm_source"]
+    assert_equal "referral", params["utm_medium"]
+    assert_equal "company-page", params["utm_campaign"]
     assert_select ".nd-overview dd", text: /\AKairos\z/
     assert_select ".nd-overview dd", text: /\AAlameda, CA\z/
     # The record's sources show once, under the facts, and name no fact.

@@ -138,7 +138,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-overview dt", "Owner"
     assert_select ".nd-overview dd a[href='/companies/georgia-power']", "Georgia Power"
     assert_select ".nd-overview dt", "Operator"
-    assert_select ".nd-overview dt", "Reactor developer"
+    assert_select ".nd-overview dt", "Reactor designer"
     assert_select ".nd-overview dd", text: /\AFission/
     assert_select ".nd-overview dd", text: /\AAP1000/
     assert_select ".nd-overview dd", text: /\A2,228 MW\b/

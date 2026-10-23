@@ -33,7 +33,7 @@
       <%# Its buckets (#281) are computed from the roles and links below, so they carry no source of their own. %>
       <%= render "shared/overview_panel", verified_at: p.verified_at, correction_url: correction_url_for(p.name), sources_label: t("profile.sources.company"), sources: record_citations, rows: [
             [ "Type", (tag.ul(class: "nd-bucketchips") { safe_join(p.buckets.map { |b| tag.li { link_to(directory_url_for(category: b), class: [ "nd-bucketchip", bucket_class(b) ], aria: { label: b.name }, title: b.name) { bucket_icon(b) + tag.span(b.name, class: "nd-bucketchip__full") + (tag.span(b.short_name, class: "nd-bucketchip__short", aria: { hidden: true }) if b.short) } } }) } if p.buckets.any?) ],
-            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), p.website, class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) ],
+            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) ],
             [ "Also known as", name_list.(p.aliases), nil, nil, p.aliases.size > 1 ],
             [ "Legal name", p.legal_name ],
             [ role_tags.size > 1 ? "Roles" : "Role", name_list.(role_tags), p.shown_roles.flat_map { |r| p.citations_for(r) }.uniq(&:first), nil, role_tags.size > 1 ],
