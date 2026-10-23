@@ -18,7 +18,7 @@ class SearchTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "<html"
     assert_select "turbo-frame#instant-results[target=_top]"
     assert_select "#instant-results-companies", "Companies"
-    assert_select ".nd-instant__row[href='/companies/kairos-power']", /Kairos Power.*Reactor developer · Alameda, CA/m
+    assert_select ".nd-instant__row[href='/companies/kairos-power']", /Kairos Power.*Reactor designer · Alameda, CA/m
     assert_select "#instant-results-plants", "Plants and sites"
     assert_select ".nd-instant__row[href='/plants/kairos-hermes']", /Test reactor · Oak Ridge, TN/
     assert_select ".nd-instant[data-instant-search-count='2']"
@@ -31,7 +31,7 @@ class SearchTest < ActionDispatch::IntegrationTest
     get search_path(q: "kairos power")
 
     assert_select ".nd-instant__row[href='/companies/kairos-power']"
-    assert_select ".nd-instant__row[href='/companies/kairos-power']", text: /Reactor developer/, count: 0
+    assert_select ".nd-instant__row[href='/companies/kairos-power']", text: /Reactor designer/, count: 0
   end
 
   test "only verified records appear" do
