@@ -88,12 +88,12 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
       quote: "Acme Fission trades on NASDAQ under the symbol ACME.", status: "matched", subject_type: "Organization", subject_id: @company.id,
       ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
     get enrich_path
-    assert_select "#finding-#{listing.id} .type-body-strong", "Stock: NASDAQ: ACME"
+    assert_select "#finding-#{listing.id} .type-body-strong", "Listed on NASDAQ as ACME"
 
     post admin_record_enrich_decide_path(type: "Organization", id: @company.id, candidate_id: listing.id, decision: "approve")
     assert_equal [ "NASDAQ", "ACME" ], @company.reload.values_at(:exchange, :ticker), flash[:alert]
     get admin_record_path(type: "Organization", id: @company.id)
-    assert_select "a[href=?]", "https://www.google.com/finance/quote/ACME:NASDAQ", text: "Google Finance ↗"
+    assert_select "a.whitespace-nowrap[href=?]", "https://www.google.com/finance/quote/ACME:NASDAQ", text: /Google Finance/
   end
 
   test "findings from its SEC record show on its Enrich page too" do

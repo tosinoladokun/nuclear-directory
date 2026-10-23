@@ -144,7 +144,7 @@ module AdminHelper
     return if ticker.blank? || exchange.blank?
 
     url = "https://www.google.com/finance/quote/#{ERB::Util.url_encode(ticker)}:#{GOOGLE_FINANCE_EXCHANGES.fetch(exchange, exchange)}"
-    safe_join([ "#{exchange}: #{ticker} ", link_to("Google Finance ↗", url, class: "nd-link", target: "_blank", rel: "noopener") ])
+    safe_join([ "#{exchange}: #{ticker} ", link_to(url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener") { safe_join([ "Google Finance ", icon("arrow-square-out", size: 12) ]) } ])
   end
 
   # A source's crawl status in one wording, wherever it's shown.
@@ -275,7 +275,7 @@ module AdminHelper
     payload = item.payload.to_h
     case item.kind
     when "organization"
-      return "Stock: #{payload['exchange']}: #{payload['ticker']}" if payload["ticker"]
+      return "Listed on #{payload['exchange']} as #{payload['ticker']}" if payload["ticker"]
 
       field, value = payload.except("name").first
       field ? "#{field_label(field).upcase_first}: #{field_value(value)}" : item.claim
