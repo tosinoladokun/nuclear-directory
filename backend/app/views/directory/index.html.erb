@@ -107,7 +107,7 @@
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
         <h2 id="companies-heading" class="nd-label mb-1">Companies</h2>
-        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %></ul>
+        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %></ul>
       </section>
     <% end %>
     <% if @plants.any? %>
@@ -118,7 +118,7 @@
     <% end %>
   <% else %>
     <ul class="nd-list">
-      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %>
+      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
       <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
     </ul>
   <% end %>
