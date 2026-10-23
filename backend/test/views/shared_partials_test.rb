@@ -108,7 +108,7 @@ class SharedPartialsTest < ActionView::TestCase
 
   test "overview panel skips rows without a value" do
     render partial: "shared/overview_panel", locals: { verified_at: Time.zone.parse("2026-10-09"),
-      rows: [ [ "Website", "kairospower.com", nil ], [ "HQ", nil, nil ], [ "Role", "Reactor developer", [ [ 1, @source ] ] ] ] }
+      rows: [ [ "Website", "kairospower.com", nil ], [ "HQ", nil, nil ], [ "Role", "Reactor designer", [ [ 1, @source ] ] ] ] }
 
     assert_select "dt", count: 2
     assert_select "dt", text: "HQ", count: 0
@@ -119,10 +119,10 @@ class SharedPartialsTest < ActionView::TestCase
 
   test "profile header with and without description and tags" do
     render partial: "shared/profile_header", locals: { name: "Kairos Power", kind: :company,
-      description: "Develops salt-cooled reactors.", citations: [ [ 1, @source ] ], tags: [ "Reactor developer" ] }
+      description: "Develops salt-cooled reactors.", citations: [ [ 1, @source ] ], tags: [ "Reactor designer" ] }
     assert_select "h1", "Kairos Power"
     assert_select ".nd-profile__desc", /Develops salt-cooled reactors./
-    assert_select ".nd-tag", "Reactor developer"
+    assert_select ".nd-tag", "Reactor designer"
 
     render partial: "shared/profile_header", locals: { name: "Hermes 2", kind: :plant, heading_id: "plant-name" }
     assert_select ".nd-ring--lg"
