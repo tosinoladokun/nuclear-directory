@@ -24,4 +24,9 @@ class SearchGapsTest < ActionDispatch::IntegrationTest
     get companies_path(q: "#{'nuclear ' * 13}me@example.com"), headers: BROWSER
     assert_equal 0, SearchGap.count
   end
+
+  test "the gap is the search that ran: a long run of spaces cut at 100 characters keys the same words the listing searched" do
+    get companies_path(q: "Ocean#{' ' * 100}Atomics"), headers: BROWSER
+    assert_equal [ "ocean" ], SearchGap.pluck(:query)
+  end
 end
