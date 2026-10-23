@@ -39,7 +39,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select "main", 1
     assert_select "h1#profile-name", "Kairos Power"
     assert_select ".nd-profile__desc", /Develops salt-cooled reactors./
-    assert_select ".nd-tag", "Reactor developer"
+    assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
@@ -81,7 +81,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
 
     assert_select "body", text: /Google/, count: 0
     assert_select "body", text: /Hermes/, count: 0
-    assert_select "body", text: /Reactor developer/, count: 0
+    assert_select "body", text: /Reactor designer/, count: 0
 
     @google.verify!(by: "human:test")
     get company_path(slug: "kairos-power")
