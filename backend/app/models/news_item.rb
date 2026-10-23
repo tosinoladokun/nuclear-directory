@@ -14,10 +14,12 @@ class NewsItem < ApplicationRecord
   validates :title, :published_on, presence: true
   validates :confidence, numericality: { in: 0..1 }, allow_nil: true
 
-  # Public: approved, and about at least one published company or plant.
+  # Public: approved by a person (never by an agent: Tosin approves each,
+  # 21 Oct), and about at least one published company or plant.
   def self.published
-    verified.where(id: NewsMention.where(subject_type: "Organization", subject_id: Organization.published.select(:id)).select(:news_item_id))
-      .or(verified.where(id: NewsMention.where(subject_type: "Facility", subject_id: Facility.published.select(:id)).select(:news_item_id)))
+    approved = verified.where("news_items.verified_by LIKE 'human:%'")
+    approved.where(id: NewsMention.where(subject_type: "Organization", subject_id: Organization.published.select(:id)).select(:news_item_id))
+      .or(approved.where(id: NewsMention.where(subject_type: "Facility", subject_id: Facility.published.select(:id)).select(:news_item_id)))
   end
 
   # A record's "Latest": its public items, newest first.
