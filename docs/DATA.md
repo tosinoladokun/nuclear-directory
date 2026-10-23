@@ -18,7 +18,7 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 | Plant link (`FacilityRelationship`) | A company's role at a plant | Southern Nuclear operates Vogtle 3 | A deal between two companies |
 | Company link (`Relationship`) | A deal or tie between two companies | Centrus supplies TRISO-X | A role at a plant |
 | Deal term (`DealTerm`) | One award, power deal or funding round under its link, with amount and dates; or a company's own funding round when its filing names no investors (Form D) | A DOE award (ID, amount, start date) under "DOE funds X-energy"; a Form D round on the company that raised it | The link itself |
-| Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor developer; SMR | A tag inferred without a quote |
+| Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor designer; SMR | A tag inferred without a quote |
 
 ### Site or unit
 
@@ -120,7 +120,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | Bucket | Means | A company is in it when it has | Today |
 |---|---|---|---|
 | Power plant owners and operators | Owns or runs nuclear power plants. Its slug stays `utilities` | `utility` or `operator`, or a published owns/operates link to an **operating power plant** | 33 |
-| Developers | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers` | `reactor_vendor` or `project_developer` | 19 |
+| Developers (home card: Reactor Developers) | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers`. One category, told apart by the role shown on each company: **Reactor designer** (`reactor_vendor`, designs the reactor) and **Project developer** (`project_developer`, builds and develops plants); a company with both shows both (Tosin, 21 Oct) | `reactor_vendor` or `project_developer` | 19 |
 | Fuel and materials | Mines, converts, enriches or fabricates fuel; ships fresh fuel; supplies materials such as coolant; produces isotopes (medical and industrial) | `fuel` or its stages, `coolant` or its kinds, `isotopes` (new key), or the sourced tag "fresh-fuel transport" | 11 |
 | Components and manufacturing | Makes equipment: pumps, valves, forgings, steam generators, instrumentation and control hardware, naval and defense nuclear components | `components` (new key) | 0 |
 | Waste and decommissioning | Stores, transports and disposes of spent fuel and waste; decommissions plants | `waste_decommissioning` (new key), or the sourced tag "spent-fuel transport" | 0 |
@@ -209,6 +209,8 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 - **Publishing:** a fact is public only through its model's `.published` scope: a unit when verified under an open site; a pending site when it has such a unit; a link only when both ends are public; a deal term only with its link.
 - **Deal terms:** one term per link (or company), kind and award ID; an award needs an amount, a start date and an award ID; a term on a company itself is a funding round; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
 - **SEC CIK:** 10 digits, zero-padded, unique among companies.
+
+- **Read-only access:** Metabase's read-only role reads only the tables on `Metabase::ReadonlyRole::READABLE_TABLES`, never sign-in data, visitors' correction reports or the deploy's records. There are no default privileges. A migration that creates a public-data table adds it to the list and grants it (`Metabase::ReadonlyRole.grant!`); a test fails while any table is on neither list (PM and Data Quality, 18 Oct).
 
 ### Audited (planned: the Live screen and `data_quality:audit`, #277)
 

@@ -46,7 +46,7 @@ class Directory::FacilityAliasesTest < ActiveSupport::TestCase
     assert_equal "Peach Bottom", other.reload.name
 
     assert write(:facility, { id: @crane.id, name: "Three Mile Island Unit 1" }).ok?
-    assert_equal [ "TMI-1" ], @crane.reload.aliases.pluck(:alias), "the promoted alias is now the name"
+    assert_equal [ "Crane Clean Energy Center", "TMI-1" ], @crane.reload.aliases.pluck(:alias).sort, "the promoted alias is now the name; the former name is an alias"
   end
 
   test "an HTML-escaped ampersand is the same as a plain one" do
@@ -79,8 +79,9 @@ class Directory::FacilityAliasesTest < ActiveSupport::TestCase
     renamed = locks.call { write(:facility, { id: other.id, name: "Peach-Bottom" }) }
     aliased = locks.call { write(:facility, { id: @crane.id, aliases: [ "Peach Bottom" ] }) }
 
-    assert_equal [ "SELECT pg_advisory_xact_lock(hashtext('facility-name:peach bottom'))" ], renamed
-    assert_equal renamed, aliased
+    peach = "SELECT pg_advisory_xact_lock(hashtext('facility-name:peach bottom'))"
+    assert_equal [ peach, "SELECT pg_advisory_xact_lock(hashtext('facility-name:salem'))" ], renamed, "the former name is locked too"
+    assert_equal [ peach ], aliased
   end
 
   test "every name a write touches is locked up front, in sorted order" do
@@ -91,7 +92,7 @@ class Directory::FacilityAliasesTest < ActiveSupport::TestCase
     end
 
     locked = sql.grep(/pg_advisory_xact_lock/).map { |statement| statement[/facility-name:([^']*)/, 1] }
-    assert_equal [ "alpha", "beta station", "zion" ], locked
+    assert_equal [ "alpha", "beta station", "salem", "zion" ], locked
   end
 
   test "aliases that aren't names are refused" do

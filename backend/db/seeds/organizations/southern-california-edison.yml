@@ -1,0 +1,18 @@
+# Seed research - 20 Oct 2026 (Checks clean-up). Description quote from sce.com; operator links quote NRC's own SONGS pages (stored in production).
+name: Southern California Edison
+aliases:
+- Southern California Edison (SCE)
+- SCE
+website: https://www.sce.com
+hq: null
+country_code: US
+status: active
+roles: []
+technologies: []
+relationships: []
+facilities: []
+notes: 'A new company for the SONGS claims in Checks (1294 1296 1295 1297 1298). ''Retains the SONGS licenses'' is NRC''s wording for the licensee, so the link is operates. HQ left blank: sce.com''s page read states no headquarters.'
+description:
+  text: Electric utility that delivers electricity to its communities.
+  source_url: https://www.sce.com/about-us/who-we-are
+  quote: Southern California Edison, our mission is to safely deliver reliable, clean and affordable electricity to the communities that make our region great.

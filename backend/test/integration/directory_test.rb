@@ -20,6 +20,51 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_redirected_to companies_url(state: "CA", sort: "connections", tag: "fusion")
   end
 
+  test "?role= narrows the Developers list to reactor designers or project developers; the list shows no role tags and no filter UI" do
+    designer = Role.find_by!(key: "reactor_vendor")
+    developer = role("project_developer")
+    both = cite!(company("Both Roles Inc", roles: [ designer, developer ]))
+    builder = cite!(company("Blue Builder Energy", roles: [ developer ]))
+    get companies_path(category: "reactor-developers")
+
+    assert_response :success
+    assert_select "nav[aria-label=Role]", 0, "no role filter in the page (the ?role= param still works)"
+    assert_select ".nd-listrow .nd-tag", 0, "the role is shown on the company page, not in the list"
+
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_select "a.nd-listrow", 2
+    assert_select "a[href='/companies/#{builder.slug}']"
+    assert_select "a[href='/companies/kairos-power']", 0
+    assert_select "meta[name=robots][content=noindex]"
+    assert_select "form.nd-filters input[type=hidden][name=role][value=project_developer]"
+
+    get companies_path(category: "reactor-developers", role: "reactor_vendor")
+    assert_select "a[href='/companies/#{builder.slug}']", 0
+    assert_select "a[href='/companies/kairos-power']"
+
+    get companies_path(category: "reactor-developers", role: "utility")
+    assert_select "a.nd-listrow", 4
+  end
+
+  test "a role no source backs does not put the company under that role" do
+    designer = Role.find_by!(key: "reactor_vendor")
+    developer = role("project_developer")
+    half = cite!(company("Half Sourced Holdings", roles: [ designer ]))
+    unsourced = OrganizationRole.create!(organization: half, role: developer, verification_status: "verified", verified_by: "human:tosin", confidence: 1)
+    assert_empty unsourced.evidence
+
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_select "a[href='/companies/#{half.slug}']", 0
+  end
+
+  test "only the Developers list has role chips and a role filter" do
+    get companies_path(category: "fuel", role: "reactor_vendor")
+    assert_select "nav[aria-label=Role]", 0
+    get companies_path
+    assert_select ".nd-listrow .nd-tag", 0
+    assert_select "nav[aria-label=Role]", 0
+  end
+
   test "a tag page lists the companies with that tag, under its own title and address" do
     cite!(company("Helion", techs: [ technology("fusion", "Fusion") ]))
     get companies_path(tag: "fusion")
@@ -92,6 +137,23 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "a.nd-listrow", text: /Pending Reactors/, count: 0
   end
 
+  test "a category narrows to one of its roles, with its canonical address the whole category" do
+    get companies_path(category: "reactor-developers", role: "project_developer")
+    assert_response :success
+    assert_select "a.nd-listrow[href='/companies/kairos-power']", 0
+    assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies?category=reactor-developers", 1
+    assert_select "meta[name=robots][content=noindex]"
+
+    get companies_path(category: "reactor-developers", role: "reactor_vendor")
+    assert_select "a.nd-listrow[href='/companies/kairos-power']"
+    assert_select "form.nd-filters input[type=hidden][name=role][value=reactor_vendor]"
+
+    get companies_path(category: "reactor-developers", role: "project_developer", format: :json)
+    project = response.parsed_body["count"]
+    get companies_path(category: "reactor-developers", format: :json)
+    assert_operator project, :<, response.parsed_body["count"], "the filter sheet's count keeps the role"
+  end
+
   test "a company without a description or HQ still lists" do
     get companies_path(category: "reactor-developers")
 
@@ -126,6 +188,9 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "reactor-developers", q: "nothing like this", state: "CA", sort: "connections")
 
     assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&sort=connections&state=CA", text: "Clear search"
+
+    get companies_path(category: "reactor-developers", q: "nothing like this", role: "project_developer")
+    assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&role=project_developer", text: "Clear search"
   end
 
   test "search and filtered lists aren't indexed; plain lists and categories are" do

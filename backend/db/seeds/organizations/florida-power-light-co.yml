@@ -8,7 +8,11 @@ website: https://www.fpl.com
 hq: null
 country_code: US
 status: active
-roles: []
+roles:
+- key: operator
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: Saint Lucie 1 | 05000335 | DPR-67 | PWR | 10 miles SE of Ft. Pierce, FL | Florida Power & Light Co. | 2
+  confidence: 1.0
 technologies: []
 relationships:
 - type: subsidiary_of

@@ -18,9 +18,16 @@ class AnalyticsTest < ActiveSupport::TestCase
     Analytics.track_search("  TerraPower ", results: 3)
     Analytics.track_search("sodium supplier", results: 0)
 
-    first, second = posthog.events.map { |e| e[:properties].slice("query", "results", "zero_results") }
-    assert_equal({ "query" => "terrapower", "results" => 3, "zero_results" => false }, first)
-    assert_equal({ "query" => "sodium supplier", "results" => 0, "zero_results" => true }, second)
+    first, second = posthog.events.map { |e| e[:properties].slice("query", "results", "zero_results", "source") }
+    assert_equal({ "query" => "terrapower", "results" => 3, "zero_results" => false, "source" => "typed" }, first)
+    assert_equal({ "query" => "sodium supplier", "results" => 0, "zero_results" => true, "source" => "typed" }, second)
+  end
+
+  test "a search says whether it was typed or a suggestion, and nothing else counts" do
+    Analytics.track_search("HALEU", results: 4, source: "suggestion")
+    Analytics.track_search("HALEU", results: 4, source: "<script>")
+
+    assert_equal [ "suggestion", "typed" ], posthog.events.map { |e| e[:properties]["source"] }
   end
 
   test "blank searches aren't sent and long ones are capped" do

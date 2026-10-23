@@ -54,7 +54,7 @@
           <% @plan.accept.each do |item| %>
             <tr id="rec-<%= item.candidate_id %>">
               <td class="type-body nd-l"><%= link_to item.claim.to_s.upcase_first, claim_path.(item), class: "nd-link" %> <span class="type-data-sm text-ink-muted">Claim <%= item.candidate_id %></span></td>
-              <td class="type-body-strong nd-l"><%= call_word.fetch(item.call) %></td>
+              <td class="type-body-strong nd-l whitespace-nowrap"><%= call_word.fetch(item.call) %></td>
               <td class="type-body nd-l"><%= item.reason %></td>
             </tr>
           <% end %>
@@ -63,7 +63,8 @@
     <% end %>
 
     <%# The verifier's own recommendations in a safe class (config/safe_verifier_classes.yml). A class that's off shows what Accept would take. %>
-    <h3 class="type-body-strong m-0">Verifier, safe classes <span class="text-ink-muted"><%= @plan.safe_accept.size %></span></h3>
+    <%# The rows below, taken or not: a class that's off still lists what it would take. %>
+    <h3 class="type-body-strong m-0" id="safe-heading">Verifier, safe classes <span class="text-ink-muted"><%= safe_shown.size %></span></h3>
     <% if safe_shown.empty? %>
       <p class="type-body text-ink-muted">No safe updates from the verifier.</p>
     <% else %>

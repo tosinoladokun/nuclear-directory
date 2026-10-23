@@ -5,6 +5,7 @@ aliases:
 - NuScale Power, LLC
 - NuScale
 website: https://www.nuscalepower.com
+sec_cik: '0001822966'
 hq:
   city: Portland
   state: OR
@@ -17,6 +18,10 @@ roles:
 - key: reactor_vendor
   source_url: https://www.nuscalepower.com/about
   quote: What started as a university research project in 2002 is now a mission to bring small modular reactor (SMR) technology to the global energy market.
+  confidence: 1.0
+- key: reactor_vendor
+  source_url: https://www.nuscalepower.com/
+  quote: The NuScale Power Module™ (NPM) is the only SMR on the market that has received design approval and is ready to deploy worldwide.
   confidence: 1.0
 technologies:
 - key: smr

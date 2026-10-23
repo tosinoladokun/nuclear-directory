@@ -262,8 +262,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # a person like any claim. Never a dropped or extracted review item, a
     # claim on a record already, or one with an end still in question.
     def rematch_settled_ends
-      ends = LINK_ENDS.values.flat_map(&:keys).uniq
-      question = /\A(?:#{ends.join('|')})(?::|\s")/
+      ends = LINK_ENDS.values.flat_map(&:keys).uniq.join("|")
+      # Only the two missing-match holds; others (a closed site, say) stay as they are.
+      question = /\A(?:(?:#{ends}): no exact match for |(?:#{ends}) ".*" isn't in the directory yet)/
       waiting = candidates.where(status: "needs_review", subject_id: nil, review_origin: nil, kind: LINK_ENDS.keys)
       waiting.find_each do |candidate|
         next unless candidate.notes.to_s.match?(question)
@@ -275,9 +276,20 @@ class DataQuality::Stages::Match < DataQuality::Stage
         end
         next unless settled
 
+        # Under the decision's locks (its source, then the claim), and only if
+        # it's still waiting as it was: a person may have decided it meanwhile.
+        notes = candidate.notes
+        reopened = Candidate.transaction do
+          ::Source.lock.find(candidate.source_id)
+          candidate.lock!
+          next false unless candidate.status_needs_review? && candidate.subject_id.nil? && candidate.review_origin.nil? && candidate.notes == notes
+
+          candidate.update!(status: "new", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        end
+        next unless reopened
+
         # Its old note is kept after what this run says, so its history shows why it moved.
-        (@rematched ||= {})[candidate.id] = candidate.notes
-        candidate.update!(status: "new", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        (@rematched ||= {})[candidate.id] = notes
         @stats["rematched"] = @stats.fetch("rematched", 0) + 1
       end
     end
@@ -291,9 +303,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # A link already citing another page of the same kind of source (another
     # USAspending recipient's awards on one company's link), which this claim
     # would change: approving it would replace what that page says (#390).
+    def other_page_on(candidate, existing) = self.class.other_page_on(candidate, existing, directory:)
+
+    # Also asked when a link claim is approved (Review), under the link's lock:
+    # a claim attached before the other page's evidence was there can't be
+    # stopped here.
     # Not for a deal term: a later filing of the same round (a Form D/A on its
     # own page) supersedes the earlier one, so there's nothing to combine.
-    def other_page_on(candidate, existing)
+    def self.other_page_on(candidate, existing, directory:)
       return if candidate.kind_deal_term?
 
       cited = directory.evidence(type: existing.type, id: existing.id).map(&:source_id)
@@ -440,8 +457,17 @@ class DataQuality::Stages::Match < DataQuality::Stage
       chosen ||= units.first if same_number.empty? && units.one? && unit_number(units.first.name).nil?
       label = "#{name} unit #{unit} (#{state})"
 
-      if chosen&.rejected?
-        settle_closed(candidate, chosen, "#{label} would be NRC unit #{chosen.name}, which was rejected")
+      if chosen&.closed?
+        # Rejected or unpublished: a person's decision that won't come back on
+        # its own, so this is as settled as a closed record match (#118).
+        settle_closed(candidate, chosen, "#{label} would be NRC unit #{chosen.name}, which was #{chosen.verification_status}")
+      elsif chosen && chosen.verification_status != "verified"
+        # The unit's own NRC record is still pending: enriching it would push
+        # EIA's values to a record that isn't public yet (#118). Wait and
+        # retry on the next match run, like a unit that doesn't exist yet.
+        # (chosen is a DirectoryClient::Record wrapper without .verified?.)
+        @stats["waiting"] += 1
+        candidate.update!(notes: "NRC unit for #{label} isn't verified yet; retried on the next match run")
       elsif chosen
         # Attach only: the values (and their evidence) are written when verify publishes.
         attach(candidate, chosen, "#{label} is NRC unit #{chosen.name}")

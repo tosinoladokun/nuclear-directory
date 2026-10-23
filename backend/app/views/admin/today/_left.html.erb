@@ -1,0 +1,12 @@
+<%# Step 4: things that need a visit, not a click: correction requests from visitors. %>
+<ul class="nd-waits">
+  <% today.left_items.each do |report| %>
+    <li class="nd-wait" id="left-report-<%= report.id %>">
+      <p class="type-body-strong m-0"><%= report.subject %></p>
+      <p class="type-body text-ink-muted m-0">A visitor asked for a correction: <%= report.message.truncate(120) %></p>
+      <div class="nd-today__actions">
+        <%= link_to "Open the request ›", admin_corrections_path(report: report.id), class: "nd-btn nd-btn--outline type-ui" %>
+      </div>
+    </li>
+  <% end %>
+</ul>

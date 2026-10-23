@@ -71,6 +71,20 @@ class Directory::DealTermsTest < ActiveSupport::TestCase
     assert_equal 0, DealTerm.count
   end
 
+  # #377: fact_state only knows FACT_TYPES, so a closed-fact error on a
+  # DealTerm used to raise "not a fact type"; now it's labelled as a fact,
+  # under the link it belongs to.
+  test "a write to a rejected deal term says what was rejected, not 'not a fact type' (#377)" do
+    first = write(verification: { status: "verified", by: BY })
+    term = DealTerm.find(first.id)
+    term.reject!(by: BY, reason: "duplicate")
+
+    result = write(award(amount_usd: "95000000.00"), protect_human_verified: true)
+
+    assert_match(/\AAward ASST_NON_DE-NE0009040_8900 under the fact .+ was rejected by #{Regexp.escape(BY)}/, result.errors.join)
+    assert_equal 80_000_000, DealTerm.sole.amount_usd, "nothing written"
+  end
+
   test "a changed amount on a human-verified term comes back as a conflict" do
     write(verification: { status: "verified", by: BY })
 

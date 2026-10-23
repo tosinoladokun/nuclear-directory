@@ -99,7 +99,7 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Overview: today's date, a tile per stage with its count, and each source's read, same and changed" do
+  test "Overview: the date, a tile per stage with its count; each source's read, same and changed is on Sources" do
     waiting("organization", { "name" => "Alpha Co" }, notes: "unsure")
     CrawlRun.create!(stage: "match", source_kind: "nrc_reactor_list", status: "succeeded", started_at: 1.hour.ago, finished_at: 1.hour.ago,
       stats: { "candidates" => 219, "confirmed" => 219 })
@@ -108,11 +108,17 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
     get admin_root_path
 
     assert_response :success
-    assert_select "h1", "Today"
+    assert_select "h1", "Overview"
     assert_select ".nd-shell__nav a[aria-current=page]", "Overview"
+    assert_select "details[open] summary", /Needs attention/
+    assert_select "details[open] summary", /Last run per stage/
+    assert_select ".nd-numtable", 0
     assert_select "a.nd-tile[href=?]", admin_checks_path, /Checks · waiting\s+#{1 + DataQuality::Review.pending_count}/
     assert_select "a.nd-tile.nd-tile--ink", 1
     assert_select "a.nd-tile[href=?]", admin_corrections_path, /Correction requests\s+1/
+
+    get admin_sources_path
+    assert_select "details[data-controller=desktop-open] summary", "Read, same, changed"
     row = css_select(".nd-numtable tbody tr").find { |tr| tr.text.include?("NRC") }
     assert_equal [ "NRC", "219", "219", "1" ], row.css("td").map { |td| td.text.squish }
   end
@@ -122,9 +128,9 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "header.nd-shell__side[data-controller=admin-menu]" do
       assert_select "button.nd-shell__menu[hidden][aria-controls=admin-nav]", "Menu"
-      assert_select "nav#admin-nav a", 5
+      assert_select "nav#admin-nav a", 7
     end
-    assert_select ".nd-shell__nav a", /Checks/
+    assert_select ".nd-shell__nav a", /Today/
     assert_select ".nd-shell__nav a", text: /Queue|Pending facts/, count: 0
   end
 

@@ -63,12 +63,15 @@ class Admin::CandidatesController < Admin::BaseController
   def edit
     @item = DataQuality::Review.candidate(params[:id].to_i) or raise ActiveRecord::RecordNotFound
     @fields = editable_fields(@item)
+    @read_only = read_only_fields(@item)
     @list = list_position(@item.candidate_id) unless from_fact
   end
 
   def update
     item = DataQuality::Review.candidate(params[:id].to_i) or raise ActiveRecord::RecordNotFound
     # Only single values come from the form; lists (aliases) and nested ends are read-only.
+    # A read-only field the form doesn't show is still passed on, so Review
+    # drops it unchanged and refuses it changed (an older page, say).
     scalars = editable_fields(item).reject { |name| item.payload[name].is_a?(Array) || item.payload[name].is_a?(Hash) }
     values = params.fetch(:values, {}).permit(*scalars).to_h.transform_values(&:presence)
     result = DataQuality::Review.edit_and_approve(item.candidate_id, attributes: values, by: actor,
@@ -85,6 +88,7 @@ class Admin::CandidatesController < Admin::BaseController
     else
       @item = item
       @fields = editable_fields(item)
+      @read_only = read_only_fields(item)
       @list = list_position(item.candidate_id) unless from_fact
       @errors = result.errors
       render :edit, status: :unprocessable_content
@@ -132,10 +136,12 @@ class Admin::CandidatesController < Admin::BaseController
       { index: index + 1, total: ids.size, previous: path.(index.positive? ? ids[index - 1] : nil), next: path.(ids[index + 1]) }
     end
 
-    # The claim's own values; link ends were matched and can't be edited here.
-    # Never a link end or what identifies the fact (a role, a deal term's
-    # filing), which an edit can't change: the form doesn't send them.
+    # The claim's own values the form shows; link ends were matched and aren't shown.
     def editable_fields(item)
-      item.payload.keys - DataQuality::Review::NOT_EDITABLE - DataQuality::Review::IDENTIFYING.fetch(item.kind.to_s, [])
+      item.payload.keys - DataQuality::Review::NOT_EDITABLE
     end
+
+    # Shown, but not editable: what identifies the claim (a role's role, a
+    # technology claim's technology). Approving refuses a change to them.
+    def read_only_fields(item) = item.payload.keys & DataQuality::Review.read_only_keys(item.kind)
 end

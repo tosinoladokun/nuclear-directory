@@ -9,6 +9,10 @@ module Directory
   module Lookup
     extend self
 
+    # A CIK as the directory stores it: 10 zero-padded digits ("320193" is
+    # "0000320193"), nil when blank.
+    def cik(value) = Organization.cik_from(value)
+
     # Pass exactly one of id, slug, name or domain.
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
@@ -57,6 +61,46 @@ module Directory
 
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
+    # Facts a company can be given by hand (#202): kind => [model, its link's column].
+    COMPANY_FACT_MODELS = { "role" => [ Role, OrganizationRole, :role ], "technology" => [ Technology, OrganizationTechnology, :technology ] }.freeze
+
+    # Whether a role or technology with this key exists.
+    def company_fact_key?(kind, key)
+      model, = COMPANY_FACT_MODELS[kind.to_s]
+      model ? model.exists?(key: key.to_s) : false
+    end
+
+    # The status of that role or technology on this company, or nil when it has none.
+    def company_fact_status(organization_id:, kind:, key:)
+      model, link, column = COMPANY_FACT_MODELS.fetch(kind.to_s)
+      link.where(organization_id:, column => model.where(key: key.to_s)).pick(:verification_status)
+    end
+
+    # Publishing a record (#202): how many of its approved facts go public
+    # with it, and its waiting facts whose last decision was added_reason
+    # ([[type, id, name], …]).
+    def publish_counts(type:, id:, added_reason:)
+      record = { "Organization" => Organization, "Facility" => Facility }.fetch(type.to_s).find(id)
+      # A link goes public only when its other end is public too.
+      public_orgs, public_sites = Organization.published.select(:id), Facility.published.select(:id)
+      live = if record.is_a?(Organization)
+        [ record.organization_roles, record.organization_technologies, record.facility_relationships.where(facility_id: public_sites),
+          Relationship.where(from_organization: record, to_organization_id: public_orgs)
+            .or(Relationship.where(to_organization: record, from_organization_id: public_orgs)) ]
+      else
+        [ Facility.where(parent: record), record.facility_relationships.where(organization_id: public_orgs) ]
+      end
+      added = record.is_a?(Organization) ? [ record.organization_roles.includes(:role), record.organization_technologies.includes(:technology) ] : []
+      added_with = added.flat_map do |scope|
+        scope.where(verification_status: "pending").select { |fact| fact.verification_events.order(:id).last&.reason == added_reason }
+          .map { |fact| [ fact.class.name, fact.id, fact.respond_to?(:role) ? fact.role.name : fact.technology.name ] }
+      end
+      [ live.sum { |scope| scope.where(verification_status: "verified").count }, added_with ]
+    end
+
+    # A website's domain as a company's domain is stored (www. and the path dropped).
+    def domain_from(url) = Organization.domain_from(url)
+
     def deal_terms(link_type:, link_id:, published: true)
       raise ArgumentError, "not a link type: #{link_type.inspect}" unless DealTerm::LINK_TYPES.include?(link_type.to_s)
 
@@ -115,16 +159,24 @@ module Directory
       # A unit's own addresses redirect to its site's page, so a report filed
       # there (before it was grouped, say) is about it too.
       plant = ->(facility) { addresses("plants", facility) + (facility.parent ? addresses("plants", facility.parent) : []) }
-      pages = case record
-      when Organization then company.(record)
-      when Facility then plant.(record)
-      when Relationship then company.(record.from_organization) + company.(record.to_organization)
-      when FacilityRelationship then company.(record.organization) + plant.(record.facility)
-      else company.(record.organization)
+      pages_of = lambda do |fact|
+        case fact
+        when nil then []
+        when Organization then company.(fact)
+        when Facility then plant.(fact)
+        when Relationship then company.(fact.from_organization) + company.(fact.to_organization)
+        when FacilityRelationship then company.(fact.organization) + plant.(fact.facility)
+        # A deal term shows on the pages of the link (or company) it's under.
+        when DealTerm then pages_of.(fact.link)
+        else company.(fact.organization)
+        end
       end
+      pages = pages_of.(record)
       CorrectionReport.where(status: %w[open reviewed])
-        # The page's own path: no query or fragment, and no format (/companies/x.html is /companies/x).
-        .where("regexp_replace(split_part(split_part(page_path, '?', 1), '#', 1), '\\.[a-z]+$', '') IN (:pages)", pages:).exists?
+        # The page's own path: no query or fragment, no trailing slash and no
+        # format (/companies/x/ and /companies/x.html are /companies/x).
+        .where("regexp_replace(regexp_replace(split_part(split_part(page_path, '?', 1), '#', 1), '/+$', ''), '\\.[a-z]+$', '') IN (:pages)", pages:)
+        .exists?
     end
 
     # A company's or a plant's public paths: today's, then its former ones

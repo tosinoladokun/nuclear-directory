@@ -225,7 +225,7 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
     with_config(max_items: 1) do
       items = SafeClasses.items.select { |item| [ a.id, b.id ].include?(item.candidate_id) }
       assert_equal 2, items.size
-      items.each { |item| assert_match(/\Aits run proposes 2 safe changes, over the limit of 1/, item.why) }
+      items.each { |item| assert_match(/\Aits run proposes 2 changes, over the limit of 1/, item.why) }
     end
     with_config(max_share: 0.5) do
       assert_match(/over the limit of 1 \(20, or 50% of the source's 2 public facts\)/, item_for(a).why)
@@ -268,8 +268,52 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
       b = Candidate.create!(source: @source, kind: "relationship", status: "matched", quote: "other award 2", crawl_run: @run,
         payload: { "relationship_type" => "funds", "description" => SECOND }, subject_type: "Relationship", subject_id: second_link.id,
         ai_recommendation: "recommend_publish", ai_confidence: 0.95, ai_source_sha256: @source.content_sha256)
-      assert_match(/\Aits run proposes 2 safe changes \(1 already approved\), over the limit of 1/, item_for(b).why)
+      assert_match(/\Aits run proposes 2 changes \(1 already approved\), over the limit of 1/, item_for(b).why)
     end
+  end
+
+  test "G6: a Data Quality approval in the same click takes the run's allowance too" do
+    other = Organization.create!(name: "Other Fission Co", verification_status: "verified", verified_by: "human:tosin")
+    second_link = Relationship.create!(from_organization: @doe, to_organization: other, relationship_type: "funds", description: "Pending.")
+    dq = Candidate.create!(source: @source, kind: "relationship", status: "matched", quote: "dq award", crawl_run: @run,
+      payload: { "relationship_type" => "funds", "description" => FIRST }, subject_type: "Relationship", subject_id: second_link.id,
+      ai_recommendation: "recommend_publish", ai_confidence: 0.95, ai_source_sha256: @source.content_sha256)
+    safe = claim({ "description" => SECOND })
+
+    with_config(max_items: 1) do
+      before = DataQuality::Recommendations.plan.fingerprint
+      DataQuality::Recommendations.record("#{dq.id} approve: the award page names this company", by: "human:tosin")
+
+      plan = DataQuality::Recommendations.plan
+      refute_equal before, plan.fingerprint, "Data Quality's list is part of the fingerprint"
+      assert_equal [ dq.id ], plan.accept.map(&:candidate_id)
+      assert_empty plan.safe_accept, "the safe item can't have what the Data Quality approval takes"
+      assert_match(/\Aits run proposes 2 changes \(1 approved in this click\), over the limit of 1/, plan.safe.sole.why)
+
+      results = DataQuality::Recommendations.accept(plan.accept, by: "human:tosin") + SafeClasses.accept(plan.safe_accept, by: "human:tosin")
+      assert results.all?(&:ok?), results.map(&:errors).flatten.to_sentence
+    end
+    assert dq.reload.status_merged?
+    assert safe.reload.status_matched?, "the safe item was left: the run's allowance was taken"
+  end
+
+  test "G6 again at Accept: an approval from the run after the page loaded can use up the allowance" do
+    other = Organization.create!(name: "Other Fission Co", verification_status: "verified", verified_by: "human:tosin")
+    second_link = Relationship.create!(from_organization: @doe, to_organization: other, relationship_type: "funds", description: "Pending.")
+    elsewhere = Candidate.create!(source: @source, kind: "relationship", status: "matched", quote: "other award", crawl_run: @run,
+      payload: { "relationship_type" => "funds", "description" => FIRST }, subject_type: "Relationship", subject_id: second_link.id,
+      ai_recommendation: "needs_review", ai_confidence: 0.5, ai_source_sha256: @source.content_sha256)
+    safe = claim({ "description" => SECOND })
+
+    with_config(max_items: 1) do
+      items = DataQuality::Recommendations.plan.safe_accept
+      assert_equal [ safe.id ], items.map(&:candidate_id), "one change from the run: within the limit"
+      assert DataQuality::Review.approve([ elsewhere.id ], by: "human:tosin").sole.ok?, "a person approves another of the run's claims"
+
+      result = SafeClasses.accept(items, by: "human:tosin").sole
+      assert_equal [ "it's no longer safe: its run already has 1 approved changes, the limit is 1" ], result.errors
+    end
+    assert safe.reload.status_matched?
   end
 
   test "G5: an API answer that couldn't be read, or a verify run still going, isn't safe" do

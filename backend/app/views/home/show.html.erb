@@ -8,15 +8,14 @@
 
   <div class="nd-home__search">
     <%= render "shared/search_box", size: :large %>
-    <nav class="nd-suggs" aria-label="Suggested searches">
-      <%= link_to directory_url_for(q: "HALEU"), class: "nd-sugg type-ui" do %><%= icon("magnifying-glass", size: 12) %>HALEU<% end %>
-      <%= link_to directory_url_for(q: "SMR"), class: "nd-sugg type-ui" do %><%= icon("magnifying-glass", size: 12) %>SMR<% end %>
-      <%= link_to directory_url_for(q: "Vogtle"), class: "nd-sugg type-ui" do %><%= icon("magnifying-glass", size: 12) %>Plant Vogtle<% end %>
-      <%= link_to directory_url_for(category: Category.find("power-buyers")), class: "nd-sugg type-ui" do %><%= icon("magnifying-glass", size: 12) %>Power deals<% end %>
+    <nav class="nd-suggs" aria-label="Suggested searches" data-controller="fit-row">
+      <% @suggestions.each do |suggestion| %>
+        <%= link_to directory_url_for(q: suggestion.query, from: "suggestion"), class: "nd-sugg type-ui", data: { fit_row_target: "item" } do %><%= icon("magnifying-glass", size: 12) %><%= suggestion.label %><% end %>
+      <% end %>
     </nav>
   </div>
 
   <div class="nd-home__cats">
-    <%= render "shared/category_boxes", examples: @examples, counts: @counts %>
+    <%= render "shared/category_cards", cards: @cards %>
   </div>
 </main>

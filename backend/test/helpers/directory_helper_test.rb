@@ -138,7 +138,7 @@ class DirectoryHelperTest < ActionView::TestCase
 
   test "labels use the words in VOICE.md" do
     assert_equal "Power plant", facility_type_label("power_reactor")
-    assert_equal "Reactor developer", role_label("reactor_vendor")
+    assert_equal "Reactor designer", role_label("reactor_vendor")
     assert_equal "Power buyer", role_label("data_center_offtaker")
     assert_nil facility_type_label(nil)
     assert_nil facility_status_label(nil)
@@ -177,5 +177,55 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_equal "2024-10-14", data_date(Date.new(2024, 10, 14))
     assert_equal "October 2024", prose_month(Date.new(2024, 10, 14))
     assert_nil data_date(nil)
+  end
+
+  # #200: company website links carry a referral UTM so companies can see
+  # the visit in their own analytics; source citations don't.
+  test "with_referral_utm appends utm_source and utm_medium to a plain company URL" do
+    url = with_referral_utm("https://terrapower.com")
+    uri = URI.parse(url)
+    params = URI.decode_www_form(uri.query).to_h
+    assert_equal "nuclear-directory", params["utm_source"]
+    assert_equal "referral", params["utm_medium"]
+    assert_nil params["utm_campaign"]
+    assert_equal "terrapower.com", uri.host, "scheme and host are unchanged"
+  end
+
+  test "with_referral_utm sets utm_campaign when given" do
+    params = URI.decode_www_form(URI.parse(with_referral_utm("https://kairospower.com", campaign: "company-page")).query).to_h
+    assert_equal "company-page", params["utm_campaign"]
+  end
+
+  test "with_referral_utm keeps an existing query string and doesn't clobber utm params the URL already carries" do
+    url = with_referral_utm("https://example.com/path?ref=abc&utm_source=theirs", campaign: "company-page")
+    params = URI.decode_www_form(URI.parse(url).query)
+    assert_equal "abc", params.assoc("ref").last
+    assert_equal "theirs", params.assoc("utm_source").last, "its own UTM wins"
+    assert_equal "referral", params.assoc("utm_medium").last, "the ones it doesn't carry are still added"
+    assert_equal "company-page", params.assoc("utm_campaign").last
+    assert_equal 1, params.count { |k, _| k == "utm_source" }, "no duplicate utm_source"
+  end
+
+  test "with_referral_utm keeps the existing query byte for byte, including non-UTF-8 values" do
+    url = with_referral_utm("https://example.com/?utm_source=caf%E9&q=a%20b", campaign: "company-page")
+
+    assert url.start_with?("https://example.com/?utm_source=caf%E9&q=a%20b&")
+    assert_includes url, "utm_medium=referral"
+    assert_includes url, "utm_campaign=company-page"
+  end
+
+  test "with_referral_utm sees percent-encoded UTM names as the ones the URL already carries" do
+    url = with_referral_utm("https://example.com/?utm%5Fsource=theirs", campaign: "company-page")
+
+    assert url.start_with?("https://example.com/?utm%5Fsource=theirs&")
+    assert_not_includes url, "utm_source=nuclear-directory"
+    assert_includes url, "utm_medium=referral"
+  end
+
+  test "with_referral_utm leaves non-http URLs and blanks alone (safety: no javascript: links)" do
+    assert_equal "", with_referral_utm("")
+    assert_nil with_referral_utm(nil)
+    assert_equal "javascript:alert(1)", with_referral_utm("javascript:alert(1)")
+    assert_equal "ftp://files.example.com/x", with_referral_utm("ftp://files.example.com/x")
   end
 end

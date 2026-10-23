@@ -100,6 +100,40 @@ class AnalyticsEventsTest < ActionDispatch::IntegrationTest
     GeoCountry.reader = previous
   end
 
+  test "a search from a home page suggestion says so; one typed in a field says typed" do
+    get root_path, headers: { "User-Agent" => BROWSER }
+    href = css_select(".nd-suggs a.nd-sugg").first["href"]
+    words = Rack::Utils.parse_query(URI(href).query)["q"]
+    query = words.downcase
+    get href, headers: { "User-Agent" => BROWSER }
+    get companies_path(q: words), headers: { "User-Agent" => BROWSER }
+
+    searches = posthog.events.select { |event| event[:event] == "search" }
+    assert_equal [ [ query, "suggestion" ], [ query, "typed" ] ], searches.map { |event| event[:properties].values_at("query", "source") }
+  end
+
+  test "filtering a suggested search keeps it a suggestion; a fresh search in the field is typed" do
+    get companies_path(q: "HALEU", from: "suggestion"), headers: { "User-Agent" => BROWSER }
+    assert_equal [ "suggestion" ], css_select("form.nd-filters input[name=from]").map { |input| input["value"] }
+
+    params = css_select("form.nd-filters input[type=hidden]").to_h { |input| [ input["name"], input["value"] ] }
+    get companies_path(params.merge(sort: "name")), headers: { "User-Agent" => BROWSER }
+    get companies_path(q: "HALEU"), headers: { "User-Agent" => BROWSER }
+    assert_empty css_select("form.nd-filters input[name=from]"), "a typed search carries no marker"
+
+    sources = posthog.events.select { |event| event[:event] == "search" }.map { |event| event[:properties]["source"] }
+    assert_equal %w[suggestion suggestion typed], sources
+  end
+
+  test "Show more on a search is the same search, expanded: one search event, not two" do
+    get companies_path(q: "HALEU", from: "suggestion"), headers: { "User-Agent" => BROWSER }
+    get companies_path(q: "HALEU", from: "suggestion", shown: 2), headers: { "User-Agent" => BROWSER }
+
+    assert_equal 1, posthog.events.count { |event| event[:event] == "search" }
+    assert_select "a[href*='shown=3']", count: 0
+    assert_equal [ "suggestion" ], css_select("form.nd-filters input[name=from]").map { |input| input["value"] }, "the marker survives on the expanded page"
+  end
+
   test "a correction that doesn't save sends nothing" do
     post corrections_path, params: { subject: "Plant Vogtle", page_path: "/plants/plant-vogtle", message: "" },
       headers: { "User-Agent" => BROWSER }

@@ -47,6 +47,7 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
       get admin_recommendations_path
 
       assert_select "#safe-#{@claim.id} .nd-tag", "Would be safe: S1"
+      assert_select "#safe-heading span", "1", "the heading counts the rows it lists"
       assert_select "#safe-#{@claim.id}", /Description.*1 award.*→.*2 awards/m
       assert_select "form[action=?]", admin_recommendations_accept_path, count: 0
     end

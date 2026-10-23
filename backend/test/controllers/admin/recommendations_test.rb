@@ -121,6 +121,7 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     assert_select ".nd-recs__accept button", "Accept: approve 1, reject 1"
     assert_select "#rec-#{changed.id} .nd-recs__label", "Left because:"
     assert_select "#rec-#{held.id}", /Alpha Fission Co.*Approve.*named on the page/m
+    assert_select "#rec-#{held.id} td.whitespace-nowrap", "Approve", "the decision stays on one line (DESIGN.md)"
     assert_select "#rec-#{rejected.id}", /Reject.*not nuclear/m
     assert_select "#left-heading", /Left for you\s*2/
     assert_select "#rec-#{changed.id}", /It changed after Data Quality looked at it/

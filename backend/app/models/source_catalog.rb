@@ -37,7 +37,8 @@ class SourceCatalog
     "usaspending_doe_awards" => { name: "USAspending", daily: true },
     "usaspending_api" => { name: "USAspending API", note: "the award search", daily: true },
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
-    "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true }
+    "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
+    "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze
@@ -103,6 +104,10 @@ class SourceCatalog
     def total = Source.count
 
     # Source ids under a row's key, or a single document ("doc-12"), for Live's filter.
+    # How many published facts these rows (crawler kinds or groups) back
+    # together, each fact once however many of them back it.
+    def facts_backed_by(keys) = public_facts(keys.flat_map { |key| source_ids(key) }.uniq).map { |_, type, id| [ type, id ] }.uniq.size
+
     def source_ids(key)
       return Source.where(id: key.delete_prefix("doc-").to_i).ids if key.to_s.start_with?("doc-")
       return Source.where(source_kind: key).ids if OFFICIAL.key?(key) || (Source.exists?(source_kind: key) && key != RESEARCH_KIND)

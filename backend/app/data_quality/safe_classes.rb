@@ -28,6 +28,8 @@ module DataQuality::SafeClasses
     def safe? = why.nil?
     def taken? = safe? && enabled
   end
+  # The advisory lock namespace for a run's G6 count (with the run id).
+  RUN_LOCK = 306_006
   # "$2.62 billion", "$921.7 million", "$750,000" in an award summary.
   TOTAL = /totaling \$([\d,]+(?:\.\d+)?)(?: (million|billion))?/
   SCALE = { nil => 1, "million" => 1_000_000, "billion" => 1_000_000_000 }.freeze
@@ -36,9 +38,11 @@ module DataQuality::SafeClasses
     # Every claim a class covers that the verifier recommends, safe or not,
     # oldest first. exclude: claims Data Quality has its own call on.
     # only_enabled: skip classes that are off (a count of what Accept takes
-    # needs nothing more). Run-level checks are read once per class; the
-    # claims a class covers are at most one per DOE link a crawl changed.
-    def items(exclude: [], only_enabled: false, directory: DataQuality::DirectoryClient.new)
+    # needs nothing more). pending: the claims Data Quality's list will
+    # approve in the same click: they take the run's allowance too, so the
+    # cap is judged with them in. Run-level checks are read once per class;
+    # the claims a class covers are at most one per DOE link a crawl changed.
+    def items(exclude: [], only_enabled: false, pending: [], directory: DataQuality::DirectoryClient.new)
       CONFIG.fetch("classes").flat_map do |klass, config|
         next [] if only_enabled && config["enabled"] != true
 
@@ -50,7 +54,7 @@ module DataQuality::SafeClasses
             snapshot: snapshot(candidate), claim: DataQuality::Claim.describe(candidate), changes: changes || {},
             subject_type: candidate.subject_type, subject_id: candidate.subject_id, why:)
         end
-        capped(items, config, claims, directory:)
+        capped(items, config, claims, pending:, directory:)
       end
     end
 
@@ -74,6 +78,12 @@ module DataQuality::SafeClasses
           candidate = Candidate.lock.find_by(id: item.candidate_id)
           result = skipped(item, "this claim no longer exists") and next unless candidate
           result = skipped(item, "it changed after the page loaded") and next unless snapshot(candidate) == item.snapshot
+          # G6 again, under its run's lock: another approval from the run may
+          # have used the allowance since the page loaded.
+          if (over = over_cap(candidate, item.klass, directory:))
+            result = skipped(item, "it's no longer safe: #{over}")
+            next
+          end
 
           check = ->(locked) { why_not(locked, item.klass, directory:) }
           result = DataQuality::Review.approve([ candidate.id ], by:, reason: reason(item), only_recommended: true, safe_check: check,
@@ -85,6 +95,11 @@ module DataQuality::SafeClasses
         skipped(item, "someone was deciding on it just then; try again")
       end
     end
+
+    # Takes a run's G6 lock (held to the end of the transaction). Safe
+    # acceptance takes it before counting; any approval path that should
+    # count against a run's allowance can take it too.
+    def lock_run(run_id) = Candidate.connection.execute("SELECT pg_advisory_xact_lock(#{RUN_LOCK}, (#{Integer(run_id)} % 2147483647)::int)")
 
     # Why a claim isn't safe in its class, or nil: every gate but the cap,
     # each read fresh (Accept asks this under the record's lock).
@@ -221,24 +236,57 @@ module DataQuality::SafeClasses
       # G6: a run that proposes more safe changes than the cap, or more than
       # its share of the source's published facts, gets none of them taken.
       # What the run already had approved counts too, so accepting some and
-      # then the rest can't pass the cap in two clicks.
-      def capped(items, config, claims, directory:)
+      # then the rest can't pass the cap in two clicks. So do the approvals
+      # Accept will make in the same click: they take the run's allowance too.
+      def capped(items, config, claims, pending:, directory:)
         cap = CONFIG.fetch("cap")
         runs = claims.to_h { |candidate| [ candidate.id, candidate.crawl_run_id ] }
-        facts = directory.published_count_backed_by(source_ids: ::Source.where(source_kind: config.fetch("source_kind")).ids)
-        limit = [ cap.fetch("max_items"), (facts * cap.fetch("max_share")).floor ].min
+        limit, facts = limit_for(config, directory:)
         approved = Candidate.joins(:source).where(sources: { source_kind: config.fetch("source_kind") }, kind: config.fetch("kind"),
           status: "merged", crawl_run_id: runs.values.uniq).group(:crawl_run_id).count
         proposed = items.select(&:safe?).group_by { |item| runs[item.candidate_id] }.transform_values(&:size)
+        approving = pending_counts(config, pending, runs)
         items.map do |item|
           run = runs[item.candidate_id]
-          total = proposed.fetch(run, 0) + approved.fetch(run, 0)
+          total = proposed.fetch(run, 0) + approved.fetch(run, 0) + approving.fetch(run, 0)
           next item unless item.safe? && total > limit
 
-          earlier = " (#{approved[run]} already approved)" if approved[run].to_i.positive?
-          item.with(why: "its run proposes #{total} safe changes#{earlier}, over the limit of #{limit} " \
+          notes = []
+          notes << "#{approved[run]} already approved" if approved[run].to_i.positive?
+          notes << "#{approving[run]} approved in this click" if approving[run].to_i.positive?
+          item.with(why: "its run proposes #{total} changes#{notes.empty? ? "" : " (#{notes.join(", ")})"}, over the limit of #{limit} " \
             "(#{cap.fetch('max_items')}, or #{(cap.fetch('max_share') * 100).round}% of the source's #{facts} public facts)")
         end
+      end
+
+      # The Data Quality approvals Accept will make in the same click, per
+      # run. Only the class's own kind and source count, like the merged ones.
+      def pending_counts(config, ids, runs)
+        return {} if ids.empty?
+
+        Candidate.joins(:source).where(id: ids, sources: { source_kind: config.fetch("source_kind") },
+          kind: config.fetch("kind"), crawl_run_id: runs.values.uniq).group(:crawl_run_id).count
+      end
+
+      # The run's limit and its source's public facts: [limit, facts].
+      def limit_for(config, directory:)
+        cap = CONFIG.fetch("cap")
+        facts = directory.published_count_backed_by(source_ids: ::Source.where(source_kind: config.fetch("source_kind")).ids)
+        [ [ cap.fetch("max_items"), (facts * cap.fetch("max_share")).floor ].min, facts ]
+      end
+
+      # At Accept, under the run's lock: why taking one more change from this
+      # claim's run would pass its limit (what the run already has approved,
+      # this click's earlier items included), or nil.
+      def over_cap(candidate, klass, directory:)
+        return unless candidate.crawl_run_id
+
+        config = CONFIG.fetch("classes").fetch(klass)
+        lock_run(candidate.crawl_run_id)
+        limit, = limit_for(config, directory:)
+        approved = Candidate.joins(:source).where(sources: { source_kind: config.fetch("source_kind") }, kind: config.fetch("kind"),
+          status: "merged", crawl_run_id: candidate.crawl_run_id).count
+        "its run already has #{approved} approved changes, the limit is #{limit}" if approved + 1 > limit
       end
 
       def label(name) = DataQuality::Claim::LABELS.fetch(name) { name.humanize(capitalize: false) }

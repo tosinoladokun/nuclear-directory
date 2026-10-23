@@ -89,7 +89,10 @@ module DataQuality::Recommendations
       end
       items = one_approval_per_record(items)
       accept, left = items.partition { |item| item.why.nil? }
-      safe = DataQuality::SafeClasses.items(exclude: claims.map(&:id), only_enabled: only_enabled_safe, directory:)
+      # The approvals Accept will make in this click take the safe classes'
+      # run allowance too, so they count before the preview is built.
+      pending = accept.select { |item| item.call == "approve" }.map(&:candidate_id)
+      safe = DataQuality::SafeClasses.items(exclude: claims.map(&:id), only_enabled: only_enabled_safe, pending:, directory:)
       Plan.new(accept:, left:, safe: one_safe_approval_per_record(safe, accept))
     end
 

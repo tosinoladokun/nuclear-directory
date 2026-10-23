@@ -1,9 +1,14 @@
-<%# Self-hosted Latin subsets (#90; built by script/build_fonts.py, OFL). Only
-    Roboto Serif is preloaded: it sets the text above the fold. The wordmark
-    is an SVG, so Anton loads only where a display heading uses it. %>
-<%= preload_link_tag "roboto-serif-latin.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
+<%# Self-hosted Latin subsets (#90; built by script/build_fonts.py, OFL). No
+    font is preloaded: a 51 KB preload shared the slow-4G bandwidth with the
+    render-blocking CSS and put LCP at 2.1 to 2.4 s on every page, a few
+    hundredths from the 2.5 s budget as /companies grew. Without the preload a
+    font-display: swap serif arrives after first paint and moves the page
+    (layout shift 0.25 on /companies in CI), so Roboto Serif and Roboto Mono
+    are font-display: optional: a font that is not ready within the first
+    moments waits for the next page, so nothing moves. The wordmark is an SVG,
+    so Anton loads only where a display heading uses it. %>
 <style>
-  @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
-  @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: optional; }
+  @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: optional; }
   @font-face { font-family: "Anton"; src: url("<%= asset_path "anton-latin.woff2" %>") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 </style>
