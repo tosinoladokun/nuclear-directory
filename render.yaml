@@ -113,6 +113,11 @@ services:
       # for nuclear-directory, Issues and Pull requests write only.
       - key: DEPLOY_REPORT_GITHUB_TOKEN
         sync: false
+      # The hosts the app answers to in production (#147); anything else
+      # the request's Host header claims gets 403. Keep in sync with
+      # production_hosts_test.rb's web expectation.
+      - key: APP_HOSTS
+        value: nuclear-directory.org,www.nuclear-directory.org
 
   # UI previews: a free instance that runs whichever PR was last labelled
   # "preview" (.github/workflows/preview.yml pushes it to the preview branch).
@@ -132,8 +137,11 @@ services:
     autoDeployTrigger: commit
     healthCheckPath: /up
     # Free instances have no pre-deploy step, so every start empties and
-    # reloads the preview database (bin/preview-start, which refuses any
-    # database but nuclear_directory_preview).
+    # reloads the preview database (bin/preview-start, a one-line wrapper
+    # that execs bin/preview-start.sh since #224). Switching the command to
+    # the .sh name directly is a follow-up (#337: Render's blueprint sync
+    # applies this to the preview's current build immediately, so it has to
+    # wait until a build that includes the renamed script is live).
     dockerCommand: ./bin/preview-start
     envVars:
       # postgres://preview_app:<password>@<internal host>/nuclear_directory_preview
@@ -157,9 +165,13 @@ services:
       - key: SECRET_KEY_BASE
         generateValue: true
       # The preview's admin login (preview@nuclear-directory.org), made on
-      # every start by bin/preview-start. Set by hand; only on the preview.
+      # every start by bin/preview-start.sh. Set by hand; only on the preview.
       - key: PREVIEW_ADMIN_PASSWORD
         sync: false
+      # Host-header allowlist for the preview (#147). The preview answers at
+      # its onrender.com hostname only.
+      - key: APP_HOSTS
+        value: nuclear-directory-preview.onrender.com
 
   # Daily encrypted off-site backup (#54); runbook in the private backups repo.
   # Runs inside Render's private network, so the database stays closed to

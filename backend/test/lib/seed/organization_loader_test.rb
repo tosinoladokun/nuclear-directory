@@ -78,6 +78,29 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 2, vogtle.facility_relationships.count
   end
 
+  # #251: an owns-link listed twice with different sources, the first
+  # without a share and the second with it, was rewriting the share on
+  # every re-seed (nil, then back) and logging four verification events
+  # each time. A missing ownership_pct is "nothing to say", not "clear".
+  test "a second entry about the same owns-link that omits the share keeps the one another entry set" do
+    write_file("a-owner", org("A Owner", website: "https://a-owner.com",
+      facilities: [ item(name: "Plant Vogtle", type: "owns", ownership_pct: 45.7),
+                    item(name: "Plant Vogtle", type: "owns", source_url: "https://example.com/other",
+                      quote: "A Owner has a stake.") ])) # no ownership_pct
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    link = Facility.find_by!(name: "Plant Vogtle").facility_relationships.sole
+    assert_equal 45.7, link.ownership_pct, "the first entry's share stands"
+    first_events = link.verification_events.count
+
+    # A re-seed logs no event, because the second entry doesn't clear the share.
+    Seed::OrganizationLoader.new(@dir).load!
+
+    assert_equal first_events, link.verification_events.count, "a re-seed logs nothing when nothing changed"
+    assert_equal 45.7, link.reload.ownership_pct
+  end
+
   test "loads brand names, descriptions, an HQ in two entries, and ownership stakes" do
     write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com",
       legal_name: "Acme Fuel, Inc.",

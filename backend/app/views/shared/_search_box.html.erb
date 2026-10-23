@@ -7,6 +7,8 @@
 <% size = local_assigns.fetch(:size, :compact) %>
 <% field_id = local_assigns[:id] || "search-#{size}" %>
 <div class="nd-searchbox nd-searchbox--<%= size %>" data-controller="instant-search" data-instant-search-url-value="<%= search_path %>"
+     data-instant-search-long-placeholder-value="Search a company, plant or site"
+     data-instant-search-short-placeholder-value="Search companies and plants"
      data-action="click@window->instant-search#outside">
   <form class="nd-search" action="<%= directory_url_for %>" method="get" role="search">
     <%= icon("magnifying-glass", size: size == :large ? 24 : 20) %>

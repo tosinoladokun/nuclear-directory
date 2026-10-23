@@ -1,0 +1,41 @@
+# Seed research for the primer chunk 4 request - 19 Oct 2026. Quotes copied from curtisswright.com pages read this session.
+name: Curtiss-Wright
+legal_name: Curtiss-Wright Corporation
+aliases:
+- Curtiss-Wright Corporation
+website: https://www.curtisswright.com
+hq:
+  city: Davidson
+  state: NC
+  source_url: https://www.curtisswright.com/contact-us
+  quote: CORPORATE HEADQUARTERS CURTISS-WRIGHT CORPORATION 130 Harbour Place Drive Suite 300 Davidson, NC 28036
+  confidence: 1.0
+country_code: US
+status: active
+roles:
+- key: components
+  source_url: https://electro-mechanicalsystems.curtisswright.com/emd/markets-and-products/power-products-and-services
+  quote: EMD offers products and engineered services for reactor coolant pumps, control rod drive mechanisms as well as a broad range of engineered services for all reactors across the globe
+  confidence: 1.0
+technologies:
+- key: fission
+  source_url: https://electro-mechanicalsystems.curtisswright.com/emd/markets-and-products/power-products-and-services
+  quote: advanced pump technology is being used for Generation III+ nuclear power plants, the Westinghouse AP1000 reactor plant, and the next generation of nuclear plants in China
+  confidence: 1.0
+relationships:
+- type: supplies
+  to: TerraPower
+  description: "Under contracts awarded earlier, to develop the Natrium plant's distributed control and reactor protection systems."
+  source_url: https://www.curtisswright.com/news/press-releases/news-release-details/2026/Curtiss-Wright-Installs-Stage-1-Simulator-at-TerraPower-Natrium-Site-in-Kemmerer-WY
+  quote: Under previously awarded contracts, Curtiss-Wright will also be developing the Distributed Control Systems (DCS) and the Reactor Protection System (RPS) for the Natrium plant.
+  published: '2026-10-14'
+  confidence: 1.0
+facilities: []
+notes: 'Primer chunk 4 (PM, 19 Oct): no Curtiss-Wright record existed. The AP1000 reactor coolant pumps are stated only as "being used for" the AP1000; no page read states Westinghouse as the buyer, so no Westinghouse link yet. SEC CIK not set: needs a 10-K cover copy. The Natrium training simulator (installed at Kemmerer, announced 14 Oct 2026) is stated in the same release but not in the quote the link cites, so it is left out of the link text. Leadership is on the site and not recorded (no individuals).'
+description:
+  text: Maker of engineered products for aerospace and defense and for commercial nuclear power, including reactor coolant pumps and control rod drive mechanisms.
+  source_url: https://www.curtisswright.com/news/press-releases/news-release-details/2026/Curtiss-Wright-Installs-Stage-1-Simulator-at-TerraPower-Natrium-Site-in-Kemmerer-WY
+  quote: 'Curtiss-Wright Corporation (NYSE: CW) is a global integrated business that provides highly engineered products, solutions and services mainly to Aerospace & Defense markets, as well as critical technologies in demanding Commercial Nuclear Power, Process and Industrial markets.'
+  also:
+  - source_url: https://electro-mechanicalsystems.curtisswright.com/emd/markets-and-products/power-products-and-services
+    quote: EMD offers products and engineered services for reactor coolant pumps, control rod drive mechanisms as well as a broad range of engineered services for all reactors across the globe

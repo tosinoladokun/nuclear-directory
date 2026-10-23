@@ -284,4 +284,16 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert_equal duplicate.id, LicensingStage.find(kept_behind.id).organization_id
     assert_equal 1, LicensingStage.where(organization_id: @developer.id).count
   end
+
+  test "an update locks the stage's plant before the stage, as a merge does, so the two can't deadlock" do
+    id = write(verification: { status: "pending", by: "agent:pipeline" }).id
+    locks = []
+    callback = ->(*, payload) { locks << payload[:sql][/FROM "(\w+)"/, 1] if payload[:sql].include?("FOR UPDATE") }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      Directory::FactWriter.write(:licensing_stage, { id:, effective_on: "2023-12-15" }, verification: { status: "verified", by: BY },
+        protect_human_verified: true)
+    end
+
+    assert_operator locks.index("facilities"), :<, locks.index("licensing_stages"), locks.inspect
+  end
 end

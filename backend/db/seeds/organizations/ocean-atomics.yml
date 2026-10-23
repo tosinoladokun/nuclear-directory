@@ -1,0 +1,27 @@
+# Seed research - 19 Oct 2026. Quotes copied from oceanatomics.com, read this session (home page and Terms of Use).
+name: Ocean Atomics
+aliases:
+- Ocean Atomics LLC
+website: https://oceanatomics.com
+hq: null
+country_code: US
+status: active
+roles:
+- key: reactor_vendor
+  source_url: https://oceanatomics.com
+  quote: Ocean Atomics is an American company designing, licensing, and assembling a standardized nuclear electric power plant and the surrounding support systems for maritime applications.
+  confidence: 1.0
+technologies:
+- key: fission
+  source_url: https://oceanatomics.com
+  quote: we are leveraging the compact, proven systems enabled by water-cooled reactors
+  confidence: 1.0
+relationships: []
+facilities: []
+notes: 'HQ left blank (PM, 19 Oct): the only address is the contact line in its Terms of Use (4500 East West Highway, Suite 150, Bethesda, MD 20814), which is not a statement of headquarters. Job listings on the home page also say Bethesda, MD. The home page names the leadership team; people are not recorded in the directory, so none is added. No facility, customer or funding source is stated on the site, so no links.'
+description:
+  text: American company designing and assembling a standardized nuclear power plant for maritime use, built on water-cooled reactors.
+  source_url: https://oceanatomics.com
+  quote: Ocean Atomics is an American company designing, licensing, and assembling a standardized nuclear electric power plant and the surrounding support systems for maritime applications.
+  also:
+  - quote: we are leveraging the compact, proven systems enabled by water-cooled reactors

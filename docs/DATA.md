@@ -18,8 +18,8 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 | Plant link (`FacilityRelationship`) | A company's role at a plant | Southern Nuclear operates Vogtle 3 | A deal between two companies |
 | Company link (`Relationship`) | A deal or tie between two companies | Centrus supplies TRISO-X | A role at a plant |
 | Deal term (`DealTerm`) | One award, power deal or funding round under its link, with amount and dates; or a company's own funding round when its filing names no investors (Form D) | A DOE award (ID, amount, start date) under "DOE funds X-energy"; a Form D round on the company that raised it | The link itself |
-| Licensing stage (`LicensingStage`) | One stage a reactor project or plant has reached with the NRC, with its docket and the date: pre-application, application accepted, construction permit, operating licence, design approval, withdrawn or denied | Hermes 1: construction permit, 14 Dec 2023, 50-7513 | A press release's say-so; the current stage as one field that overwrites the last |
-| Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor developer; SMR | A tag inferred without a quote |
+| Licensing stage (`LicensingStage`) | One stage a reactor project or plant has reached with the NRC, with its docket and the date: pre-application, application accepted, construction permit, combined licence (Part 52), operating licence, restart under NRC review, design approval, withdrawn or denied | Hermes 1: construction permit, 14 Dec 2023, 50-7513 | A press release's say-so; the current stage as one field that overwrites the last |
+| Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor designer; SMR | A tag inferred without a quote |
 
 ### Site or unit
 
@@ -122,7 +122,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | Bucket | Means | A company is in it when it has | Today |
 |---|---|---|---|
 | Power plant owners and operators | Owns or runs nuclear power plants. Its slug stays `utilities` | `utility` or `operator`, or a published owns/operates link to an **operating power plant** | 33 |
-| Developers | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers` | `reactor_vendor` or `project_developer` | 19 |
+| Developers (home card: Reactor Developers) | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers`. One category, told apart by the role shown on each company: **Reactor designer** (`reactor_vendor`, designs the reactor) and **Project developer** (`project_developer`, builds and develops plants); a company with both shows both (Tosin, 21 Oct) | `reactor_vendor` or `project_developer` | 19 |
 | Fuel and materials | Mines, converts, enriches or fabricates fuel; ships fresh fuel; supplies materials such as coolant; produces isotopes (medical and industrial) | `fuel` or its stages, `coolant` or its kinds, `isotopes` (new key), or the sourced tag "fresh-fuel transport" | 11 |
 | Components and manufacturing | Makes equipment: pumps, valves, forgings, steam generators, instrumentation and control hardware, naval and defense nuclear components | `components` (new key) | 0 |
 | Waste and decommissioning | Stores, transports and disposes of spent fuel and waste; decommissions plants | `waste_decommissioning` (new key), or the sourced tag "spent-fuel transport" | 0 |

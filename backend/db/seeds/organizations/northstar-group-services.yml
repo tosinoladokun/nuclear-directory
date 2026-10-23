@@ -1,0 +1,27 @@
+# Seed research - 20 Oct 2026 (Checks clean-up). Quote from NRC's Vermont Yankee page as stored in production.
+name: NorthStar Group Services
+aliases:
+- NorthStar Group Services, Inc. (NorthStar)
+- NorthStar
+hq: null
+country_code: null
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/vermont-yankee
+  quote: On February 9, 2017, Entergy and NorthStar Group Services, Inc. (NorthStar) submitted a request to transfer the Vermont Yankee Nuclear Power Station license from Entergy to NorthStar for the purposes of expedited decommissioning. The NRC issued an Order approving the transfer of the plant operating license in October 2018.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities:
+- name: Vermont Yankee
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/vermont-yankee
+  quote: On February 9, 2017, Entergy and NorthStar Group Services, Inc. (NorthStar) submitted a request to transfer the Vermont Yankee Nuclear Power Station license from Entergy to NorthStar for the purposes of expedited decommissioning. The NRC issued an Order approving the transfer of the plant operating license in October 2018.
+  confidence: 1.0
+  note: NRC issued an order approving the transfer of the license to NorthStar in October 2018.
+notes: 'NorthStar Group Services is not NorthStar Vallecitos, LLC (a separate record). Country and HQ left blank: NRC''s page states neither.'
+description:
+  text: Decommissioning company to which NRC approved the transfer of the Vermont Yankee license in October 2018.
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/vermont-yankee
+  quote: On February 9, 2017, Entergy and NorthStar Group Services, Inc. (NorthStar) submitted a request to transfer the Vermont Yankee Nuclear Power Station license from Entergy to NorthStar for the purposes of expedited decommissioning. The NRC issued an Order approving the transfer of the plant operating license in October 2018.

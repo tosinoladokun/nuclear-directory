@@ -13,8 +13,10 @@
 class LicensingStage < ApplicationRecord
   include Verifiable
 
-  # The seven stages (#379).
-  enum :stage, %w[pre_application application_accepted construction_permit operating_licence design_approval withdrawn denied].index_by(&:itself),
+  # The stages (#379). combined_licence: a Part 52 COL (Vogtle 3 and 4).
+  # restart_review: a shut plant's request to restore its operating basis,
+  # under NRC review (Duane Arnold); the approval is an operating_licence row.
+  enum :stage, %w[pre_application application_accepted construction_permit combined_licence operating_licence restart_review design_approval withdrawn denied].index_by(&:itself),
     validate: true
 
   # What each stage is, in the words the issue uses. The site shows these.
@@ -22,7 +24,9 @@ class LicensingStage < ApplicationRecord
     "pre_application" => "Pre-application",
     "application_accepted" => "Application accepted",
     "construction_permit" => "Construction permit",
+    "combined_licence" => "Combined licence",
     "operating_licence" => "Operating licence",
+    "restart_review" => "Restart under NRC review",
     "design_approval" => "Design approval",
     "withdrawn" => "Withdrawn",
     "denied" => "Denied"

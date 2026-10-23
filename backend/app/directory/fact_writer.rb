@@ -613,9 +613,13 @@ module Directory
         record = find(kind, spec[:model], attributes) || spec[:model].new
         created = record.new_record?
         @evidence_changed = @aliases_changed = false
+        skipped_alias = nil
         # Locked, so a human's decision made while this write runs is seen
         # before the checks below, and two decisions at once are recorded in
         # the order they happen.
+        # A licensing stage's owner is locked before the stage, the order merges
+        # lock them in (owners, then their stages), so the two can't deadlock.
+        lock_licensing_stage_owner(record) if kind == :licensing_stage && !created
         record.lock! unless created
         # What it was, read under the lock, so `changed` is about this write alone.
         before = record.attributes.except("updated_at") unless created
@@ -625,8 +629,7 @@ module Directory
         # audited and attributed.
         human_decision = verification.to_h.symbolize_keys[:by].to_s.start_with?("human:")
         if !created && record.closed? && (protect_human_verified || !human_decision)
-          raise Invalid, "#{Lookup.fact_state(type: record.class.name, id: record.id).name.upcase_first} was " \
-            "#{record.verification_status} by #{record.verified_by || 'review'}" \
+          raise Invalid, "#{record_label(record)} was #{record.verification_status} by #{record.verified_by || 'review'}" \
             "#{" on #{record.verified_at.to_date}" if record.verified_at}; not changed"
         end
         # No automated unit under a rejected or unpublished site, whether the
@@ -647,7 +650,10 @@ module Directory
         # "Three Mile Island Unit 1" updates Crane, it doesn't rename it. Only a
         # write by id renames.
         changes.delete(:name) if kind == :facility && !created && !attributes.key?(:id)
-        lock_facility_names([ changes[:name], *Array(attributes[:aliases]) ]) if kind == :facility
+        # A rename also locks the name being given up: it becomes an alias below,
+        # so a rename into it (A → B while C → A) must wait for this one (#287).
+        former_name = record.name if kind == :facility && !created && changes[:name]
+        lock_facility_names([ changes[:name], former_name, *Array(attributes[:aliases]) ]) if kind == :facility
         check_facility_name(record, changes[:name]) if kind == :facility && changes[:name]
         if curated && (conflicts = conflicts_with(record, changes)).any?
           raise Conflict.new(record.id, conflicts)
@@ -659,7 +665,14 @@ module Directory
 
         if kind == :organization
           aliases_before = record.aliases.pluck(:alias).sort
-          write_aliases(record, [ record.name, *attributes[:aliases] ])
+          # Keep the old name as an alias when a human edit renames the
+          # company (#287), so a source still using it still finds this
+          # record. Merging already does this; plain renames didn't.
+          renamed_from = record.name_before_last_save if !created && record.saved_change_to_name? && record.name_before_last_save.present?
+          holder = renamed_from && organization_alias_holder(record, renamed_from)
+          extra_alias = renamed_from unless holder
+          skipped_alias = { "skipped_alias" => renamed_from, "held_by" => holder } if holder
+          write_aliases(record, [ record.name, *attributes[:aliases], *Array(extra_alias) ])
           dropped = Array(remove_aliases).map { |name| OrganizationAlias.normalize(name) } - [ OrganizationAlias.normalize(record.name) ]
           record.aliases.where(normalized_alias: dropped).delete_all if dropped.any?
           aliases_after = record.aliases.reload.pluck(:alias).sort
@@ -670,12 +683,27 @@ module Directory
           aliases_before = record.aliases.pluck(:alias).sort
           # A name that was one of the plant's aliases is now its name.
           record.aliases.where(normalized_alias: FacilityAlias.normalize(record.name)).delete_all
-          write_facility_aliases(record, attributes[:aliases])
+          # The name changed on an edit (admin or FactWriter caller, #287):
+          # keep the old one as an alias so a source still using it finds
+          # this plant. If the old name is taken by another facility already
+          # (as a name or alias), leave the collision in place rather than
+          # fail the save.
+          renamed_from = record.name_before_last_save if !created && record.saved_change_to_name? && record.name_before_last_save.present?
+          holder = renamed_from && facility_alias_holder(record, renamed_from)
+          extra_alias = renamed_from unless holder
+          skipped_alias = { "skipped_alias" => renamed_from, "held_by" => holder } if holder
+          write_facility_aliases(record, Array(attributes[:aliases]) + Array(extra_alias))
           aliases_after = record.aliases.reload.pluck(:alias).sort
           @aliases_changed = aliases_after != aliases_before
           edited["aliases"] = [ aliases_before, aliases_after ] if edited && aliases_after != aliases_before
         end
         Array(evidence).each { |item| write_evidence(record, item) }
+        # A former name left off as an alias because another record holds it is
+        # kept in the history, with the caller's own context (#287).
+        if skipped_alias && verification
+          verification = verification.to_h.symbolize_keys
+          verification = verification.merge(context: verification[:context].to_h.merge(skipped_alias))
+        end
         # A licensing stage is public only from an NRC record (#379), so it
         # can never be verified from anything else. The check is on the
         # evidence this write carries, before the decision is applied.
@@ -699,6 +727,21 @@ module Directory
     end
 
     private
+      # Human-readable identifier for a record in error messages. Uses
+      # Lookup.fact_state's name for the records it knows; falls back on a
+      # local label for DealTerm (#377), which isn't in FACT_TYPES yet (joins
+      # when #256 lands). Any other unknown type gets "<Type> #<id>" rather
+      # than raising, so a message never crashes on a labeling helper.
+      def record_label(record)
+        if Lookup::FACT_TYPES.include?(record.class.name)
+          Lookup.fact_state(type: record.class.name, id: record.id).name.upcase_first
+        elsif record.is_a?(DealTerm)
+          [ record.term_type.to_s.humanize(capitalize: true), record.external_id, "(##{record.id})" ].compact_blank.join(" ")
+        else
+          "#{record.class.name} ##{record.id}"
+        end
+      end
+
       # Incoming values that differ from the stored ones, where both are
       # present: { "state" => ["NJ", "DE"] }. Websites compare by domain.
       def conflicts_with(record, changes)
@@ -1033,6 +1076,17 @@ module Directory
 
       # The organization's own name is stored as an alias too, so
       # Lookup.organization(name:) only ever has to check aliases.
+      # The name of the other organization that already holds this normalized
+      # alias, or nil (organization names aren't checked here since the
+      # pipeline resolves same-named companies through aliases already). Used
+      # by the rename-keeps-alias path (#287) to skip adding a colliding one.
+      def organization_alias_holder(organization, name)
+        normalized = OrganizationAlias.normalize(name)
+        return if normalized.blank?
+
+        OrganizationAlias.where.not(organization_id: organization.id).find_by(normalized_alias: normalized)&.organization&.name
+      end
+
       def write_aliases(organization, names)
         names.compact_blank.uniq.each do |name|
           normalized = OrganizationAlias.normalize(name)
@@ -1068,6 +1122,18 @@ module Directory
         return if owner.nil? || owner.facility_id == facility.id
 
         raise Invalid, "name #{name.inspect} is an alias of #{owner.facility.name}"
+      end
+
+      # The name of the other facility that already holds this normalized alias,
+      # as its own name or in facility_aliases, or nil. Used by the
+      # rename-keeps-alias path (#287) to skip adding an alias that would collide.
+      def facility_alias_holder(facility, name)
+        normalized = FacilityAlias.normalize(name)
+        return if normalized.blank?
+        owner = FacilityAlias.where.not(facility_id: facility.id).find_by(normalized_alias: normalized)
+        return owner.facility.name if owner
+
+        Facility.where.not(id: facility.id).pluck(:name).find { |other| FacilityAlias.normalize(other) == normalized }
       end
 
       def write_facility_aliases(facility, names)
@@ -1173,6 +1239,15 @@ module Directory
       # automated stage under a rejected or unpublished plant or company, or
       # on a unit whose site is. The unit and its site are locked in id
       # order, as check_link_ends locks them, so the two can't deadlock.
+      def lock_licensing_stage_owner(record)
+        if (id = record.facility_id)
+          site_id = Facility.where(id:).pick(:parent_id)
+          Facility.lock.where(id: [ id, site_id ].compact).order(:id).load
+        elsif (id = record.organization_id)
+          Organization.lock.where(id:).load
+        end
+      end
+
       def check_licensing_stage_ends(attributes, record)
         if (id = attributes.key?(:facility_id) ? attributes[:facility_id] : record.facility_id)
           site_id = Facility.where(id:).pick(:parent_id)

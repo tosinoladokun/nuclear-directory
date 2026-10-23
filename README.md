@@ -59,6 +59,12 @@ Details: [`backend/app/data_quality/README.md`](backend/app/data_quality/README.
 - [Public JSON snapshot](docs/snapshot-api.md)
 - [Data standard](docs/DATA.md)
 
+## Licence
+
+The code is licensed under the [MIT License](LICENSE). Directory data and
+dataset releases are licensed under [CC BY 4.0](DATA_LICENSE). Credit:
+"Nuclear Directory, nuclear-directory.org".
+
 Operational runbooks (deploying to Render, backups and restores, UI previews,
 local Metabase, the analytics relay) live in the private
 `nuclear-directory-backups` repo, next to the encrypted backups, for the
