@@ -54,7 +54,8 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   def extract(source, _run)
     company = company_for(source) or return []
     since = @today.call - WINDOW_DAYS
-    Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since }.map do |item|
+    taken = decided_urls(source)
+    Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
         "summary" => item.summary, "about" => [ { "name" => company, "type" => "organization" } ] }.compact }
@@ -68,7 +69,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   # The items extract reads, so a feed whose build date alone changed isn't read again.
   def rows_sha256(source)
     list = items(source.content_text) or return
-    Digest::SHA256.hexdigest(list.map { |item| [ item.url, item.title, item.published_on ].join("\t") }.join("\n"))
+    Digest::SHA256.hexdigest(list.map { |item| [ item.url, item.title, item.published_on, item.summary ].join("\t") }.join("\n"))
   end
 
   def quote_in_source?(source, quote) = Array(items(source.content_text)).any? { |item| item.title == quote.to_s.squish }
@@ -86,18 +87,34 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   private
     def company_for(source) = @feeds.key(source.url)
 
+    # Items from this feed a person or match already has: a claim that isn't
+    # one extract replaces on every read. Re-reading the feed doesn't send
+    # them back to the queue.
+    def decided_urls(source)
+      source.candidates.where(kind: "news_item").where.not(status: "new")
+        .reject { |claim| claim.status_needs_review? && claim.review_origin == "extract" }
+        .to_set { |claim| claim.payload["url"] }
+    end
+
     # The feed's items, or nil when the text isn't RSS or Atom.
     def items(text)
       doc = Nokogiri::XML(text.to_s)
       doc.remove_namespaces!
       if doc.at_xpath("/rss/channel")
-        doc.xpath("/rss/channel/item").filter_map { |node| item(node, link: node.at_xpath("link")&.text, date: node.at_xpath("pubDate")&.text, summary: node.at_xpath("description")&.text) }
+        own_summaries(doc.xpath("/rss/channel/item").filter_map { |node| item(node, link: node.at_xpath("link")&.text, date: node.at_xpath("pubDate")&.text, summary: node.at_xpath("description")&.text) })
       elsif doc.at_xpath("/feed")
-        doc.xpath("/feed/entry").filter_map do |node|
+        own_summaries(doc.xpath("/feed/entry").filter_map do |node|
           link = node.at_xpath("link[@rel='alternate']/@href") || node.at_xpath("link/@href")
           item(node, link: link&.value, date: (node.at_xpath("published") || node.at_xpath("updated"))&.text, summary: node.at_xpath("summary")&.text)
-        end
+        end)
       end
+    end
+
+    # A summary the feed repeats under other items isn't about this one
+    # (Cameco's feed gives every item its newest release's text): left out.
+    def own_summaries(items)
+      repeated = items.filter_map(&:summary).tally.select { |_, count| count > 1 }.keys
+      items.map { |item| repeated.include?(item.summary) ? item.with(summary: nil) : item }
     end
 
     def item(node, link:, date:, summary:)

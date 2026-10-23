@@ -57,8 +57,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert_equal({ "url" => "https://www.cameco.com/media/news/cameco-provides-date-for-2026-q3-results-conference-call-and-webcast",
       "title" => "Cameco Provides Date for 2026 Q3 Results, Conference Call and Webcast", "publisher" => "Cameco", "published_on" => "2026-10-20",
       "about" => [ { "name" => "Cameco", "type" => "organization" } ] }, first[:payload].except("summary"))
-    assert first[:payload]["summary"].length <= Plugin::SUMMARY_LENGTH
-    refute_match(/</, first[:payload]["summary"], "the summary is plain text")
+    assert candidates.none? { |c| c[:payload].key?("summary") }, "Cameco repeats one release's text under every item: no summaries"
     assert_match "Cameco Provides Date", plugin.verification_context(source, first[:quote])
     assert_match "Cameco's own news feed", plugin.source_facts(source)
   end
@@ -78,6 +77,32 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
     assert_equal [ { kind: "news_item", quote: "Acme signs a fuel deal", payload: { "url" => "https://acme.example/news/fuel", "title" => "Acme signs a fuel deal",
       "publisher" => "Acme", "published_on" => "2026-10-01", "summary" => "Acme & a utility agreed.", "about" => [ { "name" => "Acme", "type" => "organization" } ] } } ], candidates
+  end
+
+  test "an item already matched or decided isn't proposed again when the feed changes" do
+    source = stored
+    url = "https://www.cameco.com/media/news/cameco-provides-date-for-2026-q3-results-conference-call-and-webcast"
+    source.candidates.create!(kind: "news_item", status: "rejected", quote: "q", payload: { "url" => url })
+    source.candidates.create!(kind: "news_item", status: "new", quote: "q", payload: { "url" => "https://www.cameco.com/other" })
+
+    urls = plugin.extract(source, nil).map { |c| c[:payload]["url"] }
+    refute_includes urls, url
+    assert urls.any?
+  end
+
+  test "a summary changing is a change; a summary is plain text, cut at a word" do
+    atom = ->(summary) { <<~XML }
+      <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+        <entry><title>Acme news</title><link href="https://acme.example/n"/><published>2026-10-01T00:00:00Z</published><summary>#{summary}</summary></entry></feed>
+    XML
+    before = Source.new(content_text: atom.("&lt;b&gt;First&lt;/b&gt; text"))
+    after = Source.new(content_text: atom.("Corrected text"))
+    refute_equal plugin.rows_sha256(before), plugin.rows_sha256(after)
+    long = Source.create!(url: "https://acme.example/feed", source_kind: "company_newsrooms", crawl_status: "ok", content_sha256: "x",
+      content_text: atom.("word " * 200))
+    summary = plugin(feeds: { "Acme" => long.url }).extract(long, nil).sole[:payload]["summary"]
+    assert summary.length <= Plugin::SUMMARY_LENGTH
+    assert_equal "First text", plugin.send(:items, before.content_text).sole.summary
   end
 
   test "a feed's items leaving it drop nothing, and only its items count as a change" do
