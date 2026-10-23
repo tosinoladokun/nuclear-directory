@@ -20,7 +20,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_redirected_to companies_url(state: "CA", sort: "connections", tag: "fusion")
   end
 
-  test "the Developers list shows each company's role, and ?role= narrows it to reactor designers or project developers (no filter UI)" do
+  test "?role= narrows the Developers list to reactor designers or project developers; the list shows no role tags and no filter UI" do
     designer = Role.find_by!(key: "reactor_vendor")
     developer = role("project_developer")
     both = cite!(company("Both Roles Inc", roles: [ designer, developer ]))
@@ -29,9 +29,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "nav[aria-label=Role]", 0, "no role filter in the page (the ?role= param still works)"
-    assert_equal [ "Reactor designer" ], css_select("a[href='/companies/kairos-power'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
-    assert_equal [ "Reactor designer", "Project developer" ], css_select("a[href='/companies/#{both.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
-    assert_equal [ "Project developer" ], css_select("a[href='/companies/#{builder.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
+    assert_select ".nd-listrow .nd-tag", 0, "the role is shown on the company page, not in the list"
 
     get companies_path(category: "reactor-developers", role: "project_developer")
     assert_select "a.nd-listrow", 2
@@ -48,15 +46,12 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "a.nd-listrow", 4
   end
 
-  test "a role no source backs shows no chip and does not put the company under that role" do
+  test "a role no source backs does not put the company under that role" do
     designer = Role.find_by!(key: "reactor_vendor")
     developer = role("project_developer")
     half = cite!(company("Half Sourced Holdings", roles: [ designer ]))
     unsourced = OrganizationRole.create!(organization: half, role: developer, verification_status: "verified", verified_by: "human:tosin", confidence: 1)
     assert_empty unsourced.evidence
-
-    get companies_path(category: "reactor-developers")
-    assert_equal [ "Reactor designer" ], css_select("a[href='/companies/#{half.slug}'] .nd-listrow__roles .nd-tag").map { |el| el.text.strip }
 
     get companies_path(category: "reactor-developers", role: "project_developer")
     assert_select "a[href='/companies/#{half.slug}']", 0
@@ -66,7 +61,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "fuel", role: "reactor_vendor")
     assert_select "nav[aria-label=Role]", 0
     get companies_path
-    assert_select ".nd-listrow__roles", 0
+    assert_select ".nd-listrow .nd-tag", 0
     assert_select "nav[aria-label=Role]", 0
   end
 
