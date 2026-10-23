@@ -114,8 +114,12 @@ module Directory
     def self.mention_news(news_item_id:, subject_type:, subject_id:)
       raise Invalid, "news is about a company or a plant, not a #{subject_type}" unless NewsMention::SUBJECT_TYPES.include?(subject_type.to_s)
 
-      subject_id = Facility.where(id: subject_id).pick(:parent_id) || subject_id if subject_type.to_s == "Facility"
-      NewsMention.find_or_create_by!(news_item_id:, subject_type: subject_type.to_s, subject_id:)
+      ActiveRecord::Base.transaction(requires_new: true) do
+        # The unit locked as a write that groups it locks it, so its site is
+        # read after any grouping that's under way, never before it moves.
+        subject_id = Facility.lock.find(subject_id).parent_id || subject_id if subject_type.to_s == "Facility"
+        NewsMention.find_or_create_by!(news_item_id:, subject_type: subject_type.to_s, subject_id:)
+      end
     end
 
     # Merges one organization into another (one company per brand, decision
