@@ -1,0 +1,21 @@
+# Seed research for #253 (CFS), 22 Oct 2026. Quotes copied from CFS's release of 22 Sep 2025, read this session (cfs.energy).
+name: Eni
+aliases: []
+hq: null
+country_code: null
+status: active
+roles: []
+technologies: []
+relationships:
+- type: offtake_with
+  to: Commonwealth Fusion Systems
+  description: 'Signed PPA (Sep 2025): worth more than $1 billion, for power from CFS''s first 400 MW ARC fusion plant in Chesterfield County, Virginia, expected on the grid in the early 2030s. The plant is not built yet.'
+  source_url: https://cfs.energy/news-and-media/eni-and-commonwealth-fusion-systems-sign-1-billion/
+  quote: The power purchase agreement (PPA) concerns Eni’s acquisition of decarbonized power from CFS’s 400 MW ARC fusion power plant in Chesterfield County, Virginia, which is expected to connect to the grid in the early 2030s.
+  published: '2025-09-22'
+  confidence: 1.0
+facilities: []
+notes: 'Country and HQ left blank: the release datelines San Donato Milanese, Italy but doesn''t say headquarters. No role: the release says Eni buys the power, not what it does. Eni has been a CFS shareholder since 2018 (same release); investments are not recorded here.'
+description:
+  source_url: https://cfs.energy/news-and-media/eni-and-commonwealth-fusion-systems-sign-1-billion/
+  quote: Eni has been a CFS shareholder since 2018.
