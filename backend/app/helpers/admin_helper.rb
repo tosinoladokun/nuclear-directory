@@ -19,6 +19,7 @@ module AdminHelper
   SOURCE_KIND_LABELS = {
     "nrc_reactor_list" => "NRC", "nrc_power_status" => "NRC", "eia_generators" => "EIA", "eia_860m_index" => "EIA",
     "usaspending_doe_awards" => "USAspending", "usaspending_api" => "USAspending", "nrc_decommissioning" => "NRC", "doe_isotope_sites" => "DOE", "nrc_uranium_recovery" => "NRC",
+    "sec_form_d" => "SEC", "sec_submissions" => "SEC",
     "web_page" => "Research"
   }.freeze
 
