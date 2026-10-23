@@ -36,6 +36,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PLANNED = /\b(plans? to|planning to|aims? to|will|intends? to|in talks|exploring|considering)\b/i
   # A round the company says it has, not one it seeks.
   RAISED = /\b(raised|raises|closed|closes|secured|secures|completed)\b/i
+  # A round, not a grant, award, loan or contract; an exact figure only.
+  ROUND_WORDS = /\b(round|funding|financing|series\s+[a-z]\b|seed|investment|(raised|raise|raises)\s+(equity|capital))/i
+  NOT_A_ROUND = /\b(awards?|grants?|contracts?|loans?|debt|credit\s+facility|PPA|power\s+purchase)\b/i
+  INEXACT = /\b(up\s+to|more\s+than|over|about|approximately|nearly|at\s+least|total|totals|totaling|totalling)\b/i
   # An owner's quote says it owns.
   OWNERSHIP = /\b(own|owns|owned|owner|ownership|stake|share)\b|\d+(\.\d+)?\s?%/i
   FIELDS = %w[description hq_city hq_state founded_year legal_name].freeze
@@ -68,6 +72,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     - rounds: this company's own funding rounds the page says it raised or closed (not one it plans or seeks). amount: the amount
       exactly as the quote writes it ("$37 million"), or null; round: its name as written ("Series B", "seed"), or null; date: the
       date exactly as the quote writes it ("December 6, 2024"), or null. The quote must name this company (or "we") and the round.
+      Not grants, awards, loans, debt or contracts; not a round of another company; amounts exactly as written, never summed.
       Never investors' names, valuations or totals across rounds.
     Never report people (founders, executives, staff), investors or customers from logo lists, plant status or capacity, numbers
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
@@ -238,17 +243,20 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       quote = item["quote"].to_s.strip
       amount_text, round, date_text = item.values_at("amount", "round", "date").map { |value| value.to_s.strip.presence }
       return unless quoted.(nil, quote) && (quote.downcase.include?(name.downcase) || quote.match?(/\b(we|our|us)\b/i))
-      return if quote.match?(PLANNED) || !quote.match?(RAISED)
+      return if quote.match?(PLANNED) || !quote.match?(RAISED) || !quote.match?(ROUND_WORDS) || quote.match?(NOT_A_ROUND) || quote.match?(INEXACT)
       return if [ amount_text, round, date_text ].compact.any? { |value| !quote.downcase.include?(value.downcase) }
 
       amount = dollars(amount_text) if amount_text
       return if amount_text && !amount
       return unless amount || round
 
-      starts_on = (Date.parse(date_text) if date_text&.match?(/\b(19|20)\d\d\b/)) rescue nil
+      # A page's date is when it was announced; it's the round's date only when
+      # the quote says the round closed on it (Data Quality).
+      on_close = date_text && quote.match?(/\bon\s+#{Regexp.escape(date_text)}\b/i) && quote.match?(/\b(closed|completed)\b/i)
+      starts_on = (Date.parse(date_text) if on_close && date_text.match?(/\b(19|20)\d\d\b/)) rescue nil
       { kind: "deal_term", quote:, payload: {
         "organization" => { "name" => name }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{url}##{(round || amount_text).downcase.squish}", "amount_usd" => amount&.to_s("F"), "round" => round,
+        "external_id" => "page:#{url}##{[ round, amount_text ].compact.join(' ').downcase.squish}", "amount_usd" => amount&.to_s("F"), "round" => round,
         "starts_on" => starts_on&.iso8601 }.compact }
     end
 
