@@ -14,6 +14,7 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
     stub_request(:get, "https://www.sec.gov/robots.txt").to_return(body: "User-agent: *\nDisallow: /cgi-bin\n")
     @list = stub_request(:get, LIST).to_return(body: file_fixture("sec_form_d/newera_submissions.json").read, headers: { "Content-Type" => "application/json" })
+    @tickers = stub_request(:get, Plugin::TICKERS_URL).to_return(body: { "0" => { cik_str: 2028336, ticker: "NUAI", title: "New Era Energy & Digital, Inc." } }.to_json)
     @notice = stub_request(:get, NOTICE).to_return(body: file_fixture("sec_form_d/newera_d.xml").read, headers: { "Content-Type" => "text/xml" })
     @company = Organization.create!(name: "New Era Energy & Digital", sec_cik: "0002028336").tap { |c| c.verify!(by: BY); c.aliases.create!(alias: c.name) }
   end
@@ -38,8 +39,10 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     run = crawl
     second = crawl
 
-    assert_equal({ "lists changed" => 1, "filings new" => 1 }, run.stats)
-    assert_equal({ "lists skipped_recent" => 1, "filings stored_before" => 1 }, second.stats)
+    assert_equal({ "ticker list" => "changed", "lists changed" => 1, "filings new" => 1 }, run.stats)
+    assert_equal({ "ticker list" => "skipped_recent", "lists skipped_recent" => 1, "filings stored_before" => 1 }, second.stats)
+    assert_requested @tickers, times: 1
+    assert_match "NUAI", Source.find_by!(url: Plugin::TICKERS_URL).content_text, "kept for Data Quality to cite a CIK by ticker"
     assert_requested @list, times: 1
     assert_requested @notice, times: 1
     assert_equal "form: D | filed: 2024-12-19 | accession: 0002028336-24-000006 | issuer CIK: 0002028336 | issuer: NEW ERA HELIUM INC. | " \
@@ -47,6 +50,13 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
       "amount sold: $37,000,000 | amends: - | business combination: no | clarification: -", notice_source.content_text
     assert_equal Date.new(2024, 12, 19), notice_source.published_on
     assert_equal "D\t0002028336-24-000006\t2024-12-19\txslFormDX01/primary_doc.xml", Source.find_by!(url: LIST).content_text, "only Form D filings are kept"
+  end
+
+  test "a block on the ticker list stops the crawl before any filing list" do
+    stub_request(:get, Plugin::TICKERS_URL).to_return(status: 403, body: "Your request has been identified as part of a network of automated tools")
+
+    assert_equal "SEC blocked us", crawl.stats["stopped"]
+    assert_not_requested @list
   end
 
   test "a block stops the crawl" do

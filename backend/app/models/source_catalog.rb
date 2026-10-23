@@ -40,7 +40,7 @@ class SourceCatalog
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
     "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
     "sec_form_d" => { name: "SEC Form D rounds", daily: false },
-    "sec_submissions" => { name: "SEC filing lists", note: "finds each company's Form D filings", daily: false }
+    "sec_submissions" => { name: "SEC filing lists", note: "finds each company's Form D filings; the ticker-to-CIK list", daily: false }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze

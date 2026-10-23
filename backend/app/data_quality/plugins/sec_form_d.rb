@@ -25,6 +25,9 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
   SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK%s.json"
   ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/%<cik>d/%<accession>s/primary_doc.xml"
   INDEX_SOURCE_KIND = "sec_submissions"
+  # SEC's own ticker-to-CIK list, kept as a source so Data Quality can cite
+  # it for a company's CIK (read by ticker from the company's own IR page).
+  TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
   FORMS = %w[D D/A].freeze
   NOT_SOLD = "it reports no amount sold"
   SECURITIES = { "isEquityType" => "equity", "isDebtType" => "debt", "isOptionToAcquireType" => "options",
@@ -42,6 +45,9 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
 
   def crawl(_run)
     stats = Hash.new(0)
+    stats["ticker list"] = DataQuality::Snapshot.take(tickers_source, fetcher: @fetcher).to_s
+    return stats.merge("stopped" => "SEC blocked us").to_h if stats["ticker list"] == "blocked"
+
     @directory.organizations_with_sec_cik.each do |company|
       index = index_source(company)
       outcome = DataQuality::Snapshot.take(index, fetcher: @fetcher) { |body| filing_lines(body) }
@@ -101,6 +107,13 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
   end
 
   private
+    def tickers_source
+      Source.find_or_create_by!(url: TICKERS_URL) do |source|
+        source.source_kind = INDEX_SOURCE_KIND
+        source.title = "SEC: company tickers and CIKs"
+      end
+    end
+
     def index_source(company)
       Source.find_or_create_by!(url: format(SUBMISSIONS_URL, company.sec_cik)) do |source|
         source.source_kind = INDEX_SOURCE_KIND
