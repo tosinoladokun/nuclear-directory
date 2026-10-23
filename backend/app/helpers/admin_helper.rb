@@ -263,7 +263,7 @@ module AdminHelper
 
   def field_label(name) = DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize }
 
-  # A value for its field: a role in visitors' words ("Reactor developer").
+  # A value for its field: a role in visitors' words ("Reactor designer").
   def field_display(name, value) = name.to_s == "role" && value.present? ? role_label(value) : field_value(value)
 
   # What a decision changed: "state DE to NJ; aliases …".
