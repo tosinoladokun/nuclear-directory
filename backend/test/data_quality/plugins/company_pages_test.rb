@@ -114,4 +114,26 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert(claims.all? { |c| record.include?(c[:quote]) }, "every quote is a fragment of the record")
     assert_requested :get, edgar
   end
+
+  test "a state by name is kept as its code; www and bare host are one site; a newer request made during a read stays waiting" do
+    @company.update_columns(enrich_requested_at: 1.minute.ago)
+    stub_request(:get, HOME).to_return(body: '<a href="https://acmefission.com/about">About</a><p>Headquartered in Austin, Texas.</p>', headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://acmefission.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://acmefission.com/about").to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
+    directory = DataQuality::DirectoryClient.new
+    queued = directory.enrich_queue
+    @company.update_columns(enrich_requested_at: Time.current) # a newer request, mid-read
+    DataQuality::Plugins::CompanyPages.new(directory: Struct.new(:queue, :real) do
+      def enrich_queue = queue
+      def method_missing(name, ...) = real.public_send(name, ...)
+      def respond_to_missing?(*) = true
+    end.new(queued, directory)).crawl(nil)
+    assert_requested :get, "https://acmefission.com/about"
+    assert_equal [ @company.id ], directory.enrich_queue.map(&:first), "the newer request still waits"
+
+    found = { "description" => nil, "hq_city" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "hq_state" => { "value" => "Texas", "quote" => "Headquartered in Austin, Texas." } }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal [ { "name" => "Acme Fission", "hq_state" => "TX" } ], claims.map { |c| c[:payload] }
+  end
 end

@@ -104,4 +104,17 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     get enrich_path
     assert_select "#finding-#{found.id} .type-body-strong", "Legal name: ACME FISSION INC."
   end
+
+  test "a finding shows the value it would replace; a site that couldn't be read says so; older findings stay in Checks" do
+    @company.update_columns(hq_city: "Dallas")
+    get enrich_path
+    assert_select "#finding-#{@agreed.id}", /Now: Dallas\. Approving replaces it\./
+
+    Source.create!(url: "https://www.acmefission.com/", source_kind: "company_pages", crawl_status: "blocked", status_reason: "HTTP 403")
+    @company.update_columns(enrich_requested_at: 10.minutes.ago, enriched_at: 5.minutes.ago)
+    @agreed.update_columns(created_at: 1.hour.ago) # found by an earlier request
+    get enrich_path
+    assert_select ".nd-panel", /Its site couldn't be read .* ago: HTTP 403\./
+    assert_select "#finding-#{@agreed.id}", 0, "a finding from before this request is left to Checks"
+  end
 end

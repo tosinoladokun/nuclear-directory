@@ -63,7 +63,8 @@ module Directory
     # and not read since, oldest request first, as [id, name, website, sec_cik].
     def enrich_queue(limit: 5)
       Organization.where("enrich_requested_at IS NOT NULL AND (enriched_at IS NULL OR enriched_at < enrich_requested_at)")
-        .where("COALESCE(website, '') <> '' OR sec_cik IS NOT NULL").order(:enrich_requested_at).limit(limit).pluck(:id, :name, :website, :sec_cik)
+        .where("COALESCE(website, '') <> '' OR sec_cik IS NOT NULL").order(:enrich_requested_at).limit(limit)
+        .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik)
     end
 
     # The roles and technologies a company can be given: { "role" => [[key, name]], "technology" => [[key, name]] }.
@@ -72,7 +73,8 @@ module Directory
     end
 
     # Enrich (#479): its pages were read for the request now.
-    def mark_enriched(id) = Organization.where(id:).update_all(enriched_at: Time.current)
+    # A newer request made meanwhile (a new website, say) stays waiting.
+    def mark_enriched(id, requested_at) = Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current)
 
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
