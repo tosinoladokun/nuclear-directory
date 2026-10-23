@@ -306,4 +306,27 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert @both.reload.status_merged?, flash[:alert]
     assert copy.reload.status_merged?, flash[:alert]
   end
+
+  test "a copy whose recommendation changes after the page loaded isn't approved with its fact" do
+    other = Source.create!(url: "https://www.doe.gov/test/race.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    shown = review.fingerprint
+    first, second = review.rows("agree").sole.then { |row| [ row.candidate_id, (row.candidate_ids - [ row.candidate_id ]).sole ] }
+
+    accept = DataQuality::Recommendations.method(:accept)
+    DataQuality::Recommendations.define_singleton_method(:accept) do |items, **options|
+      accept.call(items, **options).tap { Candidate.where(id: second).update_all(dq_recommendation: "reject", dq_reason: "changed meanwhile") }
+    end
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Recommendations.define_singleton_method(:accept, accept)
+    end
+    assert Candidate.find(first).status_merged?
+    assert Candidate.find(second).status_matched?, "left waiting"
+    assert_match "changed after the page loaded", flash[:alert]
+  end
 end

@@ -106,9 +106,17 @@ class Admin::TodayController < Admin::BaseController
     # (their own sources and quotes), not held back by the decision just made.
     firsts = items.select { |item| copies.key?(item.candidate_id) }
     results = DataQuality::Recommendations.accept(firsts, by: actor)
+    # Each other copy rechecked under its decision lock against what the page
+    # showed: Aminah's call, reason and snapshot, and Joy's recommendation.
+    shown = items.index_by(&:candidate_id)
+    unchanged = lambda do |candidate|
+      item = shown.fetch(candidate.id)
+      same = [ candidate.dq_recommendation, candidate.dq_reason, candidate.dq_payload_sha256 ] == [ item.call, item.reason, item.snapshot ]
+      "Aminah's or Joy's call on it changed after the page loaded" unless same && candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?
+    end
     results += results.select(&:ok?).flat_map do |first|
       rest = copies.fetch(first.candidate_id, [])
-      rest.any? ? DataQuality::Review.approve(rest, by: actor, reason: "Accepted in Today: another page of the same fact") : []
+      rest.any? ? DataQuality::Review.approve(rest, by: actor, reason: "Accepted in Today: another page of the same fact", safe_check: unchanged) : []
     end
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?
