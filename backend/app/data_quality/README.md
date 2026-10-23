@@ -314,6 +314,15 @@ licensee's `mining` category, all quoting the row. A row whose type or state can
 person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
+## NRC reactor vendors (#388)
+
+`plugins/nrc_reactor_vendors.rb` reads each operating unit's NRC page that the reactor list links (from
+`nrc_reactor_list`'s stored copy), at most once a day, and stores only the unit's name, docket and its
+"Reactor Vendor/Type" line (never the page's contacts). A line starting with a known vendor's name gives the
+vendor company and a `vendor_for` link to the unit, by docket. Never inferred from reactor type; a historical
+vendor (Combustion Engineering) keeps its name for a person to place. A line naming no known vendor proposes
+nothing; a page without the line goes to a person.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
