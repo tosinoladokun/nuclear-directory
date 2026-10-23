@@ -124,7 +124,7 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     assert_equal "1205.1", stored.find { |row| row["eia_plant_id"] == "6036" }["nameplate_mw"]
     assert_includes stored.map { |row| row["eia_plant_id"] }, "68635", "a proposed plant (Kemmerer)"
     assert_not_includes stored.map { |row| row["eia_plant_id"] }, "3", "not the coal plant"
-    assert_equal 17, stats["rows"]
+    assert_equal 16, stats["rows"], "Vogtle 8, Calvert Cliffs 1, Catawba 4, Summer 2, Kemmerer 1"
   end
 
   test "a zip without the ownership workbook needs a human" do
