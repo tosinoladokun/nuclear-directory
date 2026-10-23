@@ -86,4 +86,13 @@ class NewsItemTest < ActiveSupport::TestCase
     assert_equal [ news.id ], Directory::Lookup.latest_news(type: "Facility", id: unit.id).map(&:id)
     assert_equal [ news.id ], Directory::Lookup.latest_news(type: "Facility", id: site.id).map(&:id)
   end
+
+  test "news for a company merged away goes on the company it went into" do
+    from = Organization.create!(name: "Old Name Fission", verification_status: "verified", verified_by: "human:tosin")
+    into = Organization.create!(name: "New Name Fission", verification_status: "verified", verified_by: "human:tosin")
+    Directory::FactWriter.merge_organization(from_id: from.id, into_id: into.id, by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/merged", title: "A headline", published_on: Date.new(2026, 10, 1))
+    mention = Directory::FactWriter.mention_news(news_item_id: item.id, subject_type: "Organization", subject_id: from.id)
+    assert_equal into.id, mention.subject_id
+  end
 end

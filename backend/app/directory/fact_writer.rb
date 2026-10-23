@@ -118,9 +118,28 @@ module Directory
         # The unit locked as a write that groups it locks it, so its site is
         # read after any grouping that's under way, never before it moves.
         subject_id = Facility.lock.find(subject_id).parent_id || subject_id if subject_type.to_s == "Facility"
+        # A company is locked as a merge locks it, so a merge under way finishes
+        # first; one merged away is followed to the company it went into.
+        subject_id = merged_survivor(subject_id) if subject_type.to_s == "Organization"
         NewsMention.find_or_create_by!(news_item_id:, subject_type: subject_type.to_s, subject_id:)
       end
     end
+
+    # The company id news should be on, its row locked: itself, or the one a
+    # merge moved it into (its unpublish event says which).
+    def self.merged_survivor(id)
+      5.times do
+        company = Organization.lock.find(id)
+        return id unless company.closed?
+
+        into = VerificationEvent.where(subject: company).order(:id).last&.context.to_h.dig("merged_into", "id")
+        raise Invalid, "#{company.name} is #{company.verification_status}; news isn't added to it" unless into
+
+        id = into
+      end
+      raise Invalid, "company #{id}: too many merges to follow"
+    end
+    private_class_method :merged_survivor
 
     # Merges one organization into another (one company per brand, decision
     # #23): a human's decision, so by: must start with "human:". In one
