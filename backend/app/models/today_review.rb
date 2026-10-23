@@ -37,7 +37,9 @@ class TodayReview
   # together (so a page never splits a fact), newest fact first.
   def clusters
     @clusters ||= begin
-      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all")).order(id: :desc).to_a
+      # A trade-press lead (#127) waits for Data Quality's primary source, never here.
+      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all"))
+        .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").order(id: :desc).to_a
       by_group = waiting.group_by { |candidate| group_of(*verdicts(candidate)) }
       GROUPS.to_h { |group| [ group, Array(by_group[group]).group_by { |candidate| same_fact(candidate) }.values.map { |copies| copies.map(&:id) } ] }
     end
