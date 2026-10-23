@@ -2,6 +2,9 @@
 # what it answered, and how many nights in a row it failed. Separate from
 # the crawl's own columns, which describe the stored copy.
 class AddLinkCheckToSources < ActiveRecord::Migration[8.1]
+  # The index is built without locking sources against the crawl's writes.
+  disable_ddl_transaction!
+
   STATUSES = %w[ok dead failing error blocked disallowed].freeze
 
   def change
@@ -11,6 +14,6 @@ class AddLinkCheckToSources < ActiveRecord::Migration[8.1]
     add_column :sources, :link_failures, :integer, default: 0, null: false
     add_check_constraint :sources, "link_status IS NULL OR link_status IN (#{STATUSES.map { |s| "'#{s}'" }.join(', ')})",
       name: "sources_link_status_check"
-    add_index :sources, :link_checked_at
+    add_index :sources, :link_checked_at, algorithm: :concurrently, if_not_exists: true
   end
 end
