@@ -332,6 +332,14 @@ days. A notice whose title names its subject the NRC's way ("<licensee>; <plant>
 NRC repeats weekly is proposed once, from its first date. Forms, biweekly lists and titles naming the
 Commissioners are left out. Only news: no fact is proposed from a notice. Every item waits for a person.
 
+## Trade press leads (#127)
+
+`plugins/trade_press.rb` reads World Nuclear News and ANS Nuclear Newswire once a day (last 14 days). Each item
+is a `news_item` claim with `lead: true`: held for Data Quality (`Review::LEAD`, shown under "Not yours yet"),
+refused by every approval path, and left out of the admin's counts (`Candidate.not_leads`). Data Quality turns
+a lead into a claim from the primary source or rejects it. **A claim made from a lead must not copy
+`lead: true`**, or it stays held like the lead.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
