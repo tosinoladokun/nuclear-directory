@@ -14,6 +14,8 @@ require "csv"
 # - DOE contracts mentioning HALEU or nuclear fuel
 # - fusion grants under the Office of Science (81.049, "fusion"), for
 #   fusion energy work only (FUSION_ENERGY)
+# - small-business (SBIR/STTR-sized) Office of Science grants from $100,000,
+#   for nuclear energy work only (NUCLEAR_ENERGY, #125)
 # The API's own fetch state (today's fetch, a block) is kept on an index
 # source that's never extracted. Awards are stored as CSV rows, one source
 # per recipient, with every field a later award table needs (#256): award
@@ -34,13 +36,22 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   SEARCHES = {
     "nuclear_energy_rd" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.121" ] },
     "haleu_fuel_contracts" => { award_type_codes: CONTRACTS, keywords: [ "HALEU", "nuclear fuel" ] },
-    "fusion" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.049" ], keywords: [ "fusion" ] }
+    "fusion" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.049" ], keywords: [ "fusion" ] },
+    # DOE's small-business (SBIR/STTR) grants (#125; SBIR.gov's API refuses
+    # our bot): Office of Science grants to businesses from $100,000, the
+    # size of a Phase I. USAspending doesn't mark a grant as SBIR, so only
+    # those whose description is about nuclear energy work are kept
+    # (NUCLEAR_ENERGY).
+    "small_business" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.049" ], min_amount: 100_000,
+      keywords: [ "nuclear reactor", "advanced reactor", "nuclear fuel", "nuclear power", "spent fuel", "nuclear waste",
+        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt", "uranium enrichment" ] }
   }.freeze
   # The fusion search's keyword also finds awards that only mention fusion:
   # data fusion, plastics, and software, simulation or quantum computing run
   # on fusion data. Only awards for fusion energy work itself are kept: its
   # machines, magnets, lasers, plasma diagnostics and research.
   FUSION_ENERGY = /\b(?:fusion (?:energy|reactors?|magnets?|plasmas?|pilot plants?|program|facilit(?:y|ies))|inertial fusion|tokamaks?|stellarators?|burning plasma|for fusion\b)/i
+  NUCLEAR_ENERGY = /\b(?:(?:nuclear|advanced|microreactors?|test) reactors?|microreactors?|nuclear (?:fuel|power|energy|plants?|waste)|spent (?:nuclear )?fuel|isotope production|medical isotopes?|HALEU|TRISO|molten salt|uranium enrichment)\b/i
   NOT_FUSION_ENERGY = /\b(?:data fusion|machine learning|data science|software|quantum|simulations?|meshing|computation)\b/i
   FIELDS = [ "Award ID", "Recipient Name", "Award Amount", "Start Date", "End Date", "Description", "generated_internal_id", "recipient_id" ].freeze
   # USAspending's recipient hash and level, e.g. "1f4e2b…-C".
@@ -246,6 +257,7 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
           data = JSON.parse(response.body)
           data["results"].to_a.each do |award|
             next if name == "fusion" && !fusion_energy?(award["Description"])
+            next if name == "small_business" && !award["Description"].to_s.match?(NUCLEAR_ENERGY)
 
             row = row_for(award, name)
             rows[row["generated_award_id"]] ||= row # an award two searches find is kept once
@@ -273,10 +285,10 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     def request_body(filters, page)
       contract = filters[:award_type_codes] == CONTRACTS
       {
-        filters: filters.merge(
+        filters: filters.except(:min_amount).merge(
           agencies: [ { type: "awarding", tier: "toptier", name: "Department of Energy" } ],
           time_period: [ { start_date: YEARS.years.ago.to_date.iso8601, end_date: Date.current.iso8601 } ],
-          award_amounts: [ { lower_bound: MIN_AMOUNT } ],
+          award_amounts: [ { lower_bound: filters.fetch(:min_amount, MIN_AMOUNT) } ],
           recipient_type_names: [ "category_business" ]
         ),
         fields: contract ? FIELDS : FIELDS + [ "CFDA Number" ],

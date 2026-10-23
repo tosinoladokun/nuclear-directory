@@ -29,7 +29,8 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
       [ "nuclear_energy_rd", 1 ] => { "results" => [ XENERGY ], "page_metadata" => { "page" => 1, "hasNext" => true } },
       [ "nuclear_energy_rd", 2 ] => { "results" => [ NUSCALE, XENERGY ], "page_metadata" => { "page" => 2, "hasNext" => false } },
       [ "haleu_fuel_contracts", 1 ] => { "results" => CENTRUS, "page_metadata" => { "page" => 1, "hasNext" => false } },
-      [ "fusion", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } }
+      [ "fusion", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } },
+      [ "small_business", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } }
     }
     @requests = []
     stub_request(:post, Plugin::API_URL).to_return do |request|
@@ -52,7 +53,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert_equal [ "category_business" ], first["filters"]["recipient_type_names"]
     assert_equal [ { "lower_bound" => 1_000_000 } ], first["filters"]["award_amounts"]
     assert_equal 5.years.ago.to_date.iso8601, first["filters"]["time_period"].first["start_date"]
-    assert_equal [ [ "81.121" ], [ "81.121" ], nil, [ "81.049" ] ], @requests.map { |body| body["filters"]["program_numbers"] }
+    assert_equal [ [ "81.121" ], [ "81.121" ], nil, [ "81.049" ], [ "81.049" ] ], @requests.map { |body| body["filters"]["program_numbers"] }
     assert_includes @requests.find { |body| body["filters"]["award_type_codes"] == Plugin::CONTRACTS }["fields"], "Award Amount"
   end
 
@@ -142,6 +143,27 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).select { |row| row["search"] == "fusion" } }
     assert_equal FUSION_KEPT.sort, kept.map { |row| row["description"] }.sort
     assert recipient(XENERGY["recipient_id"]), "the other searches are unaffected"
+  end
+
+  # Real descriptions from DOE's Office of Science grants to businesses, 23 Oct 2026.
+  SMALL_KEPT = [ "ELECTRODEPOSITED OVERLAYS FOR IMPROVED DURABILITY OF NUCLEAR REACTORS",
+    "COMMERCIALIZATION OF MPFD SYSTEMS FOR ADVANCED REACTOR INSTRUMENTATION" ].freeze
+  SMALL_DROPPED = [ "NOVEL PROBE OF OXYGEN AND ITS ISOTOPES FOR MILLIMETER-SCALE MEASUREMENTS OF SOIL DYNAMICS",
+    "HIGH PERFORMANCE GLASS SCINTILLATORS FOR NUCLEAR PHYSICS EXPERIMENTS" ].freeze
+
+  test "small-business grants from $100,000, kept only for nuclear energy work (#125)" do
+    awards = (SMALL_KEPT + SMALL_DROPPED).each_with_index.map do |description, n|
+      XENERGY.merge("Award ID" => "SB#{n}", "Recipient Name" => "SMALL CO #{n}", "Award Amount" => 1_100_000, "Description" => description,
+        "generated_internal_id" => "ASST_NON_SB#{n}_089", "recipient_id" => "00000000-0000-0000-0000-#{(n + 50).to_s.rjust(12, '0')}-R")
+    end
+    @answers[[ "small_business", 1 ]] = { "results" => awards, "page_metadata" => { "hasNext" => false } }
+
+    crawl!
+
+    assert_equal [ { "lower_bound" => 100_000 } ], @requests.last["filters"]["award_amounts"]
+    refute @requests.last["filters"].key?("min_amount")
+    kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).select { |row| row["search"] == "small_business" } }
+    assert_equal SMALL_KEPT.sort, kept.map { |row| row["description"] }.sort
   end
 
   test "a search with more awards than the pages read stores nothing, so the snapshots stay whole" do
