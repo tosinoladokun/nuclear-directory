@@ -23,8 +23,8 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
   def crawl = DataQuality::Stages::Crawl.call(plugin:)
   def notice_source = Source.find_by!(url: NOTICE)
 
-  def filing(accession, form: "D", sold: "$10,000,000", amends: "-", combination: "no", clarification: "-")
-    line = "form: #{form} | filed: 2025-01-02 | accession: #{accession} | issuer CIK: 0002028336 | issuer: NEW ERA HELIUM INC. | " \
+  def filing(accession, form: "D", sold: "$10,000,000", amends: "-", combination: "no", clarification: "-", filed: "2025-01-02")
+    line = "form: #{form} | filed: #{filed} | accession: #{accession} | issuer CIK: 0002028336 | issuer: NEW ERA HELIUM INC. | " \
       "industry group: Oil and Gas | securities: equity | first sale: 2024-12-06 | amount offered: $20,000,000 | amount sold: #{sold} | " \
       "amends: #{amends} | business combination: #{combination} | clarification: #{clarification}"
     Source.create!(url: "https://www.sec.gov/Archives/edgar/data/2028336/#{accession.delete('-')}/primary_doc.xml", source_kind: "sec_form_d",
@@ -94,6 +94,65 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     assert_empty plugin.extract(original, nil)
     assert_empty plugin.extract(first, nil)
     assert_equal [ "0002028336-25-000001", "15000000.0" ], plugin.extract(latest, nil).sole[:payload].values_at("external_id", "amount_usd")
+  end
+
+  test "two D/As amending the same filing: only the newest is proposed" do
+    original = filing("0002028336-25-000001")
+    february = filing("0002028336-25-000002", form: "D/A", sold: "$12,000,000", amends: "0002028336-25-000001", filed: "2025-02-01")
+    march = filing("0002028336-25-000003", form: "D/A", sold: "$15,000,000", amends: "0002028336-25-000001", filed: "2025-03-01")
+
+    assert_empty plugin.extract(original, nil)
+    assert_empty plugin.extract(february, nil)
+    assert_equal [ "0002028336-25-000001", "15000000.0" ], plugin.extract(march, nil).sole[:payload].values_at("external_id", "amount_usd")
+  end
+
+  test "a filing that failed is recorded, and isn't asked for again the same day" do
+    stub_request(:get, NOTICE).to_return(status: 500, body: "oops")
+
+    assert_equal 1, crawl.stats["filings error"]
+    assert_equal 1, crawl.stats["filings skipped_recent"]
+    assert_requested :get, NOTICE, times: 1
+    assert_match "500", notice_source.status_reason
+    assert_empty plugin.extract(notice_source, nil)
+  end
+
+  test "older filing lists are read too, so a round's first filing there is found" do
+    list = JSON.parse(file_fixture("sec_form_d/newera_submissions.json").read)
+    list["filings"]["recent"] = { "form" => [ "D/A" ], "accessionNumber" => [ "0002028336-25-000009" ], "filingDate" => [ "2025-06-01" ], "primaryDocument" => [ "primary_doc.xml" ] }
+    list["filings"]["files"] = [ { "name" => "CIK0002028336-submissions-001.json" } ]
+    stub_request(:get, LIST).to_return(body: list.to_json)
+    older = stub_request(:get, "https://data.sec.gov/submissions/CIK0002028336-submissions-001.json").to_return(body: {
+      form: [ "D" ], accessionNumber: [ "0002028336-24-000006" ], filingDate: [ "2024-12-19" ], primaryDocument: [ "primary_doc.xml" ] }.to_json)
+    amendment = file_fixture("sec_form_d/newera_d.xml").read.sub("<isAmendment>false</isAmendment>",
+      "<isAmendment>true</isAmendment><previousAccessionNumber>0002028336-24-000006</previousAccessionNumber>").sub("37000000", "40000000")
+    stub_request(:get, "https://www.sec.gov/Archives/edgar/data/2028336/000202833625000009/primary_doc.xml").to_return(body: amendment)
+
+    assert_equal 2, crawl.stats["filings new"]
+    assert_requested older, times: 1
+    amended = Source.find_by!(url: "https://www.sec.gov/Archives/edgar/data/2028336/000202833625000009/primary_doc.xml")
+    assert_equal [ "0002028336-24-000006", "40000000.0" ], plugin.extract(amended, nil).sole[:payload].values_at("external_id", "amount_usd")
+    assert_empty plugin.extract(notice_source, nil), "the original is superseded"
+  end
+
+  test "a later filing withdraws the round's earlier claim still waiting, on a later run" do
+    DataQuality::Pipeline.run("sec_form_d", plugin:, only: %w[crawl extract match])
+    earlier = Candidate.sole
+    assert earlier.status_matched?
+
+    list = JSON.parse(file_fixture("sec_form_d/newera_submissions.json").read)
+    %w[form accessionNumber filingDate primaryDocument].zip([ "D/A", "0002028336-25-000009", "2025-06-01", "primary_doc.xml" ]).each { |key, value| list["filings"]["recent"][key].unshift(value) }
+    stub_request(:get, LIST).to_return(body: list.to_json)
+    amendment = file_fixture("sec_form_d/newera_d.xml").read.sub("<isAmendment>false</isAmendment>",
+      "<isAmendment>true</isAmendment><previousAccessionNumber>0002028336-24-000006</previousAccessionNumber>").sub("37000000", "40000000")
+    stub_request(:get, "https://www.sec.gov/Archives/edgar/data/2028336/000202833625000009/primary_doc.xml").to_return(body: amendment)
+    Source.update_all(fetched_at: 2.days.ago)
+
+    DataQuality::Pipeline.run("sec_form_d", plugin:, only: %w[crawl extract match])
+
+    assert earlier.reload.status_rejected?
+    assert_match "Superseded", earlier.notes
+    later = Candidate.where.not(id: earlier.id).sole
+    assert_equal [ earlier.subject_id, "40000000.0" ], [ later.subject_id, later.payload["amount_usd"] ]
   end
 
   test "a D/A whose original isn't stored is the round of the filing it names" do
