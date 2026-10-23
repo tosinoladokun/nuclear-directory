@@ -8,7 +8,7 @@ class Admin::NewRecordsTest < ActionDispatch::IntegrationTest
 
   setup do
     sign_in_as users(:admin)
-    # As seeded; the site calls it "Reactor developer" (role_label, VOICE.md).
+    # As seeded; the site calls it "Reactor designer" (role_label, VOICE.md).
     Role.create!(key: "reactor_vendor", name: "Reactor vendor")
   end
 
@@ -22,7 +22,7 @@ class Admin::NewRecordsTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "#preview-heading", "What will be created"
-    assert_select ".nd-panel", /Company: Imaginary Fission Co.*What it does: Reactor developer.*Starts unpublished.*example.com\/imaginary/m
+    assert_select ".nd-panel", /Company: Imaginary Fission Co.*What it does: Reactor designer.*Starts unpublished.*example.com\/imaginary/m
     assert_select "form[action=?] button", admin_new_records_path, text: "Create record"
     assert_nil Organization.find_by(name: "Imaginary Fission Co")
     assert_nil Source.find_by(url: "https://example.com/imaginary"), "nothing kept from a preview"

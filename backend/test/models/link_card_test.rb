@@ -103,7 +103,7 @@ class LinkCardTest < ActiveSupport::TestCase
 
     card = LinkCard.for_company(profile)
 
-    assert_equal [ "Reactor developer · Alameda, CA", "Operates 1 plant · Owns stakes in 2 plants" ], [ card.label, card.footer_right ]
+    assert_equal [ "Reactor designer · Alameda, CA", "Operates 1 plant · Owns stakes in 2 plants" ], [ card.label, card.footer_right ]
     assert_equal [ LinkCard::CATEGORY_COLORS["reactor-developers"] ], card.squares
 
     profile.category = nil
@@ -124,7 +124,7 @@ class LinkCardTest < ActiveSupport::TestCase
   end
 
   test "a company's HQ shows only when its page shows it (a source backs it)" do
-    assert_equal "Reactor developer", LinkCard.for_company(kairos(hq_city: nil, hq_state: nil)).label
+    assert_equal "Reactor designer", LinkCard.for_company(kairos(hq_city: nil, hq_state: nil)).label
   end
 
   test "a company's plant counts are in the present tense: only links in effect today" do

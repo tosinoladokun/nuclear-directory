@@ -11,7 +11,7 @@ class DirectoryController < ApplicationController
       return redirect_to companies_url(params.permit(:q, :technology, :state, :sort).merge(tag:)), status: :moved_permanently
     end
 
-    @listing = DirectoryListing.new(**params.permit(:category, :tag, :q, :technology, :state, :sort).to_h.symbolize_keys)
+    @listing = DirectoryListing.new(**params.permit(:category, :tag, :q, :technology, :state, :sort, :role).to_h.symbolize_keys)
     # The filter sheet's "Show N results" (#90) asks for the count only; it isn't a search.
     return render(json: { count: @listing.company_scope.count + @listing.plant_scope.count }) if request.format.json?
 
@@ -23,6 +23,7 @@ class DirectoryController < ApplicationController
     @companies = @listing.companies.limit(@shown).to_a
     @plants = @listing.plants.limit(@shown).to_a
     @counts = DirectoryListing.category_counts
+    @roles_by = @listing.roles_by(@companies)
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
