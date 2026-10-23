@@ -136,7 +136,16 @@ class Today
         end
       else outcomes[key] = "the API answered #{value}" if key == "api"
       end
-    end
+    end.merge(failed_pages(stats))
+  end
+
+  # Pages a plug-in names by id as failed (#429, NRC decommissioning), even
+  # on a rerun that skipped them; a run that lists none clears them.
+  def self.failed_pages(stats)
+    return {} unless stats.key?("site_pages")
+
+    ids = Array(stats["failed_pages"])
+    { "failed_pages" => (ids.any? ? "#{ids.size} #{ids.size == 1 ? 'page' : 'pages'} didn't answer" : nil) }
   end
 
   def crawl_problems = crawl_rows.count(&:failed)

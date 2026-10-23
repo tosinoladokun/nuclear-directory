@@ -188,6 +188,18 @@ class TodayTest < ActiveSupport::TestCase
     assert_nil Today.new(on: Date.new(2026, 10, 20), now: NOW).crawl_rows.sole.problem, "a run that read every page clears it"
   end
 
+  test "a page named as failed by id stays a problem on a rerun that skipped it, until a run names none (#429)" do
+    run = ->(hour, stats) do
+      CrawlRun.create!(stage: "crawl", source_kind: "nrc_decommissioning", status: "succeeded", started_at: Time.utc(2026, 10, 20, hour),
+        stats: { "list" => "skipped_recent" }.merge(stats))
+    end
+    run.(7, { "site_pages" => { "changed" => 20 }, "failed_pages" => [ 12 ] })
+    assert_equal "1 page didn't answer", today.crawl_rows.sole.problem
+
+    run.(9, { "site_pages" => { "changed" => 20 } })
+    assert_nil Today.new(on: Date.new(2026, 10, 20), now: NOW).crawl_rows.sole.problem
+  end
+
   test "failed reads counted inside a stat count; zero failures don't" do
     run = ->(kind, site_pages) do
       CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
