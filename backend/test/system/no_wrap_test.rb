@@ -23,11 +23,13 @@ class NoWrapTest < ApplicationSystemTestCase
     cite!(plant("Calvert Cliffs Unit 2", parent: @plant, status: "operating", reactor_type: "PWR", capacity_mw: 862))
     [ "Constellation Energy Generation", "Oglethorpe Power Corporation", "Southern Nuclear Operating Co., Inc.", "Municipal Electric Authority of Georgia" ]
       .each { |name| cite!(link(cite!(company(name, roles: [ utility ])), "owns", @plant)) }
+    cite!(company("Dual Role Reactor Designer and Project Developer Holdings International", roles: [ role("reactor_vendor"), role("project_developer") ],
+      description: "Company that designs a small modular reactor and develops the plants that will use it, in several states."))
     cite!(company("Metropolis Works Uranium Conversion Facility Operator LLC", roles: [ role("fuel") ],
       description: "Company that supplies uranium hexafluoride conversion services to nuclear power plants worldwide."))
   end
 
-  PAGES = ->(test) { [ "/", "/companies", "/companies?category=services", "/companies?category=plants",
+  PAGES = ->(test) { [ "/", "/companies", "/companies?category=reactor-developers", "/companies?category=reactor-developers&role=project_developer", "/companies?category=services", "/companies?category=plants",
     "/companies/#{test.instance_variable_get(:@allied).slug}", "/plants/#{test.instance_variable_get(:@plant).slug}" ] }
 
   test "a long value with two-digit source numbers shrinks and never pushes past its column" do
@@ -90,6 +92,82 @@ class NoWrapTest < ApplicationSystemTestCase
       assert_equal [ "Services and engineering" ], page.evaluate_script("[...document.querySelectorAll('.nd-bucketchip__full')].filter((el) => el.offsetParent).map((el) => el.textContent)"),
         "the full name fits at #{width}"
     end
+  end
+
+  test "the hung Type pill stays inside the panel, and its icon sits on the label's edge, at 390 and 1440" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      edges = page.evaluate_script(<<~JS)
+        (() => {
+          const panel = document.querySelector(".nd-overview").getBoundingClientRect(), chip = document.querySelector(".nd-overview .nd-bucketchip")
+          const box = chip.getBoundingClientRect(), label = chip.closest("dd").previousElementSibling.getBoundingClientRect()
+          return [box.left >= panel.left + 1, box.right <= panel.right - 1, Math.abs(box.left + parseFloat(getComputedStyle(chip).paddingLeft) - label.left) <= 1]
+        })()
+      JS
+      assert_equal [ true, true, true ], edges, "at #{width}: inside the panel, icon on the label's edge"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "two or more other names go under their label at 1440 and 390, each on one line with its full text in title" do
+    [ "Allied Power", "Allied Power Services, a Bernhard Capital Partners company", "APS Holdings" ].each { |name| @allied.aliases.create!(alias: name) }
+    [ [ 1440, 900 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => el.textContent.trim() === "Also known as"), dd = dt.nextElementSibling
+          const names = [...dd.querySelectorAll(".nd-overview__name")]
+          return [dt.classList.contains("nd-overview__stack"), names.length, names.every((n) => n.title === n.textContent && "truncate" in n.dataset), dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ true, 3, true, true ], row, "at #{width}: stacked under the label, three names, each with its full text in title"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "a company with many roles lists them under the label, none overflowing, at 360 and 390" do
+    ge = cite!(company("GE Vernova Hitachi Nuclear Energy", roles: %w[reactor_vendor fuel components reactor_services waste_decommissioning].map { |key| Role.find_by(key:) || role(key) }))
+    [ [ 360, 800 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{ge.slug}"
+      row = page.evaluate_script(<<~JS)
+        (() => {
+          const dt = [...document.querySelectorAll(".nd-overview dt")].find((el) => /^Roles?$/.test(el.textContent.trim())), dd = dt.nextElementSibling
+          return [dt.textContent.trim(), dt.classList.contains("nd-overview__stack"), dd.querySelectorAll(".nd-overview__name").length > 1, dd.scrollWidth <= dd.clientWidth]
+        })()
+      JS
+      assert_equal [ "Roles", true, true, true ], row, "at #{width}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
+  test "the key-facts edge check sees an inset value, stacked or beside its label" do
+    [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit "/companies/#{@allied.slug}"
+      assert_empty page.evaluate_script(AUDIT), "at #{width}: clean before the inset"
+      page.execute_script("document.querySelector('.nd-overview .nd-overview__val:not(:has(ul))').style.paddingLeft = '6px'")
+      found = page.evaluate_script(AUDIT)
+      assert found.any? { |problem| problem.include?("edge") }, "at #{width}: a value inset by padding is reported, got #{found.inspect}"
+    end
+  end
+
+  test "on a touch phone the footer credit keeps the space before its link and the link is 44px tall" do
+    resize_viewport(390, 844)
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" }, { name: "pointer", value: "coarse" } ])
+    visit root_path
+    credit = page.evaluate_script("(() => { const p = document.querySelector('.nd-footer__credit'); return [p.innerText, Math.round(p.querySelector('a').getBoundingClientRect().height), matchMedia('(pointer: coarse)').matches] })()")
+    assert_equal [ "Hosting supported by Render.", true ], [ credit[0], credit[2] ]
+    assert_operator credit[1], :>=, 43, "the Render link is a 44px tap target"
+    apart = page.evaluate_script("(() => { const credit = document.querySelector('.nd-footer__credit a').getBoundingClientRect(); return [...document.querySelectorAll('.nd-footer__links a')].every((a) => { const r = a.getBoundingClientRect(); return r.bottom <= credit.top + 0.5 || r.top >= credit.bottom - 0.5 || r.right <= credit.left || r.left >= credit.right }) })()")
+    assert apart, "tap areas of the footer links and the credit never overlap"
+    assert_empty page.evaluate_script(AUDIT)
+  ensure
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
   end
 
   test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do

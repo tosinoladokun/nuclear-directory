@@ -72,7 +72,7 @@ if preview
   # hand. No fromDatabase, fromService or fromGroup anywhere: any of them could
   # hand production's connection string or secrets to preview code, under
   # whatever name.
-  allowed = %w[DATABASE_URL NOINDEX DISABLE_DATABASE_ENVIRONMENT_CHECK SECRET_KEY_BASE RAILS_MAX_THREADS WEB_CONCURRENCY PREVIEW_ADMIN_PASSWORD]
+  allowed = %w[DATABASE_URL NOINDEX DISABLE_DATABASE_ENVIRONMENT_CHECK SECRET_KEY_BASE RAILS_MAX_THREADS WEB_CONCURRENCY PREVIEW_ADMIN_PASSWORD APP_HOSTS]
   references = %w[fromDatabase fromService fromGroup]
   entries.each do |var|
     if !var.is_a?(Hash) || var["key"].to_s.empty? || references.any? { |ref| var.key?(ref) }
@@ -94,6 +94,19 @@ if preview
   end
   problems << "the preview must set NOINDEX to \"1\"" unless vars.dig("NOINDEX", "value").to_s == "1"
   problems << "the preview must not have custom domains" if preview["domains"]
+end
+
+# The web service's Host-header allowlist (#147). A deleted line would
+# silently turn the protection off, so insist it names nuclear-directory.org
+# as a plain value.
+web = blueprint["services"].find { |service| service["name"] == "nuclear-directory" }
+if web
+  app_hosts = web.fetch("envVars", []).find { |var| var.is_a?(Hash) && var["key"] == "APP_HOSTS" }
+  value = app_hosts&.dig("value").to_s
+  hosts = value.split(",").map(&:strip).reject(&:empty?)
+  unless app_hosts && app_hosts.keys.sort == %w[key value] && hosts.include?("nuclear-directory.org")
+    problems << "nuclear-directory's APP_HOSTS must be a plain value including nuclear-directory.org (#147)"
+  end
 end
 
 # The preview's admin login must never exist anywhere else.

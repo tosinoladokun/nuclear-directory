@@ -49,7 +49,8 @@ class Admin::CandidatesControllerTest < ActionDispatch::IntegrationTest
     end
     waiting = 1 + DataQuality::Review.pending_count # the fixtures' pending facts are waiting too
     assert_select ".nd-fchip[aria-current=page]", /All\s+#{waiting}/
-    assert_select ".nd-shell__nav a[aria-current=page]", /Checks\s+#{waiting}/
+    # Today's count: the facts waiting, plus step 4's correction requests (none here).
+    assert_select ".nd-shell__nav a[aria-current=page]", /Today\s+#{waiting}/
     assert_select "h2", /Waiting\s+#{waiting}/
   end
 
@@ -255,6 +256,28 @@ class Admin::CandidatesControllerTest < ActionDispatch::IntegrationTest
     unit = Facility.find(c.reload.subject_id)
     assert_equal [ "NJ", "human:tosin" ], [ unit.state, unit.verified_by ]
     assert_equal "NRC lists the nearby city's state", Directory::Lookup.verification_history(type: "Facility", id: unit.id).first.reason
+  end
+
+  test "a company role's role shows read-only, and approving it with no changes works" do
+    vendor = Role.create!(key: "reactor_vendor", name: "Reactor vendor")
+    c = candidate("organization_role", { "organization" => { "name" => "TerraPower" }, "role" => "reactor_vendor" })
+    c.update!(status: "matched", subject: OrganizationRole.create!(organization: organizations(:terrapower), role: vendor))
+    sign_in_as users(:admin)
+
+    get edit_admin_candidate_path(c)
+    assert_select "input[name=?]", "values[role]", count: 0
+    assert_select ".nd-field", /Role\s+Reactor vendor\s+Can.t be edited here/
+
+    # The form as the browser sends it, and as an older page did: with the role, unchanged.
+    patch admin_candidate_path(c), params: { values: { role: "utility" } }
+    assert_response :unprocessable_content
+    assert_select ".nd-alert", /can't edit role here/i
+    assert c.reload.status_matched?, "a changed role is refused, not dropped"
+    assert_select ".nd-field", /Role\s+Reactor vendor\s+Can.t be edited here/, "the page shows the claim's role, not the refused one"
+
+    patch admin_candidate_path(c), params: { values: { role: "reactor_vendor" } }
+    assert c.reload.status_merged?, [ response.status, flash[:alert], css_select(".nd-alert").text.squish ].inspect
+    assert_nil flash[:alert]
   end
 
   test "a failed edit shows the error and keeps the form" do

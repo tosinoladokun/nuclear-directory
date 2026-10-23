@@ -1,0 +1,96 @@
+<% content_for :title, "Add a record" %>
+<%
+  company = @kind == "organization"
+  roles = Role.where(key: Category.buckets.flat_map(&:role_keys)).index_by(&:key)
+  role_groups = Category.buckets.filter_map do |category|
+    options = category.role_keys.filter_map { |key| roles[key] && [ role_label(roles[key]), key ] }
+    [ category.name, options ] if options.any?
+  end
+  role_name = roles[params[:role].to_s]&.then { |role| role_label(role) }
+  previewed = @added&.ok?
+%>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: "Live", parent_path: back_path(admin_live_path), current: "Add a record" %>
+  <h1 class="type-admin-h1 m-0">Add a record</h1>
+  <nav class="nd-fchips type-ui" aria-label="Kind of record">
+    <% [ [ "organization", "Company" ], [ "facility", "Plant or site" ] ].each do |kind, label| %>
+      <%= link_to label, admin_new_record_path(kind:, back: params[:back].presence), class: "nd-fchip nd-fchip--tab", aria: { current: ("page" if kind == @kind) } %>
+    <% end %>
+  </nav>
+
+  <% if @added && !@added.ok? %>
+    <div class="nd-alert" role="alert">
+      <p class="type-body-strong">Not created yet. Fix this first:</p>
+      <ul class="type-body">
+        <% @added.errors.each do |error| %><li><%= error %></li><% end %>
+        <% if (existing = @added.existing) %>
+          <%# A reactor unit has no Record page of its own: its fact page. %>
+          <% path = existing.type == "Facility" && existing.parent_id ? admin_fact_path(type: existing.type, id: existing.id) : admin_record_path(type: existing.type, id: existing.id) %>
+          <li><%= link_to "Open #{existing.name}", path, class: "nd-link" %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <%# Preview lands on "What will be created", so it's in view on a phone. %>
+  <%= form_with url: admin_new_record_path(anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>
+    <%= hidden_field_tag :preview, 1, id: nil %>
+    <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
+    <%= hidden_field_tag :kind, @kind, id: nil %>
+    <div class="nd-field">
+      <label for="name" class="type-body-strong">Name</label>
+      <%= text_field_tag :name, params[:name], class: "nd-input type-input", required: true %>
+    </div>
+    <% if company %>
+      <div class="nd-field">
+        <label for="website" class="type-body-strong">Website <span class="type-small text-ink-muted">(optional)</span></label>
+        <%= url_field_tag :website, params[:website], class: "nd-input type-input", placeholder: "https://" %>
+      </div>
+      <div class="nd-field">
+        <label for="role" class="type-body-strong">What it does</label>
+        <%= select_tag :role, grouped_options_for_select(role_groups, params[:role]), include_blank: "Choose what it does", class: "nd-input type-input", required: true %>
+      </div>
+    <% else %>
+      <div class="nd-field">
+        <label for="facility_type" class="type-body-strong">Plant type <span class="type-small text-ink-muted">(optional)</span></label>
+        <%= select_tag :facility_type, options_for_select(Facility.facility_types.keys.map { |type| [ facility_type_label(type), type ] }, params[:facility_type]),
+          include_blank: "Not stated", class: "nd-input type-input" %>
+      </div>
+    <% end %>
+    <div class="nd-field">
+      <label for="url" class="type-body-strong">Link <span class="type-small text-ink-muted">(a public page that names it)</span></label>
+      <%= url_field_tag :url, params[:url], class: "nd-input type-input", placeholder: "https://", required: true %>
+    </div>
+    <div class="nd-field">
+      <label for="quote" class="type-body-strong">Quote <span class="type-small text-ink-muted">(the sentence from the source that names it<%= " and what it does" if company %>)</span></label>
+      <%= text_field_tag :quote, params[:quote], class: "nd-input type-input", required: true %>
+    </div>
+    <div class="nd-row">
+      <button type="submit" class="nd-btn nd-btn--outline type-ui">Preview</button>
+      <%= link_to "Cancel", back_path(admin_live_path), class: "nd-btn nd-btn--outline type-ui" %>
+    </div>
+  <% end %>
+
+  <% if previewed %>
+    <section class="nd-panel nd-stack" aria-labelledby="preview-heading">
+      <h2 id="preview-heading" class="type-admin-h2 m-0">What will be created</h2>
+      <ul class="type-body">
+        <li><%= company ? "Company" : "Plant or site" %>: <strong><%= params[:name].to_s.squish %></strong></li>
+        <% if company %>
+          <li>What it does: <%= role_name %></li>
+          <% if params[:website].present? %><li>Website: <span class="type-data"><%= params[:website].strip %></span></li><% end %>
+        <% elsif params[:facility_type].present? %>
+          <li>Plant type: <%= facility_type_label(params[:facility_type]) %></li>
+        <% end %>
+        <li>Starts unpublished: you publish it from its page</li>
+        <li>Source: <span class="type-data"><%= params[:url].strip %></span><br><span class="text-ink-muted">“<%= params[:quote].to_s.squish %>”</span></li>
+      </ul>
+      <%= form_with url: admin_new_records_path do %>
+        <% Admin::NewRecordsController::FIELDS.each do |field| %><%= hidden_field_tag field, (field == :kind ? @kind : params[field]), id: nil %><% end %>
+        <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
+        <button type="submit" class="nd-btn nd-btn--primary type-ui">Create record</button>
+      <% end %>
+    </section>
+  <% end %>
+</div>

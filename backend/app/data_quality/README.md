@@ -198,6 +198,32 @@ The recommendation lives on the candidate: `ai_recommendation`, `ai_reason`, `ai
 `ai_checked_at` and `verify_run`. `Candidate.recommended` lists those waiting for approval, indexed by
 recommendation and run.
 
+### Safe classes (`safe_classes.rb`, #306 option A)
+
+"Accept recommendations" on Checks also takes the verifier's own recommendations in a **safe class**:
+kinds of update that can't change anything a person decided. The classes and their limits are in
+`config/safe_verifier_classes.yml`, which Data Quality owns. Each class is off until a PR there turns it
+on and Tosin merges it; while off, the preview shows its items as "Would be safe". A claim is safe only
+if every gate holds:
+- **G1** the verifier recommends it now, with at least the class's confidence (S1: 0.9)
+- **G2** it updates an existing published record (S1: a DOE `funds` link a person verified, both
+  companies public); it never creates one
+- **G3** it changes only the class's fields (S1: description, started on), each last written by the
+  pipeline from the same kind of source (`Differences.pipeline_written?`)
+- **G4** nothing else is open on its record: no claim waiting for review, no unresolved correction report
+- **G5** not from its source's first batch; the latest crawl and match attempts (whatever their status)
+  succeeded, and the match checked the claim's own source for dropped facts (`dropped_checked_source_ids`
+  in the run's stats; a run skips sources with a claim still to place); the last fetch returned 200, both the claim's page
+  and, for S1, the USAspending API index
+- **G6** its run proposes no more safe changes than the cap (20, and 25% of the source's public facts),
+  counting what the run already had approved; and the source's latest verify run has succeeded (a failed
+  or cut-off run keeps a partial set)
+
+S1 also leaves out an award total that may drop by more than 20%: the summaries round ("$1.3 million"),
+so the drop is judged at its largest. Accept asks every gate but the cap again
+under the record's lock, and records "Accepted the verifier's recommendation (safe class S1: …)" as
+Tosin's decision. One fingerprint covers Data Quality's list and the safe items.
+
 ## Review: how a human decides (`review.rb`, #85)
 
 The admin (#86) calls only `DataQuality::Review`; it never touches candidates, FactWriter or directory
@@ -274,9 +300,12 @@ then NRC's page for each site it links to (about 20), each at most once a day. A
 It reads EIA's EIA-860 page, fetches the newest final yearly zip (about 24 MB, so it passes a 60 MB limit
 to the shared Fetcher), and reads the Plant sheet of `2___Plant_Y<year>.xlsx` inside it (`PlantFile`).
 
-- **Which rows:** only nuclear plants. These are plants in the newest 860M file, sites the directory has
-  by EIA plant ID, and power plants it has without one, found by name and state. Each is stored as CSV,
-  and the row is the quote.
+- **Which rows:** every plant the same zip's generator workbook (`3_1_Generator_Y<year>.xlsx`, Operable
+  and Proposed sheets) lists with a nuclear generator. Neither the 860M file nor the directory decides
+  this, so what's stored depends on the zip alone, and the cached rows stay right when EIA answers "not
+  modified". Each is stored as CSV, and the row is the quote.
+- **Finding the site:** match finds it by EIA plant ID, else a power plant with no ID by name and state,
+  looked up on every run, so a plant added to the directory later is still found.
 - **What it proposes:** each plant's `city`, as enrichment (`identify` with the plant ID and no unit). It
   never creates or renames a site. A blank city is filled. A city a person set isn't overwritten: a
   different one comes back as a difference. A row with no city proposes nothing.
@@ -332,6 +361,17 @@ Extract writes `candidates` (`kind`, `payload`, `quote`, `source_id`). Match
 | **Not found** | nothing exact and nothing similar | `matched`, subject = a new **pending** record with the quote as evidence. A per-plant or regional company name with no company for its brand yet is proposed under its brand ("NextEra Energy Point Beach, LLC" → a new "NextEra Energy"), so later names of the same brand find it. |
 | **New unit of a known site** | an NRC unit (has a docket) whose only similar record is a site (no docket, no parent) that covers it | `matched`, subject = a new **pending** unit with `parent_id` = the site |
 | **Ambiguous** | identifiers point at different records, or a similar record exists | `needs_review`, with the reason in `notes`. Never merged automatically. |
+
+A link claim that went to review because a company or plant had no exact match ("to_organization: no
+exact match for …", "… isn't in the directory yet") is **matched again** on a later run once every end
+has an exact one: a name, an alias or an id, never a domain, brand or similar name. It's then an ordinary
+claim, verified and approved by a person; nothing is approved on its own. Dropped and extracted review
+items, and claims with an end still in question, stay as they are.
+
+A link claim that would change a link which already cites **another page of the same kind of source**
+goes to review instead of attaching ("… already cites …, another page of this source"), because
+approving it would replace what that page says: two USAspending recipients that are one company each
+describe only their own awards (#390). A page that only restates the link isn't held.
 
 "Similar" means the same leading distinctive word, ignoring unit numbers and
 generic words ("Vogtle 3" vs "Plant Vogtle Units 3 & 4", "Southern Nuclear

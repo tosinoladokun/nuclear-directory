@@ -234,7 +234,7 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     assert_match "Augusta", candidate.notes
     assert_match "Waynesboro", candidate.notes
     assert_equal({ "city" => [ "Augusta", "Waynesboro" ] },
-      DataQuality::Differences.with_human_verified(candidate, DataQuality::DirectoryClient.new.attached_record(candidate)))
+      (directory = DataQuality::DirectoryClient.new) && DataQuality::Differences.with_human_verified(candidate, directory.attached_record(candidate), directory:))
     assert_equal "Augusta", @vogtle.reload.city
   end
 

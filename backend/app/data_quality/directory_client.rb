@@ -12,7 +12,7 @@ class DataQuality::DirectoryClient
   Ref = Data.define(:type, :id)
   # What a lookup found: enough to match on and to explain a match.
   # values: a link's stored values ({ "ownership_pct" => 45.7, ... }), else nil.
-  Record = Data.define(:type, :id, :name, :domain, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
+  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
     :country_code, :verification_status, :verified_by, :verified_at, :values) do
     def ref = Ref.new(type:, id:)
     def rejected? = verification_status == "rejected"
@@ -48,6 +48,9 @@ class DataQuality::DirectoryClient
     @lookup = lookup
     @fact_writer = fact_writer
   end
+
+  # A CIK as the directory stores it, so two spellings compare equal.
+  def normalize_cik(value) = lookup.cik(value)
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
   def organization(name: nil, domain: nil, sec_cik: nil)
@@ -331,6 +334,10 @@ class DataQuality::DirectoryClient
   # A fact's evidence (Directory::EvidenceRef).
   def evidence(type:, id:) = lookup.evidence(type:, id:)
 
+  # Whether a correction report on the fact's public page (a link's, either
+  # end's) is still unresolved.
+  def open_corrections?(type:, id:) = lookup.open_corrections?(type:, id:)
+
   MERGES = { "Organization" => :merge_organization, "Facility" => :merge_facility }.freeze
 
   # A person's merge of one company or plant site into another (#142), as the
@@ -377,6 +384,23 @@ class DataQuality::DirectoryClient
   def decide_fact(kind, id:, status:, by:, reason: nil, attributes: {}, context: nil)
     result = fact_writer.write(kind, attributes.to_h.symbolize_keys.merge(id:),
       verification: { status:, by:, reason:, context: }.compact)
+    write_result(result)
+  end
+
+  # Add a fact and Publish (#202): see Directory::Lookup.
+  def company_fact_key?(kind, key) = lookup.company_fact_key?(kind, key)
+  def company_fact_status(organization_id:, kind:, key:) = lookup.company_fact_status(organization_id:, kind:, key:)
+  def publish_counts(type:, id:, added_reason:) = lookup.publish_counts(type:, id:, added_reason:)
+
+  # A website's domain, as a company's is stored and matched.
+  def domain_from(url) = lookup.domain_from(url)
+
+  # A record or fact a person adds by hand (#202): written pending, with
+  # its source's quote as evidence, recorded as `by`. Publishing it is a
+  # separate decision. Returns a WriteResult.
+  def add_fact(kind, attributes, source_id:, quote:, by:, reason:)
+    result = fact_writer.write(kind, attributes.to_h.symbolize_keys,
+      evidence: [ { source_id:, quote:, found_by: "human" } ], verification: { status: "pending", by:, reason: })
     write_result(result)
   end
 
@@ -462,8 +486,8 @@ class DataQuality::DirectoryClient
     def plant_names = @plant_names ||= lookup.plant_names(owners: owner_hints)
 
     def record(type, ref, values: nil)
-      Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), nrc_docket: ref.try(:nrc_docket),
-        eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
+      Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), sec_cik: ref.try(:sec_cik),
+        nrc_docket: ref.try(:nrc_docket), eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
         facility_type: ref.try(:facility_type), status: ref.try(:status), city: ref.try(:city), state: ref.try(:state),
         country_code: ref.try(:country_code), verification_status: ref.verification_status,
         verified_by: ref.try(:verified_by), verified_at: ref.try(:verified_at), values:) if ref
