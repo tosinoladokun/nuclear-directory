@@ -155,6 +155,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # claim is attached to the first, so it's decided with that record. One
     # naming nothing in the directory waits for a person.
     def match_news(candidate, payload)
+      # A trade-press lead (#127) waits for Data Quality, whatever it names.
+      return review(candidate, DataQuality::Review::LEAD) if DataQuality::Review.lead?(candidate)
+
       found = Array(payload["about"]).filter_map do |about|
         type = about["type"] == "facility" ? :facility : :organization
         hit = resolve(type, about.except("type"), closed: :found)

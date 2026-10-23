@@ -95,6 +95,11 @@ module DataQuality::Review
 
   # The hold Data Quality's review lifts (#306): a source's first batch.
   FIRST_BATCH = "it's from this source's first batch".freeze
+  # A trade-press item (#127): a pointer for Data Quality to the primary
+  # source, never a claim to approve as it is. Nothing lifts it.
+  LEAD = "it's a lead: Data Quality finds the primary source".freeze
+
+  def self.lead?(candidate) = candidate.payload.is_a?(Hash) && candidate.payload["lead"] == true
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
@@ -165,6 +170,7 @@ module DataQuality::Review
     #   person decided by its name and change it
     # nil when it's safe. decided: whether a person decided its record, when already known.
     def held_reason(candidate, directory: DataQuality::DirectoryClient.new, record: :lookup, firsts: first_batches, decided: nil)
+      return LEAD if lead?(candidate)
       return "it isn't attached to a record yet" unless candidate.subject_id
 
       if decided.nil?
@@ -246,8 +252,9 @@ module DataQuality::Review
 
     # How many candidates wait in each Checks group, plus "all":
     # { "all" => 9, "changed" => 2, … }. Pending facts aren't included.
+    # Leads (#127) are Data Quality's work, not the admin's: listed, never counted.
     def check_counts(source_kind: nil)
-      CATEGORIES.index_with { |category| category_scope(category, source_kind:).count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
+      CATEGORIES.index_with { |category| category_scope(category, source_kind:).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
     end
 
     # Kinds of question in a queue, most common first, quoted names blanked
@@ -688,6 +695,7 @@ module DataQuality::Review
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
+          next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
           if only_recommended && !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end
