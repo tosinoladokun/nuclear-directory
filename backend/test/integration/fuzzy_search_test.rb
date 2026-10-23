@@ -70,10 +70,12 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
   test "the instant results do the same, with the note, and only on a fallback" do
     get search_path(q: "browns fery")
     assert_select ".nd-instant__note", "No exact match for “browns fery”. Showing close names."
+    assert_select "[data-instant-search-count][data-instant-search-fuzzy=true]", 1
     assert_select ".nd-instant__row", /Browns Ferry Nuclear Plant/
 
     get search_path(q: "Browns")
     assert_select ".nd-instant__note", 0
+    assert_select "[data-instant-search-fuzzy]", 0
     assert_select ".nd-instant__row", /Browns Ferry Nuclear Plant/
   end
 
