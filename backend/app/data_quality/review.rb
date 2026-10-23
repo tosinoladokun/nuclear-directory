@@ -931,18 +931,21 @@ module DataQuality::Review
       def write_added(fact_kind, attributes, url:, quote:, by:, dry_run:, duplicate:, directory:, parents: [])
         added = nil
         ApplicationRecord.transaction do
-          # In one order (table, then id), as FactWriter's link ends are, so two
-          # additions between the same records can't deadlock.
+          # The source first, key-share locked (as its evidence's foreign key
+          # will), as a decision locks its source before its records; then the
+          # records in one order (table, then id), as FactWriter's link ends
+          # are. So this can't deadlock with an approval or another addition.
+          source = DataQuality::Sources.find_or_create(url: url.to_s.strip)
+          unless source.ok?
+            added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+            raise ActiveRecord::Rollback
+          end
+          ::Source.lock("FOR KEY SHARE").find(source.ref.id)
+
           parents = parents.uniq.sort_by { |type, id| [ type, id ] }
           parents.each { |type, id| directory.lock_fact(type:, id:) }
           if parents.any? { |type, id| !(fact = directory.fact(type:, id:)) || !open_record?(fact) }
             added = Added.new(ref: nil, errors: [ "A record it's on was taken off or merged since, so nothing was added" ], existing: nil)
-            raise ActiveRecord::Rollback
-          end
-
-          source = DataQuality::Sources.find_or_create(url: url.to_s.strip)
-          unless source.ok?
-            added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
             raise ActiveRecord::Rollback
           end
 

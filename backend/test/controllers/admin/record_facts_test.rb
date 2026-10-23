@@ -189,4 +189,13 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     unit = Facility.find_by!(nrc_docket: "05000777")
     assert_equal [ site.id, "Lonely Point" ], [ unit.parent_id, unit.name ]
   end
+
+  test "a unit given by another name it goes by, under its site, is the one already listed" do
+    site = Facility.create!(name: "Alias Point", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Alias Point 1", parent: site)
+    unit.aliases.create!(alias: "AP-1")
+    get admin_record_new_fact_path(type: "Facility", id: site.id, kind: "unit", preview: 1, name: "AP-1", **SRC)
+    assert_select ".nd-alert", /That unit is already listed/
+    assert_select ".nd-alert a[href=?]", admin_fact_path(type: "Facility", id: unit.id), text: "Open it"
+  end
 end

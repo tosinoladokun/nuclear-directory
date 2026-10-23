@@ -1012,8 +1012,11 @@ module Directory
       def existing_for_create(kind, model, attributes)
         attrs = attributes.symbolize_keys
         if kind == :facility && attrs[:parent_id].present?
+          units = Facility.where(parent_id: attrs[:parent_id])
           (Facility.find_by(nrc_docket: attrs[:nrc_docket]) if attrs[:nrc_docket].present?) ||
-            Facility.where(parent_id: attrs[:parent_id]).where("LOWER(name) = LOWER(?)", attrs[:name].to_s).first
+            units.where("LOWER(name) = LOWER(?)", attrs[:name].to_s).first ||
+            # Another name one of the site's units goes by (never a same-name site).
+            units.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(attrs[:name])).select(:facility_id)).first
         else
           find(kind, model, attributes.compact)
         end
