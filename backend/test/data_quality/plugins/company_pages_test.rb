@@ -163,4 +163,29 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [ "Acme Fission owns 40% of Latest Point.", "We supply fuel to Bright Power." ], claims.map { |c| c[:quote] }
   end
+
+  test "a round the company says it raised is an announced deal term on the company, every value in its quote; a re-read lands on the same row" do
+    page = <<~HTML
+      <html><body><p>On December 6, 2024, Acme Fission closed a $37 million Series B.</p><p>We plan to raise a $500 million Series C.</p>
+      <p>Bright Power raised $9 million.</p><p>We raised $12.5M in seed funding.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    round = ->(amount, name, date, quote) { { "amount" => amount, "round" => name, "date" => date, "quote" => quote } }
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [], "rounds" => [
+        round.("$37 million", "Series B", "December 6, 2024", "On December 6, 2024, Acme Fission closed a $37 million Series B."),
+        round.("$500 million", "Series C", nil, "We plan to raise a $500 million Series C."),  # a plan
+        round.("$9 million", nil, nil, "Bright Power raised $9 million."),                     # another company's
+        round.("$40 million", "Series B", nil, "On December 6, 2024, Acme Fission closed a $37 million Series B."), # not the quote's amount
+        round.("$12.5M", "seed", nil, "We raised $12.5M in seed funding.") ] }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal [
+      { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
+        "external_id" => "page:#{HOME}#series b", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
+      { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
+        "external_id" => "page:#{HOME}#seed", "amount_usd" => "12500000.0", "round" => "seed" } ], claims.map { |c| c[:payload] }
+    assert(claims.all? { |c| c[:kind] == "deal_term" })
+  end
 end

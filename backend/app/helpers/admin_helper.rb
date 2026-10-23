@@ -284,6 +284,10 @@ module AdminHelper
       field ? "#{field_label(field).upcase_first}: #{field_value(value)}" : item.claim
     when "organization_role" then "What it does: #{role_label(payload['role'])}"
     when "organization_technology" then "Technology: #{Technology.find_by(key: payload['technology'])&.name || payload['technology']}"
+    when "deal_term"
+      parts = [ payload["round"], (DataQuality::Claim.dollars(payload["amount_usd"]) if payload["amount_usd"]),
+        (Date.iso8601(payload["starts_on"]).strftime("%-d %b %Y") if payload["starts_on"]) ].compact
+      "Funding round: #{parts.join(', ')}"
     else item.claim
     end
   end

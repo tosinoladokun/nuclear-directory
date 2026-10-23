@@ -27,13 +27,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-2".freeze
+  PROMPT_VERSION = "company_pages-3".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
   PLANT_VERBS = %w[owns operates vendor_for].freeze
   # A link is what is so now, never a plan.
   PLANNED = /\b(plans? to|planning to|aims? to|will|intends? to|in talks|exploring|considering)\b/i
+  # A round the company says it has, not one it seeks.
+  RAISED = /\b(raised|raises|closed|closes|secured|secures|completed)\b/i
   # An owner's quote says it owns.
   OWNERSHIP = /\b(own|owns|owned|owner|ownership|stake|share)\b|\d+(\.\d+)?\s?%/i
   FIELDS = %w[description hq_city hq_state founded_year legal_name].freeze
@@ -63,6 +65,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       An MOU, framework, letter of intent, option, term sheet or non-binding agreement is never a signed deal: report it only when
       the quote itself says which it is, so that word stays with it.
       owns needs an ownership statement ("owns", "owned by", a stake or share); hosting a site or campus is not owning the plant.
+    - rounds: this company's own funding rounds the page says it raised or closed (not one it plans or seeks). amount: the amount
+      exactly as the quote writes it ("$37 million"), or null; round: its name as written ("Series B", "seed"), or null; date: the
+      date exactly as the quote writes it ("December 6, 2024"), or null. The quote must name this company (or "we") and the round.
+      Never investors' names, valuations or totals across rounds.
     Never report people (founders, executives, staff), investors or customers from logo lists, plant status or capacity, numbers
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
@@ -106,7 +112,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     run&.update!(prompt_version: PROMPT_VERSION)
     found = llm.structured(role: :extract, schema:, schema_name: "company_pages", crawl_run: run, reasoning_effort: "low",
       messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(company.name, text) } ]).data
-    candidates(company.name, found, text)
+    candidates(company.name, found, text, url: source.url)
   end
 
   private
@@ -168,7 +174,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     # Only what's in its quote, with a quote on the page; keys from the lists.
-    def candidates(name, found, text)
+    def candidates(name, found, text, url: nil)
       page = text.downcase.squish
       quoted = ->(value, quote) { quote.present? && page.include?(quote.downcase.squish) && (value.nil? || quote.downcase.include?(value.to_s.downcase)) }
       choices = @directory.company_fact_choices.transform_values { |pairs| pairs.map(&:first) }
@@ -211,6 +217,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
             payload: { "from_organization" => ends.first, "to_organization" => ends.last, "relationship_type" => verb } }
         end
       end
+      Array(found["rounds"]).each do |item|
+        round = funding_round(name, item, quoted, url) and fields << round
+      end
       { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
@@ -219,6 +228,35 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         end
       end
       fields
+    end
+
+    # A round the company states it raised, as a deal term (#401's kind) on
+    # the company itself: "announced", since only one party states it (Data
+    # Quality's two-party rule). Every value is in the quote; the ID keeps a
+    # re-read of the page on the same row.
+    def funding_round(name, item, quoted, url)
+      quote = item["quote"].to_s.strip
+      amount_text, round, date_text = item.values_at("amount", "round", "date").map { |value| value.to_s.strip.presence }
+      return unless quoted.(nil, quote) && (quote.downcase.include?(name.downcase) || quote.match?(/\b(we|our|us)\b/i))
+      return if quote.match?(PLANNED) || !quote.match?(RAISED)
+      return if [ amount_text, round, date_text ].compact.any? { |value| !quote.downcase.include?(value.downcase) }
+
+      amount = dollars(amount_text) if amount_text
+      return if amount_text && !amount
+      return unless amount || round
+
+      starts_on = (Date.parse(date_text) if date_text&.match?(/\b(19|20)\d\d\b/)) rescue nil
+      { kind: "deal_term", quote:, payload: {
+        "organization" => { "name" => name }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
+        "external_id" => "page:#{url}##{(round || amount_text).downcase.squish}", "amount_usd" => amount&.to_s("F"), "round" => round,
+        "starts_on" => starts_on&.iso8601 }.compact }
+    end
+
+    # "$37 million", "$1.2 billion", "$37,000,000" as dollars; nil otherwise.
+    def dollars(text)
+      match = text.match(/\A(?:US)?\$\s?([\d,]+(?:\.\d+)?)\s*(million|billion|m|bn|b)?\z/i) or return
+      number = BigDecimal(match[1].delete(","))
+      number * { "million" => 1e6, "m" => 1e6, "billion" => 1e9, "bn" => 1e9, "b" => 1e9 }.fetch(match[2].to_s.downcase, 1).to_i
     end
 
     def schema
@@ -231,7 +269,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       links = { type: "array", items: { type: "object", additionalProperties: false, required: %w[other other_is verb company_first quote],
         properties: { other: { type: "string" }, other_is: { type: "string", enum: %w[company plant] },
           verb: { type: "string", enum: COMPANY_VERBS + PLANT_VERBS }, company_first: { type: "boolean" }, quote: { type: "string" } } } }
-      { type: "object", additionalProperties: false, required: [ *FIELDS, "roles", "technologies", "listing", "links" ],
-        properties: FIELDS.index_with { quoted }.merge("roles" => keyed, "technologies" => keyed, "listing" => listing, "links" => links) }
+      maybe = { type: %w[string null] }
+      rounds = { type: "array", items: { type: "object", additionalProperties: false, required: %w[amount round date quote],
+        properties: { amount: maybe, round: maybe, date: maybe, quote: { type: "string" } } } }
+      { type: "object", additionalProperties: false, required: [ *FIELDS, "roles", "technologies", "listing", "links", "rounds" ],
+        properties: FIELDS.index_with { quoted }.merge("roles" => keyed, "technologies" => keyed, "listing" => listing, "links" => links,
+          "rounds" => rounds) }
     end
 end

@@ -117,4 +117,14 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_select ".nd-panel", /Its site couldn't be read .* ago: HTTP 403\./
     assert_select "#finding-#{@agreed.id}", 0, "a finding from before this request is left to Checks"
   end
+
+  test "a funding round reads plainly and waits for a person, never in the shortcut" do
+    round = Candidate.create!(source: @agreed.source, crawl_run: @agreed.crawl_run, kind: "deal_term", quote: "Acme Fission closed a $37 million Series B.",
+      payload: { "organization" => { "name" => @company.name }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
+        "external_id" => "page:x#series b", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
+      status: "new", ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    get enrich_path
+    assert_select "#finding-#{round.id} .type-body-strong", "Funding round: Series B, $37,000,000, 6 Dec 2024"
+    assert_select "form[action=?] input[name='ids[]'][value=?]", admin_record_enrich_agreed_path(type: "Organization", id: @company.id), round.id.to_s, 0
+  end
 end

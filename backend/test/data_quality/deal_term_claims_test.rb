@@ -157,4 +157,19 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     assert_not result.ok?
     assert_equal issuer.id, term.reload.link_id
   end
+
+  test "Enrich's round from a company's own page (#479): matched by name, pending and announced; the same page again lands on the same row" do
+    issuer = company(name: "Acme Fission", sec_cik: nil)
+    page = { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
+      "external_id" => "page:https://acmefission.com/news#series b", "amount_usd" => "37000000.0", "round" => "Series B" }
+    first = claim(page)
+    run_stage("match", page)
+    term = DealTerm.find(first.reload.subject_id)
+    assert_equal [ issuer.id, "announced", "Series B", true ], [ term.link_id, term.status, term.round, term.pending? ]
+
+    again = claim(page)
+    run_stage("match", page)
+    assert_equal term.id, again.reload.subject_id
+    assert_equal 1, DealTerm.count
+  end
 end
