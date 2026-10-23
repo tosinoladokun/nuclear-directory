@@ -11,6 +11,16 @@ class OrganizationTest < ActiveSupport::TestCase
     assert_includes org.errors[:slug], "has already been taken"
   end
 
+  # #154: Facility opts into suffixing because an EIA site and an NRC unit
+  # can share a name; organizations shouldn't quietly save as "name-2". The
+  # :westinghouse fixture already holds the slug "westinghouse".
+  test "a duplicate organization name doesn't auto-suffix the slug" do
+    dup = Organization.new(name: "Westinghouse")
+    assert_not dup.valid?
+    assert_equal "westinghouse", dup.slug
+    assert_includes dup.errors[:slug], "has already been taken"
+  end
+
   test "domain is normalized and unique" do
     org = Organization.new(name: "Copycat", domain: " WWW.TerraPower.com ")
     assert_equal "terrapower.com", org.domain

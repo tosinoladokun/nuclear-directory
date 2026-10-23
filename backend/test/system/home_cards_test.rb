@@ -19,22 +19,53 @@ class HomeCardsTest < ApplicationSystemTestCase
 
   def cards = page.evaluate_script("[...document.querySelectorAll('section.nd-catcard')].map((c) => [c.dataset.key, c.querySelectorAll('a.nd-catcard__row').length])")
 
-  test "phones keep the suggested searches: one 28px row under the search box, scrolling inside itself, never the page" do
-    [ [ 360, 780 ], [ 390, 844 ] ].each do |width, height|
+  test "the suggested searches are one line at every width: the ones that don't fit are hidden, never wrapped or scrolled" do
+    [ [ 360, 780 ], [ 390, 844 ], [ 640, 900 ], [ 700, 900 ], [ 1440, 900 ] ].each do |width, height|
       resize_viewport(width, height)
       visit root_path
 
       row = page.evaluate_script(<<~JS)
         (() => {
-          const row = document.querySelector(".nd-home .nd-suggs"), pills = [...row.querySelectorAll(".nd-sugg")]
-          const tops = new Set(pills.map((pill) => Math.round(pill.getBoundingClientRect().top)))
-          return [pills.length, tops.size, Math.max(...pills.map((pill) => Math.round(pill.getBoundingClientRect().height))),
-            parseFloat(getComputedStyle(pills[0]).fontSize), document.documentElement.scrollWidth <= innerWidth]
+          const row = document.querySelector(".nd-home .nd-suggs"), all = [...row.querySelectorAll(".nd-sugg")]
+          const shown = all.filter((pill) => !pill.hidden), tops = new Set(shown.map((pill) => Math.round(pill.getBoundingClientRect().top)))
+          const rowBox = row.getBoundingClientRect()
+          return [all.length, shown.length >= 3, tops.size, Math.max(...shown.map((pill) => Math.round(pill.getBoundingClientRect().height))),
+            parseFloat(getComputedStyle(shown[0]).fontSize) >= 13, shown.every((pill) => pill.getBoundingClientRect().right <= rowBox.right + 1 && pill.getBoundingClientRect().left >= rowBox.left - 1),
+            row.scrollWidth <= row.clientWidth, document.documentElement.scrollWidth <= innerWidth]
         })()
       JS
-      assert_equal [ HomeSuggestions::SHOWN, 1, 28, 13.0, true ], row, "at #{width}: five pills, one row, 28px, 13px, no sideways page scroll"
+      assert_equal [ HomeSuggestions::SHOWN, true, 1, 28, true, true, true, true ], row, "at #{width}: at least three pills, one line, 28px, inside the row, no scroll anywhere"
       assert_empty page.evaluate_script(AUDIT), "at #{width}"
     end
+  end
+
+  test "a phone shows three or four suggestions on one line, whichever five the server picked" do
+    [ [ 360, 780 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      8.times do |load|
+        visit root_path
+        shown = page.evaluate_script("(() => { const pills = [...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden); return [pills.map((pill) => pill.textContent.trim()), new Set(pills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size] })()")
+        assert_includes 3..4, shown[0].size, "at #{width}, load #{load}: three or four pills (#{shown[0].join(', ')})"
+        assert_equal 1, shown[1], "at #{width}, load #{load}: one line"
+        assert_empty page.evaluate_script(AUDIT), "at #{width}, load #{load}"
+      end
+    end
+  end
+
+  test "a wide screen shows all five picked suggestions; on a phone the ones that don't fit are hidden, out of the tab order, and come back when it widens" do
+    count = "[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length"
+    resize_viewport(1440, 900)
+    visit root_path
+    assert_equal HomeSuggestions::SHOWN, page.evaluate_script(count), "all five fit on a wide screen"
+
+    resize_viewport(360, 780)
+    assert_selector ".nd-home .nd-sugg[hidden]", visible: :all, minimum: 1, wait: 5
+    assert page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg[hidden]')].every((pill) => pill.offsetParent === null)"), "hidden pills take no space and can't be tabbed to"
+    assert_operator page.evaluate_script(count), :<, HomeSuggestions::SHOWN
+
+    resize_viewport(1440, 900)
+    assert_equal HomeSuggestions::SHOWN, page.evaluate_script(count), "all five come back when the screen widens"
+    assert_no_selector ".nd-home .nd-sugg[hidden]", visible: :all
   end
 
   test "on a touch screen the suggestions stay 28px tall, with a 44px tap area" do
@@ -90,6 +121,14 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal "Search a company, plant or site", find(".nd-home input[type=search]")[:placeholder]
   end
 
+  test "just past the phone breakpoint (640 to 699) every card title still fits on one line" do
+    [ 640, 670, 699 ].each do |width|
+      resize_viewport(width, 900)
+      visit root_path
+      assert_empty page.evaluate_script(AUDIT), "at #{width}"
+    end
+  end
+
   test "on a phone the whole card header is the button, edge to edge" do
     resize_viewport(390, 844)
     visit root_path
@@ -136,7 +175,7 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal 0, inset, "the row runs edge to edge, so only an inside ring survives"
   end
 
-  test "on a phone the focus ring on a suggestion pill is drawn inside the pill, so the scrolling row can't cut it" do
+  test "on a phone the focus ring on a suggestion pill is drawn inside the pill, so the row's clip can't cut it" do
     resize_viewport(390, 844)
     visit root_path
 
@@ -196,7 +235,7 @@ class HomeCardsTest < ApplicationSystemTestCase
 
     toggle = find("section[data-key=fuel] .nd-catcard__toggle")
     assert_equal "true", toggle["aria-expanded"]
-    assert_equal "Fuel and materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
+    assert_equal "Fuel and Materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
     toggle.click
     assert_equal "false", toggle["aria-expanded"]
     assert_no_selector "section[data-key=fuel] a.nd-catcard__row", visible: true

@@ -1,0 +1,11 @@
+<%# One source on Sources by category (#166): its name (linked to its page here when it has one), a note, and its status. Locals: source (SourceCoverage::Source). %>
+<%# Hand research links to its group only when the group has documents: an empty one has no page. %>
+<% key = source.status == "live" ? source.kind : (source.group if source.status == "hand" && source.documents.to_i.positive?) %>
+<div class="nd-cov__src">
+  <span class="type-body">
+    <%= key ? link_to(source.name, admin_source_path(key:, back: admin_sources_path(by: "category")), class: "nd-link") : source.name %>
+    <% if source.leads %><span class="nd-cov__note type-data-sm text-ink-muted">leads only</span><% end %>
+    <% if source.note %><span class="nd-cov__note type-data-sm text-ink-muted"><%= source.note %></span><% end %>
+  </span>
+  <span class="type-body"><%= coverage_status(source) %></span>
+</div>

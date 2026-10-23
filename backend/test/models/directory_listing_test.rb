@@ -346,4 +346,21 @@ class DirectoryListingTest < ActiveSupport::TestCase
     site = DirectoryListing.new(category: "plants").plants.first
     assert_equal 1, site.units_statuses.size
   end
+
+  test "Developers narrows to reactor designers or project developers; a company with both is in each" do
+    builder = company("Blue Builders", roles: [ role("project_developer") ])
+    both = company("Both Ways Nuclear", roles: [ Role.find_by!(key: "reactor_vendor"), Role.find_by!(key: "project_developer") ])
+    cite!(builder, both)
+
+    assert_equal [ "Blue Builders", "Both Ways Nuclear", "Kairos Power" ], names(DirectoryListing.new(category: "reactor-developers"))
+    assert_equal [ "Both Ways Nuclear", "Kairos Power" ], names(DirectoryListing.new(category: "reactor-developers", role: "reactor_vendor"))
+    assert_equal [ "Blue Builders", "Both Ways Nuclear" ], names(DirectoryListing.new(category: "reactor-developers", role: "project_developer"))
+    assert DirectoryListing.new(category: "reactor-developers", role: "project_developer").filtered?
+  end
+
+  test "a role that isn't one of the bucket's, or on a one-role bucket, is dropped" do
+    assert_nil DirectoryListing.new(category: "reactor-developers", role: "fuel").role
+    assert_nil DirectoryListing.new(category: "components", role: "components").role
+    assert_nil DirectoryListing.new(role: "reactor_vendor").role
+  end
 end

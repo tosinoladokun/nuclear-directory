@@ -1,5 +1,5 @@
 # The admin login on the UI preview (render.yaml, nuclear-directory-preview),
-# so admin screens can be tried there. bin/preview-start calls it after every
+# so admin screens can be tried there. bin/preview-start.sh calls it after every
 # reset via `bin/rails preview:admin`. It refuses to run anywhere but the
 # preview: NOINDEX must be "1" and the database must be
 # nuclear_directory_preview. The live site never sets NOINDEX, and the

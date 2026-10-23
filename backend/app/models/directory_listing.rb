@@ -12,10 +12,10 @@
 class DirectoryListing
   SORTS = { "name" => "A to Z", "connections" => "Most connected" }.freeze
 
-  attr_reader :category, :tag, :query, :technology, :state, :sort
+  attr_reader :category, :tag, :query, :technology, :state, :sort, :role
 
   # Unknown values are ignored rather than raising: these come from the URL.
-  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil)
+  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil)
     @category = Category.find(category)
     # A tag narrows companies, so it's ignored on Plants and sites.
     @tag = Tag.find(tag) unless @category&.plants
@@ -25,6 +25,9 @@ class DirectoryListing
     @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last))
     @state = state.to_s.strip.upcase.presence&.presence_in(state_options)
     @sort = SORTS.key?(sort.to_s) ? sort.to_s : "name"
+    # A bucket made of several roles narrows to one of them (Developers:
+    # reactor designers or project developers). Any other value is dropped.
+    @role = role.to_s.presence&.presence_in(@category.role_keys) if @category && @category.role_keys.size > 1
   end
 
   # Number of published companies in each bucket, and of plants and sites,
@@ -57,6 +60,7 @@ class DirectoryListing
     scope = Organization.published
     scope = scope.where(id: Bucket.organization_ids(category)) if category
     scope = scope.where(id: tag.organization_ids) if tag
+    scope = scope.where(id: Bucket.role_member_ids(role)) if role
     scope = matching_companies(scope) if query
     scope = with_technology(scope) if technology
     scope = scope.where(hq_state: state) if state
@@ -79,7 +83,7 @@ class DirectoryListing
   end
 
   def searching? = query.present?
-  def filtered? = technology.present? || state.present?
+  def filtered? = technology.present? || state.present? || role.present?
 
   # Filter choices that actually occur in published data.
   # Technologies used by published companies, plants or units, plus their

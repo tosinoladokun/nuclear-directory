@@ -27,9 +27,10 @@ module Metabase
       roles technologies sources evidence former_slugs verification_events candidates crawl_runs
     ].freeze
     # Never readable through Metabase: sign-in data, visitors' correction
-    # messages and contacts, and the deploy's own records (their reports and
-    # errors). Rails' Solid tables too (PRIVATE_PREFIXES).
-    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations].freeze
+    # messages and contacts, the deploy's own records (their reports and
+    # errors), and the admin's Today steps (who marked them). Rails' Solid
+    # tables too (PRIVATE_PREFIXES).
+    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations today_steps].freeze
     # Rails' own Solid Queue, Cache and Cable tables (job arguments can hold
     # an email address).
     PRIVATE_PREFIXES = %w[solid_].freeze

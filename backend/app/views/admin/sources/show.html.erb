@@ -2,16 +2,16 @@
 <% research = @entry.kind.nil? %>
 <% status_label = ->(status) { { "pending" => research ? "Not checked by the crawler" : "Not read yet", "ok" => "OK", "blocked" => "Blocked", "needs_human" => "Needs a person" }.fetch(status) } %>
 
-<%= render "admin/crumbs", parent_label: "Sources", parent_path: admin_sources_path, current: @entry.name %>
+<%= render "admin/crumbs", parent_label: "Sources", parent_path: back_path(admin_sources_path), current: @entry.name %>
 <h1 class="type-admin-h1">
   <%= @entry.name %> <span class="type-count"><%= number_with_delimiter(@entry.documents) %></span>
   <% if @entry.note %><span class="type-data text-ink-muted"><%= @entry.note %></span><% end %>
 </h1>
 
 <nav class="nd-fchips type-ui" aria-label="Status">
-  <%= link_to admin_source_path(key: @entry.key), class: "nd-fchip", aria: { current: ("page" unless @status) } do %>All <span class="type-data nd-num"><%= number_with_delimiter(@entry.documents) %></span><% end %>
+  <%= link_to admin_source_path(key: @entry.key, back: back_path(nil)), class: "nd-fchip", aria: { current: ("page" unless @status) } do %>All <span class="type-data nd-num"><%= number_with_delimiter(@entry.documents) %></span><% end %>
   <% Admin::SourcesController::STATUS_CHIPS.each do |status| %>
-    <%= link_to admin_source_path(key: @entry.key, status:), class: "nd-fchip", aria: { current: ("page" if status == @status) } do %><%= status_label.(status) %> <span class="type-data nd-num"><%= @counts[status] %></span><% end %>
+    <%= link_to admin_source_path(key: @entry.key, status:, back: back_path(nil)), class: "nd-fchip", aria: { current: ("page" if status == @status) } do %><%= status_label.(status) %> <span class="type-data nd-num"><%= @counts[status] %></span><% end %>
   <% end %>
 </nav>
 

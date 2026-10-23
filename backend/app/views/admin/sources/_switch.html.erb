@@ -1,0 +1,5 @@
+<%# Sources by source type or by category (#166): a link each, so Back and Forward work. Locals: by ("type" or "category"). %>
+<nav class="nd-seg type-ui" aria-label="Group sources">
+  <%= link_to admin_sources_path, aria: { current: ("page" if by == "type") } do %><span class="nd-seg__long">Source by source type</span><span class="nd-seg__short">By source type</span><% end %>
+  <%= link_to admin_sources_path(by: "category"), aria: { current: ("page" if by == "category") } do %><span class="nd-seg__long">Source by category</span><span class="nd-seg__short">By category</span><% end %>
+</nav>

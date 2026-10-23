@@ -14,6 +14,25 @@ class HomeTest < ActionDispatch::IntegrationTest
     cite!(link(google, "offtake_with", kairos))
   end
 
+  test "Roboto Mono never swaps in late: a late swap shifted the /companies list (Lighthouse 0.85)" do
+    get root_path
+    assert_match(/font-family: "Roboto Mono".*?font-display: optional/, response.body)
+  end
+
+  test "no font is preloaded: the preload shared slow-4G bandwidth with the CSS and cost LCP 0.4 s" do
+    get root_path
+    assert_select "link[rel=preload][as=font]", count: 0
+    assert_match(/font-family: "Roboto Serif".*?font-display: optional/, response.body, "a swapped-in serif moved the page (CLS 0.25 in CI)")
+  end
+
+  test "card titles are the home page's proper-noun labels; the category's name stays in title" do
+    shown = HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [])
+    long = HomeCategories::Card.new(category: Category.find("utilities"), count: 1, records: [])
+    html = ApplicationController.render(partial: "shared/category_cards", locals: { cards: [ shown, long ] })
+    names = Nokogiri::HTML.fragment(html).css("a.nd-catcard__head .nd-catcard__name").map(&:text)
+    assert_equal [ "Waste and Decommissioning", "Plant Operators" ], names
+  end
+
   test "the home page has one job: search" do
     get root_path
 
@@ -70,8 +89,8 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_equal %w[reactor-developers power-buyers plants], css_select("section.nd-catcard").map { |card| card["data-key"] }
     assert_select "section.nd-catcard", 3
     assert_select "section[data-key=reactor-developers]" do
-      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Developers, 4 companies"
-      assert_select "section[data-label=?]", "Developers, 4 companies"
+      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Reactor Developers, 4 companies"
+      assert_select "section[data-label=?]", "Reactor Developers, 4 companies"
       assert_select "h2.nd-catcard__head--toggle", /Developers/, "the phone header, which shows no count"
       assert_select "a.nd-catcard__row", 3
       assert_select "a.nd-catcard__row[href=?][title=?]", "/companies/kairos-power", "Kairos Power", text: /Kairos Power/
@@ -83,7 +102,7 @@ class HomeTest < ActionDispatch::IntegrationTest
       assert_select "li.nd-catcard__filler[aria-hidden=true]", 2
       assert_select "a.nd-catcard__more[aria-label=?]", "Open the list of 1 company in Power buyers", text: /Open the list ›/
     end
-    assert_select "section[aria-label='Plants and sites'] a.nd-catcard__head[aria-label=?]", "Plants and sites, 0 plants and sites"
+    assert_select "section[aria-label='Plants and sites'] a.nd-catcard__head[aria-label=?]", "Plants and Sites, 0 plants and sites"
     assert_select "details.nd-howpick", 0 # no explanation link (Tosin)
   end
 
