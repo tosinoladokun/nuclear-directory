@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -51,7 +51,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_120000) do
     t.index ["subject_type", "subject_id"], name: "index_candidates_on_subject"
     t.check_constraint "ai_recommendation::text = ANY (ARRAY['recommend_publish'::character varying::text, 'needs_review'::character varying::text])", name: "candidates_ai_recommendation_check"
     t.check_constraint "dq_recommendation::text = ANY (ARRAY['approve'::character varying, 'reject'::character varying]::text[])", name: "candidates_dq_recommendation_check"
-    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text])", name: "candidates_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text])", name: "candidates_kind_check"
     t.check_constraint "status::text = ANY (ARRAY['new'::character varying::text, 'matched'::character varying::text, 'merged'::character varying::text, 'rejected'::character varying::text, 'needs_review'::character varying::text, 'confirmed'::character varying::text])", name: "candidates_status_check"
   end
 

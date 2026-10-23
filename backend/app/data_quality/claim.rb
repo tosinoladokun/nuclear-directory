@@ -29,7 +29,10 @@ module DataQuality::Claim
   }.freeze
   LABELS = { "exchange" => "stock exchange", "ticker" => "ticker", "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
     "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity",
+    "amount_usd" => "amount", "amount_offered_usd" => "amount offered", "external_id" => "external ID", "link_name" => "belongs to",
     "sec_cik" => "SEC CIK" }.freeze
+  # A Form D round's fields in its own words (#129): what it sold, and when it first sold.
+  ROUND_LABELS = { "amount_usd" => "amount sold", "starts_on" => "first sale on", "external_id" => "filing" }.freeze
 
   # One sentence: a value that ends in its own full stop ("…: DENE0009054.")
   # doesn't get a second one.
@@ -65,9 +68,21 @@ module DataQuality::Claim
       phrase ? "#{name_of(payload['organization'])} is #{phrase}." : "#{name_of(payload['organization'])} has the role #{humanize(role)}."
     when "organization_technology"
       "#{name_of(payload['organization'])} works on #{humanize(payload['technology'])}."
+    # A company's own funding round (#396): every value approval would publish.
+    when "deal_term"
+      values = payload.except("organization", "link_type", "term_type", "round")
+      values = values.transform_keys { |key| ROUND_LABELS.fetch(key, key) } if payload["term_type"] == "funding_round"
+      "#{name_of(payload['organization'])} has a #{humanize(payload['term_type'])}#{" (#{payload['round']})" if payload['round'].present?}" \
+        "#{details(values)}."
     else
       "#{candidate.kind.humanize}: #{payload.to_json}"
     end
+  end
+
+  # "$37,000,000": whole dollars as the filing states them, never rounded to millions.
+  def self.dollars(value)
+    amount = BigDecimal(value.to_s, exception: false) or return value.to_s
+    "$#{ActiveSupport::NumberHelper.number_to_delimited(amount.round(2).to_s('F').delete_suffix('.0'))}"
   end
 
   def self.details(attributes)
@@ -80,6 +95,7 @@ module DataQuality::Claim
     when "facility_type", "status" then humanize(value)
     when "ownership_pct" then "#{value}%"
     when "capacity_mw" then "#{value} MW"
+    when "amount_usd", "amount_offered_usd", "amount sold" then dollars(value)
     else value.to_s
     end
   end
