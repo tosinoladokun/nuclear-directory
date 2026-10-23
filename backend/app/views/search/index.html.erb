@@ -4,6 +4,7 @@
   <% if @query %>
     <% total = @companies.size + @plants.size %>
     <div class="nd-instant" data-instant-search-count="<%= total %>">
+      <% if @fuzzy %><p class="nd-instant__note type-small">No exact match for “<%= @query %>”. Showing close names.</p><% end %>
       <% if @companies.any? %>
         <div class="nd-label nd-instant__group" id="<%= @frame_id %>-companies">Companies</div>
         <ul class="nd-instant__list" aria-labelledby="<%= @frame_id %>-companies">

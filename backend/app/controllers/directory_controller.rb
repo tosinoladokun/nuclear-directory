@@ -20,6 +20,17 @@ class DirectoryController < ApplicationController
     # count stays the full one.
     @shown = params[:shown].to_i.clamp(1, 1000) * PAGE
     @companies_total, @plants_total = @listing.company_scope.count, @listing.plant_scope.count
+    # A search with no exact match falls back to close names ("brown ferry" finds
+    # Browns Ferry), and the page says so (#431).
+    exact_total = @companies_total + @plants_total
+    if @listing.searching? && exact_total.zero? && @listing.fuzzy_possible?
+      close = @listing.fuzzy_copy
+      close_companies, close_plants = close.company_scope.count, close.plant_scope.count
+      if (close_companies + close_plants).positive?
+        @listing, @fuzzy = close, true
+        @companies_total, @plants_total = close_companies, close_plants
+      end
+    end
     @companies = @listing.companies.limit(@shown).to_a
     @plants = @listing.plants.limit(@shown).to_a
     @counts = DirectoryListing.category_counts
@@ -28,6 +39,6 @@ class DirectoryController < ApplicationController
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
     # Show more (?shown=2) is the same search, expanded: not a new one.
-    track_search(@listing.query, results: @companies_total + @plants_total, source:) if @listing.searching? && params[:shown].blank?
+    track_search(@listing.query, results: exact_total, source:) if @listing.searching? && params[:shown].blank?
   end
 end
