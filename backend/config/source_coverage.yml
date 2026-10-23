@@ -75,7 +75,8 @@ categories:
   - key: investors
     name: Investors
     sources:
-      - { name: "SEC Form D, 8-K and 10-K", status: planned, issue: 129 }
+      - { name: SEC Form D rounds, kind: sec_form_d, status: built, issue: 129 }
+      - { name: "SEC 8-K and 10-K", status: planned, issue: 129 }
       - { name: Company newsrooms (funding rounds), status: planned, issue: 128 }
   - key: government-research
     name: Government and research
