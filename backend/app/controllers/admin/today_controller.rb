@@ -3,7 +3,8 @@
 # 4 is the correction requests. Nothing here decides a fact.
 class Admin::TodayController < Admin::BaseController
   # Undo is offered for a group of at most this many copies (a small signed token).
-  UNDO_LIMIT = 20
+  UNDO_LIMIT = 5
+  UNDO_BYTES = 1_500
 
   def show
     load_today
@@ -63,8 +64,10 @@ class Admin::TodayController < Admin::BaseController
       flash[:notice] = { "accept" => "Accepted.", "close" => "Closed. Nothing on the site changed." }.fetch(params[:decision], "Rejected.")
       # Undo only for a Reject, of every copy at once, while it's as left.
       undoable = (before || []).map { |state| DataQuality::Review.undoable(state, by: actor) }
-      if params[:decision] == "reject" && undoable.all? && undoable.size <= UNDO_LIMIT
-        flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour)
+      token = undo_verifier.generate(undoable, expires_in: 1.hour) if params[:decision] == "reject" && undoable.all? && undoable.size <= UNDO_LIMIT
+      # The session cookie holds 4 KB in all; a token over budget gets no Undo.
+      if token && token.bytesize <= UNDO_BYTES
+        flash[:undo] = token
       elsif params[:decision] == "accept"
         flash[:notice] += " To take it back, change it on its record."
       end
@@ -108,15 +111,37 @@ class Admin::TodayController < Admin::BaseController
     results = DataQuality::Recommendations.accept(firsts, by: actor)
     # Each other copy rechecked under its decision lock against what the page
     # showed: Aminah's call, reason and snapshot, and Joy's recommendation.
+    # Aminah's review must still describe the claim as it is now (a merge
+    # repoints claims without touching her fields), and the record must be
+    # as the first copy's acceptance left it: a person's edit in between is
+    # never overwritten. Only this group's own decision is let through.
+    directory = DataQuality::DirectoryClient.new
     shown = items.index_by(&:candidate_id)
+    record_state = ->(type, id) { [ directory.verification_history(type:, id:).size, directory.fact(type:, id:)&.values ] }
+    after_first = {}
     unchanged = lambda do |candidate|
       item = shown.fetch(candidate.id)
       same = [ candidate.dq_recommendation, candidate.dq_reason, candidate.dq_payload_sha256 ] == [ item.call, item.reason, item.snapshot ]
-      "Aminah's or Joy's call on it changed after the page loaded" unless same && candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?
+      next "Aminah's or Joy's call on it changed after the page loaded" unless same && DataQuality::Recommendations.current?(candidate) &&
+        candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?
+      next unless candidate.subject_id
+
+      directory.lock_fact(type: candidate.subject_type, id: candidate.subject_id)
+      expected = after_first[[ candidate.subject_type, candidate.subject_id ]]
+      "its record changed after the first page's copy was accepted" if expected && record_state.(candidate.subject_type, candidate.subject_id) != expected
     end
     results += results.select(&:ok?).flat_map do |first|
       rest = copies.fetch(first.candidate_id, [])
-      rest.any? ? DataQuality::Review.approve(rest, by: actor, reason: "Accepted in Today: another page of the same fact", safe_check: unchanged) : []
+      next [] if rest.empty?
+
+      claim = Candidate.find(first.candidate_id)
+      after_first[[ claim.subject_type, claim.subject_id ]] = record_state.(claim.subject_type, claim.subject_id) if claim.subject_id
+      rest.flat_map do |id|
+        DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today: another page of the same fact", safe_check: unchanged).tap do |result|
+          # This group's own write is the new baseline for the next copy.
+          after_first[[ claim.subject_type, claim.subject_id ]] = record_state.(claim.subject_type, claim.subject_id) if result.sole.ok? && claim.subject_id
+        end
+      end
     end
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Accepted #{helpers.pluralize(done.size, 'fact')}." if done.any?

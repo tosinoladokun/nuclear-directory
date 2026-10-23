@@ -329,4 +329,28 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert Candidate.find(second).status_matched?, "left waiting"
     assert_match "changed after the page loaded", flash[:alert]
   end
+
+  test "an edit to the record between the first copy and the next isn't overwritten: the next copy waits" do
+    other = Source.create!(url: "https://www.doe.gov/test/edit.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    shown = review.fingerprint
+    first, second = review.rows("agree").sole.then { |row| [ row.candidate_id, (row.candidate_ids - [ row.candidate_id ]).sole ] }
+
+    approve = DataQuality::Review.method(:approve)
+    DataQuality::Review.define_singleton_method(:approve) do |ids, **options|
+      Organization.where(id: Candidate.find(first).subject_id).update_all(description: "Edited by a person meanwhile.") if ids == [ second ]
+      approve.call(ids, **options)
+    end
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Review.define_singleton_method(:approve, approve)
+    end
+    assert Candidate.find(first).status_merged?
+    assert Candidate.find(second).status_matched?, "left waiting"
+    assert_match "its record changed after the first page's copy was accepted", flash[:alert]
+  end
 end
