@@ -34,7 +34,6 @@ class DirectoryController < ApplicationController
     @companies = @listing.companies.limit(@shown).to_a
     @plants = @listing.plants.limit(@shown).to_a
     @counts = DirectoryListing.category_counts
-    @roles_by = @listing.roles_by(@companies)
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"

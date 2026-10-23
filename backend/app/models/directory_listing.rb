@@ -12,10 +12,6 @@
 class DirectoryListing
   SORTS = { "name" => "A to Z", "connections" => "Most connected" }.freeze
 
-  # The Developers category is one list told apart by role (Tosin, 21 Oct): a
-  # reactor designer or a project developer. Its rows show the role as a chip.
-  ROLE_FILTER_CATEGORY = "reactor-developers"
-
   attr_reader :category, :tag, :query, :technology, :state, :sort, :role
 
   # Close names (#431): used only when an exact search finds nothing, so it
@@ -102,20 +98,6 @@ class DirectoryListing
   def fuzzy_possible? = query.to_s.length >= FUZZY_MINIMUM_LENGTH && !fuzzy?
   def filtered? = technology.present? || state.present? || role.present?
 
-  # The role keys the Developers list can be narrowed to, in the order shown.
-  def role_options = category&.key == ROLE_FILTER_CATEGORY ? category.role_keys.select { |key| %w[reactor_vendor project_developer].include?(key) } : []
-
-  # { organization id => [role keys] } for the listed companies, so each row can
-  # show its role(s) on the Developers list (one query, never per row). Only
-  # roles a source backs, as on the company's page and in the bucket.
-  def roles_by(organizations)
-    return {} if role_options.empty?
-
-    sourced = OrganizationRole.published.where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id))
-    sourced.joins(:role).where(organization_id: organizations.map(&:id), roles: { key: role_options })
-      .pluck(:organization_id, "roles.key").group_by(&:first).transform_values { |pairs| role_options & pairs.map(&:last) }
-  end
-
   # Filter choices that actually occur in published data.
   # Technologies used by published companies, plants or units, plus their
   # parents (SMR in use offers Fission); then coolant types, which only
@@ -185,7 +167,7 @@ class DirectoryListing
       normalized = OrganizationAlias.normalize(query)
       matches << OrganizationAlias.where("normalized_alias LIKE ?", like(normalized)).select(:organization_id) if normalized.present?
 
-      matches.reduce(scope.where("organizations.name ILIKE ?", like(query))) { |all, ids| all.or(scope.where(id: ids)) }
+      matches.reduce(scope.where(*loose_name("organizations.name"))) { |all, ids| all.or(scope.where(id: ids)) }
     end
 
     # The site's name, a published unit's name ("Vogtle Unit 3" finds Plant
@@ -194,7 +176,7 @@ class DirectoryListing
     # page shows that link (PlantProfile#links: published, on a verified site
     # or unit, sourced and current).
     def matching_plants(scope)
-      units = Facility.published.where.not(parent_id: nil).where("facilities.name ILIKE ?", like(query)).select(:parent_id)
+      units = Facility.published.where.not(parent_id: nil).where(*loose_name("facilities.name")).select(:parent_id)
       links = FacilityRelationship.published.where("facility_relationships.description ILIKE ?", like(query))
         .where(facility_id: Facility.verified.select(:id))
         .where(id: Evidence.where(subject_type: "FacilityRelationship").select(:subject_id))
@@ -210,7 +192,7 @@ class DirectoryListing
       # A site's own aliases, and those of its published units only (as with unit names).
       alias_sites = Facility.where(id: aliased).or(Facility.where(id: Facility.published.where(id: aliased).select(:parent_id))).select(:id)
 
-      scope.where("facilities.name ILIKE ?", like(query)).or(scope.where(id: units)).or(scope.where(id: linked_sites))
+      scope.where(*loose_name("facilities.name")).or(scope.where(id: units)).or(scope.where(id: linked_sites))
         .or(scope.verified.where(technology_id: techs)).or(scope.where(id: tech_units)).or(scope.where(id: alias_sites))
     end
 
@@ -338,4 +320,23 @@ class DirectoryListing
     end
 
     def like(text) = "%#{ActiveRecord::Base.sanitize_sql_like(text.to_s)}%"
+
+    # A name matches the search as typed, or with spacing and punctuation
+    # ignored ("next era" finds NextEra), or with every word of it somewhere
+    # in the name ("brown ferry" finds Browns Ferry) (#431).
+    def loose_name(column)
+      compact = query.downcase.gsub(/[^a-z0-9]/, "")
+      words = query.downcase.scan(/[a-z0-9]+/).select { |word| word.length >= 2 }
+      sql = [ "#{column} ILIKE ?" ]
+      binds = [ like(query) ]
+      if compact.length >= 3
+        sql << "regexp_replace(lower(#{column}), '[^a-z0-9]', '', 'g') LIKE ?"
+        binds << like(compact)
+      end
+      if words.size > 1
+        sql << "(#{([ "#{column} ILIKE ?" ] * words.size).join(' AND ')})"
+        binds.concat(words.map { |word| like(word) })
+      end
+      [ sql.join(" OR "), *binds ]
+    end
 end
