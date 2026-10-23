@@ -374,8 +374,11 @@ module Seed
       def citation(term, link)
         return link if term["quote"].to_s.strip.empty?
 
-        { "source_url" => term["source_url"] || link["source_url"], "quote" => term["quote"],
-          "confidence" => term.fetch("confidence", link["confidence"]), "published" => term["published"] || link["published"] }.compact
+        url = term["source_url"] || link["source_url"]
+        # The link's date only for the link's own page: another page's date is unknown.
+        published = term["published"] || (link["published"] if url == link["source_url"])
+        { "source_url" => url, "quote" => term["quote"], "confidence" => term.fetch("confidence", link["confidence"]),
+          "published" => published }.compact
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).

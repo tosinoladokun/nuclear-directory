@@ -12,10 +12,15 @@ module Directory::DealList
   Row = Data.define(:term_id, :key, :buyer, :seller, :plant, :capacity_mw, :firm_mw, :amount_usd, :signed_on, :starts_on, :ends_on,
     :term_years, :agreement, :status, :conditions, :counted, :sources)
 
+  POWER_LINKS = %w[offtake_with offtakes_from].freeze
+
   def self.offtakes
     terms = DealTerm.published.where(term_type: "offtake").includes(:link, evidence: :source).to_a
     ActiveRecord::Associations::Preloader.new(records: terms.map(&:link).grep(Relationship), associations: %i[from_organization to_organization]).call
     ActiveRecord::Associations::Preloader.new(records: terms.map(&:link).grep(FacilityRelationship), associations: %i[organization facility]).call
+    # Power deals only: a supply contract under "supplies" points from
+    # supplier to customer and isn't one.
+    terms = terms.select { |term| POWER_LINKS.include?(term.link&.relationship_type) }
     terms.map { |term| row(term) }.sort_by { |row| [ row.signed_on ? 0 : 1, -(row.signed_on || row.starts_on || Date.new(1900)).jd, row.key.to_s ] }
   end
 

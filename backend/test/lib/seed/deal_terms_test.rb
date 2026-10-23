@@ -118,4 +118,19 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
     assert_nil DealTerm.sole.conditions
     assert DealTerm.sole.counted?
   end
+
+  test "a term citing another page doesn't take the link page's date" do
+    seed([ PPA, FRAMEWORK ])
+
+    assert_equal Date.new(2025, 6, 30), Source.find_by!(url: "https://example.com/deal").published_on
+    assert_nil Source.find_by!(url: "https://example.com/framework").published_on
+  end
+
+  test "the deal list keeps power deals only, never a supply contract's terms" do
+    seed([ PPA ])
+    supply = Relationship.find_by!(relationship_type: "offtake_with")
+    supply.update_columns(relationship_type: "supplies")
+
+    assert_empty Directory::DealList.offtakes
+  end
 end
