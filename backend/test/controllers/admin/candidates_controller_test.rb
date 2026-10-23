@@ -49,7 +49,8 @@ class Admin::CandidatesControllerTest < ActionDispatch::IntegrationTest
     end
     waiting = 1 + DataQuality::Review.pending_count # the fixtures' pending facts are waiting too
     assert_select ".nd-fchip[aria-current=page]", /All\s+#{waiting}/
-    assert_select ".nd-shell__nav a[aria-current=page]", /Checks\s+#{waiting}/
+    # Today's count: the facts waiting, plus step 4's correction requests (none here).
+    assert_select ".nd-shell__nav a[aria-current=page]", /Today\s+#{waiting}/
     assert_select "h2", /Waiting\s+#{waiting}/
   end
 

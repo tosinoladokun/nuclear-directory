@@ -204,6 +204,8 @@
   .nd-listrow__name { font: 600 clamp(13px, calc(100cqi / (var(--chars, 20) * 0.6)), 16px)/22px var(--font-text); }
   .nd-listrow__desc { font-size: clamp(13px, calc(100cqi / (var(--chars, 40) * 0.56)), 14px); line-height: 20px; color: var(--nd-ink-muted); }
   @container (max-width: 300px) { .nd-listrow__cap { display: none; } }
+  /* The role(s) a company has in the Developers list: small chips under the name; on a narrow screen they wrap as whole chips, never cut. */
+  .nd-listrow__roles { display: flex; flex-wrap: wrap; gap: var(--nd-space-1); }
   .nd-listrow__side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; font-size: 13px; line-height: 18px; color: var(--nd-ink-muted); }
   .nd-listrow__side .nd-num { font-size: 11px; }
 
@@ -277,8 +279,8 @@
   body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
-  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor: less side padding there. */
-  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-4); } }
+  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor, more so when the fallback serif is in use (fonts are font-display: optional): less side padding, a tighter gap and no count there (Tosin: counts may go if space is short). */
+  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__head--link .nd-catcard__count { display: none; } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
@@ -286,7 +288,16 @@
   /* Compact, as before the cards (Tosin, 19 Oct): never wider than 960px, centred. */
   .nd-home__cats { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
   .nd-home .nd-searchbox--large .nd-search { height: 52px; }
-  .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+  .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
+  .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
+  .nd-sugg[hidden] { display: none; }
+  /* Four on phones where they fit (Tosin, 21 Oct): tighter pills on the narrowest phones. */
+  @media (max-width: 400px) { .nd-home .nd-suggs { column-gap: 6px; } .nd-home .nd-sugg { padding-inline: 9px; gap: 4px; } }
+  /* One line of suggestions at every width, never a second line or a scroll
+     (Tosin, 21 Oct: show fewer). The fit-row controller hides the pills that
+     wrap; without it the row clips them. The 8px above and below, taken back
+     by the margin, leave room for each pill's 44px tap area inside the clip. */
+  .nd-home .nd-suggs { flex-wrap: wrap; justify-content: center; row-gap: 16px; height: 44px; box-sizing: border-box; padding-block: 8px; margin-block: -8px; overflow: hidden; }
   @media (min-width: 1440px) {
     .nd-home { padding: 40px 120px 14px; }
     .nd-home__wordmark .nd-wordmark__svg { height: 60px; }
@@ -383,18 +394,7 @@
     /* The rows run edge to edge and the card's wrapper clips what is drawn
        outside them, so the focus ring goes inside the row: it stays whole. */
     .nd-catcard--stack .nd-catcard__row:focus-visible, .nd-catcard--stack .nd-catcard__more:focus-visible { outline-offset: -2px; }
-    /* The suggested searches stay (nothing live is removed): one 28px row at
-       13px that scrolls inside itself, faded at the edge, never a second line. */
     .nd-home__search { gap: var(--nd-space-4); }
-    /* The 8px above and below (taken back by the margin) leave room for each
-       pill's 44px tap area, which the scrolling row would otherwise clip. */
-    .nd-home .nd-suggs { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; padding-right: var(--nd-space-8);
-      padding-block: 8px; margin-block: -8px;
-      mask-image: linear-gradient(to right, #000 85%, transparent); -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); }
-    .nd-home .nd-suggs::-webkit-scrollbar { display: none; }
-    .nd-home .nd-sugg { flex: none; white-space: nowrap; }
-    /* The row scrolls inside itself and clips whatever is drawn outside it,
-       so the focus ring goes inside the pill. */
     .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
     .nd-home__wordmark .nd-wordmark__svg { height: 34px; }
     /* Search near the top, so the keyboard doesn't cover the results. */
@@ -606,6 +606,9 @@
   /* Where it appears (#166): what each output shows is long-form, so it wraps. */
   .nd-outputs td:first-child { white-space: nowrap; }
   .nd-outputs td:nth-child(3) { white-space: normal; min-width: 14rem; }
+  /* Removed (#166): the reason is long-form, so it wraps; the name keeps room. */
+  .nd-removed td:first-child { min-width: 12rem; }
+  .nd-removed td:nth-child(3) { white-space: normal; min-width: 14rem; }
   @media (max-width: 560px) {
     .nd-live__filters > summary { display: inline-flex; list-style: none; }
     .nd-live__filters > summary::-webkit-details-marker { display: none; }
@@ -622,6 +625,11 @@
     .nd-live__table tr { position: relative; min-height: 44px; }
     .nd-live__table td:first-child a::after { content: ""; position: absolute; inset: 0; }
     .nd-outputs td a { display: inline-flex; align-items: center; min-height: 44px; }
+    /* Removed: Put back and the merged-into link sit above the row's link. */
+    .nd-removed td:not(:first-child) a, .nd-removed td form { position: relative; z-index: 1; }
+    /* The name on one line (the full name in its title); who and when share a line. */
+    .nd-removed td:nth-child(3) { flex-basis: 100%; min-width: 0; }
+    .nd-removed td.nd-removed__name { min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .nd-live__foot a, .nd-split__main > .nd-shell__head a { display: inline-flex; align-items: center; min-height: 44px; }
   }
 
@@ -652,6 +660,36 @@
   .nd-fold__row { display: flex; justify-content: space-between; gap: var(--nd-space-3); padding: 9px 0; border-top: var(--nd-hairline) solid var(--nd-rule); }
   .nd-fold__row > * { margin: 0; min-width: 0; overflow-wrap: anywhere; }
   .nd-fold__body { padding-bottom: var(--nd-space-2); }
+
+  /* Today (#373): the day's four steps; only the current one is open in place. */
+  .nd-today { list-style: none; margin: 0; padding: 0; border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-today__step { border-bottom: var(--nd-hairline) solid var(--nd-rule); padding: var(--nd-space-3) 0; }
+  .nd-today__row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; column-gap: var(--nd-space-3); row-gap: 2px; min-height: 44px; }
+  .nd-today__check { width: 24px; height: 24px; border-radius: 50%; border: var(--nd-hairline) solid var(--nd-control); display: grid; place-items: center; }
+  .nd-today__step--current .nd-today__check { border: 2px solid var(--nd-ink); }
+  .nd-today__step--done .nd-today__check { background: var(--nd-ink); border-color: var(--nd-ink); color: var(--nd-paper); }
+  .nd-today__title { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+  .nd-today__step--done .nd-today__title { text-decoration: line-through; color: var(--nd-ink-muted); }
+  .nd-today__sub { grid-column: 2; margin: 0; color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+  .nd-today__body { margin: var(--nd-space-3) 0 0 calc(24px + var(--nd-space-3)); display: flex; flex-direction: column; gap: var(--nd-space-3); }
+  .nd-today__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3); }
+  .nd-today__actions .nd-btn, .nd-today__row .nd-btn { white-space: nowrap; }
+  /* Today's step 3: a fact with Joy's and Aminah's verdicts (#373). */
+  .nd-verdict__chips { display: flex; flex-wrap: wrap; gap: var(--nd-space-2); }
+  .nd-verdict__chips .nd-tag { white-space: nowrap; }
+  .nd-verdict__chip--muted { border-style: dashed; color: var(--nd-ink-muted); }
+  .nd-verdict__actions { display: flex; gap: var(--nd-space-2); }
+  .nd-verdict__actions .nd-btn { min-width: 104px; min-height: 44px; justify-content: center; white-space: nowrap; }
+  .nd-today__row > form { grid-column: 3; grid-row: 1 / span 2; }
+  @media (max-width: 639px) {
+    /* Undo goes under the sub-line, so a step's title keeps the row. */
+    .nd-today__row > form { grid-column: 2; grid-row: 3; justify-self: start; }
+    .nd-today__body { margin-left: 0; }
+    .nd-verdict__actions { flex-basis: 100%; }
+    .nd-verdict__actions > form { flex: 1; }
+    .nd-verdict__actions .nd-btn { width: 100%; }
+    .nd-today__actions > .nd-btn, .nd-today__actions > form, .nd-today__actions > form .nd-btn { width: 100%; justify-content: center; }
+  }
   .nd-record__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
   .nd-split__side span.nd-btn[aria-disabled] { cursor: default; justify-content: space-between; }
   .nd-takeoff > summary { list-style: none; }

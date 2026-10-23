@@ -1,6 +1,7 @@
 <%# One company in a list. Locals:
     organization: an Organization
     connections:  number of verified links (optional)
+    roles:        role keys to show as chips, in the Developers list (optional)
     Empty fields (description, HQ) are left out, never guessed. %>
 <% where = place(organization.hq_city, organization.hq_state) %>
 <% connections = local_assigns[:connections] %>
@@ -9,6 +10,7 @@
     <span class="nd-mono" aria-hidden="true"><%= initials(organization.name) %></span>
     <span class="nd-listrow__main">
       <span class="nd-listrow__name" data-truncate title="<%= organization.name %>" style="--chars: <%= organization.name.length %>"><%= organization.name %></span>
+      <% if local_assigns[:roles].present? %><span class="nd-listrow__roles"><% roles.each do |key| %><span class="nd-tag"><%= role_label(key) %></span><% end %></span><% end %>
       <% if organization.description.present? %><span class="nd-listrow__desc" data-truncate title="<%= organization.description %>" style="--chars: <%= organization.description.length %>"><%= organization.description %></span><% end %>
     </span>
     <% if where || connections %>
