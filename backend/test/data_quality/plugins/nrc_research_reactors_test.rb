@@ -1,0 +1,64 @@
+require "test_helper"
+
+# The fixture is NRC's real non-power reactor locations page (fetched
+# 2026-10-22 with the plug-in's user agent). NRC blocked the next request,
+# so the reactor pages here are written in the layout of NRC's other
+# facility pages; the first production read checks the real ones, and a
+# page without a name or docket goes to a person.
+class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
+  Plugin = DataQuality::Plugins::NrcResearchReactors
+  PAGES = %r{\Ahttps://www\.nrc\.gov/facilities-safety/facility-finder/nonpower/}
+  MIT = "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/mit-ma-hwr-reflected".freeze
+
+  setup do
+    stub_request(:get, "https://www.nrc.gov/robots.txt").to_return(body: file_fixture("nrc/robots.txt").read)
+    @list = stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/nonpower/list.html").read)
+    @pages = stub_request(:get, PAGES).to_return do |request|
+      slug = request.uri.path.split("/").last
+      { body: "<html><main><h1>Reactor #{slug}</h1><p><strong>Licensee:</strong> Someone<br><strong>Docket Number:</strong> 0500#{slug.sum.to_s.rjust(4, '0')}<br>" \
+        "<strong>Reactor Type:</strong> TRIGA<br><strong>Licensed Power:</strong> 1 MWt</p><p>Project Manager: (a person)</p></main></html>" }
+    end
+  end
+
+  def plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+  def crawl = DataQuality::Stages::Crawl.call(plugin:)
+  def mit = Source.find_by!(url: MIT)
+
+  test "is the plug-in for nrc_research_reactors" do
+    assert_instance_of Plugin, DataQuality::Plugin.for("nrc_research_reactors")
+  end
+
+  test "reads the research and test reactor table, then each reactor page once a day; not the medical or advanced tables" do
+    run = crawl
+    second = crawl
+
+    assert_equal 29, run.stats["reactors"]
+    assert_equal({ "changed" => 29 }, run.stats["reactor_pages"])
+    assert_equal({ "skipped_recent" => 29 }, second.stats["reactor_pages"])
+    assert_not_requested :get, %r{nonpower/shine-medical}
+    assert_equal "Reactor mit-ma-hwr-reflected | Licensee: Massachusetts Institute of Technology | Location: Cambridge, MA | " \
+      "Docket Number: 0500#{'mit-ma-hwr-reflected'.sum.to_s.rjust(4, '0')} | Reactor Type: TRIGA", mit.content_text
+    refute_match(/Project Manager|Licensed Power/, mit.content_text)
+  end
+
+  test "a blocked reactor page stops the crawl; a page without a docket needs a person" do
+    stub_request(:get, PAGES).to_return(status: 403, body: file_fixture("nrc/akamai-403.html").read)
+    assert_equal "reactor page blocked", crawl.stats["stopped"]
+
+    Source.update_all(fetched_at: 2.days.ago, blocked_streak: 0, crawl_status: "ok")
+    stub_request(:get, PAGES).to_return(body: "<html><main><h1>Moved</h1></main></html>")
+    assert_equal 29, crawl.stats["reactor_pages"]["needs_human"]
+  end
+
+  test "the reactor, its licensee, and university only where the licensee's name says so" do
+    crawl
+    claims = plugin.extract(mit, nil)
+
+    assert_equal %w[facility organization organization_role], claims.map { |c| c[:kind] }
+    assert_equal({ "name" => "Reactor mit-ma-hwr-reflected", "facility_type" => "research_reactor", "nrc_docket" => claims.first[:payload]["nrc_docket"],
+      "country_code" => "US", "city" => "Cambridge", "state" => "MA" }, claims.first[:payload])
+    assert_equal "university", claims.last[:payload]["role"]
+    dow = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/dcc-mi-triga")
+    assert_equal %w[facility organization], plugin.extract(dow, nil).map { |c| c[:kind] }, "a company gets no role from its name"
+  end
+end
