@@ -77,6 +77,22 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
     assert_select ".nd-instant__row", /Browns Ferry Nuclear Plant/
   end
 
+  test "the filter sheet's JSON count matches the close names the page shows" do
+    get companies_path(q: "browns fery", format: :json)
+
+    assert_equal 1, JSON.parse(response.body)["count"]
+  end
+
+  test "close names are ranked among the records the filters leave, not before them" do
+    10.times { |n| cite!(company("Browns Ferry Group #{('a'.ord + n).chr}", state: "TX")) }
+    cite!(company("Browns Ferry Services Company of Alabama", state: "AL"))
+
+    get companies_path(q: "browns fery", state: "AL")
+    assert_includes names, "Browns Ferry Services Company of Alabama"
+    assert_empty names.grep(/Group/), "none of the Texas companies"
+    assert_select ".nd-fuzzy-note"
+  end
+
   test "unpublished names are never suggested" do
     company("Browns Fery Holdings", verified: false)
     get companies_path(q: "browns fery")

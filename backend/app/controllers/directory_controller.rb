@@ -12,8 +12,6 @@ class DirectoryController < ApplicationController
     end
 
     @listing = DirectoryListing.new(**params.permit(:category, :tag, :q, :technology, :state, :sort, :role).to_h.symbolize_keys)
-    # The filter sheet's "Show N results" (#90) asks for the count only; it isn't a search.
-    return render(json: { count: @listing.company_scope.count + @listing.plant_scope.count }) if request.format.json?
 
     # The first PAGE rows of each list (companies, plants), then PAGE more per "Show more" (?shown=2 is two
     # pages' worth), so the page stays light as the directory grows. The
@@ -31,6 +29,10 @@ class DirectoryController < ApplicationController
         @companies_total, @plants_total = close_companies, close_plants
       end
     end
+    # The filter sheet's "Show N results" (#90) asks for the count only; it isn't a
+    # search. It counts what the page shows, close names included.
+    return render(json: { count: @companies_total + @plants_total }) if request.format.json?
+
     @companies = @listing.companies.limit(@shown).to_a
     @plants = @listing.plants.limit(@shown).to_a
     @counts = DirectoryListing.category_counts

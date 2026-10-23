@@ -69,9 +69,10 @@ class DirectoryListing
     scope = scope.where(id: Bucket.organization_ids(category)) if category
     scope = scope.where(id: tag.organization_ids) if tag
     scope = scope.where(id: Bucket.role_member_ids(role)) if role
-    scope = (fuzzy? ? fuzzy_companies(scope) : matching_companies(scope)) if query
     scope = with_technology(scope) if technology
     scope = scope.where(hq_state: state) if state
+    # Matching goes last: close names are ranked among the companies the filters leave.
+    scope = (fuzzy? ? fuzzy_companies(scope) : matching_companies(scope)) if query
     scope
   end
 
@@ -84,9 +85,9 @@ class DirectoryListing
     return Facility.none if category.nil? && query.nil?
 
     scope = public_sites
-    scope = (fuzzy? ? fuzzy_plants(scope) : matching_plants(scope)) if query
     scope = scope.verified.where(state:) if state
     scope = plants_with_technology(scope) if technology
+    scope = (fuzzy? ? fuzzy_plants(scope) : matching_plants(scope)) if query
     scope
   end
 
@@ -279,21 +280,22 @@ class DirectoryListing
       ])
     end
 
-    # Close names, best match first (at most FUZZY_LIMIT): the query against each
+    # Close names, best match first (at most FUZZY_LIMIT) among the records the
+    # filters (category, tag, role, state, technology) already leave: the query against each
     # name and alias by trigram similarity, as typed, as a part of the name
     # ("westinghous"), and with spaces and punctuation dropped ("next era").
     def fuzzy_companies(scope)
       @fuzzy_company_ids ||= fuzzy_ids(
-        "SELECT o.id AS id, #{fuzzy_score_sql("o.name")} AS score FROM organizations o WHERE o.id IN (#{Organization.published.select(:id).to_sql}) UNION ALL " \
-        "SELECT oa.organization_id, #{fuzzy_score_sql("oa.alias")} FROM organization_aliases oa WHERE oa.organization_id IN (#{Organization.published.select(:id).to_sql})"
+        "SELECT o.id AS id, #{fuzzy_score_sql("o.name")} AS score FROM organizations o WHERE o.id IN (#{scope.select(:id).to_sql}) UNION ALL " \
+        "SELECT oa.organization_id, #{fuzzy_score_sql("oa.alias")} FROM organization_aliases oa WHERE oa.organization_id IN (#{scope.select(:id).to_sql})"
       )
       scope.where(id: @fuzzy_company_ids)
     end
 
     def fuzzy_plants(scope)
       @fuzzy_plant_ids ||= fuzzy_ids(
-        "SELECT f.id AS id, #{fuzzy_score_sql("f.name")} AS score FROM facilities f WHERE f.id IN (#{public_sites.select(:id).to_sql}) UNION ALL " \
-        "SELECT fa.facility_id, #{fuzzy_score_sql("fa.alias")} FROM facility_aliases fa WHERE fa.facility_id IN (#{public_sites.select(:id).to_sql})"
+        "SELECT f.id AS id, #{fuzzy_score_sql("f.name")} AS score FROM facilities f WHERE f.id IN (#{scope.select(:id).to_sql}) UNION ALL " \
+        "SELECT fa.facility_id, #{fuzzy_score_sql("fa.alias")} FROM facility_aliases fa WHERE fa.facility_id IN (#{scope.select(:id).to_sql})"
       )
       scope.where(id: @fuzzy_plant_ids)
     end
