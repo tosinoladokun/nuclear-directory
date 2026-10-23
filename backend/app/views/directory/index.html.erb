@@ -62,6 +62,8 @@
         <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#count" } do %>
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
           <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
+          <%# A category's role (Reactor designer, Project developer) stays through the filters and their count. %>
+          <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
           <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
           <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
@@ -94,7 +96,7 @@
       <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{list_page.name}" if list_page}.",
             action_label: "Clear search",
             action_url: directory_url_for(category: listing.category, tag: listing.tag&.key, technology: listing.technology, state: listing.state,
-                                          sort: (listing.sort unless listing.sort == "name")) %>
+                                          role: listing.role, sort: (listing.sort unless listing.sort == "name")) %>
     <% elsif listing.filtered? %>
       <%= render "shared/empty_state", message: "Nothing matches these filters.", action_label: "Clear filters", action_url: directory_url_for(category: listing.category, tag: listing.tag&.key) %>
     <% else %>
@@ -105,7 +107,7 @@
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
         <h2 id="companies-heading" class="nd-label mb-1">Companies</h2>
-        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %></ul>
+        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %></ul>
       </section>
     <% end %>
     <% if @plants.any? %>
@@ -116,13 +118,13 @@
     <% end %>
   <% else %>
     <ul class="nd-list">
-      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
+      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %>
       <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
     </ul>
   <% end %>
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
-      state: listing.state, sort: (listing.sort unless listing.sort == "name"), shown: @shown / DirectoryController::PAGE + 1,
+      state: listing.state, role: listing.role, sort: (listing.sort unless listing.sort == "name"), shown: @shown / DirectoryController::PAGE + 1,
       from: ("suggestion" if listing.searching? && params[:from] == "suggestion")),
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
