@@ -100,7 +100,8 @@ class Admin::RecordEnrichController < Admin::BaseController
         domain = @company.domain.presence
         pages = domain ? Source.where(source_kind: SOURCE_KIND, domain: [ domain, "www.#{domain}" ]) : Source.none
         # Only what this request found (since it was asked); older findings stay in Checks.
-        scope = Candidate.where(source: pages, status: %w[new matched needs_review])
+        # A trade-press lead (#127) waits for Data Quality, never here.
+        scope = Candidate.where(source: pages, status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
         scope = scope.where(created_at: @company.enrich_requested_at..) if @company.enrich_requested_at
         scope.order(:id).ids
       end
