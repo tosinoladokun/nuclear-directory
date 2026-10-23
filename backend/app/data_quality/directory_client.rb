@@ -178,6 +178,7 @@ class DataQuality::DirectoryClient
       end
     evidence = [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", confidence:, crawl_run_id: crawl_run&.id } ]
     return write_alias(candidate, verification:, evidence:, by:) if candidate.kind == "organization_alias"
+    return write_news(candidate, verification:, evidence:) if candidate.kind == "news_item"
 
     result = fact_writer.write(candidate.kind, attributes, evidence:, verification:,
       protect_human_verified: by.nil? || enrichment)
@@ -421,6 +422,23 @@ class DataQuality::DirectoryClient
   private
     # "X is also known as Y": the alias goes on its company, which must be
     # published already (approving an alias doesn't publish a company).
+    # A news item (#137): the item (the same one by its link), then the
+    # companies and plants match found it's about.
+    def write_news(candidate, verification:, evidence:)
+      payload = candidate.payload.to_h
+      attributes = payload.slice("url", "title", "publisher", "published_on", "summary").symbolize_keys
+      result = nil
+      ActiveRecord::Base.transaction(requires_new: true) do
+        result = fact_writer.write(:news_item, attributes, evidence:, verification:)
+        raise ActiveRecord::Rollback unless result.ok?
+
+        Array(payload["mentions"]).each do |type, id|
+          Directory::FactWriter.mention_news(news_item_id: result.id, subject_type: type, subject_id: id)
+        end
+      end
+      write_result(result)
+    end
+
     def write_alias(candidate, verification:, evidence:, by:)
       ends = candidate.payload["organization"].to_h
       company = (organization(name: ends["name"]) if ends["name"].present?) ||

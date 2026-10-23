@@ -27,7 +27,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
   # plant names they may end in ("NextEra Energy Seabrook"), so plants proposed
   # in the same run must already be known. Records before links.
   ORDER = %w[facility organization organization_role organization_technology relationship facility_relationship
-    organization_alias].freeze
+    organization_alias news_item].freeze
 
   # Payload keys that name another record, and what kind of record each is.
   LINK_ENDS = {
@@ -145,8 +145,25 @@ class DataQuality::Stages::Match < DataQuality::Stage
       when "facility" then payload.key?("identify") ? match_enrichment(candidate, payload["identify"]) : match_record(candidate, payload)
       when "organization" then match_record(candidate, payload)
       when *LINK_ENDS.keys then match_link(candidate, payload)
+      when "news_item" then match_news(candidate, payload)
       else review(candidate, "#{candidate.kind} candidates aren't matched automatically yet")
       end
+    end
+
+    # A news item (#137) is about the companies and plants it names: each
+    # found exactly (name, alias or docket) is noted as a mention, and the
+    # claim is attached to the first, so it's decided with that record. One
+    # naming nothing in the directory waits for a person.
+    def match_news(candidate, payload)
+      found = Array(payload["about"]).filter_map do |about|
+        type = about["type"] == "facility" ? :facility : :organization
+        hit = resolve(type, about.except("type"), closed: :found)
+        hit.record if hit.is_a?(Found) && EXACT.include?(hit.by) && !hit.record.closed?
+      end.uniq { |record| [ record.type, record.id ] }
+      return review(candidate, "it names no company or plant in the directory") if found.empty?
+
+      candidate.update!(payload: payload.merge("mentions" => found.map { |record| [ record.type, record.id ] }))
+      attach(candidate, found.first, "About #{found.map(&:name).to_sentence}")
     end
 
     def match_record(candidate, payload)

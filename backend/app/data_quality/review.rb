@@ -730,8 +730,9 @@ module DataQuality::Review
           result = directory.write_fact(candidate, confidence:, crawl_run: run, by:, reason:, edited:)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: result.errors) unless result.success?
 
-          candidate.update!(status: "merged", subject_type: result.ref.type, subject_id: result.ref.id,
-            reviewed_by: by, reviewed_at: Time.current)
+          # A news item stays attached to the company or plant it's about (#137): its page is where it shows.
+          attached = candidate.kind == "news_item" ? {} : { subject_type: result.ref.type, subject_id: result.ref.id }
+          candidate.update!(status: "merged", **attached, reviewed_by: by, reviewed_at: Time.current)
           fill_site(candidate, result.ref.id, run, directory) if candidate.kind_facility?
           Result.new(candidate_id: candidate.id, ref: result.ref, errors: [])
         end
