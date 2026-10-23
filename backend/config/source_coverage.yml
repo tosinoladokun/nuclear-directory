@@ -35,7 +35,7 @@ categories:
       - { name: GAIN directory, status: planned, issue: 257, leads: true }
       - { name: NRC construction-permit notices in the Federal Register, status: planned, issue: 126, note: project developers }
       - { name: SEC filings, status: planned, issue: 129, note: project developers }
-      - { name: Company newsrooms, status: planned, issue: 128 }
+      - { name: Company newsrooms (news), kind: company_newsrooms, status: built, issue: 128 }
   - key: fuel
     name: Fuel and materials
     sources:
