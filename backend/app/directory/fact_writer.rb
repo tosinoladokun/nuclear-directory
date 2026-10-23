@@ -60,7 +60,8 @@ module Directory
     KINDS = {
       organization: {
         model: Organization,
-        attributes: %i[name short_name slug legal_name website domain sec_cik description hq_city hq_state country_code founded_year status aliases]
+        attributes: %i[name short_name slug legal_name website domain sec_cik description hq_city hq_state country_code founded_year status aliases
+          exchange ticker]
       },
       organization_role: { model: OrganizationRole, attributes: %i[organization_id role] },
       organization_technology: { model: OrganizationTechnology, attributes: %i[organization_id technology] },

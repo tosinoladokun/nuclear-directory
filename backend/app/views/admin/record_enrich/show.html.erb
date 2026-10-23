@@ -27,7 +27,7 @@
   <% if @items.any? %>
     <% held = @items.count { |item| item.ai_recommendation == "recommend_publish" && item.status != "needs_review" && item.held } %>
     <% if @agreed.empty? && held.positive? %>
-      <p class="type-small text-ink-muted m-0">No “Approve all” here: <%= joy %> agrees with <%= pluralize(held, "finding") %>, but <%= held == 1 ? "it changes" : "they change" %> what a person already decided (or <%= held == 1 ? "is" : "are" %> in a first batch Data Quality reads), so <%= held == 1 ? "it's" : "they're" %> approved one at a time.</p>
+      <p class="type-small text-ink-muted m-0">No Approve all here: these change what a person already decided, so approve them one at a time.</p>
     <% end %>
     <% if @agreed.any? %>
       <section class="nd-panel nd-stack" aria-label="Shortcut">

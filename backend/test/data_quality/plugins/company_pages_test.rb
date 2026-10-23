@@ -72,4 +72,30 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_includes rules, "If the page is about another company"
     assert_includes rules, "An office is not headquarters unless the page says so."
   end
+
+  test "part 2: a listing with its ticker in the quote, and links naming the other party, in the directory's verbs" do
+    page = <<~HTML
+      <html><body><p>Acme Fission Inc. designs small modular reactors.</p><p>Acme Fission trades on NASDAQ under the symbol ACME.</p>
+      <p>Acme Fission supplies fuel to Bright Power.</p><p>Acme Fission operates Latest Point.</p><p>Big Fund invested in Acme Fission.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => { "exchange" => "NASDAQ", "ticker" => "ACME", "quote" => "Acme Fission trades on NASDAQ under the symbol ACME." },
+      "links" => [
+        { "other" => "Bright Power", "other_is" => "company", "verb" => "supplies", "company_first" => true, "quote" => "Acme Fission supplies fuel to Bright Power." },
+        { "other" => "Big Fund", "other_is" => "company", "verb" => "invests_in", "company_first" => false, "quote" => "Big Fund invested in Acme Fission." },
+        { "other" => "Latest Point", "other_is" => "plant", "verb" => "operates", "company_first" => true, "quote" => "Acme Fission operates Latest Point." },
+        { "other" => "Ghost Co", "other_is" => "company", "verb" => "funds", "company_first" => true, "quote" => "Acme Fission operates Latest Point." } # other not in quote
+      ] }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+
+    assert_includes claims, { kind: "organization", payload: { "name" => "Acme Fission", "exchange" => "NASDAQ", "ticker" => "ACME" },
+      quote: "Acme Fission trades on NASDAQ under the symbol ACME." }
+    assert_includes claims.map { |c| c[:payload] }, { "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "Bright Power" }, "relationship_type" => "supplies" }
+    assert_includes claims.map { |c| c[:payload] }, { "from_organization" => { "name" => "Big Fund" }, "to_organization" => { "name" => "Acme Fission" }, "relationship_type" => "invests_in" }
+    assert_includes claims.map { |c| c[:payload] }, { "organization" => { "name" => "Acme Fission" }, "facility" => { "name" => "Latest Point" }, "relationship_type" => "operates" }
+    assert(claims.none? { |c| c[:payload].to_s.include?("Ghost Co") })
+  end
 end

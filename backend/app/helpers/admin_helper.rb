@@ -136,6 +136,17 @@ module AdminHelper
     end
   end
 
+  # A public company's listing with a link to its quote on Google Finance
+  # (#479): a convenience link, never a source for any fact.
+  GOOGLE_FINANCE_EXCHANGES = { "NASDAQ" => "NASDAQ", "NYSE" => "NYSE", "NYSE American" => "NYSEAMERICAN", "TSX" => "TSE",
+    "TSXV" => "CVE", "LSE" => "LON", "ASX" => "ASX", "OTC" => "OTCMKTS" }.freeze
+  def stock_listing(exchange, ticker)
+    return if ticker.blank? || exchange.blank?
+
+    url = "https://www.google.com/finance/quote/#{ERB::Util.url_encode(ticker)}:#{GOOGLE_FINANCE_EXCHANGES.fetch(exchange, exchange)}"
+    safe_join([ "#{exchange}: #{ticker} ", link_to("Google Finance ↗", url, class: "nd-link", target: "_blank", rel: "noopener") ])
+  end
+
   # A source's crawl status in one wording, wherever it's shown.
   def crawl_status_label(status) = CRAWL_STATUS_LABELS.fetch(status.to_s, status.to_s.humanize)
 
@@ -264,6 +275,8 @@ module AdminHelper
     payload = item.payload.to_h
     case item.kind
     when "organization"
+      return "Stock: #{payload['exchange']}: #{payload['ticker']}" if payload["ticker"]
+
       field, value = payload.except("name").first
       field ? "#{field_label(field).upcase_first}: #{field_value(value)}" : item.claim
     when "organization_role" then "What it does: #{role_label(payload['role'])}"

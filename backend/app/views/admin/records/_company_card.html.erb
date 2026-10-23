@@ -12,7 +12,8 @@
   <% end %>
   <% if shown.description.present? %><p class="type-body"><%= shown.description %></p><% end %>
   <% facts = [ [ "Website", shown.website ], [ "Also known as", p.aliases.join(", ").presence ], [ "Legal name", shown.legal_name ],
-               [ "Headquarters", place(shown.hq_city, shown.hq_state) ], [ "Founded", shown.founded_year ] ].reject { |_, value| value.blank? } %>
+               [ "Headquarters", place(shown.hq_city, shown.hq_state) ], [ "Founded", shown.founded_year ],
+               [ "Stock", stock_listing(record.exchange, record.ticker) ] ].reject { |_, value| value.blank? } %>
   <% if facts.any? %>
     <dl class="nd-kv type-body">
       <% facts.each do |label, value| %><dt class="type-label"><%= label %></dt><dd class="wrap-anywhere"><%= value %></dd><% end %>

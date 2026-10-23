@@ -42,7 +42,7 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_select "#finding-#{@agreed.id}", /“Acme Fission is headquartered in Austin\.”.*acmefission\.com.*✓ Joy: accept/m
     assert_select ".nd-panel a[href=?]", "https://www.acmefission.com/", text: "acmefission.com"
     assert_select ".nd-panel button.nd-btn--outline", "Read its pages"
-    assert_select "p", /No “Approve all” here: Joy agrees with 1 finding, but it changes what a person already decided/
+    assert_select "p", "No Approve all here: these change what a person already decided, so approve them one at a time."
     assert_select "#finding-#{@unsure.id}", /Joy: check it/
     assert_select "#finding-#{@agreed.id} .nd-btn--primary", "Approve"
 
@@ -81,5 +81,18 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
       payload: { "name" => "Other Co" }, quote: "q", status: "matched", subject_type: "Organization", subject_id: other.id)
     post admin_record_enrich_decide_path(type: "Organization", id: @company.id, candidate_id: elsewhere.id, decision: "approve")
     assert_response :not_found
+  end
+
+  test "a stock listing reads as one finding; approved, it's on the company's page with a Google Finance link" do
+    listing = Candidate.create!(source: @page, kind: "organization", payload: { "name" => "Acme Fission", "exchange" => "NASDAQ", "ticker" => "ACME" },
+      quote: "Acme Fission trades on NASDAQ under the symbol ACME.", status: "matched", subject_type: "Organization", subject_id: @company.id,
+      ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    get enrich_path
+    assert_select "#finding-#{listing.id} .type-body-strong", "Stock: NASDAQ: ACME"
+
+    post admin_record_enrich_decide_path(type: "Organization", id: @company.id, candidate_id: listing.id, decision: "approve")
+    assert_equal [ "NASDAQ", "ACME" ], @company.reload.values_at(:exchange, :ticker), flash[:alert]
+    get admin_record_path(type: "Organization", id: @company.id)
+    assert_select "a[href=?]", "https://www.google.com/finance/quote/ACME:NASDAQ", text: "Google Finance ↗"
   end
 end

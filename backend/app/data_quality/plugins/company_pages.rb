@@ -10,8 +10,12 @@
 class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PAGES = 4
   # The company's own pages worth reading, by their address or link text.
-  LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview/i
-  PROMPT_VERSION = "company_pages-1".freeze
+  LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
+  PROMPT_VERSION = "company_pages-2".freeze
+  EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
+  # Part 2 (#479): links in the directory's own verbs.
+  COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
+  PLANT_VERBS = %w[owns operates vendor_for].freeze
   FIELDS = %w[description hq_city hq_state founded_year legal_name].freeze
 
   INSTRUCTIONS = <<~TEXT.freeze
@@ -29,6 +33,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     For roles and technologies the quote itself must state the activity in a sentence: a menu heading, a navigation label or a list
     of links is not enough.
     If the page is about another company (a partner, parent, customer, or a press item about someone else), report nothing.
+    - listing: a public company's stock listing (exchange and ticker, e.g. NASDAQ and OKLO), only as the page states it.
+    - links: another company or a plant this company has a stated relationship with. The quote must name both this company (or
+      "we") and the other party, and state the relationship in a sentence. Verbs: supplies, invests_in, funds, offtake_with
+      (buys or sells power under an agreement), subsidiary_of (only when the page says it is a subsidiary or wholly owned), and for
+      plants owns, operates, vendor_for (it designed the plant's reactor). company_first is true when this company does the verb to
+      the other ("we supply X"), false when the other does it to this company ("X invested in us"). No amounts or dates here.
     Never report people (founders, executives, staff), investors or customers from logo lists, plant status or capacity, numbers
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
@@ -107,6 +117,30 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
         { kind: "organization", payload: { "name" => name, field => value.to_s.strip }, quote: quote.strip }
       end
+      listing = found["listing"]
+      if listing && EXCHANGES.include?(listing["exchange"]) && listing["ticker"].to_s.match?(/\A[A-Z.]{1,6}\z/) &&
+          quoted.(listing["ticker"], listing["quote"])
+        fields << { kind: "organization", payload: { "name" => name, "exchange" => listing["exchange"], "ticker" => listing["ticker"] },
+          quote: listing["quote"].strip }
+      end
+      Array(found["links"]).each do |link|
+        other, verb, quote = link["other"].to_s.strip, link["verb"], link["quote"]
+        next if other.blank? || !quoted.(other, quote)
+
+        if link["other_is"] == "plant"
+          next unless PLANT_VERBS.include?(verb)
+
+          fields << { kind: "facility_relationship", quote: quote.strip,
+            payload: { "organization" => { "name" => name }, "facility" => { "name" => other }, "relationship_type" => verb } }
+        else
+          next unless COMPANY_VERBS.include?(verb)
+
+          ends = [ { "name" => name }, { "name" => other } ]
+          ends.reverse! unless link["company_first"]
+          fields << { kind: "relationship", quote: quote.strip,
+            payload: { "from_organization" => ends.first, "to_organization" => ends.last, "relationship_type" => verb } }
+        end
+      end
       { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
@@ -122,7 +156,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         properties: { value: { type: "string" }, quote: { type: "string" } } }
       keyed = { type: "array", items: { type: "object", additionalProperties: false, required: %w[key quote],
         properties: { key: { type: "string" }, quote: { type: "string" } } } }
-      { type: "object", additionalProperties: false, required: [ *FIELDS, "roles", "technologies" ],
-        properties: FIELDS.index_with { quoted }.merge("roles" => keyed, "technologies" => keyed) }
+      listing = { type: %w[object null], additionalProperties: false, required: %w[exchange ticker quote],
+        properties: { exchange: { type: "string" }, ticker: { type: "string" }, quote: { type: "string" } } }
+      links = { type: "array", items: { type: "object", additionalProperties: false, required: %w[other other_is verb company_first quote],
+        properties: { other: { type: "string" }, other_is: { type: "string", enum: %w[company plant] },
+          verb: { type: "string", enum: COMPANY_VERBS + PLANT_VERBS }, company_first: { type: "boolean" }, quote: { type: "string" } } } }
+      { type: "object", additionalProperties: false, required: [ *FIELDS, "roles", "technologies", "listing", "links" ],
+        properties: FIELDS.index_with { quoted }.merge("roles" => keyed, "technologies" => keyed, "listing" => listing, "links" => links) }
     end
 end
