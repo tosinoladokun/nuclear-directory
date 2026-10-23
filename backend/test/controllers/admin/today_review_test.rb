@@ -384,4 +384,12 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert Candidate.find(second).status_matched?, "left waiting"
     assert_match "its record changed after the first page's copy was accepted", flash[:alert]
   end
+
+  test "a trade-press lead is never a row in Today's review" do
+    lead = Candidate.create!(source: @source, kind: "organization", payload: @both.payload.merge("lead" => true), quote: "Also.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    get admin_today_review_path
+    assert_select "[value=?]", lead.id.to_s, 0
+    assert_not_includes TodayReview.new.rows("agree").flat_map(&:candidate_ids), lead.id
+  end
 end
