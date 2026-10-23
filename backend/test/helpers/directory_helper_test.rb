@@ -138,7 +138,7 @@ class DirectoryHelperTest < ActionView::TestCase
 
   test "labels use the words in VOICE.md" do
     assert_equal "Power plant", facility_type_label("power_reactor")
-    assert_equal "Reactor developer", role_label("reactor_vendor")
+    assert_equal "Reactor designer", role_label("reactor_vendor")
     assert_equal "Power buyer", role_label("data_center_offtaker")
     assert_nil facility_type_label(nil)
     assert_nil facility_status_label(nil)
