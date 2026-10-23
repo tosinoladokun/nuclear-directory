@@ -109,7 +109,6 @@ class Admin::TodayController < Admin::BaseController
     # its locks); once that's in, the fact's other copies are approved with it
     # (their own sources and quotes), not held back by the decision just made.
     firsts = items.select { |item| copies.key?(item.candidate_id) }
-    results = DataQuality::Recommendations.accept(firsts, by: actor)
     # Each other copy rechecked under its decision lock against what the page
     # showed: Aminah's call, reason and snapshot, and Joy's recommendation.
     # Aminah's review must still describe the claim as it is now (a merge
@@ -131,16 +130,24 @@ class Admin::TodayController < Admin::BaseController
       expected = after_first[[ candidate.subject_type, candidate.subject_id ]]
       "its record changed after the first page's copy was accepted" if expected && record_state.(candidate.subject_type, candidate.subject_id) != expected
     end
-    results += results.select(&:ok?).flat_map do |first|
-      rest = copies.fetch(first.candidate_id, [])
-      next [] if rest.empty?
-
-      claim = Candidate.find(first.candidate_id)
-      after_first[[ claim.subject_type, claim.subject_id ]] = record_state.(claim.subject_type, claim.subject_id) if claim.subject_id
-      rest.flat_map do |id|
-        DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today: another page of the same fact", safe_check: unchanged).tap do |result|
-          # This group's own write is the new baseline for the next copy.
-          after_first[[ claim.subject_type, claim.subject_id ]] = record_state.(claim.subject_type, claim.subject_id) if result.sole.ok? && claim.subject_id
+    # Each fact's copies are decided in one transaction holding its record's
+    # lock from before the first write, so no one else's edit lands between
+    # the first copy and the baseline the others are checked against.
+    results = firsts.flat_map do |item|
+      claim = Candidate.find(item.candidate_id)
+      key = [ claim.subject_type, claim.subject_id ]
+      ActiveRecord::Base.transaction(requires_new: true) do
+        directory.lock_fact(type: claim.subject_type, id: claim.subject_id) if claim.subject_id
+        first = DataQuality::Recommendations.accept([ item ], by: actor)
+        rest = first.sole.ok? ? copies.fetch(item.candidate_id, []) : []
+        claim.reload
+        key = [ claim.subject_type, claim.subject_id ]
+        after_first[key] = record_state.(*key) if claim.subject_id && rest.any?
+        first + rest.flat_map do |id|
+          DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today: another page of the same fact", safe_check: unchanged).tap do |result|
+            # This group's own write is the new baseline for the next copy.
+            after_first[key] = record_state.(*key) if result.sole.ok? && claim.subject_id
+          end
         end
       end
     end
