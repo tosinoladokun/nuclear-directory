@@ -1,0 +1,16 @@
+# Seed research - 22 Oct 2026 (awardee companies with no role). Quote from the company's own page, checked live.
+name: General Atomics
+country_code: null
+status: active
+roles:
+- key: reactor_vendor
+  source_url: https://www.ga.com/about
+  quote: GA developed the UCSD Supercomputer Center and has constructed more than 60 TRIGA nuclear research reactors in 24 countries.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: An existing record (DOE awardee). Only the role is added, from the company's own page; country, HQ and website are not stated by that page, so none is set here.
+description:
+  source_url: https://www.ga.com/about
+  quote: GA developed the UCSD Supercomputer Center and has constructed more than 60 TRIGA nuclear research reactors in 24 countries.
