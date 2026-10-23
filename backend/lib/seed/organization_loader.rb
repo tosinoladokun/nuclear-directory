@@ -253,6 +253,7 @@ module Seed
         terms = Array(item["terms"])
         return if terms.empty? || !link&.ok?
 
+        link_verified = link_type.constantize.find_by(id: link.id)&.verified?
         terms.each do |term|
           unless term["key"].to_s.strip.present?
             @errors << "#{slug}: a deal term under #{item['to'] || item['name']} needs a key (a stable id, e.g. google-kairos-mpda-2024)"
@@ -263,7 +264,9 @@ module Seed
           # gives as null clears it (a condition met since, say).
           attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip }
             .merge(TERM_FIELDS.select { |field| term.key?(field) }.to_h { |field| [ field.to_sym, term[field] ] })
-          write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"])
+          # Pending only while the link itself is: once a person approves the
+          # link, its terms are verified with it, though the YAML still says pending.
+          write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"] && !link_verified)
         end
       end
 
