@@ -52,10 +52,11 @@ module StructuredDataHelper
     { "@type" => "Organization", "name" => organization.name, "url" => company_url(slug: organization.slug) }
   end
 
+  # No addressCountry: the profile holds a state, not a sourced country (Urenco is in London).
   def postal_address(city, state)
     return if city.blank? && state.blank?
 
-    { "@type" => "PostalAddress", "addressLocality" => city.presence, "addressRegion" => state.presence, "addressCountry" => "US" }.compact
+    { "@type" => "PostalAddress", "addressLocality" => city.presence, "addressRegion" => state.presence }.compact
   end
 
   def property(name, value)

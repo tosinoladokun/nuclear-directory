@@ -15,11 +15,12 @@
 <% content_for :head do %>
   <meta name="description" content="<%= description %>">
   <link rel="canonical" href="<%= company_url(slug: p.slug) %>">
-  <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
 <% end %>
 <%= render "shared/site_header" %>
 
 <main class="nd-page">
+  <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
+  <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
   <nav class="nd-crumbs" aria-label="Breadcrumb">
     <% if p.category %><%= link_to p.category.name, directory_url_for(category: p.category), class: "nd-link nd-link--muted" %> / <% end %><span aria-current="page"><%= p.name %></span>
   </nav>

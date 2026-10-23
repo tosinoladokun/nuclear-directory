@@ -145,7 +145,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_equal "Kairos Power", org["name"]
     assert_equal "Develops salt-cooled reactors.", org["description"]
     assert_equal "https://kairospower.com", org["url"]
-    assert_equal({ "@type" => "PostalAddress", "addressLocality" => "Alameda", "addressRegion" => "CA", "addressCountry" => "US" }, org["address"])
+    assert_equal({ "@type" => "PostalAddress", "addressLocality" => "Alameda", "addressRegion" => "CA" }, org["address"], "no country: the profile holds none")
     assert_includes org["alternateName"], "Kairos"
     assert_includes page["citation"].map { |c| c["url"] }, "https://kairospower.com/news/google"
     press = page["citation"].find { |c| c["url"] == "https://kairospower.com/news/google" }
