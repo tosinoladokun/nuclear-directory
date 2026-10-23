@@ -481,4 +481,31 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
     assert_match "already a unit of another site (Elsewhere), not San Onofre", error.message
   end
+
+  test "a unit may share its site's name; an alias under another site isn't moved; re-casing never renames" do
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "Callaway", site: "Callaway", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    site = Facility.find_by!(name: "Callaway", parent_id: nil)
+    assert_equal [ site.id ], Facility.where(name: "Callaway").where.not(id: site.id).pluck(:parent_id)
+
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "CALLAWAY", site: "Callaway", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal 2, Facility.where("LOWER(name) = 'callaway'").count
+    assert_not Facility.exists?(name: "CALLAWAY"), "re-casing the entry doesn't rename the unit"
+
+    other = Facility.create!(name: "Elsewhere")
+    Facility.create!(name: "Elsewhere 2", parent: other).aliases.create!(alias: "SONGS 2")
+    write_file("sce", org("Southern California Edison", website: "https://sce.example.com", facilities: [ item(name: "SONGS 2", site: "San Onofre", type: "operates") ]))
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "already a unit of another site (Elsewhere), not San Onofre", error.message
+  end
+
+  test "a site named only through site: can take its details from facilities.yml" do
+    write_file("holtec", org("Holtec International", website: "https://holtec.com", facilities: [ item(name: "Indian Point 2", site: "Indian Point", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ {
+      "name" => "Indian Point", "state" => { "value" => "NY", "source_url" => "https://example.com/where", "quote" => "Indian Point is in New York." }
+    } ] }.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    assert_equal "NY", Facility.find_by!(name: "Indian Point", parent_id: nil).state
+  end
 end

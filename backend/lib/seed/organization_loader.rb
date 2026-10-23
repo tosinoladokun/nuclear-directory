@@ -102,7 +102,8 @@ module Seed
         # Organizations first, so relationships can find the other side.
         docs.each { |slug, doc| write_organization(slug, doc, sources, shared) }
         docs.each { |slug, doc| write_facts(slug, doc, sources) }
-        in_docs = docs.values.flat_map { |doc| Array(doc["facilities"]).map { |item| item["name"] } }.to_set
+        # A site named only as a unit's site: (#472) is in a file too.
+        in_docs = docs.values.flat_map { |doc| Array(doc["facilities"]).flat_map { |item| [ item["name"], item["site"].to_s.strip.presence ] } }.compact.to_set
         facilities.each { |facility| write_facility_details(facility, sources, in_docs) }
 
         raise Error, "Seed failed, nothing was written:\n  #{@errors.join("\n  ")}" if @errors.any?
@@ -335,22 +336,39 @@ module Seed
       # name, or made there, so a fresh load gives one site with its units,
       # never a unit as a plant of its own. A same-name plant without a site
       # is taken in as the unit; one under another site fails the load.
+      # The site and unit are found by their own rules, never by FactWriter's
+      # global name lookup (which could find a unit for a site, or a site for
+      # its same-name unit): a site is an undocketed facility with no parent;
+      # a unit is one under that site by name or alias. One that's missing is
+      # created in place, then written by id, so the write is audited and
+      # sourced but never matched elsewhere. An existing unit keeps its name.
       def write_unit(slug, item, sources)
         site_name, name = item["site"].to_s.strip, item["name"].to_s.strip
-        site = Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", site_name).first
-        site_id = site&.id || (written = write(slug, :facility, { name: site_name }, evidence(item, sources)))&.id
-        return written unless site_id
-
-        named = Facility.where("LOWER(name) = LOWER(?)", name)
-        unit = named.find_by(parent_id: site_id)
-        if !unit && (elsewhere = named.where.not(parent_id: [ nil, site_id ]).first)
-          @errors << "#{slug}: facility #{name}: already a unit of another site (#{Facility.where(id: elsewhere.parent_id).pick(:name)}), not #{site_name}"
-          return
+        site = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", site_name).first
+        unless site
+          # A new site, sourced and decided like any written by this load.
+          site = Facility.create!(name: site_name)
+          site_result = write(slug, :facility, { id: site.id }, evidence(item, sources))
+          return site_result unless site_result&.ok?
         end
 
-        attributes = facility_attributes(item).merge(parent_id: site_id)
-        attributes[:id] = (unit || named.find_by(parent_id: nil))&.id
-        write(slug, :facility, attributes.compact, evidence(item, sources))
+        under = Facility.where(parent_id: site.id)
+        unit = under.where("LOWER(name) = LOWER(?)", name).first ||
+          under.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(name)).select(:facility_id)).first
+        unless unit
+          # The same name (or another name) under another site is that site's: never moved.
+          elsewhere = Facility.where.not(parent_id: [ nil, site.id ]).where("LOWER(name) = LOWER(?)", name).first ||
+            Facility.where.not(parent_id: [ nil, site.id ]).where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(name)).select(:facility_id)).first
+          if elsewhere
+            @errors << "#{slug}: facility #{name}: already a unit of another site (#{Facility.where(id: elsewhere.parent_id).pick(:name)}), not #{site_name}"
+            return
+          end
+          # A plant of its own by that name (an older fresh load) is taken in;
+          # never the site itself, or a docketed unit of another plant.
+          unit = Facility.where(parent_id: nil).where.not(id: site.id).where("LOWER(name) = LOWER(?)", name).first ||
+            Facility.create!(name:, parent_id: site.id)
+        end
+        write(slug, :facility, facility_attributes(item).except(:name).merge(id: unit.id, parent_id: site.id), evidence(item, sources))
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).
