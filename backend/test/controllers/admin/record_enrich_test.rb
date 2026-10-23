@@ -117,4 +117,30 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_select ".nd-panel", /Its site couldn't be read .* ago: HTTP 403\./
     assert_select "#finding-#{@agreed.id}", 0, "a finding from before this request is left to Checks"
   end
+
+  test "two fields for a pending company are both approved in one Approve all; an unusable website isn't asked for" do
+    @company.update_columns(verification_status: "pending", verified_by: nil)
+    @unsure.update_columns(status: "matched", notes: nil, ai_recommendation: "recommend_publish")
+    ids = [ @agreed.id, @unsure.id ].sort
+    post admin_record_enrich_agreed_path(type: "Organization", id: @company.id), params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) }
+    assert_equal "Approved 2 findings.", flash[:notice], flash[:alert]
+    assert_equal [ "Austin", 2019 ], [ @company.reload.hq_city, @company.founded_year ]
+
+    @company.update_columns(website: "acmefission.com", enrich_requested_at: nil)
+    assert_no_enqueued_jobs { post enrich_path }
+    assert_nil @company.reload.enrich_requested_at
+    assert_match "needs to start with https://", flash[:alert]
+  end
+
+  test "while its findings are being worked out, or after that failed, the page says so instead of 'Nothing waiting'" do
+    Candidate.where(id: [ @agreed.id, @unsure.id ]).update_all(status: "rejected")
+    @company.update_columns(enrich_requested_at: 10.minutes.ago, enriched_at: 5.minutes.ago)
+    run = CrawlRun.create!(stage: "extract", source_kind: "company_pages", status: "running", started_at: 4.minutes.ago)
+    get enrich_path
+    assert_select "p", /Working out what they state now/
+    run.update!(status: "failed", error: "model timeout")
+    get enrich_path
+    assert_select "p", /stopped with an error\. Read its pages again to retry\./
+    assert_select "p", text: /Nothing waiting/, count: 0
+  end
 end

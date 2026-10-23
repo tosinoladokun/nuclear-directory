@@ -16,13 +16,22 @@ class Admin::RecordEnrichController < Admin::BaseController
     # at a time, as on Checks).
     @agreed = @items.select { |item| item.ai_recommendation == "recommend_publish" && item.status != "needs_review" && item.held.nil? }.map(&:candidate_id)
     @runs = CrawlRun.where(source_kind: SOURCE_KIND).order(started_at: :desc).limit(4)
+    # Reading what its pages say, after they were fetched: still going, or stopped.
+    @extract = CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: @company.enriched_at..).order(:started_at).last if @company.enriched_at
     # Its home page, when the last read couldn't use it (blocked, an error): said, with Read again.
     @home = Source.find_by(url: @company.website.to_s.strip) if @company.website.present?
   end
 
   def create
+<<<<<<< HEAD
     if @company.website.blank? && @company.sec_cik.blank?
       flash[:alert] = "It has no website or SEC number to read yet. Add one with Edit first."
+=======
+    if @company.website.blank?
+      flash[:alert] = "It has no website to read yet. Add one with Edit first."
+    elsif !@company.website.to_s.strip.match?(%r{\Ahttps://[^\s/]+}i)
+      flash[:alert] = "Its website needs to start with https:// before its pages can be read. Fix it with Edit first."
+>>>>>>> origin/feat/479-enrich
     else
       @company.update_columns(enrich_requested_at: Time.current)
       DataQuality::RunJob.perform_later(SOURCE_KIND)
@@ -55,7 +64,29 @@ class Admin::RecordEnrichController < Admin::BaseController
       return redirect_after(admin_record_enrich_path(type: "Organization", id: @company.id))
     end
 
-    done, stopped = DataQuality::Review.approve(ids, by: actor, reason: "Approved in Enrich: Joy agrees", only_recommended: true).partition(&:ok?)
+    # One batch under the company's lock: whether a person had decided each
+    # record is read before any of these writes (the first approval mustn't
+    # hold back the rest), and two findings for one field never both land.
+    directory = DataQuality::DirectoryClient.new
+    results = ActiveRecord::Base.transaction do
+      Organization.lock.find(@company.id)
+      decided = Candidate.where(id: ids).to_h do |claim|
+        [ claim.id, directory.attached_record(claim)&.verified_by.to_s.start_with?("human:") ]
+      end
+      fields = []
+      check = lambda do |claim|
+        held = DataQuality::Review.held_reason(claim, directory:, decided: decided[claim.id])
+        next held if held
+
+        field = claim.kind == "organization" && [ claim.subject_id, claim.payload.to_h.except("name").keys.sort ]
+        next "another finding for the same field was approved just now; decide this one on its own" if field && fields.include?(field)
+
+        fields << field if field
+        nil
+      end
+      DataQuality::Review.approve(ids, by: actor, reason: "Approved in Enrich: Joy agrees", only_recommended: true, safe_check: check)
+    end
+    done, stopped = results.partition(&:ok?)
     flash[:notice] = "Approved #{helpers.pluralize(done.size, 'finding')}." if done.any?
     flash[:alert] = stopped.map { |r| "##{r.candidate_id}: #{Array(r.errors).to_sentence}" }.join("; ") if stopped.any?
     redirect_after admin_record_enrich_path(type: "Organization", id: @company.id)
