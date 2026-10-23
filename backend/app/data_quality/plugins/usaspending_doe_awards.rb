@@ -158,6 +158,16 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     end
   end
 
+  # A company found only by the small-business search (#125) waits for a
+  # person: the search is new, and a grant's description is all that says
+  # it's nuclear work.
+  SMALL_BUSINESS_HOLD = "Found only by the new small-business search: check the grants are nuclear energy work"
+
+  def hold_for_review(candidate)
+    searches = CSV.parse(candidate.source&.content_text.to_s, headers: true).filter_map { |row| row["search"] }
+    SMALL_BUSINESS_HOLD if searches.any? && searches.uniq == [ "small_business" ]
+  end
+
   # The facts every row's source states, which a single row doesn't repeat.
   def source_facts(source)
     return unless source.source_kind == source_kind

@@ -164,6 +164,9 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     refute @requests.last["filters"].key?("min_amount")
     kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).select { |row| row["search"] == "small_business" } }
     assert_equal SMALL_KEPT.sort, kept.map { |row| row["description"] }.sort
+    small = Source.find_by!(url: "https://www.usaspending.gov/recipient/00000000-0000-0000-0000-000000000050-R/latest")
+    assert_equal Plugin::SMALL_BUSINESS_HOLD, plugin.hold_for_review(Candidate.new(kind: "relationship", source: small))
+    assert_nil plugin.hold_for_review(Candidate.new(kind: "relationship", source: recipient(XENERGY["recipient_id"])))
   end
 
   test "a search with more awards than the pages read stores nothing, so the snapshots stay whole" do
