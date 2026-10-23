@@ -170,7 +170,7 @@ Disallow: /</pre>
     <div class="flex flex-col gap-2">
       <span class="type-label">Profile header: company with description, plant without</span>
       <%= render "shared/profile_header", name: m[:company].name, kind: :company, description: m[:company].description,
-            citations: [ [ 1, m[:sources][0] ] ], tags: [ "Reactor developer", "Molten salt coolant", "Fission" ], heading_id: "design-profile-company" %>
+            citations: [ [ 1, m[:sources][0] ] ], tags: [ "Reactor designer", "Molten salt coolant", "Fission" ], heading_id: "design-profile-company" %>
       <%= render "shared/profile_header", name: m[:plant_sparse].name, kind: :plant, heading_id: "design-profile-plant" %>
     </div>
 
@@ -209,7 +209,7 @@ Disallow: /</pre>
         <%= render "shared/overview_panel", verified_at: m[:verified_at], correction_url: "#",
               rows: [ [ "Website", link_to("kairospower.com", "#", class: "nd-link"), nil ],
                       [ "HQ", nil, nil ],
-                      [ "Role", "Reactor developer", [ [ 1, m[:sources][0] ] ] ],
+                      [ "Role", "Reactor designer", [ [ 1, m[:sources][0] ] ] ],
                       [ "Technology", "Fission, small modular reactor", nil ] ] %>
         <%= render "shared/overview_panel", rows: [ [ "Website", nil, nil ] ] %>
       </div>
