@@ -183,6 +183,15 @@ module Seed
           country_code: doc["country_code"], status: doc["status"], description: description["text"],
           hq_city: hq.filter_map { |entry| entry["city"].presence }.last, hq_state: hq.filter_map { |entry| entry["state"].presence }.last
         }
+        # A field the file doesn't state at all is left as it is, so a role-only
+        # seed never blanks what the admin, Enrich or an earlier seed filled in
+        # (Copilot, #501). A key stated as null still clears it.
+        { website: "website", country_code: "country_code", legal_name: "legal_name", hq_city: "hq", hq_state: "hq" }.each do |attribute, key|
+          attributes.delete(attribute) unless doc.key?(key)
+        end
+        # A description stated as null, or with `text: null`, clears it; one with only a source and quote (no text key) leaves the text alone.
+        states_text = doc.key?("description") && (doc["description"].nil? || doc["description"].respond_to?(:key?) && doc["description"].key?("text"))
+        attributes.delete(:description) unless states_text
         attributes[:domain] = nil if shared.include?(Organization.domain_from(doc["website"]))
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
@@ -229,9 +238,13 @@ module Seed
           # same link (same from/to/type) doesn't clear a value another
           # entry set. The seed describes what's known; a missing key is
           # "nothing to say", not "clear it".
+          # A link marked pending stays pending, and a human's later decision on it holds, as for plant links.
+          existing = Relationship.find_by(from_organization_id: organization.id, to_organization_id: other.id, relationship_type: item["type"])
+          next if item["pending"] && existing&.closed?
+
           link = write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
             relationship_type: item["type"], description: item["description"] }.compact,
-            evidence(item, sources))
+            evidence(item, sources), pending: item["pending"], hold: held_link_reason(existing, item))
           write_terms(slug, "Relationship", link, item, sources)
         end
 
@@ -502,6 +515,18 @@ module Seed
         return unless link&.verified?
         # A seed-verified link is decided in the write that creates it; a
         # decision from pending made later is a human's (e.g. in the admin).
+        events = link.verification_events
+        decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
+        return if events.where(to_status: "pending").or(decided_later).exists?
+
+        item["pending_reason"]
+      end
+
+      # The pending reason to keep, when a link the seed marks pending was verified later by a person
+      # (a decision made after the seed's own write); nil otherwise. Plant links and company links.
+      def held_link_reason(link, item)
+        return unless item["pending"] && link&.verified?
+
         events = link.verification_events
         decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
         return if events.where(to_status: "pending").or(decided_later).exists?

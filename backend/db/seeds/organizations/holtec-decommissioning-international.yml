@@ -33,6 +33,20 @@ facilities:
   source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/oc
   quote: to Oyster Creek Environmental Protection, LLC (OCEP), as the licensed owner and to Holtec Decommissioning International (HDI), as the licensed operator. The license transfer was approved by the NRC staff and became effective on July 1, 2019.
   confidence: 1.0
+- name: Indian Point 2
+  site: Indian Point
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/ip2
+  quote: On November 21, 2019, Entergy and Holtec submitted a License Transfer Application requesting NRC approval to transfer the Indian Point Facility Operating Licenses for Units 1, 2, and 3, as well as the general license for the Independent Spent Fuel Storage Installation (ISFSI) to Holtec, as the licensed owner, and to Holtec Decommissioning International (HDI), as the licensed operator. On November 23, 2020, the NRC issued an order approving the transfer and draft conforming license amendments
+  confidence: 1.0
+  note: 'Licensed operator: NRC approved the transfer to HDI in November 2020.'
+- name: Indian Point 3
+  site: Indian Point
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/ip3
+  quote: On November 21, 2019, Entergy and Holtec submitted a License Transfer Application requesting NRC approval to transfer the Indian Point Facility Operating Licenses for Units 1, 2, and 3, as well as the general license for the Independent Spent Fuel Storage Installation (ISFSI) to Holtec, as the licensed owner, and to Holtec Decommissioning International (HDI), as the licensed operator. On November 23, 2020, the NRC issued an order approving the transfer and draft conforming license amendments
+  confidence: 1.0
+  note: 'Licensed operator: NRC approved the transfer to HDI in November 2020.'
 notes: 'Decision for the HDI claims in Checks (1273, 1279, 1287, 1291 and the links that wait on them): HDI is its own company with its own site, and Holtec states it is a wholly owned subsidiary, so it is a company linked by subsidiary_of, not an alias of Holtec International. HQ and country left blank: no page read states where it is based. The operator links for Indian Point 2 and 3 and Oyster Creek stay with the pipeline: their NRC quotes are transfer applications, not the completed transfer.'
 description:
   text: Decommissioning company, a wholly owned subsidiary of Holtec International, for shut-down nuclear power plants.

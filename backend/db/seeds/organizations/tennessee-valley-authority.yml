@@ -25,6 +25,15 @@ technologies:
   confidence: 1.0
 relationships:
 - type: offtake_with
+  to: ENTRA1 Energy
+  description: 'Non-binding collaborative agreement (framework) for up to 6 GW of NuScale SMR capacity, reached in 2025 with ENTRA1. It is not a power purchase agreement.'
+  source_url: https://www.nuscalepower.com/press-releases/2026/nuscale-power-reports-fourth-quarter-and-full-year-2025-results
+  quote: with our exclusive global commercialization partner, ENTRA1, reaching a nonbinding collaborative agreement with TVA to deploy up to 6 gigawatts of NuScale small modular reactor (“SMR”) capacity across TVA’s seven-state service region.
+  published: '2026-02-26'
+  confidence: 1.0
+  pending: true
+  pending_reason: "A non-binding framework must not be counted as a power deal; it waits for the stage-aware deal count and presentation (#487)."
+- type: offtake_with
   to: Kairos Power
   description: 'Signed PPA: TVA buys up to 50 MW from Kairos Power''s Hermes 2 reactor (first US utility PPA with a Gen IV reactor). Announced Aug 2025.'
   source_url: https://world-nuclear-news.org/articles/google-kairos-power-tva-announce-collaboration
