@@ -44,14 +44,14 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     # (NUCLEAR_ENERGY).
     "small_business" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.049" ], min_amount: 100_000,
       keywords: [ "nuclear reactor", "advanced reactor", "nuclear fuel", "nuclear power", "spent fuel", "nuclear waste",
-        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt", "uranium enrichment" ] }
+        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt reactor", "uranium enrichment" ] }
   }.freeze
   # The fusion search's keyword also finds awards that only mention fusion:
   # data fusion, plastics, and software, simulation or quantum computing run
   # on fusion data. Only awards for fusion energy work itself are kept: its
   # machines, magnets, lasers, plasma diagnostics and research.
   FUSION_ENERGY = /\b(?:fusion (?:energy|reactors?|magnets?|plasmas?|pilot plants?|program|facilit(?:y|ies))|inertial fusion|tokamaks?|stellarators?|burning plasma|for fusion\b)/i
-  NUCLEAR_ENERGY = /\b(?:(?:nuclear|advanced|microreactors?|test) reactors?|microreactors?|nuclear (?:fuel|power|energy|plants?|waste)|spent (?:nuclear )?fuel|isotope production|medical isotopes?|HALEU|TRISO|molten salt|uranium enrichment)\b/i
+  NUCLEAR_ENERGY = /\b(?:(?:nuclear|advanced|microreactors?|test) reactors?|microreactors?|nuclear (?:fuel|power|energy|plants?|waste)|spent (?:nuclear )?fuel|isotope production|medical isotopes?|HALEU|TRISO|molten salt (?:reactors?|fuel|coolant for (?:a |nuclear )?reactors?)|uranium enrichment)\b/i
   NOT_FUSION_ENERGY = /\b(?:data fusion|machine learning|data science|software|quantum|simulations?|meshing|computation)\b/i
   FIELDS = [ "Award ID", "Recipient Name", "Award Amount", "Start Date", "End Date", "Description", "generated_internal_id", "recipient_id" ].freeze
   # USAspending's recipient hash and level, e.g. "1f4e2b…-C".
