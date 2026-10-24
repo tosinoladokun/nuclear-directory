@@ -8,6 +8,57 @@ class SeedsTest < ActiveSupport::TestCase
     silence_warnings { load Rails.root.join("db/seeds.rb") }
   end
 
+  # What the seed files say should load, counted from the YAML itself, so a
+  # seed PR adds its files without editing a number here (and two seed PRs
+  # never conflict on one). Each fact once: the same role, link or plant link
+  # stated in two files is one row.
+  class Expected
+    def initialize
+      @files = Dir[Rails.root.join("db/seeds/organizations/*.yml")].sort
+        .to_h { |path| [ File.basename(path, ".yml"), YAML.safe_load_file(path, permitted_classes: [ Date ]) ] }
+      @plants = YAML.safe_load_file(Rails.root.join("db/seeds/facilities.yml"), permitted_classes: [ Date ])["facilities"]
+    end
+
+    def organizations = @files.size
+    def roles = each_file("roles") { |slug, item| [ item["key"], item["subtype"] ].compact.map { |key| [ slug, key ] } }.uniq.size
+    def technologies = each_file("technologies") { |slug, item| [ [ slug, item["key"] ] ] }.uniq.size
+    # A company link stated pending in any file waits, and isn't counted as verified.
+    def relationships
+      links = each_file("relationships") { |slug, item| [ [ [ item["type"], slug, slug_of(item["to"]) ], item["pending"] ] ] }.group_by(&:first)
+      links.count { |_, rows| rows.none?(&:last) }
+    end
+    # Each site and each unit once. A unit given with its site ("site:
+    # Indian Point") is its own record under that site, and the site is one
+    # too, even when they share a name (Callaway). A plain name that is one of
+    # those sites or units is the same record (a standalone plant later taken
+    # in as the unit).
+    def facilities
+      key = ->(name) { name.to_s.strip.downcase }
+      items = each_file("facilities") { |_, item| [ item ] }
+      units = items.select { |item| item["site"].present? }.map { |item| [ key.(item["name"]), key.(item["site"]) ] }.uniq
+      sites = units.map(&:last).uniq
+      plain = (items.reject { |item| item["site"].present? }.map { |item| key.(item["name"]) } + @plants.map { |plant| key.(plant["name"]) }).uniq
+      units.size + sites.size + plain.count { |name| !sites.include?(name) && units.none? { |unit, _| unit == name } }
+    end
+    def facility_aliases = @plants.sum { |plant| Array(plant["other_names"]).size }
+
+    # [verified, pending]: a link stated pending in any file waits.
+    def plant_links
+      links = each_file("facilities") { |slug, item| [ [ [ slug, item["type"], item["name"] ], item["pending"] ] ] }.group_by(&:first)
+      pending = links.count { |_, rows| rows.any?(&:last) }
+      [ links.size - pending, pending ]
+    end
+
+    private
+      def each_file(key, &block) = @files.flat_map { |slug, doc| Array(doc[key]).flat_map { |item| block.call(slug, item) } }
+
+      # A link names the other company by name or alias; its file is its identity.
+      def slug_of(name)
+        @slugs ||= @files.flat_map { |slug, doc| [ doc["name"], *Array(doc["aliases"]) ].map { |each| [ OrganizationAlias.normalize(each.to_s), slug ] } }.to_h
+        @slugs.fetch(OrganizationAlias.normalize(name.to_s), name)
+      end
+  end
+
   # Production was first seeded from these files (main at #100, 2026-10-09);
   # every later seed must load on top of them, as a re-seed does.
   test "the current seed loads on top of the seed production started with" do
@@ -47,12 +98,30 @@ class SeedsTest < ActiveSupport::TestCase
     assert_nil Technology.find_by!(key: "fusion").parent
   end
 
+  test "a site named only through site:, and a unit that shares its name, count as two facilities" do
+    expected = Expected.new
+    files = { "ameren" => { "name" => "Ameren", "facilities" => [ { "name" => "Callaway", "site" => "Callaway" } ] },
+      "other" => { "name" => "Other", "facilities" => [ { "name" => "Indian Point 2", "site" => "Indian Point" }, { "name" => "Indian Point 2" } ] } }
+    expected.instance_variable_set(:@files, files)
+    expected.instance_variable_set(:@plants, [ { "name" => "Indian Point" } ])
+
+    assert_equal 4, expected.facilities, "Callaway site and unit; Indian Point and its unit 2, named plainly too"
+  end
+
+  test "the expected counts are read from the seed files, and aren't empty" do
+    expected = Expected.new
+    assert_operator expected.organizations, :>, 100
+    assert_operator expected.relationships, :>, 50
+    assert_operator expected.plant_links.sum, :>, 50
+  end
+
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 121, Organization.verified.count
-    assert_equal 137, OrganizationRole.verified.count
-    assert_equal 59, OrganizationTechnology.verified.count
+    expected = Expected.new
+    assert_equal expected.organizations, Organization.verified.count
+    assert_equal expected.roles, OrganizationRole.verified.count
+    assert_equal expected.technologies, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
     %w[ameren-ue arizona-public-service-co dte-electric-company duke-energy-florida duke-energy energy-harbor-nuclear-corp firstenergy-nuclear-operating-co indiana-michigan-power-co nebraska-public-power-district northern-states-power-company-minnesota pacific-gas-electric-co pseg-nuclear-llc south-carolina-electric-gas-co southern-nuclear-operating-co stp-nuclear-operating-co susquehanna-nuclear-llc wolf-creek-nuclear-operating-corp].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
@@ -61,13 +130,13 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 78, Relationship.verified.count
-    assert_equal 52, Facility.verified.count
-    # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 75, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
-    assert_equal 27, FacilityAlias.count
+    assert_equal expected.relationships, Relationship.verified.count
+    assert_equal expected.facilities, Facility.verified.count
+    # Plant links marked pending wait for a direct quote (owns/operates not stated by the source).
+    assert_equal expected.plant_links, [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal expected.facility_aliases, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
-    assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
+    assert_equal [ "human:tosin" ], Relationship.verified.distinct.pluck(:verified_by)
     assert_equal [ 1 ], OrganizationRole.distinct.pluck(:confidence)
 
     georgia_power = Directory::Lookup.organization(name: "Georgia Power Company")
@@ -181,15 +250,84 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal [ "venture_capital" ], Organization.find_by!(slug: "bernhard-capital-partners").roles.pluck(:key)
   end
 
-  test "CFS and Dominion share one ARC facility" do
+  test "CFS, Google and Eni share one ARC facility, and Dominion owns only the site, so has no link to the plant" do
     load_seeds
 
     arc = Facility.find_by!(name: "Fall Line Fusion Power Station")
     links = arc.facility_relationships.includes(:organization).to_h { |link| [ link.organization.slug, link ] }
-    assert_equal %w[commonwealth-fusion-systems dominion-energy google], links.keys.sort
+    assert_equal %w[commonwealth-fusion-systems eni google], links.keys.sort
     assert links["google"].offtakes_from?
-    assert_match "leasing rights", links["dominion-energy"].description
-    assert_equal "Dominion Energy Virginia currently owns the proposed site.", links["dominion-energy"].evidence.sole.quote
+    assert links["eni"].offtakes_from?
+    assert_match "more than $1 billion", links["eni"].evidence.sole.quote
+    assert_match "leasing rights", links["commonwealth-fusion-systems"].description
+  end
+
+  test "ENTRA1's 2023 SEC quotes come off after the seed attaches its own sources" do
+    load_seeds
+    load Rails.root.join("db/data/20261022200000_entra1_drop_sec_evidence.rb")
+    company = Organization.find_by!(slug: "entra1-energy")
+    sec = Source.find_or_create_by!(url: Entra1DropSecEvidence::SOURCE_URL) { |source| source.source_kind = "web_page" }
+    role = company.organization_roles.first
+    [ company, role ].each { |fact| Evidence.create!(subject: fact, source: sec, quote: "ENTRA1 is a company from the filing", confidence: 0.9, found_by: "human") }
+
+    Entra1DropSecEvidence.new(reason: "test").up
+
+    assert_empty Evidence.where(source: sec, subject: [ company, role ])
+    assert company.evidence.any?, "the company keeps its own site's quote"
+    assert role.evidence.any?, "the role keeps its own site's quote"
+    assert_nothing_raised { Entra1DropSecEvidence.new(reason: "test").up }
+  end
+
+  test "a role-only company seed leaves the company's other fields as they are, now and on a re-seed" do
+    load_seeds
+    slugs = %w[general-atomics global-laser-enrichment good-energy-collective-incorporated pkmj-technical-services-llc advanced-conductor-technologies]
+    slugs.each do |slug|
+      Organization.find_by!(slug:).update_columns(country_code: "US", website: "https://example.org/#{slug}", legal_name: "#{slug} Inc.",
+        hq_city: "Springfield", hq_state: "IL", description: "Added later by hand")
+    end
+
+    2.times { load_seeds }
+
+    slugs.each do |slug|
+      company = Organization.find_by!(slug:)
+      assert_equal [ "US", "https://example.org/#{slug}", "#{slug} Inc.", "Springfield", "IL", "Added later by hand" ],
+        company.attributes.values_at("country_code", "website", "legal_name", "hq_city", "hq_state", "description"), slug
+    end
+  end
+
+  test "Indian Point's units from two companies' files share one site" do
+    load_seeds
+
+    units = Facility.where(name: [ "Indian Point 2", "Indian Point 3" ])
+    assert_equal 2, units.count
+    assert_equal 1, units.pluck(:parent_id).uniq.size
+    assert_equal "Indian Point", units.first.parent.name
+    assert_equal [ "Holtec Decommissioning International", "Holtec International" ],
+      FacilityRelationship.where(facility: units).includes(:organization).map { |link| link.organization.name }.uniq.sort
+  end
+
+  test "ENTRA1's SEC cleanup fails loudly when a removal is refused, so it isn't recorded as applied" do
+    load_seeds
+    load Rails.root.join("db/data/20261022200000_entra1_drop_sec_evidence.rb")
+    company = Organization.find_by!(slug: "entra1-energy")
+    sec = Source.find_or_create_by!(url: Entra1DropSecEvidence::SOURCE_URL) { |source| source.source_kind = "web_page" }
+    Evidence.where(subject: company).delete_all
+    Evidence.create!(subject: company, source: sec, quote: "ENTRA1 is a company from the filing", confidence: 0.9, found_by: "human")
+
+    assert_raises(RuntimeError) { Entra1DropSecEvidence.new(reason: "test").up }
+    assert Evidence.where(subject: company, source: sec).exists?, "the only quote stays"
+  end
+
+  test "the TVA-ENTRA1 framework stays pending, outside ENTRA1's deals, after loading and reloading" do
+    load_seeds
+    tva = Organization.find_by!(slug: "tennessee-valley-authority")
+    entra1 = Organization.find_by!(slug: "entra1-energy")
+    link = Relationship.find_by!(from_organization_id: tva.id, to_organization_id: entra1.id, relationship_type: "offtake_with")
+    assert link.pending?
+
+    2.times { load_seeds }
+    assert link.reload.pending?
+    refute_includes CompanyProfile.new(entra1.reload).deals.map(&:id), link.id
   end
 
   test "is safe to re-run" do

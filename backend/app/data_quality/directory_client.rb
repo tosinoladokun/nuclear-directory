@@ -12,7 +12,7 @@ class DataQuality::DirectoryClient
   Ref = Data.define(:type, :id)
   # What a lookup found: enough to match on and to explain a match.
   # values: a link's stored values ({ "ownership_pct" => 45.7, ... }), else nil.
-  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :state,
+  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
     :country_code, :verification_status, :verified_by, :verified_at, :values) do
     def ref = Ref.new(type:, id:)
     def rejected? = verification_status == "rejected"
@@ -38,10 +38,12 @@ class DataQuality::DirectoryClient
 
   # Kinds whose payload names other records instead of carrying attributes;
   # the match stage resolves those names to ids and writes the fact.
-  LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship].freeze
+  # Kinds that name other records (match resolves their ends). A deal term's
+  # one end is the company or link it belongs to (#397).
+  LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship deal_term].freeze
   LINK_ENDS = %w[organization facility from_organization to_organization].freeze
   # Never taken from a payload: which record, which ends, and the slug.
-  PAYLOAD_LOCKED = %w[id slug organization_id facility_id from_organization_id to_organization_id].freeze
+  PAYLOAD_LOCKED = %w[id slug organization_id facility_id from_organization_id to_organization_id link_id].freeze
 
   def initialize(lookup: nil, fact_writer: nil)
     @owner_hints = []
@@ -57,9 +59,17 @@ class DataQuality::DirectoryClient
     record("Organization", lookup.organization(name:, domain:, sec_cik:))
   end
 
+  # Companies with an SEC CIK, live ones only (#129): [SecFilerRef].
+  def organizations_with_sec_cik = lookup.organizations_with_sec_cik
+
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
   end
+
+  # For a plant-level EIA file (#319): the power plants that have no EIA
+  # plant ID yet, to find by name and state.
+  def plants_without_eia_plant_id = lookup.plants_without_eia_plant_id
+  def normalize_facility_name(name) = lookup.normalize_facility_name(name)
 
   # Runs the block with the candidate's attached fact locked, unless it was
   # rejected or unpublished meanwhile: then returns that fact's Record and
@@ -156,6 +166,8 @@ class DataQuality::DirectoryClient
     # a slug in the payload (payloads aren't validated; Review locks these too).
     attributes = candidate.payload.except(*WRITE_SKIPPED).symbolize_keys
     attributes[:id] = candidate.subject_id if candidate.subject_id
+    # A deal term's link verb only finds its link; the term has no such field.
+    attributes.delete(:relationship_type) if candidate.kind == "deal_term"
     if candidate.kind == "organization"
       # The name it was found under becomes an alias only once a verdict accepts
       # it, and a matched company keeps its own name.
@@ -178,6 +190,7 @@ class DataQuality::DirectoryClient
       end
     evidence = [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", confidence:, crawl_run_id: crawl_run&.id } ]
     return write_alias(candidate, verification:, evidence:, by:) if candidate.kind == "organization_alias"
+    return write_news(candidate, verification:, evidence:) if candidate.kind == "news_item"
 
     result = fact_writer.write(candidate.kind, attributes, evidence:, verification:,
       protect_human_verified: by.nil? || enrichment)
@@ -225,6 +238,9 @@ class DataQuality::DirectoryClient
     # A link's ends as the payload names them, found afresh, so a claim
     # attached to the wrong link (#226) doesn't pass as the same claim.
     attributes.merge!(link_end_ids(candidate.payload)) if LINK_KINDS.include?(candidate.kind)
+    # A deal term's end is its link: the company (#396), or the link its
+    # ends and verb name (#256).
+    attributes = deal_term_link(candidate.payload, attributes) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
       at: candidate.source.fetched_at || Time.current)
@@ -304,6 +320,12 @@ class DataQuality::DirectoryClient
 
   # Whether a fact is public now (its model's published scope).
   def published?(type:, id:) = lookup.published?(type:, id:)
+
+  # Published companies' and plants' names and aliases, by type (#127).
+  def published_names = lookup.published_names
+
+  # Ids of sources behind published facts (#510).
+  def published_source_ids = lookup.published_source_ids
 
   # Of these facts of one type, the ids a person decided (verified_by human:…).
   def human_decided_ids(type:, ids:) = lookup.human_decided_ids(type:, ids:)
@@ -394,7 +416,7 @@ class DataQuality::DirectoryClient
   # its source's quote as evidence, recorded as `by`. Publishing it is a
   # separate decision. Returns a WriteResult.
   def add_fact(kind, attributes, source_id:, quote:, by:, reason:)
-    result = fact_writer.write(kind, attributes.to_h.symbolize_keys,
+    result = fact_writer.write(kind, attributes.to_h.symbolize_keys, create_only: true,
       evidence: [ { source_id:, quote:, found_by: "human" } ], verification: { status: "pending", by:, reason: })
     write_result(result)
   end
@@ -419,8 +441,35 @@ class DataQuality::DirectoryClient
   end
 
   private
+    # A news item (#137): the item (the same one by its link), then the
+    # companies and plants match found it's about. One about nothing in the
+    # directory isn't written; one whose company or plant was taken off since
+    # is refused, item and mentions together, without stopping the batch.
+    def write_news(candidate, verification:, evidence:)
+      payload = candidate.payload.to_h
+      mentions = Array(payload["mentions"])
+      if candidate.subject_id.nil? || mentions.empty?
+        return WriteResult.new(ref: nil, errors: [ "it isn't about a company or plant in the directory yet" ])
+      end
+
+      attributes = payload.slice("url", "title", "publisher", "published_on", "summary").symbolize_keys
+      result = nil
+      begin
+        ActiveRecord::Base.transaction(requires_new: true) do
+          result = fact_writer.write(:news_item, attributes, evidence:, verification:)
+          raise ActiveRecord::Rollback unless result.ok?
+
+          mentions.each { |type, id| Directory::FactWriter.mention_news(news_item_id: result.id, subject_type: type, subject_id: id) }
+        end
+      rescue Directory::FactWriter::Invalid => error
+        return WriteResult.new(ref: nil, errors: [ error.message ])
+      end
+      write_result(result)
+    end
+
     # "X is also known as Y": the alias goes on its company, which must be
     # published already (approving an alias doesn't publish a company).
+
     def write_alias(candidate, verification:, evidence:, by:)
       ends = candidate.payload["organization"].to_h
       company = (organization(name: ends["name"]) if ends["name"].present?) ||
@@ -443,6 +492,19 @@ class DataQuality::DirectoryClient
     # { organization_id: 12, facility_id: 40 } for the ends a link payload
     # names: a company by name (or alias) or domain, a plant by docket, EIA
     # plant ID or name. An end that isn't found is nil.
+    # A deal term's attributes with its ends replaced by its link's id.
+    def deal_term_link(payload, attributes)
+      ends = attributes.extract!(:organization_id, :facility_id, :from_organization_id, :to_organization_id)
+      link_kind = DataQuality::Stages::Match::DEAL_LINKS[payload["link_type"]]
+      return attributes.merge(link_id: ends[:organization_id]) unless link_kind
+
+      # Both ends must be found: with one missing, the other end and the verb
+      # alone could pick some other link.
+      needed = link_kind == "relationship" ? %i[from_organization_id to_organization_id] : %i[organization_id facility_id]
+      link = (existing_fact(link_kind, ends.slice(*needed).merge(relationship_type: payload["relationship_type"])) if needed.all? { |key| ends[key] })
+      attributes.except(:relationship_type).merge(link_id: link&.id)
+    end
+
     def link_end_ids(payload)
       LINK_ENDS.each_with_object({}) do |key, ids|
         named = payload[key]
@@ -483,7 +545,7 @@ class DataQuality::DirectoryClient
     def record(type, ref, values: nil)
       Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), sec_cik: ref.try(:sec_cik),
         nrc_docket: ref.try(:nrc_docket), eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
-        facility_type: ref.try(:facility_type), status: ref.try(:status), state: ref.try(:state),
+        facility_type: ref.try(:facility_type), status: ref.try(:status), city: ref.try(:city), state: ref.try(:state),
         country_code: ref.try(:country_code), verification_status: ref.verification_status,
         verified_by: ref.try(:verified_by), verified_at: ref.try(:verified_at), values:) if ref
     end

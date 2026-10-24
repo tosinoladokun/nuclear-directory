@@ -14,6 +14,19 @@ class DealTerm < ApplicationRecord
   enum :status, %w[announced signed active completed terminated].index_by(&:itself), validate: { allow_nil: true },
     prefix: :status
 
+  # The form of agreement (#256, #255). A signed power deal is counted:
+  # a PPA, supply agreement or tariff subscription that's signed, active or
+  # completed, with no open condition. The rest (development agreements,
+  # prepayments, frameworks, MOUs, letters of intent, options, preorders)
+  # are listed by stage (docs/DATA.md section 2).
+  AGREEMENTS = %w[ppa supply_agreement tariff_subscription development_agreement prepayment framework mou loi option preorder].freeze
+  COUNTED_AGREEMENTS = %w[ppa supply_agreement tariff_subscription].freeze
+  COUNTED_STATUSES = %w[signed active completed].freeze
+  validates :agreement, inclusion: { in: AGREEMENTS }, allow_nil: true
+  validates :firm_mw, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :term_years, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
+  normalizes :conditions, with: ->(text) { text.squish.presence }
+
   # Optional here so an unknown link_type is a validation error (the
   # inclusion check below), never a NameError resolving it.
   belongs_to :link, polymorphic: true, optional: true
@@ -39,8 +52,16 @@ class DealTerm < ApplicationRecord
       .or(verified.where(link_type: "Organization", link_id: Organization.published.select(:id)))
   end
 
+  # A signed power deal, in the data piece's headline count: one still
+  # waiting on a condition (an approval) is "signed, pending" instead.
+  def counted? = COUNTED_AGREEMENTS.include?(agreement) && COUNTED_STATUSES.include?(status) && conditions.blank?
+
   private
+    # A deal that can be counted states its size; one listed by stage (a
+    # framework, an option…) may state none, and then none is filled in.
     def what_an_offtake_needs
+      return unless agreement.nil? || COUNTED_AGREEMENTS.include?(agreement)
+
       errors.add(:base, "an offtake needs capacity_mw or amount_usd") if capacity_mw.nil? && amount_usd.nil?
     end
 
