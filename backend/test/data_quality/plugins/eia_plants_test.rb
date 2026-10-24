@@ -277,4 +277,15 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     runs = [ first, second ].map { |stats| CrawlRun.new(status: "succeeded", stats:) }
     assert_equal "a page didn't answer", Today.problem(runs)
   end
+
+  test "a Plant sheet with no nuclear plant is unreadable: the last good copy and older claims stay" do
+    crawl!
+    good = source.content_text
+    source.update!(fetched_at: 1.day.ago)
+    stub_request(:get, FILE).to_return(body: yearly_zip([ COAL ]))
+
+    assert_equal "needs_human", crawl!["snapshot"]
+    assert_match "No row on the Plant sheet is a nuclear plant", source.reload.status_reason
+    assert_equal good, source.content_text
+  end
 end
