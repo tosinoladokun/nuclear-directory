@@ -126,7 +126,7 @@
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
       state: listing.state, role: listing.role, sort: (listing.sort unless listing.sort == "name"), shown: @shown / DirectoryController::PAGE + 1,
       from: ("suggestion" if listing.searching? && params[:from] == "suggestion")),
-      class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
+      class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows", turbo_prefetch: false } %></p>
   <% end %>
   </turbo-frame>
 </main>
