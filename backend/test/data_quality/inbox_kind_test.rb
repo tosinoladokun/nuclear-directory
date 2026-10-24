@@ -31,7 +31,8 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
 
   test "a restatement confirms itself at match, with its source as evidence" do
     same = claim({ "name" => "KIND FISSION INC.", "hq_city" => "Austin" }, status: "new")
-    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    stats = DataQuality::Stages::Match.call(plugin: DummyPlugin.new).stats
+    assert_equal 1, stats["evidence_only"], "counted in the run's stats"
     assert_equal [ "confirmed", @company.id ], same.reload.values_at(:status, :subject_id), same.notes
     assert Evidence.exists?(subject: @company, source: @page)
   end
