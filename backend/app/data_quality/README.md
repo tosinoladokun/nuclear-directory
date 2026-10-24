@@ -356,6 +356,17 @@ A crawler can propose a deal term: today, a company's own funding round from a F
   apply to deal terms: a Form D/A on its own filing page replaces its original's values, once a person
   approves it.
 
+## SEC Form D rounds (#129)
+
+`plugins/sec_form_d.rb` reads the filing list (data.sec.gov submissions API) of each company the directory
+has an SEC CIK for, at most once a day, on a `sec_submissions` index source that's never extracted. Each
+Form D or D/A not stored yet is fetched once and stored as one line of its offering fields (form, dates,
+accession, issuer CIK and name, industry group, securities, amounts offered and sold, what it amends,
+business combination, clarification). Never the people it names and never the raw XML. Each filing gives one
+`deal_term` funding round on the company, known by its first filing's accession number, so a D/A lands on the
+same round; only a round's latest stored filing is proposed. Nothing sold proposes nothing; a business
+combination or a clarification note is held for a person. No model is asked; a person approves every round.
+
 ## NRC uranium recovery (#275)
 
 `plugins/nrc_uranium_recovery.rb` reads NRC's "Locations of Uranium Recovery Facilities" once a day, and

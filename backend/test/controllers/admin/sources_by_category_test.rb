@@ -119,7 +119,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     get admin_sources_path(by: "category")
 
     assert_select ".nd-cov__src", /DOE program pages \(ARDP, GAIN vouchers, Fusion Milestone\)/
-    assert_select ".nd-cov__src", /SEC Form D, 8-K and 10-K/
+    assert_select ".nd-cov__src", /SEC 8-K and 10-K/
     assert_select ".nd-cov__src", /World Nuclear News/
     assert_select ".nd-cov__src a", { text: "World Nuclear News", count: 0 }, "no documents, no page to link to"
   end
