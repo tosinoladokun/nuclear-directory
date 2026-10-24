@@ -26,7 +26,7 @@
   # A shared category or listing previews with its own line, not the home page's (#246).
   content_for :og_description, description
   # A category page shows its own preview image; a search or "All companies", the default (#245).
-  @link_card = [ LinkCard.for_category(listing.category, @counts.fetch(listing.category.key)), "categories", listing.category.key ] if listing.category && !listing.searching? && !listing.filtered?
+  @link_card = [ LinkCard.for_category(listing.category, @counts.fetch(listing.category.key)), "categories", listing.category.key ] if @counts && listing.category && !listing.searching? && !listing.filtered?
 %>
 <% content_for :head do %>
   <meta name="description" content="<%= description %>">
@@ -37,7 +37,7 @@
 <%= render "shared/site_header", query: listing.query %>
 
 <main class="nd-page">
-  <%= render "shared/category_pills", current: listing.category, counts: @counts %>
+  <%= render "shared/category_pills", current: listing.category, counts: @counts if @counts %>
 
   <div class="nd-listhead">
     <h1 class="type-title-md nd-listhead__title"><%= heading %> <span class="type-data nd-listhead__count"><%= pluralize(total, noun, plural:) %></span></h1>
@@ -85,6 +85,7 @@
     </div>
   </div>
 
+  <% if @fuzzy %><p class="nd-fuzzy-note type-small text-ink-muted">No exact match for “<%= listing.query %>”. Showing close names.</p><% end %>
   <%# The rows and Show more are one Turbo frame: Show more swaps the next page in
       place, so the page doesn't jump (advancing the address would scroll to the
       top). The link is still a real page (?shown=2) for crawlers and without
@@ -107,7 +108,7 @@
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
         <h2 id="companies-heading" class="nd-label mb-1">Companies</h2>
-        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %></ul>
+        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %></ul>
       </section>
     <% end %>
     <% if @plants.any? %>
@@ -118,7 +119,7 @@
     <% end %>
   <% else %>
     <ul class="nd-list">
-      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count, roles: @roles_by[company.id] %><% end %>
+      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
       <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
     </ul>
   <% end %>

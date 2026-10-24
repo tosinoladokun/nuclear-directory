@@ -94,6 +94,11 @@ docker compose run --rm web bin/rails data_quality:status
 
 ## Adding a source
 
+**Nightly cap on new sources (#513).** A plug-in can set `new_sources_per_run` (and `new_source_order`) so
+extract reads at most that many sources it has never read before in one run, in its order; the rest wait for
+the next nights, and sources read before are never held back. USAspending sets 15, largest award totals first,
+so a new search's companies and their "DOE funds" links reach Data Quality a night's batch at a time.
+
 Create `plugins/<source_kind>.rb` defining `DataQuality::Plugins::<SourceKind> < DataQuality::Plugin`
 with `crawl(run)` and `extract(source, run)` (see `plugin.rb`). Match and verify are shared.
 
@@ -294,6 +299,25 @@ then NRC's page for each site it links to (about 20), each at most once a day. A
 - A unit gone from the list is suggested as shut down. The list's rows, and each page's text without its
   date stamp, are what's hashed (#240).
 
+## EIA annual plant file (#319)
+
+`plugins/eia_plants.rb` gives each nuclear power plant its city, which the monthly 860M file doesn't have.
+It reads EIA's EIA-860 page, fetches the newest final yearly zip (about 24 MB, so it passes a 60 MB limit
+to the shared Fetcher), and reads the Plant sheet of `2___Plant_Y<year>.xlsx` inside it (`PlantFile`).
+
+- **Which rows:** every plant the same zip's generator workbook (`3_1_Generator_Y<year>.xlsx`, Operable
+  and Proposed sheets) lists with a nuclear generator. Neither the 860M file nor the directory decides
+  this, so what's stored depends on the zip alone, and the cached rows stay right when EIA answers "not
+  modified". Each is stored as CSV, and the row is the quote.
+- **Finding the site:** match finds it by EIA plant ID, else a power plant with no ID by name and state,
+  looked up on every run, so a plant added to the directory later is still found.
+- **What it proposes:** each plant's `city`, as enrichment (`identify` with the plant ID and no unit). It
+  never creates or renames a site. A blank city is filled. A city a person set isn't overwritten: a
+  different one comes back as a difference. A row with no city proposes nothing.
+- **Found by name:** a plant with no EIA plant ID is held for a person. A site also gets EIA's plant ID
+  (Duane Arnold). A one-record plant with its NRC docket (Columbia) gets only the city, because only a
+  site can carry an EIA plant ID.
+
 
 The contract is in [`app/directory/README.md`](../directory/README.md).
 `directory_client.rb` uses `Directory::Lookup.organization` / `.facility` and
@@ -305,13 +329,40 @@ Two tests keep the module and the directory in step:
 - It also checks that the fakes in `support/fake_directory.rb` have the same
   method signatures as the real interfaces.
 
+## Deal terms (#397)
+
+A crawler can propose a deal term: today, a company's own funding round from a Form D (`link_type`
+"Organization", #396). A term under a link (an award under "DOE funds X") comes with #256.
+
+```ruby
+{ kind: "deal_term", quote: "…", payload: {
+  "organization" => { "name" => "NEW ERA HELIUM INC.", "sec_cik" => "0002028336" }, "link_type" => "Organization",
+  "term_type" => "funding_round", "external_id" => "0002028336-24-000006",
+  "amount_usd" => "37000000.0", "amount_offered_usd" => "105000000.0", "starts_on" => "2024-12-06" } }
+```
+
+- **Match** finds the company by its SEC CIK first (a government ID, ranked above names), then by name or
+  alias; the CIK wins over a name that names another company (showing that conflict is #402). It finds the term by its link, type
+  and external ID, so a Form D/A (which carries its original's accession number) lands on the same round.
+  A new term is proposed pending with its values, since a round needs its amount to exist.
+- **Verify** describes it ("… has a funding round, with filing …, amount sold $37,000,000 …"), and a value
+  a person decided is held as a conflict (`amount_usd`, `amount_offered_usd`, `starts_on`, `ends_on`,
+  `round`, `status`).
+- **A person decides every one.** A deal term is never in Approve all or a safe class (`BY_A_PERSON`). A
+  person approves it, or accepts Data Quality's reviewed call on it. An amendment to a round a person already
+  approved is decided on that round's page, never through Data Quality's Accept: a decided record's rule
+  (16 Oct) comes first.
+- **A later filing supersedes an earlier one.** #390's guard against another page of the same source doesn't
+  apply to deal terms: a Form D/A on its own filing page replaces its original's values, once a person
+  approves it.
+
 ## NRC uranium recovery (#275)
 
 `plugins/nrc_uranium_recovery.rb` reads NRC's "Locations of Uranium Recovery Facilities" once a day, and
 only its table of NRC-licensed facilities. Each row gives the site (in situ recovery as `uranium_mine`, a
-conventional mill as `mill`; city and state from Location), its licensee, an `operates` link and the
-licensee's `mining` category, all quoting the row. A row whose type or state can't be read is held for a
-person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
+conventional mill as `mill`; city and state from Location) and its licensee, quoting the row. No link or
+role: a licensee row doesn't say the company runs the site or what it does. A row whose type or state can't be
+read is held for a person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
 ## Company newsrooms (#128)
@@ -340,6 +391,38 @@ is a `news_item` claim with `lead: true`: held for Data Quality (`Review::LEAD`,
 refused by every approval path, and left out of the admin's counts (`Candidate.not_leads`). Data Quality turns
 a lead into a claim from the primary source or rejects it. **A claim made from a lead must not copy
 `lead: true`**, or it stays held like the lead.
+## NRC reactor vendors (#388)
+
+`plugins/nrc_reactor_vendors.rb` reads each operating unit's NRC page that the reactor list links (from
+`nrc_reactor_list`'s stored copy), at most once a day, and stores only the unit's name, docket and its
+"Reactor Vendor/Type" line (never the page's contacts). A line starting with a known vendor's name gives the
+vendor company and a `vendor_for` link to the unit, by docket. Never inferred from reactor type; a historical
+vendor (Combustion Engineering) keeps its name for a person to place. A line naming no known vendor proposes
+nothing; a page without the line goes to a person.
+## DOE program pages (#124)
+
+`plugins/doe_programs.rb` reads the DOE program pages in its `PAGES` list once a day. First, the HALEU
+Availability Program's three pages that list companies: enrichment services, deconversion services and HALEU
+allocations. It reads only the lists it names, each found by the sentence or heading the page writes before it,
+and each item gives the company and DOE's link to it (`funds` for a contract, `supplies` for a conditional HALEU
+allocation), described in the page's terms and quoting the item. No roles: being selected to bid doesn't say
+what a company does. A page missing an expected list goes to a person. ARDP's page names no companies, INL's
+GAIN pages answer our bot with 403, and the fusion milestone program's page moved: those come later.
+## NRC research and test reactors (#387)
+
+`plugins/nrc_research_reactors.rb` reads the "Locations of Research and Test Reactors" table on NRC's non-power
+page (an index, never extracted) and each reactor page it links, at most once a day. It stores, from the reactor
+page alone, its name, Licensee, Location, Docket Number and Reactor Type; never contacts.
+Each gives the reactor (`research_reactor`, docket, city, state), its licensee, and `university` or
+`national_lab` only where the licensee's name says so. No operates link and no power level. The medical isotope
+and advanced reactor tables aren't read.
+## NRC fuel cycle facilities (#386)
+
+`plugins/nrc_fuel_cycle.rb` reads NRC's fuel cycle locations page (an index, never extracted) and each
+facility page it links, at most once a day, storing only the facility's labelled facts (name, location,
+licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_facility`, city, state, docket)
+and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
+states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
 ## DOE Isotope Program: production sites (#276)
 

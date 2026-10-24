@@ -86,4 +86,62 @@ class NewsItemTest < ActiveSupport::TestCase
     assert_equal [ news.id ], Directory::Lookup.latest_news(type: "Facility", id: unit.id).map(&:id)
     assert_equal [ news.id ], Directory::Lookup.latest_news(type: "Facility", id: site.id).map(&:id)
   end
+
+  test "news for a company merged away goes on the company it went into" do
+    from = Organization.create!(name: "Old Name Fission", verification_status: "verified", verified_by: "human:tosin")
+    into = Organization.create!(name: "New Name Fission", verification_status: "verified", verified_by: "human:tosin")
+    Directory::FactWriter.merge_organization(from_id: from.id, into_id: into.id, by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/merged", title: "A headline", published_on: Date.new(2026, 10, 1))
+    mention = Directory::FactWriter.mention_news(news_item_id: item.id, subject_type: "Organization", subject_id: from.id)
+    assert_equal into.id, mention.subject_id
+  end
+
+  test "news for a site merged away goes on the site it went into" do
+    from = Facility.create!(name: "Old Site", verification_status: "verified", verified_by: "human:tosin")
+    into = Facility.create!(name: "Kept Site", verification_status: "verified", verified_by: "human:tosin")
+    Directory::FactWriter.merge_facility(from_id: from.id, into_id: into.id, by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/site-merged", title: "A headline", published_on: Date.new(2026, 10, 1))
+    assert_equal into.id, Directory::FactWriter.mention_news(news_item_id: item.id, subject_type: "Facility", subject_id: from.id).subject_id
+  end
+
+  test "attaching news retries after a deadlock with a merge" do
+    company = Organization.create!(name: "Retry Fission", verification_status: "verified", verified_by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/retry", title: "A headline", published_on: Date.new(2026, 10, 1))
+    calls = 0
+    once = Directory::FactWriter.method(:mention_news_once)
+    Directory::FactWriter.define_singleton_method(:mention_news_once) do |**args|
+      (calls += 1) == 1 ? raise(ActiveRecord::Deadlocked, "deadlock detected") : once.call(**args)
+    end
+    begin
+      mention = Directory::FactWriter.mention_news(news_item_id: item.id, subject_type: "Organization", subject_id: company.id)
+    ensure
+      Directory::FactWriter.singleton_class.send(:remove_method, :mention_news_once)
+      Directory::FactWriter.define_singleton_method(:mention_news_once, once)
+      Directory::FactWriter.singleton_class.send(:private, :mention_news_once)
+    end
+    assert_equal [ 2, company.id ], [ calls, mention.subject_id ]
+  end
+
+  test "moving news to a site that already has it, as a concurrent grouping would leave it, keeps one mention and counts none moved" do
+    site = Facility.create!(name: "Shared Site", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Shared Unit", verification_status: "verified", verified_by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/shared", title: "A headline", published_on: Date.new(2026, 10, 1))
+    NewsMention.create!(news_item: item, subject: unit)
+    NewsMention.create!(news_item: item, subject: site) # put there by the other grouping
+    moved = Directory::FactWriter.new.send(:move_news_mentions, unit, site)
+    assert_equal 0, moved
+    assert_equal [ [ "Facility", site.id ] ], NewsMention.where(news_item: item).pluck(:subject_type, :subject_id)
+  end
+
+  test "moving news puts the mentions on the site in news item order, so two groupings can't deadlock" do
+    site = Facility.create!(name: "Ordered Site", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Ordered Unit", verification_status: "verified", verified_by: "human:tosin")
+    items = 3.times.map { |n| NewsItem.create!(url: "https://example.com/ordered-#{n}", title: "A headline", published_on: Date.new(2026, 10, 1)) }
+    [ items[2], items[0], items[1] ].each { |item| NewsMention.create!(news_item: item, subject: unit) } # mention ids out of item order
+    inserted = []
+    callback = ->(*, payload) { inserted << payload[:sql][/VALUES \((\d+)/, 1].to_i if payload[:sql].start_with?("INSERT INTO \"news_mentions\"") }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { Directory::FactWriter.new.send(:move_news_mentions, unit, site) }
+
+    assert_equal items.map(&:id), inserted
+  end
 end

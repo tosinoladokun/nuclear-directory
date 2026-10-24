@@ -132,6 +132,48 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-factrow .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
   end
 
+  test "schema.org JSON-LD states the page's facts and lists its sources as citations (#185)" do
+    get company_path(slug: "kairos-power")
+
+    scripts = css_select("script[type='application/ld+json']")
+    assert_equal 1, scripts.size
+    graph = JSON.parse(scripts.first.text).fetch("@graph")
+    page, org = graph
+    assert_equal "http://www.example.com/companies/kairos-power", page["url"]
+    assert_equal "2026-10-09", page["dateModified"]
+    assert_equal org["@id"], page.dig("mainEntity", "@id")
+    assert_equal "Kairos Power", org["name"]
+    assert_equal "Develops salt-cooled reactors.", org["description"]
+    assert_equal "https://kairospower.com", org["url"]
+    assert_equal({ "@type" => "PostalAddress", "addressLocality" => "Alameda", "addressRegion" => "CA" }, org["address"], "no country: the profile holds none")
+    assert_includes org["alternateName"], "Kairos"
+    assert_includes page["citation"].map { |c| c["url"] }, "https://kairospower.com/news/google"
+    press = page["citation"].find { |c| c["url"] == "https://kairospower.com/news/google" }
+    assert_equal [ "Google and Kairos Power partner", "2024-10-14" ], press.values_at("name", "datePublished")
+    assert_equal page["citation"].size, css_select("ol.nd-sources li").size, "every source on the page is a citation"
+    assert_not_includes response.body, "Ghost Partner", "an unpublished company is nowhere in the page, JSON-LD included"
+  end
+
+  test "a name with markup cannot end the JSON-LD script" do
+    @kairos.update!(legal_name: "</script><script>alert(1)</script>")
+    get company_path(slug: "kairos-power")
+
+    assert_equal 1, css_select("script[type='application/ld+json']").size
+    assert_not_includes response.body, "</script><script>alert(1)"
+  end
+
+  test "a company with both roles shows both role labels by its name, and only there (the Developers list shows none)" do
+    designer = Role.find_or_create_by!(key: "reactor_vendor") { |role| role.name = "Reactor vendor" }
+    developer = Role.find_or_create_by!(key: "project_developer") { |role| role.name = "Project developer" }
+    both = cite!(company("Both Roles Holdings", roles: [ designer, developer ]))
+    get company_path(slug: both.slug)
+
+    assert_equal [ "Project developer", "Reactor designer" ], css_select(".nd-tag").map { |el| el.text.strip }.sort, "both role labels, in the tag row under the name"
+
+    get companies_path(category: "reactor-developers")
+    assert_select ".nd-listrow .nd-tag", 0
+  end
+
   test "key facts" do
     get company_path(slug: "kairos-power")
 

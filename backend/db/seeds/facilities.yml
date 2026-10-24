@@ -190,6 +190,29 @@ facilities:
     source_url: https://cfs.energy/technology/arc
     quote: in Chesterfield County, near Richmond, Virginia
     confidence: 1.0
+- name: SPARC
+  other_names:
+  - SPARC tokamak
+  facility_type:
+    value: fusion_facility
+    source_url: https://cfs.energy/technology/sparc/
+    quote: SPARC is a type of device called a tokamak — a donut-shaped machine that’s the most viable, scientifically proven way to recreate the sun’s power source on Earth.
+    confidence: 1.0
+  status:
+    value: under_construction
+    source_url: https://cfs.energy/technology/sparc/
+    quote: We’re building SPARC at our 60-acre campus in Devens, Massachusetts, where a team of physicists, welders, technicians, computer scientists, and more are working together to make it happen.
+    confidence: 1.0
+  city:
+    value: Devens
+    source_url: https://cfs.energy/technology/sparc/
+    quote: We’re building SPARC at our 60-acre campus in Devens, Massachusetts, where a team of physicists, welders, technicians, computer scientists, and more are working together to make it happen.
+    confidence: 1.0
+  state:
+    value: MA
+    source_url: https://cfs.energy/technology/sparc/
+    quote: We’re building SPARC at our 60-acre campus in Devens, Massachusetts, where a team of physicists, welders, technicians, computer scientists, and more are working together to make it happen.
+    confidence: 1.0
 - name: Orion fusion power plant
   other_names:
   - Orion fusion power plant (Malaga, Chelan County, WA)

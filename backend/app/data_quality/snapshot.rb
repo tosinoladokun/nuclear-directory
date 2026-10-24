@@ -12,9 +12,10 @@ class DataQuality::Snapshot
   # binary: fetch raw bytes. With a block, the block turns the fetched body
   # into the text that's stored (e.g. the rows of a spreadsheet that matter),
   # and the hash is of that text, so unrelated changes to the file don't
-  # count as changes.
-  def self.take(source, fetcher:, binary: false, &to_text)
-    claim(source) { take_claimed(source, fetcher:, binary:, &to_text) }
+  # count as changes. max_bytes: a larger limit than the Fetcher's for a
+  # source known to be bigger (EIA's yearly zip, about 24 MB).
+  def self.take(source, fetcher:, binary: false, max_bytes: DataQuality::Fetcher::MAX_BYTES, &to_text)
+    claim(source) { take_claimed(source, fetcher:, binary:, max_bytes:, &to_text) }
   end
 
   # Runs the block with the source's row locked and re-read, so the
@@ -35,18 +36,18 @@ class DataQuality::Snapshot
     result
   end
 
-  def self.take_claimed(source, fetcher:, binary:, &to_text)
+  def self.take_claimed(source, fetcher:, binary:, max_bytes:, &to_text)
     # At most one fetch per source per calendar day (in the app's time zone).
     return :skipped_recent if source.fetched_at&.to_date == Date.current
 
-    response = fetcher.get(source.url, etag: source.etag, last_modified: source.last_modified, binary:)
+    response = fetcher.get(source.url, etag: source.etag, last_modified: source.last_modified, binary:, max_bytes:)
     attempt = { fetched_at: Time.current, http_status: response.status }
 
     case response.kind
     when :ok
       if response.truncated
         # Half a page would look like a changed page; keep the last good snapshot.
-        source.update!(attempt.merge(status_reason: "Larger than #{DataQuality::Fetcher::MAX_BYTES / 1.megabyte} MB; not stored"))
+        source.update!(attempt.merge(status_reason: "Larger than #{max_bytes / 1.megabyte} MB; not stored"))
         return :error
       end
 
