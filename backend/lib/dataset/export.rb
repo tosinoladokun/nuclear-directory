@@ -112,7 +112,7 @@ module Dataset
       "news_article" => "Named reporting: trade press or news",
       "web_page" => "Any other public page"
     }.freeze
-    KIND_TYPES = { "eia_generators" => "government_dataset", "eia_plants" => "government_dataset", "nrc_reactor_list" => "regulator_list",
+    KIND_TYPES = { "eia_generators" => "government_dataset", "eia_plants" => "government_dataset", "eia_owners" => "government_dataset", "nrc_reactor_list" => "regulator_list",
       "nrc_power_status" => "regulator_list", "nrc_decommissioning" => "regulator_list", "usaspending_doe_awards" => "award_record" }.freeze
     PUBLICATION_HOSTS = %w[federalregister.gov govinfo.gov].freeze
 

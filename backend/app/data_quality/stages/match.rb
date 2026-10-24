@@ -56,7 +56,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
   Found = Data.define(:record, :by)
   # How a found record counts as the same one: its name or an alias
   # (normalized), or an id. Not a domain, a brand or a similar name.
-  EXACT = [ "name", "NRC docket", "EIA plant ID", "SEC CIK" ].freeze
+  EXACT = [ "name", "NRC docket", "EIA plant ID", "SEC CIK", "EIA utility ID" ].freeze
   Review = Data.define(:reason)
   # A new unit that belongs under an existing site record.
   Under = Data.define(:site)
@@ -100,15 +100,18 @@ class DataQuality::Stages::Match < DataQuality::Stage
       from_source = source.candidates.where(review_origin: nil).or(source.candidates.where.not(review_origin: "dropped"))
       latest = from_source.maximum(:crawl_run_id) or return
       read = from_source.where(crawl_run_id: latest)
-      return skip_dropped_check if read.where(subject_id: nil).or(read.status_new).exists?
+      return skip_dropped_check if read.where(subject_id: nil).or(read.status_new).find_each.any? { |candidate| plugin.blocks_dropped_check?(candidate) }
 
       listed = read.distinct.pluck(:subject_type, :subject_id).to_set
-      supported = from_source.where(status: %w[merged confirmed]).where.not(subject_id: nil).distinct.pluck(:subject_type, :subject_id)
+      # What this source, or an earlier edition of it, supported.
+      history = Candidate.where(source_id: [ source.id, *plugin.earlier_editions(source) ])
+      history = history.where(review_origin: nil).or(history.where.not(review_origin: "dropped"))
+      supported = history.where(status: %w[merged confirmed]).where.not(subject_id: nil).distinct.pluck(:subject_type, :subject_id)
       dropped = supported.reject { |pair| listed.include?(pair) }.select { |type, id| directory.published?(type:, id:) }
       return checked_dropped(source) if dropped.empty?
       return skip_dropped_check if dropped.size > supported.size * plugin.max_dropped_share(source)
 
-      dropped.each { |type, id| flag_one_dropped(source, from_source, type, id) }
+      dropped.each { |type, id| flag_one_dropped(source, history, type, id) }
       checked_dropped(source)
     end
 
@@ -121,13 +124,22 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # Once per absence: not again while one is open, nor after a person
     # decided one, until the source lists the fact again.
     def flag_one_dropped(source, from_source, type, id)
-      last = from_source.where(subject_type: type, subject_id: id).order(:id).last
-      return if source.candidates.where(subject_type: type, subject_id: id, review_origin: "dropped").where("id > ?", last.id).exists?
+      sightings = from_source.where(subject_type: type, subject_id: id)
+      last = sightings.order(:id).last
+      # What was kept: the last claim a person approved or a read confirmed,
+      # never a later proposal nobody decided (or one that was rejected).
+      kept = sightings.where(status: %w[merged confirmed]).order(:id).last || last
+      # Once across the document's editions: not again in a later year while
+      # one is open, or after a person decided one.
+      editions = [ source.id, *plugin.earlier_editions(source) ]
+      return if Candidate.where(source_id: editions, subject_type: type, subject_id: id, review_origin: "dropped").where("id > ?", last.id).exists?
 
-      payload, advice = plugin.dropped(last.kind) ||
-        [ last.payload, "Approve to keep it as it is; if it's no longer true, unpublish it on its page." ]
+      payload, advice = plugin.dropped(kept.kind) ||
+        [ kept.payload, "Approve to keep it as it is; if it's no longer true, unpublish it on its page." ]
       read_on = source.fetched_at&.to_date || Date.current
-      source.candidates.create!(kind: last.kind, payload:, quote: last.quote, status: "needs_review", review_origin: "dropped",
+      # On the edition that stated what was kept, with its quote, so keeping it
+      # cites that page again, never a newer one that doesn't have the row.
+      kept.source.candidates.create!(kind: kept.kind, payload:, quote: kept.quote, status: "needs_review", review_origin: "dropped",
         subject_type: type, subject_id: id, crawl_run: @run,
         notes: "No longer in #{source.title.presence || source.url} as read on #{read_on}. #{advice}")
       @stats["dropped"] = @stats.fetch("dropped", 0) + 1
@@ -382,7 +394,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
       return if candidate.kind_deal_term?
 
       cited = directory.evidence(type: existing.type, id: existing.id).map(&:source_id)
-      other = ::Source.where(id: cited, source_kind: candidate.source.source_kind).where.not(id: candidate.source_id).order(:id).first
+      # An earlier edition of this document is superseded by it, not another page.
+      # (Research pages and other plug-in-less kinds have no editions.)
+      earlier = begin
+        DataQuality::Plugin.for(candidate.source.source_kind).earlier_editions(candidate.source)
+      rescue DataQuality::Plugin::UnknownSourceKind
+        []
+      end
+      other = ::Source.where(id: cited - earlier, source_kind: candidate.source.source_kind).where.not(id: candidate.source_id).order(:id).first
       return unless other
 
       changes = DataQuality::Differences.changes(candidate, existing, directory:)
@@ -416,6 +435,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # The SEC's CIK is exact and ranks above any name (PM, #129), as in FactWriter.
       by_cik = directory.organization(sec_cik: payload["sec_cik"]) if payload["sec_cik"].present?
       return Found.new(by_cik, "SEC CIK") if by_cik
+      by_utility = directory.organization(eia_utility_id: payload["eia_utility_id"]) if payload["eia_utility_id"].present?
+      return Found.new(by_utility, "EIA utility ID") if by_utility
 
       name = payload["name"].presence
       # FactWriter derives a domain from the website unless domain was supplied.
