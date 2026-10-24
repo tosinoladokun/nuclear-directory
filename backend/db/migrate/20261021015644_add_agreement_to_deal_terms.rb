@@ -12,7 +12,9 @@ class AddAgreementToDealTerms < ActiveRecord::Migration[8.1]
 
   COUNTED = %w[ppa supply_agreement tariff_subscription].freeze
 
-  def change
+  OLD_OFFTAKE = "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL"
+
+  def up
     add_column :deal_terms, :agreement, :string
     add_column :deal_terms, :conditions, :text
     add_column :deal_terms, :firm_mw, :decimal, precision: 10, scale: 1
@@ -24,9 +26,23 @@ class AddAgreementToDealTerms < ActiveRecord::Migration[8.1]
 
     # An offtake states its size, unless it's listed by stage (a framework,
     # an option…): then a size its source doesn't give stays blank.
-    remove_check_constraint :deal_terms, "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL",
-      name: "deal_terms_offtake_check"
-    add_check_constraint :deal_terms, "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL " \
+    remove_check_constraint :deal_terms, name: "deal_terms_offtake_check"
+    add_check_constraint :deal_terms, "#{OLD_OFFTAKE} " \
       "OR (agreement IS NOT NULL AND agreement NOT IN (#{COUNTED.map { |a| "'#{a}'" }.join(', ')}))", name: "deal_terms_offtake_check"
+  end
+
+  # The old size rule comes back NOT VALID: frameworks seeded with no size
+  # stay as they are (no size invented, nothing deleted), and new rows must
+  # state one again.
+  def down
+    remove_check_constraint :deal_terms, name: "deal_terms_offtake_check"
+    add_check_constraint :deal_terms, OLD_OFFTAKE, name: "deal_terms_offtake_check", validate: false
+    remove_check_constraint :deal_terms, name: "deal_terms_term_years_check"
+    remove_check_constraint :deal_terms, name: "deal_terms_firm_mw_check"
+    remove_check_constraint :deal_terms, name: "deal_terms_agreement_check"
+    remove_column :deal_terms, :term_years
+    remove_column :deal_terms, :firm_mw
+    remove_column :deal_terms, :conditions
+    remove_column :deal_terms, :agreement
   end
 end
