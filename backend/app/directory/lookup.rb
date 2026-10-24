@@ -242,6 +242,12 @@ module Directory
 
     # Whether a fact is public now, by its model's .published scope (a unit
     # under a closed site isn't, #104), so callers don't re-derive the rule.
+    # Sources cited by evidence on any published fact (#510's link check), as a relation of ids.
+    def published_source_ids
+      FACT_TYPES.map { |type| Evidence.where(subject_type: type, subject_id: type.constantize.published.select(:id)).distinct.select(:source_id) }
+        .reduce { |all, ids| all.or(ids) }
+    end
+
     def published?(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
 
