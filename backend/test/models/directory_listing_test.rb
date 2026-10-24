@@ -363,4 +363,18 @@ class DirectoryListingTest < ActiveSupport::TestCase
     assert_nil DirectoryListing.new(category: "components", role: "components").role
     assert_nil DirectoryListing.new(role: "reactor_vendor").role
   end
+
+  test "search ignores spacing and punctuation, and finds every word of a name in any form (#431)" do
+    nextera = company("NextEra Energy")
+    browns = plant("Browns Ferry Nuclear Plant", state: "AL", facility_type: "power_reactor")
+    cite!(nextera)
+
+    assert_includes names(DirectoryListing.new(q: "next era")), "NextEra Energy"
+    assert_includes names(DirectoryListing.new(q: "Next-Era")), "NextEra Energy"
+    assert_includes DirectoryListing.new(q: "brown ferry").plants.map(&:name), browns.name
+    assert_empty names(DirectoryListing.new(q: "next banana")), "every word must be in the name"
+    unit_three = plant("Browns Unit 3", parent: browns)
+    assert_not_includes DirectoryListing.new(q: "Browns Unit 5").plants.map(&:name), browns.name, "a unit number must match, not any unit"
+    assert unit_three
+  end
 end
