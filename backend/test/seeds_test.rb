@@ -50,7 +50,7 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 121, Organization.verified.count
+    assert_equal 122, Organization.verified.count
     assert_equal 137, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
@@ -62,10 +62,10 @@ class SeedsTest < ActiveSupport::TestCase
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
     assert_equal 79, Relationship.verified.count
-    assert_equal 52, Facility.verified.count
-    # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 76, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
-    assert_equal 27, FacilityAlias.count
+    assert_equal 53, Facility.verified.count
+    # 4 plant links wait for a direct quote (owns/operates not stated by the source).
+    assert_equal [ 76, 6 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal 28, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
     assert_equal [ 1 ], OrganizationRole.distinct.pluck(:confidence)
@@ -181,15 +181,14 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal [ "venture_capital" ], Organization.find_by!(slug: "bernhard-capital-partners").roles.pluck(:key)
   end
 
-  test "CFS and Dominion share one ARC facility" do
+  test "CFS and Google share one ARC facility, and Dominion owns only the site, so has no link to the plant" do
     load_seeds
 
     arc = Facility.find_by!(name: "Fall Line Fusion Power Station")
     links = arc.facility_relationships.includes(:organization).to_h { |link| [ link.organization.slug, link ] }
-    assert_equal %w[commonwealth-fusion-systems dominion-energy google], links.keys.sort
+    assert_equal %w[commonwealth-fusion-systems google], links.keys.sort
     assert links["google"].offtakes_from?
-    assert_match "leasing rights", links["dominion-energy"].description
-    assert_equal "Dominion Energy Virginia currently owns the proposed site.", links["dominion-energy"].evidence.sole.quote
+    assert_match "leasing rights", links["commonwealth-fusion-systems"].description
   end
 
   test "ENTRA1's 2023 SEC quotes come off after the seed attaches its own sources" do

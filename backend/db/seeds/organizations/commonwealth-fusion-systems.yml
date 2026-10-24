@@ -40,7 +40,13 @@ facilities:
   quote: US private fusion company Commonwealth Fusion Systems has announced plans to independently finance, construct, own and operate a commercial-scale fusion power plant in Chesterfield County, Virginia.
   published: '2024-12-18'
   confidence: 0.8
-  note: Planned, about 400 MWe, early 2030s; site leased from Dominion Energy Virginia.
+  note: Planned, about 400 MWe, early 2030s; CFS has leasing rights to the site from Dominion Energy Virginia.
+- name: SPARC
+  type: vendor_for
+  source_url: https://cfs.energy/technology/sparc/
+  quote: We’re building SPARC at our 60-acre campus in Devens, Massachusetts, where a team of physicists, welders, technicians, computer scientists, and more are working together to make it happen.
+  confidence: 1.0
+  note: CFS is building this demonstration tokamak at its Devens campus. The page doesn't say who operates it, so no operator link.
 notes: 'HQ conflict: DOE''s 2023 milestone announcement lists ''Commonwealth Fusion Systems (Cambridge, MA)''; CFS''s 2025 releases describe it as ''the Devens, Massachusetts-based company''. Eni (Italy) is also an investor and ARC offtaker (>$1B) per CFS; not added as an org. #63: HQ already sourced in seed (Devens, MA).'
 description:
   text: Fusion company building the SPARC tokamak and planning the ARC fusion power plant.
