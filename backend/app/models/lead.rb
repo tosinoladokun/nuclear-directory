@@ -25,6 +25,10 @@ class Lead < ApplicationRecord
     transaction(requires_new: true) do
       lead = lock.find_or_initialize_by(kind:, normalized_name: normalized)
       lead.name = name if lead.new_record?
+      seen = lead.sources.find { |source| source["key"] == key }
+      # A source seen before keeps its earliest first and latest last date.
+      first = [ first, (Date.parse(seen["first"]) if seen) ].compact.min
+      last = [ last, (Date.parse(seen["last"]) if seen) ].compact.max
       entry = { "key" => key, "label" => label, "url" => url, "times" => [ times.to_i, 1 ].max, "first" => first.to_s, "last" => last.to_s }.compact
       lead.sources = lead.sources.reject { |source| source["key"] == key } + [ entry ]
       lead.seen_count = lead.sources.sum { |source| source["times"].to_i }

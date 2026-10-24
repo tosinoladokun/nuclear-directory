@@ -25,4 +25,21 @@ class LeadSyncTest < ActiveSupport::TestCase
       LeadSync.run
     end
   end
+
+  test "a news item naming a known company and an unknown one brings in the unknown; a re-read page's new claim is the same sighting" do
+    known = Organization.create!(name: "Known Fission", verification_status: "verified", verified_by: "human:tosin")
+    known.aliases.create!(alias: "Known Fission")
+    Candidate.create!(source: @page, kind: "news_item", status: "matched", quote: "q", subject_type: "Organization", subject_id: known.id,
+      payload: { "url" => @page.url, "title" => "Two companies", "about" => [ { "name" => "Known Fission", "type" => "organization" },
+        { "name" => "Unknown Partner", "type" => "organization" } ] })
+    site = Source.create!(url: "https://acme.example.com/about", source_kind: "company_pages", crawl_status: "ok")
+    ends = { "from_organization" => { "name" => "Acme" }, "to_organization" => { "name" => "Quillon Grid" }, "relationship_type" => "supplies" }
+    2.times do
+      Candidate.create!(source: site, kind: "relationship", status: "needs_review", quote: "q", payload: ends,
+        notes: %(to_organization "Quillon Grid" isn't in the directory yet))
+    end
+    LeadSync.run
+    assert_equal [ "Quillon Grid", "Unknown Partner" ], Lead.order(:name).pluck(:name)
+    assert_equal 1, Lead.find_by!(name: "Quillon Grid").seen_count
+  end
 end

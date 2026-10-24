@@ -45,10 +45,11 @@ class Admin::LeadsController < Admin::BaseController
     company = lead.record if lead.record_type == "Organization"
     company ||= Organization.where(verification_status: %w[verified pending]).find_by("LOWER(name) = ?", lead.name.downcase) if lead.kind == "company"
     lead.decide!("researching", by: actor, record: company)
-    if company && (company.website.present? || company.sec_cik.present?)
-      company.update_columns(enrich_requested_at: Time.current)
-      DataQuality::RunJob.perform_later(Admin::RecordEnrichController::SOURCE_KIND)
-      return redirect_to(admin_record_enrich_path(type: "Organization", id: company.id), notice: "Reading #{company.name}'s pages.")
+    if company
+      # As Enrich's own button: refused for an address that can't be read.
+      refusal = Admin::RecordEnrichController.request!(company)
+      return redirect_to(admin_record_enrich_path(type: "Organization", id: company.id),
+        refusal ? { alert: refusal } : { notice: "Reading #{company.name}'s pages." })
     end
     back "Marked as being researched. What Data Quality finds comes back as claims to approve."
   end
@@ -57,7 +58,10 @@ class Admin::LeadsController < Admin::BaseController
     lead = Lead.find(params[:id])
     name = params[:record].to_s.strip
     record = if name.present?
-      (ref = Directory::Lookup.organization(name:)) ? Organization.find_by(id: ref.id) : Facility.find_by(id: Directory::Lookup.facility(name:)&.id)
+      # Only a record still in the directory (published or waiting), never a removed one.
+      live = %w[verified pending]
+      (ref = Directory::Lookup.organization(name:)) && Organization.where(verification_status: live).find_by(id: ref.id) ||
+        Facility.where(verification_status: live).find_by(id: Directory::Lookup.facility(name:)&.id)
     end
     return back("No company or plant is called “#{params[:record]}”. Check the spelling, or Research it instead.", alert: true) unless record
 

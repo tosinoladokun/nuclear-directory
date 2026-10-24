@@ -25,13 +25,18 @@ class LeadSync
       end
     end
 
+    # Every name a news item gives that the directory doesn't have, even when
+    # another name in it matched; keyed by the article and the name.
     def news
-      open_claims.where(kind: "news_item").where("notes ILIKE ?", "%names no company or plant in the directory%")
-        .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").flat_map do |claim|
+      Candidate.where(kind: "news_item", status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
+        .flat_map do |claim|
         Array(claim.payload["about"]).filter_map do |entry|
           next unless entry.is_a?(Hash) && entry["name"].present?
 
-          { name: entry["name"], kind: entry["type"] == "facility" ? "plant" : "company", key: "news:#{claim.id}:#{entry['name']}",
+          plant = entry["type"] == "facility"
+          next if plant ? Directory::Lookup.facility(name: entry["name"]) : Directory::Lookup.organization(name: entry["name"])
+
+          { name: entry["name"], kind: plant ? "plant" : "company", key: "news:#{claim.payload['url'] || claim.id}:#{Lead.normalize(entry['name'])}",
             label: "News: #{claim.payload['title']}", url: claim.payload["url"], first: claim.created_at.to_date }
         end
       end
@@ -47,7 +52,8 @@ class LeadSync
     def enrich
       open_claims.joins(:source).where(sources: { source_kind: "company_pages" }).flat_map do |claim|
         DataQuality::Review.open_company_ends(claim).map do |key, name|
-          { name:, kind: "company", key: "enrich:#{claim.id}:#{key}", label: "Enrich: named on #{claim.source.domain}", url: claim.source.url,
+          # By its page and the name, so a re-read page's new claim is the same sighting.
+          { name:, kind: "company", key: "enrich:#{claim.source_id}:#{Lead.normalize(name)}", label: "Enrich: named on #{claim.source.domain}", url: claim.source.url,
             first: claim.created_at.to_date }
         end
       end

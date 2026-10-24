@@ -79,4 +79,17 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
     assert_equal "researching", Lead.find_by!(name: "zentra fusion").status
     assert_equal 4, Lead.count - 2 # the two from setup
   end
+
+  test "Research refuses an address Enrich can't read; Already covered never links a removed record" do
+    company = Organization.create!(name: "Often Seen Fission", website: "often.example.com", verification_status: "verified", verified_by: "human:tosin")
+    assert_no_enqueued_jobs(only: DataQuality::RunJob) { post research_admin_lead_path(@often) }
+    assert_match "needs to be a full https:// address", flash[:alert]
+    assert_nil company.reload.enrich_requested_at
+
+    gone = Organization.create!(name: "Once Seen Company", verification_status: "rejected", verified_by: "human:tosin")
+    gone.aliases.create!(alias: "Once Seen Company")
+    post covered_admin_lead_path(@once), params: { record: "Once Seen Company" }
+    assert_match "No company or plant is called", flash[:alert]
+    assert @once.reload.status_new?
+  end
 end

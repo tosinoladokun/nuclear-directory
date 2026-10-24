@@ -27,20 +27,34 @@ class Admin::RecordEnrichController < Admin::BaseController
   end
 
   def create
-    if @company.website.blank? && @company.sec_cik.blank?
-      flash[:alert] = "It has no website or SEC number to read yet. Add one with Edit first."
-    elsif @company.website.present? && !usable_website?
-      flash[:alert] = "Its website needs to be a full https:// address before its pages can be read. Fix it with Edit first."
+    if (refusal = self.class.request!(@company))
+      flash[:alert] = refusal
     else
-      # A retry after a read whose extraction failed resumes that request, so
-      # findings already made from its pages stay on this page.
-      failed = @company.enriched_at && CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: @company.enriched_at..)
-        .order(:started_at).first&.failed?
-      @company.update_columns(failed ? { enriched_at: nil } : { enrich_requested_at: Time.current })
-      DataQuality::RunJob.perform_later(SOURCE_KIND)
       flash[:notice] = "Reading its pages. What they state comes back here to decide, usually within a few minutes."
     end
     redirect_after admin_record_enrich_path(type: "Organization", id: @company.id)
+  end
+
+  # Asks for a company's pages to be read (also from Leads, #484): nil once
+  # queued, or why it can't be. A retry after a read whose extraction failed
+  # resumes that request, so findings already made from its pages stay.
+  def self.request!(company)
+    return "It has no website or SEC number to read yet. Add one with Edit first." if company.website.blank? && company.sec_cik.blank?
+    if company.website.present? && !usable_website?(company.website)
+      return "Its website needs to be a full https:// address before its pages can be read. Fix it with Edit first."
+    end
+
+    failed = company.enriched_at && CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: company.enriched_at..)
+      .order(:started_at).first&.failed?
+    company.update_columns(failed ? { enriched_at: nil } : { enrich_requested_at: Time.current })
+    DataQuality::RunJob.perform_later(SOURCE_KIND)
+    nil
+  end
+
+  # The address's form only: its page may be a saved source already.
+  def self.usable_website?(url)
+    url = url.to_s.strip
+    url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && (URI.parse(url).host.present? rescue false)
   end
 
   def decide
@@ -120,12 +134,6 @@ class Admin::RecordEnrichController < Admin::BaseController
 
   private
     # A whole https address a page can be saved under (no spaces, a host).
-    def usable_website?
-      url = @company.website.to_s.strip
-      # The address's form only: its page may be a saved source already.
-      url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && (URI.parse(url).host.present? rescue false)
-    end
-
     def load_company
       raise ActiveRecord::RecordNotFound unless params[:type] == "Organization"
 

@@ -18,4 +18,10 @@ class LeadTest < ActiveSupport::TestCase
     lead.decide!("ignored", by: "human:tosin", reason: "Not nuclear")
     assert_equal [ "ignored", "Not nuclear", "human:tosin" ], [ lead.status, lead.reason, lead.decided_by ]
   end
+
+  test "a source seen again keeps its earliest first date" do
+    Lead.sighted!(name: "Listed Co", kind: "company", key: "list:listed co", label: "Added by hand", first: Date.new(2026, 10, 1))
+    Lead.sighted!(name: "Listed Co", kind: "company", key: "list:listed co", label: "Added by hand", first: Date.new(2026, 10, 20))
+    assert_equal [ Date.new(2026, 10, 1), Date.new(2026, 10, 20) ], Lead.sole.values_at(:first_seen_on, :last_seen_on)
+  end
 end
