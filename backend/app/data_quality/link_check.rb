@@ -36,10 +36,13 @@ class DataQuality::LinkCheck
   end
 
   # Sources cited by any published fact (every fact type, roles and deal
-  # terms too), never checked first, then the longest unchecked. Only the
-  # columns the check reads: a stored page can be megabytes.
+  # terms too), never checked first, then the longest unchecked; not one
+  # checked today, so a rerun can't count one day's outage as several
+  # nights. Only the columns the check reads: a stored page can be megabytes.
   def due
-    Source.where(id: @directory.published_source_ids).select(:id, :url, :link_failures)
+    today = @clock.call.in_time_zone.beginning_of_day
+    Source.where(id: @directory.published_source_ids).where("link_checked_at IS NULL OR link_checked_at < ?", today)
+      .select(:id, :url, :link_failures)
       .order(Arel.sql("link_checked_at ASC NULLS FIRST"), :id).limit(@limit)
   end
 

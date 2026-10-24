@@ -13,7 +13,7 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     Source.create!(url:, source_kind: "web_page").tap { |source| Evidence.create!(subject:, source:, quote: "q", found_by: "human") }
   end
 
-  def check(limit: 10) = DataQuality::LinkCheck.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), limit:, clock: -> { NOW }).run
+  def check(limit: 10, at: NOW) = DataQuality::LinkCheck.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), limit:, clock: -> { at }).run
 
   test "records each cited source's answer: ok, dead, blocked; never touches the fact" do
     ok = cite("https://example.org/ok")
@@ -62,12 +62,14 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     flaky = cite("https://example.org/flaky")
     stub_request(:get, flaky.url).to_return(status: 503, body: "down")
 
-    2.times { check }
+    check(at: NOW)
+    assert_equal 0, check(at: NOW + 1.hour)["checked"], "not again the same day"
+    check(at: NOW + 1.day)
     assert_equal [ "error", 2 ], flaky.reload.values_at(:link_status, :link_failures)
-    assert_equal [ flaky.id ], check["failing"]
+    assert_equal [ flaky.id ], check(at: NOW + 2.days)["failing"]
 
     stub_request(:get, flaky.url).to_return(body: "back")
-    check
+    check(at: NOW + 3.days)
     assert_equal [ "ok", 0 ], flaky.reload.values_at(:link_status, :link_failures)
   end
 
@@ -79,10 +81,10 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     recent = cite("https://example.org/recent").tap { |s| s.update_columns(link_checked_at: NOW - 1.day) }
     Source.create!(url: "https://example.org/uncited", source_kind: "web_page")
 
-    due = DataQuality::LinkCheck.new(limit: 2).due.map(&:id)
+    due = DataQuality::LinkCheck.new(limit: 2, clock: -> { NOW }).due.map(&:id)
 
     assert_equal [ fresh.id, old.id ], due
-    refute_includes DataQuality::LinkCheck.new.due.map(&:id), unpublished_only.id
-    assert_includes DataQuality::LinkCheck.new.due.map(&:id), recent.id
+    refute_includes DataQuality::LinkCheck.new(clock: -> { NOW }).due.map(&:id), unpublished_only.id
+    assert_includes DataQuality::LinkCheck.new(clock: -> { NOW }).due.map(&:id), recent.id
   end
 end
