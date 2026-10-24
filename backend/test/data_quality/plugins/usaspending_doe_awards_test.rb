@@ -97,7 +97,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     crawl!
     candidates = plugin.extract(recipient("d527144c-7fea-82ff-aff0-e95e5fd6e488-C"), nil)
 
-    company, link = candidates
+    company, link, *terms = candidates
     assert_equal({ "name" => "American Centrifuge Operating", "aliases" => [ "AMERICAN CENTRIFUGE OPERATING, LLC" ] }, company[:payload],
       "a readable name, the award's spelling kept as an alias (DATA.md D1, #302)")
     assert_equal({ "from_organization" => { "name" => "U.S. Department of Energy" }, "to_organization" => { "name" => "AMERICAN CENTRIFUGE OPERATING, LLC" },
@@ -107,6 +107,12 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
       link[:payload])
     assert_includes recipient("d527144c-7fea-82ff-aff0-e95e5fd6e488-C").content_text, link[:quote], "quotes its largest award's row"
     assert plugin.quote_in_source?(recipient("d527144c-7fea-82ff-aff0-e95e5fd6e488-C"), link[:quote])
+
+    # Each award is a term under the link (#256), quoting its own row.
+    assert_equal [ "deal_term" ] * 2, terms.map { |claim| claim[:kind] }
+    assert_equal [ "award" ], terms.map { |claim| claim[:payload]["term_type"] }.uniq
+    assert_equal "U.S. Department of Energy", terms.first[:payload].dig("from_organization", "name")
+    assert(terms.all? { |claim| claim[:payload]["external_id"].present? && plugin.quote_in_source?(recipient("d527144c-7fea-82ff-aff0-e95e5fd6e488-C"), claim[:quote]) })
   end
 
   test "amounts read in millions or billions, and one award in the singular" do
@@ -116,9 +122,9 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     crawl!
 
     assert_equal "1 award from the U.S. Department of Energy totaling $921.7 million (2021): DENE0009040.",
-      plugin.extract(recipient(XENERGY["recipient_id"]), nil).last[:payload]["description"]
+      plugin.extract(recipient(XENERGY["recipient_id"]), nil).find { |claim| claim[:kind] == "relationship" }[:payload]["description"]
     assert_equal "1 award from the U.S. Department of Energy totaling $1.7 billion (2021): DENE0009054.",
-      plugin.extract(recipient(sfr["recipient_id"]), nil).last[:payload]["description"]
+      plugin.extract(recipient(sfr["recipient_id"]), nil).find { |claim| claim[:kind] == "relationship" }[:payload]["description"]
   end
 
   # Real descriptions from the fusion search on 15 Oct 2026.
@@ -369,7 +375,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     crawl!
 
     assert_match(/\A2 awards from the U\.S\. Department of Energy totaling \$[\d.]+ (?:million|billion) \(all in 2021\): /,
-      plugin.extract(recipient(XENERGY["recipient_id"]), nil).last[:payload]["description"])
+      plugin.extract(recipient(XENERGY["recipient_id"]), nil).find { |claim| claim[:kind] == "relationship" }[:payload]["description"])
   end
 
   test "match links an existing company to DOE; the link waits for a person" do
@@ -385,5 +391,21 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert link.status_matched?, link.notes
     funds = Relationship.find(link.subject_id)
     assert_equal [ doe, xenergy, "funds", "pending" ], [ funds.from_organization, funds.to_organization, funds.relationship_type, funds.verification_status ]
+
+    # Its awards are terms on that link, pending, one per award ID (#256).
+    terms = DealTerm.where(link: funds)
+    assert terms.any?
+    assert(terms.all? { |term| term.award? && term.pending? && term.external_id.present? && term.amount_usd.positive? })
+    assert_equal terms.count, terms.distinct.count(:external_id)
+  end
+
+  test "a repeat crawl leaves each open award its own values" do
+    crawl!
+    source = recipient("d527144c-7fea-82ff-aff0-e95e5fd6e488-C")
+    awards = plugin.extract(source, nil).select { |claim| claim[:kind] == "deal_term" }
+    assert_equal 2, awards.size
+    open = awards.map { |claim| Candidate.create!(source:, kind: "deal_term", payload: claim[:payload], quote: claim[:quote], status: "new") }
+    plugin.refresh_open_claims
+    assert_equal awards.map { |claim| claim[:payload]["external_id"] }, open.map { |claim| claim.reload.payload["external_id"] }
   end
 end
