@@ -366,7 +366,10 @@ module AdminHelper
     named = payload["name"].to_s.squish
     if item.kind == "organization" && record && named.present? && (payload.keys - %w[name aliases]).empty? &&
         !named.casecmp?(record.name.to_s.squish)
-      return "#{record.name}, named “#{named}” in this source. Approving adds the source; its name stays #{record.name}."
+      others = Array(payload["aliases"]).map { |name| name.to_s.squish }.compact_blank.uniq
+        .reject { |name| name.casecmp?(record.name.to_s.squish) || name.casecmp?(named) }
+      also = " It also lists #{others.map { |name| "“#{name}”" }.to_sentence} as other names." if others.any?
+      return "#{record.name}, named “#{named}” in this source. Approving adds the source; its name stays #{record.name}.#{also}"
     end
 
     item.claim

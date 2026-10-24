@@ -26,4 +26,10 @@ class Admin::ClaimTextTest < ActionDispatch::IntegrationTest
     assert_equal [ "Urenco", "Urenco USA" ], @urenco.aliases.pluck(:alias).sort, "the en-dash spelling is the same alias"
     assert Evidence.exists?(subject: @urenco, source: @page, quote: "Licensee: URENCO–USA")
   end
+
+  test "proposed other names stay visible in the sentence" do
+    @claim.update!(payload: { "name" => "URENCO–USA", "aliases" => [ "Louisiana Energy Services" ] })
+    get admin_checks_path
+    assert_select "#claim-#{@claim.id}", /its name stays Urenco\. It also lists “Louisiana Energy Services” as other names\./
+  end
 end
