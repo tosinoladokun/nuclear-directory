@@ -8,6 +8,14 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     def call(candidate) = DataQuality::Verdict.new(outcome: :publish, confidence: 0.92, reason: "The row names #{candidate.payload['name']}.")
   end
 
+  # A source that holds each claim for a person's review, as a new source's
+  # first read does (Plugin#hold_for_review).
+  class DataQuality::Plugins::HoldDummy < DummyPlugin
+    HOLD = "It's a first read of this list: check it"
+    def source_kind = "hold_dummy"
+    def hold_for_review(_candidate) = HOLD
+  end
+
   setup do
     @source = Source.create!(url: "https://www.nrc.gov/test/recs.html", source_kind: "dummy", crawl_status: "ok", title: "NRC test page")
     sign_in_as users(:admin)
@@ -275,5 +283,30 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select ".nd-alert li", /Line 1: there's no fact 12345678901234567890/
+  end
+
+  test "a claim held only by its source's review hold is accepted with Data Quality's approve, unless it would change a person's decision" do
+    source = Source.create!(url: "https://www.nrc.gov/test/held.html", source_kind: "hold_dummy", crawl_status: "ok", title: "Held list")
+    run = CrawlRun.create!(source_kind: "hold_dummy", stage: "crawl", status: "succeeded", started_at: 1.hour.ago)
+    Directory::FactWriter.write(:organization, { name: "Held Fission Co" })
+    decided = Organization.create!(name: "Decided Fission Co", verification_status: "verified", verified_by: "human:tosin")
+    decided.aliases.create!(alias: "Decided Fission Co")
+    held, kept = [ "Held Fission Co", "Decided Fission Co" ].map do |name|
+      Candidate.create!(source:, kind: "organization", payload: { "name" => name, "description" => "A new description." }, quote: "a quote", crawl_run: run)
+    end
+    plugin = DataQuality::Plugins::HoldDummy.new
+    DataQuality::Pipeline.run("hold_dummy", plugin:, only: "match")
+    DataQuality::Pipeline.run("hold_dummy", plugin:, only: "verify", verifier: Recommend.new)
+    assert held.reload.status_needs_review?
+    assert_match DataQuality::Plugins::HoldDummy::HOLD, held.notes
+
+    paste("#{held.id} approve: the list names it\n#{kept.reload.id} approve: the list names it")
+    get admin_recommendations_path
+    assert_select "#rec-#{kept.id}", /would change a record a person decided|already/
+    shown = css_select("form[action='#{admin_recommendations_accept_path}'] input[name=shown]").first["value"]
+    post admin_recommendations_accept_path, params: { shown: }
+
+    assert held.reload.status_merged?, [ held.notes, flash[:alert], flash[:notice] ].inspect
+    assert_not kept.reload.status_merged?, "a person's decision is never overwritten"
   end
 end

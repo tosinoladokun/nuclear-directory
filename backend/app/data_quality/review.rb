@@ -312,13 +312,16 @@ module DataQuality::Review
     # safe_check (a safe class, DataQuality::SafeClasses): asked under the
     # record's lock in place of the usual holds; its answer is why the claim
     # isn't safe, or nil.
+    # source_held: Data Quality reviewed a claim its source held for review
+    # (Recommendations.source_hold?), so the checker's verdict isn't needed;
+    # every other bulk check, a person's decision first, still applies.
     def approve(candidate_ids, by:, reason: nil, only_recommended: false, data_quality_reviewed: false, safe_check: nil,
-      directory: DataQuality::DirectoryClient.new)
+      source_held: false, directory: DataQuality::DirectoryClient.new)
       human!(by)
       firsts = first_batches if only_recommended # once per bulk approval
       Candidate.transaction do
         Candidate.where(id: candidate_ids).includes(:crawl_run, :verify_run).order(:id).map do |candidate|
-          approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:, data_quality_reviewed:, safe_check:)
+          approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:, data_quality_reviewed:, safe_check:, source_held:)
         end
       end
     rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
@@ -932,12 +935,13 @@ module DataQuality::Review
       # only_recommended (bulk approval): checked under the lock, so a claim a
       # verify run moved to review a moment ago isn't published in bulk.
       def approve_one(candidate, by:, reason:, directory:, edited: false, only_recommended: false, firsts: nil, data_quality_reviewed: false,
-        safe_check: nil)
+        safe_check: nil, source_held: false)
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
-          if only_recommended && !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
+          if only_recommended && !(source_held && data_quality_reviewed) &&
+              !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end
           # Checked again when a bulk approval runs: the record may have been

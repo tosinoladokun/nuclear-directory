@@ -133,7 +133,8 @@ module DataQuality::Recommendations
           reason = "#{ACCEPTED}: #{candidate.dq_reason}"
           result =
             if candidate.dq_recommendation == "approve"
-              DataQuality::Review.approve([ candidate.id ], by:, reason:, only_recommended: true, data_quality_reviewed: true, directory:).first
+              DataQuality::Review.approve([ candidate.id ], by:, reason:, only_recommended: true, data_quality_reviewed: true,
+                source_held: source_hold?(candidate), directory:).first
             else
               DataQuality::Review.reject([ candidate.id ], by:, reason:, directory:).first
             end
@@ -235,13 +236,30 @@ module DataQuality::Recommendations
         return "it fills in a record's details; decide it on its own page" if directory.enrichment?(candidate)
         return if candidate.dq_recommendation == "reject"
 
-        return "the app's checker didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
-        return "it's waiting for a person's review" if candidate.status_needs_review?
-        return "its source changed after the app's checker checked it" unless recommended.include?(candidate.id)
+        # A claim its source holds for a person's review (a new source's first
+        # read, a replacement): Data Quality's approve is that review, as it is
+        # for the first batch, so the checker's verdict isn't needed. Every
+        # other check stands, and a person's decision is never overwritten.
+        unless source_hold?(candidate)
+          return "the app's checker didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
+          return "it's waiting for a person's review" if candidate.status_needs_review?
+          return "its source changed after the app's checker checked it" unless recommended.include?(candidate.id)
+        end
         return "its company or plant isn't settled yet" unless candidate.subject_id
 
         held = DataQuality::Review.held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ]))
         held unless DataQuality::Review::REVIEWED_HOLDS.include?(held)
+      end
+
+      # Held in review only by its source's own hold (Plugin#hold_for_review),
+      # with that hold's reason still the note, so nothing else held it.
+      def source_hold?(candidate)
+        return false unless candidate.status_needs_review?
+
+        reason = DataQuality::Plugin.for(candidate.source.source_kind).hold_for_review(candidate)
+        reason.present? && candidate.notes.to_s.start_with?(reason)
+      rescue DataQuality::Plugin::UnknownSourceKind
+        false
       end
 
       # The claim as Data Quality saw it: what it says and what it's attached to.
