@@ -339,6 +339,9 @@ class DataQuality::DirectoryClient
   # Of these facts of one type, the ids a person decided (verified_by human:…).
   def human_decided_ids(type:, ids:) = lookup.human_decided_ids(type:, ids:)
 
+  # Whether a company or plant already goes by this name (normalized).
+  def known_name?(type:, id:, name:) = lookup.known_name?(type:, id:, name:)
+
   # Holds a fact's row lock until the surrounding transaction ends.
   def lock_fact(type:, id:) = lookup.lock_fact(type:, id:)
 
