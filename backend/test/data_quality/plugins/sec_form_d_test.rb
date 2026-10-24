@@ -155,6 +155,27 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     assert_equal [ earlier.subject_id, "40000000.0" ], [ later.subject_id, later.payload["amount_usd"] ]
   end
 
+  test "a same-day rerun after a block requests nothing more" do
+    stub_request(:get, NOTICE).to_return(status: 403, body: "Your request has been identified as part of a network of automated tools")
+    first = crawl
+    assert_equal "SEC blocked us", first.stats["stopped"]
+
+    second = crawl
+    assert_equal "SEC blocked us", second.stats["stopped"]
+    assert_requested :get, NOTICE, times: 1
+  end
+
+  test "an original that arrives after its amendments has the whole chain read again" do
+    a = filing("0002028336-25-000001")
+    b = filing("0002028336-25-000002", form: "D/A", amends: "0002028336-25-000001")
+    c = filing("0002028336-25-000003", form: "D/A", amends: "0002028336-25-000002")
+    [ a, b, c ].each { |source| source.update_columns(extracted_sha256: source.content_sha256) }
+
+    plugin.send(:reread_amendments, Plugin::Filing.new(form: "D", accession: "0002028336-25-000001", filed_on: "2025-01-02", document: "x"), @company)
+
+    assert_equal [ a.content_sha256, nil, nil ], [ a, b, c ].map { |source| source.reload.extracted_sha256 }
+  end
+
   test "a D/A whose original isn't stored is the round of the filing it names" do
     amendment = filing("0002028336-25-000005", form: "D/A", amends: "0001012975-25-000531")
 

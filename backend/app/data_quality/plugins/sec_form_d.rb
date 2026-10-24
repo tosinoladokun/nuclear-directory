@@ -52,20 +52,34 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
 
   def crawl(_run)
     stats = Hash.new(0)
-    stats["ticker list"] = DataQuality::Snapshot.take(tickers_source, fetcher: @fetcher).to_s
-    return stats.merge("stopped" => BLOCKED).to_h if stats["ticker list"] == "blocked"
+    stopped = read_all(stats)
+    # Also after a stop: an amendment stored before it must still withdraw
+    # its round's earlier claims.
+    stats["superseded"] = supersede_earlier_filings
+    stats["stopped"] = BLOCKED if stopped
+    stats.reject { |key, count| key == "superseded" && count.zero? }.to_h
+  end
+
+  # Reads the ticker list, each company's filing lists and new filings;
+  # true when SEC blocked us, now or earlier today (a same-day rerun gets
+  # skipped_recent for a blocked source, so its recorded block is checked).
+  def read_all(stats)
+    tickers = tickers_source
+    stats["ticker list"] = DataQuality::Snapshot.take(tickers, fetcher: @fetcher).to_s
+    return true if blocked?(stats["ticker list"], tickers)
 
     @directory.organizations_with_sec_cik.each do |company|
-      filings = filing_list(company, stats) or return stats.merge("stopped" => BLOCKED).to_h
+      filings = filing_list(company, stats) or return true
 
       filings.each do |filing|
-        result = store(company, filing)
+        result, source = store(company, filing)
         stats["filings #{result}"] += 1
-        return stats.merge("stopped" => BLOCKED).to_h if result == :blocked
+        return true if blocked?(result.to_s, source)
+
+        reread_amendments(filing, company) if result == :new
       end
     end
-    stats["superseded"] = supersede_earlier_filings
-    stats.reject { |key, count| key == "superseded" && count.zero? }.to_h
+    false
   end
 
   def extract(source, _run)
@@ -144,7 +158,7 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
       index = index_source(company)
       outcome = DataQuality::Snapshot.take(index, fetcher: @fetcher) { |body| filing_lines(body) }
       stats["lists #{outcome}"] += 1
-      return if outcome == :blocked
+      return if blocked?(outcome.to_s, index)
       return [] unless index.crawl_ok? && index.content_text
 
       older = index.content_text.lines(chomp: true).filter_map { |line| line.delete_prefix("file\t") if line.start_with?("file\t") }
@@ -155,7 +169,7 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
         end
         outcome = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |body| filing_lines(body) }
         stats["lists #{outcome}"] += 1
-        return if outcome == :blocked
+        return if blocked?(outcome.to_s, source)
 
         source.content_text.to_s
       end
@@ -171,13 +185,34 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
         row.title = "SEC #{filing.form} #{filing.accession}: #{company.name}"
         row.published_on = date(filing.filed_on)
       end
-      return :stored_before if source.content_text.present?
+      return [ :stored_before, source ] if source.content_text.present?
 
       result = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |body| offering_line(body, filing) or raise Unreadable }
-      result == :changed ? :new : result
+      [ result == :changed ? :new : result, source ]
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: "SEC's notice has no offering fields to read")
-      :unreadable
+      [ :unreadable, source ]
+    end
+
+    def blocked?(outcome, source) = outcome == "blocked" || source&.blocked_streak.to_i.positive?
+
+    # A filing that arrived after amendments naming it (a failed download
+    # earlier): the company's amendments are read again, so their round
+    # resolves to its first filing now.
+    def reread_amendments(filing, company)
+      prefix = format(ARCHIVE_URL, cik: company.sec_cik.to_i, accession: "")[%r{\A.*/edgar/data/\d+/}]
+      sources = Source.where(source_kind:).where("url LIKE ?", "#{prefix}%").where.not(content_text: nil).to_a
+      ancestors = [ filing.accession ]
+      loop do
+        dependents = sources.select { |source| ancestors.include?(fields(source.content_text)&.dig("amends")) }
+          .map { |source| fields(source.content_text)["accession"] } - ancestors
+        break if dependents.empty?
+
+        ancestors += dependents
+      end
+      Source.where(id: sources.select { |source| ancestors.drop(1).include?(fields(source.content_text)&.dig("accession")) }.map(&:id))
+        .update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
+      @stored_filings = nil
     end
 
     # A round's earlier filings' claims still waiting are withdrawn once a
