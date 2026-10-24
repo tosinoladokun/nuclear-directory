@@ -167,6 +167,8 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     small = Source.find_by!(url: "https://www.usaspending.gov/recipient/00000000-0000-0000-0000-000000000050-R/latest")
     assert_equal Plugin::SMALL_BUSINESS_HOLD, plugin.hold_for_review(Candidate.new(kind: "relationship", source: small))
     assert_nil plugin.hold_for_review(Candidate.new(kind: "relationship", source: recipient(XENERGY["recipient_id"])))
+    mixed = Source.new(content_text: CSV.generate { |csv| csv << Plugin::COLUMNS; csv << Plugin::COLUMNS.map { |c| c == "search" ? "nuclear_energy_rd" : "x" }; csv << Plugin::COLUMNS.map { |c| c == "search" ? "small_business" : "x" } })
+    assert_equal Plugin::SMALL_BUSINESS_HOLD, plugin.hold_for_review(Candidate.new(kind: "relationship", source: mixed)), "mixed searches are held too"
   end
 
   test "a search with more awards than the pages read stores nothing, so the snapshots stay whole" do
