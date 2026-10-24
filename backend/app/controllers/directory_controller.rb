@@ -35,11 +35,19 @@ class DirectoryController < ApplicationController
 
     @companies = @listing.companies.limit(@shown).to_a
     @plants = @listing.plants.limit(@shown).to_a
-    @counts = DirectoryListing.category_counts
+    # A Show more request wants only the frame's rows (Turbo drops the rest), so the
+    # category counts, the slowest part of the page, are skipped for it.
+    @counts = DirectoryListing.category_counts unless turbo_frame_request?
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
     # Show more (?shown=2) is the same search, expanded: not a new one.
-    track_search(@listing.query, results: exact_total, source:) if @listing.searching? && params[:shown].blank?
+    # A gap is a search of the whole directory finding nothing: a category,
+    # tag or filter narrowing it to nothing isn't one. What the page showed
+    # decides it, so a typo the close-match fallback answers (#496) is a hit
+    # (closing a gap it had), while analytics keep the exact count.
+    unfiltered = !@listing.filtered? && @listing.category.nil? && @listing.tag.nil?
+    track_search(@listing.query, results: exact_total, source:, gap: (params[:q].to_s if unfiltered),
+      shown: @companies_total + @plants_total) if @listing.searching? && params[:shown].blank?
   end
 end

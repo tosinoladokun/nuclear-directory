@@ -258,6 +258,26 @@ class Admin::CandidatesControllerTest < ActionDispatch::IntegrationTest
     assert_equal "NRC lists the nearby city's state", Directory::Lookup.verification_history(type: "Facility", id: unit.id).first.reason
   end
 
+  test "edit, then approve a funding round: its amount is editable, its filing and company aren't" do
+    Directory::FactWriter.write(:organization, { name: "X-energy", sec_cik: "0001234567" }, verification: { status: "verified", by: "human:tosin" })
+    source = Source.create!(url: "https://www.sec.gov/Archives/edgar/data/1234567/000123456724000001/xslFormDX01/primary_doc.xml",
+      source_kind: "web_page", crawl_status: "ok", content_text: "q")
+    c = Candidate.create!(source:, kind: "deal_term", quote: "q", payload: { "organization" => { "name" => "X-energy", "sec_cik" => "0001234567" },
+      "link_type" => "Organization", "term_type" => "funding_round", "external_id" => "0001234567-24-000001", "amount_usd" => "25000000.0" })
+    DataQuality::Pipeline.run("web_page", plugin: DummyPlugin.new.tap { |p| p.define_singleton_method(:source_kind) { "web_page" } }, only: "match")
+    sign_in_as users(:admin)
+
+    get edit_admin_candidate_path(c, category: "facts")
+    assert_select "input[name=?]", "values[amount_usd]"
+    %w[term_type external_id].each { |name| assert_select "input[name=?]", "values[#{name}]", count: 0 }
+
+    patch admin_candidate_path(c), params: { values: { amount_usd: "26000000" } }
+
+    assert_redirected_to admin_checks_path
+    term = DealTerm.find(c.reload.subject_id)
+    assert_equal [ 26_000_000, "0001234567-24-000001", "verified" ], [ term.amount_usd, term.external_id, term.verification_status ]
+  end
+
   test "a company role's role shows read-only, and approving it with no changes works" do
     vendor = Role.create!(key: "reactor_vendor", name: "Reactor vendor")
     c = candidate("organization_role", { "organization" => { "name" => "TerraPower" }, "role" => "reactor_vendor" })
