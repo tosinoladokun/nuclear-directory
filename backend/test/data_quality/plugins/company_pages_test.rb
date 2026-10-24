@@ -280,6 +280,14 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_not_equal format(DataQuality::Plugins::SecFormD::SUBMISSIONS_URL, "0001849056"), format(DataQuality::Plugins::CompanyPages::EDGAR, 1_849_056)
   end
 
+  test "an unnamed, undated round read again with its amount reworded is the same round" do
+    plugin = DataQuality::Plugins::CompanyPages.new
+    ids = [ [ "$5 million", "We closed a funding round of $5 million." ], [ "$5M", "We closed a funding round of $5M." ] ].map do |amount, quote|
+      plugin.send(:funding_round, "Acme Fission", { "amount" => amount, "round" => nil, "date" => nil, "quote" => quote }, ->(_v, _q) { true }, HOME)[:payload]["external_id"]
+    end
+    assert_equal 1, ids.uniq.size, ids.inspect
+  end
+
   test "a deal runs buyer to seller for power and supplier to buyer for supply; loose agreement words aren't deals" do
     page = <<~HTML
       <html><body><p>Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.</p>
