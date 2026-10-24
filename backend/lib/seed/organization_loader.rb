@@ -172,7 +172,9 @@ module Seed
         { website: "website", country_code: "country_code", legal_name: "legal_name", hq_city: "hq", hq_state: "hq" }.each do |attribute, key|
           attributes.delete(attribute) unless doc.key?(key)
         end
-        attributes.delete(:description) unless description["text"]
+        # A description stated as null, or with `text: null`, clears it; one with only a source and quote (no text key) leaves the text alone.
+        states_text = doc.key?("description") && (doc["description"].nil? || doc["description"].respond_to?(:key?) && doc["description"].key?("text"))
+        attributes.delete(:description) unless states_text
         attributes[:domain] = nil if shared.include?(Organization.domain_from(doc["website"]))
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
