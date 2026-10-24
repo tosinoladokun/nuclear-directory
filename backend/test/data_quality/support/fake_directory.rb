@@ -68,7 +68,7 @@ module FakeDirectory
     def repoint_merged_claims = 0
 
     def write(kind, attributes, evidence: [], verification: nil, fill_blank: false, protect_human_verified: false,
-      remove_aliases: [])
+      remove_aliases: [], create_only: false)
       @writes << { kind:, attributes:, evidence:, verification:, fill_blank: }
       return Directory::FactWriter::Result.new(kind: kind.to_sym, id: nil, created: false, errors: [ @fail_with ]) if @fail_with
 

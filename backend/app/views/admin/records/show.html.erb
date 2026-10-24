@@ -49,13 +49,12 @@
       <% end %>
     <% end %>
     <%# A removed or rejected record gets no Add fact: Put it back first. %>
-    <% if @fact.type == "Organization" && %w[verified pending].include?(@fact.verification_status) %>
+    <%# A company or plant site; a unit's facts are its site's. %>
+    <% if %w[verified pending].include?(@fact.verification_status) && (@fact.type == "Organization" || (@fact.type == "Facility" && @fact.values.to_h["parent_id"].blank?)) %>
       <%= link_to "Add a fact", admin_record_new_fact_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--outline type-ui" %>
       <% if @fact.type == "Organization" %>
         <%= link_to "Enrich", admin_record_enrich_path(type: "Organization", id: @fact.id), class: "nd-btn nd-btn--outline type-ui" %>
       <% end %>
-    <% elsif %w[verified pending].include?(@fact.verification_status) %>
-      <span class="nd-btn nd-btn--outline type-ui text-ink-muted" aria-disabled="true" title="Adding a plant's facts comes next (#202)">Add fact <span class="nd-tag">Soon</span></span>
     <% end %>
     <% if %w[verified pending].include?(@fact.verification_status) %>
       <%= link_to "Merge into…", admin_record_merge_path(type: @fact.type, id: @fact.id, back: params[:back].presence), class: "nd-btn nd-btn--outline type-ui" %>
