@@ -73,21 +73,26 @@
                   <%= button_to "Research", research_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline nd-btn--sm",
                     title: lead.kind == "company" ? "Read its pages if we have it, or add it to the research list" : "Add it to the research list" %>
                 <% end %>
-                <details class="nd-leads__form">
+                <%# Its form opens as a panel under the button (a sheet on phones), over the page, so the row keeps its shape (Design on #546). %>
+                <details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
                   <summary class="nd-btn nd-btn--outline nd-btn--sm">Already covered</summary>
-                  <%= form_with url: covered_admin_lead_path(lead, **keep), method: :post, class: "nd-stack" do %>
-                    <label for="record-<%= lead.id %>" class="type-small">The company or plant that has it</label>
-                    <%= text_field_tag :record, nil, id: "record-#{lead.id}", class: "nd-input type-input", placeholder: "Its name in the directory", required: true %>
-                    <button type="submit" class="nd-btn nd-btn--primary nd-btn--sm">Link it</button>
-                  <% end %>
+                  <div class="nd-rowmenu__panel">
+                    <%= form_with url: covered_admin_lead_path(lead, **keep), method: :post, class: "nd-rowmenu__takeoff" do %>
+                      <label for="record-<%= lead.id %>" class="type-body-strong">The company or plant that has it</label>
+                      <%= text_field_tag :record, nil, id: "record-#{lead.id}", class: "nd-input type-input", placeholder: "Its name in the directory", required: true %>
+                      <button type="submit" class="nd-btn nd-btn--primary type-ui">Link it</button>
+                    <% end %>
+                  </div>
                 </details>
-                <details class="nd-leads__form">
+                <details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
                   <summary class="nd-btn nd-btn--outline nd-btn--sm">Ignore</summary>
-                  <%= form_with url: ignore_admin_lead_path(lead, **keep), method: :post, class: "nd-stack" do %>
-                    <label for="reason-<%= lead.id %>" class="type-small">Why it's ignored</label>
-                    <%= text_field_tag :reason, nil, id: "reason-#{lead.id}", class: "nd-input type-input", required: true, placeholder: "Not nuclear, a typo…" %>
-                    <button type="submit" class="nd-btn nd-btn--primary nd-btn--sm">Ignore it</button>
-                  <% end %>
+                  <div class="nd-rowmenu__panel">
+                    <%= form_with url: ignore_admin_lead_path(lead, **keep), method: :post, class: "nd-rowmenu__takeoff" do %>
+                      <label for="reason-<%= lead.id %>" class="type-body-strong">Why it's ignored</label>
+                      <%= text_field_tag :reason, nil, id: "reason-#{lead.id}", class: "nd-input type-input", required: true, placeholder: "Not nuclear, a typo…" %>
+                      <button type="submit" class="nd-btn nd-btn--primary type-ui">Ignore it</button>
+                    <% end %>
+                  </div>
                 </details>
               <% else %>
                 <%= button_to "Put back", reopen_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline nd-btn--sm" %>
