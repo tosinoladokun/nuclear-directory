@@ -78,6 +78,36 @@ class DataQuality::Plugins::NrcFuelCycleTest < ActiveSupport::TestCase
     assert_equal waiting, crawl.stats["restored"]
   end
 
+  test "a published facility that disappears, returns unchanged and disappears again is flagged both times" do
+    DataQuality::Pipeline.run("nrc_fuel_cycle", plugin:, only: %w[crawl extract match])
+    Facility.where(nrc_docket: "07003103").update_all(verification_status: "pending")
+    approved = DataQuality::Review.approve(page.candidates.where(kind: "facility").pluck(:id), by: "human:test")
+    assert approved.all?(&:ok?), approved.flat_map(&:errors).inspect
+
+    gone = file_fixture("nrc/fuel_cycle/list.html").read.gsub("urenco-enrichment-fac-nm-lc", "gone")
+    flags = -> { page.candidates.where(review_origin: "dropped").count }
+    cycle = lambda do |list|
+      stub_request(:get, Plugin::LIST_URL).to_return(body: list)
+      Source.update_all(fetched_at: 2.days.ago)
+      DataQuality::Pipeline.run("nrc_fuel_cycle", plugin:, only: %w[crawl extract match])
+    end
+
+    cycle.(gone)
+    assert_equal 1, flags.call
+    page.candidates.where(review_origin: "dropped").update_all(status: "merged")
+    cycle.(file_fixture("nrc/fuel_cycle/list.html").read)
+    cycle.(gone)
+    assert_equal 2, flags.call, "flagged again after it returned"
+  end
+
+  test "taking over a hand-cited page fetches it afresh and stores only its facts" do
+    Source.create!(url: URENCO, source_kind: "web_page", crawl_status: "ok", content_text: "<html>whole page</html>", content_sha256: "old",
+      fetched_at: Time.current)
+
+    crawl
+    assert_equal LINE, page.content_text
+  end
+
   test "a facility page without its facts needs a person" do
     stub_request(:get, %r{facility-finder/fc/}).to_return(body: "<html><main><h1>Moved</h1></main></html>")
 

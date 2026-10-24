@@ -115,7 +115,7 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
         row.source_kind = source_kind
         row.title = "NRC fuel cycle facility"
       end
-      source.update!(source_kind:) if source.source_kind == "web_page"
+      take_over(source)
       return "another_kind" unless source.source_kind == source_kind
 
       DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html) }.to_s
