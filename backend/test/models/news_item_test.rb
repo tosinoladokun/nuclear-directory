@@ -103,4 +103,22 @@ class NewsItemTest < ActiveSupport::TestCase
     item = NewsItem.create!(url: "https://example.com/site-merged", title: "A headline", published_on: Date.new(2026, 10, 1))
     assert_equal into.id, Directory::FactWriter.mention_news(news_item_id: item.id, subject_type: "Facility", subject_id: from.id).subject_id
   end
+
+  test "attaching news retries after a deadlock with a merge" do
+    company = Organization.create!(name: "Retry Fission", verification_status: "verified", verified_by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/retry", title: "A headline", published_on: Date.new(2026, 10, 1))
+    calls = 0
+    once = Directory::FactWriter.method(:mention_news_once)
+    Directory::FactWriter.define_singleton_method(:mention_news_once) do |**args|
+      (calls += 1) == 1 ? raise(ActiveRecord::Deadlocked, "deadlock detected") : once.call(**args)
+    end
+    begin
+      mention = Directory::FactWriter.mention_news(news_item_id: item.id, subject_type: "Organization", subject_id: company.id)
+    ensure
+      Directory::FactWriter.singleton_class.send(:remove_method, :mention_news_once)
+      Directory::FactWriter.define_singleton_method(:mention_news_once, once)
+      Directory::FactWriter.singleton_class.send(:private, :mention_news_once)
+    end
+    assert_equal [ 2, company.id ], [ calls, mention.subject_id ]
+  end
 end
