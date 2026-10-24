@@ -330,7 +330,11 @@ module DataQuality::Review
       end
       ends = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {}).select { |_, type| type == :organization }.keys
       ends.filter_map do |key|
-        name = candidate.payload.dig(key, "name").to_s
+        # A malformed end (a string, not an object) is left for Reject, not a crash.
+        named = candidate.payload[key]
+        next unless named.is_a?(Hash)
+
+        name = named["name"].to_s
         [ key, name ] if name.present? && candidate.notes.to_s.match?(/\A#{Regexp.escape(key)}(: no exact match for| ".*" isn't in the directory yet)/)
       end
     end

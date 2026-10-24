@@ -92,4 +92,26 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
     assert_equal [ "Acme funds GENERAL ATOMICS." ], link.evidence.map(&:quote)
     assert_equal "pending", link.verification_status
   end
+
+  test "the settle note survives the match run it queues; a back link outside admin isn't used; a malformed end doesn't break Checks" do
+    post settle_path, params: { choice: "same", record_id: @ga.id }
+    web_page = Class.new(DataQuality::Plugin) do
+      def source_kind = "web_page"
+      def crawl(_run) = {}
+      def extract(_source, _run) = []
+    end
+    DataQuality::Pipeline.run("web_page", plugin: web_page.new, only: %w[match])
+    assert_match "tosin settled \"GENERAL ATOMICS INC\" as the same as General Atomics", @link.reload.notes
+
+    get settle_path(Candidate.create!(source: @source, kind: "relationship", status: "needs_review", quote: "Acme funds GENERAL ATOMICS.",
+      payload: { "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "GENERAL ATOMICS INC" }, "relationship_type" => "funds" },
+      notes: %(to_organization: no exact match for "GENERAL ATOMICS INC")), back: "javascript:alert(1)")
+    assert_select "a[href^='javascript']", 0
+
+    Candidate.create!(source: @source, kind: "relationship", status: "needs_review", quote: "Acme funds GA.",
+      payload: { "from_organization" => "Acme", "to_organization" => { "name" => "GA" }, "relationship_type" => "funds" },
+      notes: %(from_organization: no exact match for "Acme"))
+    get admin_checks_path
+    assert_response :success
+  end
 end

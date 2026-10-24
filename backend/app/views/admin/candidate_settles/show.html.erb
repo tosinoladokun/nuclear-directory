@@ -1,5 +1,5 @@
 <% content_for :title, "Which company is “#{@name}”?" %>
-<% back = params[:back].presence %>
+<% back = back_path(nil) %>
 <% here = ->(**extra) { admin_candidate_settle_path(@candidate.id, end: @end_key, back:, **extra) } %>
 
 <div class="nd-stack max-w-prose">
