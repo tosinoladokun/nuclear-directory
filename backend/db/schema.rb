@@ -259,6 +259,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.index ["sluggable_type", "sluggable_id"], name: "index_former_slugs_on_sluggable"
   end
 
+  create_table "news_items", force: :cascade do |t|
+    t.string "url", null: false
+    t.string "title", null: false
+    t.string "publisher"
+    t.date "published_on", null: false
+    t.text "summary"
+    t.decimal "confidence", precision: 3, scale: 2
+    t.string "verification_status", default: "pending", null: false
+    t.datetime "verified_at"
+    t.string "verified_by"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["published_on"], name: "index_news_items_on_published_on"
+    t.index ["url"], name: "index_news_items_on_url", unique: true
+    t.index ["verification_status"], name: "index_news_items_on_verification_status"
+    t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "news_items_confidence_check"
+    t.check_constraint "url::text ~ '^https?://'::text", name: "news_items_url_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "news_items_verification_status_check"
+  end
+
+  create_table "news_mentions", force: :cascade do |t|
+    t.bigint "news_item_id", null: false
+    t.string "subject_type", null: false
+    t.bigint "subject_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_item_id", "subject_type", "subject_id"], name: "index_news_mentions_uniqueness", unique: true
+    t.index ["news_item_id"], name: "index_news_mentions_on_news_item_id"
+    t.index ["subject_type", "subject_id"], name: "index_news_mentions_on_subject_type_and_subject_id"
+    t.check_constraint "subject_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])", name: "news_mentions_subject_type_check"
+  end
+
   create_table "organization_aliases", force: :cascade do |t|
     t.bigint "organization_id", null: false
     t.string "alias", null: false
@@ -648,6 +680,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
   add_foreign_key "facility_aliases", "facilities"
   add_foreign_key "facility_relationships", "facilities"
   add_foreign_key "facility_relationships", "organizations"
+  add_foreign_key "news_mentions", "news_items", on_delete: :cascade
   add_foreign_key "organization_aliases", "organizations"
   add_foreign_key "organization_roles", "organizations"
   add_foreign_key "organization_roles", "roles"
