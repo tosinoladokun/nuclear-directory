@@ -301,15 +301,22 @@ class DataQuality::Stages::Match < DataQuality::Stage
     def rematch_settled_ends
       ends = LINK_ENDS.values.flat_map(&:keys).uniq.join("|")
       # Only the two missing-match holds; others (a closed site, say) stay as they are.
-      question = /\A(?:(?:#{ends}): no exact match for |(?:#{ends}) ".*" isn't in the directory yet)/
+      # And a deal waiting for its link (#256), once that link is in.
+      question = /\A(?:(?:#{ends}): no exact match for |(?:#{ends}) ".*" isn't in the directory yet|The link .* approve the link first)/
       waiting = candidates.where(status: "needs_review", subject_id: nil, review_origin: nil, kind: LINK_ENDS.keys)
       waiting.find_each do |candidate|
         next unless candidate.notes.to_s.match?(question)
 
         payload = candidate.payload.to_h
+        ids = {}
         settled = link_ends(candidate.kind, payload).all? do |key, type|
           found = resolve(type, payload[key], closed: :found) if payload[key].is_a?(Hash)
+          ids[:"#{key}_id"] = found.record.id if found.is_a?(Found)
           found.is_a?(Found) && EXACT.include?(found.by) && !found.record.closed?
+        end
+        if settled && candidate.kind == "deal_term" && (link_kind = DEAL_LINKS[payload["link_type"]])
+          link = directory.existing_fact(link_kind, ids.merge(relationship_type: payload["relationship_type"]))
+          settled = link && !link.closed?
         end
         next unless settled
 
