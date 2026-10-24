@@ -225,9 +225,13 @@ module Seed
           # same link (same from/to/type) doesn't clear a value another
           # entry set. The seed describes what's known; a missing key is
           # "nothing to say", not "clear it".
+          # A link marked pending stays pending, and a human's later decision on it holds, as for plant links.
+          existing = Relationship.find_by(from_organization_id: organization.id, to_organization_id: other.id, relationship_type: item["type"])
+          next if item["pending"] && existing&.closed?
+
           write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
             relationship_type: item["type"], description: item["description"] }.compact,
-            evidence(item, sources))
+            evidence(item, sources), pending: item["pending"], hold: held_link_reason(existing, item))
         end
 
         Array(doc["facilities"]).each do |item|
@@ -436,6 +440,18 @@ module Seed
         return unless link&.verified?
         # A seed-verified link is decided in the write that creates it; a
         # decision from pending made later is a human's (e.g. in the admin).
+        events = link.verification_events
+        decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
+        return if events.where(to_status: "pending").or(decided_later).exists?
+
+        item["pending_reason"]
+      end
+
+      # The pending reason to keep, when a link the seed marks pending was verified later by a person
+      # (a decision made after the seed's own write); nil otherwise. Plant links and company links.
+      def held_link_reason(link, item)
+        return unless item["pending"] && link&.verified?
+
         events = link.verification_events
         decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
         return if events.where(to_status: "pending").or(decided_later).exists?
