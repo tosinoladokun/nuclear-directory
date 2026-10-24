@@ -114,6 +114,19 @@ module Directory
     def self.mention_news(news_item_id:, subject_type:, subject_id:)
       raise Invalid, "news is about a company or a plant, not a #{subject_type}" unless NewsMention::SUBJECT_TYPES.include?(subject_type.to_s)
 
+      # A site merge locks sites before their units, and this locks a unit
+      # before its site: if the two ever deadlock, this side rolls back to its
+      # savepoint and tries again (a few times).
+      attempts = 0
+      begin
+        mention_news_once(news_item_id:, subject_type:, subject_id:)
+      rescue ActiveRecord::Deadlocked
+        retry if (attempts += 1) < 3
+        raise
+      end
+    end
+
+    def self.mention_news_once(news_item_id:, subject_type:, subject_id:)
       ActiveRecord::Base.transaction(requires_new: true) do
         # The unit locked as a write that groups it locks it, so its site is
         # read after any grouping that's under way, never before it moves.
@@ -128,6 +141,8 @@ module Directory
         NewsMention.find_or_create_by!(news_item_id:, subject_type: subject_type.to_s, subject_id:)
       end
     end
+
+    private_class_method :mention_news_once
 
     # The company or site id news should be on, its row locked: itself, or
     # the one a merge moved it into (its unpublish event says which).
