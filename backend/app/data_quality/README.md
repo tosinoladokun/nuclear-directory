@@ -314,6 +314,14 @@ licensee's `mining` category, all quoting the row. A row whose type or state can
 person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
+## NRC research and test reactors (#387)
+
+`plugins/nrc_research_reactors.rb` reads the "Locations of Research and Test Reactors" table on NRC's non-power
+page (an index, never extracted) and each reactor page it links, at most once a day. It stores, from the reactor
+page alone, its name, Licensee, Location, Docket Number and Reactor Type; never contacts.
+Each gives the reactor (`research_reactor`, docket, city, state), its licensee, and `university` or
+`national_lab` only where the licensee's name says so. No operates link and no power level. The medical isotope
+and advanced reactor tables aren't read.
 ## NRC fuel cycle facilities (#386)
 
 `plugins/nrc_fuel_cycle.rb` reads NRC's fuel cycle locations page (an index, never extracted) and each
