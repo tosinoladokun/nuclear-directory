@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -259,6 +259,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.index ["sluggable_type", "sluggable_id"], name: "index_former_slugs_on_sluggable"
   end
 
+  create_table "news_items", force: :cascade do |t|
+    t.string "url", null: false
+    t.string "title", null: false
+    t.string "publisher"
+    t.date "published_on", null: false
+    t.text "summary"
+    t.decimal "confidence", precision: 3, scale: 2
+    t.string "verification_status", default: "pending", null: false
+    t.datetime "verified_at"
+    t.string "verified_by"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["published_on"], name: "index_news_items_on_published_on"
+    t.index ["url"], name: "index_news_items_on_url", unique: true
+    t.index ["verification_status"], name: "index_news_items_on_verification_status"
+    t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "news_items_confidence_check"
+    t.check_constraint "url::text ~ '^https?://'::text", name: "news_items_url_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "news_items_verification_status_check"
+  end
+
+  create_table "news_mentions", force: :cascade do |t|
+    t.bigint "news_item_id", null: false
+    t.string "subject_type", null: false
+    t.bigint "subject_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["news_item_id", "subject_type", "subject_id"], name: "index_news_mentions_uniqueness", unique: true
+    t.index ["news_item_id"], name: "index_news_mentions_on_news_item_id"
+    t.index ["subject_type", "subject_id"], name: "index_news_mentions_on_subject_type_and_subject_id"
+    t.check_constraint "subject_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])", name: "news_mentions_subject_type_check"
+  end
+
   create_table "organization_aliases", force: :cascade do |t|
     t.bigint "organization_id", null: false
     t.string "alias", null: false
@@ -366,6 +398,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_roles_on_key", unique: true
     t.index ["parent_id"], name: "index_roles_on_parent_id"
+  end
+
+  create_table "search_gaps", force: :cascade do |t|
+    t.string "query", null: false
+    t.integer "searches_count", default: 1, null: false
+    t.date "first_searched_on", null: false
+    t.date "last_searched_on", null: false
+    t.string "status", default: "open", null: false
+    t.string "decided_by"
+    t.datetime "decided_at"
+    t.datetime "closed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["query"], name: "index_search_gaps_on_query", unique: true
+    t.index ["status", "searches_count"], name: "index_search_gaps_on_status_and_searches_count"
+    t.check_constraint "char_length(query::text) >= 3 AND char_length(query::text) <= 100", name: "search_gaps_query_length_check"
+    t.check_constraint "searches_count >= 1", name: "search_gaps_count_check"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'research'::character varying, 'covered'::character varying, 'ignored'::character varying, 'closed'::character varying]::text[])", name: "search_gaps_status_check"
   end
 
   create_table "sessions", force: :cascade do |t|
@@ -566,10 +616,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.string "extracted_sha256"
     t.integer "blocked_streak", default: 0, null: false
     t.string "extracted_rows_sha256"
+    t.datetime "link_checked_at"
+    t.string "link_status"
+    t.integer "link_http_status"
+    t.integer "link_failures", default: 0, null: false
     t.index ["domain"], name: "index_sources_on_domain"
+    t.index ["link_checked_at"], name: "index_sources_on_link_checked_at"
     t.index ["source_kind"], name: "index_sources_on_source_kind"
     t.index ["url"], name: "index_sources_on_url", unique: true
     t.check_constraint "crawl_status::text = ANY (ARRAY['pending'::character varying::text, 'ok'::character varying::text, 'blocked'::character varying::text, 'needs_human'::character varying::text])", name: "sources_crawl_status_check"
+    t.check_constraint "link_status IS NULL OR (link_status::text = ANY (ARRAY['ok'::character varying, 'dead'::character varying, 'failing'::character varying, 'error'::character varying, 'blocked'::character varying, 'disallowed'::character varying]::text[]))", name: "sources_link_status_check"
   end
 
   create_table "technologies", force: :cascade do |t|
@@ -630,6 +686,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
   add_foreign_key "facility_aliases", "facilities"
   add_foreign_key "facility_relationships", "facilities"
   add_foreign_key "facility_relationships", "organizations"
+  add_foreign_key "news_mentions", "news_items", on_delete: :cascade
   add_foreign_key "organization_aliases", "organizations"
   add_foreign_key "organization_roles", "organizations"
   add_foreign_key "organization_roles", "roles"

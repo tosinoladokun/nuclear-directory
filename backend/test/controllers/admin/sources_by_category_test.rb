@@ -35,7 +35,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     flagged = css_select("details.nd-cov__cat summary .nd-flag").size
     assert_equal 8, flagged
     assert_select "p .nd-flag", "8 of 9 categories have no live source"
-    assert_select "details#utilities[open] summary", /1 of 4.*Live/m
+    assert_select "details#utilities[open] summary", /1 of 5.*Live/m
     assert_select "details#waste-decommissioning:not([open]) summary .nd-flag", "No live source"
   end
 
@@ -57,7 +57,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     get admin_sources_path(by: "category")
 
     assert_select "details#waste-decommissioning a[href=?][target=_blank]", "https://github.com/tosinoladokun/nuclear-directory/issues/274", "#274"
-    assert_select "details#government-research .text-critical", "Missing · no issue yet"
+    assert_select "details#components .text-critical", "Missing · no issue yet"
     assert_select "details#reactor-developers .nd-cov__src", /GAIN directory\s*leads only/
   end
 
@@ -181,6 +181,17 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     run_crawler("eia_generators", crawl_status: "blocked").update!(fetched_at: 1.hour.ago, status_reason: "HTTP 403", content_sha256: nil)
     get admin_sources_path(by: "category")
     assert_select "details#utilities .nd-cov__src", /EIA-860M generators.*Built/m
+  end
+
+  test "EIA-860 plants isn't live while the EIA-860 page fails, though the cached zip reads fine" do
+    index = run_crawler("eia_860_index")
+    run_crawler("eia_plants")
+    get admin_sources_path(by: "category")
+    assert_select "details#utilities .nd-cov__src", /EIA-860 plants.*Live/m
+
+    index.update!(status_reason: "HTTP 503", fetched_at: 10.minutes.ago) # a 503 leaves crawl_status ok and the cached page
+    get admin_sources_path(by: "category")
+    assert_select "details#utilities .nd-cov__src", /EIA-860 plants.*Built/m
   end
 
   test "a hand-research task's issue isn't called a crawler; a crawler's is" do

@@ -72,6 +72,9 @@ module Seed
     # A plant (site) by name: one with no parent first, as write_unit finds
     # a site (undocketed before docketed), so a same-name NRC unit never
     # takes the site's details.
+    # A site by name: undocketed, with no parent (as write_unit finds one).
+    def site_named(name) = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(:id).first
+
     def plant_named(name)
       Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
         Directory::Lookup.facility(name:)
@@ -84,7 +87,9 @@ module Seed
         holder = Facility.find_by(parent_id: nil, eia_plant_id: entry["eia_plant_id"].to_s) or next
         # The site the loader would write to, found as it finds it: by its
         # name, then by a former one (rename_from_former_name).
-        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| plant_named(name) }.first
+        # A site under its name or a former one comes before a same-name NRC unit.
+        names = [ entry["name"], *entry["other_names"] ].compact_blank
+        target = names.lazy.filter_map { |name| site_named(name) }.first || names.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -339,9 +344,16 @@ module Seed
       # already taken. It takes the slug a fresh seed would give it too, so
       # its URL doesn't depend on which seed loaded it first.
       def rename_from_former_name(entry)
-        return if Directory::Lookup.facility(name: entry["name"])
+        return if site_named(entry["name"])
 
-        former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
+        # A site under a former name is renamed, even beside a same-name NRC
+        # unit (a docketed Callaway and the site once called Callaway Energy Center).
+        former = Array(entry["other_names"]).lazy.filter_map { |name| site_named(name) }.first
+        unless former
+          return if Directory::Lookup.facility(name: entry["name"])
+
+          former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
+        end
         attributes = { id: former.id, name: entry["name"] }
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)

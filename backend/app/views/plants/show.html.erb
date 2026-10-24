@@ -22,6 +22,8 @@
 <%= render "shared/site_header" %>
 
 <main class="nd-page">
+  <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
+  <%= json_ld_tag(plant_json_ld(p, page_url: plant_url(slug: p.slug))) %>
   <nav class="nd-crumbs" aria-label="Breadcrumb">
     <%= link_to "Plants and sites", directory_url_for(category: Category.find("plants")), class: "nd-link nd-link--muted" %> / <span aria-current="page"><%= p.name %></span>
   </nav>
