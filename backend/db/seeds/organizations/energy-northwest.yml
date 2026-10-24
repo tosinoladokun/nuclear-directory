@@ -29,6 +29,7 @@ technologies:
 relationships: []
 facilities:
 - name: Columbia Generating Station
+  site: Columbia Generating Station
   type: operates
   source_url: https://world-nuclear-news.org/articles/amazon-invests-in-x-energy-unveils-smr-project-plans
   quote: Amazon will fund the initial feasibility phase for the SMR project which is planned for a site near the energy company's Columbia Generating Station nuclear energy facility in Richland.
@@ -43,6 +44,7 @@ facilities:
   pending: true
   pending_reason: "The source says Energy Northwest and X-energy plan to build the SMRs; needs a quote that Energy Northwest will own the Cascade facility."
 - name: Columbia Generating Station
+  site: Columbia Generating Station
   type: owns
   source_url: https://www.bpa.gov/-/media/Aep/about/publications/news-releases/20250522pr1025jointreleaseenergynorthwestandbpaadvanceplantoexpandregionsnuclearpower.pdf
   quote: Columbia Generating Station, a 1,207-megawatt nuclear energy facility near Richland, Washington, is owned and operated by Energy Northwest.

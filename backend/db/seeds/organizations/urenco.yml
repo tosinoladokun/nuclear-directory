@@ -49,6 +49,12 @@ facilities:
   quote: Urenco USA currently has the capacity to meet approximately one-third of the enrichment needs of U.S. utilities and is expanding to meet additional commercial demand.
   published: '2024-12-11'
   confidence: 1.0
+- name: Louisiana Energy Services (LES)
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
+  quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
+  confidence: 1.0
+  note: NRC lists the licensee for this operational facility.
 notes: 'Legal entity name (e.g. Urenco Limited) not verified. From the merged Urenco USA file: DOE LEU IDIQ selection (Dec 2024) is a contract vehicle with no funds stated; not modelled as ''funds''. Urenco USA did not receive a Jan 2026 DOE task order (per secondary coverage). No named US-utility supply contract found. Urenco USA''s HQ (Eunice, NM, from a press-release dateline) was dropped in the merge: the company''s HQ is London; the Eunice plant keeps its location. #63: Countries from same page: "These are located in Germany, the Netherlands, the UK and the USA." HQ already in seed (London). Fission inferred from fuel for nuclear power plants.'
 description:
   text: Company that supplies uranium enrichment for nuclear power, with plants in Germany, the Netherlands, the UK and the U.S.

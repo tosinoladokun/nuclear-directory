@@ -330,6 +330,23 @@ class SeedsTest < ActiveSupport::TestCase
     refute_includes CompanyProfile.new(entra1.reload).deals.map(&:id), link.id
   end
 
+  test "Columbia is one site with its unit under it, carrying EIA's plant ID, and GE's reactors link to GE Vernova" do
+    load_seeds
+
+    site = Facility.find_by!(eia_plant_id: "371")
+    assert_nil site.parent_id
+    assert_equal 1, Facility.where(parent_id: site.id).count
+    assert_equal 1, Facility.where(name: "Columbia Generating Station", parent_id: nil).count
+
+    vendor = Organization.find_by!(slug: "ge-vernova")
+    [ "Browns Ferry 1", "Browns Ferry 2", "Browns Ferry 3", "Brunswick 1" ].each do |unit|
+      plant = Facility.find_by!(name: unit)
+      assert plant.parent_id, "#{unit} sits under its site"
+      assert FacilityRelationship.verified.exists?(organization: vendor, facility: plant, relationship_type: "vendor_for"), unit
+    end
+    assert_equal "H3D", Organization.find_by!(slug: "h3d").name
+  end
+
   test "is safe to re-run" do
     load_seeds
     Role.find_by!(key: "fuel").update!(name: "Edited")

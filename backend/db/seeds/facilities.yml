@@ -636,3 +636,110 @@ facilities:
     quote: 'Iowa''s only nuclear facility, which is located in Palo'
     published: '2025-10-27'
     confidence: 1.0
+- name: Louisiana Energy Services (LES)
+  facility_type:
+    value: enrichment
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
+    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
+    confidence: 1.0
+  status:
+    value: operating
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
+    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
+    confidence: 1.0
+  city:
+    value: Eunice
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
+    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
+    confidence: 1.0
+  state:
+    value: NM
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
+    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
+    confidence: 1.0
+- name: BWXT
+  facility_type:
+    value: fuel_facility
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/bwxt-nuclear-lc
+    quote: 'BWXT | Location: Lynchburg, VA | Licensee: BWXT Nuclear Operations Group Inc. | Docket Number: 07000027 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  status:
+    value: operating
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/bwxt-nuclear-lc
+    quote: 'BWXT | Location: Lynchburg, VA | Licensee: BWXT Nuclear Operations Group Inc. | Docket Number: 07000027 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  city:
+    value: Lynchburg
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/bwxt-nuclear-lc
+    quote: 'BWXT | Location: Lynchburg, VA | Licensee: BWXT Nuclear Operations Group Inc. | Docket Number: 07000027 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  state:
+    value: VA
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/bwxt-nuclear-lc
+    quote: 'BWXT | Location: Lynchburg, VA | Licensee: BWXT Nuclear Operations Group Inc. | Docket Number: 07000027 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+- name: Framatome
+  facility_type:
+    value: fuel_facility
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/areva-np-lc
+    quote: 'Framatome | Location: Richland, WA | Licensee: Framatome, Inc. | Docket Number: 07001257 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  status:
+    value: operating
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/areva-np-lc
+    quote: 'Framatome | Location: Richland, WA | Licensee: Framatome, Inc. | Docket Number: 07001257 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  city:
+    value: Richland
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/areva-np-lc
+    quote: 'Framatome | Location: Richland, WA | Licensee: Framatome, Inc. | Docket Number: 07001257 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  state:
+    value: WA
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/areva-np-lc
+    quote: 'Framatome | Location: Richland, WA | Licensee: Framatome, Inc. | Docket Number: 07001257 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+- name: GNF-A
+  facility_type:
+    value: fuel_facility
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/global-nuc-fuels-america-fuel-fab-lc
+    quote: 'GNF-A | Location: Wilmington, NC | Licensee: Global Nuclear Fuel – Americas, LLC | Docket Number: 07001113 | Facility Type: Uranium Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  status:
+    value: operating
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/global-nuc-fuels-america-fuel-fab-lc
+    quote: 'GNF-A | Location: Wilmington, NC | Licensee: Global Nuclear Fuel – Americas, LLC | Docket Number: 07001113 | Facility Type: Uranium Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  city:
+    value: Wilmington
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/global-nuc-fuels-america-fuel-fab-lc
+    quote: 'GNF-A | Location: Wilmington, NC | Licensee: Global Nuclear Fuel – Americas, LLC | Docket Number: 07001113 | Facility Type: Uranium Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  state:
+    value: NC
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/global-nuc-fuels-america-fuel-fab-lc
+    quote: 'GNF-A | Location: Wilmington, NC | Licensee: Global Nuclear Fuel – Americas, LLC | Docket Number: 07001113 | Facility Type: Uranium Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+- name: Westinghouse
+  facility_type:
+    value: fuel_facility
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/westinghouse-fuel-fab-fac-sc-lc
+    quote: 'Westinghouse | Location: Columbia, SC | Licensee: Westinghouse Electric Company, LLC | Docket Number: 07001151 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  status:
+    value: operating
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/westinghouse-fuel-fab-fac-sc-lc
+    quote: 'Westinghouse | Location: Columbia, SC | Licensee: Westinghouse Electric Company, LLC | Docket Number: 07001151 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  city:
+    value: Columbia
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/westinghouse-fuel-fab-fac-sc-lc
+    quote: 'Westinghouse | Location: Columbia, SC | Licensee: Westinghouse Electric Company, LLC | Docket Number: 07001151 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+  state:
+    value: SC
+    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/westinghouse-fuel-fab-fac-sc-lc
+    quote: 'Westinghouse | Location: Columbia, SC | Licensee: Westinghouse Electric Company, LLC | Docket Number: 07001151 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+    confidence: 1.0
+- name: Columbia Generating Station
+  eia_plant_id: '371'

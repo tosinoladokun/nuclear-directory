@@ -25,7 +25,35 @@ technologies:
   quote: Technologies include boiling water reactors and small modular reactors
   confidence: 1.0
 relationships: []
-facilities: []
+facilities:
+- name: Browns Ferry 1
+  site: Browns Ferry
+  type: vendor_for
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/bf1
+  quote: 'Browns Ferry Nuclear Plant, Unit 1 | Docket Number: 05000259 | Reactor Vendor/Type: General Electric Type 4'
+  confidence: 1.0
+  note: NRC lists General Electric (now GE Vernova) as the reactor vendor.
+- name: Browns Ferry 2
+  site: Browns Ferry
+  type: vendor_for
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/bf2
+  quote: 'Browns Ferry Nuclear Plant, Unit 2 | Docket Number: 05000260 | Reactor Vendor/Type: General Electric Type 4'
+  confidence: 1.0
+  note: NRC lists General Electric (now GE Vernova) as the reactor vendor.
+- name: Browns Ferry 3
+  site: Browns Ferry
+  type: vendor_for
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/bf3
+  quote: 'Browns Ferry Nuclear Plant, Unit 3 | Docket Number: 05000296 | Reactor Vendor/Type: General Electric Type 4'
+  confidence: 1.0
+  note: NRC lists General Electric (now GE Vernova) as the reactor vendor.
+- name: Brunswick 1
+  site: Brunswick Nuclear
+  type: vendor_for
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/bru1
+  quote: 'Brunswick Steam Electric Plant, Unit 1 | Docket Number: 05000325 | Reactor Vendor/Type: General Electric Type 4'
+  confidence: 1.0
+  note: NRC lists General Electric (now GE Vernova) as the reactor vendor.
 notes: 'Lead parent of GE Vernova Hitachi Nuclear Energy and Global Nuclear Fuel (both JVs with Hitachi). Older sources (2022) name ''GE'' as the parent; GE Vernova is the successor energy business. Roles left empty (nuclear roles sit with GVH/GNF). #63: Nuclear clause in description is supported by the role quote (press-release boilerplate). Same boilerplate supports a fuel/fabrication role via Global Nuclear Fuel, but GNF is its own record, so only reactor_vendor added. HQ already in seed.'
 description:
   text: Energy equipment company making wind and gas turbines; its nuclear business designs reactors with Hitachi.

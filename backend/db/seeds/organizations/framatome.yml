@@ -30,7 +30,13 @@ relationships:
   quote: Framatome recently signed a "multi-million dollar" contract with US utility Dominion Energy to support the long-term operation of its nuclear power plant fleet.
   published: '2021-04-07'
   confidence: 0.8
-facilities: []
+facilities:
+- name: Framatome
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/areva-np-lc
+  quote: 'Framatome | Location: Richland, WA | Licensee: Framatome, Inc. | Docket Number: 07001257 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+  confidence: 1.0
+  note: NRC lists the licensee for this operational facility.
 notes: 'Non-US parent (Framatome is French-headquartered - not verified from a fetched page in this session; set country_code after verification). US operations: source says Framatome would mobilise more than 1,100 Virginia-based employees. Contract (2021-2026) may be ending; check for renewal. Framatome''s own press release was not fetched. #63: Framatome locations page also says "France is home to Framatome’s world headquarters" (https://www.framatome.com/en/about/locations/france).'
 description:
   text: Company that designs and makes nuclear steam supply systems and supplies equipment, services and fuel to nuclear plants.

@@ -1,0 +1,14 @@
+# Seed research - 24 Oct 2026 (odd all-caps name from USAspending). The company's own site writes its name H3D.
+name: H3D
+aliases:
+- H3d
+- H3D INC
+status: active
+roles: []
+technologies: []
+relationships: []
+facilities: []
+notes: An existing record (DOE small-business awardee) created as 'H3d' from USAspending's capitals. Only the name is corrected, from the company's own site; the file states no country, HQ or website, so the record's own values are left as they are.
+description:
+  source_url: https://www.h3dgamma.com/
+  quote: H3D exists to serve customer needs
