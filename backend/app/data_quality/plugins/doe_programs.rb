@@ -65,7 +65,10 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
         row.title = page[:title]
       end
       source.update!(source_kind:) if source.source_kind == "web_page"
+      was_held = %w[blocked needs_human].include?(source.crawl_status)
       stats[page[:title]] = DataQuality::Snapshot.take(source, fetcher: @fetcher).to_s
+      # Readable again after a block, even unchanged: its lists count again.
+      stats[page[:title]] = "readable_again" if was_held && source.reload.crawl_ok?
       next unless source.crawl_ok? && source.content_text.present?
 
       items = items(source)
@@ -79,8 +82,14 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
     # A link's description sums up every page, so when one page changed (or
     # stopped being readable), every page is read again: the page that owns
     # a link may not have changed itself.
-    if @pages.values.any? { |page| %w[changed blocked layout_changed].include?(stats[page[:title]]) }
-      Source.where(source_kind:, url: @pages.keys).update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
+    if @pages.values.any? { |page| %w[changed blocked layout_changed readable_again].include?(stats[page[:title]]) }
+      pages = Source.where(source_kind:, url: @pages.keys)
+      pages.update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
+      # The links' combined descriptions were read from the old pages: their
+      # claims not yet decided are withdrawn, and the fresh read proposes them again.
+      superseded = Candidate.where(source_id: pages.select(:id), kind: "relationship", status: %w[new matched])
+        .update_all(status: "rejected", notes: "Superseded: DOE's program pages changed, so the link is read again", updated_at: Time.current)
+      stats["superseded"] = superseded if superseded.positive?
     end
     stats
   end

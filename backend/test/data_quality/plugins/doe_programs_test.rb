@@ -93,6 +93,21 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_equal "HALEU enrichment services contract: selected in 2024 to bid on task orders", orano[:payload]["description"]
   end
 
+  test "a page readable again (even unchanged) re-reads every page, and undecided link claims from the old read are superseded" do
+    DataQuality::Pipeline.run("doe_programs", plugin:, only: %w[crawl extract match])
+    stub_request(:get, DECONVERSION).to_return(status: 403, body: "Forbidden")
+    Source.update_all(fetched_at: 2.days.ago)
+    crawl
+    Source.where(source_kind: "doe_programs").update_all(extracted_sha256: "read", extracted_rows_sha256: "read")
+
+    stub_request(:get, DECONVERSION).to_return(body: html(FILES[DECONVERSION]))
+    Source.update_all(fetched_at: 2.days.ago)
+    stats = crawl.stats
+    assert_equal "readable_again", stats["DOE: HALEU deconversion services"]
+    assert Source.where(source_kind: "doe_programs").all? { |s| s.extracted_sha256.nil? }
+    assert Candidate.where(kind: "relationship", status: %w[new matched]).none?
+  end
+
   test "a heading's date is read from the page: a changed date is a change, and the description follows it" do
     source = stored(ALLOCATION)
     moved = Source.new(url: ALLOCATION, content_text: source.content_text.sub("Round 3 Conditional Selections (July 23, 2026)", "Round 3 Conditional Selections (August 23, 2026)"))
