@@ -110,13 +110,17 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
   private
     def rows(html)
       table = Nokogiri::HTML(html.to_s).at_css(%(table[summary="#{TABLE_SUMMARY}"])) or return []
-      table.css("tr").filter_map do |tr|
+      rows = table.css("tr").reject { |tr| tr.css("td").empty? } # header rows are th only
+      read = rows.filter_map do |tr|
         cells = tr.css("td")
         link = cells[1]&.at_css("a[href]")
         next unless cells.size >= 3 && link && link["href"].start_with?("/facilities-safety/facility-finder/nonpower/")
 
         Row.new(licensee: link.text.squish, location: cells[2].text.squish, path: link["href"])
       end
+      # A row without its page link makes the whole read unusable: a partial
+      # list would look like reactors leaving it.
+      read.size == rows.size ? read : []
     end
 
     def read(row)

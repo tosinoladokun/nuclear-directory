@@ -57,6 +57,30 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     assert_equal "Licensee of tamu-tx-triga", plugin.extract(tamu, nil).second[:payload]["name"]
   end
 
+  test "a table row without its page link makes the whole read unusable; nothing is withdrawn" do
+    DataQuality::Pipeline.run("nrc_research_reactors", plugin:, only: %w[crawl extract match])
+    broken = file_fixture("nrc/nonpower/list.html").read.sub(%r{<a href="/facilities-safety/facility-finder/nonpower/mit-ma-hwr-reflected">(.*?)</a>}, '\\1')
+    stub_request(:get, Plugin::LIST_URL).to_return(body: broken)
+    Source.update_all(fetched_at: 2.days.ago)
+
+    stats = crawl.stats
+    assert_equal 0, stats["reactors"]
+    assert_nil stats["withdrawn"]
+    assert Source.find_by!(url: Plugin::LIST_URL).crawl_needs_human?
+  end
+
+  test "a page removed between crawl and extract isn't read while it's unlisted" do
+    crawl
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/nonpower/list.html").read.gsub("mit-ma-hwr-reflected", "gone"))
+    stub_request(:get, PAGES).to_return(status: 404)
+    Source.where(url: Plugin::LIST_URL).update_all(fetched_at: 2.days.ago)
+    crawl
+    DataQuality::Pipeline.run("nrc_research_reactors", plugin:, only: "extract")
+
+    assert mit.crawl_needs_human?
+    assert_empty mit.candidates
+  end
+
   test "a reactor the table stops linking: its waiting claims go to review" do
     DataQuality::Pipeline.run("nrc_research_reactors", plugin:, only: %w[crawl extract match])
     waiting = mit.candidates.where(status: %w[new matched needs_review]).count
