@@ -12,9 +12,11 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
   test "the list shows most-seen first with where each came from; the nav counts new leads" do
     get admin_leads_path
     assert_response :success
-    assert_select "ol.nd-waits > li", 2
-    assert_select "ol.nd-waits > li:first-child .type-subject", "Often Seen Fission"
-    assert_select "#lead-#{@once.id} a[href='https://example.com/n']", "News: a headline"
+    assert_select "table.nd-leads tbody tr", 2
+    get admin_leads_path(sort: "seen")
+    assert_select "table.nd-leads tbody tr:first-child .nd-leads__lead p", "Often Seen Fission"
+    assert_select "th[aria-sort=descending] a", /Seen/
+    assert_select "#lead-#{@once.id} a[href=?][title=?]", "https://example.com/n", "News: a headline", text: /example.com/
     assert_select "nav a", /Leads\s*2/
   end
 

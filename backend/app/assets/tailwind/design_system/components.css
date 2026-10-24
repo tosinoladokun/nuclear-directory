@@ -958,6 +958,15 @@
   .nd-sources__plain { display: none; }
   .nd-sources td:first-child { width: 100%; }
 
+  /* Leads (#484, Design on #543): an action's form opens under its row. */
+  .nd-leads__form > summary { list-style: none; }
+  .nd-leads__form > summary::-webkit-details-marker { display: none; }
+  .nd-leads__form > form { margin-top: var(--nd-space-2); }
+  .nd-leads__actions > div { flex-wrap: nowrap; align-items: flex-start; }
+  .nd-leads__actions .nd-btn--sm, .nd-leads__form > summary.nd-btn--sm { height: 28px; min-height: 28px; white-space: nowrap; }
+  .nd-leads__form[open] { flex: 1 1 100%; }
+  .nd-leads__actions > div:has(.nd-leads__form[open]) { flex-wrap: wrap; }
+
   @media (max-width: 560px) {
     .nd-stack-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .nd-stack-table, .nd-stack-table tbody { display: block; }
@@ -981,6 +990,14 @@
     .nd-sources--list .nd-sources__run { position: relative; z-index: 1; }
     .nd-sources--list .nd-sources__run > summary { min-height: 44px; display: flex; align-items: center; }
     .nd-sources__blank { display: none !important; }
+    /* Leads on a phone: the lead first, then its lines; actions a full-width row of 44px targets. */
+    .nd-leads .nd-leads__lead { order: -1; flex-basis: 100%; }
+    .nd-leads .nd-leads__lead .truncate { max-width: none; }
+    .nd-leads .nd-leads__actions { flex-basis: 100%; }
+    .nd-leads .nd-leads__actions .nd-btn--sm, .nd-leads .nd-leads__form > summary.nd-btn--sm { height: 44px; min-height: 44px; width: 100%;
+      padding: 0 var(--nd-space-2); justify-content: center; }
+    .nd-leads .nd-leads__actions > div > *, .nd-leads .nd-leads__actions form.button_to { flex: 1; }
+    .nd-leads .nd-leads__actions .button_to .nd-btn { width: 100%; }
   }
 }
 

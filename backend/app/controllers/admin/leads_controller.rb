@@ -4,17 +4,26 @@
 # record that has it; Ignore needs a reason. Nothing here publishes: a lead
 # becomes facts only as pending claims through the usual path.
 class Admin::LeadsController < Admin::BaseController
-  TABS = %w[new researching added ignored].freeze
+  # The status filter (Design, on #543): its label and the statuses it shows.
+  TABS = { "all" => [ "All", Lead::STATUSES ], "new" => [ "To do", %w[new] ], "researching" => [ "Researching", %w[researching] ],
+    "added" => [ "Covered", %w[added] ], "ignored" => [ "Ignored", %w[ignored] ] }.freeze
+  STATUS_LABELS = { "new" => "To do", "researching" => "Researching", "added" => "Covered", "ignored" => "Ignored" }.freeze
+  # Sortable columns: Date is the last time a lead came up.
+  SORTS = { "date" => :last_seen_on, "seen" => :seen_count }.freeze
   PAGE = 50
 
   def index
     LeadSync.run if params[:page].blank?
-    @tab = params[:tab].presence_in(TABS) || "new"
+    @tab = params[:tab].presence_in(TABS.keys) || "new"
+    @sort = params[:sort].presence_in(SORTS.keys) || "date"
+    @dir = params[:dir] == "asc" ? "asc" : "desc"
     @page = [ params[:page].to_i, 1 ].max
-    @leads = Lead.where(status: @tab).order(seen_count: :desc, last_seen_on: :desc, id: :asc).offset((@page - 1) * PAGE).limit(PAGE + 1).to_a
+    @leads = Lead.where(status: TABS.fetch(@tab).last).order(SORTS.fetch(@sort) => @dir, id: :asc)
+      .offset((@page - 1) * PAGE).limit(PAGE + 1).to_a
     @more = @leads.size > PAGE
     @leads = @leads.first(PAGE)
-    @counts = Lead.group(:status).count
+    counts = Lead.group(:status).count
+    @counts = TABS.transform_values { |(_, statuses)| statuses.sum { |status| counts[status].to_i } }
   end
 
   # A pasted list (one name per line, "Name: note" for a note), Data Quality's.
@@ -37,7 +46,7 @@ class Admin::LeadsController < Admin::BaseController
 
   def refresh
     LeadSync.run
-    redirect_to admin_leads_path(tab: params[:tab].presence), notice: "Leads brought up to date."
+    redirect_to admin_leads_path(params.permit(:tab, :sort, :dir).to_h.compact_blank), notice: "Leads brought up to date."
   end
 
   def research
@@ -84,6 +93,6 @@ class Admin::LeadsController < Admin::BaseController
 
   private
     def back(message, alert: false)
-      redirect_to admin_leads_path(tab: params[:tab].presence), (alert ? :alert : :notice) => message
+      redirect_to admin_leads_path(params.permit(:tab, :sort, :dir).to_h.compact_blank), (alert ? :alert : :notice) => message
     end
 end
