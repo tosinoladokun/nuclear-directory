@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "pg_trgm"
 
   create_table "candidates", force: :cascade do |t|
     t.bigint "source_id", null: false
@@ -162,10 +163,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
     t.datetime "created_at", null: false
     t.datetime "last_confirmed_at"
     t.string "confirmed_sha256"
+    t.string "fields", array: true
     t.index ["crawl_run_id"], name: "index_evidence_on_crawl_run_id"
     t.index ["source_id"], name: "index_evidence_on_source_id"
     t.index ["subject_type", "subject_id"], name: "index_evidence_on_subject"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "evidence_confidence_check"
+    t.check_constraint "fields IS NULL OR cardinality(fields) > 0", name: "evidence_fields_check"
     t.check_constraint "found_by::text = ANY (ARRAY['crawler'::character varying::text, 'verifier'::character varying::text, 'human'::character varying::text])", name: "evidence_found_by_check"
   end
 
@@ -571,6 +574,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_230000) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_technologies_on_key", unique: true
     t.index ["parent_id"], name: "index_technologies_on_parent_id"
+  end
+
+  create_table "today_steps", force: :cascade do |t|
+    t.date "on", null: false
+    t.string "step", null: false
+    t.string "done_by", null: false
+    t.string "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["on", "step"], name: "index_today_steps_on_on_and_step", unique: true
+    t.check_constraint "done_by::text ~~ 'human:%'::text", name: "today_steps_done_by_check"
+    t.check_constraint "step::text = ANY (ARRAY['crawl'::character varying, 'list'::character varying, 'review'::character varying, 'left'::character varying]::text[])", name: "today_steps_step_check"
   end
 
   create_table "users", force: :cascade do |t|
