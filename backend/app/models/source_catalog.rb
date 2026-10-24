@@ -42,7 +42,10 @@ class SourceCatalog
     "nrc_research_reactors" => { name: "NRC research and test reactors", daily: false },
     "nrc_research_reactors_index" => { name: "NRC non-power reactor locations", note: "finds each reactor's page", daily: false },
     "nrc_fuel_cycle" => { name: "NRC fuel cycle facilities", daily: false },
-    "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: false }
+    "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: false },
+    # The annual plant file (#319): read once a year, not by the daily crawl.
+    "eia_plants" => { name: "EIA-860 plants" },
+    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze
