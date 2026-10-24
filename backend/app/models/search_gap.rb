@@ -13,7 +13,7 @@ class SearchGap < ApplicationRecord
   # of digits, spaces, brackets, dots, plus signs and dashes, Unicode dashes
   # too, with seven digits or more).
   # Any script's digits (full-width, Arabic-Indic) count as digits.
-  PHONE_RUN = /[\p{Nd}[[:space:]]\u00A0\u202F().+\-\u2010-\u2015\u2212]+/
+  PHONE_RUN = /[\p{Nd}[[:space:]]\u00A0\u202F().\/+\-\u2010-\u2015\u2212]+/
   def self.personal?(query) = query.include?("@") || query.scan(PHONE_RUN).any? { |run| run.scan(/\p{Nd}/).size >= 7 }
 
   enum :status, STATUSES.index_by(&:itself), validate: true, prefix: :status
