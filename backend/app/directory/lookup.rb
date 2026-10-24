@@ -119,6 +119,24 @@ module Directory
         .order(Arel.sql("COALESCE(starts_on, signed_on) ASC NULLS LAST"), :id).map { |term| DealTermRef.from(term) }
     end
 
+    # The NRC stages a unit or a developer has reached (#379), newest first.
+    # The current stage is the first one: the latest by date.
+    # published: true (the default) gives only what public pages may show.
+    def licensing_stages(facility_id: nil, organization_id: nil, published: true)
+      raise ArgumentError, "pass a facility or an organization" if facility_id.nil? && organization_id.nil?
+
+      scope = published ? LicensingStage.published : LicensingStage.where.not(verification_status: Verifiable::CLOSED_STATUSES)
+      scope = scope.where(facility_id:) if facility_id
+      scope = scope.where(organization_id:) if organization_id
+      scope.includes(evidence: :source).order(Arel.sql("effective_on DESC NULLS LAST"), :id)
+        .map { |stage| LicensingStageRef.from(stage) }
+    end
+
+    # The stage a unit or developer is at now (#379): the latest one, or nil.
+    def current_licensing_stage(facility_id: nil, organization_id: nil)
+      licensing_stages(facility_id:, organization_id:).first
+    end
+
     # Every change of a fact's verification, newest first, as plain values:
     # who, when, from -> to, why. type is the fact's class name ("Organization").
     def verification_history(type:, id:)

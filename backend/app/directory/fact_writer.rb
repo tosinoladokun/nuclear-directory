@@ -84,6 +84,11 @@ module Directory
         model: DealTerm,
         attributes: %i[link_type link_id term_type external_id amount_usd amount_offered_usd capacity_mw signed_on starts_on ends_on status
           agreement conditions firm_mw term_years program round lead_investor_ids]
+      },
+      # One stage a reactor project or plant has reached with the NRC (#379).
+      licensing_stage: {
+        model: LicensingStage,
+        attributes: %i[facility_id organization_id design_name stage nrc_docket effective_on expires_on]
       }
     }.freeze
 
@@ -164,8 +169,8 @@ module Directory
     # #23): a human's decision, so by: must start with "human:". In one
     # transaction that locks both, everything about from moves to into:
     # aliases (its name among them, so it still finds into), domain if into
-    # has none, roles, technologies, plant links, company links, evidence and
-    # the candidates attached to it. A fact into already has (or a link that
+    # has none, roles, technologies, plant links, company links, evidence,
+    # design approvals (#379) and the candidates attached to it. A fact into already has (or a link that
     # would point at itself, such as "Urenco USA subsidiary of Urenco") stays
     # on from and is rejected, and a closed fact stays where it was decided
     # (#229). Then from is unpublished, and the audit reason
@@ -261,6 +266,13 @@ module Directory
             "WITH ORDINALITY AS t(id, n) GROUP BY id ORDER BY min(n))", from.id, into.id ])
         # Its own rounds (a Form D names no investors, #129) move with it.
         moved["deal_terms"] += move_deal_terms(from, into)
+        # Its design approvals move with it (#379), or are retired when the
+        # kept company already has that design at that stage.
+        moved["licensing_stages"] += move_licensing_stages(from, into)
+        # What stayed behind is a duplicate of the kept record's stage: retired
+        # with the merge, as a duplicate link is, so it can't come back.
+        retired.concat(LicensingStage.where((from.is_a?(Organization) ? :organization_id : :facility_id) => from.id)
+          .where.not(verification_status: Verifiable::CLOSED_STATUSES).lock.to_a)
 
         note = "Merged into #{into.name} (##{into.id})"
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this, or it would point at itself") unless row.closed? }
@@ -289,8 +301,8 @@ module Directory
     # counterpart of merge_organization: a human's decision, in one
     # transaction that locks both. into gets from's blank-on-into fields (its
     # EIA plant ID first, cleared on from so the unique index holds), its
-    # units, its aliases and its name as an alias, its company links,
-    # evidence and the candidates attached to it. A link into already has
+    # units, its aliases and its name as an alias, its company links, its own
+    # licensing stages (#379), evidence and the candidates attached to it. A link into already has
     # stays on from and is rejected, and a closed link stays where it was
     # decided; values into already has are kept, and filled ones are on
     # into's history. Two sites with different EIA plant IDs are two plants
@@ -359,6 +371,12 @@ module Directory
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Facility", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
+        # Its own licensing stages move with it (#379), unless into has that docket at that stage.
+        moved["licensing_stages"] += move_licensing_stages(from, into)
+        # What stayed behind is a duplicate of the kept record's stage: retired
+        # with the merge, as a duplicate link is, so it can't come back.
+        retired.concat(LicensingStage.where((from.is_a?(Organization) ? :organization_id : :facility_id) => from.id)
+          .where.not(verification_status: Verifiable::CLOSED_STATUSES).lock.to_a)
         moved["news"] = move_news_mentions(from, into)
 
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this link") unless row.closed? }
@@ -687,7 +705,15 @@ module Directory
         # Locked, so a human's decision made while this write runs is seen
         # before the checks below, and two decisions at once are recorded in
         # the order they happen.
+        # A licensing stage's owner is locked before the stage, the order merges
+        # lock them in (owners, then their stages), so the two can't deadlock.
+        locked_owner = lock_licensing_stage_owner(record) if kind == :licensing_stage && !created
         record.lock! unless created
+        # A merge may have moved the stage between finding it and locking it:
+        # locking its new owner now would reverse the order, so stop instead.
+        if locked_owner && locked_owner != record.slice(:facility_id, :organization_id).compact
+          raise Invalid, "this licensing stage moved to another record while it was being written; try again"
+        end
         # What it was, read under the lock, so `changed` is about this write alone.
         before = record.attributes.except("updated_at") unless created
         # A rejected or unpublished fact only changes by a human's hand:
@@ -710,6 +736,7 @@ module Directory
         # ends: retiring a proposal whose company was closed must still work.
         rejecting_only = !created && attributes.keys == [ :id ] && verification.to_h.symbolize_keys[:status].to_s == "rejected"
         check_link_ends(kind, attributes, record) if protect_human_verified && !rejecting_only
+        check_licensing_stage_ends(attributes, record) if kind == :licensing_stage && protect_human_verified && !rejecting_only
         curated = protect_human_verified && !created && record.human_reviewed?
         changes = model_attributes(kind, attributes)
         # A plant found by its docket, name or an alias keeps its name: writing
@@ -773,6 +800,10 @@ module Directory
           verification = verification.to_h.symbolize_keys
           verification = verification.merge(context: verification[:context].to_h.merge(skipped_alias))
         end
+        # A licensing stage is public only from an NRC record (#379), so it
+        # can never be verified from anything else. The check is on the
+        # evidence this write carries, before the decision is applied.
+        check_licensing_stage_source(record, verification) if kind == :licensing_stage
         apply_verification(record, verification, edited:) if verification && !curated
         record.recompute_confidence!
         # Still under the lock, so another writer can't make a restatement look like a change, or the reverse.
@@ -925,6 +956,7 @@ module Directory
         evidence_and_claims(from, into, moved)
         moved["lead investors"] = DealTerm.where("? = ANY (lead_investor_ids)", from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES).count
         moved["deal_terms"] += deal_terms_moving(from, into).size
+        moved["licensing_stages"] += licensing_stages_moving(from, into).size
         merge_summary(moved)
       end
 
@@ -961,6 +993,7 @@ module Directory
 
           moved["facility_relationships"] += 1
         end
+        moved["licensing_stages"] += licensing_stages_moving(from, into).size
         evidence_and_claims(from, into, moved)
         merge_summary(moved, filled)
       end
@@ -1038,6 +1071,38 @@ module Directory
         end
       end
 
+      # The licensing stages that move with a merge (#379): a company's
+      # design approvals, or a plant's own stages. All but one the kept
+      # record already has (the same design and stage, or the same docket and
+      # stage); none to a closed record.
+      def licensing_stages_moving(from, into)
+        return [] if into.closed?
+
+        owner = from.is_a?(Organization) ? :organization_id : :facility_id
+        LicensingStage.where(owner => from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES).reject do |stage|
+          kept_licensing_stage?(stage, owner, into)
+        end
+      end
+
+      # Moves them to the kept record. Each is locked and read again before
+      # it moves, so a person's decision on it meanwhile stands; one the kept
+      # record already has stays, and is retired with the merged record.
+      def move_licensing_stages(from, into)
+        owner = from.is_a?(Organization) ? :organization_id : :facility_id
+        licensing_stages_moving(from, into).count do |stage|
+          stage.lock!
+          next false if stage.closed? || stage.public_send(owner) != from.id
+          next false if kept_licensing_stage?(stage, owner, into)
+
+          stage.update!(owner => into.id)
+        end
+      end
+
+      def kept_licensing_stage?(stage, owner, into)
+        same = owner == :organization_id ? { design_name: stage.design_name } : { nrc_docket: stage.nrc_docket }
+        LicensingStage.exists?(owner => into.id, stage: stage.stage, **same)
+      end
+
       # Finds the existing row for this fact, or nil.
       def find(kind, model, attrs)
         return model.find_by(id: attrs[:id]) || raise(Invalid, "no #{kind} with id #{attrs[:id]}") if attrs[:id]
@@ -1085,6 +1150,15 @@ module Directory
           raise Invalid, "a deal term needs a term type" if attrs[:term_type].blank?
 
           model.find_by(attrs.slice(:link_type, :link_id, :term_type, :external_id)) if attrs[:external_id].present?
+        when :licensing_stage
+          # A stage is the same one only under the same record, docket and
+          # stage: the same unit reaching the same stage on the same docket.
+          if attrs[:facility_id].present?
+            model.find_by(facility_id: attrs[:facility_id], nrc_docket: LicensingStage.normalize_docket(attrs[:nrc_docket]), stage: attrs[:stage])
+          elsif attrs[:organization_id].present?
+            model.find_by(organization_id: attrs[:organization_id], design_name: LicensingStage.normalize_design_name(attrs[:design_name]),
+              stage: attrs[:stage])
+          end
         end
       end
 
@@ -1280,6 +1354,52 @@ module Directory
           label = finish.try(:name) || "#{model.model_name.human} ##{finish.id}" # a link (a deal term's end) has no name
           raise Invalid, "#{label} was #{finish.verification_status} by #{finish.verified_by || 'review'}; not linked"
         end
+      end
+
+      # The record a licensing stage hangs on must be open (#379): no
+      # automated stage under a rejected or unpublished plant or company, or
+      # on a unit whose site is. Only the unit is locked; the site is read.
+      # Returns the owner it locked, as { "facility_id" => id } or
+      # { "organization_id" => id }.
+      def lock_licensing_stage_owner(record)
+        if (id = record.facility_id)
+          # Only the record the stage hangs on, never its site: other writes
+          # lock a unit and its site in different orders (merges site first,
+          # fill_site_from_unit unit first), so a stage write takes neither pair.
+          Facility.lock.where(id:).load
+          { "facility_id" => id }
+        elsif (id = record.organization_id)
+          Organization.lock.where(id:).load
+          { "organization_id" => id }
+        end
+      end
+
+      def check_licensing_stage_ends(attributes, record)
+        if (id = attributes.key?(:facility_id) ? attributes[:facility_id] : record.facility_id)
+          # The unit is locked; its site is read as it stands, unlocked (see
+          # lock_licensing_stage_owner).
+          unit = Facility.lock.find_by(id:)
+          records = [ unit, (Facility.find_by(id: unit.parent_id) if unit&.parent_id) ].compact
+        elsif (id = attributes.key?(:organization_id) ? attributes[:organization_id] : record.organization_id)
+          records = [ Organization.lock.find_by(id:) ].compact
+        else
+          return
+        end
+
+        closed = records.find(&:closed?) or return
+        raise Invalid, "#{closed.name} was #{closed.verification_status} by #{closed.verified_by || 'review'}; no stage added"
+      end
+
+      # A licensing stage is verified only from an NRC record (#379): a page
+      # on nrc.gov, or an NRC notice in the Federal Register. A press release
+      # or a news article can be attached as a lead, but it never makes the
+      # stage public, so it can't be verified from one.
+      def check_licensing_stage_source(record, verification)
+        status = verification.to_h.symbolize_keys[:status].to_s
+        return unless status == "verified"
+        return if record.evidence.joins(:source).where(LicensingStage.nrc_record_sql(quote_column: "evidence.quote")).exists?
+
+        raise Invalid, "a licensing stage needs an NRC record: a page on nrc.gov, or an NRC notice in the Federal Register"
       end
 
       AUDIT_IGNORED = %w[created_at updated_at confidence verification_reason verification_context audited_changes].freeze

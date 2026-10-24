@@ -69,6 +69,38 @@ module Seed
       end + plant_id_collisions
     end
 
+    # A licensing stage the seed would verify from a source that isn't an
+    # NRC record (#379). The write itself refuses to verify such a stage, so
+    # this lists them before the load, while it can still be fixed. Reads
+    # the files; writes nothing.
+    def licensing_source_problems
+      @files.flat_map do |path|
+        doc = read(path)
+        slug = File.basename(path, ".yml")
+        Array(doc["licensing"]).filter_map do |item|
+          next if nrc_record?(item["source_url"], item["quote"])
+
+          on = item["design_name"].present? ? "design #{item["design_name"].inspect}" : "facility #{item["facility"].inspect}"
+          "#{slug}.yml: licensing #{item["stage"].inspect} for #{on}, docket #{item["nrc_docket"]}, " \
+            "isn't cited to an NRC record: #{item["source_url"].inspect}"
+        end
+      end
+    end
+
+    # Whether a source is an NRC record (#379): a page on nrc.gov, or a
+    # government publication that names the Nuclear Regulatory Commission.
+    def nrc_record?(url, quote = nil)
+      domain = begin
+        URI.parse(url.to_s).host.to_s.downcase.delete_prefix("www.")
+      rescue URI::InvalidURIError
+        ""
+      end
+
+      # A source already stored may be named by its title (a Federal Register
+      # notice whose address is only a number), as FactWriter reads it.
+      LicensingStage.nrc_record?(domain:, url:, title: Source.find_by(url: url.to_s.strip)&.title, quote:)
+    end
+
     # A plant (site) by name: one with no parent first, as write_unit finds
     # a site (undocketed before docketed), so a same-name NRC unit never
     # takes the site's details.
@@ -118,6 +150,9 @@ module Seed
         # A site named only as a unit's site: (#472) is in a file too.
         in_docs = docs.values.flat_map { |doc| Array(doc["facilities"]).flat_map { |item| [ item["name"], item["site"].to_s.strip.presence ] } }.compact.to_set
         facilities.each { |facility| write_facility_details(facility, sources, in_docs) }
+        # Last, once every file's plants exist: a stage can name a plant
+        # another company's file defines (#379).
+        docs.each { |slug, doc| write_licensing_stages(slug, doc, sources) }
 
         raise Error, "Seed failed, nothing was written:\n  #{@errors.join("\n  ")}" if @errors.any?
       end
@@ -140,7 +175,7 @@ module Seed
         links = [ *doc["relationships"], *doc["facilities"] ].compact
         # A term's citation as it'll be written (its own quote, on its own page
         # or its link's), so its confidence is checked and consolidated too.
-        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links,
+        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links, *doc["licensing"],
           *links.flat_map { |link| Array(link["terms"]).map { |term| citation(term, link) } } ].compact.select { |item| item["source_url"] }
       end
 
@@ -304,6 +339,53 @@ module Seed
           # link, its terms are verified with it, though the YAML still says pending.
           write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"] && !link_verified)
         end
+      end
+
+      def write_licensing_stages(slug, doc, sources)
+        organization = Directory::Lookup.organization(slug:) or return
+
+        Array(doc["licensing"]).each { |item| write_licensing_stage(slug, organization, item, sources) }
+      end
+
+      # A licensing stage (#379): the NRC stage a project or plant has
+      # reached, with its docket and the date, from an NRC record. The row
+      # is on the unit that holds the docket, or on the developer for a
+      # design approval.
+      def write_licensing_stage(slug, organization, item, sources)
+        # A pending stage couldn't be reviewed: licensing stages aren't in
+        # the admin's review list yet. Leave a lead out until an NRC record
+        # states the stage.
+        if item["pending"]
+          return @errors << "#{slug}: licensing #{item['stage'].inspect}: pending: isn't supported for licensing stages; " \
+            "add the stage once an NRC record states it"
+        end
+
+        attributes = { stage: item["stage"], nrc_docket: item["nrc_docket"], effective_on: item["effective_on"] }
+        attributes[:expires_on] = item["expires_on"] if item["expires_on"].present?
+        if item["design_name"].present?
+          attributes[:organization_id] = organization.id
+          attributes[:design_name] = item["design_name"]
+        else
+          # The docket first, as everywhere (DATA.md, The same record): a
+          # name can belong to an older site as well as the docketed unit.
+          docket = LicensingStage.normalize_docket(item["nrc_docket"])
+          facility = (Directory::Lookup.facility(nrc_docket: docket) if docket) ||
+            (Directory::Lookup.facility(name: item["facility"]) if item["facility"].present?)
+          unless facility
+            @errors << "#{slug}: licensing: unknown facility #{item["facility"].inspect}"
+            return
+          end
+          # Found by name with another docket: a typo or a missing unit, never
+          # a stage on the wrong reactor.
+          if docket && facility.nrc_docket.present? && facility.nrc_docket != docket
+            @errors << "#{slug}: licensing: #{item["facility"]} has docket #{facility.nrc_docket}, not #{docket}"
+            return
+          end
+
+          attributes[:facility_id] = facility.id
+        end
+
+        write(slug, :licensing_stage, attributes, evidence(item, sources))
       end
 
       # merges: names of organizations an earlier seed loaded as their own
@@ -544,10 +626,14 @@ module Seed
         if result.ok?
           count(kind, result.id, result.created ? :created : (result.changed ? :changed : :unchanged))
         else
-          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type] || attributes[:external_id]}: " \
-            "#{result.errors.join("; ")}"
+          @errors << "#{slug}: #{kind} #{label(attributes)}: #{result.errors.join("; ")}"
         end
         result
+      end
+
+      # What an error names: the record the fact is about.
+      def label(attributes)
+        attributes[:name] || attributes[:role] || attributes[:relationship_type] || attributes[:stage] || attributes[:nrc_docket]
       end
   end
 end

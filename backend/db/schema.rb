@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_010100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -257,6 +257,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.datetime "updated_at", null: false
     t.index ["sluggable_type", "slug"], name: "index_former_slugs_on_sluggable_type_and_slug", unique: true
     t.index ["sluggable_type", "sluggable_id"], name: "index_former_slugs_on_sluggable"
+  end
+
+  create_table "licensing_stages", force: :cascade do |t|
+    t.bigint "facility_id"
+    t.bigint "organization_id"
+    t.string "design_name"
+    t.string "stage", null: false
+    t.string "nrc_docket", null: false
+    t.date "effective_on", null: false
+    t.date "expires_on"
+    t.decimal "confidence", precision: 3, scale: 2
+    t.string "verification_status", default: "pending", null: false
+    t.datetime "verified_at"
+    t.string "verified_by"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["facility_id", "nrc_docket", "stage"], name: "index_licensing_stages_on_facility", unique: true
+    t.index ["organization_id", "design_name", "stage"], name: "index_licensing_stages_on_organization", unique: true
+    t.index ["verification_status"], name: "index_licensing_stages_on_verification_status"
+    t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "licensing_stages_confidence_check"
+    t.check_constraint "expires_on IS NULL OR expires_on >= effective_on", name: "licensing_stages_dates_check"
+    t.check_constraint "stage::text <> 'design_approval'::text OR organization_id IS NOT NULL AND design_name IS NOT NULL", name: "licensing_stages_design_check"
+    t.check_constraint "design_name IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_design_name_check"
+    t.check_constraint "organization_id IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_organization_stage_check"
+    t.check_constraint "(facility_id IS NULL) <> (organization_id IS NULL)", name: "licensing_stages_owner_check"
+    t.check_constraint "stage::text = ANY (ARRAY['pre_application'::character varying::text, 'application_accepted'::character varying::text, 'construction_permit'::character varying::text, 'combined_licence'::character varying::text, 'operating_licence'::character varying::text, 'restart_review'::character varying::text, 'restart_approved'::character varying::text, 'design_approval'::character varying::text, 'withdrawn'::character varying::text, 'denied'::character varying::text])", name: "licensing_stages_stage_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "licensing_stages_verification_status_check"
   end
 
   create_table "news_items", force: :cascade do |t|
@@ -686,6 +713,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   add_foreign_key "facility_aliases", "facilities"
   add_foreign_key "facility_relationships", "facilities"
   add_foreign_key "facility_relationships", "organizations"
+  add_foreign_key "licensing_stages", "facilities"
+  add_foreign_key "licensing_stages", "organizations"
   add_foreign_key "news_mentions", "news_items", on_delete: :cascade
   add_foreign_key "organization_aliases", "organizations"
   add_foreign_key "organization_roles", "organizations"
