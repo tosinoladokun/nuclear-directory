@@ -64,7 +64,7 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal 78, Relationship.verified.count
     assert_equal 52, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 75, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal [ 76, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal 27, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
