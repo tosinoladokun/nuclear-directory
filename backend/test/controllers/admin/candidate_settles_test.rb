@@ -34,13 +34,14 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
     assert_select "#company-#{@ga.id} button[aria-label=?]", "Same as General Atomics", "Same as"
   end
 
-  test "Same as: the end is named as that company, its own name kept, and it's matched again; nothing approved" do
-    assert_enqueued_with(job: DataQuality::RunJob, args: [ "web_page", { only: %w[match verify] } ]) do
+  test "Same as on a Research claim: the end is named as that company, its own name kept, and it stays in Checks to approve; nothing approved" do
+    assert_no_enqueued_jobs(only: DataQuality::RunJob) do
       post settle_path, params: { choice: "same", record_id: @ga.id }
     end
     assert_redirected_to admin_checks_path
     @link.reload
-    assert_equal "new", @link.status
+    assert_equal "needs_review", @link.status, "Research has no run to match it again"
+    assert_match "approve or reject it here", @link.notes
     assert_equal({ "name" => "General Atomics", "aliases" => [ "GENERAL ATOMICS INC" ] }, @link.payload["to_organization"])
     assert_match "tosin settled \"GENERAL ATOMICS INC\" as the same as General Atomics", @link.notes
     assert_equal 0, Relationship.count
@@ -113,5 +114,13 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
       notes: %(from_organization: no exact match for "Acme"))
     get admin_checks_path
     assert_response :success
+  end
+
+  test "Same as on a claim whose source has a run queues match and verify for it" do
+    @source.update_columns(source_kind: "usaspending_doe_awards")
+    assert_enqueued_with(job: DataQuality::RunJob, args: [ "usaspending_doe_awards", { only: %w[match verify] } ]) do
+      post settle_path, params: { choice: "same", record_id: @ga.id }
+    end
+    assert_equal "new", @link.reload.status
   end
 end
