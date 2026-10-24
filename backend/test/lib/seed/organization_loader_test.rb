@@ -116,6 +116,20 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 40, acme.facility_relationships.sole.ownership_pct
   end
 
+  test "each record quote says which fields it backs (#398)" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com",
+      legal_name: "Acme Fuel, Inc.",
+      description: { "text" => "Makes fuel.", "source_url" => "https://example.com/about", "quote" => "Acme Fuel, Inc. makes fuel." },
+      hq: [ { "state" => "TN" }, item(city: "Oak Ridge", source_url: "https://example.com/hq", quote: "Based in Oak Ridge.") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+    Seed::OrganizationLoader.new(@dir).load!
+
+    fields = Organization.find_by!(slug: "acme-fuel").evidence.to_h { |row| [ row.quote, row.fields ] }
+    assert_equal({ "Acme Fuel, Inc. makes fuel." => %w[description legal_name], "Based in Oak Ridge." => %w[hq_city] }, fields,
+      "the description's quote also states the legal name; the HQ entry gives only the city; a re-seed changes nothing")
+  end
+
   test "a legal name is cited by the quote that states it" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", legal_name: "Acme Fuel, Inc.",
       roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel, Inc. supplies fuel.") ]))

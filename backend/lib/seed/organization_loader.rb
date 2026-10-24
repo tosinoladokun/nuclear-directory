@@ -186,11 +186,16 @@ module Seed
         # it never clears a short name set in the admin.
         attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
 
-        items = [ *hq, *description_items(doc), legal ].compact.uniq
+        # Which fields each quote backs (#398), by where it sits in the file.
+        backs = Hash.new { |hash, item| hash[item] = [] }
+        hq.each { |item| backs[item].concat({ "city" => "hq_city", "state" => "hq_state" }.select { |key, _| item[key].present? }.values) }
+        description_items(doc).each { |item| backs[item] << "description" }
+        backs[legal] << "legal_name" if legal
         # An unquoted legal name still finds a record an earlier seed loaded
         # under it (it's in aliases), then is removed from the aliases in the
         # same write.
-        write(slug, :organization, attributes, items.filter_map { |item| evidence(item, sources) },
+        quotes = backs.filter_map { |item, fields| evidence(item, sources)&.merge(fields: fields.uniq.presence) }
+        write(slug, :organization, attributes, quotes,
           remove_aliases: legal ? [] : Array(doc["legal_name"]))
       end
 
