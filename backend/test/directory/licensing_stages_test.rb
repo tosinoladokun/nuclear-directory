@@ -296,4 +296,19 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
 
     assert_operator locks.index("facilities"), :<, locks.index("licensing_stages"), locks.inspect
   end
+
+  test "a stage on a unit whose id is lower than its site's locks the site first, as a merge does" do
+    unit = Facility.create!(name: "Low Id Unit", nrc_docket: "05009991", verification_status: "verified", verified_by: BY)
+    site = Facility.create!(name: "High Id Site", verification_status: "verified", verified_by: BY)
+    unit.update!(parent: site)
+    id = write(stage(facility_id: unit.id, nrc_docket: "50-9991"), verification: { status: "pending", by: "agent:pipeline" }).id
+    locked = []
+    callback = ->(*, payload) { locked << payload[:binds]&.first&.value if payload[:sql].include?('FROM "facilities"') && payload[:sql].include?("FOR UPDATE") }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      Directory::FactWriter.write(:licensing_stage, { id:, effective_on: "2023-12-15" }, verification: { status: "verified", by: BY },
+        protect_human_verified: true)
+    end
+
+    assert_equal [ site.id, unit.id ], locked.compact.uniq, "site, then unit"
+  end
 end

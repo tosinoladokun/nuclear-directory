@@ -1237,12 +1237,14 @@ module Directory
 
       # The record a licensing stage hangs on must be open (#379): no
       # automated stage under a rejected or unpublished plant or company, or
-      # on a unit whose site is. The unit and its site are locked in id
-      # order, as check_link_ends locks them, so the two can't deadlock.
+      # on a unit whose site is. The site is locked before the unit, as
+      # merge_facility locks them, so the two can't deadlock.
       def lock_licensing_stage_owner(record)
         if (id = record.facility_id)
+          # The site before its unit, as merge_facility locks sites and then
+          # their units, whatever the ids.
           site_id = Facility.where(id:).pick(:parent_id)
-          Facility.lock.where(id: [ id, site_id ].compact).order(:id).load
+          [ site_id, id ].compact.each { |each_id| Facility.lock.find_by(id: each_id) }
         elsif (id = record.organization_id)
           Organization.lock.where(id:).load
         end
@@ -1251,7 +1253,7 @@ module Directory
       def check_licensing_stage_ends(attributes, record)
         if (id = attributes.key?(:facility_id) ? attributes[:facility_id] : record.facility_id)
           site_id = Facility.where(id:).pick(:parent_id)
-          records = [ id, site_id ].compact.uniq.sort_by(&:to_i).filter_map { |each_id| Facility.lock.find_by(id: each_id) }
+          records = [ site_id, id ].compact.uniq.filter_map { |each_id| Facility.lock.find_by(id: each_id) }
         elsif (id = attributes.key?(:organization_id) ? attributes[:organization_id] : record.organization_id)
           records = [ Organization.lock.find_by(id:) ].compact
         else
