@@ -345,6 +345,9 @@ class SeedsTest < ActiveSupport::TestCase
       assert FacilityRelationship.verified.exists?(organization: vendor, facility: plant, relationship_type: "vendor_for"), unit
     end
     assert_equal "H3D", Organization.find_by!(slug: "h3d").name
+
+    eunice = Facility.find_by!(name: "Urenco USA enrichment facility")
+    assert_equal eunice.id, Facility.find_by!(name: "Louisiana Energy Services (LES)").parent_id, "LES is the NRC unit of the Eunice site, not a second plant"
   end
 
   test "is safe to re-run" do

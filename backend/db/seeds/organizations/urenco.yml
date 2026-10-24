@@ -50,6 +50,7 @@ facilities:
   published: '2024-12-11'
   confidence: 1.0
 - name: Louisiana Energy Services (LES)
+  site: Urenco USA enrichment facility
   type: operates
   source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
   quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
