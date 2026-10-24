@@ -95,6 +95,7 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     post admin_record_facts_path(type: "Organization", id: @company.id), params: { kind: "company_link", other: meta.id, verb: "funds", swap: "1", **SRC }
     assert_select ".nd-alert", /That link already exists/
     assert_select ".nd-alert a[href=?]", admin_fact_path(type: "Relationship", id: link.id)
+    assert_select ".nd-alert a", text: "Swap", count: 1 # the other direction is still free
   end
 
   test "a plant's company link: owners may have a share, dates are optional, both checked" do

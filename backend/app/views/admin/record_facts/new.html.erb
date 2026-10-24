@@ -40,6 +40,11 @@
           <li><%= error %><% if @added.existing %> <%= link_to "Open it", existing_path(@added.existing), class: "nd-link" %><% end %></li>
         <% end %>
       </ul>
+      <% if @kind == "company_link" && @plan && @other %>
+        <%# The other direction may be free: Swap stays here, not only in the preview. %>
+        <p class="m-0"><%= link_to "Swap", page.(other: @other.id, swap: (params[:swap] == "1" ? nil : "1"), preview: 1, anchor: "preview-heading"), class: "nd-link nd-tap" %>
+          <span class="type-small text-ink-muted">to add it the other way round</span></p>
+      <% end %>
     </div>
   <% end %>
 
