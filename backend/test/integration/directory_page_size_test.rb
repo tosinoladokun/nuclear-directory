@@ -64,4 +64,14 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
     assert_equal PAGE + 3, rows, "only the project developers, none of the designers"
     assert_select "a[href='/companies/role-designer-0']", 0
   end
+
+  test "a Show more frame request skips the category counts" do
+    get companies_path(shown: 2)
+    assert_select "nav.nd-pills", 1
+
+    get companies_path(shown: 2), headers: { "Turbo-Frame" => "directory-rows" }
+    assert_response :success
+    assert_select "nav.nd-pills", 0
+    assert_select "turbo-frame#directory-rows"
+  end
 end
