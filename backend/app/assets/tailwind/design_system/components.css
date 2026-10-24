@@ -992,7 +992,7 @@
     .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 auto; }
   }
 
-  @media (max-width: 399px) {
+  @media (max-width: 439px) {
     .nd-leads__long { display: none; }
     .nd-leads__short { display: inline; }
   }
