@@ -117,6 +117,10 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     assert_includes readme, "This licence covers the data in this repository. The website's code is not covered."
     assert_includes readme, "Oladokun, T. (2026). *Nuclear Directory: US nuclear supply chain dataset* (Version 2026.12)"
     assert_match "| `companies` | 2 |", readme
+    Export::TABLES.each { |table, columns| assert_includes readme, "| `#{table}` | #{columns.keys.map { |c| "`#{c}`" }.join(", ")} |" }
+    assert_includes readme, "`facilities.site_slug` is the `slug` of a unit's site."
+    assert_includes readme, "@misc{oladokun_nuclear_directory,\n  author    = {Oladokun, Tosin},"
+    assert_includes readme, "a merged or renamed company can change slug"
     assert_no_match(/open source/i, Dir[File.join(@dir, "*"), File.join(@dir, ".*")].select { |path| File.file?(path) }.map { |path| File.read(path) }.join)
     dictionary = file("DATA-DICTIONARY.md")
     Export::TABLES.each_value { |columns| columns.each_key { |column| assert_includes dictionary, "| `#{column}` |" } }
