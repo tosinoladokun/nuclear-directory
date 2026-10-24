@@ -216,6 +216,12 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_nil @company.enriched_at
   end
 
+  test "a stored website that isn't http or https shows as plain text, never a link" do
+    @company.update_columns(website: "javascript:alert(1)")
+    get enrich_path
+    assert_select "a[href^='javascript']", 0
+  end
+
   test "a deal reads with the other company and its terms" do
     deal = Candidate.create!(source: @agreed.source, crawl_run: @agreed.crawl_run, kind: "deal_term",
       quote: "Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.",

@@ -270,5 +270,4 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     assert_equal term.id, again.reload.subject_id
     assert_equal 1, DealTerm.count
   end
-
 end
