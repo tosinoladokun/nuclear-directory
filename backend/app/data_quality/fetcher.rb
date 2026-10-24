@@ -178,6 +178,8 @@ class DataQuality::Fetcher
       robots_uri = uri.dup.tap { |copy| copy.path = "/robots.txt"; copy.query = copy.fragment = nil }
       fetched = request(robots_uri, {}, max_bytes: 1.megabyte)
       status = fetched.http.code.to_i
+      # A bot challenge on robots.txt is a block, as on any page.
+      return classify(robots_uri.to_s, fetched) if challenge?(fetched.http)
 
       case status
       when 200..299 then DataQuality::Robots.parse(body_of(fetched))
@@ -240,6 +242,11 @@ class DataQuality::Fetcher
     def classify(url, fetched, binary: false)
       http = fetched.http
       status = http.code.to_i
+      # A bot challenge is a block whatever its status (200 or 503 with
+      # Cloudflare's marker): recorded, never worked around (#510).
+      if challenge?(http)
+        return response(url, :blocked, status:, reason: "Bot challenge (HTTP #{status}) from #{http['Server'] || 'the server'}")
+      end
 
       case status
       when 200..299
@@ -256,6 +263,8 @@ class DataQuality::Fetcher
         response(url, :error, status:, reason: "HTTP #{status}")
       end
     end
+
+    def challenge?(http) = http["cf-mitigated"].to_s.casecmp?("challenge")
 
     def response(url, kind, status: nil, body: nil, etag: nil, last_modified: nil, reason: nil, block_reference: nil,
       content_type: nil, truncated: false)

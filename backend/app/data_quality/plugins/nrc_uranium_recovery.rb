@@ -9,8 +9,10 @@
 # Extract reads only the table of NRC-licensed facilities (Site Name |
 # Licensee | Location | Type of Facility). Each row gives the site (in situ
 # recovery as uranium_mine, a conventional mill as mill; city and state
-# from Location), its licensee, an operates link and the licensee's mining
-# category, all quoting the row. A row whose type or state can't be read
+# from Location) and its licensee, quoting the row. No link or role: a
+# licensee row doesn't say the company runs the site (two of the three are
+# unbuilt, one stopped) or what it does, so those wait for a source that
+# says so (Data Quality, 22 Oct). A row whose type or state can't be read
 # is held for a person at verify. No model is asked. The page's second table,
 # of sites Agreement States license, isn't read: NRC says it was last
 # updated in 2018 and makes no claim about it (those sites are #384, from
@@ -130,13 +132,9 @@ class DataQuality::Plugins::NrcUraniumRecovery < DataQuality::Plugin
     def candidates(row)
       site = { "name" => row.site, "facility_type" => row.facility_type, "country_code" => "US", "city" => row.city,
         "state" => row.state }.compact
-      organization = { "name" => row.licensee }
       [
         { kind: "facility", quote: row.line, payload: site },
-        { kind: "organization", quote: row.line, payload: organization },
-        { kind: "facility_relationship", quote: row.line, payload: {
-          "organization" => organization, "facility" => { "name" => row.site }, "relationship_type" => "operates" } },
-        { kind: "organization_role", quote: row.line, payload: { "organization" => organization, "role" => "mining" } }
+        { kind: "organization", quote: row.line, payload: { "name" => row.licensee } }
       ]
     end
 end
