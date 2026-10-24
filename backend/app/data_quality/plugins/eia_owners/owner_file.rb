@@ -48,7 +48,12 @@ class DataQuality::Plugins::EiaOwners::OwnerFile
         if generator["ownership"] == SOLE
           [ base.merge("owner_eia_utility_id" => generator["utility_id"], "owner_name" => generator["utility_name"], "percent_owned" => nil) ]
         else
-          owners.fetch(generator.values_at("eia_plant_id", "generator_id"), []).map { |owner| base.merge(owner) }
+          # A J or W generator with no Schedule 4 rows: an incomplete file, so
+          # the last good snapshot stays rather than a partial ownership.
+          owners.fetch(generator.values_at("eia_plant_id", "generator_id")) do
+            raise Unreadable, "Schedule 4 lists no owners for #{generator['plant_name']} generator #{generator['generator_id']} " \
+              "(ownership #{generator['ownership']})"
+          end.map { |owner| base.merge(owner) }
         end
       end.sort_by { |row| [ row["eia_plant_id"].to_i, row["owner_eia_utility_id"].to_i, row["generator_id"] ] }
     end

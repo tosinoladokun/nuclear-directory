@@ -11,7 +11,9 @@ module DataQuality::Differences
     # sec_cik: a company matched by name whose stored CIK differs from the
     # source's goes to review, not through as a conflict only approval would
     # see (#402). Equivalent CIKs ("320193" and "0000320193") compare equal.
-    "organization" => %w[domain sec_cik],
+    # eia_utility_id likewise (#382): a second EIA utility for one company
+    # goes to review, never over the stored one.
+    "organization" => %w[domain sec_cik eia_utility_id],
     "facility" => %w[nrc_docket eia_plant_id facility_type status city state country_code],
     # A link's type and ends say which link it is; these are its details.
     "relationship" => %w[description started_on ended_on],
@@ -147,6 +149,7 @@ module DataQuality::Differences
     end
     return value.to_s.strip.upcase if name == "country_code"
     return directory.normalize_cik(value).to_s if name == "sec_cik"
+    return directory.normalize_eia_utility_id(value).to_s if name == "eia_utility_id"
     return value.to_s.strip unless name == "domain" && value.present?
 
     text = value.to_s.strip

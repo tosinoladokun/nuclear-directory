@@ -11,6 +11,9 @@ module Directory
 
     # A CIK as the directory stores it: 10 zero-padded digits ("320193" is
     # "0000320193"), nil when blank.
+    # EIA's utility ID as the directory stores it ("07140" is "7140").
+    def eia_utility_id(value) = Organization.normalize_value_for(:eia_utility_id, value)
+
     def cik(value) = Organization.cik_from(value)
 
     # Pass exactly one of id, slug, name or domain.

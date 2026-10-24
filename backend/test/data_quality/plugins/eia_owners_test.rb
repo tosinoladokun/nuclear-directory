@@ -62,8 +62,8 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     end.string
   end
 
-  def yearly_zip(owners: OWNERS, owner_workbook: true)
-    generators = workbook("Operable" => [ [ "Schedule 3 (Operable)" ], GENERATOR_HEADER, *OPERABLE ],
+  def yearly_zip(owners: OWNERS, owner_workbook: true, operable: OPERABLE)
+    generators = workbook("Operable" => [ [ "Schedule 3 (Operable)" ], GENERATOR_HEADER, *operable ],
       "Proposed" => [ [ "Schedule 3 (Proposed)" ], GENERATOR_HEADER, *PROPOSED ])
     Zip::OutputStream.write_buffer do |zip|
       zip.put_next_entry("3_1_Generator_Y2025.xlsx")
@@ -91,7 +91,7 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     FacilityRelationship.create!(organization: @georgia_power, facility: @vogtle, relationship_type: "owns", ownership_pct: 45.7, **by)
   end
 
-  def plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+  def plugin = @plugin ||= Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
   def crawl! = plugin.crawl(CrawlRun.create!(stage: "crawl", source_kind: "eia_owners"))
   def source = Source.find_by!(url: SOURCE)
   def stored = CSV.parse(source.content_text, headers: true).map(&:to_h)
@@ -191,5 +191,84 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
 
     assert_match "S means the owner named is the utility that reports the generator, and owns it alone", facts
     assert_nil plugin.source_facts(Source.new(url: FILE, source_kind: "eia_plants"))
+  end
+
+  FILE_2026 = "https://www.eia.gov/electricity/data/eia860/xls/eia8602026.zip"
+
+  # The next year's release: a new source, an edition after the first.
+  def next_year!(**zip)
+    stub_request(:get, DataQuality::Plugins::EiaPlants::INDEX_URL).to_return(body: %(<a href="xls/eia8602026.zip">2026</a>))
+    stub_request(:get, FILE_2026).to_return(body: yearly_zip(**zip))
+    Source.where(source_kind: %w[eia_owners eia_860_index]).update_all(fetched_at: 1.day.ago)
+    run!
+  end
+
+  test "a J or W generator with no Schedule 4 owners is an incomplete file: the last good copy stays" do
+    crawl!
+    good = source.content_text
+    source.update!(fetched_at: 1.day.ago)
+    stub_request(:get, FILE).to_return(body: yearly_zip(owners: OWNERS.reject { |row| row[2] == "6127" }))
+
+    assert_equal "needs_human", crawl!["snapshot"]
+    assert_match "Schedule 4 lists no owners for V C Summer generator 1", source.reload.status_reason
+    assert_equal good, source.content_text
+  end
+
+  test "an owner found by name whose stored EIA utility ID differs goes to review, never over the stored ID" do
+    @georgia_power.update!(eia_utility_id: "9999")
+    run!
+
+    company = Candidate.where(kind: "organization").find { |c| c.payload["eia_utility_id"] == "7140" }
+    assert company.status_needs_review?, company.notes
+    assert_match "9999", company.notes
+    assert_equal "9999", @georgia_power.reload.eia_utility_id
+  end
+
+  test "next year's file updates a share an earlier year's file backs, instead of being held as another page" do
+    run!
+    calvert = claim("55951", "6011")
+    DataQuality::Review.approve([ calvert.id ], by: "human:tosin")
+    link = FacilityRelationship.find(calvert.reload.subject_id)
+    assert_equal 100, link.ownership_pct.to_i
+
+    shared = OPERABLE.map { |row| row[2] == "6011" ? row.dup.tap { |r| r[7] = "J" } : row }
+    owners = OWNERS + [ owner_row("6011", "Calvert Cliffs Nuclear Power Plant", "1", "Constellation Nuclear", "55951", "0.5"),
+      owner_row("6011", "Calvert Cliffs Nuclear Power Plant", "1", "Another Utility", "424242", "0.5") ]
+    next_year!(owners:, operable: shared)
+
+    update = Candidate.where(source: Source.find_by!(url: "#{FILE_2026}#owners")).find { |c| c.kind == "facility_relationship" &&
+      c.payload.dig("organization", "eia_utility_id") == "55951" && c.payload.dig("facility", "eia_plant_id") == "6011" }
+    assert_equal link.id, update.subject_id, "attached to the link 2025 backs, not held as another page"
+    # The share was approved unedited from EIA's own file, so EIA's newer
+    # file may update it (a share a person typed would go to review).
+    assert_equal "recommend_publish", update.ai_recommendation, update.notes
+    assert_no_match(/another page/i, update.notes.to_s)
+    DataQuality::Review.approve([ update.id ], by: "human:tosin")
+    assert_equal 50, link.reload.ownership_pct.to_i
+  end
+
+  test "an owner that leaves next year's file is flagged for review, not unpublished" do
+    run!
+    approve_recommended
+    calvert = FacilityRelationship.find(claim("55951", "6011").subject_id)
+    assert calvert.verified?
+
+    # Calvert Cliffs leaves; Catawba too (its owner names wait for a person,
+    # which rightly keeps a read incomplete). Kemmerer's site isn't in the
+    # directory, which doesn't.
+    # Removing Catawba drops its four owner companies as well, past the
+    # broken-file guard (a quarter of what's supported); the real file
+    # changes far less from year to year.
+    plugin.define_singleton_method(:max_dropped_share) { |_source| 1.0 }
+    next_year!(operable: OPERABLE.reject { |row| %w[6011 6036].include?(row[2]) }, owners: OWNERS.reject { |row| row[2] == "6036" })
+
+    dropped = Candidate.find_by(review_origin: "dropped", subject_type: "FacilityRelationship", subject_id: calvert.id)
+    assert dropped&.status_needs_review?, "flagged on the 2026 file"
+    assert_match "No longer in", dropped.notes
+    assert calvert.reload.verified?, "still published until a person decides"
+  end
+
+  def owner_row(plant, name, generator, owner_name, owner_id, pct)
+    [ "1", "Utility", plant, name, "XX", generator, "OP", owner_name, "", "", "", "", owner_id, pct ]
   end
 end

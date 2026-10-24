@@ -91,6 +91,28 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     new_owner_reason(candidate)
   end
 
+  # Each year's file is a source of its own; earlier years are earlier
+  # editions of this one (Plugin#earlier_editions).
+  def earlier_editions(source)
+    current = year(source.url.delete_suffix(ANCHOR)).to_i
+    Source.where(source_kind:).where.not(id: source.id).select { |other| year(other.url.delete_suffix(ANCHOR)).to_i < current }
+      .sort_by { |other| year(other.url.delete_suffix(ANCHOR)).to_i }.map(&:id)
+  end
+
+  # An owns claim for a plant the directory doesn't have yet (Kemmerer)
+  # waits indefinitely; it can't hide a dropped owner, so it doesn't stop the
+  # dropped check. A company still being matched does.
+  def blocks_dropped_check?(candidate)
+    return true unless candidate.kind == "facility_relationship" && candidate.subject_id.nil?
+
+    facility = candidate.payload["facility"].to_h
+    if facility["eia_plant_id"].present?
+      @directory.facility(eia_plant_id: facility["eia_plant_id"]).present?
+    else
+      facility["name"].blank? || @directory.facility(name: facility["name"]).present?
+    end
+  end
+
   private
     def year(file) = file[Plants::FILE_LINK, 1]
 
@@ -169,8 +191,7 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     # Once a newer yearly file is read, the older file's undecided claims are
     # withdrawn, and those waiting for a person are warned, as EiaPlants does.
     def supersede_older_files(source)
-      current = year(source.url.delete_suffix(ANCHOR)).to_i
-      older = Source.where(source_kind:).where.not(id: source.id).select { |other| year(other.url.delete_suffix(ANCHOR)).to_i < current }
+      older = Source.where(id: earlier_editions(source)).to_a
       return 0 if older.empty?
 
       Candidate.transaction do

@@ -12,7 +12,7 @@ class DataQuality::DirectoryClient
   Ref = Data.define(:type, :id)
   # What a lookup found: enough to match on and to explain a match.
   # values: a link's stored values ({ "ownership_pct" => 45.7, ... }), else nil.
-  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
+  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :eia_utility_id, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
     :country_code, :verification_status, :verified_by, :verified_at, :values) do
     def ref = Ref.new(type:, id:)
     def rejected? = verification_status == "rejected"
@@ -53,6 +53,7 @@ class DataQuality::DirectoryClient
 
   # A CIK as the directory stores it, so two spellings compare equal.
   def normalize_cik(value) = lookup.cik(value)
+  def normalize_eia_utility_id(value) = lookup.eia_utility_id(value)
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
   def organization(name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
@@ -500,7 +501,7 @@ class DataQuality::DirectoryClient
     def plant_names = @plant_names ||= lookup.plant_names(owners: owner_hints)
 
     def record(type, ref, values: nil)
-      Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), sec_cik: ref.try(:sec_cik),
+      Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), sec_cik: ref.try(:sec_cik), eia_utility_id: ref.try(:eia_utility_id),
         nrc_docket: ref.try(:nrc_docket), eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
         facility_type: ref.try(:facility_type), status: ref.try(:status), city: ref.try(:city), state: ref.try(:state),
         country_code: ref.try(:country_code), verification_status: ref.verification_status,

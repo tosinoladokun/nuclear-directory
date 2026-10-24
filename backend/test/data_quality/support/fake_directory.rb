@@ -18,7 +18,7 @@ module FakeDirectory
 
     def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
       one_of!(id:, slug:, name:, domain:, sec_cik:, eia_utility_id:)
-      Directory::OrganizationRef.new(id: @organizations[name], slug: nil, name: name, domain: nil, sec_cik: nil,
+      Directory::OrganizationRef.new(id: @organizations[name], slug: nil, name: name, domain: nil, sec_cik: nil, eia_utility_id: nil,
         verification_status: "verified", verified_by: nil, verified_at: nil) if @organizations.key?(name)
     end
 
