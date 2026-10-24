@@ -242,8 +242,9 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
           sold = amount(latest[first_accession(fields)]&.fetch("amount sold"))
           sold&.positive?
         end
-        Candidate.where(id: replaced.map(&:id)).update_all(status: "rejected", notes: "Superseded by a later filing of this round", updated_at: Time.current)
-        Candidate.where(id: unreplaced.map(&:id)).update_all(status: "needs_review",
+        # Re-checked here: a person may have decided one since it was read.
+        Candidate.where(id: replaced.map(&:id), status: %w[new matched]).update_all(status: "rejected", notes: "Superseded by a later filing of this round", updated_at: Time.current)
+        Candidate.where(id: unreplaced.map(&:id), status: %w[new matched]).update_all(status: "needs_review",
           notes: "A later filing of this round reports nothing sold: keep this amount, or reject the round", updated_at: Time.current)
         replaced.size + unreplaced.size
       end
