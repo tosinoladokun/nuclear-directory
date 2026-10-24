@@ -322,6 +322,13 @@ for the reactor and its Docket Number and Reactor Type, with the table's license
 Each gives the reactor (`research_reactor`, docket, city, state), its licensee, and `university` or
 `national_lab` only where the licensee's name says so. No operates link and no power level. The medical isotope
 and advanced reactor tables aren't read.
+## NRC fuel cycle facilities (#386)
+
+`plugins/nrc_fuel_cycle.rb` reads NRC's fuel cycle locations page (an index, never extracted) and each
+facility page it links, at most once a day, storing only the facility's labelled facts (name, location,
+licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_facility`, city, state, docket)
+and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
+states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
 ## DOE Isotope Program: production sites (#276)
 
