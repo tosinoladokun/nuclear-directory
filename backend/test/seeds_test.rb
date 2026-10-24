@@ -8,6 +8,41 @@ class SeedsTest < ActiveSupport::TestCase
     silence_warnings { load Rails.root.join("db/seeds.rb") }
   end
 
+  # What the seed files say should load, counted from the YAML itself, so a
+  # seed PR adds its files without editing a number here (and two seed PRs
+  # never conflict on one). Each fact once: the same role, link or plant link
+  # stated in two files is one row.
+  class Expected
+    def initialize
+      @files = Dir[Rails.root.join("db/seeds/organizations/*.yml")].sort
+        .to_h { |path| [ File.basename(path, ".yml"), YAML.safe_load_file(path, permitted_classes: [ Date ]) ] }
+      @plants = YAML.safe_load_file(Rails.root.join("db/seeds/facilities.yml"), permitted_classes: [ Date ])["facilities"]
+    end
+
+    def organizations = @files.size
+    def roles = each_file("roles") { |slug, item| [ item["key"], item["subtype"] ].compact.map { |key| [ slug, key ] } }.uniq.size
+    def technologies = each_file("technologies") { |slug, item| [ [ slug, item["key"] ] ] }.uniq.size
+    def relationships = each_file("relationships") { |slug, item| [ [ item["type"], slug, slug_of(item["to"]) ] ] }.uniq.size
+    def facilities = (each_file("facilities") { |_, item| [ item["name"] ] } + @plants.map { |plant| plant["name"] }).uniq.size
+    def facility_aliases = @plants.sum { |plant| Array(plant["other_names"]).size }
+
+    # [verified, pending]: a link stated pending in any file waits.
+    def plant_links
+      links = each_file("facilities") { |slug, item| [ [ [ slug, item["type"], item["name"] ], item["pending"] ] ] }.group_by(&:first)
+      pending = links.count { |_, rows| rows.any?(&:last) }
+      [ links.size - pending, pending ]
+    end
+
+    private
+      def each_file(key, &block) = @files.flat_map { |slug, doc| Array(doc[key]).flat_map { |item| block.call(slug, item) } }
+
+      # A link names the other company by name or alias; its file is its identity.
+      def slug_of(name)
+        @slugs ||= @files.flat_map { |slug, doc| [ doc["name"], *Array(doc["aliases"]) ].map { |each| [ OrganizationAlias.normalize(each.to_s), slug ] } }.to_h
+        @slugs.fetch(OrganizationAlias.normalize(name.to_s), name)
+      end
+  end
+
   # Production was first seeded from these files (main at #100, 2026-10-09);
   # every later seed must load on top of them, as a re-seed does.
   test "the current seed loads on top of the seed production started with" do
@@ -47,12 +82,20 @@ class SeedsTest < ActiveSupport::TestCase
     assert_nil Technology.find_by!(key: "fusion").parent
   end
 
+  test "the expected counts are read from the seed files, and aren't empty" do
+    expected = Expected.new
+    assert_operator expected.organizations, :>, 100
+    assert_operator expected.relationships, :>, 50
+    assert_operator expected.plant_links.sum, :>, 50
+  end
+
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 121, Organization.verified.count
-    assert_equal 137, OrganizationRole.verified.count
-    assert_equal 59, OrganizationTechnology.verified.count
+    expected = Expected.new
+    assert_equal expected.organizations, Organization.verified.count
+    assert_equal expected.roles, OrganizationRole.verified.count
+    assert_equal expected.technologies, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
     %w[ameren-ue arizona-public-service-co dte-electric-company duke-energy-florida duke-energy energy-harbor-nuclear-corp firstenergy-nuclear-operating-co indiana-michigan-power-co nebraska-public-power-district northern-states-power-company-minnesota pacific-gas-electric-co pseg-nuclear-llc south-carolina-electric-gas-co southern-nuclear-operating-co stp-nuclear-operating-co susquehanna-nuclear-llc wolf-creek-nuclear-operating-corp].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
@@ -61,11 +104,11 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 78, Relationship.verified.count
-    assert_equal 52, Facility.verified.count
-    # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 75, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
-    assert_equal 27, FacilityAlias.count
+    assert_equal expected.relationships, Relationship.verified.count
+    assert_equal expected.facilities, Facility.verified.count
+    # Plant links marked pending wait for a direct quote (owns/operates not stated by the source).
+    assert_equal expected.plant_links, [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal expected.facility_aliases, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
     assert_equal [ 1 ], OrganizationRole.distinct.pluck(:confidence)
