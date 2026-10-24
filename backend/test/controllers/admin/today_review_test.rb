@@ -392,4 +392,18 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_select "[value=?]", lead.id.to_s, 0
     assert_not_includes TodayReview.new.rows("agree").flat_map(&:candidate_ids), lead.id
   end
+
+  test "a group that loses a deadlock stays waiting, saying so, instead of an error page" do
+    review = TodayReview.new
+    shown = review.fingerprint
+    accept = DataQuality::Recommendations.method(:accept)
+    DataQuality::Recommendations.define_singleton_method(:accept) { |*, **| raise ActiveRecord::Deadlocked, "deadlock detected" }
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Recommendations.define_singleton_method(:accept, accept)
+    end
+    assert_response :redirect
+    assert_match DataQuality::Review::BUSY, flash[:alert]
+  end
 end
