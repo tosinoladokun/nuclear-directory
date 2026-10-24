@@ -37,7 +37,9 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
       new_source.source_kind = INDEX_SOURCE_KIND
       new_source.title = "EIA-860 annual electric generator data page"
     end
-    DataQuality::Snapshot.take(index, fetcher: @fetcher)
+    # Reported, so a failed fetch that falls back on an earlier copy still
+    # shows on Today (a same-day rerun skips the fetch and keeps that outcome).
+    index_read = DataQuality::Snapshot.take(index, fetcher: @fetcher).to_s
     raise "EIA-860 page: #{index.status_reason || index.crawl_status}" unless index.crawl_ok? && index.content_text.present?
 
     url = latest_file_url(index.content_text) or raise "EIA-860 page: no yearly zip link found; the page may have changed"
@@ -49,11 +51,11 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true, max_bytes: MAX_BYTES) do |bytes|
       PlantFile.to_csv(PlantFile.plants(bytes))
     end
-    { "file" => url, "snapshot" => result.to_s, "plants" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
+    { "index" => index_read, "file" => url, "snapshot" => result.to_s, "plants" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
       "superseded" => (supersede_older_files(source) if source.crawl_ok?) }.compact
   rescue PlantFile::Unreadable => error
     source.update!(crawl_status: "needs_human", status_reason: "Couldn't read the EIA-860 plant file: #{error.message}")
-    { "file" => url, "snapshot" => "needs_human" }
+    { "index" => index_read, "file" => url, "snapshot" => "needs_human" }
   end
 
   def source_facts(source)

@@ -262,4 +262,19 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     assert_match "Plant sheet of EIA's annual Form EIA-860", plugin.source_facts(Source.new(url: FILE, source_kind: "eia_plants"))
     assert_nil plugin.source_facts(Source.new(url: Plugin::INDEX_URL, source_kind: Plugin::INDEX_SOURCE_KIND))
   end
+
+  test "a failed read of the EIA-860 page is reported though its cached copy is used, and a same-day rerun keeps it on Today" do
+    crawl!
+    Source.find_by!(url: Plugin::INDEX_URL).update!(fetched_at: 1.day.ago)
+    stub_request(:get, Plugin::INDEX_URL).to_return(status: 503)
+
+    first = crawl!
+    assert_equal "error", first["index"]
+    assert_equal FILE, first["file"], "the cached page still finds the file"
+
+    second = crawl!
+    assert_equal "skipped_recent", second["index"]
+    runs = [ first, second ].map { |stats| CrawlRun.new(status: "succeeded", stats:) }
+    assert_equal "a page didn't answer", Today.problem(runs)
+  end
 end
