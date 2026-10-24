@@ -17,7 +17,7 @@ module AdminHelper
 
   # Sources by kind, in the names the admin uses (canvas A).
   SOURCE_KIND_LABELS = {
-    "nrc_reactor_list" => "NRC", "nrc_power_status" => "NRC", "eia_generators" => "EIA", "eia_860m_index" => "EIA",
+    "nrc_reactor_list" => "NRC", "nrc_power_status" => "NRC", "eia_generators" => "EIA", "eia_860m_index" => "EIA", "eia_plants" => "EIA", "eia_860_index" => "EIA",
     "usaspending_doe_awards" => "USAspending", "usaspending_api" => "USAspending", "nrc_decommissioning" => "NRC", "doe_isotope_sites" => "DOE", "nrc_uranium_recovery" => "NRC",
     "sec_form_d" => "SEC", "sec_submissions" => "SEC",
     "nrc_research_reactors" => "NRC", "nrc_research_reactors_index" => "NRC",
