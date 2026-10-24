@@ -162,7 +162,10 @@ class DataQuality::Stages::Verify < DataQuality::Stage
 
     # model: nil for a code check, which asked no model.
     def send_to_review(candidate, reason, run, stats, confidence: nil, model: run.model)
-      candidate.update!(ai_fields("needs_review", reason, confidence, run, model:).merge(status: "needs_review", notes: reason))
+      # A person's Same as… (#391) stays in the note, as Match keeps it.
+      settled = candidate.notes.to_s[DataQuality::Stages::Match::SETTLED]&.strip
+      notes = settled && !reason.to_s.include?(settled) ? "#{reason}. #{settled}" : reason
+      candidate.update!(ai_fields("needs_review", reason, confidence, run, model:).merge(status: "needs_review", notes:))
       stats["needs_review"] += 1
     end
 

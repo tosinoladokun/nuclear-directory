@@ -40,7 +40,7 @@
         </header>
 
         <main class="nd-shell__main">
-          <% if notice %><div class="nd-flash" role="status"><p class="type-body"><%= admin_notice %></p></div><% end %>
+          <% if notice %><div class="nd-flash" role="status"><p class="type-body"><%= admin_notice %></p><%= yield :flash_action %></div><% end %>
           <% if alert %><div class="nd-flash" role="alert"><%= icon("warning-circle") %><p class="type-body-strong"><%= alert %></p></div><% end %>
           <%= yield %>
         </main>
@@ -53,7 +53,7 @@
         </div>
       </header>
       <main class="nd-page">
-        <% if notice %><div class="nd-flash" role="status"><p class="type-body"><%= notice %></p></div><% end %>
+        <% if notice %><div class="nd-flash" role="status"><p class="type-body"><%= notice %></p><%= yield :flash_action %></div><% end %>
         <% if alert %><div class="nd-flash" role="alert"><%= icon("warning-circle") %><p class="type-body-strong"><%= alert %></p></div><% end %>
         <%= yield %>
       </main>

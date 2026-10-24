@@ -359,10 +359,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     # This run's note, and for a claim matched again, the note it had.
+    # A person's Same as… (#391) stays in the note through any later run.
     def noted(candidate, note)
+      settled = candidate.notes.to_s[SETTLED]&.strip
+      note = "#{note}. #{settled}" if settled && !note.include?(settled)
       was = @rematched&.dig(candidate.id) or return note
       "#{note}. Matched again: its company or plant is in the directory now. Was: #{was}"
     end
+    SETTLED = /[^.]* settled ".*?" as [^.]*/
 
     # A link already citing another page of the same kind of source (another
     # USAspending recipient's awards on one company's link), which this claim

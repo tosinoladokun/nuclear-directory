@@ -3,5 +3,5 @@
 <p class="type-body m-0"><%= pluralize(review.size, "fact") %>. <%= joy %> and <%= aminah %> agree on <%= review.count("agree") %>; <%= review.count("disagree") %> <%= review.count("disagree") == 1 ? "has" : "have" %> different verdicts; <%= aminah %> didn't see <%= review.count("only_joy") %>.</p>
 <div class="nd-today__actions">
   <%= link_to "Start reviewing ›", admin_today_review_path, class: "nd-btn nd-btn--primary type-ui" %>
-  <%= link_to "The full list in Checks ›", admin_checks_path, class: "nd-btn nd-btn--outline type-ui" %>
+  <%= link_to "Open the full list ›", admin_checks_path, class: "nd-btn nd-btn--outline type-ui" %>
 </div>

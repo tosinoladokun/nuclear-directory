@@ -60,6 +60,16 @@ class Admin::CandidatesController < Admin::BaseController
     redirect_after after_decision(results, queue_path)
   end
 
+  # Close: the claim restates what the site already shows. Records the
+  # decision; nothing live changes.
+  def close
+    id = params.require(:candidate_id).to_i
+    results = DataQuality::Review.confirm_identical([ id ], by: actor)
+    results = [ DataQuality::Review::Result.new(candidate_id: id, ref: nil, errors: [ "it's already decided" ]) ] if results.empty?
+    flash_decision(results, "Closed")
+    redirect_after after_decision(results, queue_path)
+  end
+
   def edit
     @item = DataQuality::Review.candidate(params[:id].to_i) or raise ActiveRecord::RecordNotFound
     @fields = editable_fields(@item)
