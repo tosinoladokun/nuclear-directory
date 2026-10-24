@@ -18,8 +18,9 @@ class DataQuality::LinkCheck
   MAX_BYTES = 64.kilobytes
   DEAD = [ 404, 410 ].freeze
 
-  def initialize(fetcher: DataQuality::Fetcher.new, limit: PER_NIGHT, clock: -> { Time.current })
+  def initialize(fetcher: DataQuality::Fetcher.new, limit: PER_NIGHT, clock: -> { Time.current }, directory: DataQuality::DirectoryClient.new)
     @fetcher = fetcher
+    @directory = directory
     @limit = limit
     @clock = clock
   end
@@ -34,17 +35,15 @@ class DataQuality::LinkCheck
     stats
   end
 
-  # Sources cited by a published fact, never checked first, then the longest unchecked.
+  # Sources cited by any published fact (every fact type, roles and deal
+  # terms too), never checked first, then the longest unchecked. Only the
+  # columns the check reads: a stored page can be megabytes.
   def due
-    Source.where(id: cited_ids).order(Arel.sql("link_checked_at ASC NULLS FIRST"), :id).limit(@limit)
+    Source.where(id: @directory.published_source_ids).select(:id, :url, :link_failures)
+      .order(Arel.sql("link_checked_at ASC NULLS FIRST"), :id).limit(@limit)
   end
 
   private
-    def cited_ids
-      SourceCatalog::LIVE_TYPES.map do |type|
-        Evidence.where(subject_type: type, subject_id: type.constantize.published.select(:id)).select(:source_id)
-      end.reduce { |all, ids| all.or(ids) }
-    end
 
     def check(source)
       response = @fetcher.get(source.url, max_bytes: MAX_BYTES)

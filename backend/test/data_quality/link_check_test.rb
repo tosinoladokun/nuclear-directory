@@ -33,6 +33,24 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     assert_nil gone.reload.content_text, "the page isn't stored"
   end
 
+  test "a bot challenge is blocked, whether it answers 200 or 503" do
+    walled = cite("https://example.org/challenge-200")
+    busy = cite("https://example.org/challenge-503")
+    stub_request(:get, walled.url).to_return(status: 200, body: "Just a moment...", headers: { "cf-mitigated" => "challenge" })
+    stub_request(:get, busy.url).to_return(status: 503, body: "Just a moment...", headers: { "cf-mitigated" => "challenge" })
+
+    assert_equal [ walled.id, busy.id ].sort, check["blocked"].sort
+    assert_equal [ 0, 0 ], [ walled.reload.link_failures, busy.reload.link_failures ]
+  end
+
+  test "a source cited only by a published role is checked too" do
+    role = Role.create!(key: "fuel", name: "Fuel")
+    fact = OrganizationRole.create!(organization: @company, role:).tap { |r| r.verify!(by: BY) }
+    only_role = cite("https://example.org/role-only", subject: fact)
+
+    assert_includes DataQuality::LinkCheck.new.due.map(&:id), only_role.id
+  end
+
   test "an error is failing after three nights in a row, and a good answer resets it" do
     flaky = cite("https://example.org/flaky")
     stub_request(:get, flaky.url).to_return(status: 503, body: "down")
@@ -54,10 +72,10 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     recent = cite("https://example.org/recent").tap { |s| s.update_columns(link_checked_at: NOW - 1.day) }
     Source.create!(url: "https://example.org/uncited", source_kind: "web_page")
 
-    due = DataQuality::LinkCheck.new(limit: 2).due.to_a
+    due = DataQuality::LinkCheck.new(limit: 2).due.map(&:id)
 
-    assert_equal [ fresh, old ], due
-    refute_includes DataQuality::LinkCheck.new.due, unpublished_only
-    assert_includes DataQuality::LinkCheck.new.due, recent
+    assert_equal [ fresh.id, old.id ], due
+    refute_includes DataQuality::LinkCheck.new.due.map(&:id), unpublished_only.id
+    assert_includes DataQuality::LinkCheck.new.due.map(&:id), recent.id
   end
 end

@@ -240,6 +240,11 @@ class DataQuality::Fetcher
     def classify(url, fetched, binary: false)
       http = fetched.http
       status = http.code.to_i
+      # A bot challenge is a block whatever its status (200 or 503 with
+      # Cloudflare's marker): recorded, never worked around (#510).
+      if http["cf-mitigated"].to_s.casecmp?("challenge")
+        return response(url, :blocked, status:, reason: "Bot challenge (HTTP #{status}) from #{http['Server'] || 'the server'}")
+      end
 
       case status
       when 200..299
