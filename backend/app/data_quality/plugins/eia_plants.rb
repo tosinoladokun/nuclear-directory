@@ -111,6 +111,15 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
     end
   end
 
+  # Earlier yearly files (#542): each year is its own source, older first.
+  def earlier_editions(source)
+    current = source.url.to_s[FILE_LINK, 1].to_i
+    return [] if current.zero?
+
+    Source.where(source_kind:).where.not(id: source.id).select { |other| other.url.to_s[FILE_LINK, 1].to_i.between?(1, current - 1) }
+      .sort_by { |other| other.url.to_s[FILE_LINK, 1].to_i }.map(&:id)
+  end
+
   private
     # Once a newer yearly file is read, candidates from older ones that
     # nobody has decided yet are withdrawn: an older year's address mustn't
