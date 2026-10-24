@@ -23,6 +23,7 @@ categories:
     sources:
       - { name: NRC reactor list, kind: nrc_reactor_list, status: built }
       - { name: EIA-860M generators, kind: eia_generators, status: built }
+      - { name: EIA-860 plants, kind: eia_plants, status: built }
       - { name: NRC licensing pages (new reactors), status: planned, issue: 130 }
       - { name: State utility commission filings, status: planned, issue: 131 }
   - key: reactor-developers
@@ -40,7 +41,7 @@ categories:
     name: Fuel and materials
     sources:
       - { name: NRC fuel cycle facilities, kind: nrc_fuel_cycle, status: built, issue: 386 }
-      - { name: DOE HALEU pages, status: planned, issue: 124 }
+      - { name: DOE HALEU pages, kind: doe_programs, status: built, issue: 124 }
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
       - { name: DOE Isotope Program (isotope producers), kind: doe_isotope_sites, status: built, issue: 276 }
       - { name: NRC uranium recovery sites (mines and mills), kind: nrc_uranium_recovery, status: built, issue: 275 }

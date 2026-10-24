@@ -299,6 +299,25 @@ then NRC's page for each site it links to (about 20), each at most once a day. A
 - A unit gone from the list is suggested as shut down. The list's rows, and each page's text without its
   date stamp, are what's hashed (#240).
 
+## EIA annual plant file (#319)
+
+`plugins/eia_plants.rb` gives each nuclear power plant its city, which the monthly 860M file doesn't have.
+It reads EIA's EIA-860 page, fetches the newest final yearly zip (about 24 MB, so it passes a 60 MB limit
+to the shared Fetcher), and reads the Plant sheet of `2___Plant_Y<year>.xlsx` inside it (`PlantFile`).
+
+- **Which rows:** every plant the same zip's generator workbook (`3_1_Generator_Y<year>.xlsx`, Operable
+  and Proposed sheets) lists with a nuclear generator. Neither the 860M file nor the directory decides
+  this, so what's stored depends on the zip alone, and the cached rows stay right when EIA answers "not
+  modified". Each is stored as CSV, and the row is the quote.
+- **Finding the site:** match finds it by EIA plant ID, else a power plant with no ID by name and state,
+  looked up on every run, so a plant added to the directory later is still found.
+- **What it proposes:** each plant's `city`, as enrichment (`identify` with the plant ID and no unit). It
+  never creates or renames a site. A blank city is filled. A city a person set isn't overwritten: a
+  different one comes back as a difference. A row with no city proposes nothing.
+- **Found by name:** a plant with no EIA plant ID is held for a person. A site also gets EIA's plant ID
+  (Duane Arnold). A one-record plant with its NRC docket (Columbia) gets only the city, because only a
+  site can carry an EIA plant ID.
+
 
 The contract is in [`app/directory/README.md`](../directory/README.md).
 `directory_client.rb` uses `Directory::Lookup.organization` / `.facility` and
@@ -346,6 +365,15 @@ role: a licensee row doesn't say the company runs the site or what it does. A ro
 read is held for a person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
+## DOE program pages (#124)
+
+`plugins/doe_programs.rb` reads the DOE program pages in its `PAGES` list once a day. First, the HALEU
+Availability Program's three pages that list companies: enrichment services, deconversion services and HALEU
+allocations. It reads only the lists it names, each found by the sentence or heading the page writes before it,
+and each item gives the company and DOE's link to it (`funds` for a contract, `supplies` for a conditional HALEU
+allocation), described in the page's terms and quoting the item. No roles: being selected to bid doesn't say
+what a company does. A page missing an expected list goes to a person. ARDP's page names no companies, INL's
+GAIN pages answer our bot with 403, and the fusion milestone program's page moved: those come later.
 ## NRC research and test reactors (#387)
 
 `plugins/nrc_research_reactors.rb` reads the "Locations of Research and Test Reactors" table on NRC's non-power
