@@ -153,4 +153,10 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_select "p", /stopped with an error\. Read its pages again to retry\./
     assert_select "p", text: /Nothing waiting/, count: 0
   end
+
+  test "a trade-press lead isn't a finding here" do
+    @agreed.update_columns(payload: @agreed.payload.merge("lead" => true))
+    get enrich_path
+    assert_select "#finding-#{@agreed.id}", 0
+  end
 end

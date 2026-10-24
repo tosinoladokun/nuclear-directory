@@ -102,7 +102,8 @@ class Admin::RecordEnrichController < Admin::BaseController
         # Its SEC record too (part 3), when it has a CIK.
         pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i))) if @company.sec_cik.present?
         # Only what this request found (since it was asked); older findings stay in Checks.
-        scope = Candidate.where(source: pages, status: %w[new matched needs_review])
+        # A trade-press lead (#127) waits for Data Quality, never here.
+        scope = Candidate.where(source: pages, status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
         scope = scope.where(created_at: @company.enrich_requested_at..) if @company.enrich_requested_at
         scope.order(:id).ids
       end
