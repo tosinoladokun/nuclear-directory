@@ -73,7 +73,7 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     assert_equal [ { kind: "deal_term", quote: notice_source.content_text, payload: {
       "organization" => { "name" => "NEW ERA HELIUM INC.", "sec_cik" => "0002028336" }, "link_type" => "Organization",
       "term_type" => "funding_round", "external_id" => "0002028336-24-000006", "amount_usd" => "37000000.0",
-      "amount_offered_usd" => "105000000.0", "starts_on" => "2024-12-06" } } ], candidates
+      "starts_on" => "2024-12-06", "amount_offered_usd" => "105000000.0" } } ], candidates
     assert plugin.quote_in_source?(notice_source, candidates.sole[:quote])
     refute_match(/relatedPerson|signature/i, notice_source.content_text)
   end
@@ -174,6 +174,32 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     plugin.send(:reread_amendments, Plugin::Filing.new(form: "D", accession: "0002028336-25-000001", filed_on: "2025-01-02", document: "x"), @company)
 
     assert_equal [ a.content_sha256, nil, nil ], [ a, b, c ].map { |source| source.reload.extracted_sha256 }
+  end
+
+  test "an Indefinite amount offered is stated as nil, so it clears an earlier one" do
+    amendment = filing("0002028336-25-000004", form: "D/A", amends: "0002028336-25-000001").tap do |source|
+      line = source.content_text.sub("amount offered: $20,000,000", "amount offered: Indefinite")
+      source.update!(content_text: line)
+    end
+    payload = plugin.extract(amendment, nil).sole[:payload]
+    assert payload.key?("amount_offered_usd")
+    assert_nil payload["amount_offered_usd"]
+  end
+
+  test "a D/A reporting nothing sold sends the round's earlier claim to a person, not away" do
+    DataQuality::Pipeline.run("sec_form_d", plugin:, only: %w[crawl extract match])
+    earlier = Candidate.sole
+    list = JSON.parse(file_fixture("sec_form_d/newera_submissions.json").read)
+    %w[form accessionNumber filingDate primaryDocument].zip([ "D/A", "0002028336-25-000009", "2025-06-01", "primary_doc.xml" ]).each { |key, value| list["filings"]["recent"][key].unshift(value) }
+    stub_request(:get, LIST).to_return(body: list.to_json)
+    zero = file_fixture("sec_form_d/newera_d.xml").read.sub("<isAmendment>false</isAmendment>",
+      "<isAmendment>true</isAmendment><previousAccessionNumber>0002028336-24-000006</previousAccessionNumber>").sub("<totalAmountSold>37000000", "<totalAmountSold>0")
+    stub_request(:get, "https://www.sec.gov/Archives/edgar/data/2028336/000202833625000009/primary_doc.xml").to_return(body: zero)
+    Source.update_all(fetched_at: 2.days.ago)
+    crawl
+
+    assert earlier.reload.status_needs_review?
+    assert_match "nothing sold", earlier.notes
   end
 
   test "a D/A whose original isn't stored is the round of the filing it names" do

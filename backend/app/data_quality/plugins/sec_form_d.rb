@@ -92,7 +92,9 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
     [ { kind: "deal_term", quote: source.content_text, payload: {
       "organization" => { "name" => fields["issuer"], "sec_cik" => fields["issuer CIK"] }, "link_type" => "Organization",
       "term_type" => "funding_round", "external_id" => first_accession(fields), "amount_usd" => sold.to_s("F"),
-      "amount_offered_usd" => amount(fields["amount offered"])&.to_s("F"), "starts_on" => date(fields["first sale"]) }.compact } ]
+      "starts_on" => date(fields["first sale"]) }.compact.merge(
+        # Always stated, so a D/A restating it as "Indefinite" clears an earlier amount.
+        "amount_offered_usd" => amount(fields["amount offered"])&.to_s("F")) } ]
   end
 
   # One filing per source: a round isn't dropped because a later filing replaced it.
@@ -232,7 +234,18 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
         waiting = Candidate.where(source_id: earlier.map(&:id), kind: "deal_term")
         waiting.where(status: "needs_review").where.not("notes LIKE ?", "%A later filing of this round exists%")
           .update_all([ "notes = COALESCE(notes || '. ', '') || ?, updated_at = ?", "A later filing of this round exists", Time.current ])
-        waiting.where(status: %w[new matched]).update_all(status: "rejected", notes: "Superseded by a later filing of this round", updated_at: Time.current)
+        # A round whose latest filing proposes nothing (nothing sold) has no
+        # replacement claim: its earlier ones go to a person instead, with the
+        # pending round, rather than leaving that round with no claim at all.
+        replaced, unreplaced = waiting.where(status: %w[new matched]).to_a.partition do |claim|
+          fields = fields(claim.source.content_text)
+          sold = amount(latest[first_accession(fields)]&.fetch("amount sold"))
+          sold&.positive?
+        end
+        Candidate.where(id: replaced.map(&:id)).update_all(status: "rejected", notes: "Superseded by a later filing of this round", updated_at: Time.current)
+        Candidate.where(id: unreplaced.map(&:id)).update_all(status: "needs_review",
+          notes: "A later filing of this round reports nothing sold: keep this amount, or reject the round", updated_at: Time.current)
+        replaced.size + unreplaced.size
       end
     end
 
