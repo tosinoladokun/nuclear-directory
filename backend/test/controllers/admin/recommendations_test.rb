@@ -37,8 +37,8 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select ".nd-alert p", /Added 2 recommendations\.\s+2 lines weren't added:/
-    assert_select ".nd-alert li", /please approve the rest\s*Line 5: it isn't “<claim id> approve: <reason>”/
-    assert_select ".nd-alert li", /999999 approve: x\s*Line 6: there's no claim 999999/
+    assert_select ".nd-alert li", /please approve the rest\s*Line 5: it isn't “<id> approve: <reason>”/
+    assert_select ".nd-alert li", /999999 approve: x\s*Line 6: there's no fact 999999/
     assert_equal [ "approve", "the page names Alpha" ], a.reload.slice(:dq_recommendation, :dq_reason).values
     assert_equal "reject", b.reload.dq_recommendation
     assert a.status_matched?, "recording decides nothing"
@@ -125,7 +125,7 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     assert_select "#rec-#{rejected.id}", /Reject.*not nuclear/m
     assert_select "#left-heading", /Left for you\s*2/
     assert_select "#rec-#{changed.id}", /It changed after Data Quality looked at it/
-    assert_select "#rec-#{unrecommended.id}", /The verifier didn't recommend it/
+    assert_select "#rec-#{unrecommended.id}", /The app's checker didn't recommend it/
   end
 
   test "Accept decides the shown list as the person, lifting only the first-batch hold" do
@@ -240,7 +240,7 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     a.destroy!
 
     result = DataQuality::Recommendations.accept([ item ], by: users(:admin).actor).sole
-    assert_equal [ "this claim no longer exists" ], result.errors
+    assert_equal [ "this fact no longer exists" ], result.errors
   end
 
   test "a reopened claim needs a fresh recommendation" do
@@ -274,6 +274,6 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     paste("12345678901234567890 approve: too long")
 
     assert_response :unprocessable_content
-    assert_select ".nd-alert li", /Line 1: there's no claim 12345678901234567890/
+    assert_select ".nd-alert li", /Line 1: there's no fact 12345678901234567890/
   end
 end

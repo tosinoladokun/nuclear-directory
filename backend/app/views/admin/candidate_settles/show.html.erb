@@ -1,0 +1,48 @@
+<% content_for :title, "Which company is “#{@name}”?" %>
+<% back = back_path(nil) %>
+<% here = ->(**extra) { admin_candidate_settle_path(@candidate.id, end: @end_key, back:, **extra) } %>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: "Checks", parent_path: back || admin_checks_path, current: "Which company" %>
+  <h1 class="type-admin-h1 m-0">Which company is “<%= @name %>”? <span class="type-count text-ink-muted"><%= claim_number(@candidate.id) %></span></h1>
+  <p class="type-body m-0"><%= DataQuality::Claim.describe(@candidate) %></p>
+  <p class="type-small text-ink-muted m-0">Pick one. The item then goes through the checks again and comes back to you to approve; nothing goes live from here.</p>
+
+  <% if @ends.size > 1 %>
+    <nav class="nd-fchips type-ui" aria-label="Which company in it">
+      <% @ends.each do |key, name| %>
+        <%= link_to name, admin_candidate_settle_path(@candidate.id, end: key, back:), class: "nd-fchip nd-fchip--tab", aria: { current: ("page" if key == @end_key) } %>
+      <% end %>
+    </nav>
+  <% end %>
+
+  <%= form_with url: here.(), method: :get, class: "nd-search", role: "search" do %>
+    <%= icon("magnifying-glass", size: 16) %>
+    <%= hidden_field_tag :end, @end_key, id: nil %>
+    <%= hidden_field_tag :back, back, id: nil if back %>
+    <label class="sr-only" for="settle-q">Find the company</label>
+    <input type="search" id="settle-q" name="q" value="<%= @query %>" placeholder="Find the company" class="type-input">
+  <% end %>
+
+  <% if @choices.any? %>
+    <div class="nd-panel">
+      <% @choices.each do |company| %>
+        <div class="nd-fold__row type-body nd-settle" id="company-<%= company.id %>">
+          <p class="nd-one-line m-0" title="<%= company.name %>"><%= link_to company.name, admin_record_path(type: "Organization", id: company.id), class: "nd-link" %>
+            <span class="type-small text-ink-muted"><%= company.verification_status == "pending" ? "Not public yet" : "Live" %></span></p>
+          <div class="nd-row">
+            <%= button_to "Same as", here.(), params: { choice: "same", record_id: company.id }, class: "nd-btn nd-btn--outline type-ui", "aria-label": "Same as #{company.name}" %>
+            <%= button_to "Subsidiary of", here.(), params: { choice: "subsidiary", record_id: company.id }, class: "nd-btn nd-btn--outline type-ui", "aria-label": "Subsidiary of #{company.name}" %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% elsif @query.length >= 2 %>
+    <p class="type-body text-ink-muted">No company matches “<%= @query %>”.</p>
+  <% end %>
+
+  <section class="nd-panel nd-stack" aria-label="A new company">
+    <p class="type-body m-0">None of these? It's a company of its own: “<%= @name %>”, added not public yet, from this item's source.</p>
+    <%= button_to "New company", here.(), params: { choice: "new" }, class: "nd-btn nd-btn--outline type-ui", "aria-label": "New company: #{@name}" %>
+  </section>
+</div>

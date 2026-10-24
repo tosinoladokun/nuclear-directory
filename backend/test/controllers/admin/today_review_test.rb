@@ -135,6 +135,147 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_select "#fact-#{changed.id} button", "Keep"
   end
 
+  def undo_token = flash[:undo].tap { |token| assert token, "an Undo is offered" }
+
+  test "Undo a Reject: it's waiting again, as it was" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    follow_redirect!
+    assert_select ".nd-flash[role=status]", /Rejected\.\s*Undo/
+    assert_select ".nd-flash form.nd-flash__undo button", "Undo"
+    post admin_today_review_undo_path, params: { token: }
+
+    assert_equal "Undone. It's waiting again.", flash[:notice]
+    assert @only_joy.reload.status_matched?
+    assert_nil @only_joy.reviewed_by
+  end
+
+  test "an Accept has no Undo: it may have published or changed a record, so it's taken back on the record" do
+    post admin_today_review_decide_path(candidate_id: @both.id, decision: "accept")
+    assert @both.reload.status_merged?, flash[:alert]
+    assert_nil flash[:undo]
+    assert_equal "Accepted. To take it back, change it on its record.", flash[:notice]
+  end
+
+  test "a Reject keeps the fact's notes, so Undo loses nothing" do
+    @only_joy.update_columns(notes: "the page names it")
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    assert_equal "the page names it", @only_joy.reload.notes
+    post admin_today_review_undo_path, params: { token: undo_token }
+    assert_equal [ "matched", "the page names it" ], [ @only_joy.reload.status, @only_joy.notes ]
+  end
+
+  test "a Reject that retired the record its fact proposed has no Undo" do
+    proposed = Organization.create!(name: "Proposed Fission Co")
+    claim = Candidate.create!(source: @source, kind: "organization", payload: { "name" => proposed.name }, quote: "q", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: proposed.id, proposed_subject: true, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    post admin_today_review_decide_path(candidate_id: claim.id, decision: "reject")
+    assert claim.reload.status_rejected?
+    assert_nil flash[:undo]
+  end
+
+  test "copies of one fact with different verdicts are separate rows; a fact's copies are never split across pages" do
+    other = Source.create!(url: "https://www.doe.gov/test/split.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    unsure = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also.", crawl_run: @only_joy.crawl_run,
+      status: "needs_review", notes: "unsure", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    review = TodayReview.new
+    assert(review.rows("only_joy").none? { |row| row.candidate_ids.sort == [ @only_joy.id, unsure.id ].sort }, "different verdicts, different rows")
+
+    stub_const(TodayReview, :PAGE, 1) do
+      again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Again.", crawl_run: @only_joy.crawl_run,
+        status: "matched", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+      first = TodayReview.new.rows("only_joy").first
+      assert_equal [ again.id, @only_joy.id ].sort, first.candidate_ids.sort, "both copies on the first page"
+    end
+  end
+
+  test "Undo works only while nothing else has changed it" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    @only_joy.reload.update!(notes: "decided again elsewhere")
+
+    post admin_today_review_undo_path, params: { token: }
+    assert_equal "Can't undo this: it changed since, so it can't be undone here.", flash[:alert]
+    assert @only_joy.reload.status_rejected?
+  end
+
+  test "the same fact from another page is one row, decided in one click" do
+    other = Source.create!(url: "https://www.doe.gov/test/today-review.html", source_kind: "web_page", crawl_status: "ok", title: "DOE page", content_sha256: "sha")
+    again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also listed.", crawl_run: @only_joy.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "recommend_publish",
+      ai_reason: "DOE lists it.", ai_confidence: 0.9, ai_source_sha256: "sha")
+
+    get admin_today_review_path
+    assert_select "h2", /Only Joy checked\s+2/
+    assert_select "#fact-#{again.id}", /Also on 1 other page: nrc\.gov ↗\. One decision covers both\./
+    assert_select "#fact-#{@only_joy.id}", 0
+
+    post admin_today_review_decide_path(candidate_id: again.id, decision: "reject"), params: { same: [ again.id, @only_joy.id ] }
+    assert again.reload.status_rejected?
+    assert @only_joy.reload.status_rejected?
+
+    post admin_today_review_undo_path, params: { token: undo_token }
+    assert_equal "Undone. It's waiting again.", flash[:notice]
+    assert again.reload.status_matched?
+    assert @only_joy.reload.status_matched?
+  end
+
+  test "a new company several pages propose is one decision" do
+    proposals = [ @source, Source.create!(url: "https://example.com/news", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha") ].map do |source|
+      Candidate.create!(source:, kind: "organization", payload: { "name" => "Brand New Fission" }, quote: "Brand New Fission was founded.",
+        crawl_run: @both.crawl_run, status: "needs_review", notes: "new company", ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    end
+
+    get admin_today_review_path
+    assert_select "li.nd-verdict", text: /Brand New Fission/, count: 1
+    assert_select "li.nd-verdict", /Brand New Fission.*One decision covers both/m
+  end
+
+  test "a new company proposed with different values on two pages is two decisions" do
+    [ [ @source, "brandnew.com" ], [ Source.create!(url: "https://example.com/news2", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha"), "other.com" ] ].each do |source, domain|
+      Candidate.create!(source:, kind: "organization", payload: { "name" => "Brand New Fission", "domain" => domain }, quote: "Brand New Fission was founded.",
+        crawl_run: @both.crawl_run, status: "needs_review", notes: "new company", ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    end
+    get admin_today_review_path
+    assert_select "li.nd-verdict", text: /Brand New Fission/, count: 2
+  end
+
+  test "a grouped Undo restores every copy or none: one changed since, nothing is undone" do
+    other = Source.create!(url: "https://www.doe.gov/test/undo.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    again = Candidate.create!(source: other, kind: "organization", payload: @only_joy.payload, quote: "Also.", crawl_run: @only_joy.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @only_joy.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    post admin_today_review_decide_path(candidate_id: again.id, decision: "reject"), params: { same: [ again.id, @only_joy.id ] }
+    token = undo_token
+    @only_joy.reload.update!(notes: "changed elsewhere")
+
+    post admin_today_review_undo_path, params: { token: }
+    assert_match "it changed since", flash[:alert]
+    assert again.reload.status_rejected?
+    assert @only_joy.reload.status_rejected?
+  end
+
+  test "a fact that only restates what the site shows offers one action: Close, already on the site" do
+    page = Source.create!(url: "https://example.com/restated", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha",
+      content_text: "Agreed Fission Co holds a license.")
+    company = Organization.find(@both.subject_id)
+    company.verify!(by: "human:tosin")
+    Evidence.create!(subject: company, source: page, quote: @both.quote, found_by: "human")
+    same = Candidate.create!(source: page, kind: "organization", payload: @both.payload, quote: @both.quote,
+      crawl_run: @both.crawl_run, status: "matched", subject_type: "Organization", subject_id: company.id, ai_recommendation: "recommend_publish",
+      ai_reason: "Listed.", ai_source_sha256: "sha")
+    assert_includes DataQuality::Review.restating_ids([ same.id ], by: "human:tosin"), same.id, DataQuality::Review.confirm_identical([ same.id ], by: "human:tosin", dry_run: true).map(&:errors).inspect
+
+    get admin_today_review_path
+    assert_select "#fact-#{same.id}", /It says what the site already shows\. Closing notes that in the history and changes nothing live\./
+    assert_select "#fact-#{same.id} button", "Close: already on the site"
+    assert_select "#fact-#{same.id} button", text: "Reject", count: 0
+
+    post admin_today_review_decide_path(candidate_id: same.id, decision: "close")
+    assert_equal "Closed. Nothing on the site changed.", flash[:notice]
+    assert_equal "confirmed", same.reload.status
+    assert_equal "verified", company.reload.verification_status
+  end
+
   test "with no list from Aminah today, her earlier calls show as not reviewed and the shortcut takes none" do
     post admin_today_step_path("crawl")
     post admin_today_step_path("list"), params: { note: "no_list" }
@@ -155,5 +296,140 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     @only_joy.update_columns(status: "needs_review", notes: "withdrawn: the source no longer lists it")
     get admin_today_review_path
     assert_select "#fact-#{@only_joy.id} .nd-tag", text: "Joy: check it"
+  end
+
+  test "Undo is refused once the record its fact was about has been decided since" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    Organization.find(@only_joy.subject_id).tap { |c| c.update_columns(verification_status: "rejected", verified_by: "human:tosin") }
+    post admin_today_review_undo_path, params: { token: }
+    assert_match "the record it was about was decided since", flash[:alert]
+    assert @only_joy.reload.status_rejected?
+  end
+
+  test "Undo is refused after a merge moved the fact to another record" do
+    post admin_today_review_decide_path(candidate_id: @only_joy.id, decision: "reject")
+    token = undo_token
+    kept = Organization.create!(name: "Kept Fission Co")
+    Candidate.where(id: @only_joy.id).update_all(subject_id: kept.id) # as a merge repoints claims
+    post admin_today_review_undo_path, params: { token: }
+    assert_match "it changed since", flash[:alert]
+  end
+
+  test "unattached plants with the same name aren't grouped; only a new company's proposals are" do
+    a, b = 2.times.map do |i|
+      Candidate.create!(source: @source, kind: "facility", payload: { "name" => "Twin Point 1", "nrc_docket" => "0500088#{i}" }, quote: "q",
+        crawl_run: @both.crawl_run, status: "needs_review", notes: "unsure", ai_recommendation: "needs_review", ai_source_sha256: "sha")
+    end
+    rows = TodayReview.new.rows("only_joy")
+    assert(rows.none? { |row| (row.candidate_ids & [ a.id, b.id ]).size == 2 })
+  end
+
+  test "the shortcut accepts every copy of an agreed fact, not just the first" do
+    other = Source.create!(url: "https://www.doe.gov/test/copy.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    assert_equal [ copy.id, @both.id ].sort, review.rows("agree").sole.candidate_ids.sort
+
+    post admin_today_review_agreed_path, params: { shown_set: review.fingerprint }
+    assert @both.reload.status_merged?, flash[:alert]
+    assert copy.reload.status_merged?, flash[:alert]
+  end
+
+  test "a copy whose recommendation changes after the page loaded isn't approved with its fact" do
+    other = Source.create!(url: "https://www.doe.gov/test/race.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    shown = review.fingerprint
+    first, second = review.rows("agree").sole.then { |row| [ row.candidate_id, (row.candidate_ids - [ row.candidate_id ]).sole ] }
+
+    accept = DataQuality::Recommendations.method(:accept)
+    DataQuality::Recommendations.define_singleton_method(:accept) do |items, **options|
+      accept.call(items, **options).tap { Candidate.where(id: second).update_all(dq_recommendation: "reject", dq_reason: "changed meanwhile") }
+    end
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Recommendations.define_singleton_method(:accept, accept)
+    end
+    assert Candidate.find(first).status_merged?
+    assert Candidate.find(second).status_matched?, "left waiting"
+    assert_match "changed after the page loaded", flash[:alert]
+  end
+
+  test "an edit to the record between the first copy and the next isn't overwritten: the next copy waits" do
+    other = Source.create!(url: "https://www.doe.gov/test/edit.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    shown = review.fingerprint
+    first, second = review.rows("agree").sole.then { |row| [ row.candidate_id, (row.candidate_ids - [ row.candidate_id ]).sole ] }
+
+    approve = DataQuality::Review.method(:approve)
+    DataQuality::Review.define_singleton_method(:approve) do |ids, **options|
+      Organization.where(id: Candidate.find(first).subject_id).update_all(description: "Edited by a person meanwhile.") if ids == [ second ]
+      approve.call(ids, **options)
+    end
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Review.define_singleton_method(:approve, approve)
+    end
+    assert Candidate.find(first).status_merged?
+    assert Candidate.find(second).status_matched?, "left waiting"
+    assert_match "its record changed after the first page's copy was accepted", flash[:alert]
+  end
+
+  test "a trade-press lead is never a row in Today's review" do
+    lead = Candidate.create!(source: @source, kind: "organization", payload: @both.payload.merge("lead" => true), quote: "Also.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    get admin_today_review_path
+    assert_select "[value=?]", lead.id.to_s, 0
+    assert_not_includes TodayReview.new.rows("agree").flat_map(&:candidate_ids), lead.id
+  end
+
+  test "a group that loses a deadlock stays waiting, saying so, instead of an error page" do
+    review = TodayReview.new
+    shown = review.fingerprint
+    accept = DataQuality::Recommendations.method(:accept)
+    DataQuality::Recommendations.define_singleton_method(:accept) { |*, **| raise ActiveRecord::Deadlocked, "deadlock detected" }
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Recommendations.define_singleton_method(:accept, accept)
+    end
+    assert_response :redirect
+    assert_match DataQuality::Review::BUSY, flash[:alert]
+  end
+
+  test "a copy that meets a lock inside its approval rolls back the whole group, including the first copy" do
+    other = Source.create!(url: "https://www.doe.gov/test/busy.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    shown = review.fingerprint
+    first, second = review.rows("agree").sole.then { |row| [ row.candidate_id, (row.candidate_ids - [ row.candidate_id ]).sole ] }
+
+    # Approve's own savepoint caught a lock timeout and returned BUSY.
+    approve = DataQuality::Review.method(:approve)
+    DataQuality::Review.define_singleton_method(:approve) do |ids, **options|
+      next approve.call(ids, **options) unless ids == [ second ]
+
+      [ DataQuality::Review::Result.new(candidate_id: second, ref: nil, errors: [ DataQuality::Review::BUSY ]) ]
+    end
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Review.define_singleton_method(:approve, approve)
+    end
+    assert Candidate.find(first).status_matched?, "the first copy's approval rolled back with the group"
+    assert Candidate.find(second).status_matched?
+    assert_match DataQuality::Review::BUSY, flash[:alert]
   end
 end

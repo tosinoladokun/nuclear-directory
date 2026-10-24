@@ -39,7 +39,7 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
 
     get admin_checks_path(category: "duplicates")
     assert_select "#claim-#{duplicate.id} .type-kicker", "Duplicate · NRC"
-    assert_select "#claim-#{duplicate.id} .type-change", "→ General Matter"
+    assert_select "#claim-#{duplicate.id} .nd-wait__value", /Matched to\s+General Matter/ # only a guess while its company is a question
     assert_select "#claim-#{brand.id} .type-change", "→ Urenco"
     get admin_checks_path(category: "links")
     assert_select "#claim-#{link.id} .type-kicker", "New link · Research"
