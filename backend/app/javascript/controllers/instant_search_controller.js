@@ -60,7 +60,10 @@ export default class extends Controller {
     if (!panel) return this.close()
 
     const count = Number(panel.dataset.instantSearchCount)
-    this.statusTarget.textContent = count === 0 ? "No results" : `${count} ${count === 1 ? "result" : "results"}, use the down arrow to browse`
+    const close = panel.dataset.instantSearchFuzzy === "true"
+    const results = `${count} ${close ? (count === 1 ? "close name" : "close names") : (count === 1 ? "result" : "results")}`
+    // Close names are approximate: say so, since ArrowDown skips the note in the panel.
+    this.statusTarget.textContent = count === 0 ? "No results" : `${close ? "No exact match. " : ""}${results}, use the down arrow to browse`
     this.open()
   }
 

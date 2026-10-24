@@ -13,6 +13,11 @@ class Evidence < ApplicationRecord
 
   validates :confidence, numericality: { in: 0..1 }, allow_nil: true
 
+  # The record fields a quote backs (#398), as column names ("hq_city"),
+  # sorted and unique; nil when it's about the record as a whole.
+  normalizes :fields, with: ->(names) { Array(names).map { |name| name.to_s.strip }.compact_blank.uniq.sort.presence }
+  validate { errors.add(:fields, "must be column names") if fields&.any? { |name| !name.match?(/\A[a-z_]+\z/) } }
+
   after_save :refresh_subject_confidence
   after_destroy :refresh_subject_confidence, unless: :destroyed_by_association
 

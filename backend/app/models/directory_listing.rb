@@ -14,8 +14,16 @@ class DirectoryListing
 
   attr_reader :category, :tag, :query, :technology, :state, :sort, :role
 
+  # Close names (#431): used only when an exact search finds nothing, so it
+  # fills an empty result and never adds extras to a real one.
+  FUZZY_THRESHOLD = 0.45
+  FUZZY_LIMIT = 10
+  FUZZY_MINIMUM_LENGTH = 3
+
   # Unknown values are ignored rather than raising: these come from the URL.
-  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil)
+  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil, fuzzy: false)
+    @args = { category:, tag:, q:, technology:, state:, sort:, role: }
+    @fuzzy = fuzzy
     @category = Category.find(category)
     # A tag narrows companies, so it's ignored on Plants and sites.
     @tag = Tag.find(tag) unless @category&.plants
@@ -61,9 +69,10 @@ class DirectoryListing
     scope = scope.where(id: Bucket.organization_ids(category)) if category
     scope = scope.where(id: tag.organization_ids) if tag
     scope = scope.where(id: Bucket.role_member_ids(role)) if role
-    scope = matching_companies(scope) if query
     scope = with_technology(scope) if technology
     scope = scope.where(hq_state: state) if state
+    # Matching goes last: close names are ranked among the companies the filters leave.
+    scope = (fuzzy? ? fuzzy_companies(scope) : matching_companies(scope)) if query
     scope
   end
 
@@ -76,13 +85,18 @@ class DirectoryListing
     return Facility.none if category.nil? && query.nil?
 
     scope = public_sites
-    scope = matching_plants(scope) if query
     scope = scope.verified.where(state:) if state
     scope = plants_with_technology(scope) if technology
+    scope = (fuzzy? ? fuzzy_plants(scope) : matching_plants(scope)) if query
     scope
   end
 
   def searching? = query.present?
+  def fuzzy? = @fuzzy
+
+  # The same listing, matching close names instead of exact text.
+  def fuzzy_copy = self.class.new(**@args, fuzzy: true)
+  def fuzzy_possible? = query.to_s.length >= FUZZY_MINIMUM_LENGTH && !fuzzy?
   def filtered? = technology.present? || state.present? || role.present?
 
   # Filter choices that actually occur in published data.
@@ -154,7 +168,7 @@ class DirectoryListing
       normalized = OrganizationAlias.normalize(query)
       matches << OrganizationAlias.where("normalized_alias LIKE ?", like(normalized)).select(:organization_id) if normalized.present?
 
-      matches.reduce(scope.where("organizations.name ILIKE ?", like(query))) { |all, ids| all.or(scope.where(id: ids)) }
+      matches.reduce(scope.where(*loose_name("organizations.name"))) { |all, ids| all.or(scope.where(id: ids)) }
     end
 
     # The site's name, a published unit's name ("Vogtle Unit 3" finds Plant
@@ -163,7 +177,7 @@ class DirectoryListing
     # page shows that link (PlantProfile#links: published, on a verified site
     # or unit, sourced and current).
     def matching_plants(scope)
-      units = Facility.published.where.not(parent_id: nil).where("facilities.name ILIKE ?", like(query)).select(:parent_id)
+      units = Facility.published.where.not(parent_id: nil).where(*loose_name("facilities.name")).select(:parent_id)
       links = FacilityRelationship.published.where("facility_relationships.description ILIKE ?", like(query))
         .where(facility_id: Facility.verified.select(:id))
         .where(id: Evidence.where(subject_type: "FacilityRelationship").select(:subject_id))
@@ -179,7 +193,7 @@ class DirectoryListing
       # A site's own aliases, and those of its published units only (as with unit names).
       alias_sites = Facility.where(id: aliased).or(Facility.where(id: Facility.published.where(id: aliased).select(:parent_id))).select(:id)
 
-      scope.where("facilities.name ILIKE ?", like(query)).or(scope.where(id: units)).or(scope.where(id: linked_sites))
+      scope.where(*loose_name("facilities.name")).or(scope.where(id: units)).or(scope.where(id: linked_sites))
         .or(scope.verified.where(technology_id: techs)).or(scope.where(id: tech_units)).or(scope.where(id: alias_sites))
     end
 
@@ -238,6 +252,8 @@ class DirectoryListing
     # query come first, then names that contain it, then matches through a
     # role, technology or deal; the chosen sort orders within each band.
     def ordered(scope, name_column)
+      return scope.order(fuzzy_position_sql(name_column)) if fuzzy? && query
+
       scope = scope.order(relevance_sql(name_column, aliases: name_column == "organizations.name")) if query
       sort == "connections" ? scope.order(Arel.sql("connections_count DESC"), name_column) : scope.order(name_column)
     end
@@ -264,5 +280,68 @@ class DirectoryListing
       ])
     end
 
+    # Close names, best match first (at most FUZZY_LIMIT) among the records the
+    # filters (category, tag, role, state, technology) already leave: the query against each
+    # name and alias by trigram similarity, as typed, as a part of the name
+    # ("westinghous"), and with spaces and punctuation dropped ("next era").
+    def fuzzy_companies(scope)
+      @fuzzy_company_ids ||= fuzzy_ids(
+        "SELECT o.id AS id, #{fuzzy_score_sql("o.name")} AS score FROM organizations o WHERE o.id IN (#{scope.select(:id).to_sql}) UNION ALL " \
+        "SELECT oa.organization_id, #{fuzzy_score_sql("oa.alias")} FROM organization_aliases oa WHERE oa.organization_id IN (#{scope.select(:id).to_sql})"
+      )
+      scope.where(id: @fuzzy_company_ids)
+    end
+
+    def fuzzy_plants(scope)
+      @fuzzy_plant_ids ||= fuzzy_ids(
+        "SELECT f.id AS id, #{fuzzy_score_sql("f.name")} AS score FROM facilities f WHERE f.id IN (#{scope.select(:id).to_sql}) UNION ALL " \
+        "SELECT fa.facility_id, #{fuzzy_score_sql("fa.alias")} FROM facility_aliases fa WHERE fa.facility_id IN (#{scope.select(:id).to_sql})"
+      )
+      scope.where(id: @fuzzy_plant_ids)
+    end
+
+    def fuzzy_ids(union)
+      rows = ActiveRecord::Base.connection.select_rows(
+        "SELECT id FROM (SELECT id, MAX(score) AS best FROM (#{union}) scored WHERE score >= #{FUZZY_THRESHOLD} GROUP BY id) ranked ORDER BY best DESC, id LIMIT #{FUZZY_LIMIT}"
+      )
+      rows.flatten.map(&:to_i)
+    end
+
+    def fuzzy_score_sql(column)
+      squeezed = "regexp_replace(lower(#{column}), '[^a-z0-9]', '', 'g')"
+      ActiveRecord::Base.sanitize_sql_array([
+        "GREATEST(similarity(lower(#{column}), :q), word_similarity(:q, lower(#{column})), similarity(#{squeezed}, :squeezed))",
+        { q: query.downcase, squeezed: query.downcase.gsub(/[^a-z0-9]/, "") }
+      ])
+    end
+
+    # The close names in their order of closeness, not A to Z.
+    def fuzzy_position_sql(name_column)
+      ids = name_column.start_with?("facilities") ? (@fuzzy_plant_ids || []) : (@fuzzy_company_ids || [])
+      Arel.sql(ids.empty? ? "#{name_column}" : "array_position(ARRAY[#{ids.map(&:to_i).join(",")}]::bigint[], #{name_column.sub(/\.name\z/, ".id")})")
+    end
+
     def like(text) = "%#{ActiveRecord::Base.sanitize_sql_like(text.to_s)}%"
+
+    # A name matches the search as typed, or with spacing and punctuation
+    # ignored ("next era" finds NextEra), or with every word of it somewhere
+    # in the name ("brown ferry" finds Browns Ferry) (#431).
+    def loose_name(column)
+      compact = query.downcase.gsub(/[^a-z0-9]/, "")
+      tokens = query.downcase.scan(/[a-z0-9]+/)
+      # A short token ("5" in "Vogtle Unit 5") would match anywhere, so the
+      # every-word match isn't used then: it would find Unit 3.
+      words = tokens.any? { |word| word.length < 2 } ? [] : tokens
+      sql = [ "#{column} ILIKE ?" ]
+      binds = [ like(query) ]
+      if compact.length >= 3
+        sql << "regexp_replace(lower(#{column}), '[^a-z0-9]', '', 'g') LIKE ?"
+        binds << like(compact)
+      end
+      if words.size > 1
+        sql << "(#{([ "#{column} ILIKE ?" ] * words.size).join(' AND ')})"
+        binds.concat(words.map { |word| like(word) })
+      end
+      [ sql.join(" OR "), *binds ]
+    end
 end

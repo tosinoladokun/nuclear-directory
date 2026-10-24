@@ -69,6 +69,14 @@ module Seed
       end + plant_id_collisions
     end
 
+    # A plant (site) by name: one with no parent first, as write_unit finds
+    # a site (undocketed before docketed), so a same-name NRC unit never
+    # takes the site's details.
+    def plant_named(name)
+      Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
+        Directory::Lookup.facility(name:)
+    end
+
     # An EIA plant ID another site holds (#229): merge that site in first.
     def plant_id_collisions
       facilities = File.exist?(@facilities_file.to_s) ? Array(read(@facilities_file)["facilities"]) : []
@@ -76,7 +84,7 @@ module Seed
         holder = Facility.find_by(parent_id: nil, eia_plant_id: entry["eia_plant_id"].to_s) or next
         # The site the loader would write to, found as it finds it: by its
         # name, then by a former one (rename_from_former_name).
-        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first
+        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -102,7 +110,8 @@ module Seed
         # Organizations first, so relationships can find the other side.
         docs.each { |slug, doc| write_organization(slug, doc, sources, shared) }
         docs.each { |slug, doc| write_facts(slug, doc, sources) }
-        in_docs = docs.values.flat_map { |doc| Array(doc["facilities"]).map { |item| item["name"] } }.to_set
+        # A site named only as a unit's site: (#472) is in a file too.
+        in_docs = docs.values.flat_map { |doc| Array(doc["facilities"]).flat_map { |item| [ item["name"], item["site"].to_s.strip.presence ] } }.compact.to_set
         facilities.each { |facility| write_facility_details(facility, sources, in_docs) }
 
         raise Error, "Seed failed, nothing was written:\n  #{@errors.join("\n  ")}" if @errors.any?
@@ -177,11 +186,16 @@ module Seed
         # it never clears a short name set in the admin.
         attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
 
-        items = [ *hq, *description_items(doc), legal ].compact.uniq
+        # Which fields each quote backs (#398), by where it sits in the file.
+        backs = Hash.new { |hash, item| hash[item] = [] }
+        hq.each { |item| backs[item].concat({ "city" => "hq_city", "state" => "hq_state" }.select { |key, _| item[key].present? }.values) }
+        description_items(doc).each { |item| backs[item] << "description" }
+        backs[legal] << "legal_name" if legal
         # An unquoted legal name still finds a record an earlier seed loaded
         # under it (it's in aliases), then is removed from the aliases in the
         # same write.
-        write(slug, :organization, attributes, items.filter_map { |item| evidence(item, sources) },
+        quotes = backs.filter_map { |item, fields| evidence(item, sources)&.merge(fields: fields.uniq.presence) }
+        write(slug, :organization, attributes, quotes,
           remove_aliases: legal ? [] : Array(doc["legal_name"]))
       end
 
@@ -217,7 +231,7 @@ module Seed
         end
 
         Array(doc["facilities"]).each do |item|
-          facility = write(slug, :facility, facility_attributes(item), evidence(item, sources))
+          facility = item["site"].present? ? write_unit(slug, item, sources) : write(slug, :facility, facility_attributes(item), evidence(item, sources))
           next unless facility&.ok?
           # A pending link a human has since rejected or unpublished stays decided.
           next if item["pending"] && closed_link?(organization.id, facility.id, item["type"])
@@ -345,7 +359,7 @@ module Seed
         return @errors << "facilities.yml: #{name.inspect} isn't in any organization file" unless in_docs.include?(name)
 
         # Its organization-file write failed (already in @errors): nothing to fill.
-        facility = Directory::Lookup.facility(name:) or return
+        facility = plant_named(name) or return
 
         FACILITY_FIELDS.each do |field|
           detail = entry[field]
@@ -386,6 +400,52 @@ module Seed
         published = term["published"] || (link["published"] if url == link["source_url"])
         { "source_url" => url, "quote" => term["quote"], "confidence" => term.fetch("confidence", link["confidence"]),
           "published" => published }.compact
+      end
+
+      # A unit given with its site ("site: Indian Point"): the site is found
+      # among sites by name, or made; the unit is found under that site by
+      # name, or made there, so a fresh load gives one site with its units,
+      # never a unit as a plant of its own. A same-name plant without a site
+      # is taken in as the unit; one under another site fails the load.
+      # The site and unit are found by their own rules, never by FactWriter's
+      # global name lookup (which could find a unit for a site, or a site for
+      # its same-name unit): a site is an undocketed facility with no parent;
+      # a unit is one under that site by name or alias. One that's missing is
+      # created in place, then written by id, so the write is audited and
+      # sourced but never matched elsewhere. An existing unit keeps its name.
+      def write_unit(slug, item, sources)
+        site_name, name = item["site"].to_s.strip, item["name"].to_s.strip
+        site = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", site_name).first
+        unless site
+          # A new site, sourced and decided like any written by this load.
+          site = Facility.create!(name: site_name)
+          count(:facility, site.id, :created)
+          site_result = write(slug, :facility, { id: site.id }, evidence(item, sources))
+          return site_result unless site_result&.ok?
+        end
+
+        under = Facility.where(parent_id: site.id)
+        unit = under.where("LOWER(name) = LOWER(?)", name).first ||
+          under.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(name)).select(:facility_id)).first
+        unless unit
+          # The same name (or another name) under another site is that site's: never moved.
+          elsewhere = Facility.where.not(parent_id: [ nil, site.id ]).where("LOWER(name) = LOWER(?)", name).first ||
+            Facility.where.not(parent_id: [ nil, site.id ]).where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(name)).select(:facility_id)).first
+          if elsewhere
+            @errors << "#{slug}: facility #{name}: already a unit of another site (#{Facility.where(id: elsewhere.parent_id).pick(:name)}), not #{site_name}"
+            return
+          end
+          # A plant of its own by that name (an older fresh load) is taken in;
+          # never the site itself, or a docketed unit of another plant.
+          loose = Facility.where(parent_id: nil).where.not(id: site.id)
+          unit = loose.where("LOWER(name) = LOWER(?)", name).first ||
+            loose.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(name)).select(:facility_id)).first
+          unless unit
+            unit = Facility.create!(name:, parent_id: site.id)
+            count(:facility, unit.id, :created)
+          end
+        end
+        write(slug, :facility, facility_attributes(item).except(:name).merge(id: unit.id, parent_id: site.id), evidence(item, sources))
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).
