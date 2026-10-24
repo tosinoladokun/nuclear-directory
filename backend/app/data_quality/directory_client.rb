@@ -190,7 +190,7 @@ class DataQuality::DirectoryClient
       end
     evidence = [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", confidence:, crawl_run_id: crawl_run&.id } ]
     return write_alias(candidate, verification:, evidence:, by:) if candidate.kind == "organization_alias"
-    return write_news(candidate, verification:, evidence:) if candidate.kind == "news_item"
+    return write_news(candidate, verification:, evidence:, by:) if candidate.kind == "news_item"
 
     result = fact_writer.write(candidate.kind, attributes, evidence:, verification:,
       protect_human_verified: by.nil? || enrichment)
@@ -445,7 +445,7 @@ class DataQuality::DirectoryClient
     # companies and plants match found it's about. One about nothing in the
     # directory isn't written; one whose company or plant was taken off since
     # is refused, item and mentions together, without stopping the batch.
-    def write_news(candidate, verification:, evidence:)
+    def write_news(candidate, verification:, evidence:, by: nil)
       payload = candidate.payload.to_h
       mentions = Array(payload["mentions"])
       if candidate.subject_id.nil? || mentions.empty?
@@ -456,7 +456,8 @@ class DataQuality::DirectoryClient
       result = nil
       begin
         ActiveRecord::Base.transaction(requires_new: true) do
-          result = fact_writer.write(:news_item, attributes, evidence:, verification:)
+          # As any fact: an automated write never overwrites a person's decision.
+          result = fact_writer.write(:news_item, attributes, evidence:, verification:, protect_human_verified: by.nil?)
           raise ActiveRecord::Rollback unless result.ok?
 
           mentions.each { |type, id| Directory::FactWriter.mention_news(news_item_id: result.id, subject_type: type, subject_id: id) }

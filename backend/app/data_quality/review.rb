@@ -87,7 +87,9 @@ module DataQuality::Review
     organization_id facility_id from_organization_id to_organization_id].freeze
   # A link's type is part of which link it is, and a plant's parent site is
   # its place in the hierarchy: changing either means matching again.
-  NOT_EDITABLE = (LINK_ENDS + %w[id slug relationship_type parent_id]).freeze
+  # A news item's about and mentions are what match found it's about (#137):
+  # changed only by matching again, never edited in, like a link's ends.
+  NOT_EDITABLE = (LINK_ENDS + %w[id slug relationship_type parent_id about mentions]).freeze
   # What reasons() calls candidates with no notes.
   NO_REASON = "no reason"
   # The Checks screen's groups of waiting items (#201). Pending facts with no
