@@ -100,6 +100,30 @@ class DataQuality::Plugins::NrcFuelCycleTest < ActiveSupport::TestCase
     assert_equal 2, flags.call, "flagged again after it returned"
   end
 
+  test "a page removed between crawl and extract isn't read while it's unlisted" do
+    crawl
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/fuel_cycle/list.html").read.gsub("urenco-enrichment-fac-nm-lc", "gone"))
+    Source.where(url: Plugin::LIST_URL).update_all(fetched_at: 2.days.ago)
+    crawl
+
+    DataQuality::Pipeline.run("nrc_fuel_cycle", plugin:, only: "extract")
+    assert page.crawl_needs_human?
+    assert_empty page.candidates
+  end
+
+  test "a failed read on return keeps the withdrawn claims waiting" do
+    DataQuality::Pipeline.run("nrc_fuel_cycle", plugin:, only: %w[crawl extract match])
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/fuel_cycle/list.html").read.gsub("urenco-enrichment-fac-nm-lc", "gone"))
+    Source.update_all(fetched_at: 2.days.ago)
+    crawl
+
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/fuel_cycle/list.html").read)
+    stub_request(:get, %r{facility-finder/fc/}).to_return(status: 500, body: "oops")
+    Source.update_all(fetched_at: 2.days.ago)
+    assert_nil crawl.stats["restored"]
+    assert page.candidates.where(review_origin: "withdrawn").exists?
+  end
+
   test "taking over a hand-cited page fetches it afresh and stores only its facts" do
     Source.create!(url: URENCO, source_kind: "web_page", crawl_status: "ok", content_text: "<html>whole page</html>", content_sha256: "old",
       fetched_at: Time.current)
