@@ -23,7 +23,19 @@ class SeedsTest < ActiveSupport::TestCase
     def roles = each_file("roles") { |slug, item| [ item["key"], item["subtype"] ].compact.map { |key| [ slug, key ] } }.uniq.size
     def technologies = each_file("technologies") { |slug, item| [ [ slug, item["key"] ] ] }.uniq.size
     def relationships = each_file("relationships") { |slug, item| [ [ item["type"], slug, slug_of(item["to"]) ] ] }.uniq.size
-    def facilities = (each_file("facilities") { |_, item| [ item["name"] ] } + @plants.map { |plant| plant["name"] }).uniq.size
+    # Each site and each unit once. A unit given with its site ("site:
+    # Indian Point") is its own record under that site, and the site is one
+    # too, even when they share a name (Callaway). A plain name that is one of
+    # those sites or units is the same record (a standalone plant later taken
+    # in as the unit).
+    def facilities
+      key = ->(name) { name.to_s.strip.downcase }
+      items = each_file("facilities") { |_, item| [ item ] }
+      units = items.select { |item| item["site"].present? }.map { |item| [ key.(item["name"]), key.(item["site"]) ] }.uniq
+      sites = units.map(&:last).uniq
+      plain = (items.reject { |item| item["site"].present? }.map { |item| key.(item["name"]) } + @plants.map { |plant| key.(plant["name"]) }).uniq
+      units.size + sites.size + plain.count { |name| !sites.include?(name) && units.none? { |unit, _| unit == name } }
+    end
     def facility_aliases = @plants.sum { |plant| Array(plant["other_names"]).size }
 
     # [verified, pending]: a link stated pending in any file waits.
@@ -80,6 +92,16 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal Role.find_by!(key: "fuel"), Role.find_by!(key: "enrichment").parent
     assert_equal Technology.find_by!(key: "fission"), Technology.find_by!(key: "smr").parent
     assert_nil Technology.find_by!(key: "fusion").parent
+  end
+
+  test "a site named only through site:, and a unit that shares its name, count as two facilities" do
+    expected = Expected.new
+    files = { "ameren" => { "name" => "Ameren", "facilities" => [ { "name" => "Callaway", "site" => "Callaway" } ] },
+      "other" => { "name" => "Other", "facilities" => [ { "name" => "Indian Point 2", "site" => "Indian Point" }, { "name" => "Indian Point 2" } ] } }
+    expected.instance_variable_set(:@files, files)
+    expected.instance_variable_set(:@plants, [ { "name" => "Indian Point" } ])
+
+    assert_equal 4, expected.facilities, "Callaway site and unit; Indian Point and its unit 2, named plainly too"
   end
 
   test "the expected counts are read from the seed files, and aren't empty" do
