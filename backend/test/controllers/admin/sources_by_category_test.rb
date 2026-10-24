@@ -57,7 +57,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     get admin_sources_path(by: "category")
 
     assert_select "details#waste-decommissioning a[href=?][target=_blank]", "https://github.com/tosinoladokun/nuclear-directory/issues/274", "#274"
-    assert_select "details#government-research .text-critical", "Missing · no issue yet"
+    assert_select "details#components .text-critical", "Missing · no issue yet"
     assert_select "details#reactor-developers .nd-cov__src", /GAIN directory\s*leads only/
   end
 
