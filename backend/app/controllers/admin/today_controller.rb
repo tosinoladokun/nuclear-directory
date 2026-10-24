@@ -136,6 +136,11 @@ class Admin::TodayController < Admin::BaseController
       claim = Candidate.find(item.candidate_id)
       key = [ claim.subject_type, claim.subject_id ]
       ActiveRecord::Base.transaction(requires_new: true) do
+        # Every approval locks source, then claim, then record; the group's
+        # are taken in that order (by id) before its record, never after.
+        group = [ item.candidate_id, *copies.fetch(item.candidate_id, []) ]
+        Source.lock.where(id: Candidate.where(id: group).select(:source_id)).order(:id).ids
+        Candidate.lock.where(id: group).order(:id).ids
         directory.lock_fact(type: claim.subject_type, id: claim.subject_id) if claim.subject_id
         first = DataQuality::Recommendations.accept([ item ], by: actor)
         rest = first.sole.ok? ? copies.fetch(item.candidate_id, []) : []
