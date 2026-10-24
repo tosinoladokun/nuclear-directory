@@ -214,7 +214,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         { kind: "organization", payload: { "name" => name, field => value }, quote: quote.strip }
       end
       listing = found["listing"]
-      if listing && EXCHANGES.include?(listing["exchange"]) && listing["ticker"].to_s.match?(/\A[A-Z.]{1,6}\z/) &&
+      if listing && EXCHANGES.include?(listing["exchange"]) && listing["ticker"].to_s.match?(/\A[A-Z0-9][A-Z0-9.\-]{0,7}\z/) &&
           quoted.(listing["ticker"], listing["quote"]) && listing["quote"].to_s.downcase.include?(listing["exchange"].to_s.downcase)
         fields << { kind: "organization", payload: { "name" => name, "exchange" => listing["exchange"], "ticker" => listing["ticker"] },
           quote: listing["quote"].strip }
@@ -339,7 +339,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     def whole_dollars?(amount_text, quote)
       at = quote.downcase.index(amount_text.downcase) or return false
       before, after = quote[0...at], quote[(at + amount_text.length)..].to_s
-      return false if after.match?(/\A[\d.,]|\A\s*(million|billion|thousand|m|bn|b|k)\b/i)
+      # A digit, or a point or comma before one, continues the number; a full stop or comma after it doesn't.
+      return false if after.match?(/\A\d|\A[.,]\d|\A\s*(million|billion|thousand|m|bn|b|k)\b/i)
       return false if before.match?(/[A-Za-z]\z/) || after.match?(/\A\s*(CAD|AUD|NZD|HKD|SGD|EUR|GBP|JPY|CHF|CNY|RMB|KRW|INR|C\$|A\$)\b/i)
 
       true

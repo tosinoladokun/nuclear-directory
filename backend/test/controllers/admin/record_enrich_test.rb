@@ -205,6 +205,17 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_select ".nd-panel a[href='']", 0
   end
 
+  test "its page already saved as a source can be read again; a retry after a failed extraction keeps that request's findings" do
+    Source.create!(url: @company.website, source_kind: "company_pages", crawl_status: "ok")
+    @company.update_columns(enrich_requested_at: 10.minutes.ago, enriched_at: 9.minutes.ago)
+    requested = @company.enrich_requested_at
+    CrawlRun.create!(stage: "extract", source_kind: "company_pages", status: "failed", error: "x", started_at: 8.minutes.ago)
+    assert_enqueued_with(job: DataQuality::RunJob) { post enrich_path }
+    @company.reload
+    assert_in_delta requested, @company.enrich_requested_at, 1, "the same request, resumed"
+    assert_nil @company.enriched_at
+  end
+
   test "a deal reads with the other company and its terms" do
     deal = Candidate.create!(source: @agreed.source, crawl_run: @agreed.crawl_run, kind: "deal_term",
       quote: "Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.",

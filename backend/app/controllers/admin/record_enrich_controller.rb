@@ -32,7 +32,11 @@ class Admin::RecordEnrichController < Admin::BaseController
     elsif @company.website.present? && !usable_website?
       flash[:alert] = "Its website needs to be a full https:// address before its pages can be read. Fix it with Edit first."
     else
-      @company.update_columns(enrich_requested_at: Time.current)
+      # A retry after a read whose extraction failed resumes that request, so
+      # findings already made from its pages stay on this page.
+      failed = @company.enriched_at && CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: @company.enriched_at..)
+        .order(:started_at).first&.failed?
+      @company.update_columns(failed ? { enriched_at: nil } : { enrich_requested_at: Time.current })
       DataQuality::RunJob.perform_later(SOURCE_KIND)
       flash[:notice] = "Reading its pages. What they state comes back here to decide, usually within a few minutes."
     end
@@ -118,7 +122,8 @@ class Admin::RecordEnrichController < Admin::BaseController
     # A whole https address a page can be saved under (no spaces, a host).
     def usable_website?
       url = @company.website.to_s.strip
-      url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && Source.new(url:).tap(&:validate).errors[:url].empty?
+      # The address's form only: its page may be a saved source already.
+      url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && (URI.parse(url).host.present? rescue false)
     end
 
     def load_company
