@@ -28,7 +28,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
   # in the same run must already be known. Records before links, and deal
   # terms after the links and companies they belong to (#397).
   ORDER = %w[facility organization organization_role organization_technology relationship facility_relationship
-    deal_term organization_alias].freeze
+    deal_term organization_alias news_item].freeze
 
   # Payload keys that name another record, and what kind of record each is.
   LINK_ENDS = {
@@ -36,9 +36,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
     "organization_technology" => { "organization" => :organization },
     "relationship" => { "from_organization" => :organization, "to_organization" => :organization },
     "facility_relationship" => { "organization" => :organization, "facility" => :facility },
-    # A funding round on the company itself (link_type "Organization", #396).
+    # A funding round on the company itself (link_type "Organization", #396);
+    # a term under a link names that link's ends instead (DEAL_LINKS).
     "deal_term" => { "organization" => :organization }
   }.freeze
+  # A deal term under a link (#256): the link's kind, found by its ends and verb.
+  DEAL_LINKS = { "Relationship" => "relationship", "FacilityRelationship" => "facility_relationship" }.freeze
+  # Agreements counted as signed power deals: these state their size (#439).
+  COUNTED_AGREEMENTS = %w[ppa supply_agreement tariff_subscription].freeze
   LINK_KEYS = {
     "organization_role" => %w[role],
     "organization_technology" => %w[technology],
@@ -150,8 +155,28 @@ class DataQuality::Stages::Match < DataQuality::Stage
       when "facility" then payload.key?("identify") ? match_enrichment(candidate, payload["identify"]) : match_record(candidate, payload)
       when "organization" then match_record(candidate, payload)
       when *LINK_ENDS.keys then match_link(candidate, payload)
+      when "news_item" then match_news(candidate, payload)
       else review(candidate, "#{candidate.kind} candidates aren't matched automatically yet")
       end
+    end
+
+    # A news item (#137) is about the companies and plants it names: each
+    # found exactly (name, alias or docket) is noted as a mention, and the
+    # claim is attached to the first, so it's decided with that record. One
+    # naming nothing in the directory waits for a person.
+    def match_news(candidate, payload)
+      # A trade-press lead (#127) waits for Data Quality, whatever it names.
+      return review(candidate, DataQuality::Review::LEAD) if DataQuality::Review.lead?(candidate)
+
+      found = Array(payload["about"]).filter_map do |about|
+        type = about["type"] == "facility" ? :facility : :organization
+        hit = resolve(type, about.except("type"), closed: :found)
+        hit.record if hit.is_a?(Found) && EXACT.include?(hit.by) && !hit.record.closed?
+      end.uniq { |record| [ record.type, record.id ] }
+      return review(candidate, "it names no company or plant in the directory") if found.empty?
+
+      candidate.update!(payload: payload.merge("mentions" => found.map { |record| [ record.type, record.id ] }))
+      attach(candidate, found.first, "About #{found.map(&:name).to_sentence}")
     end
 
     def match_record(candidate, payload)
@@ -190,15 +215,23 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # values. (A new link is pending, so nothing public is missing meanwhile;
     # like any proposal, it gets the quote as evidence.)
     def match_link(candidate, payload)
-      # Only a company's own funding rounds so far; a term under a link comes with #256.
-      if candidate.kind == "deal_term" && payload["link_type"] != "Organization"
-        return review(candidate, "a deal term under a link (#{payload['link_type'].inspect}) isn't matched yet (#256)")
+      if candidate.kind == "deal_term" && !(payload["link_type"] == "Organization" || DEAL_LINKS.key?(payload["link_type"]))
+        return review(candidate, "a deal term's link_type must be Organization, Relationship or FacilityRelationship, not #{payload['link_type'].inspect}")
+      end
+      if candidate.kind == "deal_term" && DEAL_LINKS.key?(payload["link_type"])
+        # A rerun must find the same term (unique by link, type and ID), and a
+        # counted offtake needs its size (deal_terms_offtake_check, Database).
+        return review(candidate, "a deal needs an external_id, so reading it again updates the same term") if payload["external_id"].blank?
+        if payload["term_type"] == "offtake" && payload["capacity_mw"].blank? && payload["amount_usd"].blank? &&
+            (payload["agreement"].blank? || COUNTED_AGREEMENTS.include?(payload["agreement"]))
+          return review(candidate, "an offtake states its size (capacity_mw or amount_usd) unless it's a framework, MOU or similar")
+        end
       end
 
       attributes = payload.slice(*LINK_KEYS.fetch(candidate.kind)).symbolize_keys
       closed_end = nil
 
-      LINK_ENDS.fetch(candidate.kind).each do |key, type|
+      link_ends(candidate.kind, payload).each do |key, type|
         unless payload.key?(key)
           return review(candidate, "payload has no #{key}")
         end
@@ -219,8 +252,21 @@ class DataQuality::Stages::Match < DataQuality::Stage
         end
       end
 
-      # A deal term's one end is its link: the company, for a round.
-      attributes[:link_id] = attributes.delete(:organization_id) if candidate.kind == "deal_term"
+      # A deal term's one end is its link: the company, for a round; for a
+      # deal, the open link its ends and verb name (#256), which must exist
+      # first. A term never creates or reopens its link.
+      if candidate.kind == "deal_term"
+        if (link_kind = DEAL_LINKS[payload["link_type"]])
+          ends = attributes.extract!(*link_ends(candidate.kind, payload).keys.map { |key| :"#{key}_id" })
+          link = directory.existing_fact(link_kind, ends.merge(relationship_type: payload["relationship_type"]))
+          return review(candidate, "#{describe_link(payload)} isn't in the directory yet: approve the link first") unless link
+          return review(candidate, "#{link.name.upcase_first} was #{link.decision}, so no term is added to it") if link.closed?
+
+          attributes[:link_id] = link.id
+        else
+          attributes[:link_id] = attributes.delete(:organization_id)
+        end
+      end
 
       # A link a human rejected or unpublished, or one whose company or plant
       # was, isn't written to. The same claim again is confirmed (it stays as
@@ -248,7 +294,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # round to exist), pending until a person approves it.
       # What match resolved wins: a payload never names the record, its company or its id.
       if candidate.kind == "deal_term"
-        values = payload.except(*LINK_ENDS.fetch(candidate.kind).keys, *DataQuality::DirectoryClient::WRITE_SKIPPED).symbolize_keys
+        values = payload.except(*link_ends(candidate.kind, payload).keys, "relationship_type", *DataQuality::DirectoryClient::WRITE_SKIPPED).symbolize_keys
         return write(candidate, values.merge(attributes))
       end
 
@@ -261,18 +307,36 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # matched again, as new. Nothing is approved: it goes on to verify and
     # a person like any claim. Never a dropped or extracted review item, a
     # claim on a record already, or one with an end still in question.
+    # The ends a claim names: a deal term under a link names that link's.
+    def link_ends(kind, payload)
+      link_kind = (DEAL_LINKS[payload["link_type"]] if kind == "deal_term")
+      LINK_ENDS.fetch(link_kind || kind)
+    end
+
+    def describe_link(payload)
+      ends = payload.values_at("from_organization", "organization", "to_organization", "facility").compact.map { |named| label(named) }
+      "The link #{ends.join(" #{payload['relationship_type']} ")}"
+    end
+
     def rematch_settled_ends
       ends = LINK_ENDS.values.flat_map(&:keys).uniq.join("|")
       # Only the two missing-match holds; others (a closed site, say) stay as they are.
-      question = /\A(?:(?:#{ends}): no exact match for |(?:#{ends}) ".*" isn't in the directory yet)/
+      # And a deal waiting for its link (#256), once that link is in.
+      question = /\A(?:(?:#{ends}): no exact match for |(?:#{ends}) ".*" isn't in the directory yet|The link .* approve the link first)/
       waiting = candidates.where(status: "needs_review", subject_id: nil, review_origin: nil, kind: LINK_ENDS.keys)
       waiting.find_each do |candidate|
         next unless candidate.notes.to_s.match?(question)
 
         payload = candidate.payload.to_h
-        settled = LINK_ENDS.fetch(candidate.kind).all? do |key, type|
+        ids = {}
+        settled = link_ends(candidate.kind, payload).all? do |key, type|
           found = resolve(type, payload[key], closed: :found) if payload[key].is_a?(Hash)
+          ids[:"#{key}_id"] = found.record.id if found.is_a?(Found)
           found.is_a?(Found) && EXACT.include?(found.by) && !found.record.closed?
+        end
+        if settled && candidate.kind == "deal_term" && (link_kind = DEAL_LINKS[payload["link_type"]])
+          link = directory.existing_fact(link_kind, ids.merge(relationship_type: payload["relationship_type"]))
+          settled = link && !link.closed?
         end
         next unless settled
 
@@ -295,10 +359,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     # This run's note, and for a claim matched again, the note it had.
+    # A person's Same as… (#391) stays in the note through any later run.
     def noted(candidate, note)
+      settled = candidate.notes.to_s[SETTLED]&.strip
+      note = "#{note}. #{settled}" if settled && !note.include?(settled)
       was = @rematched&.dig(candidate.id) or return note
       "#{note}. Matched again: its company or plant is in the directory now. Was: #{was}"
     end
+    SETTLED = /[^.]* settled ".*?" as [^.]*/
 
     # A link already citing another page of the same kind of source (another
     # USAspending recipient's awards on one company's link), which this claim

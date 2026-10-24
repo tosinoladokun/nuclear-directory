@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_010100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -52,7 +52,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["subject_type", "subject_id"], name: "index_candidates_on_subject"
     t.check_constraint "ai_recommendation::text = ANY (ARRAY['recommend_publish'::character varying::text, 'needs_review'::character varying::text])", name: "candidates_ai_recommendation_check"
     t.check_constraint "dq_recommendation::text = ANY (ARRAY['approve'::character varying, 'reject'::character varying]::text[])", name: "candidates_dq_recommendation_check"
-    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text])", name: "candidates_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text, 'news_item'::character varying::text])", name: "candidates_kind_check"
     t.check_constraint "status::text = ANY (ARRAY['new'::character varying::text, 'matched'::character varying::text, 'merged'::character varying::text, 'rejected'::character varying::text, 'needs_review'::character varying::text, 'confirmed'::character varying::text])", name: "candidates_status_check"
   end
 
@@ -211,7 +211,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "facilities_confidence_check"
     t.check_constraint "facility_type::text = ANY (ARRAY['power_reactor'::character varying::text, 'research_reactor'::character varying::text, 'fuel_facility'::character varying::text, 'enrichment'::character varying::text, 'fusion_facility'::character varying::text, 'other'::character varying::text, 'uranium_mine'::character varying::text, 'mill'::character varying::text])", name: "facilities_facility_type_check"
     t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "facilities_short_name_check"
-    t.check_constraint "status::text = ANY (ARRAY['operating'::character varying, 'under_construction'::character varying, 'planned'::character varying, 'shut_down'::character varying, 'decommissioning'::character varying, 'not_operating'::character varying]::text[])", name: "facilities_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['operating'::character varying::text, 'under_construction'::character varying::text, 'planned'::character varying::text, 'shut_down'::character varying::text, 'decommissioning'::character varying::text, 'not_operating'::character varying::text])", name: "facilities_status_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "facilities_verification_status_check"
   end
 
@@ -259,6 +259,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["sluggable_type", "sluggable_id"], name: "index_former_slugs_on_sluggable"
   end
 
+  create_table "licensing_stages", force: :cascade do |t|
+    t.bigint "facility_id"
+    t.bigint "organization_id"
+    t.string "design_name"
+    t.string "stage", null: false
+    t.string "nrc_docket", null: false
+    t.date "effective_on", null: false
+    t.date "expires_on"
+    t.decimal "confidence", precision: 3, scale: 2
+    t.string "verification_status", default: "pending", null: false
+    t.datetime "verified_at"
+    t.string "verified_by"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["facility_id", "nrc_docket", "stage"], name: "index_licensing_stages_on_facility", unique: true
+    t.index ["organization_id", "design_name", "stage"], name: "index_licensing_stages_on_organization", unique: true
+    t.index ["verification_status"], name: "index_licensing_stages_on_verification_status"
+    t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "licensing_stages_confidence_check"
+    t.check_constraint "expires_on IS NULL OR expires_on >= effective_on", name: "licensing_stages_dates_check"
+    t.check_constraint "stage::text <> 'design_approval'::text OR organization_id IS NOT NULL AND design_name IS NOT NULL", name: "licensing_stages_design_check"
+    t.check_constraint "design_name IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_design_name_check"
+    t.check_constraint "organization_id IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_organization_stage_check"
+    t.check_constraint "(facility_id IS NULL) <> (organization_id IS NULL)", name: "licensing_stages_owner_check"
+    t.check_constraint "stage::text = ANY (ARRAY['pre_application'::character varying::text, 'application_accepted'::character varying::text, 'construction_permit'::character varying::text, 'combined_licence'::character varying::text, 'operating_licence'::character varying::text, 'restart_review'::character varying::text, 'restart_approved'::character varying::text, 'design_approval'::character varying::text, 'withdrawn'::character varying::text, 'denied'::character varying::text])", name: "licensing_stages_stage_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "licensing_stages_verification_status_check"
+  end
+
   create_table "news_items", force: :cascade do |t|
     t.string "url", null: false
     t.string "title", null: false
@@ -276,7 +303,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["verification_status"], name: "index_news_items_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "news_items_confidence_check"
     t.check_constraint "url::text ~ '^https?://'::text", name: "news_items_url_check"
-    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "news_items_verification_status_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "news_items_verification_status_check"
   end
 
   create_table "news_mentions", force: :cascade do |t|
@@ -288,7 +315,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["news_item_id", "subject_type", "subject_id"], name: "index_news_mentions_uniqueness", unique: true
     t.index ["news_item_id"], name: "index_news_mentions_on_news_item_id"
     t.index ["subject_type", "subject_id"], name: "index_news_mentions_on_subject_type_and_subject_id"
-    t.check_constraint "subject_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])", name: "news_mentions_subject_type_check"
+    t.check_constraint "subject_type::text = ANY (ARRAY['Organization'::character varying::text, 'Facility'::character varying::text])", name: "news_mentions_subject_type_check"
   end
 
   create_table "organization_aliases", force: :cascade do |t|
@@ -656,7 +683,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.datetime "updated_at", null: false
     t.index ["on", "step"], name: "index_today_steps_on_on_and_step", unique: true
     t.check_constraint "done_by::text ~~ 'human:%'::text", name: "today_steps_done_by_check"
-    t.check_constraint "step::text = ANY (ARRAY['crawl'::character varying, 'list'::character varying, 'review'::character varying, 'left'::character varying]::text[])", name: "today_steps_step_check"
+    t.check_constraint "step::text = ANY (ARRAY['crawl'::character varying::text, 'list'::character varying::text, 'review'::character varying::text, 'left'::character varying::text])", name: "today_steps_step_check"
   end
 
   create_table "users", force: :cascade do |t|
@@ -694,6 +721,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   add_foreign_key "facility_aliases", "facilities"
   add_foreign_key "facility_relationships", "facilities"
   add_foreign_key "facility_relationships", "organizations"
+  add_foreign_key "licensing_stages", "facilities"
+  add_foreign_key "licensing_stages", "organizations"
   add_foreign_key "news_mentions", "news_items", on_delete: :cascade
   add_foreign_key "organization_aliases", "organizations"
   add_foreign_key "organization_roles", "organizations"

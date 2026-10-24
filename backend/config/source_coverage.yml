@@ -35,9 +35,9 @@ categories:
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
       - { name: SBIR awards, status: planned, issue: 125 }
       - { name: GAIN directory, status: planned, issue: 257, leads: true }
-      - { name: NRC construction-permit notices in the Federal Register, status: planned, issue: 126, note: project developers }
+      - { name: NRC notices in the Federal Register (news), kind: federal_register_nrc, status: built, issue: 126, note: project developers }
       - { name: SEC filings, status: planned, issue: 129, note: project developers }
-      - { name: Company newsrooms, status: planned, issue: 128 }
+      - { name: Company newsrooms (news), kind: company_newsrooms, status: built, issue: 128 }
   - key: fuel
     name: Fuel and materials
     sources:
@@ -77,7 +77,8 @@ categories:
   - key: investors
     name: Investors
     sources:
-      - { name: "SEC Form D, 8-K and 10-K", status: planned, issue: 129 }
+      - { name: SEC Form D rounds, kind: sec_form_d, status: built, issue: 129 }
+      - { name: "SEC 8-K and 10-K", status: planned, issue: 129 }
       - { name: Company newsrooms (funding rounds), status: planned, issue: 128 }
   - key: government-research
     name: Government and research
@@ -97,4 +98,5 @@ general:
   - { name: Company newsrooms, status: hand, group: company-sites, issue: 128, crawler: true }
   - { name: Companies' own pages (Enrich), kind: company_pages, status: built, issue: 479, note: "read on request, one company at a time" }
   - { name: Federal Register, status: planned, issue: 126 }
+  - { name: Trade press feeds (WNN and ANS), kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
   - { name: Daily lead researcher, status: planned, issue: 278, note: "leads for Data Quality, not facts" }

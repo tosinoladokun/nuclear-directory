@@ -11,6 +11,7 @@
     <div class="nd-wait__what">
       <p class="type-kicker text-ink-muted">Pending <%= type_label(fact.type).downcase_first %><%= " · #{source_host(first.url)}" if first %></p>
       <p class="type-subject"><%= link_to fact_heading(fact), admin_fact_path(type: fact.type, id: fact.id, from: "checks", back: request.fullpath), class: "nd-link" %></p>
+      <p class="type-small m-0 nd-next-step"><strong>Decide:</strong> <%= fact.evidence.any? ? "added without a check; approve or reject it" : "it has no source yet, so it can't be published. Open it to add one, or reject it" %></p>
       <details>
         <summary class="type-small">Details</summary>
         <div class="nd-wait__more">
@@ -36,10 +37,11 @@
     </div>
     <div class="nd-wait__actions type-ui">
       <% if fact.evidence.any? %>
-        <button type="submit" class="nd-btn nd-btn--primary" name="id" value="<%= fact.id %>">Approve</button>
+        <button type="submit" class="nd-btn nd-btn--outline" name="id" value="<%= fact.id %>">Approve</button>
       <% end %>
       <button type="submit" class="nd-btn nd-btn--outline" name="id" value="<%= fact.id %>"
         formaction="<%= reject_admin_pending_facts_path(category: filters[:category]) %>">Reject</button>
+      <%= link_to "Open", (%w[Organization Facility].include?(fact.type) ? admin_record_path(type: fact.type, id: fact.id, back: request.fullpath) : admin_fact_path(type: fact.type, id: fact.id, from: "checks", back: request.fullpath)), class: "nd-btn nd-btn--outline" %>
     </div>
   <% end %>
 </li>

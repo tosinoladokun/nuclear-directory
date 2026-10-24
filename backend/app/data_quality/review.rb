@@ -102,7 +102,9 @@ module DataQuality::Review
   IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology],
     # A deal term is the same one only by its link (and the company or link it
     # belongs to), type and external ID (DATA.md): an edit never moves a round.
-    "deal_term" => %w[link_type link_id term_type external_id] }.freeze
+    "deal_term" => %w[link_type link_id term_type external_id],
+    # A news item's lead mark (#127) is what makes it a lead: the edit form can't change it.
+    "news_item" => %w[lead] }.freeze
   # What a claim of this kind can't change when it's edited before approval:
   # its link's ends and type, and what identifies it (a role's role).
   def self.read_only_keys(kind) = NOT_EDITABLE + IDENTIFYING.fetch(kind.to_s, [])
@@ -114,6 +116,11 @@ module DataQuality::Review
   BY_A_PERSON = "a deal term is decided by a person".freeze
   # The holds a person's Accept of Data Quality's reviewed list lifts.
   REVIEWED_HOLDS = [ FIRST_BATCH, BY_A_PERSON ].freeze
+  # A trade-press item (#127): a pointer for Data Quality to the primary
+  # source, never a claim to approve as it is. Nothing lifts it.
+  LEAD = "it's a lead: Data Quality finds the primary source".freeze
+
+  def self.lead?(candidate) = candidate.payload.is_a?(Hash) && candidate.payload["lead"] == true
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
@@ -184,6 +191,7 @@ module DataQuality::Review
     #   person decided by its name and change it
     # nil when it's safe. decided: whether a person decided its record, when already known.
     def held_reason(candidate, directory: DataQuality::DirectoryClient.new, record: :lookup, firsts: first_batches, decided: nil)
+      return LEAD if lead?(candidate)
       return "it isn't attached to a record yet" unless candidate.subject_id
 
       if decided.nil?
@@ -266,8 +274,9 @@ module DataQuality::Review
 
     # How many candidates wait in each Checks group, plus "all":
     # { "all" => 9, "changed" => 2, … }. Pending facts aren't included.
+    # Leads (#127) are Data Quality's work, not the admin's: listed, never counted.
     def check_counts(source_kind: nil)
-      CATEGORIES.index_with { |category| category_scope(category, source_kind:).count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
+      CATEGORIES.index_with { |category| category_scope(category, source_kind:).not_leads.count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
     end
 
     # Kinds of question in a queue, most common first, quoted names blanked
@@ -319,6 +328,8 @@ module DataQuality::Review
     def edit_and_approve(candidate_id, attributes:, by:, reason: nil, directory: DataQuality::DirectoryClient.new)
       human!(by)
       candidate = Candidate.find_by(id: candidate_id) or return gone(candidate_id)
+      return Result.new(candidate_id:, ref: nil, errors: [ LEAD ]) if lead?(candidate)
+
       attributes = attributes.to_h.stringify_keys
       # A field that can't be edited here may come back unchanged (the form
       # shows it); only a changed one is refused.
@@ -337,6 +348,105 @@ module DataQuality::Review
         raise ActiveRecord::Rollback unless result.ok? # keep the original values if publishing failed
       end
       result
+    end
+
+    # The company ends a waiting claim leaves as a question (#391): link ends
+    # with no exact match, or a company claim with only similar names.
+    # Returns [[end key or nil for the claim's own company, the name it gives]].
+    def open_company_ends(candidate)
+      return [] unless candidate.status.to_s == "needs_review" && candidate.subject_id.nil?
+
+      if candidate.kind == "organization"
+        return candidate.notes.to_s.include?("no exact match for") ? [ [ nil, candidate.payload["name"].to_s ] ] : []
+      end
+      ends = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {}).select { |_, type| type == :organization }.keys
+      ends.filter_map do |key|
+        # A malformed end (a string, not an object) is left for Reject, not a crash.
+        named = candidate.payload[key]
+        next unless named.is_a?(Hash)
+
+        name = named["name"].to_s
+        [ key, name ] if name.present? && candidate.notes.to_s.match?(/\A#{Regexp.escape(key)}(: no exact match for| ".*" isn't in the directory yet)/)
+      end
+    end
+
+    # Settles one company end of a waiting claim as a person's decision
+    # (#391): choice "same" (record_id is that company), "new" (a company
+    # by the name it gives, not public yet) or "subsidiary" (that new
+    # company, plus "subsidiary of" record_id, not public yet). The claim
+    # then goes back to match and verify for its source (queued now), never
+    # approved here. Returns a Result.
+    def settle_company(candidate_id, end_key:, choice:, by:, record_id: nil, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      fail_with = ->(why) { Result.new(candidate_id:, ref: nil, errors: [ why ]) }
+      result = nil
+      # Matched and verified again by its source's plug-in (Research's too).
+      source_kind = Candidate.joins(:source).where(id: candidate_id).pick("sources.source_kind")
+      Candidate.transaction do
+        candidate = Candidate.lock.find_by(id: candidate_id) or next result = fail_with.("it no longer exists")
+        name = open_company_ends(candidate).to_h[end_key.presence] or next result = fail_with.("its company was settled already")
+        other = (directory.fact(type: "Organization", id: record_id) if record_id.present?)
+        if %w[same subsidiary].include?(choice) && !(other && %w[verified pending].include?(other.verification_status))
+          next result = fail_with.("pick the company")
+        end
+
+        # The claim's name becomes another name of X (on approval); never one
+        # that's already another company's name or other name (DQ's rule).
+        if choice == "same" && (owner = directory.organization(name:)) && owner.id != other.id
+          next result = fail_with.("“#{name}” is already #{owner.name}'s name or another name; pick #{owner.name}, or ask Data Quality")
+        end
+
+        company = if choice == "same" then other
+        elsif %w[new subsidiary].include?(choice)
+          made = directory.add_fact(:organization, { name: }, source_id: candidate.source_id, quote: candidate.quote, by:, reason: ADDED_REASON)
+          unless made.success?
+            taken = made.errors.join.match?(/already been taken/)
+            next result = fail_with.(taken ? "a company named #{name} is in the directory already; pick it with Same as" : made.errors.to_sentence)
+          end
+          unless made.created
+            # It found one by that name (its evidence was added): undone.
+            result = fail_with.("a company named #{name} is in the directory already; pick it with Same as")
+            raise ActiveRecord::Rollback
+          end
+
+          if choice == "subsidiary"
+            link = directory.add_fact(:relationship, { from_organization_id: made.ref.id, to_organization_id: other.id, relationship_type: "subsidiary_of" },
+              source_id: candidate.source_id, quote: candidate.quote, by:, reason: ADDED_REASON)
+            unless link.success?
+              result = fail_with.(link.errors.to_sentence)
+              raise ActiveRecord::Rollback
+            end
+          end
+          directory.fact(type: "Organization", id: made.ref.id)
+        else next result = fail_with.("choose same as, new company or subsidiary")
+        end
+
+        what = { "same" => "the same as #{company.name}", "new" => "a new company", "subsidiary" => "a new company, a subsidiary of #{other&.name}" }.fetch(choice)
+        note = "#{by.delete_prefix('human:')} settled #{name.inspect} as #{what}"
+        if end_key.blank?
+          # The claim's own company: attached to it, as match would.
+          candidate.update!(status: "matched", subject_type: "Organization", subject_id: company.id, proposed_subject: false,
+            notes: "#{note}. Was: #{candidate.notes}", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        else
+          # A link end: named exactly as the company now, its own name kept
+          # as another name, and matched again.
+          payload = candidate.payload.deep_dup
+          payload[end_key] = payload[end_key].merge("name" => company.name, "aliases" => [ *payload[end_key]["aliases"], (name unless name.casecmp?(company.name)) ].compact.uniq)
+          candidate.update!(status: "new", payload:, notes: "#{note}. Was: #{candidate.notes}", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        end
+        result = Result.new(candidate_id:, ref: company.ref, errors: [])
+      end
+      DataQuality::RunJob.perform_later(source_kind, only: %w[match verify]) if result&.ok?
+      result
+    end
+
+    # Of these candidates, the ones that only restate a fact already on the
+    # site as decided: what Close (confirm_identical) would close. A dry run,
+    # so the label and the action agree. Returns a Set of ids.
+    def restating_ids(candidate_ids, by:, directory: DataQuality::DirectoryClient.new)
+      return Set.new if candidate_ids.empty?
+
+      confirm_identical(candidate_ids, by:, dry_run: true, directory:).select(&:ok?).to_set(&:candidate_id)
     end
 
     # Closes open candidates whose source just restates a fact a person
@@ -397,6 +507,61 @@ module DataQuality::Review
           Result.new(candidate_id: candidate.id, ref: nil, errors: [])
         end
       end
+    end
+
+    # Undo for Today's Reject (#373): only a Reject, which changes nothing but
+    # the claims (notes are kept, so nothing is lost), and only while they're
+    # still as that Reject left them. A Reject that also retired the record
+    # its claims proposed has no Undo, and neither has an Accept: it may have
+    # published or changed a record, so it's taken back on the record (Edit,
+    # Take off), never by a blind reversal.
+    #   before = Review.undo_state(id)              # before the decision
+    #   state = Review.undoable(before, by:)        # after it; nil: no Undo
+    #   Review.undo_all([ state ], by:)             # all or none
+    def undo_state(candidate_id)
+      candidate = Candidate.find_by(id: candidate_id) or return
+      { "id" => candidate.id, "status" => candidate.status }
+    end
+
+    def undoable(state, by:, directory: DataQuality::DirectoryClient.new)
+      candidate = (Candidate.find_by(id: state["id"]) if state) or return
+      return unless candidate.status_rejected? && candidate.reviewed_by == by
+      # The Reject retired the record it proposed (or another claim's): that stays.
+      return if candidate.subject_id && directory.fact(type: candidate.subject_type, id: candidate.subject_id)&.closed?
+
+      state.merge("stamp" => undo_stamp(candidate))
+    end
+
+    # Several at once (the same fact from several pages): every claim is
+    # locked and checked first, then all are reopened, or none.
+    def undo_all(states, by:, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      result = nil
+      Candidate.transaction do
+        candidates = Candidate.where(id: states.map { |state| state["id"] }).order(:id).lock.index_by(&:id)
+        # Their records, locked after the claims as a decision locks them, and
+        # still open: one closed since (another claim's Reject retired it) can't take a claim back.
+        candidates.values.select(&:subject_id).map { |c| [ c.subject_type, c.subject_id ] }.uniq.sort.each { |type, id| directory.lock_fact(type:, id:) }
+        closed = candidates.values.find { |c| c.subject_id && directory.fact(type: c.subject_type, id: c.subject_id)&.closed? }
+        if closed
+          result = Result.new(candidate_id: closed.id, ref: nil, errors: [ "the record it was about was decided since, so it can't be undone here" ])
+          next
+        end
+        changed = states.reject { |state| (candidate = candidates[state["id"]]) && undo_stamp(candidate) == state["stamp"] }
+        if changed.any?
+          result = Result.new(candidate_id: changed.first["id"], ref: nil, errors: [ "it changed since, so it can't be undone here" ])
+          next
+        end
+
+        states.each { |state| candidates.fetch(state["id"]).update!(status: state["status"], reviewed_by: nil, reviewed_at: nil) }
+        result = Result.new(candidate_id: states.first["id"], ref: nil, errors: [])
+      end
+      result
+    # Undo locks claims before records, as a decision does; a merge locks
+    # records first. If the two meet, Postgres aborts one: the whole Undo
+    # rolled back, so it says to try again instead of an error page.
+    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
+      Result.new(candidate_id: states.first&.dig("id"), ref: nil, errors: [ BUSY ])
     end
 
     # Rejects candidates. A record match created only for one of them (a
@@ -766,6 +931,7 @@ module DataQuality::Review
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
+          next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
           if only_recommended && !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end
@@ -808,8 +974,9 @@ module DataQuality::Review
           result = directory.write_fact(candidate, confidence:, crawl_run: run, by:, reason:, edited:)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: result.errors) unless result.success?
 
-          candidate.update!(status: "merged", subject_type: result.ref.type, subject_id: result.ref.id,
-            reviewed_by: by, reviewed_at: Time.current)
+          # A news item stays attached to the company or plant it's about (#137): its page is where it shows.
+          attached = candidate.kind == "news_item" ? {} : { subject_type: result.ref.type, subject_id: result.ref.id }
+          candidate.update!(status: "merged", **attached, reviewed_by: by, reviewed_at: Time.current)
           fill_site(candidate, result.ref.id, run, directory) if candidate.kind_facility?
           Result.new(candidate_id: candidate.id, ref: result.ref, errors: [])
         end
@@ -930,6 +1097,11 @@ module DataQuality::Review
 
         scope.where("candidates.notes ILIKE ANY (ARRAY[?])", reason_patterns(reason))
       end
+
+      # What Undo checks is unchanged: the claim as that Reject left it.
+      # A merge repoints claims with update_all (no updated_at), so the record and proposal flag are in it too.
+      def undo_stamp(candidate) = [ candidate.status, candidate.reviewed_by, candidate.reviewed_at&.to_f, candidate.updated_at.to_f,
+        candidate.subject_type, candidate.subject_id, candidate.proposed_subject ].join("|")
 
       def open_record?(fact) = %w[verified pending].include?(fact.verification_status)
 

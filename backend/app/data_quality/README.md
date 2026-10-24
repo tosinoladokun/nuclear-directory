@@ -356,6 +356,17 @@ A crawler can propose a deal term: today, a company's own funding round from a F
   apply to deal terms: a Form D/A on its own filing page replaces its original's values, once a person
   approves it.
 
+## SEC Form D rounds (#129)
+
+`plugins/sec_form_d.rb` reads the filing list (data.sec.gov submissions API) of each company the directory
+has an SEC CIK for, at most once a day, on a `sec_submissions` index source that's never extracted. Each
+Form D or D/A not stored yet is fetched once and stored as one line of its offering fields (form, dates,
+accession, issuer CIK and name, industry group, securities, amounts offered and sold, what it amends,
+business combination, clarification). Never the people it names and never the raw XML. Each filing gives one
+`deal_term` funding round on the company, known by its first filing's accession number, so a D/A lands on the
+same round; only a round's latest stored filing is proposed. Nothing sold proposes nothing; a business
+combination or a clarification note is held for a person. No model is asked; a person approves every round.
+
 ## NRC uranium recovery (#275)
 
 `plugins/nrc_uranium_recovery.rb` reads NRC's "Locations of Uranium Recovery Facilities" once a day, and
@@ -365,6 +376,32 @@ role: a licensee row doesn't say the company runs the site or what it does. A ro
 read is held for a person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
+## Company newsrooms (#128)
+
+`plugins/company_newsrooms.rb` reads each company's own news feed (RSS or Atom) in its `FEEDS` list once a
+day. A company's release is the primary source for its own announcement, so each item published in the last
+60 days becomes a `news_item` claim (#137) about that company, quoting the item's title as the feed gives it.
+No model is asked. Every item waits for a person's approval and shows in "Latest" only after it. Only feeds a
+company publishes itself, of its news or releases, that answer our bot are listed: a blocked feed is recorded
+and skipped, and a page that isn't a feed goes to a person. Feeds drop old items as new ones arrive, so an
+item leaving the feed flags nothing.
+
+## NRC notices in the Federal Register (#126)
+
+`plugins/federal_register_nrc.rb` asks the Federal Register API once a day for the NRC's notices of the last 60
+days (a `federal_register_index` source, never extracted). Each notice whose title names its subject the NRC's
+way ("<licensee>; <plant>; <action>") is stored once as its own source, at its Federal Register page, and becomes
+a `news_item` claim citing that page, about what its title names. Notices are told apart by document number; a
+weekly repeat (its abstract says so) isn't stored again. Forms, biweekly lists and titles naming the
+Commissioners are left out. Only news: no fact is proposed from a notice. Every item waits for a person.
+
+## Trade press leads (#127)
+
+`plugins/trade_press.rb` reads World Nuclear News and ANS Nuclear Newswire once a day (last 14 days). Each item
+is a `news_item` claim with `lead: true`: held for Data Quality (`Review::LEAD`, shown under "Not yours yet"),
+refused by every approval path, and left out of the admin's counts (`Candidate.not_leads`). Data Quality turns
+a lead into a claim from the primary source or rejects it. **A claim made from a lead must not copy
+`lead: true`**, or it stays held like the lead.
 ## NRC reactor vendors (#388)
 
 `plugins/nrc_reactor_vendors.rb` reads each operating unit's NRC page that the reactor list links (from

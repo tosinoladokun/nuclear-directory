@@ -19,10 +19,12 @@ module AdminHelper
   SOURCE_KIND_LABELS = {
     "nrc_reactor_list" => "NRC", "nrc_power_status" => "NRC", "eia_generators" => "EIA", "eia_860m_index" => "EIA", "eia_plants" => "EIA", "eia_860_index" => "EIA",
     "usaspending_doe_awards" => "USAspending", "usaspending_api" => "USAspending", "nrc_decommissioning" => "NRC", "doe_isotope_sites" => "DOE", "nrc_uranium_recovery" => "NRC",
+    "sec_form_d" => "SEC", "sec_submissions" => "SEC",
     "nrc_reactor_vendors" => "NRC",
     "doe_programs" => "DOE",
     "nrc_research_reactors" => "NRC", "nrc_research_reactors_index" => "NRC",
     "nrc_fuel_cycle" => "NRC", "nrc_fuel_cycle_index" => "NRC",
+    "company_newsrooms" => "Newsroom", "federal_register_nrc" => "Federal Register", "federal_register_index" => "Federal Register", "trade_press" => "Trade press",
     "web_page" => "Research"
   }.freeze
 
@@ -150,6 +152,41 @@ module AdminHelper
     url = "https://www.google.com/finance/quote/#{ERB::Util.url_encode(ticker)}:#{GOOGLE_FINANCE_EXCHANGES.fetch(exchange, exchange)}"
     safe_join([ "#{exchange}: #{ticker} ", link_to(url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener") { safe_join([ "Google Finance ", icon("arrow-square-out", size: 12) ]) } ])
   end
+
+  # Checks' groups (Design's spec on #373), in order: what has a
+  # recommendation, what the admin decides, what isn't theirs yet.
+  CHECK_GROUPS = { "ready" => "Ready for you", "decide" => "You decide", "not_yours" => "Not yours yet" }.freeze
+  NextStep = Data.define(:group, :verb, :why)
+
+  # What to do with a waiting claim, as one line: its group, the verb (bold
+  # on the page, and the black button's) and why. restating: it only
+  # restates the site (Review.restating_ids). Joy and Aminah agree only
+  # when both say accept; Joy's "not sure" never counts as a reject (PM).
+  def check_next_step(item, restating: false)
+    joy, aminah = t("admin.reviewers.checker"), t("admin.reviewers.reviewer")
+    held = item.held unless item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH
+    return NextStep.new(group: "ready", verb: "Close", why: "already on the site") if restating
+    # A company still in question is the admin's to settle (#391), whatever else holds it.
+    if (open = DataQuality::Review.open_company_ends(item).first)
+      return NextStep.new(group: "decide", verb: "Decide", why: "which company is “#{open.last}”? Pick it with Same as…")
+    end
+    return NextStep.new(group: "not_yours", verb: "Wait", why: held == DataQuality::Review::FIRST_BATCH ? "#{aminah} hasn't checked it yet" : held) if held
+
+    # A claim sent back to review keeps its old verdict field; review wins (as in Today).
+    joy_accepts = item.ai_recommendation == "recommend_publish" && item.status.to_s != "needs_review"
+    why = case [ joy_accepts, item.dq_recommendation ]
+    in [ true, "approve" ] then return NextStep.new(group: "ready", verb: "Approve", why: "#{joy} and #{aminah} agree")
+    in [ true, "reject" ] then "#{joy} accepts, #{aminah} rejects"
+    in [ false, "approve" ] then "#{aminah} accepts, #{joy} isn't sure"
+    in [ false, "reject" ] then "#{aminah} rejects, #{joy} isn't sure"
+    in [ true, _ ] then "only #{joy} checked"
+    else [ "#{joy} isn't sure", (item.notes if item.notes.present? && item.notes.length <= 80) ].compact.join(": ")
+    end
+    NextStep.new(group: "decide", verb: "Decide", why:)
+  end
+
+  # A claim's number as the admin sees it ("#1234"), so "do 1234" is easy to find (Tosin, 21 Oct).
+  def claim_number(*ids) = tag.span(ids.map { |id| "##{id}" }.join(", "), class: "nd-claim-no type-data nd-num")
 
   # A source's crawl status in one wording, wherever it's shown.
   def crawl_status_label(status) = CRAWL_STATUS_LABELS.fetch(status.to_s, status.to_s.humanize)

@@ -70,13 +70,16 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     assert_equal issuer.id, DealTerm.find(c.reload.subject_id).link_id
   end
 
-  test "a term under a link waits for #256" do
+  test "a term under a link must name the link's ends; an unknown link type waits" do
     company
     c = claim(round(link_type: "Relationship"))
-    run_stage("match")
-
+    run_stage("match", round(link_type: "Relationship"))
     assert c.reload.status_needs_review?
-    assert_match "isn't matched yet (#256)", c.notes
+    assert_match "payload has no from_organization", c.notes
+
+    odd = claim(round(link_type: "Facility"))
+    run_stage("match", round(link_type: "Facility"))
+    assert_match "link_type must be Organization, Relationship or FacilityRelationship", odd.reload.notes
   end
 
   test "it reads plainly for the verifier and the queue" do
@@ -156,6 +159,101 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     result = DataQuality::Review.approve_fact(type: "DealTerm", id: term.id, by: BY, attributes: { link_id: other.id })
     assert_not result.ok?
     assert_equal issuer.id, term.reload.link_id
+  end
+
+  test "a deal between two companies (#256) attaches to their link, proposed pending with its terms; no link yet waits; the same deal again is the same row" do
+    buyer = Directory::FactWriter.write(:organization, { name: "Big Data Co" }, verification: { status: "verified", by: BY }) && Organization.find_by!(name: "Big Data Co")
+    seller = company(name: "Small Reactor Co", sec_cik: nil)
+    deal = { "link_type" => "Relationship", "from_organization" => { "name" => "Small Reactor Co" }, "to_organization" => { "name" => "Big Data Co" },
+      "relationship_type" => "offtake_with", "term_type" => "offtake", "external_id" => "release-2026-10-01", "capacity_mw" => "500",
+      "agreement" => "ppa", "status" => "signed", "signed_on" => "2026-10-01" }
+
+    waiting = claim(deal)
+    run_stage("match", deal)
+    assert waiting.reload.status_needs_review?
+    assert_match "isn't in the directory yet: approve the link first", waiting.notes
+
+    Directory::FactWriter.write(:relationship, { from_organization_id: seller.id, to_organization_id: buyer.id, relationship_type: "offtake_with" },
+      verification: { status: "verified", by: BY })
+    link = Relationship.find_by!(from_organization_id: seller.id, to_organization_id: buyer.id)
+    first = claim(deal)
+    run_stage("match", deal)
+    term = DealTerm.find(first.reload.subject_id)
+    assert_equal [ "Relationship", link.id, "offtake", "ppa", "signed", 500 ], [ term.link_type, term.link_id, term.term_type, term.agreement, term.status, term.capacity_mw.to_i ]
+    assert term.pending?
+
+    again = claim(deal)
+    run_stage("match", deal)
+    assert_equal term.id, again.reload.subject_id
+    assert_equal 1, DealTerm.count
+
+    second_deal = deal.merge("external_id" => "release-2026-10-02")
+    second = claim(second_deal)
+    run_stage("match", second_deal)
+    result = DataQuality::Review.approve([ second.reload.id ], by: BY).sole
+    assert result.ok?, result.errors.inspect
+    assert DealTerm.find(second.reload.subject_id).verified?, "approving a deal on a link writes no relationship_type"
+
+    # A changed size on a deal a person decided is a conflict, not a quiet update.
+    bigger = claim(second_deal.merge("capacity_mw" => "800"))
+    run_stage("match", second_deal.merge("capacity_mw" => "800"))
+    directory = DataQuality::DirectoryClient.new
+    differences = DataQuality::Differences.with_human_verified(bigger.reload, directory.attached_record(bigger), directory:)
+    assert_equal [ "500", "800" ], differences["capacity_mw"]
+  end
+
+  test "a deal whose link end is no longer found isn't confirmed against another link" do
+    client = DataQuality::DirectoryClient.new
+    attributes = client.send(:deal_term_link, { "link_type" => "Relationship", "relationship_type" => "offtake_with" },
+      { from_organization_id: 1, to_organization_id: nil })
+    assert_nil attributes[:link_id]
+  end
+
+  test "a deal on a link a person rejected isn't added" do
+    a = company(name: "Rejected A", sec_cik: nil)
+    b = company(name: "Rejected B", sec_cik: "0000000001")
+    Directory::FactWriter.write(:relationship, { from_organization_id: a.id, to_organization_id: b.id, relationship_type: "supplies" },
+      verification: { status: "rejected", by: BY })
+    deal = { "link_type" => "Relationship", "from_organization" => { "name" => "Rejected A" }, "to_organization" => { "name" => "Rejected B" },
+      "relationship_type" => "supplies", "term_type" => "offtake", "amount_usd" => "1000000", "external_id" => "x-1" }
+    c = claim(deal)
+    run_stage("match", deal)
+    assert_match "so no term is added to it", c.reload.notes
+    assert_equal 0, DealTerm.count
+  end
+
+  test "a deal reads with both parties" do
+    deal = { "link_type" => "Relationship", "from_organization" => { "name" => "Small Reactor Co" }, "to_organization" => { "name" => "Big Data Co" },
+      "relationship_type" => "offtake_with", "term_type" => "offtake", "capacity_mw" => "500" }
+    text = DataQuality::Claim.describe(claim(deal))
+    assert_match(/\ASmall Reactor Co has an offtake agreement with Big Data Co: an offtake, with .*500/, text)
+  end
+
+  test "a deal without an ID, or a counted offtake without its size, waits instead of failing the write" do
+    base = { "link_type" => "Relationship", "from_organization" => { "name" => "A Co" }, "to_organization" => { "name" => "B Co" },
+      "relationship_type" => "offtake_with", "term_type" => "offtake" }
+    no_id = claim(base.merge("capacity_mw" => "50"))
+    run_stage("match", base.merge("capacity_mw" => "50"))
+    assert_match "needs an external_id", no_id.reload.notes
+    no_size = claim(base.merge("external_id" => "y-1", "agreement" => "ppa"))
+    run_stage("match", base.merge("external_id" => "y-1", "agreement" => "ppa"))
+    assert_match "states its size", no_size.reload.notes
+  end
+
+  test "a deal waiting for its link is matched again once the link is in" do
+    buyer = company(name: "Later Buyer", sec_cik: nil)
+    seller = company(name: "Later Seller", sec_cik: "0000000002")
+    deal = { "link_type" => "Relationship", "from_organization" => { "name" => "Later Seller" }, "to_organization" => { "name" => "Later Buyer" },
+      "relationship_type" => "offtake_with", "term_type" => "offtake", "external_id" => "z-1", "capacity_mw" => "20" }
+    waiting = claim(deal)
+    run_stage("match", deal)
+    assert_match "approve the link first", waiting.reload.notes
+
+    Directory::FactWriter.write(:relationship, { from_organization_id: seller.id, to_organization_id: buyer.id, relationship_type: "offtake_with" },
+      verification: { status: "verified", by: BY })
+    run_stage("match", deal)
+    assert waiting.reload.status_matched?, waiting.notes
+    assert_equal "DealTerm", waiting.subject_type
   end
 
   test "Enrich's round from a company's own page (#479): matched by name, pending and announced; the same page again lands on the same row" do
