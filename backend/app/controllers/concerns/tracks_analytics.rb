@@ -21,8 +21,16 @@ module TracksAnalytics
   end
 
   private
-    def track_search(query, results:, source: "typed")
-      Analytics.track_search(query, results:, source:, visitor: visitor_properties) if trackable_request?
+    # gap: the query exactly as typed, for our own list of searches that found
+    # nothing (#483), or nil to leave the list alone (a filtered search). The
+    # gap is keyed by the query searched, screened against what was typed.
+    # shown: what the page showed (a close-match fallback included), which
+    # decides the gap; results stays the exact count for analytics.
+    def track_search(query, results:, source: "typed", gap: nil, shown: results)
+      return unless trackable_request?
+
+      Analytics.track_search(query, results:, source:, visitor: visitor_properties)
+      SearchGap.record(query, results: shown, typed: gap) if gap
     end
 
     def track_company_viewed(slug) = track("company_viewed", slug:)

@@ -34,4 +34,17 @@ class Directory::OpenCorrectionsTest < ActiveSupport::TestCase
     assert Directory::Lookup.open_corrections?(type: "Facility", id: site.id)
     assert Directory::Lookup.open_corrections?(type: "Organization", id: company.id)
   end
+
+  test "a deal term counts a report on the pages of the link or company it's under" do
+    company = Organization.create!(name: "Imaginary Fission")
+    buyer = Organization.create!(name: "Imaginary Cloud")
+    round = DealTerm.create!(link: company, term_type: "funding_round", external_id: "0009999999-26-000001", amount_usd: 5_000_000)
+    link = Relationship.create!(from_organization: buyer, to_organization: company, relationship_type: "offtake_with")
+    offtake = DealTerm.create!(link:, term_type: "offtake", capacity_mw: 100)
+
+    refute Directory::Lookup.open_corrections?(type: "DealTerm", id: round.id)
+    report("/companies/#{company.slug}")
+    assert Directory::Lookup.open_corrections?(type: "DealTerm", id: round.id)
+    assert Directory::Lookup.open_corrections?(type: "DealTerm", id: offtake.id)
+  end
 end

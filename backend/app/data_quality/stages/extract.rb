@@ -12,8 +12,15 @@ class DataQuality::Stages::Extract < DataQuality::Stage
   private
     def perform(run)
       stats = { "sources" => 0, "candidates" => 0, "unchanged" => 0, "empty" => 0 }
+      deferred = deferred_new_sources
 
       sources.crawl_ok.find_each do |source|
+        # Over the plug-in's nightly cap of new sources (#513): read on a later night.
+        if deferred.include?(source.id)
+          stats["deferred"] = stats.fetch("deferred", 0) + 1
+          next
+        end
+
         # Nothing stored, nothing to extract (not the same as a page whose
         # layout changed, which the plug-in reports).
         if source.content_text.blank?
@@ -90,6 +97,14 @@ class DataQuality::Stages::Extract < DataQuality::Stage
     # Only facts whose quote the source still has: a read that found nothing
     # (a page that stopped naming its licensees) writes no candidates, so the
     # last read's are still the ones here, and their quotes may be gone.
+    # Sources never read before beyond the plug-in's nightly cap, in its order
+    # (e.g. largest awards first); nil cap, none.
+    def deferred_new_sources
+      limit = plugin.new_sources_per_run or return Set.new
+      fresh = sources.crawl_ok.where(extracted_sha256: nil).where.not(content_text: [ nil, "" ]).to_a
+      plugin.new_source_order(fresh).drop(limit).to_set(&:id)
+    end
+
     def reconfirm(source, rows)
       return if rows.blank? || source.status_reason.present?
 
