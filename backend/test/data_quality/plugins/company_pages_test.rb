@@ -238,4 +238,16 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal "2024-12-06", payloads.first["starts_on"]
     assert_equal 1, payloads.map { |p| p["external_id"] }.uniq.size, "$37 million and $37M are one round"
   end
+
+  test "an amount ending a sentence counts; tickers with digits or a hyphen are kept" do
+    page = "<html><body><p>We closed a Series B funding round of $37 million.</p><p>Acme Fission is listed on NYSE as BRK-B.</p></body></html>"
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => { "exchange" => "NYSE", "ticker" => "BRK-B", "quote" => "Acme Fission is listed on NYSE as BRK-B." }, "links" => [],
+      "rounds" => [ { "amount" => "$37 million", "round" => "Series B", "date" => nil, "quote" => "We closed a Series B funding round of $37 million." } ] }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal [ "BRK-B", "37000000.0" ], [ claims.find { |c| c[:payload]["ticker"] }&.dig(:payload, "ticker"), claims.find { |c| c[:kind] == "deal_term" }&.dig(:payload, "amount_usd") ]
+  end
 end
