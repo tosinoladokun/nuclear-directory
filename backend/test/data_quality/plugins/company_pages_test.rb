@@ -100,7 +100,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
   end
 
   test "part 3: a company's EDGAR record gives its listing and business address (never its upper-case name as a legal name), each quoting the record" do
-    edgar = "https://data.sec.gov/submissions/CIK0001849056.json"
+    edgar = "https://data.sec.gov/submissions/CIK0001849056.json?enrich=1"
     record = '{"cik":"0001849056","name":"OKLO INC.","tickers":["OKLO"],"exchanges":["NYSE"],"addresses":{"mailing":{"city":"X"},' \
       '"business":{"street1":"3190 Coronado Dr.","city":"SANTA CLARA","stateOrCountry":"CA","zipCode":"95054"}}}'
     stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
@@ -265,5 +265,18 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
       "listing" => nil, "links" => [], "rounds" => rounds.map { |date, quote| { "amount" => "$5 million", "round" => nil, "date" => date, "quote" => quote } } }
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal 2, claims.map { |c| c[:payload]["external_id"] }.uniq.size
+  end
+
+  test "an approximate amount isn't a round's amount; Enrich's SEC record has its own address, apart from Form D's" do
+    page = "<html><body><p>We raised around $37 million in a Series B round.</p><p>We raised roughly $9 million in a seed round.</p></body></html>"
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [], "rounds" => [
+        { "amount" => "$37 million", "round" => "Series B", "date" => nil, "quote" => "We raised around $37 million in a Series B round." },
+        { "amount" => "$9 million", "round" => "seed", "date" => nil, "quote" => "We raised roughly $9 million in a seed round." } ] }
+    assert_empty DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_not_equal format(DataQuality::Plugins::SecFormD::SUBMISSIONS_URL, "0001849056"), format(DataQuality::Plugins::CompanyPages::EDGAR, 1_849_056)
   end
 end
