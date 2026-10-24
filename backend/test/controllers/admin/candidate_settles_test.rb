@@ -101,6 +101,10 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
     post settle_path, params: { choice: "same", record_id: @ga.id }
     DataQuality::Pipeline.run("web_page", only: %w[match])
     assert_match "tosin settled \"GENERAL ATOMICS INC\" as the same as General Atomics", @link.reload.notes
+    # Verify sending it to review keeps the decision too.
+    DataQuality::Stages::Verify.new(plugin: DataQuality::Plugins::WebPage.new).send(:send_to_review, @link.reload, "the quote isn't on the page",
+      CrawlRun.create!(stage: "verify", source_kind: "web_page", started_at: Time.current), Hash.new(0))
+    assert_match "the quote isn't on the page. tosin settled \"GENERAL ATOMICS INC\" as the same as General Atomics", @link.reload.notes
 
     get settle_path(Candidate.create!(source: @source, kind: "relationship", status: "needs_review", quote: "Acme funds GENERAL ATOMICS.",
       payload: { "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "GENERAL ATOMICS INC" }, "relationship_type" => "funds" },
