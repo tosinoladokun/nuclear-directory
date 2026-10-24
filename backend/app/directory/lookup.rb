@@ -128,7 +128,7 @@ module Directory
         .map { |event| VerificationEventRef.from(event) }
     end
 
-    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship].freeze
+    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm].freeze
     # FactWriter kinds, one per fact type.
     FACT_KINDS = FACT_TYPES.map(&:underscore).freeze
 
@@ -169,13 +169,19 @@ module Directory
       # A unit's own addresses redirect to its site's page, so a report filed
       # there (before it was grouped, say) is about it too.
       plant = ->(facility) { addresses("plants", facility) + (facility.parent ? addresses("plants", facility.parent) : []) }
-      pages = case record
-      when Organization then company.(record)
-      when Facility then plant.(record)
-      when Relationship then company.(record.from_organization) + company.(record.to_organization)
-      when FacilityRelationship then company.(record.organization) + plant.(record.facility)
-      else company.(record.organization)
+      pages_of = lambda do |fact|
+        case fact
+        when nil then []
+        when Organization then company.(fact)
+        when Facility then plant.(fact)
+        when Relationship then company.(fact.from_organization) + company.(fact.to_organization)
+        when FacilityRelationship then company.(fact.organization) + plant.(fact.facility)
+        # A deal term shows on the pages of the link (or company) it's under.
+        when DealTerm then pages_of.(fact.link)
+        else company.(fact.organization)
+        end
       end
+      pages = pages_of.(record)
       CorrectionReport.where(status: %w[open reviewed])
         # The page's own path: no query or fragment, no trailing slash and no
         # format (/companies/x/ and /companies/x.html are /companies/x).
@@ -229,9 +235,17 @@ module Directory
     PENDING_INCLUDES = {
       "organization" => [ :aliases ], "facility" => [ :parent, :technology ], "organization_role" => [ :organization, :role ],
       "organization_technology" => [ :organization, :technology ],
-      "relationship" => [ :from_organization, :to_organization ], "facility_relationship" => [ :organization, :facility ]
+      "relationship" => [ :from_organization, :to_organization ], "facility_relationship" => [ :organization, :facility ],
+      "deal_term" => [ :link ]
     }.freeze
     private_constant :PENDING_INCLUDES
+
+    # Companies with an SEC CIK (#129), live ones only (a rejected or
+    # unpublished company's filings aren't read), oldest first.
+    def organizations_with_sec_cik
+      Organization.where.not(sec_cik: nil).where.not(verification_status: Verifiable::CLOSED_STATUSES).order(:id)
+        .map { |organization| SecFilerRef.from(organization) }
+    end
 
     # Ids of companies or plants by slug, in one query: { "terrapower" => 12 }.
     def ids_by_slug(type:, slugs:)
@@ -242,6 +256,12 @@ module Directory
 
     # Whether a fact is public now, by its model's .published scope (a unit
     # under a closed site isn't, #104), so callers don't re-derive the rule.
+    # Sources cited by evidence on any published fact (#510's link check), as a relation of ids.
+    def published_source_ids
+      FACT_TYPES.map { |type| Evidence.where(subject_type: type, subject_id: type.constantize.published.select(:id)).distinct.select(:source_id) }
+        .reduce { |all, ids| all.or(ids) }
+    end
+
     def published?(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
 
@@ -351,6 +371,22 @@ module Directory
 
       record = scope.order(:id).first
       FacilityRef.from(record) if record
+    end
+
+    # A plant name as the directory compares names ("Plant Vogtle" and
+    # "PLANT VOGTLE" alike).
+    def normalize_facility_name(name) = FacilityAlias.normalize(name.to_s)
+
+    # Power plants with no EIA plant ID that aren't rejected or taken off:
+    # top-level records (a site, or a one-unit plant kept as one record,
+    # like Columbia), each as { id:, state:, site:, names: [name, *aliases] },
+    # for a plant-level EIA file to find by name and state (#319). site:
+    # false for a one-record plant with its NRC docket, which can't carry an
+    # EIA plant ID (only a site can).
+    def plants_without_eia_plant_id
+      Facility.where(parent_id: nil, eia_plant_id: [ nil, "" ], facility_type: [ "power_reactor", nil ])
+        .where.not(verification_status: %w[rejected unpublished]).includes(:aliases).order(:id)
+        .map { |plant| { id: plant.id, state: plant.state, site: plant.nrc_docket.blank?, names: [ plant.name, *plant.aliases.map(&:alias) ] } }
     end
 
     # Words too common in this industry to tell two names apart.
@@ -553,6 +589,7 @@ module Directory
           values[:to_organization_name] = record.to_organization.name
         end
         values[:parent_name] = record.parent&.name if kind == "facility"
+        values[:link_name] = fact_label(record.link) if kind == "deal_term" && record.link
         values
       end
 
@@ -611,8 +648,21 @@ module Directory
           when OrganizationTechnology then "#{record.organization.name} works on #{in_sentence(record.technology.name)}"
           when Relationship then "#{record.from_organization.name} #{LINK_VERBS.fetch(record.relationship_type)} #{record.to_organization.name}"
           when FacilityRelationship then "#{record.organization.name} #{LINK_VERBS.fetch(record.relationship_type)} #{record.facility.name}"
+          # Its id (an award ID, an accession number) or round, so two terms under one link read apart.
+          when DealTerm then return deal_term_label(record)
           end
         "the fact “#{statement}”"
+      end
+
+      # "X-energy's funding round 0001234567-24-000001", or "award DE-NE0009054
+      # under the fact “U.S. Department of Energy funds X-energy”".
+      def deal_term_label(term)
+        kind = term.term_type.to_s.tr("_", " ")
+        id = [ term.external_id, term.round ].compact_blank.first
+        named = [ kind, id ].compact.join(" ")
+        return "#{term.link.name}'s #{named}" if term.link.is_a?(Organization)
+
+        term.link ? "#{named} under #{fact_label(term.link)}" : named
       end
 
       # A display name inside a sentence: lowercased, except acronyms ("SMR",

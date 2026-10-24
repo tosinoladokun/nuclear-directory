@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -52,7 +52,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.index ["subject_type", "subject_id"], name: "index_candidates_on_subject"
     t.check_constraint "ai_recommendation::text = ANY (ARRAY['recommend_publish'::character varying::text, 'needs_review'::character varying::text])", name: "candidates_ai_recommendation_check"
     t.check_constraint "dq_recommendation::text = ANY (ARRAY['approve'::character varying, 'reject'::character varying]::text[])", name: "candidates_dq_recommendation_check"
-    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text])", name: "candidates_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text])", name: "candidates_kind_check"
     t.check_constraint "status::text = ANY (ARRAY['new'::character varying::text, 'matched'::character varying::text, 'merged'::character varying::text, 'rejected'::character varying::text, 'needs_review'::character varying::text, 'confirmed'::character varying::text])", name: "candidates_status_check"
   end
 
@@ -616,10 +616,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.string "extracted_sha256"
     t.integer "blocked_streak", default: 0, null: false
     t.string "extracted_rows_sha256"
+    t.datetime "link_checked_at"
+    t.string "link_status"
+    t.integer "link_http_status"
+    t.integer "link_failures", default: 0, null: false
     t.index ["domain"], name: "index_sources_on_domain"
+    t.index ["link_checked_at"], name: "index_sources_on_link_checked_at"
     t.index ["source_kind"], name: "index_sources_on_source_kind"
     t.index ["url"], name: "index_sources_on_url", unique: true
     t.check_constraint "crawl_status::text = ANY (ARRAY['pending'::character varying::text, 'ok'::character varying::text, 'blocked'::character varying::text, 'needs_human'::character varying::text])", name: "sources_crawl_status_check"
+    t.check_constraint "link_status IS NULL OR (link_status::text = ANY (ARRAY['ok'::character varying, 'dead'::character varying, 'failing'::character varying, 'error'::character varying, 'blocked'::character varying, 'disallowed'::character varying]::text[]))", name: "sources_link_status_check"
   end
 
   create_table "technologies", force: :cascade do |t|

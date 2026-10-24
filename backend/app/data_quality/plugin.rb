@@ -40,6 +40,14 @@ class DataQuality::Plugin
   # keep the fact's last payload and just ask. Returns [payload, note] or nil.
   def dropped(_kind) = nil
 
+  # How many sources never read before one run extracts (#513), so a new
+  # source's first batch reaches people a night at a time; the rest wait for
+  # the next nights. nil: no cap. Sources read before are never held back.
+  def new_sources_per_run = nil
+
+  # The order new sources are taken under that cap; first come first.
+  def new_source_order(sources) = sources.sort_by(&:id)
+
   # The largest share of a source's supported facts one complete read may
   # drop and still be flagged (#240). More than that looks like a broken
   # page rather than real changes, and flags nothing. Default: a quarter. A
