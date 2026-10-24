@@ -26,19 +26,26 @@ module DataQuality::UnlistedPages
 
           claim.update!(status: "needs_review", review_origin: WITHDRAWN, notes: joined_note(claim.notes, reason))
         end
-        page.update!(extracted_rows_sha256: nil) if page.extracted_rows_sha256
+        # Its stored read stays as it is, so an unlisted page isn't read again
+        # meanwhile; restore_listed asks for a fresh read when it returns.
         withdrawn + flag_published(page, run, reason)
       end
     end
   end
 
-  # A page the index links again: its withdrawn claims a person hasn't decided return.
+  # A page the index links again (or readable again): its withdrawn claims a
+  # person hasn't decided return, and if it was missing since its last
+  # support, its stored read is cleared so extract and match record fresh
+  # support. A later disappearance is then flagged again, even when the
+  # earlier warning was decided.
   def restore_listed(page, reason)
     Candidate.transaction do
       page.lock!
-      page.candidates.status_needs_review.where(review_origin: WITHDRAWN).order(:id).lock.to_a.count do |claim|
+      restored = page.candidates.status_needs_review.where(review_origin: WITHDRAWN).order(:id).lock.to_a.count do |claim|
         claim.update!(status: claim.subject_id ? "matched" : "new", review_origin: nil, notes: joined_note(claim.notes, reason))
       end
+      page.update!(extracted_sha256: nil, extracted_rows_sha256: nil) if missing_since_support?(page)
+      restored
     end
   end
 
@@ -58,6 +65,21 @@ module DataQuality::UnlistedPages
         review_origin: "dropped", subject_type: type, subject_id: id, crawl_run: run,
         notes: "#{reason} (read on #{Date.current}). #{KEEP_OR_UNPUBLISH}")
     end
+  end
+
+  # Whether the page was withdrawn or flagged as missing after the last claim that supported it.
+  def missing_since_support?(page)
+    last_support = page.candidates.where(status: %w[merged confirmed]).where("review_origin IS DISTINCT FROM 'dropped'").maximum(:id).to_i
+    page.candidates.where(review_origin: [ WITHDRAWN, "dropped" ]).where("id > ?", last_support).exists?
+  end
+
+  # Takes over a page someone cited by hand: its stored copy is the whole
+  # page, so it's cleared and fetched afresh, then converted.
+  def take_over(source)
+    return unless source.source_kind == "web_page"
+
+    source.update!(source_kind:, fetched_at: nil, etag: nil, last_modified: nil, content_text: nil, content_sha256: nil,
+      extracted_sha256: nil, extracted_rows_sha256: nil)
   end
 
   # A page blocked on an earlier fetch (today's rerun gets skipped_recent): the stop holds.

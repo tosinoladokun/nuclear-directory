@@ -126,9 +126,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       end
       # A page someone cited by hand becomes this plug-in's; its stored copy is
       # the whole page, so it's fetched afresh and converted.
-      if source.source_kind == "web_page"
-        source.update!(source_kind:, fetched_at: nil, etag: nil, last_modified: nil, content_text: nil, content_sha256: nil, extracted_sha256: nil)
-      end
+      take_over(source)
       return "another_kind" unless source.source_kind == source_kind
 
       DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s
