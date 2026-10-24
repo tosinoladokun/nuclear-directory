@@ -114,7 +114,7 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     @company.update_columns(enrich_requested_at: 10.minutes.ago, enriched_at: 5.minutes.ago)
     @agreed.update_columns(created_at: 1.hour.ago) # found by an earlier request
     get enrich_path
-    assert_select ".nd-panel", /Its site couldn't be read .* ago: HTTP 403\./
+    assert_select ".nd-panel", /Its site couldn't be read: HTTP 403/
     assert_select "#finding-#{@agreed.id}", 0, "a finding from before this request is left to Checks"
   end
 
@@ -139,7 +139,7 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     @company.update_columns(website: "acmefission.com", enrich_requested_at: nil)
     assert_no_enqueued_jobs { post enrich_path }
     assert_nil @company.reload.enrich_requested_at
-    assert_match "needs to start with https://", flash[:alert]
+    assert_match "needs to be a full https:// address", flash[:alert]
   end
 
   test "while its findings are being worked out, or after that failed, the page says so instead of 'Nothing waiting'" do
@@ -195,5 +195,13 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     @unsure.update_columns(review_origin: "dropped")
     get enrich_path
     assert_select "#finding-#{@unsure.id}", 0
+  end
+
+  test "a company read only through its SEC record says so, and says when that record couldn't be read" do
+    @company.update_columns(website: nil, sec_cik: "0001849056", enrich_requested_at: 10.minutes.ago, enriched_at: 5.minutes.ago)
+    Source.create!(url: "https://data.sec.gov/submissions/CIK0001849056.json", source_kind: "company_pages", crawl_status: "blocked", status_reason: "HTTP 503")
+    get enrich_path
+    assert_select ".nd-panel", /Its SEC record couldn't be read: HTTP 503/
+    assert_select ".nd-panel a[href='']", 0
   end
 end

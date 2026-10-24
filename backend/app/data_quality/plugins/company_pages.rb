@@ -146,7 +146,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       city, state = business["city"].to_s.strip, business["stateOrCountry"].to_s.strip
       street = "#{business['street1']} #{business['street2']}"
       # Only a US state (EDGAR codes other places A1, X1…), never a PO box.
-      if city.present? && STATES.key?(state) && !street.match?(/\bP\.?\s*O\.?\s*Box\b/i) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
+      if city.present? && STATES.key?(state) && !street.match?(/\b(P\.?\s*O\.?\s*Box|Post\s+Office\s+Box)\b/i) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
         claims << { kind: "organization", payload: { "name" => company.name, "hq_city" => city.titleize, "hq_state" => state }, quote: }
       end
       claims
@@ -252,20 +252,35 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       return if [ amount_text, round, date_text ].compact.any? { |value| !quote.downcase.include?(value.downcase) }
 
       amount = dollars(amount_text) if amount_text
-      return if amount_text && !amount
+      return if amount_text && !(amount && whole_dollars?(amount_text, quote))
       return unless amount || round
 
       # A page's date is when it was announced; it's the round's date only when
       # the quote says the round closed on it (Data Quality).
       # "On <date>, <a few words> closed": the date is the closing's, never an
       # announcement's ("On March 1 we announced that we had closed…").
-      on_close = date_text && (between = quote[/\bon\s+#{Regexp.escape(date_text)},?\s+((?:\S+\s+){0,4}?)(?:closed|completed)\b/i, 1]) &&
-        !between.match?(/announc|said|report/i)
+      # Either order: "On <date>, X closed…" or "X closed … on <date>".
+      date = Regexp.escape(date_text.to_s)
+      between = quote[/\bon\s+#{date},?\s+((?:\S+\s+){0,4}?)(?:closed|completed)\b/i, 1] ||
+        quote[/\b(?:closed|completed)\b((?:\s+\S+){0,8}?)\s+on\s+#{date}\b/i, 1] if date_text
+      on_close = between && !between.match?(/announc|said|report/i)
       starts_on = (Date.parse(date_text) if on_close && date_text.match?(/\b(19|20)\d\d\b/)) rescue nil
       { kind: "deal_term", quote:, payload: {
         "organization" => { "name" => name }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{url}##{[ round, amount_text ].compact.join(' ').downcase.squish}", "amount_usd" => amount&.to_s("F"), "round" => round,
+        # The amount as a number, so "$37 million" and "$37M" are the same round.
+        "external_id" => "page:#{url}##{[ round&.downcase&.squish, amount&.to_s('F') ].compact.join(' ')}", "amount_usd" => amount&.to_s("F"), "round" => round,
         "starts_on" => starts_on&.iso8601 }.compact }
+    end
+
+    # The amount stands whole in its quote, in US dollars: "$37" isn't
+    # "$37 million", and "C$37 million" or "$37 million CAD" aren't dollars.
+    def whole_dollars?(amount_text, quote)
+      at = quote.downcase.index(amount_text.downcase) or return false
+      before, after = quote[0...at], quote[(at + amount_text.length)..].to_s
+      return false if after.match?(/\A[\d.,]|\A\s*(million|billion|thousand|m|bn|b|k)\b/i)
+      return false if before.match?(/[A-Za-z]\z/) || after.match?(/\A\s*(CAD|AUD|NZD|HKD|SGD|EUR|GBP|JPY|CHF|CNY|RMB|KRW|INR|C\$|A\$)\b/i)
+
+      true
     end
 
     # "$37 million", "$1.2 billion", "$37,000,000" as dollars; nil otherwise.

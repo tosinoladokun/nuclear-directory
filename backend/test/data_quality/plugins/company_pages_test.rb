@@ -116,7 +116,8 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
 
     source = Source.find_by!(url: edgar)
     [ '"tickers":["BRK-A","BRK-B"],"exchanges":["NYSE","NYSE"],"addresses":{"business":{"street1":"PO Box 12","city":"OMAHA","stateOrCountry":"NE"}}}',
-      '"tickers":["OKLO"],"exchanges":["NYSE","Nasdaq"],"addresses":{"business":{"street1":"1 Bay St","city":"TORONTO","stateOrCountry":"A6"}}}' ].each do |rest|
+      '"tickers":["OKLO"],"exchanges":["NYSE","Nasdaq"],"addresses":{"business":{"street1":"1 Bay St","city":"TORONTO","stateOrCountry":"A6"}}}',
+      '"tickers":["A","B"],"exchanges":["NYSE","NYSE"],"addresses":{"business":{"street1":"Post Office Box 12","city":"OMAHA","stateOrCountry":"NE"}}}' ].each do |rest|
       source.update_columns(content_text: '{"cik":"0001849056","name":"OKLO INC.",' + rest)
       assert_empty DataQuality::Plugins::CompanyPages.new.extract(source, nil), "several tickers, a PO box or a non-US code give nothing"
     end
@@ -189,11 +190,11 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#series b $37 million", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
+        "external_id" => "page:#{HOME}#series b 37000000.0", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#seed $12.5m", "amount_usd" => "12500000.0", "round" => "seed" },
+        "external_id" => "page:#{HOME}#seed 12500000.0", "amount_usd" => "12500000.0", "round" => "seed" },
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#seed $3 million", "amount_usd" => "3000000.0", "round" => "seed" } ], claims.map { |c| c[:payload] }
+        "external_id" => "page:#{HOME}#seed 3000000.0", "amount_usd" => "3000000.0", "round" => "seed" } ], claims.map { |c| c[:payload] }
     assert(claims.all? { |c| c[:kind] == "deal_term" })
   end
 
@@ -214,5 +215,27 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [ "deal_term" ], claims.map { |c| c[:kind] }, "no listing without NASDAQ in the quote, no plain link from an MOU"
     assert_nil claims.sole[:payload]["starts_on"], "March 1 is when it was announced"
+  end
+
+  test "an amount stands whole and in US dollars; a closing date after the verb counts; a reread with $37M is the same round" do
+    page = <<~HTML
+      <html><body><p>Acme Fission closed a $37 million Series B on December 6, 2024.</p><p>We raised $12 million CAD in a seed round.</p>
+      <p>Acme Fission closed a $37M Series B.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    round = ->(amount, name, date, quote) { { "amount" => amount, "round" => name, "date" => date, "quote" => quote } }
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [], "deals" => [], "rounds" => [
+        round.("$37", "Series B", nil, "Acme Fission closed a $37 million Series B on December 6, 2024."),                     # a prefix
+        round.("$37 million", "Series B", "December 6, 2024", "Acme Fission closed a $37 million Series B on December 6, 2024."),
+        round.("$12 million", "seed", nil, "We raised $12 million CAD in a seed round."),                                    # not US dollars
+        round.("$37M", "Series B", nil, "Acme Fission closed a $37M Series B.") ] }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    payloads = claims.map { |c| c[:payload] }
+    assert_equal [ "37000000.0", "37000000.0" ], payloads.map { |p| p["amount_usd"] }
+    assert_equal "2024-12-06", payloads.first["starts_on"]
+    assert_equal 1, payloads.map { |p| p["external_id"] }.uniq.size, "$37 million and $37M are one round"
   end
 end
