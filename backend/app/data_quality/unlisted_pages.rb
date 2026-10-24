@@ -54,6 +54,18 @@ module DataQuality::UnlistedPages
     end
   end
 
+  # A page that stopped stating its facts (read but unusable): its undecided
+  # claims wait in review like an unlisted page's, and come back after a
+  # clean read (restore_listed).
+  def hold_open(page, reason)
+    Candidate.transaction do
+      page.lock!
+      page.candidates.where(status: OPEN).where("review_origin IS DISTINCT FROM 'dropped'").where("review_origin IS DISTINCT FROM ?", WITHDRAWN)
+        .order(:id).lock.to_a.each { |claim| claim.update!(status: "needs_review", review_origin: WITHDRAWN, notes: joined_note(claim.notes, reason)) }
+        .size
+    end
+  end
+
   # One review item per published fact the page supported, once per absence:
   # not again while one is open or after a person decided one, until the page
   # states it again.
@@ -83,7 +95,9 @@ module DataQuality::UnlistedPages
   def take_over(source)
     return unless source.source_kind == "web_page"
 
-    source.update!(source_kind:, fetched_at: nil, etag: nil, last_modified: nil, content_text: nil, content_sha256: nil,
+    # Its fetch date stays, so the once-a-day rule holds; with no stored copy
+    # and no validators, the next permitted fetch is a full one.
+    source.update!(source_kind:, etag: nil, last_modified: nil, content_text: nil, content_sha256: nil,
       extracted_sha256: nil, extracted_rows_sha256: nil)
   end
 

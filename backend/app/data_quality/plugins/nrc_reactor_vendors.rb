@@ -108,6 +108,7 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
     rescue Unreadable
       # A page that stopped naming its vendor: the link it supported goes to a person too.
       source.update!(crawl_status: "needs_human", status_reason: NO_VENDOR_LINE)
+      hold_open(source, NO_VENDOR_LINE)
       flag_published(source, run, NO_VENDOR_LINE)
       "needs_human"
     end

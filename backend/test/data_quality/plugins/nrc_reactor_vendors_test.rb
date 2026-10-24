@@ -103,6 +103,22 @@ class DataQuality::Plugins::NrcReactorVendorsTest < ActiveSupport::TestCase
     assert page("ano1").candidates.where(review_origin: "dropped", subject_id: link.reload.subject_id).exists?
   end
 
+  test "a page that loses its vendor line before approval: its open claims wait in review, and return after a clean read" do
+    DataQuality::Pipeline.run("nrc_reactor_vendors", plugin:, only: %w[crawl extract match])
+    open = page("ano1").candidates.where(status: %w[new matched needs_review]).count
+    stub_request(:get, "#{UNITS}ano1").to_return(body: "<html><main><h1>ANO</h1><p>moved</p></main></html>")
+    Source.update_all(fetched_at: 2.days.ago)
+    crawl
+
+    assert page("ano1").crawl_needs_human?
+    assert_equal open, page("ano1").candidates.where(review_origin: "withdrawn").count
+    assert Candidate.recommended.where(source: page("ano1")).none?
+
+    stub_request(:get, "#{UNITS}ano1").to_return(body: file_fixture("nrc/units/ano1.html").read)
+    Source.update_all(fetched_at: 2.days.ago)
+    assert_equal open, crawl.stats["restored"]
+  end
+
   test "a same-day rerun after a block requests no later page" do
     stub_request(:get, /\A#{Regexp.escape(UNITS)}/).to_return(status: 403, body: file_fixture("nrc/akamai-403.html").read)
     crawl
