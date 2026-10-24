@@ -72,6 +72,9 @@ module Seed
     # A plant (site) by name: one with no parent first, as write_unit finds
     # a site (undocketed before docketed), so a same-name NRC unit never
     # takes the site's details.
+    # A site by name: undocketed, with no parent (as write_unit finds one).
+    def site_named(name) = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(:id).first
+
     def plant_named(name)
       Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
         Directory::Lookup.facility(name:)
@@ -84,7 +87,9 @@ module Seed
         holder = Facility.find_by(parent_id: nil, eia_plant_id: entry["eia_plant_id"].to_s) or next
         # The site the loader would write to, found as it finds it: by its
         # name, then by a former one (rename_from_former_name).
-        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| plant_named(name) }.first
+        # A site under its name or a former one comes before a same-name NRC unit.
+        names = [ entry["name"], *entry["other_names"] ].compact_blank
+        target = names.lazy.filter_map { |name| site_named(name) }.first || names.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -132,8 +137,11 @@ module Seed
       end
 
       def evidence_items(doc)
-        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *doc["relationships"],
-          *doc["facilities"] ].compact.select { |item| item["source_url"] }
+        links = [ *doc["relationships"], *doc["facilities"] ].compact
+        # A term's citation as it'll be written (its own quote, on its own page
+        # or its link's), so its confidence is checked and consolidated too.
+        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links,
+          *links.flat_map { |link| Array(link["terms"]).map { |term| citation(term, link) } } ].compact.select { |item| item["source_url"] }
       end
 
       # The description's quote, plus any "also" quotes that support the rest
@@ -175,6 +183,15 @@ module Seed
           country_code: doc["country_code"], status: doc["status"], description: description["text"],
           hq_city: hq.filter_map { |entry| entry["city"].presence }.last, hq_state: hq.filter_map { |entry| entry["state"].presence }.last
         }
+        # A field the file doesn't state at all is left as it is, so a role-only
+        # seed never blanks what the admin, Enrich or an earlier seed filled in
+        # (Copilot, #501). A key stated as null still clears it.
+        { website: "website", country_code: "country_code", legal_name: "legal_name", hq_city: "hq", hq_state: "hq" }.each do |attribute, key|
+          attributes.delete(attribute) unless doc.key?(key)
+        end
+        # A description stated as null, or with `text: null`, clears it; one with only a source and quote (no text key) leaves the text alone.
+        states_text = doc.key?("description") && (doc["description"].nil? || doc["description"].respond_to?(:key?) && doc["description"].key?("text"))
+        attributes.delete(:description) unless states_text
         attributes[:domain] = nil if shared.include?(Organization.domain_from(doc["website"]))
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
@@ -183,11 +200,16 @@ module Seed
         # it never clears a short name set in the admin.
         attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
 
-        items = [ *hq, *description_items(doc), legal ].compact.uniq
+        # Which fields each quote backs (#398), by where it sits in the file.
+        backs = Hash.new { |hash, item| hash[item] = [] }
+        hq.each { |item| backs[item].concat({ "city" => "hq_city", "state" => "hq_state" }.select { |key, _| item[key].present? }.values) }
+        description_items(doc).each { |item| backs[item] << "description" }
+        backs[legal] << "legal_name" if legal
         # An unquoted legal name still finds a record an earlier seed loaded
         # under it (it's in aliases), then is removed from the aliases in the
         # same write.
-        write(slug, :organization, attributes, items.filter_map { |item| evidence(item, sources) },
+        quotes = backs.filter_map { |item, fields| evidence(item, sources)&.merge(fields: fields.uniq.presence) }
+        write(slug, :organization, attributes, quotes,
           remove_aliases: legal ? [] : Array(doc["legal_name"]))
       end
 
@@ -216,9 +238,14 @@ module Seed
           # same link (same from/to/type) doesn't clear a value another
           # entry set. The seed describes what's known; a missing key is
           # "nothing to say", not "clear it".
-          write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
+          # A link marked pending stays pending, and a human's later decision on it holds, as for plant links.
+          existing = Relationship.find_by(from_organization_id: organization.id, to_organization_id: other.id, relationship_type: item["type"])
+          next if item["pending"] && existing&.closed?
+
+          link = write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
             relationship_type: item["type"], description: item["description"] }.compact,
-            evidence(item, sources))
+            evidence(item, sources), pending: item["pending"], hold: held_link_reason(existing, item))
+          write_terms(slug, "Relationship", link, item, sources)
         end
 
         Array(doc["facilities"]).each do |item|
@@ -231,9 +258,51 @@ module Seed
           # entry about the same owns-link that omits a share doesn't
           # clear the share another entry set, which was rewriting the
           # value and logging four verification events on every re-seed.
-          write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
+          link = write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
             relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] }.compact,
             evidence(item, sources), pending: item["pending"], hold: hold_reason(organization.id, facility.id, item))
+          write_terms(slug, "FacilityRelationship", link, item, sources)
+        end
+      end
+
+      # A deal's terms (#256): each one agreement under its link, with its
+      # MW, money, dates, form of agreement and status, so the data piece
+      # (#255) and the export (#254) read them as data. A term's key is its
+      # stable id (stored as external_id), so a re-seed updates it rather than
+      # adding another. Its evidence is its own quote, else the link's (citation).
+      #   terms:
+      #   - key: constellation-uprates-ppa-2026
+      #     agreement: ppa
+      #     status: signed
+      #     capacity_mw: 890
+      #     signed_on: 2026-10-01
+      #     starts_on: 2026-10-01
+      #     ends_on: 2046-09-30
+      #     conditions: Illinois Commerce Commission approval   # optional: then not counted yet
+      TERM_FIELDS = %w[agreement status conditions capacity_mw firm_mw amount_usd signed_on starts_on ends_on term_years].freeze
+
+      def write_terms(slug, link_type, link, item, sources)
+        terms = Array(item["terms"])
+        return if terms.empty? || !link&.ok?
+
+        link_verified = link_type.constantize.find_by(id: link.id)&.verified?
+        terms.each do |term|
+          unless term["key"].to_s.strip.present?
+            @errors << "#{slug}: a deal term under #{item['to'] || item['name']} needs a key (a stable id, e.g. google-kairos-mpda-2024)"
+            next
+          end
+
+          # A term a person rejected or unpublished stays as decided, as a
+          # closed link does: a re-seed never brings it back.
+          next if DealTerm.find_by(link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip)&.closed?
+
+          # A field the entry leaves out is "nothing to say" (#251); one it
+          # gives as null clears it (a condition met since, say).
+          attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip }
+            .merge(TERM_FIELDS.select { |field| term.key?(field) }.to_h { |field| [ field.to_sym, term[field] ] })
+          # Pending only while the link itself is: once a person approves the
+          # link, its terms are verified with it, though the YAML still says pending.
+          write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"] && !link_verified)
         end
       end
 
@@ -288,9 +357,16 @@ module Seed
       # already taken. It takes the slug a fresh seed would give it too, so
       # its URL doesn't depend on which seed loaded it first.
       def rename_from_former_name(entry)
-        return if Directory::Lookup.facility(name: entry["name"])
+        return if site_named(entry["name"])
 
-        former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
+        # A site under a former name is renamed, even beside a same-name NRC
+        # unit (a docketed Callaway and the site once called Callaway Energy Center).
+        former = Array(entry["other_names"]).lazy.filter_map { |name| site_named(name) }.first
+        unless former
+          return if Directory::Lookup.facility(name: entry["name"])
+
+          former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
+        end
         attributes = { id: former.id, name: entry["name"] }
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)
@@ -337,6 +413,18 @@ module Seed
         item.slice("name", "facility_type", "status", "city", "state")
           .transform_values { |value| value.is_a?(String) ? value.strip : value }
           .compact_blank.symbolize_keys
+      end
+
+      # A term's citation: its own quote (from its own page, else its link's),
+      # or with no quote of its own, its link's whole citation.
+      def citation(term, link)
+        return link if term["quote"].to_s.strip.empty?
+
+        url = term["source_url"] || link["source_url"]
+        # The link's date only for the link's own page: another page's date is unknown.
+        published = term["published"] || (link["published"] if url == link["source_url"])
+        { "source_url" => url, "quote" => term["quote"], "confidence" => term.fetch("confidence", link["confidence"]),
+          "published" => published }.compact
       end
 
       # A unit given with its site ("site: Indian Point"): the site is found
@@ -434,6 +522,18 @@ module Seed
         item["pending_reason"]
       end
 
+      # The pending reason to keep, when a link the seed marks pending was verified later by a person
+      # (a decision made after the seed's own write); nil otherwise. Plant links and company links.
+      def held_link_reason(link, item)
+        return unless item["pending"] && link&.verified?
+
+        events = link.verification_events
+        decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
+        return if events.where(to_status: "pending").or(decided_later).exists?
+
+        item["pending_reason"]
+      end
+
       def closed_link?(organization_id, facility_id, type)
         FacilityRelationship.find_by(organization_id:, facility_id:, relationship_type: type)&.closed?
       end
@@ -444,7 +544,7 @@ module Seed
         if result.ok?
           count(kind, result.id, result.created ? :created : (result.changed ? :changed : :unchanged))
         else
-          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type]}: " \
+          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type] || attributes[:external_id]}: " \
             "#{result.errors.join("; ")}"
         end
         result

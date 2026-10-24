@@ -77,15 +77,17 @@ module Directory
         model: FacilityRelationship,
         attributes: %i[organization_id facility_id relationship_type ownership_pct description started_on ended_on]
       },
+      # A news item for "Latest" (#137), the same one by its link.
+      news_item: { model: NewsItem, attributes: %i[url title publisher published_on summary] },
       # One award, offtake or funding round under its link (#256).
       deal_term: {
         model: DealTerm,
         attributes: %i[link_type link_id term_type external_id amount_usd amount_offered_usd capacity_mw signed_on starts_on ends_on status
-          program round lead_investor_ids]
+          agreement conditions firm_mw term_years program round lead_investor_ids]
       }
     }.freeze
 
-    EVIDENCE_ATTRIBUTES = %i[source_id quote found_by confidence crawl_run_id].freeze
+    EVIDENCE_ATTRIBUTES = %i[source_id quote found_by confidence crawl_run_id fields].freeze
 
     def self.write(...) = new.write(...)
 
@@ -107,6 +109,57 @@ module Directory
     end
     def self.merge_organization(...) = new.merge_organization(...)
 
+    # Says a news item is about a company or plant (#137): a unit's news is
+    # its site's. Idempotent. Returns the NewsMention.
+    def self.mention_news(news_item_id:, subject_type:, subject_id:)
+      raise Invalid, "news is about a company or a plant, not a #{subject_type}" unless NewsMention::SUBJECT_TYPES.include?(subject_type.to_s)
+
+      # A site merge locks sites before their units, and this locks a unit
+      # before its site: if the two ever deadlock, this side rolls back to its
+      # savepoint and tries again (a few times).
+      attempts = 0
+      begin
+        mention_news_once(news_item_id:, subject_type:, subject_id:)
+      rescue ActiveRecord::Deadlocked
+        retry if (attempts += 1) < 3
+        raise
+      end
+    end
+
+    def self.mention_news_once(news_item_id:, subject_type:, subject_id:)
+      ActiveRecord::Base.transaction(requires_new: true) do
+        # The unit locked as a write that groups it locks it, so its site is
+        # read after any grouping that's under way, never before it moves.
+        if subject_type.to_s == "Facility"
+          subject_id = Facility.lock.find(subject_id).parent_id || subject_id
+          # A site merged away is followed to the one it went into, as a company is.
+          subject_id = merged_survivor(subject_id, model: Facility)
+        end
+        # A company is locked as a merge locks it, so a merge under way finishes
+        # first; one merged away is followed to the company it went into.
+        subject_id = merged_survivor(subject_id) if subject_type.to_s == "Organization"
+        NewsMention.find_or_create_by!(news_item_id:, subject_type: subject_type.to_s, subject_id:)
+      end
+    end
+
+    private_class_method :mention_news_once
+
+    # The company or site id news should be on, its row locked: itself, or
+    # the one a merge moved it into (its unpublish event says which).
+    def self.merged_survivor(id, model: Organization)
+      5.times do
+        record = model.lock.find(id)
+        return id unless record.closed?
+
+        into = VerificationEvent.where(subject: record).order(:id).last&.context.to_h.dig("merged_into", "id")
+        raise Invalid, "#{record.name} is #{record.verification_status}; news isn't added to it" unless into
+
+        id = into
+      end
+      raise Invalid, "#{model.name.downcase} #{id}: too many merges to follow"
+    end
+    private_class_method :merged_survivor
+
     # Merges one organization into another (one company per brand, decision
     # #23): a human's decision, so by: must start with "human:". In one
     # transaction that locks both, everything about from moves to into:
@@ -117,6 +170,22 @@ module Directory
     # on from and is rejected, and a closed fact stays where it was decided
     # (#229). Then from is unpublished, and the audit reason
     # says where it went and what moved. Returns a Result for into.
+    # A merged record's news is the record kept's (#137): each mention moves,
+    # or goes when into has it already. Returns how many moved.
+    def move_news_mentions(from, into)
+      # Each mention is put on into first, skipping one that's there already
+      # (or that a concurrent grouping put there), then taken off from. In
+      # news_item_id order, so two groupings into the same site take the
+      # unique index's slots in the same order and can't deadlock.
+      NewsMention.where(subject: from).order(:news_item_id).sum do |mention|
+        now = Time.current
+        added = NewsMention.insert_all([ { news_item_id: mention.news_item_id, subject_type: into.class.name, subject_id: into.id,
+          created_at: now, updated_at: now } ], unique_by: :index_news_mentions_uniqueness, returning: :id).length
+        mention.destroy!
+        added
+      end
+    end
+
     def merge_organization(from_id:, into_id:, by:, reason: nil)
       raise Invalid, "a merge is a human's decision (by: \"human:…\")" unless by.to_s.start_with?("human:")
       raise Invalid, "can't merge an organization into itself" if from_id == into_id
@@ -184,6 +253,7 @@ module Directory
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Organization", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
+        moved["news"] = move_news_mentions(from, into)
         # A round that names from as a lead investor names into instead, once
         # each and in its order. A closed term stays as it was decided.
         moved["lead investors"] = DealTerm.where("? = ANY (lead_investor_ids)", from.id).where.not(verification_status: Verifiable::CLOSED_STATUSES)
@@ -289,6 +359,7 @@ module Directory
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Facility", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
+        moved["news"] = move_news_mentions(from, into)
 
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this link") unless row.closed? }
         from.unpublish!(by:, reason: [ reason, "#{note}. Moved: #{merge_summary(moved, filled)}" ].compact.join(". "),
@@ -577,8 +648,13 @@ module Directory
     # - otherwise only blank attributes are filled, evidence is added, and the
     #   verification is left alone
     # Automated writers pass this.
+    # create_only: a fact added by hand (#202) is only ever new: one that
+    # exists already is returned as it is (created: false), never updated or
+    # locked, so a duplicate can't change it or wait on its lock. A unit
+    # under a site is the same one by its docket, or by its name under that
+    # site, never by a same-name site elsewhere.
     def write(kind, attributes, evidence: [], verification: nil, fill_blank: false, protect_human_verified: false,
-      remove_aliases: [])
+      remove_aliases: [], create_only: false)
       kind = kind.to_sym
       spec = KINDS[kind] or return failure(kind, "unknown kind #{kind.inspect}")
       human = verification.to_h.symbolize_keys[:by].to_s.start_with?("human:")
@@ -594,13 +670,17 @@ module Directory
         return failure(kind, "aliases must be a name or a list of names")
       end
 
+      if create_only && (existing = existing_for_create(kind, spec[:model], attributes))
+        return Result.new(kind:, id: existing.id, created: false, errors: [], conflicts: {}, changed: false)
+      end
+
       record = nil
       created = changed = false
       ActiveRecord::Base.transaction(requires_new: true) do
         # Checked before anything changes, even for a curated record whose
         # verification won't be applied: a bad key must never pass silently.
         check_verification!(verification) if verification
-        record = find(kind, spec[:model], attributes) || spec[:model].new
+        record = (find(kind, spec[:model], attributes) unless create_only) || spec[:model].new
         created = record.new_record?
         @evidence_changed = @aliases_changed = false
         skipped_alias = nil
@@ -646,7 +726,10 @@ module Directory
         end
         changes = changes.select { |name, _| record.public_send(name).blank? } if (fill_blank || curated) && !created
         record.assign_attributes(changes)
+        gained_site = kind == :facility && !created && record.parent_id_changed? && record.parent_id_was.nil? && record.parent_id
         record.save!
+        # A unit that gains its site: its news is the site's now (#137), moved once.
+        move_news_mentions(record, Facility.find(record.parent_id)) if gained_site
         edited = audited_values(record) unless created
 
         if kind == :organization
@@ -798,6 +881,9 @@ module Directory
         summary.join(", ").presence || "nothing"
       end
 
+      # How many of from's news mentions would move (into hasn't them already).
+      def news_moving(from, into) = NewsMention.where(subject: from).where.not(news_item_id: NewsMention.where(subject: into).select(:news_item_id)).count
+
       # merge_organization's counts, read only.
       def organization_merge_counts(from, into)
         moved = Hash.new(0)
@@ -808,6 +894,7 @@ module Directory
         moved["aliases"] += 1 unless name == OrganizationAlias.normalize(into.name) || OrganizationAlias.exists?(normalized_alias: name) || others.include?(name)
         moved["domain"] += 1 if from.domain && into.domain.blank?
         moved["SEC CIK"] += 1 if from.sec_cik && into.sec_cik.blank?
+        moved["news"] = news_moving(from, into)
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
           from.public_send(table).each do |row|
@@ -853,6 +940,7 @@ module Directory
         moved = Hash.new(0)
         filled = SITE_FIELDS.select { |name| into.public_send(name).blank? && from.public_send(name).present? }
         moved["units"] = from.children.count
+        moved["news"] = news_moving(from, into)
         # from's own aliases are dropped before its names are added to into.
         taken = FacilityAlias.where.not(facility_id: from.id).pluck(:normalized_alias).to_set
         others = Facility.where.not(id: [ from.id, into.id ]).pluck(:name).map { |other| FacilityAlias.normalize(other) }.to_set
@@ -988,6 +1076,8 @@ module Directory
           model.find_by(attrs.slice(:from_organization_id, :to_organization_id, :relationship_type))
         when :facility_relationship
           model.find_by(attrs.slice(:organization_id, :facility_id, :relationship_type))
+        when :news_item
+          model.find_by(url: attrs[:url].to_s.strip) if attrs[:url].present?
         when :deal_term
           # A term is the same one only under the same link, of the same kind,
           # with the same source id (an award ID); without one it's always new.
@@ -995,6 +1085,21 @@ module Directory
           raise Invalid, "a deal term needs a term type" if attrs[:term_type].blank?
 
           model.find_by(attrs.slice(:link_type, :link_id, :term_type, :external_id)) if attrs[:external_id].present?
+        end
+      end
+
+      # What a create-only write would duplicate: a unit by docket or by name
+      # under its site; anything else as find finds it.
+      def existing_for_create(kind, model, attributes)
+        attrs = attributes.symbolize_keys
+        if kind == :facility && attrs[:parent_id].present?
+          units = Facility.where(parent_id: attrs[:parent_id])
+          (Facility.find_by(nrc_docket: attrs[:nrc_docket]) if attrs[:nrc_docket].present?) ||
+            units.where("LOWER(name) = LOWER(?)", attrs[:name].to_s).first ||
+            # Another name one of the site's units goes by (never a same-name site).
+            units.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(attrs[:name])).select(:facility_id)).first
+        else
+          find(kind, model, attributes.compact)
         end
       end
 
@@ -1099,6 +1204,9 @@ module Directory
 
         row = record.evidence.find_or_initialize_by(source_id: item[:source_id], quote: item[:quote])
         row.assign_attributes(item.slice(:found_by, :confidence, :crawl_run_id))
+        # A quote can back several fields (an HQ line that also states the
+        # legal name): each write adds its fields, never removes any.
+        row.fields = [ *row.fields, *item[:fields] ] if item[:fields].present?
         @evidence_changed = true if row.new_record? || row.changed?
         row.save!
       end

@@ -64,8 +64,10 @@ class DataQuality::Plugins::EiaGenerators::Workbook
     CSV.generate { |csv| csv << COLUMNS.keys; generators.each { |g| csv << g.values_at(*COLUMNS.keys) } }
   end
 
-  def initialize(path)
+  # sheet: the sheet to read (EIA-860's Plant file has a "Plant" sheet).
+  def initialize(path, sheet: SHEET)
     @path = path
+    @sheet = sheet
     @zip = Zip::File.open(path)
   rescue Zip::Error => error
     raise Unreadable, "Not a readable .xlsx: #{error.message}"
@@ -74,27 +76,35 @@ class DataQuality::Plugins::EiaGenerators::Workbook
   def close = @zip&.close
 
   def nuclear_generators
-    header = nil
     generators = []
+    each_record(marker: COLUMNS["eia_plant_id"], titles: COLUMNS.values + [ TECHNOLOGY ]) do |cells|
+      next unless cells[TECHNOLOGY].to_s.strip == NUCLEAR
 
-    each_row(sheet_path) do |cells|
-      if header.nil?
-        # Title rows come first; the header is the row naming "Plant ID".
-        header = cells.invert if cells.value?(COLUMNS["eia_plant_id"])
-        next
-      end
-      next unless cells[header[TECHNOLOGY]].to_s.strip == NUCLEAR
-
-      generators << COLUMNS.transform_values { |title| cells[header[title]]&.strip.presence }
+      generators << COLUMNS.transform_values { |title| cells[title]&.strip.presence }
         .tap { |row| check_identity!(row) && check_numbers!(row) }
     end
-
-    raise Unreadable, "No header row with #{COLUMNS['eia_plant_id'].inspect} on the #{SHEET} sheet" unless header
-    missing = (COLUMNS.values + [ TECHNOLOGY ]) - header.keys
-    raise Unreadable, "Columns missing from the #{SHEET} sheet: #{missing.join(', ')}" if missing.any?
-    raise Unreadable, "No nuclear generators on the #{SHEET} sheet" if generators.empty?
+    raise Unreadable, "No nuclear generators on the #{@sheet} sheet" if generators.empty?
 
     generators
+  end
+
+  # Yields each row under the header as { column title => text }. Title rows
+  # come first; the header is the first row with marker in it ("Plant ID").
+  # Raises Unreadable when there's no header, or one of titles is missing
+  # from it.
+  def each_record(marker:, titles:)
+    header = nil
+    each_row(sheet_path) do |cells|
+      if header.nil?
+        header = cells.invert if cells.value?(marker)
+        next
+      end
+      yield header.transform_values { |column| cells[column] }
+    end
+
+    raise Unreadable, "No header row with #{marker.inspect} on the #{@sheet} sheet" unless header
+    missing = titles - header.keys
+    raise Unreadable, "Columns missing from the #{@sheet} sheet: #{missing.join(', ')}" if missing.any?
   end
 
   # Namespaces are dropped throughout: a row read from the stream on its
@@ -118,9 +128,9 @@ class DataQuality::Plugins::EiaGenerators::Workbook
     end
 
     def sheet_path
-      sheet = xml("xl/workbook.xml").at_xpath("//sheet[@name='#{SHEET}']") or raise Unreadable, "No #{SHEET.inspect} sheet"
+      sheet = xml("xl/workbook.xml").at_xpath("//sheet[@name='#{@sheet}']") or raise Unreadable, "No #{@sheet.inspect} sheet"
       target = xml("xl/_rels/workbook.xml.rels").at_xpath("//Relationship[@Id='#{sheet['id']}']")&.[]("Target")
-      raise Unreadable, "Can't find the #{SHEET} sheet's file" unless target
+      raise Unreadable, "Can't find the #{@sheet} sheet's file" unless target
 
       target.start_with?("/") ? target.delete_prefix("/") : "xl/#{target}"
     end

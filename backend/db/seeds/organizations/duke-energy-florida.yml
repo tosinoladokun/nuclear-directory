@@ -12,7 +12,13 @@ relationships:
   quote: Duke Energy Florida, a subsidiary of Duke Energy
   published: '2026-10-16'
   confidence: 1.0
-facilities: []
+facilities:
+- name: Crystal River 3
+  type: owns
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/cr3
+  quote: On October 1, 2020, Duke Energy Florida transferred the license for Crystal River Unit 3, to Accelerated Decommissioning Partners (ADP). ADP is a joint venture between NorthStar Group Services and Orano USA. Per the agreement, Duke remains the NRC-licensed owner of the plant, property, and decommissioning trust fund but not the spent fuel.
+  confidence: 1.0
+  note: NRC says Duke remains the licensed owner of the plant after the 2020 license transfer to ADP.
 notes: A bare record the crawler made from the NRC Crystal River 3 page. No website, HQ or description is stated by a page read here, so none is set. The Crystal River 3 owner claim is separate (ADP-CR3 holds the license).
 description:
   source_url: https://news.duke-energy.com/releases/duke-energy-florida-launches-new-solar-site-in-jefferson-county
