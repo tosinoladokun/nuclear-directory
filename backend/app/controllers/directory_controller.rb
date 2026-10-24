@@ -35,7 +35,9 @@ class DirectoryController < ApplicationController
 
     @companies = @listing.companies.limit(@shown).to_a
     @plants = @listing.plants.limit(@shown).to_a
-    @counts = DirectoryListing.category_counts
+    # A Show more request wants only the frame's rows (Turbo drops the rest), so the
+    # category counts, the slowest part of the page, are skipped for it.
+    @counts = DirectoryListing.category_counts unless turbo_frame_request?
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
