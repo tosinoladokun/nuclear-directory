@@ -17,7 +17,7 @@ class SearchGapTest < ActiveSupport::TestCase
   end
 
   test "an email, a phone number or one or two letters isn't kept" do
-    [ "me@example.com", "call 555 123 4567", "ab", " x ", "5550199", "212\u2011555\u20110199", "555\u00A0123\u00A04567", "555\u202F123\u202F4567", "２１２-５５５-０１９９", "٢١٢-٥٥٥-٠١٩٩", "212/555/0199", "030/123456", "#{'nuclear ' * 13}me@example.com",
+    [ "me@example.com", "call 555 123 4567", "ab", " x ", "5550199", "212\u2011555\u20110199", "555\u00A0123\u00A04567", "555\u202F123\u202F4567", "２１２-５５５-０１９９", "２１２－５５５－０１９９", "ｍｅ＠ｅｘａｍｐｌｅ．ｃｏｍ", "٢١٢-٥٥٥-٠١٩٩", "212/555/0199", "030/123456", "#{'nuclear ' * 13}me@example.com",
       "#{'nuclear ' * 12}call 555 123 4567" ].each { |query| SearchGap.record(query, results: 0) }
     assert_equal 0, SearchGap.count
   end

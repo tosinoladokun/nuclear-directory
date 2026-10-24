@@ -14,7 +14,11 @@ class SearchGap < ApplicationRecord
   # too, with seven digits or more).
   # Any script's digits (full-width, Arabic-Indic) count as digits.
   PHONE_RUN = /[\p{Nd}[[:space:]]\u00A0\u202F().\/+\-\u2010-\u2015\u2212]+/
-  def self.personal?(query) = query.include?("@") || query.scan(PHONE_RUN).any? { |run| run.scan(/\p{Nd}/).size >= 7 }
+  # Screened as NFKC, so full-width forms ("２１２－５５５－０１９９") read as plain digits and dashes.
+  def self.personal?(query)
+    query = query.unicode_normalize(:nfkc)
+    query.include?("@") || query.scan(PHONE_RUN).any? { |run| run.scan(/\p{Nd}/).size >= 7 }
+  end
 
   enum :status, STATUSES.index_by(&:itself), validate: true, prefix: :status
 
