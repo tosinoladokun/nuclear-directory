@@ -63,11 +63,25 @@ module Dataset
         | `sources` | #{@counts["sources"]} | The public documents the facts come from |
         | `evidence` | #{@counts["evidence"]} | Which source states each fact |
 
+        Other files: `DATA-DICTIONARY.md`, `CITATION.cff`, `LICENSE`, `CHANGELOG.md` and `manifest.json`.
+
+        ## Fields
+
+        | Table | Columns |
+        |---|---|
+        #{Export::TABLES.map { |table, columns| "| `#{table}` | #{columns.keys.map { |column| "`#{column}`" }.join(", ")} |" }.join("\n")}
+
+        ### How the tables join
+
+        - `facilities.site_slug` is the `slug` of a unit's site.
+        - `relationships.from_slug` is a company `slug`. `relationships.to_slug` is a `slug` in `companies` or `facilities`, as `to_table` says.
+        - `evidence.fact_table` and `evidence.fact_key` point at a row in `companies`, `facilities` or `relationships`, and `evidence.source_id` is a `sources.id`. For a company's category or technology, `fact_part` says which one (`role:<key>` or `technology:<key>`).
+
         ## How it's collected
 
         1. Crawlers read public records: #{@crawled.any? ? @crawled.to_sentence : "none in this release"}.
         2. People research the rest from companies' own pages, press releases, SEC filings and agency pages.
-        3. AI models help: they read pages and propose facts, and a separate model checks each proposal against its quote. Neither publishes anything.
+        3. AI models help: they read pages and propose facts, and a separate model checks each proposal against its quote. Neither publishes anything. #{Export::AUTHOR[:given]} #{Export::AUTHOR[:family]} is the editor of record.
 
         ## How it's checked
 
@@ -84,11 +98,26 @@ module Dataset
         - Capacity is net summer capacity in MW, from EIA, for reactor units. A site's capacity is the sum of its operating units.
         - Buckets are computed from each company's sourced categories and links, so a company can be in several. Count companies, not the sum of buckets.
         - Quotes aren't in this dataset, because they're other publishers' text. Each fact's page on #{Export::SITE.delete_prefix("https://")} shows its quote, and the `sources` table links to every document.
+        - Slugs are stable keys, but a merged or renamed company can change slug. The website redirects the old one; this dataset doesn't list old slugs, so check the changelog when joining two releases.
         - The data is as of the release date. The website changes daily.
 
         ## How to cite
 
-        #{citation_line}
+        Cite the DOI that covers all versions, and say which version you used and when you downloaded it.
+
+        **Reference list (APA style):**
+
+        > #{citation_line}
+
+        **BibTeX:**
+
+        ```
+        #{bibtex}
+        ```
+
+        **In running text:** "#{Export::PUBLISHER} (#{Export::AUTHOR[:family]}, #{@released_on.year})", linking the DOI.
+
+        **One fact from the website:** name the company or plant page and the date you read it. Each page shows the source document behind every fact; citing that document directly is better than citing us for the fact.
 
         ## Licence
 
@@ -213,6 +242,13 @@ module Dataset
 
       def doi_line
         concept_doi ? "DOI: [#{concept_doi}](https://doi.org/#{concept_doi}) (all versions)." : "Each release is archived on Zenodo, which gives it a DOI."
+      end
+
+      def bibtex
+        url = concept_doi ? "https://doi.org/#{concept_doi}" : Export::SITE
+        [ "@misc{#{Export::AUTHOR[:family].downcase}_nuclear_directory,", "  author    = {#{Export::AUTHOR[:family]}, #{Export::AUTHOR[:given]}},",
+          "  title     = {#{Export::TITLE}},", "  year      = {#{@released_on.year}},", "  version   = {#{@version}},",
+          "  publisher = {#{Export::PUBLISHER}},", "  note      = {Data set},", "  url       = {#{url}}", "}" ].join("\n")
       end
 
       def citation_line
