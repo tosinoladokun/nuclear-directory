@@ -12,7 +12,7 @@ module DataQuality::Differences
     # source's goes to review, not through as a conflict only approval would
     # see (#402). Equivalent CIKs ("320193" and "0000320193") compare equal.
     "organization" => %w[domain sec_cik],
-    "facility" => %w[nrc_docket eia_plant_id facility_type status state country_code],
+    "facility" => %w[nrc_docket eia_plant_id facility_type status city state country_code],
     # A link's type and ends say which link it is; these are its details.
     "relationship" => %w[description started_on ended_on],
     "facility_relationship" => %w[ownership_pct description started_on ended_on],

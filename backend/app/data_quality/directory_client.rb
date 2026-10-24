@@ -12,7 +12,7 @@ class DataQuality::DirectoryClient
   Ref = Data.define(:type, :id)
   # What a lookup found: enough to match on and to explain a match.
   # values: a link's stored values ({ "ownership_pct" => 45.7, ... }), else nil.
-  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :state,
+  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
     :country_code, :verification_status, :verified_by, :verified_at, :values) do
     def ref = Ref.new(type:, id:)
     def rejected? = verification_status == "rejected"
@@ -70,6 +70,11 @@ class DataQuality::DirectoryClient
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
   end
+
+  # For a plant-level EIA file (#319): the power plants that have no EIA
+  # plant ID yet, to find by name and state.
+  def plants_without_eia_plant_id = lookup.plants_without_eia_plant_id
+  def normalize_facility_name(name) = lookup.normalize_facility_name(name)
 
   # Runs the block with the candidate's attached fact locked, unless it was
   # rejected or unpublished meanwhile: then returns that fact's Record and
@@ -509,7 +514,7 @@ class DataQuality::DirectoryClient
     def record(type, ref, values: nil)
       Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), sec_cik: ref.try(:sec_cik),
         nrc_docket: ref.try(:nrc_docket), eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
-        facility_type: ref.try(:facility_type), status: ref.try(:status), state: ref.try(:state),
+        facility_type: ref.try(:facility_type), status: ref.try(:status), city: ref.try(:city), state: ref.try(:state),
         country_code: ref.try(:country_code), verification_status: ref.verification_status,
         verified_by: ref.try(:verified_by), verified_at: ref.try(:verified_at), values:) if ref
     end
