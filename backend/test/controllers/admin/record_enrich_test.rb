@@ -181,4 +181,14 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     post admin_record_enrich_agreed_path(type: "Organization", id: @company.id), params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) }
     assert_not_equal "verified", link.reload.verification_status
   end
+
+  test "a deal reads with the other company and its terms" do
+    deal = Candidate.create!(source: @agreed.source, crawl_run: @agreed.crawl_run, kind: "deal_term",
+      quote: "Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.",
+      payload: { "link_type" => "Relationship", "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "Big Data Co" },
+        "relationship_type" => "offtake_with", "term_type" => "offtake", "agreement" => "ppa", "status" => "announced", "external_id" => "x",
+        "capacity_mw" => "500.0", "signed_on" => "2026-03-03" }, status: "new", ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    get enrich_path
+    assert_select "#finding-#{deal.id} .type-body-strong", "Deal with Big Data Co: Power purchase agreement, 500 MW, signed 3 Mar 2026"
+  end
 end

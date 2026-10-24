@@ -70,6 +70,14 @@ module DataQuality::Claim
       "#{name_of(payload['organization'])} works on #{humanize(payload['technology'])}."
     # A company's own funding round (#396): every value approval would publish.
     when "deal_term"
+      # A deal under a link (#256): both parties, then its terms.
+      if payload["link_type"] != "Organization" && payload["relationship_type"]
+        party = payload["from_organization"] || payload["organization"]
+        other = payload["to_organization"] ? name_of(payload["to_organization"]) : "the plant #{facility_name(payload['facility'])}"
+        values = payload.except("from_organization", "to_organization", "organization", "facility", "link_type", "term_type", "relationship_type")
+        term = humanize(payload["term_type"])
+        return "#{name_of(party)} #{verb(payload['relationship_type'])} #{other}: #{term.match?(/\A[aeiou]/i) ? 'an' : 'a'} #{term}#{details(values)}."
+      end
       values = payload.except("organization", "link_type", "term_type", "round")
       values = values.transform_keys { |key| ROUND_LABELS.fetch(key, key) } if payload["term_type"] == "funding_round"
       "#{name_of(payload['organization'])} has a #{humanize(payload['term_type'])}#{" (#{payload['round']})" if payload['round'].present?}" \

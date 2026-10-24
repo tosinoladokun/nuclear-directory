@@ -123,8 +123,11 @@ module Seed
       end
 
       def evidence_items(doc)
-        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *doc["relationships"],
-          *doc["facilities"] ].compact.select { |item| item["source_url"] }
+        links = [ *doc["relationships"], *doc["facilities"] ].compact
+        # A term's citation as it'll be written (its own quote, on its own page
+        # or its link's), so its confidence is checked and consolidated too.
+        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links,
+          *links.flat_map { |link| Array(link["terms"]).map { |term| citation(term, link) } } ].compact.select { |item| item["source_url"] }
       end
 
       # The description's quote, plus any "also" quotes that support the rest
@@ -207,9 +210,10 @@ module Seed
           # same link (same from/to/type) doesn't clear a value another
           # entry set. The seed describes what's known; a missing key is
           # "nothing to say", not "clear it".
-          write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
+          link = write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
             relationship_type: item["type"], description: item["description"] }.compact,
             evidence(item, sources))
+          write_terms(slug, "Relationship", link, item, sources)
         end
 
         Array(doc["facilities"]).each do |item|
@@ -222,9 +226,51 @@ module Seed
           # entry about the same owns-link that omits a share doesn't
           # clear the share another entry set, which was rewriting the
           # value and logging four verification events on every re-seed.
-          write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
+          link = write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
             relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] }.compact,
             evidence(item, sources), pending: item["pending"], hold: hold_reason(organization.id, facility.id, item))
+          write_terms(slug, "FacilityRelationship", link, item, sources)
+        end
+      end
+
+      # A deal's terms (#256): each one agreement under its link, with its
+      # MW, money, dates, form of agreement and status, so the data piece
+      # (#255) and the export (#254) read them as data. A term's key is its
+      # stable id (stored as external_id), so a re-seed updates it rather than
+      # adding another. Its evidence is its own quote, else the link's (citation).
+      #   terms:
+      #   - key: constellation-uprates-ppa-2026
+      #     agreement: ppa
+      #     status: signed
+      #     capacity_mw: 890
+      #     signed_on: 2026-10-01
+      #     starts_on: 2026-10-01
+      #     ends_on: 2046-09-30
+      #     conditions: Illinois Commerce Commission approval   # optional: then not counted yet
+      TERM_FIELDS = %w[agreement status conditions capacity_mw firm_mw amount_usd signed_on starts_on ends_on term_years].freeze
+
+      def write_terms(slug, link_type, link, item, sources)
+        terms = Array(item["terms"])
+        return if terms.empty? || !link&.ok?
+
+        link_verified = link_type.constantize.find_by(id: link.id)&.verified?
+        terms.each do |term|
+          unless term["key"].to_s.strip.present?
+            @errors << "#{slug}: a deal term under #{item['to'] || item['name']} needs a key (a stable id, e.g. google-kairos-mpda-2024)"
+            next
+          end
+
+          # A term a person rejected or unpublished stays as decided, as a
+          # closed link does: a re-seed never brings it back.
+          next if DealTerm.find_by(link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip)&.closed?
+
+          # A field the entry leaves out is "nothing to say" (#251); one it
+          # gives as null clears it (a condition met since, say).
+          attributes = { link_type:, link_id: link.id, term_type: term["type"] || "offtake", external_id: term["key"].to_s.strip }
+            .merge(TERM_FIELDS.select { |field| term.key?(field) }.to_h { |field| [ field.to_sym, term[field] ] })
+          # Pending only while the link itself is: once a person approves the
+          # link, its terms are verified with it, though the YAML still says pending.
+          write(slug, :deal_term, attributes, evidence(citation(term, item), sources), pending: item["pending"] && !link_verified)
         end
       end
 
@@ -330,6 +376,18 @@ module Seed
           .compact_blank.symbolize_keys
       end
 
+      # A term's citation: its own quote (from its own page, else its link's),
+      # or with no quote of its own, its link's whole citation.
+      def citation(term, link)
+        return link if term["quote"].to_s.strip.empty?
+
+        url = term["source_url"] || link["source_url"]
+        # The link's date only for the link's own page: another page's date is unknown.
+        published = term["published"] || (link["published"] if url == link["source_url"])
+        { "source_url" => url, "quote" => term["quote"], "confidence" => term.fetch("confidence", link["confidence"]),
+          "published" => published }.compact
+      end
+
       # nil when the file gives no source (e.g. an HQ city stated without one).
       def evidence(item, sources)
         return unless item["source_url"]
@@ -389,7 +447,7 @@ module Seed
         if result.ok?
           count(kind, result.id, result.created ? :created : (result.changed ? :changed : :unchanged))
         else
-          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type]}: " \
+          @errors << "#{slug}: #{kind} #{attributes[:name] || attributes[:role] || attributes[:relationship_type] || attributes[:external_id]}: " \
             "#{result.errors.join("; ")}"
         end
         result

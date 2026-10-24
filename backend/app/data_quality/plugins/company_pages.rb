@@ -27,7 +27,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-3".freeze
+  PROMPT_VERSION = "company_pages-4".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
@@ -36,6 +36,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PLANNED = /\b(plans? to|planning to|aims? to|will|intends? to|in talks|exploring|considering)\b/i
   # A round the company says it has, not one it seeks.
   RAISED = /\b(raised|raises|closed|closes|secured|secures|completed)\b/i
+  # The form of agreement, from the quote's own words (#439's list); the
+  # first that matches, early stages first so an "MOU for a PPA" stays an MOU.
+  AGREEMENT_WORDS = {
+    "mou" => /\b(memorandum of understanding|MOU)\b/i, "loi" => /\b(letter of intent|LOI)\b/i,
+    "framework" => /\bframework\b/i, "option" => /\boption\b/i, "preorder" => /\bpre-?order\b/i,
+    "development_agreement" => /\bdevelopment agreement\b/i, "prepayment" => /\bprepay(ment)?\b/i,
+    "ppa" => /\b(power purchase agreement|PPA)\b/i, "supply_agreement" => /\bsupply (agreement|contract)\b/i,
+    "tariff_subscription" => /\btariff\b/i
+  }.freeze
   # A round, not a grant, award, loan or contract; an exact figure only.
   ROUND_WORDS = /\b(round|funding|financing|series\s+[a-z]\b|seed|investment|(raised|raise|raises)\s+(equity|capital))/i
   NOT_A_ROUND = /\b(awards?|grants?|contracts?|loans?|debt|credit\s+facility|PPA|power\s+purchase)\b/i
@@ -74,6 +83,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       date exactly as the quote writes it ("December 6, 2024"), or null. The quote must name this company (or "we") and the round.
       Not grants, awards, loans, debt or contracts; not a round of another company; amounts exactly as written, never summed.
       Never investors' names, valuations or totals across rounds.
+    - deals: an agreement this company has with another company to buy or sell power or fuel (offtake or supply). other: the other
+      company as named; company_first: true when this company sells or supplies to the other; amount and capacity exactly as the
+      quote writes them ("$80 million", "500 MW"), or null; date as written, or null. The quote must name both parties (or "we"),
+      say what kind of agreement it is (power purchase agreement, supply agreement, MOU, letter of intent, framework, option…),
+      and state it as signed or in force, never planned.
     Never report people (founders, executives, staff), investors or customers from logo lists, plant status or capacity, numbers
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
@@ -222,6 +236,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
             payload: { "from_organization" => ends.first, "to_organization" => ends.last, "relationship_type" => verb } }
         end
       end
+      Array(found["deals"]).each do |item|
+        deal = two_party_deal(name, item, quoted, url) and fields << deal
+      end
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
@@ -260,6 +277,41 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         "starts_on" => starts_on&.iso8601 }.compact }
     end
 
+    # A deal between this company and another (#256), as a deal term on
+    # their link: "announced", since only this company states it (Data
+    # Quality's two-party rule). The form of agreement is read from the
+    # quote's own words; every value is in the quote.
+    def two_party_deal(name, item, quoted, url)
+      other, quote = item["other"].to_s.strip, item["quote"].to_s.strip
+      return if other.blank? || !quoted.(other, quote)
+      return unless quote.downcase.include?(name.downcase) || quote.match?(/\b(we|our|us)\b/i)
+      return if quote.match?(PLANNED) || quote.match?(INEXACT)
+
+      agreement = AGREEMENT_WORDS.find { |_key, words| quote.match?(words) }&.first or return
+      amount_text, capacity_text, date_text = item.values_at("amount", "capacity", "date").map { |value| value.to_s.strip.presence }
+      return if [ amount_text, capacity_text, date_text ].compact.any? { |value| !quote.downcase.include?(value.downcase) }
+
+      amount = dollars(amount_text) if amount_text
+      capacity = megawatts(capacity_text) if capacity_text
+      return if (amount_text && !amount) || (capacity_text && !capacity)
+
+      signed_on = (Date.parse(date_text) if date_text&.match?(/\b(19|20)\d\d\b/) && quote.match?(/\bsign(ed|s)?\b/i)) rescue nil
+      ends = [ { "name" => name }, { "name" => other } ]
+      ends.reverse! unless item["company_first"]
+      { kind: "deal_term", quote:, payload: {
+        "link_type" => "Relationship", "from_organization" => ends.first, "to_organization" => ends.last, "relationship_type" => (agreement == "supply_agreement" ? "supplies" : "offtake_with"),
+        "term_type" => "offtake", "agreement" => agreement, "status" => "announced",
+        "external_id" => "page:#{url}##{[ other, agreement, amount_text, capacity_text ].compact.join(' ').downcase.squish}",
+        "amount_usd" => amount&.to_s("F"), "capacity_mw" => capacity&.to_s("F"), "signed_on" => signed_on&.iso8601 }.compact }
+    end
+
+    # "500 MW", "1.2 GW" as megawatts; nil otherwise.
+    def megawatts(text)
+      match = text.match(/\A([\d,]+(?:\.\d+)?)\s*(MW|GW|megawatts?|gigawatts?)\z/i) or return
+      number = BigDecimal(match[1].delete(","))
+      match[2].downcase.start_with?("g") ? number * 1000 : number
+    end
+
     # "$37 million", "$1.2 billion", "$37,000,000" as dollars; nil otherwise.
     def dollars(text)
       match = text.match(/\A(?:US)?\$\s?([\d,]+(?:\.\d+)?)\s*(million|billion|m|bn|b)?\z/i) or return
@@ -278,10 +330,14 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         properties: { other: { type: "string" }, other_is: { type: "string", enum: %w[company plant] },
           verb: { type: "string", enum: COMPANY_VERBS + PLANT_VERBS }, company_first: { type: "boolean" }, quote: { type: "string" } } } }
       maybe = { type: %w[string null] }
+      deals = { type: "array", items: { type: "object", additionalProperties: false,
+        required: %w[other company_first amount capacity date quote],
+        properties: { other: { type: "string" }, company_first: { type: "boolean" }, amount: maybe, capacity: maybe, date: maybe,
+          quote: { type: "string" } } } }
       rounds = { type: "array", items: { type: "object", additionalProperties: false, required: %w[amount round date quote],
         properties: { amount: maybe, round: maybe, date: maybe, quote: { type: "string" } } } }
-      { type: "object", additionalProperties: false, required: [ *FIELDS, "roles", "technologies", "listing", "links", "rounds" ],
+      { type: "object", additionalProperties: false, required: [ *FIELDS, "roles", "technologies", "listing", "links", "rounds", "deals" ],
         properties: FIELDS.index_with { quoted }.merge("roles" => keyed, "technologies" => keyed, "listing" => listing, "links" => links,
-          "rounds" => rounds) }
+          "rounds" => rounds, "deals" => deals) }
     end
 end

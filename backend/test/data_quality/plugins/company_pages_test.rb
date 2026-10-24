@@ -196,4 +196,33 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
         "external_id" => "page:#{HOME}#seed $3 million", "amount_usd" => "3000000.0", "round" => "seed" } ], claims.map { |c| c[:payload] }
     assert(claims.all? { |c| c[:kind] == "deal_term" })
   end
+
+  test "a deal with another company is an announced offtake on their link: its form from the quote, every value in it" do
+    page = <<~HTML
+      <html><body><p>Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.</p>
+      <p>We signed a memorandum of understanding with Grid Co.</p><p>We plan to sign a PPA with Later Co for 300 MW.</p>
+      <p>Bright Power signed a PPA with Dim Power for 100 MW.</p><p>We are working with Vague Co.</p>
+      <p>We signed a supply agreement with Fuel Co for up to $80 million.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    deal = ->(other, first, amount, capacity, date, quote) { { "other" => other, "company_first" => first, "amount" => amount, "capacity" => capacity, "date" => date, "quote" => quote } }
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [], "rounds" => [], "deals" => [
+        deal.("Big Data Co", true, nil, "500 MW", "March 3, 2026", "Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026."),
+        deal.("Grid Co", true, nil, nil, nil, "We signed a memorandum of understanding with Grid Co."),
+        deal.("Later Co", true, nil, "300 MW", nil, "We plan to sign a PPA with Later Co for 300 MW."),           # a plan
+        deal.("Dim Power", true, nil, "100 MW", nil, "Bright Power signed a PPA with Dim Power for 100 MW."),   # two other companies
+        deal.("Vague Co", true, nil, nil, nil, "We are working with Vague Co."),                                 # no form of agreement
+        deal.("Fuel Co", true, "$80 million", nil, nil, "We signed a supply agreement with Fuel Co for up to $80 million.") ] } # inexact
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal [
+      { "link_type" => "Relationship", "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "Big Data Co" },
+        "relationship_type" => "offtake_with", "term_type" => "offtake", "agreement" => "ppa", "status" => "announced",
+        "external_id" => "page:#{HOME}#big data co ppa 500 mw", "capacity_mw" => "500.0", "signed_on" => "2026-03-03" },
+      { "link_type" => "Relationship", "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "Grid Co" },
+        "relationship_type" => "offtake_with", "term_type" => "offtake", "agreement" => "mou", "status" => "announced",
+        "external_id" => "page:#{HOME}#grid co mou" } ], claims.map { |c| c[:payload] }
+  end
 end
