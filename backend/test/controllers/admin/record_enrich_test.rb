@@ -215,4 +215,10 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_in_delta requested, @company.enrich_requested_at, 1, "the same request, resumed"
     assert_nil @company.enriched_at
   end
+
+  test "a stored website that isn't http or https shows as plain text, never a link" do
+    @company.update_columns(website: "javascript:alert(1)")
+    get enrich_path
+    assert_select "a[href^='javascript']", 0
+  end
 end

@@ -11,7 +11,8 @@
     <% if @company.website.blank? && @company.sec_cik.blank? %>
       <p class="type-body m-0">It has no website to read yet. Add one with <%= link_to "Edit", admin_record_edit_path(type: "Organization", id: @company.id), class: "nd-link" %> first.</p>
     <% else %>
-      <% where = [ (link_to(source_host(@company.website), @company.website, class: "nd-link", target: "_blank", rel: "noopener") if @company.website.present?),
+      <% where = [ (if (site = safe_url(@company.website)) then link_to(source_host(site), site, class: "nd-link", target: "_blank", rel: "noopener")
+             elsif @company.website.present? then @company.website.to_s end),
            (link_to("its SEC record", @sec.url, class: "nd-link", target: "_blank", rel: "noopener") if @sec) ].compact %>
       <% unread = { "its site" => @home, "its SEC record" => @sec }.select { |_, page| page && (!page.crawl_ok? || page.status_reason.present?) } %>
       <p class="type-body m-0">
