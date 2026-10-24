@@ -5,7 +5,12 @@ aliases:
 - ADVANCED REACTOR CONCEPTS, LLC
 - ARC Clean Technology
 website: https://www.arc-cleantech.com/
-hq: null
+hq:
+  city: Washington
+  state: DC
+  source_url: https://www.arc-cleantech.com/about
+  quote: Headquartered in Washington, DC, ARC Clean Technology was founded in 2006
+  confidence: 1.0
 country_code: US
 status: active
 roles:
