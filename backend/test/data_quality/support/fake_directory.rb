@@ -47,13 +47,14 @@ module FakeDirectory
     def open_corrections?(type:, id:) = false
     def similar_facilities(name) = []
     def facility_units(name:, state: nil) = []
+    def known_name?(type:, id:, name:) = false
+    def domain_from(url) = Organization.domain_from(url)
 
     private
       # Same rule as the real Lookup.
       def one_of!(**options)
         raise ArgumentError, "pass exactly one of #{options.keys.join(", ")}" unless options.compact.size == 1
       end
-    def known_name?(type:, id:, name:) = false
   end
 
   class FactWriter

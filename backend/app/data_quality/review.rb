@@ -242,6 +242,14 @@ module DataQuality::Review
       return false if changes.nil? || changes.any?
 
       payload = candidate.payload.to_h
+      # Values approval derives, not only the ones the claim states: a
+      # website's domain, and a unit's site from its EIA plant ID.
+      if candidate.kind == "organization" && payload["website"].present? && !payload.key?("domain")
+        derived = directory.domain_from(payload["website"])
+        return false if derived.present? && directory.organization(domain: derived)&.id != record.id
+      end
+      return false if candidate.kind == "facility" && directory.site_for_unit(candidate)
+
       names = [ payload["name"], *Array(payload["aliases"]) ].compact_blank
       names.all? { |name| directory.known_name?(type: candidate.subject_type, id: candidate.subject_id, name:) }
     end
