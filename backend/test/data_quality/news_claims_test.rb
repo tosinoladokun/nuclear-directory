@@ -68,4 +68,18 @@ class DataQuality::NewsClaimsTest < ActiveSupport::TestCase
     assert_not result.ok?
     assert_empty NewsItem.all, "item and mentions together, or neither"
   end
+
+  test "what a news claim is about can't be edited in; an automated write never overwrites a person's approval" do
+    claim = news([ { "name" => "Acme Fission", "type" => "organization" } ])
+    match!
+    result = DataQuality::Review.edit_and_approve(claim.reload.id, attributes: { "about" => [ { "name" => "Other Co", "type" => "organization" } ] }, by: BY)
+    assert_match "can't edit about here", result.errors.to_sentence
+
+    assert DataQuality::Review.approve([ claim.id ], by: BY).sole.ok?
+    item = NewsItem.sole
+    again = news([ { "name" => "Acme Fission", "type" => "organization" } ])
+    match!
+    DataQuality::DirectoryClient.new.write_fact(again.reload, confidence: 0.9, crawl_run: nil)
+    assert_equal BY, item.reload.verified_by, "still the person's, so it stays in Latest"
+  end
 end
