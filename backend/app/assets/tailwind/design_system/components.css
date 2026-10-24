@@ -206,6 +206,7 @@
 
   .nd-list { list-style: none; margin: 0; padding: 0; }
   .nd-listrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: var(--nd-space-1) var(--nd-space-4); align-items: center; padding: 14px var(--nd-space-1); border-bottom: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink); text-decoration: none; }
+  .nd-fuzzy-note { margin: var(--nd-space-3) 0 0; }
   .nd-listrow:hover { background: var(--nd-paper-raised); }
   .nd-listrow:hover .nd-listrow__name { text-decoration: underline; text-underline-offset: 3px; }
   .nd-listrow__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; container-type: inline-size; }
@@ -431,6 +432,7 @@
   .nd-instant__all { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-space-2); padding: var(--nd-space-3) var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink-muted); text-decoration: none; }
   .nd-instant__all:hover, .nd-instant__all:focus-visible { background: var(--nd-paper-sunken); color: var(--nd-ink); }
   .nd-instant__all kbd { border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); padding: 2px 6px; }
+  .nd-instant__note { margin: 0; padding: var(--nd-space-3) var(--nd-space-4) 0; color: var(--nd-ink-muted); }
   .nd-instant__empty { margin: 0; padding: var(--nd-space-4); }
 
   .nd-suggs { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--nd-space-2); }
