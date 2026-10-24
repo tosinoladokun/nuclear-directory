@@ -11,7 +11,7 @@
 # repeats a source that already ran, and still fails for any that failed.
 # Each source gets its own ATTEMPTS.
 class DataQuality::DailyCrawlJob < ApplicationJob
-  SOURCE_KINDS = %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms].freeze
+  SOURCE_KINDS = %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d].freeze
   RETRY_WAIT = 10.minutes
   ATTEMPTS = 30
 
