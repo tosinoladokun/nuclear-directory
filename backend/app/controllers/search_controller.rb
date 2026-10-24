@@ -15,6 +15,13 @@ class SearchController < ApplicationController
     if @query
       @companies = listing.companies.limit(COMPANY_LIMIT).to_a
       @plants = listing.plants.limit(PLANT_LIMIT).to_a
+      # Nothing exact: close names ("brown ferry" finds Browns Ferry), said so (#431).
+      if @companies.empty? && @plants.empty? && listing.fuzzy_possible?
+        close = listing.fuzzy_copy
+        @companies = close.companies.limit(COMPANY_LIMIT).to_a
+        @plants = close.plants.limit(PLANT_LIMIT).to_a
+        @fuzzy = @companies.any? || @plants.any?
+      end
       @roles = OrganizationRole.published.where(organization_id: @companies.map(&:id)).includes(:role).group_by(&:organization_id)
     end
 
