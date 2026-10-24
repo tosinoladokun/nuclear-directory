@@ -26,6 +26,7 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 - **A unit** has an NRC docket (or, before licensing, a unit number the developer states) and sits under its site. Two levels only: site, then unit.
 - **A site** has no parent. It holds the EIA plant ID, the location and the operator links. A single-unit plant can stand alone as one record until its EIA site exists (Columbia today).
 - Unit capacity, coordinates and state come from EIA's generator row. A unit's state should equal its site's (audited).
+- **In a company's seed file,** a link to one unit gives its site too: `- name: Indian Point 2` with `site: Indian Point`. The loader finds the site among sites by name (or makes it), then the unit under it by name (or makes it there). A same-name plant with no site becomes that unit; one already under another site fails the load. Write the site's name exactly as the directory has it (Indian Point, San Onofre, Duane Arnold Energy Center): a variant makes a second site. Without `site:`, the entry is a plant of its own, so use it only for a site or a single-unit plant.
 
 ### The same record
 
