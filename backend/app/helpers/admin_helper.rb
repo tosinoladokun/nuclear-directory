@@ -332,11 +332,28 @@ module AdminHelper
     when "organization_role" then "What it does: #{role_label(payload['role'])}"
     when "organization_technology" then "Technology: #{Technology.find_by(key: payload['technology'])&.name || payload['technology']}"
     when "deal_term"
+      return enrich_deal(payload, company: @company&.name) if payload["link_type"] == "Relationship"
+
       parts = [ payload["round"], (DataQuality::Claim.dollars(payload["amount_usd"]) if payload["amount_usd"]),
         (Date.iso8601(payload["starts_on"]).strftime("%-d %b %Y") if payload["starts_on"]) ].compact
       "Funding round: #{parts.join(', ')}"
     else item.claim
     end
+  end
+
+  AGREEMENT_LABELS = { "ppa" => "Power purchase agreement", "supply_agreement" => "Supply agreement", "tariff_subscription" => "Tariff subscription",
+    "development_agreement" => "Development agreement", "prepayment" => "Prepayment", "framework" => "Framework", "mou" => "MOU",
+    "loi" => "Letter of intent", "option" => "Option", "preorder" => "Preorder" }.freeze
+
+  # "Deal with Big Data Co: Power purchase agreement, 500 MW, signed 3 Mar 2026".
+  def enrich_deal(payload, company: nil)
+    names = [ payload["from_organization"], payload["to_organization"] ].compact.map { |named| named["name"].to_s }
+    other = names.find { |name| !name.casecmp?(company.to_s) } || names.last
+    parts = [ AGREEMENT_LABELS.fetch(payload["agreement"].to_s) { payload["agreement"].to_s.humanize },
+      ("#{BigDecimal(payload['capacity_mw']).to_s('F').delete_suffix('.0')} MW" if payload["capacity_mw"]),
+      (DataQuality::Claim.dollars(payload["amount_usd"]) if payload["amount_usd"]),
+      ("signed #{Date.iso8601(payload['signed_on']).strftime('%-d %b %Y')}" if payload["signed_on"]) ].compact_blank
+    "Deal with #{other}: #{parts.join(', ')}"
   end
 
   def field_label(name) = DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize }

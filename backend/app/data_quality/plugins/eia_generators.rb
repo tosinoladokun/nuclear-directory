@@ -83,6 +83,21 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
     rows.map { |row| enrichment(row) } + rows.group_by { |row| row["eia_plant_id"] }.flat_map { |_, plant| plant_candidates(plant) }
   end
 
+  # Earlier monthly files (#542): each month is its own source, older first.
+  def earlier_editions(source)
+    current = month_number(source.url) or return []
+    Source.where(source_kind:).where.not(id: source.id)
+      .filter_map { |other| (month = month_number(other.url)) && month < current ? [ month, other.id ] : nil }.sort.map(&:last)
+  end
+
+  # "september_generator2026.xlsx" as a month count, or nil.
+  def month_number(url)
+    month, year = url.to_s.match(/(#{MONTH_NAMES_RE})_generator(\d{4})\.xlsx/i)&.captures
+    return unless month
+
+    year.to_i * 12 + Date::MONTHNAMES.index(month.capitalize).to_i
+  end
+
   private
     # A generator's capacity and place, for its NRC unit (#61).
     def enrichment(row)

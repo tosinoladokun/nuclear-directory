@@ -249,7 +249,7 @@ class DataQuality::DirectoryClient
     attributes = deal_term_link(candidate.payload, attributes) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
-      at: candidate.source.fetched_at || Time.current)
+      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind)
   end
 
   # A source read again with the same rows: all its evidence was checked at:.
