@@ -1,30 +1,31 @@
-# Seed research for #253 batch 2 (hyperscaler power deals) - 2026-10-15. Quotes copied from raw page text fetched this session.
+# Seed research for #253 batch 2 (hyperscaler power deals), re-sourced 21 Oct 2026 to ENTRA1's own site and NuScale's own page.
 name: ENTRA1 Energy
 aliases:
 - ENTRA1 Energy LLC
 - ENTRA1
 website: https://entra1.com
-hq: null
+hq:
+  city: Houston
+  state: TX
+  source_url: https://entra1.com/
+  quote: '"addressLocality": "Houston", "addressRegion": "TX"'
+  confidence: 1.0
 country_code: US
 status: active
 roles:
 - key: project_developer
-  source_url: https://www.sec.gov/Archives/edgar/data/1822966/000182296623000242/a2023-10x06xstandardpowe.htm
-  quote: ENTRA1 develops, finances, owns and operates energy production plants powered by the NuScale SMR Technology
-  published: '2023-10-06'
-  confidence: 0.9
+  source_url: https://entra1.com/
+  quote: ENTRA1 Energy is an independent energy production company and asset architect specializing in the deployment, financing, and operation of baseload power infrastructure across nuclear, natural gas, and other advanced energy sources.
+  confidence: 1.0
 technologies:
 - key: smr
-  source_url: https://www.sec.gov/Archives/edgar/data/1822966/000182296623000242/a2023-10x06xstandardpowe.htm
-  quote: ENTRA1 Energy is NuScale's exclusive global strategic partner commercializing the NuScale SMR Technology.
-  confidence: 0.9
+  source_url: https://www.nuscalepower.com/
+  quote: ENTRA1 Energy is our exclusive global partner for the commercialization, distribution, and deployment of our groundbreaking SMR technology.
+  confidence: 1.0
 relationships: []
 facilities: []
-notes: 'entra1.com renders with JavaScript; only its meta description was readable in the raw HTML (used for the description). Category project_developer (Tosin, 16 Oct), from the 2023 SEC boilerplate ("ENTRA1 develops, finances, owns and operates energy production plants powered by the NuScale SMR Technology"); the site does not say it designs reactors or runs a plant today. country_code US rests on the same exhibit: "ENTRA1 Energy LLC is an American independent global energy production company" (SEC, not char-verified live; matched against a copy fetched earlier this session). Developer partner on the Standard Power plan (standard-power.yml).'
+notes: Roles, technology and HQ now cite ENTRA1's own site (its structured data; the page renders with JavaScript) and NuScale's own page; the 2023 SEC filing about Standard Power is no longer a source. Owners are not named by any page read, so none is stated. The ENTRA1 NuScale LLC joint venture on Wikipedia is unconfirmed.
 description:
-  text: Energy company deploying baseload power infrastructure across nuclear, natural gas and other sources.
+  text: Energy production company deploying, financing and operating baseload power infrastructure across nuclear, natural gas and other sources.
   source_url: https://entra1.com/
-  quote: ENTRA1 Energy's mission is to be a vital contributor to America's energy dominance and security by deploying baseload power infrastructure across nuclear, natural gas, and other advanced energy sources.
-  also:
-  - source_url: https://www.sec.gov/Archives/edgar/data/1822966/000182296623000242/a2023-10x06xstandardpowe.htm
-    quote: ENTRA1 Energy LLC is an American independent global energy production company
+  quote: ENTRA1 Energy is an independent energy production company and asset architect specializing in the deployment, financing, and operation of baseload power infrastructure across nuclear, natural gas, and other advanced energy sources.

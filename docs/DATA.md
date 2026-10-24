@@ -210,6 +210,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 - **Publishing:** a fact is public only through its model's `.published` scope: a unit when verified under an open site; a pending site when it has such a unit; a link only when both ends are public; a deal term only with its link.
 - **Deal terms:** one term per link (or company), kind and award ID; an award needs an amount, a start date and an award ID; a term on a company itself is a funding round; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
 - **SEC CIK:** 10 digits, zero-padded, unique among companies.
+- **First batches and Data Quality's list (PM, 22 Oct):** the Today screen's "accept the agreed" shortcut lifts a new source's first-batch hold when Data Quality's list has reviewed the claim. So Data Quality reads that list claim by claim for a new source's first batch, every quote, and never sends a bulk "accept" entry.
 
 - **Read-only access:** Metabase's read-only role reads only the tables on `Metabase::ReadonlyRole::READABLE_TABLES`, never sign-in data, visitors' correction reports or the deploy's records. There are no default privileges. A migration that creates a public-data table adds it to the list and grants it (`Metabase::ReadonlyRole.grant!`); a test fails while any table is on neither list (PM and Data Quality, 18 Oct).
 
