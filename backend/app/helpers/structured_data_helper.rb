@@ -3,7 +3,7 @@
 # shows (the profile already hides what no source backs), and lists the page's
 # numbered sources as `citation`, in the page's order.
 module StructuredDataHelper
-  # A <script type="application/ld+json"> for the head. json_escape keeps
+  # A <script type="application/ld+json"> for the page body (at the top of <main>), not the head: Turbo keeps head scripts across visits and they would pile up. json_escape keeps
   # "</script>" and friends in a name from ending the tag.
   def json_ld_tag(data)
     tag.script(raw(ERB::Util.json_escape(JSON.generate(data))), type: "application/ld+json") # rubocop:disable Rails/OutputSafety
