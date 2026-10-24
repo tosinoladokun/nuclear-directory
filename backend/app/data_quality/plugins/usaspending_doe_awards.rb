@@ -158,6 +158,16 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     end
   end
 
+  # At most this many recipients new to us a night (PM, 23 Oct, #513), each
+  # a company with its "DOE funds" link; largest total awards first.
+  NEW_RECIPIENTS_PER_NIGHT = 15
+
+  def new_sources_per_run = NEW_RECIPIENTS_PER_NIGHT
+
+  def new_source_order(sources)
+    sources.sort_by { |source| [ -CSV.parse(source.content_text.to_s, headers: true).sum { |row| row["amount_usd"].to_d }, source.id ] }
+  end
+
   # A company with any small-business grant (#125) waits for a person: the
   # search is new, a grant's description is all that says it's nuclear
   # work, and its grants join the same link's summary as the others.

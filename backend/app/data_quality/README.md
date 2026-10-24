@@ -94,6 +94,11 @@ docker compose run --rm web bin/rails data_quality:status
 
 ## Adding a source
 
+**Nightly cap on new sources (#513).** A plug-in can set `new_sources_per_run` (and `new_source_order`) so
+extract reads at most that many sources it has never read before in one run, in its order; the rest wait for
+the next nights, and sources read before are never held back. USAspending sets 15, largest award totals first,
+so a new search's companies and their "DOE funds" links reach Data Quality a night's batch at a time.
+
 Create `plugins/<source_kind>.rb` defining `DataQuality::Plugins::<SourceKind> < DataQuality::Plugin`
 with `crawl(run)` and `extract(source, run)` (see `plugin.rb`). Match and verify are shared.
 

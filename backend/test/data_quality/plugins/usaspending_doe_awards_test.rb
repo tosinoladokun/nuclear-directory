@@ -172,6 +172,29 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert_equal Plugin::SMALL_BUSINESS_HOLD, plugin.hold_for_review(Candidate.new(kind: "relationship", source: mixed)), "mixed searches are held too"
   end
 
+  test "at most 15 new recipients a night, largest awards first; the rest the next nights; ones read before always" do
+    sources = 20.times.map do |n|
+      csv = CSV.generate do |rows|
+        rows << Plugin::COLUMNS
+        rows << Plugin::COLUMNS.map { |c| { "award_id" => "A#{n}", "recipient_name" => "CO #{n} INC", "amount_usd" => (1_000_000 * (n + 1)).to_s,
+          "start_date" => "2024-01-01", "search" => "nuclear_energy_rd", "award_url" => "https://www.usaspending.gov/award/A#{n}",
+          "generated_award_id" => "A#{n}", "recipient_id" => "r#{n}" }.fetch(c, nil) }
+      end
+      Source.create!(url: "https://www.usaspending.gov/recipient/r#{n}/latest", source_kind: "usaspending_doe_awards", crawl_status: "ok",
+        content_text: csv, content_sha256: Digest::SHA256.hexdigest(csv))
+    end
+    extract = -> { DataQuality::Stages::Extract.call(plugin:) }
+
+    first = extract.()
+    assert_equal 5, first.stats["deferred"]
+    read = sources.select { |source| source.reload.extracted_sha256.present? }
+    assert_equal (5..19).map { |n| "r#{n}" }.sort, read.map { |source| source.url[%r{recipient/(r\d+)}, 1] }.sort, "largest totals first"
+
+    second = extract.()
+    assert_nil second.stats["deferred"]
+    assert sources.all? { |source| source.reload.extracted_sha256.present? }
+  end
+
   test "a search with more awards than the pages read stores nothing, so the snapshots stay whole" do
     crawl!
     before = recipient(XENERGY["recipient_id"]).content_text
