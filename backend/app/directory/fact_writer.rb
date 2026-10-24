@@ -117,7 +117,11 @@ module Directory
       ActiveRecord::Base.transaction(requires_new: true) do
         # The unit locked as a write that groups it locks it, so its site is
         # read after any grouping that's under way, never before it moves.
-        subject_id = Facility.lock.find(subject_id).parent_id || subject_id if subject_type.to_s == "Facility"
+        if subject_type.to_s == "Facility"
+          subject_id = Facility.lock.find(subject_id).parent_id || subject_id
+          # A site merged away is followed to the one it went into, as a company is.
+          subject_id = merged_survivor(subject_id, model: Facility)
+        end
         # A company is locked as a merge locks it, so a merge under way finishes
         # first; one merged away is followed to the company it went into.
         subject_id = merged_survivor(subject_id) if subject_type.to_s == "Organization"
@@ -125,19 +129,19 @@ module Directory
       end
     end
 
-    # The company id news should be on, its row locked: itself, or the one a
-    # merge moved it into (its unpublish event says which).
-    def self.merged_survivor(id)
+    # The company or site id news should be on, its row locked: itself, or
+    # the one a merge moved it into (its unpublish event says which).
+    def self.merged_survivor(id, model: Organization)
       5.times do
-        company = Organization.lock.find(id)
-        return id unless company.closed?
+        record = model.lock.find(id)
+        return id unless record.closed?
 
-        into = VerificationEvent.where(subject: company).order(:id).last&.context.to_h.dig("merged_into", "id")
-        raise Invalid, "#{company.name} is #{company.verification_status}; news isn't added to it" unless into
+        into = VerificationEvent.where(subject: record).order(:id).last&.context.to_h.dig("merged_into", "id")
+        raise Invalid, "#{record.name} is #{record.verification_status}; news isn't added to it" unless into
 
         id = into
       end
-      raise Invalid, "company #{id}: too many merges to follow"
+      raise Invalid, "#{model.name.downcase} #{id}: too many merges to follow"
     end
     private_class_method :merged_survivor
 
