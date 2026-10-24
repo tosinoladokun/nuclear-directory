@@ -87,7 +87,7 @@ module Directory
       }
     }.freeze
 
-    EVIDENCE_ATTRIBUTES = %i[source_id quote found_by confidence crawl_run_id].freeze
+    EVIDENCE_ATTRIBUTES = %i[source_id quote found_by confidence crawl_run_id fields].freeze
 
     def self.write(...) = new.write(...)
 
@@ -173,8 +173,14 @@ module Directory
     # A merged record's news is the record kept's (#137): each mention moves,
     # or goes when into has it already. Returns how many moved.
     def move_news_mentions(from, into)
+      # Each mention is put on into first, skipping one that's there already
+      # (or that a concurrent grouping put there), then taken off from.
       NewsMention.where(subject: from).sum do |mention|
-        NewsMention.exists?(news_item_id: mention.news_item_id, subject: into) ? (mention.destroy! && 0) : (mention.update!(subject: into) && 1)
+        now = Time.current
+        added = NewsMention.insert_all([ { news_item_id: mention.news_item_id, subject_type: into.class.name, subject_id: into.id,
+          created_at: now, updated_at: now } ], unique_by: :index_news_mentions_uniqueness, returning: :id).length
+        mention.destroy!
+        added
       end
     end
 
@@ -1172,6 +1178,9 @@ module Directory
 
         row = record.evidence.find_or_initialize_by(source_id: item[:source_id], quote: item[:quote])
         row.assign_attributes(item.slice(:found_by, :confidence, :crawl_run_id))
+        # A quote can back several fields (an HQ line that also states the
+        # legal name): each write adds its fields, never removes any.
+        row.fields = [ *row.fields, *item[:fields] ] if item[:fields].present?
         @evidence_changed = true if row.new_record? || row.changed?
         row.save!
       end

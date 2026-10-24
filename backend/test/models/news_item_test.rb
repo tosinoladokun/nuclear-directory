@@ -121,4 +121,15 @@ class NewsItemTest < ActiveSupport::TestCase
     end
     assert_equal [ 2, company.id ], [ calls, mention.subject_id ]
   end
+
+  test "moving news to a site that already has it, as a concurrent grouping would leave it, keeps one mention and counts none moved" do
+    site = Facility.create!(name: "Shared Site", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Shared Unit", verification_status: "verified", verified_by: "human:tosin")
+    item = NewsItem.create!(url: "https://example.com/shared", title: "A headline", published_on: Date.new(2026, 10, 1))
+    NewsMention.create!(news_item: item, subject: unit)
+    NewsMention.create!(news_item: item, subject: site) # put there by the other grouping
+    moved = Directory::FactWriter.new.send(:move_news_mentions, unit, site)
+    assert_equal 0, moved
+    assert_equal [ [ "Facility", site.id ] ], NewsMention.where(news_item: item).pluck(:subject_type, :subject_id)
+  end
 end
