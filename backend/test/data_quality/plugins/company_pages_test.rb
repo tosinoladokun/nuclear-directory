@@ -197,6 +197,25 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert(claims.all? { |c| c[:kind] == "deal_term" })
   end
 
+  test "a listing needs its exchange in the quote; a provisional link is left to deal terms; an announcement's date isn't a closing date" do
+    page = <<~HTML
+      <html><body><p>Acme Fission trades under the symbol ACME.</p><p>Acme Fission signed an MOU with Bright Power to supply fuel.</p>
+      <p>On March 1, 2024, we announced that we had closed a $3 million seed round.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => { "exchange" => "NASDAQ", "ticker" => "ACME", "quote" => "Acme Fission trades under the symbol ACME." },
+      "links" => [ { "other" => "Bright Power", "other_is" => "company", "verb" => "supplies", "company_first" => true,
+        "quote" => "Acme Fission signed an MOU with Bright Power to supply fuel." } ],
+      "rounds" => [ { "amount" => "$3 million", "round" => "seed", "date" => "March 1, 2024",
+        "quote" => "On March 1, 2024, we announced that we had closed a $3 million seed round." } ] }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal [ "deal_term" ], claims.map { |c| c[:kind] }, "no listing without NASDAQ in the quote, no plain link from an MOU"
+    assert_nil claims.sole[:payload]["starts_on"], "March 1 is when it was announced"
+  end
+
   test "a deal runs buyer to seller for power and supplier to buyer for supply; loose agreement words aren't deals" do
     page = <<~HTML
       <html><body><p>Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.</p>

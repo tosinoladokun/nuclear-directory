@@ -150,4 +150,11 @@ class Directory::MergeOrganizationTest < ActiveSupport::TestCase
 
     assert_equal [ "Acme" ], @into.aliases.pluck(:alias)
   end
+
+  test "a stock listing moves to the company kept, unless it has its own" do
+    @from.update_columns(exchange: "NASDAQ", ticker: "ACUS")
+    merge
+    assert_equal [ "NASDAQ", "ACUS" ], [ @into.reload.exchange, @into.ticker ]
+    assert_nil @from.reload.ticker, "the old row no longer holds the pair"
+  end
 end

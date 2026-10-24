@@ -52,6 +52,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   ROUND_WORDS = /\b(round|funding|financing|series\s+[a-z]\b|seed|investment|(raised|raise|raises)\s+(equity|capital))/i
   NOT_A_ROUND = /\b(awards?|grants?|contracts?|loans?|debt|credit\s+facility|PPA|power\s+purchase)\b/i
   INEXACT = /\b(up\s+to|more\s+than|over|about|approximately|nearly|at\s+least|total|totals|totaling|totalling)\b/i
+  # An MOU, letter of intent, framework, option, term sheet or non-binding agreement.
+  PROVISIONAL = /\b(memorandum of understanding|MOU|letter of intent|LOI|framework|option|term sheet|non-binding)\b/i
   # An owner's quote says it owns.
   OWNERSHIP = /\b(own|owns|owned|owner|ownership|stake|share)\b|\d+(\.\d+)?\s?%/i
   FIELDS = %w[description hq_city hq_state founded_year legal_name].freeze
@@ -213,7 +215,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       listing = found["listing"]
       if listing && EXCHANGES.include?(listing["exchange"]) && listing["ticker"].to_s.match?(/\A[A-Z.]{1,6}\z/) &&
-          quoted.(listing["ticker"], listing["quote"])
+          quoted.(listing["ticker"], listing["quote"]) && listing["quote"].to_s.downcase.include?(listing["exchange"].to_s.downcase)
         fields << { kind: "organization", payload: { "name" => name, "exchange" => listing["exchange"], "ticker" => listing["ticker"] },
           quote: listing["quote"].strip }
       end
@@ -225,6 +227,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         next unless quote.downcase.include?(name.downcase) || quote.match?(/\b(we|our|us)\b/i)
         next if quote.match?(PLANNED)
         next if verb == "owns" && !quote.match?(OWNERSHIP)
+        # A provisional agreement can't keep its stage on a plain link
+        # (DATA.md section 2): it comes through as a deal term instead (#524).
+        next if quote.match?(PROVISIONAL)
 
         if link["other_is"] == "plant"
           next unless PLANT_VERBS.include?(verb)
@@ -273,7 +278,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
       # A page's date is when it was announced; it's the round's date only when
       # the quote says the round closed on it (Data Quality).
-      on_close = date_text && quote.match?(/\bon\s+#{Regexp.escape(date_text)}\b/i) && quote.match?(/\b(closed|completed)\b/i)
+      # "On <date>, <a few words> closed": the date is the closing's, never an
+      # announcement's ("On March 1 we announced that we had closed…").
+      on_close = date_text && (between = quote[/\bon\s+#{Regexp.escape(date_text)},?\s+((?:\S+\s+){0,4}?)(?:closed|completed)\b/i, 1]) &&
+        !between.match?(/announc|said|report/i)
       starts_on = (Date.parse(date_text) if on_close && date_text.match?(/\b(19|20)\d\d\b/)) rescue nil
       { kind: "deal_term", quote:, payload: {
         "organization" => { "name" => name }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",

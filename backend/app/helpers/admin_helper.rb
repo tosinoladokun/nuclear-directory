@@ -280,8 +280,11 @@ module AdminHelper
     when "organization"
       return "Listed on #{payload['exchange']} as #{payload['ticker']}" if payload["ticker"]
 
-      field, value = payload.except("name").first
-      field ? "#{field_label(field).upcase_first}: #{field_value(value)}" : item.claim
+      fields = payload.except("name")
+      return item.claim if fields.empty?
+
+      # Every field it would change ("HQ city: Santa Clara · HQ state: CA").
+      fields.map { |field, value| "#{field_label(field).upcase_first}: #{field_value(value)}" }.join(" · ")
     when "organization_role" then "What it does: #{role_label(payload['role'])}"
     when "organization_technology" then "Technology: #{Technology.find_by(key: payload['technology'])&.name || payload['technology']}"
     when "deal_term"

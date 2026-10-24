@@ -65,28 +65,36 @@ class Admin::RecordEnrichController < Admin::BaseController
     # record is read before any of these writes (the first approval mustn't
     # hold back the rest), and two findings for one field never both land.
     directory = DataQuality::DirectoryClient.new
-    results = ActiveRecord::Base.transaction do
-      # Approval's lock order: sources, then claims, then the company.
-      Source.lock.where(id: Candidate.where(id: ids).select(:source_id)).order(:id).ids
-      Candidate.lock.where(id: ids).order(:id).ids
-      Organization.lock.find(@company.id)
-      # Only the company row, locked here, is read before the batch; any
-      # other record (a role, a technology) is checked live under its own lock.
-      own = Candidate.where(id: ids, subject_type: "Organization", subject_id: @company.id).ids
-      company_decided = @company.reload.verified_by.to_s.start_with?("human:")
-      decided = own.index_with { company_decided }
-      fields = []
-      check = lambda do |claim|
-        held = DataQuality::Review.held_reason(claim, directory:, decided: decided[claim.id])
-        next held if held
+    results = begin
+      ActiveRecord::Base.transaction do
+        # Review.approve's order: each claim's source then the claim, in claim
+        # order; then the company.
+        Candidate.where(id: ids).order(:id).pluck(:id, :source_id).each do |id, source_id|
+          Source.lock.find(source_id)
+          Candidate.lock.find(id)
+        end
+        Organization.lock.find(@company.id)
+        # Only the company row, locked here, is read before the batch; any
+        # other record (a role, a technology) is checked live under its own lock.
+        own = Candidate.where(id: ids, subject_type: "Organization", subject_id: @company.id).ids
+        company_decided = @company.reload.verified_by.to_s.start_with?("human:")
+        decided = own.index_with { company_decided }
+        fields = []
+        check = lambda do |claim|
+          held = DataQuality::Review.held_reason(claim, directory:, decided: decided[claim.id])
+          next held if held
 
-        field = claim.kind == "organization" && [ claim.subject_id, claim.payload.to_h.except("name").keys.sort ]
-        next "another finding for the same field was approved just now; decide this one on its own" if field && fields.include?(field)
+          mine = claim.kind == "organization" ? claim.payload.to_h.except("name").keys.map { |key| [ claim.subject_id, key ] } : []
+          next "another finding for the same field was approved just now; decide this one on its own" if mine.intersect?(fields)
 
-        fields << field if field
-        nil
+          fields.concat(mine)
+          nil
+        end
+        DataQuality::Review.approve(ids, by: actor, reason: "Approved in Enrich: Joy agrees", only_recommended: true, safe_check: check)
       end
-      DataQuality::Review.approve(ids, by: actor, reason: "Approved in Enrich: Joy agrees", only_recommended: true, safe_check: check)
+    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
+      # Rolled back whole: each stays waiting, saying why.
+      ids.map { |id| DataQuality::Review::Result.new(candidate_id: id, ref: nil, errors: [ DataQuality::Review::BUSY ]) }
     end
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Approved #{helpers.pluralize(done.size, 'finding')}." if done.any?
@@ -110,7 +118,9 @@ class Admin::RecordEnrichController < Admin::BaseController
         pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i))) if @company.sec_cik.present?
         # Only what this request found (since it was asked); older findings stay in Checks.
         # A trade-press lead (#127) waits for Data Quality, never here.
+        # A "no longer listed" flag (review_origin dropped) is decided in Checks, with its reason.
         scope = Candidate.where(source: pages, status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
+          .where("candidates.review_origin IS DISTINCT FROM 'dropped'")
         scope = scope.where(created_at: @company.enrich_requested_at..) if @company.enrich_requested_at
         scope.order(:id).ids
       end
