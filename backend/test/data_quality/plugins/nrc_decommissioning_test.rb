@@ -76,7 +76,7 @@ class DataQuality::Plugins::NrcDecommissioningTest < ActiveSupport::TestCase
     run = crawl
 
     assert run.succeeded?
-    assert_equal({ "list" => "changed", "units" => 21, "site_pages" => { "changed" => 20 } }, run.stats)
+    assert_equal({ "list" => "changed", "units" => 21, "site_pages" => { "changed" => 20 }, "failed_pages" => [] }, run.stats)
     assert_requested @pages, times: 20
     cr3 = Source.find_by!(url: CR3_URL)
     assert_equal [ "nrc_decommissioning", true ], [ cr3.source_kind, cr3.crawl_ok? ]
@@ -120,6 +120,20 @@ class DataQuality::Plugins::NrcDecommissioningTest < ActiveSupport::TestCase
     assert_equal({ "skipped_recent" => 1 }, second.stats["site_pages"])
     assert_equal "site page blocked", second.stats["stopped"]
     assert_requested @pages, times: 1
+  end
+
+  test "a failed site page is reported by id, and still on a same-day rerun that skips it, until it reads cleanly (#429)" do
+    stub_request(:get, CR3_URL).to_return(status: 500, body: "oops")
+    first = crawl.stats
+    cr3 = Source.find_by!(url: CR3_URL)
+    assert_equal 1, first["site_pages"]["error"]
+    assert_equal [ cr3.id ], first["failed_pages"]
+
+    assert_equal [ cr3.id ], crawl.stats["failed_pages"], "skipped today, still failed"
+
+    Source.update_all(fetched_at: 2.days.ago)
+    stub_request(:get, CR3_URL).to_return(body: "<html><body><p>Crystal River</p></body></html>")
+    assert_equal [], crawl.stats["failed_pages"]
   end
 
   test "a site page is read again when the list maps a new unit to it, though its text is the same" do
