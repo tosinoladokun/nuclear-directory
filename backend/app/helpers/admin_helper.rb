@@ -44,7 +44,9 @@ module AdminHelper
       { label: "Removed", path: admin_removed_path, count: counts[:removed], current: controller_name == "removed" },
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
-        current: controller_name == "corrections" }
+        current: controller_name == "corrections" },
+      # Leads (#484): names that aren't facts yet, for Data Quality to work.
+      { label: "Leads", path: admin_leads_path, count: counts[:leads], title: "Not facts yet", current: controller_name == "leads" }
     ]
   end
 
@@ -135,6 +137,7 @@ module AdminHelper
         checks: DataQuality::Review.counts.values.sum + pending,
         live: Organization.published.count + Facility.published.where(parent_id: nil).count,
         corrections:,
+        leads: Lead.status_new.count,
         outputs: PublicPages.new.count,
         removed: Directory::RemovedList.total,
         today: DataQuality::Review.check_counts["all"] + pending + corrections

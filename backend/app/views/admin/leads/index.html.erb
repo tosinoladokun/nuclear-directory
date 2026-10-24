@@ -1,0 +1,103 @@
+<% content_for :title, "Leads" %>
+
+<div>
+  <h1 class="type-admin-h1">Leads <span class="type-count"><%= @counts["new"].to_i %></span></h1>
+  <p class="type-body text-ink-muted">Names that aren't facts yet, most seen first. Nothing here goes on the site: a lead becomes facts only as claims you approve.</p>
+</div>
+
+<div class="nd-row">
+  <%= button_to "Bring up to date", refresh_admin_leads_path(tab: (@tab unless @tab == "new")), class: "nd-btn nd-btn--outline type-ui" %>
+</div>
+
+<nav class="nd-fchips type-ui" aria-label="Leads">
+  <% Admin::LeadsController::TABS.each do |tab| %>
+    <%= link_to admin_leads_path(tab:), class: "nd-fchip", aria: { current: ("page" if tab == @tab) } do %>
+      <%= tab.humanize %> <span class="type-data nd-num"><%= @counts[tab].to_i %></span>
+    <% end %>
+  <% end %>
+</nav>
+
+<% if @leads.empty? %>
+  <p class="type-body text-ink-muted"><%= { "new" => "No new leads.", "researching" => "Nothing being researched.", "added" => "None linked yet.", "ignored" => "None ignored." }.fetch(@tab) %></p>
+<% else %>
+  <ol class="nd-waits">
+    <% @leads.each do |lead| %>
+      <li class="nd-wait" id="lead-<%= lead.id %>">
+        <div class="nd-wait__what">
+          <p class="type-kicker text-ink-muted">
+            <%= lead.kind.humanize %> · seen <span class="nd-num"><%= lead.seen_count %></span> <%= "time".pluralize(lead.seen_count) %> ·
+            <%= data_date(lead.first_seen_on) %><%= " to #{data_date(lead.last_seen_on)}" unless lead.first_seen_on == lead.last_seen_on %>
+          </p>
+          <p class="type-subject wrap-anywhere"><%= lead.name %></p>
+          <% if (record = lead.record) %>
+            <p class="type-small m-0"><%= lead.status_added? ? "Covered by" : "Researching" %>
+              <%= link_to record.name, admin_record_path(type: lead.record_type, id: record.id), class: "nd-link" %></p>
+          <% end %>
+          <% if lead.status_ignored? && lead.reason.present? %>
+            <p class="type-small m-0">Ignored: <%= lead.reason %> · <%= who(lead.decided_by) %></p>
+          <% end %>
+          <% if lead.note.present? %><p class="type-small text-ink-muted m-0"><%= lead.note %></p><% end %>
+          <details>
+            <summary class="type-small">Where it came from (<%= lead.sources.size %>)</summary>
+            <ul class="nd-wait__more type-small">
+              <% lead.sources.each do |source| %>
+                <li>
+                  <% if (url = safe_url(source["url"])) %><%= link_to source["label"], url, class: "nd-link wrap-anywhere", target: "_blank", rel: "noopener" %>
+                  <% else %><%= source["label"] %><% end %>
+                  · <span class="nd-num"><%= source["times"] %></span>×
+                </li>
+              <% end %>
+            </ul>
+          </details>
+          <% unless lead.status_added? || lead.status_ignored? %>
+            <details>
+              <summary class="type-small">Already covered or ignore</summary>
+              <div class="nd-wait__more nd-stack">
+                <%= form_with url: covered_admin_lead_path(lead, tab: (@tab unless @tab == "new")), method: :post, class: "nd-stack" do %>
+                  <div class="nd-field">
+                    <label for="record-<%= lead.id %>" class="type-small">The company or plant that has it</label>
+                    <%= text_field_tag :record, nil, id: "record-#{lead.id}", class: "nd-input type-input", placeholder: "Its name in the directory" %>
+                  </div>
+                  <button type="submit" class="nd-btn nd-btn--outline type-ui">Already covered</button>
+                <% end %>
+                <%= form_with url: ignore_admin_lead_path(lead, tab: (@tab unless @tab == "new")), method: :post, class: "nd-stack" do %>
+                  <div class="nd-field">
+                    <label for="reason-<%= lead.id %>" class="type-small">Why it's ignored</label>
+                    <%= text_field_tag :reason, nil, id: "reason-#{lead.id}", class: "nd-input type-input", required: true, placeholder: "Not nuclear, a typo…" %>
+                  </div>
+                  <button type="submit" class="nd-btn nd-btn--outline type-ui">Ignore</button>
+                <% end %>
+              </div>
+            </details>
+          <% end %>
+        </div>
+        <div class="nd-wait__actions type-ui">
+          <% if lead.status_new? %>
+            <%= button_to "Research", research_admin_lead_path(lead), class: "nd-btn nd-btn--primary",
+              title: lead.kind == "company" ? "Read its pages if we have it, or mark it for Data Quality" : "Mark it for Data Quality" %>
+          <% else %>
+            <%= button_to "Back to new", reopen_admin_lead_path(lead, tab: @tab), class: "nd-btn nd-btn--outline" %>
+          <% end %>
+        </div>
+      </li>
+    <% end %>
+  </ol>
+  <% if @more %>
+    <div><%= link_to "Next #{Admin::LeadsController::PAGE}", admin_leads_path(tab: @tab, page: @page + 1), class: "nd-btn nd-btn--outline type-ui" %></div>
+  <% end %>
+<% end %>
+
+<details class="nd-panel">
+  <summary class="type-body-strong">Add leads</summary>
+  <%= form_with url: admin_leads_path, method: :post, class: "nd-stack" do %>
+    <div class="nd-field">
+      <label for="names" class="type-small">One name per line, with a note after a colon, or Data Quality's Leads.md table as it is.</label>
+      <%= text_area_tag :names, nil, rows: 6, class: "nd-input type-input", placeholder: "Example Fusion: named in a DOE GAIN list" %>
+    </div>
+    <div class="nd-field">
+      <label for="kind" class="type-small">They're all</label>
+      <%= select_tag :kind, options_for_select([ [ "Companies", "company" ], [ "Plants", "plant" ], [ "Other", "other" ] ], "company"), class: "nd-select type-ui" %>
+    </div>
+    <div><button type="submit" class="nd-btn nd-btn--primary type-ui">Add leads</button></div>
+  <% end %>
+</details>

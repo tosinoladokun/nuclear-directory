@@ -117,6 +117,15 @@ Rails.application.routes.draw do
         post :reject
       end
     end
+    resources :leads, only: %i[index create] do
+      collection { post :refresh }
+      member do
+        post :research
+        post :covered
+        post :ignore
+        post :reopen
+      end
+    end
     resources :corrections, only: :index do
       member do
         post :start
