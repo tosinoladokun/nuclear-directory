@@ -15,17 +15,21 @@
 # fabrication): a licence alone doesn't say a plant runs (DQ, 22 Oct, on
 # #411). No capacity, no model. Match, verify and approval are shared.
 class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
+  include DataQuality::UnlistedPages
+
   NRC = "https://www.nrc.gov".freeze
   LIST_URL = "https://www.nrc.gov/facilities-safety/facility-finder/fc".freeze
   PAGE_PATH = %r{\A/facilities-safety/facility-finder/fc/(?!project-managers)[a-z0-9-]+}
   LABELS = [ "Location", "Licensee", "Docket Number", "Facility Type", "Facility Status" ].freeze
-  NO_FACTS = "The facility's page has no Licensee, Docket Number or Facility Type; the page layout may have changed"
+  NO_FACTS = "The facility's page is missing one of #{LABELS.join(', ')}; the page layout may have changed"
+  UNLISTED = "NRC's fuel cycle locations page no longer links this facility"
+  LISTED_AGAIN = "NRC's fuel cycle locations page links this facility again"
   NO_LINKS = "The locations page links no facility pages; the page layout may have changed"
   # The type's words => the fuel stage it states.
   STAGES = { /\bEnrichment\b/i => "enrichment", /\bConversion\b/i => "conversion", /\bFabrication\b/i => "fabrication" }.freeze
   STATE_CODES = LinkCard::US_STATES.invert.merge(LinkCard::US_STATES.keys.to_h { |code| [ code, code ] }).freeze
 
-  Facility = Data.define(:name, :facts) do
+  Plant = Data.define(:name, :facts) do
     def line = [ name, *LABELS.filter_map { |label| "#{label}: #{facts[label]}" if facts[label] } ].join(" | ")
     def operational? = facts["Facility Status"].to_s.match?(/\AOperational\b/i)
     def stage = STAGES.find { |pattern, _| facts["Facility Type"].to_s.match?(pattern) }&.last
@@ -41,7 +45,7 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
     @fetcher = fetcher
   end
 
-  def crawl(_run)
+  def crawl(run)
     list = Source.find_or_create_by!(url: LIST_URL) do |row|
       row.source_kind = INDEX_SOURCE_KIND
       row.title = "NRC: locations of fuel cycle facilities"
@@ -55,13 +59,19 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
       list.update!(crawl_status: "needs_human", status_reason: NO_LINKS)
       return stats.merge("facility_pages" => 0)
     end
+    urls = paths.map { |path| "#{NRC}#{path}" }
+    stats["withdrawn"] = withdraw_unlisted(urls, run, UNLISTED)
     stats["facility_pages"] = Hash.new(0)
-    paths.each do |path|
-      result = read("#{NRC}#{path}")
+    urls.each do |url|
+      result = read(url)
       stats["facility_pages"][result] += 1
-      return stats.merge("stopped" => "facility page blocked") if result == "blocked"
+      # A block recorded earlier today stops a same-day rerun too, before any later page.
+      return stats.merge("stopped" => "facility page blocked") if result == "blocked" || still_blocked?(Source.find_by!(url:))
+
+      restored = restore_listed(Source.find_by!(url:), LISTED_AGAIN)
+      stats["restored"] = stats.fetch("restored", 0) + restored if restored.positive?
     end
-    stats
+    stats.reject { |key, value| key == "withdrawn" && value.zero? }
   end
 
   # The locations page is only an index, never extracted.
@@ -119,9 +129,9 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
       doc = Nokogiri::HTML(html.to_s)
       name = doc.at_css("main h1, h1")&.text.to_s.squish
       facts = LABELS.to_h { |label| [ label, value_after(doc, label) ] }.compact
-      raise Unreadable if name.empty? || %w[Licensee Docket\ Number Facility\ Type].any? { |label| facts[label].blank? }
+      raise Unreadable if name.empty? || LABELS.any? { |label| facts[label].blank? }
 
-      Facility.new(name:, facts:).line
+      Plant.new(name:, facts:).line
     end
 
     def value_after(doc, label)
@@ -140,6 +150,6 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
       facts = rest.to_h { |part| part.split(": ", 2) }
       return if name.blank? || !(LABELS & facts.keys).include?("Docket Number") || facts.keys.any? { |key| !LABELS.include?(key) }
 
-      Facility.new(name:, facts:)
+      Plant.new(name:, facts:)
     end
 end

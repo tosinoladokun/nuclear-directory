@@ -48,6 +48,36 @@ class DataQuality::Plugins::NrcFuelCycleTest < ActiveSupport::TestCase
     assert_equal "facility page blocked", crawl.stats["stopped"]
   end
 
+  test "a same-day rerun after a block requests no later page" do
+    stub_request(:get, %r{facility-finder/fc/}).to_return(status: 403, body: file_fixture("nrc/akamai-403.html").read)
+    crawl
+
+    assert_equal "facility page blocked", crawl.stats["stopped"]
+    assert_requested :get, %r{facility-finder/fc/}, times: 1
+  end
+
+  test "a page missing its status is a changed layout, not a plant that stopped" do
+    stub_request(:get, %r{facility-finder/fc/}).to_return(body: file_fixture("nrc/fuel_cycle/urenco.html").read.sub(%r{<br><strong>Facility Status:</strong> Operational}, ""))
+
+    assert_equal 12, crawl.stats["facility_pages"]["needs_human"]
+  end
+
+  test "a facility the locations page stops linking: its waiting claims go to review, and return when it's linked again" do
+    DataQuality::Pipeline.run("nrc_fuel_cycle", plugin:, only: %w[crawl extract match])
+    waiting = page.candidates.where(status: %w[new matched needs_review]).count
+    assert waiting.positive?
+
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/fuel_cycle/list.html").read.gsub("urenco-enrichment-fac-nm-lc", "gone"))
+    Source.update_all(fetched_at: 2.days.ago)
+    assert_equal waiting, crawl.stats["withdrawn"]
+    assert page.candidates.where(status: %w[new matched]).none?
+    assert_match Plugin::UNLISTED, page.candidates.first.notes
+
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/fuel_cycle/list.html").read)
+    Source.update_all(fetched_at: 2.days.ago)
+    assert_equal waiting, crawl.stats["restored"]
+  end
+
   test "a facility page without its facts needs a person" do
     stub_request(:get, %r{facility-finder/fc/}).to_return(body: "<html><main><h1>Moved</h1></main></html>")
 

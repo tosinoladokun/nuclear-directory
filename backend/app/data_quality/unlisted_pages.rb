@@ -1,0 +1,68 @@
+# For plug-ins that read one page per record from an index (#386, #387,
+# #388), the way NrcDecommissioning handles its site pages: when a complete
+# index read no longer links a page, the page's undecided claims wait in
+# review and each published fact it supported gets one review item; when the
+# index links it again, its withdrawn claims go back where match left them.
+# Nothing is unpublished; a person decides.
+#
+# A plug-in includes it and calls:
+#   withdraw_unlisted(listed_urls, run, reason) # after a complete index read
+#   restore_listed(page, reason)                # for each page still linked
+#   flag_published(page, run, reason)           # e.g. a page that stopped stating its fact
+module DataQuality::UnlistedPages
+  WITHDRAWN = "withdrawn"
+  KEEP_OR_UNPUBLISH = "Approve to keep it as it is; if it's no longer true, unpublish it on its page."
+  OPEN = %w[new matched needs_review].freeze
+
+  # Pages of this plug-in's kind the index no longer links. Returns how many
+  # claims were withdrawn or flagged.
+  def withdraw_unlisted(listed_urls, run, reason)
+    Source.where(source_kind:).where.not(url: listed_urls).order(:id).sum do |page|
+      Candidate.transaction do
+        page.lock!
+        waiting = page.candidates.where(status: OPEN).where("review_origin IS DISTINCT FROM 'dropped'").order(:id).lock.to_a
+        withdrawn = waiting.count do |claim|
+          next false if claim.review_origin == WITHDRAWN
+
+          claim.update!(status: "needs_review", review_origin: WITHDRAWN, notes: joined_note(claim.notes, reason))
+        end
+        page.update!(extracted_rows_sha256: nil) if page.extracted_rows_sha256
+        withdrawn + flag_published(page, run, reason)
+      end
+    end
+  end
+
+  # A page the index links again: its withdrawn claims a person hasn't decided return.
+  def restore_listed(page, reason)
+    Candidate.transaction do
+      page.lock!
+      page.candidates.status_needs_review.where(review_origin: WITHDRAWN).order(:id).lock.to_a.count do |claim|
+        claim.update!(status: claim.subject_id ? "matched" : "new", review_origin: nil, notes: joined_note(claim.notes, reason))
+      end
+    end
+  end
+
+  # One review item per published fact the page supported, once per absence:
+  # not again while one is open or after a person decided one, until the page
+  # states it again.
+  def flag_published(page, run, reason)
+    directory = DataQuality::DirectoryClient.new
+    supported = page.candidates.where(status: %w[merged confirmed]).where.not(subject_id: nil)
+      .where("review_origin IS DISTINCT FROM 'dropped'").order(:id).to_a
+    supported.group_by { |claim| [ claim.subject_type, claim.subject_id ] }.count do |(type, id), claims|
+      last = claims.last
+      next false unless directory.published?(type:, id:)
+      next false if page.candidates.where(subject_type: type, subject_id: id, review_origin: "dropped").where("id > ?", last.id).exists?
+
+      page.candidates.create!(kind: last.kind, payload: last.payload, quote: last.quote, status: "needs_review",
+        review_origin: "dropped", subject_type: type, subject_id: id, crawl_run: run,
+        notes: "#{reason} (read on #{Date.current}). #{KEEP_OR_UNPUBLISH}")
+    end
+  end
+
+  # A page blocked on an earlier fetch (today's rerun gets skipped_recent): the stop holds.
+  def still_blocked?(page) = page.blocked_streak.positive?
+
+  private
+    def joined_note(notes, reason) = [ notes.presence, reason ].compact.join(". ")
+end
