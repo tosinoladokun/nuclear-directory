@@ -161,4 +161,13 @@ class Seed::DealTermsTest < ActiveSupport::TestCase
     assert_equal 200, offtake.reload.capacity_mw.to_i, "the offtake is still updated"
     assert award.reload.rejected?
   end
+
+  test "the deal list hands out plain values, never models" do
+    seed([ PPA ])
+    row = Directory::DealList.offtakes.sole
+
+    values = [ row.buyer, row.seller, row.plant, *row.sources ].compact
+    assert values.none? { |value| value.is_a?(ActiveRecord::Base) }, values.map(&:class).inspect
+    assert_equal [ "https://example.com/deal" ], row.sources.map(&:url)
+  end
 end
