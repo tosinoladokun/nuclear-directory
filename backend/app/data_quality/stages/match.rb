@@ -100,7 +100,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       from_source = source.candidates.where(review_origin: nil).or(source.candidates.where.not(review_origin: "dropped"))
       latest = from_source.maximum(:crawl_run_id) or return
       read = from_source.where(crawl_run_id: latest)
-      return skip_dropped_check if read.where(subject_id: nil).or(read.status_new).any? { |candidate| plugin.blocks_dropped_check?(candidate) }
+      return skip_dropped_check if read.where(subject_id: nil).or(read.status_new).find_each.any? { |candidate| plugin.blocks_dropped_check?(candidate) }
 
       listed = read.distinct.pluck(:subject_type, :subject_id).to_set
       # What this source, or an earlier edition of it, supported.

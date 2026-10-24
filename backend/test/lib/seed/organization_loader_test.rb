@@ -500,6 +500,119 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 0, Source.where(url: "https://example.com/news").count
   end
 
+  # A licensing stage (#379): the NRC stage a project has reached, with its
+  # docket and date, from an NRC record.
+  def licensing(**extra)
+    { stage: "construction_permit", nrc_docket: "50-7513", effective_on: Date.new(2023, 12, 14),
+      facility: "Hermes 1", source_url: "https://www.nrc.gov/reactors/operating/list-power-reactor-units.html",
+      quote: "NRC issued a construction permit to Hermes 1." }.merge(extra)
+  end
+
+  test "a licensing stage is written on the unit that holds the docket, with its evidence" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ licensing ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    stage = LicensingStage.sole
+    assert_equal [ "construction_permit", "05007513", Date.new(2023, 12, 14) ],
+      [ stage.stage, stage.nrc_docket, stage.effective_on ]
+    assert_equal "Hermes 1", stage.facility.name
+    assert_equal "human:tosin", stage.verified_by
+    assert_equal "NRC issued a construction permit to Hermes 1.", stage.evidence.sole.quote
+  end
+
+  test "a design approval is written on the developer, with its design" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      licensing: [ licensing(stage: "design_approval", design_name: "US460", facility: nil) ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    stage = LicensingStage.sole
+    assert_equal [ "design_approval", "US460" ], [ stage.stage, stage.design_name ]
+    assert_equal "Acme", stage.organization.name
+  end
+
+  test "a licensing stage finds its unit by docket before name" do
+    Facility.create!(name: "Hermes 1", verification_status: "verified", verified_by: "human:tosin") # an older record of that name
+    unit = Facility.create!(name: "Hermes Unit 1", nrc_docket: "05007513", verification_status: "verified", verified_by: "human:tosin")
+    write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    assert_equal unit, LicensingStage.sole.facility
+  end
+
+  test "a pending licensing entry is refused: nobody could review it in the admin yet" do
+    lead = licensing(pending: true, source_url: "https://world-nuclear-news.org/articles/permit", quote: "A permit.")
+    write_file("acme", org("Acme", website: "https://acme.com", facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ lead ]))
+
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "pending: isn't supported for licensing stages", error.message
+    assert_equal 0, LicensingStage.count
+  end
+
+  test "seed:check reads a stored notice's title, as FactWriter does" do
+    url = "https://public-inspection.federalregister.gov/2026-10073.pdf"
+    Source.create!(url:, source_kind: "web_page", title: "Long Mott Energy, LLC; Nuclear Regulatory Commission notice")
+    write_file("acme", org("Acme", website: "https://acme.com", facilities: [ item(name: "Hermes 1", type: "owns") ],
+      licensing: [ licensing(source_url: url, quote: "The application was docketed.") ]))
+
+    assert_empty Seed::OrganizationLoader.new(@dir).licensing_source_problems
+  end
+
+  test "a licensing stage found by name on a unit with another docket fails the load" do
+    Facility.create!(name: "Hermes 1", nrc_docket: "05007513", verification_status: "verified", verified_by: "human:tosin")
+    write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing(nrc_docket: "50-7514") ]))
+
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "Hermes 1 has docket 05007513, not 05007514", error.message
+    assert_equal 0, LicensingStage.count
+  end
+
+  test "a licensing stage can name a plant a later file defines" do
+    write_file("a-developer", org("A Developer", website: "https://developer.com", licensing: [ licensing ]))
+    write_file("z-owner", org("Z Owner", website: "https://owner.com", facilities: [ item(name: "Hermes 1", type: "owns") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    assert_equal "Hermes 1", LicensingStage.sole.facility.name
+  end
+
+  test "a licensing stage for a plant the seed doesn't have fails the load and names it" do
+    write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing ]))
+
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match 'unknown facility "Hermes 1"', error.message
+  end
+
+  test "seed:check lists a licensing stage that isn't cited to an NRC record" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      facilities: [ item(name: "Hermes 1", type: "owns") ],
+      licensing: [ licensing(source_url: "https://world-nuclear-news.org/articles/permit", quote: "A permit.") ]))
+
+    problems = Seed::OrganizationLoader.new(@dir).licensing_source_problems
+
+    assert_equal [ 'acme.yml: licensing "construction_permit" for facility "Hermes 1", docket 50-7513, ' \
+      'isn\'t cited to an NRC record: "https://world-nuclear-news.org/articles/permit"' ], problems
+  end
+
+  test "seed:check names a design approval by its design" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      licensing: [ licensing(stage: "design_approval", design_name: "US460", facility: nil, nrc_docket: "52-048",
+        source_url: "https://example.com/news") ]))
+
+    assert_match 'acme.yml: licensing "design_approval" for design "US460", docket 52-048',
+      Seed::OrganizationLoader.new(@dir).licensing_source_problems.sole
+  end
+
+  test "seed:check is quiet when every licensing stage is cited to an NRC record" do
+    write_file("acme", org("Acme", website: "https://acme.com",
+      facilities: [ item(name: "Hermes 1", type: "owns") ], licensing: [ licensing ]))
+
+    assert_empty Seed::OrganizationLoader.new(@dir).licensing_source_problems
+  end
+
   test "a unit given with its site loads under that site: one public plant, both units under it, on a fresh load and a re-seed" do
     write_file("holtec", org("Holtec International", website: "https://holtec.com", facilities: [
       item(name: "Indian Point 2", site: "Indian Point", type: "owns"), item(name: "Indian Point 3", site: "Indian Point", type: "owns") ]))
