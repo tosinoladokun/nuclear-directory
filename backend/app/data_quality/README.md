@@ -322,6 +322,13 @@ person at verify; a row missing any value holds the whole read. The page's table
 vendor company and a `vendor_for` link to the unit, by docket. Never inferred from reactor type; a historical
 vendor (Combustion Engineering) keeps its name for a person to place. A line naming no known vendor proposes
 nothing; a page without the line goes to a person.
+## NRC fuel cycle facilities (#386)
+
+`plugins/nrc_fuel_cycle.rb` reads NRC's fuel cycle locations page (an index, never extracted) and each
+facility page it links, at most once a day, storing only the facility's labelled facts (name, location,
+licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_facility`, city, state, docket)
+and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
+states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
 ## DOE Isotope Program: production sites (#276)
 
