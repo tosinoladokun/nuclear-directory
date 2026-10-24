@@ -22,13 +22,15 @@ class Admin::RecordEnrichController < Admin::BaseController
     @extract = CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: @company.enriched_at..).order(:started_at).first if @company.enriched_at
     # Its home page, when the last read couldn't use it (blocked, an error): said, with Read again.
     @home = Source.find_by(url: @company.website.to_s.strip) if @company.website.present?
+    # Its SEC record (part 3), read too when it has a CIK: its own status.
+    @sec = Source.find_by(url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i)) if @company.sec_cik.present?
   end
 
   def create
     if @company.website.blank? && @company.sec_cik.blank?
       flash[:alert] = "It has no website or SEC number to read yet. Add one with Edit first."
-    elsif @company.website.present? && !@company.website.to_s.strip.match?(%r{\Ahttps://[^\s/]+}i)
-      flash[:alert] = "Its website needs to start with https:// before its pages can be read. Fix it with Edit first."
+    elsif @company.website.present? && !usable_website?
+      flash[:alert] = "Its website needs to be a full https:// address before its pages can be read. Fix it with Edit first."
     else
       @company.update_columns(enrich_requested_at: Time.current)
       DataQuality::RunJob.perform_later(SOURCE_KIND)
@@ -87,10 +89,20 @@ class Admin::RecordEnrichController < Admin::BaseController
           mine = claim.kind == "organization" ? claim.payload.to_h.except("name").keys.map { |key| [ claim.subject_id, key ] } : []
           next "another finding for the same field was approved just now; decide this one on its own" if mine.intersect?(fields)
 
-          fields.concat(mine)
           nil
         end
-        DataQuality::Review.approve(ids, by: actor, reason: "Approved in Enrich: Joy agrees", only_recommended: true, safe_check: check)
+        # One at a time, so a field counts as taken only once its finding is in.
+        ids.flat_map do |id|
+          pending = []
+          held = lambda do |claim|
+            why = check.call(claim)
+            pending.concat(claim.kind == "organization" ? claim.payload.to_h.except("name").keys.map { |key| [ claim.subject_id, key ] } : []) unless why
+            why
+          end
+          DataQuality::Review.approve([ id ], by: actor, reason: "Approved in Enrich: Joy agrees", only_recommended: true, safe_check: held).tap do |result|
+            fields.concat(pending) if result.sole.ok?
+          end
+        end
       end
     rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
       # Rolled back whole: each stays waiting, saying why.
@@ -103,6 +115,12 @@ class Admin::RecordEnrichController < Admin::BaseController
   end
 
   private
+    # A whole https address a page can be saved under (no spaces, a host).
+    def usable_website?
+      url = @company.website.to_s.strip
+      url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && Source.new(url:).tap(&:validate).errors[:url].empty?
+    end
+
     def load_company
       raise ActiveRecord::RecordNotFound unless params[:type] == "Organization"
 
