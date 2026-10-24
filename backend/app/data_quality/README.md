@@ -305,6 +305,33 @@ Two tests keep the module and the directory in step:
 - It also checks that the fakes in `support/fake_directory.rb` have the same
   method signatures as the real interfaces.
 
+## Deal terms (#397)
+
+A crawler can propose a deal term: today, a company's own funding round from a Form D (`link_type`
+"Organization", #396). A term under a link (an award under "DOE funds X") comes with #256.
+
+```ruby
+{ kind: "deal_term", quote: "…", payload: {
+  "organization" => { "name" => "NEW ERA HELIUM INC.", "sec_cik" => "0002028336" }, "link_type" => "Organization",
+  "term_type" => "funding_round", "external_id" => "0002028336-24-000006",
+  "amount_usd" => "37000000.0", "amount_offered_usd" => "105000000.0", "starts_on" => "2024-12-06" } }
+```
+
+- **Match** finds the company by its SEC CIK first (a government ID, ranked above names), then by name or
+  alias; the CIK wins over a name that names another company (showing that conflict is #402). It finds the term by its link, type
+  and external ID, so a Form D/A (which carries its original's accession number) lands on the same round.
+  A new term is proposed pending with its values, since a round needs its amount to exist.
+- **Verify** describes it ("… has a funding round, with filing …, amount sold $37,000,000 …"), and a value
+  a person decided is held as a conflict (`amount_usd`, `amount_offered_usd`, `starts_on`, `ends_on`,
+  `round`, `status`).
+- **A person decides every one.** A deal term is never in Approve all or a safe class (`BY_A_PERSON`). A
+  person approves it, or accepts Data Quality's reviewed call on it. An amendment to a round a person already
+  approved is decided on that round's page, never through Data Quality's Accept: a decided record's rule
+  (16 Oct) comes first.
+- **A later filing supersedes an earlier one.** #390's guard against another page of the same source doesn't
+  apply to deal terms: a Form D/A on its own filing page replaces its original's values, once a person
+  approves it.
+
 ## NRC uranium recovery (#275)
 
 `plugins/nrc_uranium_recovery.rb` reads NRC's "Locations of Uranium Recovery Facilities" once a day, and
