@@ -19,7 +19,13 @@ roles:
   confidence: 1.0
 technologies: []
 relationships: []
-facilities: []
+facilities:
+- name: BWXT
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/bwxt-nuclear-lc
+  quote: 'BWXT | Location: Lynchburg, VA | Licensee: BWXT Nuclear Operations Group Inc. | Docket Number: 07000027 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+  confidence: 1.0
+  note: NRC lists the licensee for this operational facility.
 notes: BWX Technologies; legal entities from DOE awards are aliases (D1). BWXT Medical (isotopes) not added without a quote.
 description:
   text: Makes naval nuclear reactors and components, as it has since the 1950s, and nuclear fuel.
