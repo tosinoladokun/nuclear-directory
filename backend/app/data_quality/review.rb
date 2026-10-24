@@ -201,11 +201,57 @@ module DataQuality::Review
         # Any decision a person made: approved, rejected or taken off.
         decided = record&.verified_by.to_s.start_with?("human:")
       end
-      return "it would change a record a person decided" if decided || candidate.notes.to_s.match?(/\Ahuman-verified /i)
+      if (decided || candidate.notes.to_s.match?(/\Ahuman-verified /i)) && !evidence_only?(candidate, directory:)
+        return "it would change a record a person decided"
+      end
       return BY_A_PERSON if candidate.kind_deal_term?
       return FIRST_BATCH if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
 
       nil
+    end
+
+    # What a waiting claim is in Tosin's inbox (#548): "new_record" (a company
+    # or plant to create), "new_fact" (a fact, link or deal to approve),
+    # "change" (it would change something already there, shown old → new),
+    # or "dq": Data Quality's to settle first (matching, Same as…, leads,
+    # first batches, a source's own hold), never his.
+    INBOX_KINDS = %w[new_record new_fact change dq].freeze
+
+    def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new)
+      return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
+      return "dq" if candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
+      return "dq" if held_reason(candidate, directory:) == FIRST_BATCH
+
+      if candidate.proposed_subject
+        %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
+      else
+        "change"
+      end
+    end
+
+    # Approving it would only add its source as evidence on a published
+    # record (PM, 24 Oct): no value differs from what's stored, and any name
+    # or alias it gives is one the record already goes by. Such a claim joins
+    # the agreed shortcut; anything that would change a value still asks.
+    # Asked again under the record's lock when the shortcut runs.
+    def evidence_only?(candidate, directory:)
+      record = directory.fact(type: candidate.subject_type, id: candidate.subject_id)
+      return false unless record&.verification_status == "verified"
+
+      changes = DataQuality::Differences.changes(candidate, record, directory:)
+      return false if changes.nil? || changes.any?
+
+      payload = candidate.payload.to_h
+      # Values approval derives, not only the ones the claim states: a
+      # website's domain, and a unit's site from its EIA plant ID.
+      if candidate.kind == "organization" && payload["website"].present? && !payload.key?("domain")
+        derived = directory.domain_from(payload["website"])
+        return false if derived.present? && directory.organization(domain: derived)&.id != record.id
+      end
+      return false if candidate.kind == "facility" && directory.site_for_unit(candidate)
+
+      names = [ payload["name"], *Array(payload["aliases"]) ].compact_blank
+      names.all? { |name| directory.known_name?(type: candidate.subject_type, id: candidate.subject_id, name:) }
     end
 
     # Each kind of source's first batch: { "usaspending_doe_awards" => crawl run id }.

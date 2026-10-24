@@ -128,7 +128,7 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "header.nd-shell__side[data-controller=admin-menu]" do
       assert_select "button.nd-shell__menu[hidden][aria-controls=admin-nav]", "Menu"
-      assert_select "nav#admin-nav a", 8
+      assert_select "nav#admin-nav a", 9
     end
     assert_select ".nd-shell__nav a", /Today/
     assert_select ".nd-shell__nav a", text: /Queue|Pending facts/, count: 0

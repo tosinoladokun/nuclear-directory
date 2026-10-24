@@ -371,6 +371,16 @@ module Directory
     def unit_ids(site_ids:) = Facility.where(parent_id: site_ids).ids
 
     # Of these facts of one type, the ids a person decided, in one query.
+    # Whether a company or plant already goes by this name: its own name or
+    # one of its aliases, compared as normalized (case, punctuation and legal
+    # suffixes don't count).
+    def known_name?(type:, id:, name:)
+      model, aliases = { "Organization" => [ Organization, OrganizationAlias ], "Facility" => [ Facility, FacilityAlias ] }.fetch(type.to_s) { return false }
+      record = model.find_by(id:) or return false
+      wanted = aliases.normalize(name)
+      aliases.normalize(record.name) == wanted || record.aliases.exists?(normalized_alias: wanted)
+    end
+
     def human_decided_ids(type:, ids:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
 

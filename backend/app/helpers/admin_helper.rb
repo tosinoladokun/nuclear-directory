@@ -37,16 +37,18 @@ module AdminHelper
     counts = admin_nav_counts
     [
       { label: "Overview", path: admin_root_path, current: controller_name == "overview" },
+      # Today is Tosin's inbox (#548): only what he decides.
+      { label: "Today", path: admin_inbox_path, count: counts[:inbox], current: controller_name == "inbox" },
+      { label: "Data Quality's pages", heading: true },
+      { label: "Checks", path: admin_checks_path, count: counts[:today],
+        current: %w[today checks candidates pending_facts recommendations].include?(controller_name) },
+      { label: "Leads", path: admin_leads_path, count: counts[:leads], title: "Not facts yet", current: controller_name == "leads" },
       { label: "Sources", path: admin_sources_path, count: counts[:sources], current: controller_name == "sources" },
-      # Today (#373) leads to Checks, its step 3, so it stays current there.
-      { label: "Today", path: admin_today_path, count: counts[:today], current: %w[today checks candidates pending_facts recommendations].include?(controller_name) },
       { label: "Live", path: admin_live_path, count: counts[:live], current: %w[live records].include?(controller_name) },
       { label: "Removed", path: admin_removed_path, count: counts[:removed], current: controller_name == "removed" },
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
-        current: controller_name == "corrections" },
-      # Leads (#484): names that aren't facts yet, for Data Quality to work.
-      { label: "Leads", path: admin_leads_path, count: counts[:leads], title: "Not facts yet", current: controller_name == "leads" }
+        current: controller_name == "corrections" }
     ]
   end
 
@@ -138,6 +140,7 @@ module AdminHelper
         live: Organization.published.count + Facility.published.where(parent_id: nil).count,
         corrections:,
         leads: Lead.status_new.count,
+        inbox: OwnerInbox.new.size,
         outputs: PublicPages.new.count,
         removed: Directory::RemovedList.total,
         today: DataQuality::Review.check_counts["all"] + pending + corrections
@@ -354,6 +357,33 @@ module AdminHelper
       (DataQuality::Claim.dollars(payload["amount_usd"]) if payload["amount_usd"]),
       ("signed #{Date.iso8601(payload['signed_on']).strftime('%-d %b %Y')}" if payload["signed_on"]) ].compact_blank
     "Deal with #{other}: #{parts.join(', ')}"
+  end
+
+  # An inbox item as one plain sentence, name first (#548, Design's spec).
+  def inbox_sentence(entry)
+    item = entry.item
+    payload = item.payload.to_h
+    return item.claim unless entry.kind == "new_record"
+
+    name = payload["name"].to_s
+    city = payload["hq_city"].presence || payload["city"].presence
+    state = payload["hq_state"].presence || payload["state"].presence
+    where = [ city, state ].compact.join(", ")
+    what = item.kind == "facility" ? "a plant" : "a company"
+    safe_join([ tag.strong(name), ": #{what}#{" in #{where}" if where.present?}.",
+      (" #{payload['description'].to_s.strip}" if payload["description"].present?) ].compact)
+  end
+
+  # A decision in Recently decided (#548): "Created Bluefield Fission",
+  # "Approved Meta funds TerraPower", "Said no to Old Lead Co".
+  def inbox_decision(claim)
+    record = %w[organization facility].include?(claim.kind)
+    what = record ? claim.payload.to_h["name"].to_s : DataQuality::Claim.describe(claim).delete_suffix(".")
+    verb = if claim.status_rejected? then "Said no to"
+    elsif record && claim.proposed_subject then "Created"
+    else "Approved"
+    end
+    "#{verb} #{what}"
   end
 
   def field_label(name) = DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize }

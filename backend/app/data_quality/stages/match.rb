@@ -718,8 +718,15 @@ class DataQuality::Stages::Match < DataQuality::Stage
         return
       end
 
-      confirmation = directory.confirm(candidate, in_source: in_source(candidate))
-      confirmed(candidate, record, confirmed_note(record, confirmation)) if confirmation&.confirmed?
+      # A claim that would only add evidence confirms itself (#548): Tosin
+      # decides only what's new; nobody needs to see a restatement.
+      add_evidence = DataQuality::Review.evidence_only?(candidate, directory:)
+      confirmation = directory.confirm(candidate, in_source: in_source(candidate), add_evidence:)
+      return unless confirmation&.confirmed?
+
+      # Counted for Data Quality's morning report: restatements that closed themselves.
+      @stats["evidence_only"] = @stats.fetch("evidence_only", 0) + 1 if add_evidence
+      confirmed(candidate, record, confirmed_note(record, confirmation))
     end
 
     # The same claim waiting from an earlier edition of this source (last
