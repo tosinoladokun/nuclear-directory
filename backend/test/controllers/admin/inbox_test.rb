@@ -50,11 +50,18 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   test "Yes to all takes only what Data Quality checked, each checked again" do
     DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
     get admin_inbox_path
-    assert_select ".nd-panel", /Data Quality checked 1 of these 1\./
+    assert_select ".nd-panel", 0, "one checked item needs no batch button"
+    other = Organization.create!(name: "Second Fission", verification_status: "pending")
+    second = claim({ "name" => "Second Fission" }, subject: other, proposed_subject: true)
+    DataQuality::Recommendations.record("#{second.id} approve: named on the NRC page", by: "human:dq")
+    get admin_inbox_path
+    assert_select ".nd-panel", /Data Quality checked 2 of these 2\./
+    assert_select "#inbox-item-#{second.id} .type-small", /“q”/, "a name-only company shows its quote"
     form = css_select("form[action='#{admin_inbox_yes_all_path}']").first
-    shown = form.at_css("input[name=shown]")["value"]
-    post admin_inbox_yes_all_path, params: { ids: [ @create.id ], shown: }
+    ids = form.css("input[name='ids[]']").map { |input| input["value"].to_i }
+    post admin_inbox_yes_all_path, params: { ids:, shown: form.at_css("input[name=shown]")["value"] }
     assert @new_co.reload.verified?
-    assert_match "1 item live", flash[:notice]
+    assert other.reload.verified?
+    assert_match "2 items live", flash[:notice]
   end
 end

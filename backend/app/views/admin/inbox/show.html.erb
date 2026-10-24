@@ -3,7 +3,8 @@
 <% total = @inbox.size %>
 <% checked = @inbox.checked %>
 <% headings = { "new_record" => "New companies and plants", "new_fact" => "New facts and deals", "change" => "Changes to something you decided" } %>
-<% batch_after = %w[new_record new_fact].find { |key| sections[key].any?(&:checked) } %>
+<%# One checked item needs no batch button: its own Yes does it (Design). %>
+<% batch_after = (%w[new_record new_fact].find { |key| sections[key].any?(&:checked) } if checked.size > 1) %>
 
 <div>
   <h1 class="type-admin-h1">Today</h1>
@@ -31,6 +32,10 @@
               <p class="type-small text-ink-muted m-0"><%= item.claim %></p>
             <% else %>
               <p class="<%= key == "new_record" ? "type-body" : "type-body-strong" %> m-0"><%= inbox_sentence(entry) %></p>
+              <% if key == "new_record" && (item.payload.to_h.keys - %w[name aliases]).empty? %>
+                <%# Only a name: the source's words say what it is (Design). %>
+                <p class="type-small text-ink-muted m-0">“<%= item.quote %>”</p>
+              <% end %>
             <% end %>
             <p class="type-small m-0">
               <% if (url = safe_url(item.source&.url)) %><%= link_to url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener" do %><%= source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %> · <% end %>
@@ -38,7 +43,7 @@
             </p>
             <details class="nd-fold">
               <summary class="type-small">Why, and the source</summary>
-              <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
+              <div class="nd-fold__body"><blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote></div>
             </details>
           </div>
           <div class="nd-wait__actions nd-inbox__buttons type-ui">
