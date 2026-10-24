@@ -945,7 +945,9 @@ module DataQuality::Review
 
           parents = parents.uniq.sort_by { |type, id| [ type, id ] }
           parents.each { |type, id| directory.lock_fact(type:, id:) }
-          if parents.any? { |type, id| !(fact = directory.fact(type:, id:)) || !open_record?(fact) }
+          # Read fresh under the locks: a cached read from before them could
+          # miss a Take off or Merge committed in between.
+          if ActiveRecord::Base.uncached { parents.any? { |type, id| !(fact = directory.fact(type:, id:)) || !open_record?(fact) } }
             added = Added.new(ref: nil, errors: [ "A record it's on was taken off or merged since, so nothing was added" ], existing: nil)
             raise ActiveRecord::Rollback
           end
