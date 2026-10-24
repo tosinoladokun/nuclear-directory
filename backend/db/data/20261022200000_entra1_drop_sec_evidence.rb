@@ -19,8 +19,10 @@ class Entra1DropSecEvidence < DeployData::Migration
     removed = 0
     facts.each do |type, id|
       Evidence.where(subject_type: type, subject_id: id, source_id: source.id).each do |row|
-        Directory::FactWriter.remove_evidence(type:, id:, evidence_id: row.id, source_id: source.id, quote: row.quote, by: BY,
+        result = Directory::FactWriter.remove_evidence(type:, id:, evidence_id: row.id, source_id: source.id, quote: row.quote, by: BY,
           reason: "The 2023 SEC filing is about Standard Power, not ENTRA1; re-sourced to ENTRA1's own site (21 Oct 2026); #{reason}")
+        raise "removing the SEC quote from #{type} #{id} failed: #{Array(result.errors).join('; ')}" unless result.ok?
+
         removed += 1
       end
     end

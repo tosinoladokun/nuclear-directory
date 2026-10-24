@@ -40,7 +40,12 @@ facilities:
   quote: US private fusion company Commonwealth Fusion Systems has announced plans to independently finance, construct, own and operate a commercial-scale fusion power plant in Chesterfield County, Virginia.
   published: '2024-12-18'
   confidence: 0.8
-  note: Planned, about 400 MWe, early 2030s; CFS has leasing rights to the site from Dominion Energy Virginia.
+  note: Planned, about 400 MWe, early 2030s; Dominion Energy Virginia will offer CFS leasing rights to the site.
+- name: Fall Line Fusion Power Station
+  type: owns
+  source_url: https://cfs.energy/company/commercial-partners/
+  quote: The Virginia utility will provide CFS with development and technical expertise that’ll help connect the first ARC fusion power plant to the grid. In addition, Dominion will offer leasing rights for the planned site for the ARC fusion power plant.
+  confidence: 1.0
 - name: SPARC
   type: vendor_for
   source_url: https://cfs.energy/technology/sparc/

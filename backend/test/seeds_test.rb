@@ -61,10 +61,10 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 80, Relationship.verified.count
+    assert_equal 79, Relationship.verified.count
     assert_equal 56, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 80, 6 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal [ 81, 6 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal 28, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
@@ -181,13 +181,15 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal [ "venture_capital" ], Organization.find_by!(slug: "bernhard-capital-partners").roles.pluck(:key)
   end
 
-  test "CFS and Google share one ARC facility, and Dominion owns only the site, so has no link to the plant" do
+  test "CFS, Google and Eni share one ARC facility, and Dominion owns only the site, so has no link to the plant" do
     load_seeds
 
     arc = Facility.find_by!(name: "Fall Line Fusion Power Station")
     links = arc.facility_relationships.includes(:organization).to_h { |link| [ link.organization.slug, link ] }
-    assert_equal %w[commonwealth-fusion-systems google], links.keys.sort
+    assert_equal %w[commonwealth-fusion-systems eni google], links.keys.sort
     assert links["google"].offtakes_from?
+    assert links["eni"].offtakes_from?
+    assert_match "more than $1 billion", links["eni"].evidence.sole.quote
     assert_match "leasing rights", links["commonwealth-fusion-systems"].description
   end
 
@@ -233,6 +235,18 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal "Indian Point", units.first.parent.name
     assert_equal [ "Holtec Decommissioning International", "Holtec International" ],
       FacilityRelationship.where(facility: units).includes(:organization).map { |link| link.organization.name }.uniq.sort
+  end
+
+  test "ENTRA1's SEC cleanup fails loudly when a removal is refused, so it isn't recorded as applied" do
+    load_seeds
+    load Rails.root.join("db/data/20261022200000_entra1_drop_sec_evidence.rb")
+    company = Organization.find_by!(slug: "entra1-energy")
+    sec = Source.find_or_create_by!(url: Entra1DropSecEvidence::SOURCE_URL) { |source| source.source_kind = "web_page" }
+    Evidence.where(subject: company).delete_all
+    Evidence.create!(subject: company, source: sec, quote: "ENTRA1 is a company from the filing", confidence: 0.9, found_by: "human")
+
+    assert_raises(RuntimeError) { Entra1DropSecEvidence.new(reason: "test").up }
+    assert Evidence.where(subject: company, source: sec).exists?, "the only quote stays"
   end
 
   test "is safe to re-run" do
