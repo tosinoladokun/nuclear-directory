@@ -127,4 +127,26 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     get enrich_path
     assert_select "#finding-#{@agreed.id}", 0
   end
+
+  test "a later company's extraction doesn't stand in for this one's" do
+    Candidate.where(id: [ @agreed.id, @unsure.id ]).update_all(status: "rejected")
+    @company.update_columns(enrich_requested_at: 10.minutes.ago, enriched_at: 9.minutes.ago)
+    CrawlRun.create!(stage: "extract", source_kind: "company_pages", status: "succeeded", started_at: 8.minutes.ago)
+    CrawlRun.create!(stage: "extract", source_kind: "company_pages", status: "failed", error: "x", started_at: 2.minutes.ago) # another company's
+    get enrich_path
+    assert_select "p", text: /stopped with an error/, count: 0
+    assert_select "p", /Nothing waiting/
+  end
+
+  test "a role decided by a person after the page loaded isn't approved again by Approve all" do
+    role = Role.first || Role.create!(key: "reactor_developer", name: "Reactor developer")
+    link = OrganizationRole.create!(organization: @company, role:, verification_status: "pending")
+    claim = Candidate.create!(source: @page, crawl_run: @agreed.crawl_run, kind: "organization_role", quote: "Acme Fission is headquartered in Austin.",
+      payload: { "organization" => { "name" => @company.name }, "role" => role.key }, status: "matched", subject_type: "OrganizationRole",
+      subject_id: link.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    link.update_columns(verification_status: "rejected", verified_by: "human:tosin")
+    ids = [ claim.id ]
+    post admin_record_enrich_agreed_path(type: "Organization", id: @company.id), params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) }
+    assert_not_equal "verified", link.reload.verification_status
+  end
 end
