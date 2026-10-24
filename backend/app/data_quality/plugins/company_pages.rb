@@ -274,8 +274,16 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         # its closing date, or with neither a name nor a date its quote, tells
         # two rounds of one amount apart.
         "external_id" => "page:#{url}##{[ round&.downcase&.squish, amount&.to_s('F'), starts_on&.iso8601,
-          (Digest::SHA256.hexdigest(quote.downcase.squish)[0, 10] unless round || starts_on) ].compact.join(' ')}", "amount_usd" => amount&.to_s("F"), "round" => round,
+          (round_digest(quote, amount_text, amount) unless round || starts_on) ].compact.join(' ')}", "amount_usd" => amount&.to_s("F"), "round" => round,
         "starts_on" => starts_on&.iso8601 }.compact }
+    end
+
+    # A short digest of an unnamed, undated round's quote, with its amount
+    # written as its value, so "$5 million" and "$5M" read again are the same round.
+    def round_digest(quote, amount_text, amount)
+      text = quote.downcase.squish
+      text = text.sub(amount_text.downcase, amount.to_s("F")) if amount_text && amount
+      Digest::SHA256.hexdigest(text)[0, 10]
     end
 
     # The amount stands whole in its quote, in US dollars: "$37" isn't

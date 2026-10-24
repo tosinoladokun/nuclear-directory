@@ -279,4 +279,12 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_empty DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_not_equal format(DataQuality::Plugins::SecFormD::SUBMISSIONS_URL, "0001849056"), format(DataQuality::Plugins::CompanyPages::EDGAR, 1_849_056)
   end
+
+  test "an unnamed, undated round read again with its amount reworded is the same round" do
+    plugin = DataQuality::Plugins::CompanyPages.new
+    ids = [ [ "$5 million", "We closed a funding round of $5 million." ], [ "$5M", "We closed a funding round of $5M." ] ].map do |amount, quote|
+      plugin.send(:funding_round, "Acme Fission", { "amount" => amount, "round" => nil, "date" => nil, "quote" => quote }, ->(_v, _q) { true }, HOME)[:payload]["external_id"]
+    end
+    assert_equal 1, ids.uniq.size, ids.inspect
+  end
 end
