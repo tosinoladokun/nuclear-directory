@@ -107,7 +107,8 @@ class Today
     runs.each do |run|
       stats = run.stats.to_h
       fresh = outcomes_of(stats)
-      outcomes.merge!(fresh)
+      # The failed-pages list is state, not a read: merged after, it never clears a halt.
+      outcomes.merge!(fresh).merge!(failed_pages(stats))
       if run.status == "failed" then halted = run.error.presence || "the crawl failed"
       elsif stats["stopped"].present? then halted = stats["stopped"]
       # A run that only skipped reads read nothing, so it clears nothing.
@@ -137,6 +138,17 @@ class Today
       else outcomes[key] = "the API answered #{value}" if key == "api"
       end
     end
+  end
+
+  # Pages a plug-in names by id as failed (#429, NRC decommissioning), even
+  # on a rerun that skipped them.
+  # When a run names its failed pages (an empty list when none failed), that
+  # list replaces the counts' outcome: it says which pages, skipped or not.
+  def self.failed_pages(stats)
+    return {} unless stats.key?("failed_pages")
+
+    ids = Array(stats["failed_pages"])
+    { "site_pages" => nil, "failed_pages" => (ids.any? ? "#{ids.size} #{ids.size == 1 ? 'page' : 'pages'} didn't answer" : nil) }
   end
 
   def crawl_problems = crawl_rows.count(&:failed)
