@@ -236,7 +236,7 @@ class DataQuality::DirectoryClient
   # quote_in_source?), so the fact's other evidence from it is stamped too.
   # nil too when the source's last fetch failed (it keeps its old content but
   # moves fetched_at): that's no fresh check.
-  def confirm(candidate, fact_id: candidate.subject_id, rows_sha256: candidate.source.extracted_rows_sha256, in_source: nil)
+  def confirm(candidate, fact_id: candidate.subject_id, rows_sha256: candidate.source.extracted_rows_sha256, in_source: nil, add_evidence: false)
     return unless fact_id
     return if candidate.source.status_reason.present?
 
@@ -249,7 +249,7 @@ class DataQuality::DirectoryClient
     attributes = deal_term_link(candidate.payload, attributes) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
-      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind)
+      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind, add_evidence:)
   end
 
   # A source read again with the same rows: all its evidence was checked at:.

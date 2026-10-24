@@ -353,7 +353,8 @@ class DataQuality::ReviewTest < ActiveSupport::TestCase
 
   test "an Undo that meets a merge's locks says to try again, with nothing undone" do
     Organization.create!(name: "Imaginary Fission Co", verification_status: "verified", verified_by: BY).aliases.create!(alias: "Imaginary Fission Co")
-    c = candidate("organization", { "name" => "Imaginary Fission Co" })
+    # It changes a value, so it waits (a bare restatement would confirm itself, #548).
+    c = candidate("organization", { "name" => "Imaginary Fission Co", "description" => "A new description." })
     run_stage("match")
     before = Review.undo_state(c.id)
     Review.reject([ c.id ], by: BY)

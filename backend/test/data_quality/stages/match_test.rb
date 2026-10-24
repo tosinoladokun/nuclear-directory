@@ -185,7 +185,8 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
 
     match!
 
-    assert c.reload.status_matched?
+    # A name it already has (normalized) only adds evidence, so it confirms itself (#548).
+    assert c.reload.status_confirmed?, c.notes
     assert_equal terrapower.id, c.subject_id
     terrapower.reload
     assert terrapower.verified?

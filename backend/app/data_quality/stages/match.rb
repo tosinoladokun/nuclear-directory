@@ -718,7 +718,10 @@ class DataQuality::Stages::Match < DataQuality::Stage
         return
       end
 
-      confirmation = directory.confirm(candidate, in_source: in_source(candidate))
+      # A claim that would only add evidence confirms itself (#548): Tosin
+      # decides only what's new; nobody needs to see a restatement.
+      add_evidence = DataQuality::Review.evidence_only?(candidate, directory:)
+      confirmation = directory.confirm(candidate, in_source: in_source(candidate), add_evidence:)
       confirmed(candidate, record, confirmed_note(record, confirmation)) if confirmation&.confirmed?
     end
 

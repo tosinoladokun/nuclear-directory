@@ -210,6 +210,25 @@ module DataQuality::Review
       nil
     end
 
+    # What a waiting claim is in Tosin's inbox (#548): "new_record" (a company
+    # or plant to create), "new_fact" (a fact, link or deal to approve),
+    # "change" (it would change something already there, shown old → new),
+    # or "dq": Data Quality's to settle first (matching, Same as…, leads,
+    # first batches, a source's own hold), never his.
+    INBOX_KINDS = %w[new_record new_fact change dq].freeze
+
+    def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new)
+      return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
+      return "dq" if candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
+      return "dq" if held_reason(candidate, directory:) == FIRST_BATCH
+
+      if candidate.proposed_subject
+        %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
+      else
+        "change"
+      end
+    end
+
     # Approving it would only add its source as evidence on a published
     # record (PM, 24 Oct): no value differs from what's stored, and any name
     # or alias it gives is one the record already goes by. Such a claim joins
