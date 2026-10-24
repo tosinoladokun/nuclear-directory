@@ -35,9 +35,9 @@ categories:
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
       - { name: SBIR awards, status: planned, issue: 125 }
       - { name: GAIN directory, status: planned, issue: 257, leads: true }
-      - { name: NRC construction-permit notices in the Federal Register, status: planned, issue: 126, note: project developers }
+      - { name: NRC notices in the Federal Register (news), kind: federal_register_nrc, status: built, issue: 126, note: project developers }
       - { name: SEC filings, status: planned, issue: 129, note: project developers }
-      - { name: Company newsrooms, status: planned, issue: 128 }
+      - { name: Company newsrooms (news), kind: company_newsrooms, status: built, issue: 128 }
   - key: fuel
     name: Fuel and materials
     sources:
@@ -97,4 +97,5 @@ general:
   - { name: Reddit (r/nuclear and others), status: hand, leads: true, note: "read by a person; no bot access" }
   - { name: Company newsrooms, status: hand, group: company-sites, issue: 128, crawler: true }
   - { name: Federal Register, status: planned, issue: 126 }
+  - { name: Trade press feeds (WNN and ANS), kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
   - { name: Daily lead researcher, status: planned, issue: 278, note: "leads for Data Quality, not facts" }

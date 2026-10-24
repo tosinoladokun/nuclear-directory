@@ -102,7 +102,9 @@ module DataQuality::Review
   IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology],
     # A deal term is the same one only by its link (and the company or link it
     # belongs to), type and external ID (DATA.md): an edit never moves a round.
-    "deal_term" => %w[link_type link_id term_type external_id] }.freeze
+    "deal_term" => %w[link_type link_id term_type external_id],
+    # A news item's lead mark (#127) is what makes it a lead: the edit form can't change it.
+    "news_item" => %w[lead] }.freeze
   # What a claim of this kind can't change when it's edited before approval:
   # its link's ends and type, and what identifies it (a role's role).
   def self.read_only_keys(kind) = NOT_EDITABLE + IDENTIFYING.fetch(kind.to_s, [])
@@ -114,6 +116,11 @@ module DataQuality::Review
   BY_A_PERSON = "a deal term is decided by a person".freeze
   # The holds a person's Accept of Data Quality's reviewed list lifts.
   REVIEWED_HOLDS = [ FIRST_BATCH, BY_A_PERSON ].freeze
+  # A trade-press item (#127): a pointer for Data Quality to the primary
+  # source, never a claim to approve as it is. Nothing lifts it.
+  LEAD = "it's a lead: Data Quality finds the primary source".freeze
+
+  def self.lead?(candidate) = candidate.payload.is_a?(Hash) && candidate.payload["lead"] == true
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
@@ -184,6 +191,7 @@ module DataQuality::Review
     #   person decided by its name and change it
     # nil when it's safe. decided: whether a person decided its record, when already known.
     def held_reason(candidate, directory: DataQuality::DirectoryClient.new, record: :lookup, firsts: first_batches, decided: nil)
+      return LEAD if lead?(candidate)
       return "it isn't attached to a record yet" unless candidate.subject_id
 
       if decided.nil?
@@ -266,8 +274,9 @@ module DataQuality::Review
 
     # How many candidates wait in each Checks group, plus "all":
     # { "all" => 9, "changed" => 2, … }. Pending facts aren't included.
+    # Leads (#127) are Data Quality's work, not the admin's: listed, never counted.
     def check_counts(source_kind: nil)
-      CATEGORIES.index_with { |category| category_scope(category, source_kind:).count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
+      CATEGORIES.index_with { |category| category_scope(category, source_kind:).not_leads.count }.then { |counts| { "all" => counts.values.sum }.merge(counts) }
     end
 
     # Kinds of question in a queue, most common first, quoted names blanked
@@ -319,6 +328,8 @@ module DataQuality::Review
     def edit_and_approve(candidate_id, attributes:, by:, reason: nil, directory: DataQuality::DirectoryClient.new)
       human!(by)
       candidate = Candidate.find_by(id: candidate_id) or return gone(candidate_id)
+      return Result.new(candidate_id:, ref: nil, errors: [ LEAD ]) if lead?(candidate)
+
       attributes = attributes.to_h.stringify_keys
       # A field that can't be edited here may come back unchanged (the form
       # shows it); only a changed one is refused.
@@ -766,6 +777,7 @@ module DataQuality::Review
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
+          next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
           if only_recommended && !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end
