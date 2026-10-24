@@ -110,7 +110,11 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   # Returns what changed: [{ candidate:, changes:, reverify: }].
   def refresh_open_claims(by: "agent:#{source_kind}")
     directory = DataQuality::DirectoryClient.new
-    open = Candidate.joins(:source).where(sources: { source_kind: }, status: %w[new matched needs_review]).includes(:source).order(:id).to_a
+    # Only the company and its link: a source has one of each, so its kind
+    # finds the fresh claim. Its awards (#256) are one per row and already
+    # worded as they are now.
+    open = Candidate.joins(:source).where(sources: { source_kind: }, status: %w[new matched needs_review], kind: %w[organization relationship])
+      .includes(:source).order(:id).to_a
     fresh = open.to_h { |candidate| [ candidate.id, extract(candidate.source, nil).find { |item| item[:kind] == candidate.kind } ] }
     shared = open.select { |candidate| candidate.kind == "organization" && candidate.subject_id && fresh[candidate.id] }
       .group_by(&:subject_id).transform_values { |claims| shared_name(claims.map { |claim| fresh[claim.id][:payload]["name"] }) }

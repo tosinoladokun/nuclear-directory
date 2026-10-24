@@ -398,4 +398,14 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert(terms.all? { |term| term.award? && term.pending? && term.external_id.present? && term.amount_usd.positive? })
     assert_equal terms.count, terms.distinct.count(:external_id)
   end
+
+  test "a repeat crawl leaves each open award its own values" do
+    crawl!
+    source = recipient("d527144c-7fea-82ff-aff0-e95e5fd6e488-C")
+    awards = plugin.extract(source, nil).select { |claim| claim[:kind] == "deal_term" }
+    assert_equal 2, awards.size
+    open = awards.map { |claim| Candidate.create!(source:, kind: "deal_term", payload: claim[:payload], quote: claim[:quote], status: "new") }
+    plugin.refresh_open_claims
+    assert_equal awards.map { |claim| claim[:payload]["external_id"] }, open.map { |claim| claim.reload.payload["external_id"] }
+  end
 end
