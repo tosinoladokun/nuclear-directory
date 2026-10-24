@@ -211,6 +211,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 - **Deal terms:** one term per link (or company), kind and award ID; an award needs an amount, a start date and an award ID; a term on a company itself is a funding round; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
 - **SEC CIK:** 10 digits, zero-padded, unique among companies.
 - **EIA utility ID:** a plain number without leading zeros ("7140"), unique among companies. One company holds one; a brand with several EIA utilities (Duke Energy) keeps the one its owner claims use, and a second goes to review.
+- **First batches and Data Quality's list (PM, 22 Oct):** the Today screen's "accept the agreed" shortcut lifts a new source's first-batch hold when Data Quality's list has reviewed the claim. So Data Quality reads that list claim by claim for a new source's first batch, every quote, and never sends a bulk "accept" entry.
 
 - **Read-only access:** Metabase's read-only role reads only the tables on `Metabase::ReadonlyRole::READABLE_TABLES`, never sign-in data, visitors' correction reports or the deploy's records. There are no default privileges. A migration that creates a public-data table adds it to the list and grants it (`Metabase::ReadonlyRole.grant!`); a test fails while any table is on neither list (PM and Data Quality, 18 Oct).
 
@@ -226,6 +227,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | duplicate site | High | Two live sites share an EIA plant ID or coordinates within 50 m |
 | duplicate company | High | Two live companies share a normalized name, alias or domain |
 | `single-source` | Low | Rests on one source |
+| `unquoted-docket-place`, `unquoted-hq`, `unquoted-legal-name` | Low | A plant's docket or place, or a company's headquarters or legal name, that none of the record's own quotes states (#407). A docket or legal name must appear as written, case, spacing and dash style aside; a docket also counts in NRC's short forms (05000254 as "50-254" or "050-00254"). A place needs the city as written and the state as its code (in capitals), full name or AP abbreviation ("Tenn.", "N.C."), in one quote. The fact itself stays on the page: only the line under its key facts leaves it out of "from these sources". Also counted by `seed:check`, which doesn't fail on them |
 | `idle-all-year` | High | A reactor marked `operating` that NRC's daily status report shows at 0% on all of the last 365 days (#296) |
 | `no-operator` | Medium | An operating reactor or plant with no published operator, on it or its site |
 | `no-capacity` | Medium | An operating reactor with no capacity |

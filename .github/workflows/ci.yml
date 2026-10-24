@@ -10,10 +10,12 @@ defaults:
     working-directory: backend
 
 jobs:
-  # Which of test and lighthouse this PR needs (.github/scripts/ci_scope.rb):
-  # docs-only PRs skip both, render.yaml/.github-only PRs skip lighthouse.
-  # Pushes to main always run everything. A skipped job reports success, so
-  # required checks still pass.
+  # Which work this PR needs (.github/scripts/ci_scope.rb): the unit tests, the
+  # browser (system) tests and the Lighthouse audit. Data-only PRs (seeds, data
+  # steps, crawler code) run unit tests only; page code runs everything.
+  # Pushes to main always run everything. "test" and "lighthouse" are required
+  # checks, so those two jobs always run and report: they pass with a
+  # "skipped" note when there was nothing for them to do.
   scope:
     runs-on: ubuntu-latest
     defaults:
@@ -21,6 +23,7 @@ jobs:
         working-directory: .
     outputs:
       test: ${{ steps.scope.outputs.test }}
+      system: ${{ steps.scope.outputs.system }}
       lighthouse: ${{ steps.scope.outputs.lighthouse }}
     steps:
       - uses: actions/checkout@v5
@@ -40,7 +43,7 @@ jobs:
              git show "$BASE:.github/scripts/ci_scope.rb" > "$RUNNER_TEMP/ci_scope.rb" 2>/dev/null; then
             git diff --name-only --no-renames "$BASE...$HEAD" | ruby "$RUNNER_TEMP/ci_scope.rb"
           else
-            printf 'test=true\nlighthouse=true\n' >> "$GITHUB_OUTPUT"
+            printf 'test=true\nsystem=true\nlighthouse=true\n' >> "$GITHUB_OUTPUT"
           fi
 
   lint:
@@ -79,10 +82,13 @@ jobs:
       - name: Test who holds the preview slot
         run: .github/scripts/preview_slot_test.sh
 
-  test:
+  # The unit tests. Skipped when scope says there's nothing to test; the
+  # required "test" job below still reports.
+  unit-tests:
     needs: scope
-    # Runs unless scope says it isn't needed; if scope itself failed, runs anyway.
-    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.test == 'true') }}
+    # Runs unless scope says it isn't needed; if scope itself failed, or its
+    # answer is missing, runs anyway.
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.test != 'false') }}
     runs-on: ubuntu-latest
 
     services:
@@ -124,10 +130,51 @@ jobs:
       - name: Run tests
         run: bin/rails test
 
-      # Browser tests (#362, #363): layout measured on the page and JavaScript,
-      # in headless Chrome, which ubuntu-latest has. On a freshly loaded schema:
-      # rows the unit tests leave in the shared test database would break
-      # loading the fixtures.
+  # Browser tests (#362, #363): layout measured on the page and JavaScript,
+  # in headless Chrome, which ubuntu-latest has. Its own job and its own
+  # freshly loaded database (rows the unit tests leave in the shared test
+  # database would break loading the fixtures), so it runs beside the unit
+  # tests, not after them.
+  system-tests:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.system != 'false') }}
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: backend
+          bundler-cache: true
+
+      - name: Build CSS
+        run: bin/rails tailwindcss:build
+
+      - name: Install libvips
+        run: sudo apt-get update -qq && (sudo apt-get install -y --no-install-recommends libvips42t64 || sudo apt-get install -y --no-install-recommends libvips42)
+
+      - name: Prepare database
+        run: bin/rails db:prepare
+
       - name: Run system tests
         timeout-minutes: 10
         # The runner's own chromedriver ($CHROMEWEBDRIVER is set on GitHub's
@@ -143,13 +190,38 @@ jobs:
           path: backend/tmp/screenshots
           if-no-files-found: ignore
 
+  # The required "test" check. It always runs and reports: it fails if the unit
+  # or the browser tests failed (or were cancelled), and passes, with a note,
+  # when scope left them out.
+  test:
+    needs: [ scope, unit-tests, system-tests ]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Report
+        env:
+          UNIT: ${{ needs.unit-tests.result }}
+          SYSTEM: ${{ needs.system-tests.result }}
+        run: |
+          echo "unit tests: $UNIT, system tests: $SYSTEM"
+          if [ "$UNIT" = failure ] || [ "$UNIT" = cancelled ] || [ "$SYSTEM" = failure ] || [ "$SYSTEM" = cancelled ]; then
+            echo "::error::A test job didn't pass."
+            exit 1
+          fi
+          [ "$UNIT" = skipped ] && echo "skipped: no changes that need the unit tests" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$SYSTEM" = skipped ] && echo "skipped: no page, JavaScript or controller changes, so no browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 0
+
   # #90: Lighthouse on a phone profile (simulated 4G, mid-range CPU) against
   # the production build with seed data. Fails below 95 for performance or
   # accessibility, or when the largest content takes over 2.5 s.
-  lighthouse:
+  lighthouse-audit:
     needs: scope
     # Runs unless scope says it isn't needed; if scope itself failed, runs anyway.
-    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.lighthouse == 'true') }}
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.lighthouse != 'false') }}
     runs-on: ubuntu-latest
 
     services:
@@ -205,3 +277,26 @@ jobs:
         with:
           name: lighthouse
           path: backend/lighthouse
+
+  # The required "lighthouse" check. It always runs and reports: it fails if the
+  # audit failed (or was cancelled), and passes, with a note, when scope found
+  # no public page code in the change.
+  lighthouse:
+    needs: [ scope, lighthouse-audit ]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Report
+        env:
+          AUDIT: ${{ needs.lighthouse-audit.result }}
+        run: |
+          echo "lighthouse audit: $AUDIT"
+          if [ "$AUDIT" = failure ] || [ "$AUDIT" = cancelled ]; then
+            echo "::error::The Lighthouse audit didn't pass."
+            exit 1
+          fi
+          [ "$AUDIT" = skipped ] && echo "skipped: no page changes" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 0
