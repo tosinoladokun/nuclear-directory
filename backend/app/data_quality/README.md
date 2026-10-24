@@ -327,9 +327,10 @@ item leaving the feed flags nothing.
 ## NRC notices in the Federal Register (#126)
 
 `plugins/federal_register_nrc.rb` asks the Federal Register API once a day for the NRC's notices of the last 60
-days. A notice whose title names its subject the NRC's way ("<licensee>; <plant>; <action>") becomes a
-`news_item` claim about what its title names; match keeps the names it finds in the directory. A notice the
-NRC repeats weekly is proposed once, from its first date. Forms, biweekly lists and titles naming the
+days (a `federal_register_index` source, never extracted). Each notice whose title names its subject the NRC's
+way ("<licensee>; <plant>; <action>") is stored once as its own source, at its Federal Register page, and becomes
+a `news_item` claim citing that page, about what its title names. Notices are told apart by document number; a
+weekly repeat (its abstract says so) isn't stored again. Forms, biweekly lists and titles naming the
 Commissioners are left out. Only news: no fact is proposed from a notice. Every item waits for a person.
 
 ## DOE Isotope Program: production sites (#276)
