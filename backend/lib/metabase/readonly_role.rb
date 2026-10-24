@@ -30,7 +30,7 @@ module Metabase
     # messages and contacts, the deploy's own records (their reports and
     # errors), and the admin's Today steps (who marked them). Rails' Solid
     # tables too (PRIVATE_PREFIXES).
-    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations today_steps].freeze
+    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations today_steps search_gaps].freeze
     # Rails' own Solid Queue, Cache and Cable tables (job arguments can hold
     # an email address).
     PRIVATE_PREFIXES = %w[solid_].freeze
