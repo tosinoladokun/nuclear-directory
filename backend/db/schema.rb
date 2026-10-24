@@ -134,21 +134,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140100) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.decimal "amount_offered_usd", precision: 16, scale: 2
+    t.string "agreement"
+    t.text "conditions"
+    t.decimal "firm_mw", precision: 10, scale: 1
+    t.integer "term_years"
     t.index ["link_type", "link_id", "term_type", "external_id"], name: "index_deal_terms_uniqueness", unique: true, where: "(external_id IS NOT NULL)"
     t.index ["link_type", "link_id"], name: "index_deal_terms_on_link_type_and_link_id"
     t.index ["verification_status"], name: "index_deal_terms_on_verification_status"
+    t.check_constraint "agreement IS NULL OR (agreement::text = ANY (ARRAY['ppa'::character varying, 'supply_agreement'::character varying, 'tariff_subscription'::character varying, 'development_agreement'::character varying, 'prepayment'::character varying, 'framework'::character varying, 'mou'::character varying, 'loi'::character varying, 'option'::character varying, 'preorder'::character varying]::text[]))", name: "deal_terms_agreement_check"
     t.check_constraint "amount_offered_usd IS NULL OR amount_offered_usd >= 0::numeric", name: "deal_terms_amount_offered_check"
     t.check_constraint "amount_usd IS NULL OR amount_usd >= 0::numeric", name: "deal_terms_amount_check"
     t.check_constraint "capacity_mw IS NULL OR capacity_mw >= 0::numeric", name: "deal_terms_capacity_check"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "deal_terms_confidence_check"
     t.check_constraint "ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on", name: "deal_terms_dates_check"
     t.check_constraint "link_type::text <> 'Organization'::text OR term_type::text = 'funding_round'::text", name: "deal_terms_company_round_check"
+    t.check_constraint "firm_mw IS NULL OR firm_mw >= 0::numeric", name: "deal_terms_firm_mw_check"
     t.check_constraint "link_type::text = ANY (ARRAY['Relationship'::character varying, 'FacilityRelationship'::character varying, 'Organization'::character varying]::text[])", name: "deal_terms_link_type_check"
     t.check_constraint "status IS NULL OR (status::text = ANY (ARRAY['announced'::character varying, 'signed'::character varying, 'active'::character varying, 'completed'::character varying, 'terminated'::character varying]::text[]))", name: "deal_terms_status_check"
     t.check_constraint "term_type::text <> 'award'::text OR amount_usd IS NOT NULL AND starts_on IS NOT NULL AND external_id IS NOT NULL", name: "deal_terms_award_check"
     t.check_constraint "term_type::text <> 'funding_round'::text OR amount_usd IS NOT NULL OR round IS NOT NULL", name: "deal_terms_round_check"
-    t.check_constraint "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL", name: "deal_terms_offtake_check"
+    t.check_constraint "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL OR agreement IS NOT NULL AND (agreement::text <> ALL (ARRAY['ppa'::character varying, 'supply_agreement'::character varying, 'tariff_subscription'::character varying]::text[]))", name: "deal_terms_offtake_check"
     t.check_constraint "term_type::text = ANY (ARRAY['award'::character varying, 'offtake'::character varying, 'funding_round'::character varying]::text[])", name: "deal_terms_term_type_check"
+    t.check_constraint "term_years IS NULL OR term_years > 0", name: "deal_terms_term_years_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "deal_terms_verification_status_check"
   end
 

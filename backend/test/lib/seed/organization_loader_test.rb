@@ -230,6 +230,23 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     end
   end
 
+  test "terms added under a pending plant link approved since are verified with it, though the YAML still says pending" do
+    entry = item(name: "Acme Plant", type: "offtakes_from", pending: true, pending_reason: "quote doesn't say it")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ entry ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    link = FacilityRelationship.sole
+
+    travel 1.hour do
+      link.verify!(by: "human:tosin")
+      terms = [ { key: "acme-plant-ppa", agreement: "ppa", status: "signed", capacity_mw: 100 } ]
+      write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ entry.merge(terms:) ]))
+      Seed::OrganizationLoader.new(@dir).load!
+    end
+
+    assert DealTerm.find_by!(external_id: "acme-plant-ppa").verified?
+    assert_equal [ "acme-plant-ppa" ], Directory::DealList.offtakes.map(&:key)
+  end
+
   test "a plant link marked pending is created pending, and a rerun keeps a later decision" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
       facilities: [ item(name: "Acme Plant", type: "owns", pending: true, pending_reason: "quote doesn't say owns") ]))
