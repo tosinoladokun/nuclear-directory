@@ -59,7 +59,7 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
   end
 
   def crawl(_run)
-    @pages.each_with_object({}) do |(url, page), stats|
+    stats = @pages.each_with_object({}) do |(url, page), stats|
       source = Source.find_or_create_by!(url:) do |row|
         row.source_kind = source_kind
         row.title = page[:title]
@@ -76,6 +76,13 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
         stats["companies"] = stats.fetch("companies", 0) + items.size
       end
     end
+    # A link's description sums up every page, so when one page changed (or
+    # stopped being readable), every page is read again: the page that owns
+    # a link may not have changed itself.
+    if @pages.values.any? { |page| %w[changed blocked layout_changed].include?(stats[page[:title]]) }
+      Source.where(source_kind:, url: @pages.keys).update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
+    end
+    stats
   end
 
   def extract(source, _run)
@@ -133,7 +140,8 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
 
     # The other pages' items, from their stored copies (an unreadable one adds nothing).
     def other_pages_items(source)
-      Source.where(source_kind:, url: @pages.keys - [ source.url ]).where.not(content_text: nil)
+      # Only pages read cleanly: a blocked or changed-layout page's old copy isn't used.
+      Source.where(source_kind:, url: @pages.keys - [ source.url ], crawl_status: "ok").where.not(content_text: nil)
         .flat_map { |other| Array(items(other)) }
     end
 

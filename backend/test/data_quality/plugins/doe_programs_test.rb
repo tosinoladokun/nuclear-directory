@@ -81,6 +81,18 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_match "DOE selected four companies", context
   end
 
+  test "a change on one page has every page read again; a blocked page's old copy isn't summed up" do
+    crawl
+    Source.where(source_kind: "doe_programs").update_all(extracted_sha256: "read", extracted_rows_sha256: "read")
+    stub_request(:get, DECONVERSION).to_return(status: 403, body: "Forbidden")
+    Source.update_all(fetched_at: 2.days.ago)
+    crawl
+
+    assert Source.where(source_kind: "doe_programs").all? { |s| s.extracted_sha256.nil? }
+    orano = plugin.extract(Source.find_by!(url: ENRICHMENT), nil).find { |c| c[:payload].dig("to_organization", "name").to_s.start_with?("Orano") }
+    assert_equal "HALEU enrichment services contract: selected in 2024 to bid on task orders", orano[:payload]["description"]
+  end
+
   test "a heading's date is read from the page: a changed date is a change, and the description follows it" do
     source = stored(ALLOCATION)
     moved = Source.new(url: ALLOCATION, content_text: source.content_text.sub("Round 3 Conditional Selections (July 23, 2026)", "Round 3 Conditional Selections (August 23, 2026)"))
