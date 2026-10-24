@@ -1,6 +1,5 @@
 # Seed research - 22 Oct 2026 (awardee companies with no role). Quote from the company's own page, checked live.
 name: PKMJ Technical Services
-country_code: null
 status: active
 roles:
 - key: reactor_services
@@ -10,7 +9,7 @@ roles:
 technologies: []
 relationships: []
 facilities: []
-notes: An existing record (DOE awardee). Only the role is added, from the company's own page; country, HQ and website are not stated by that page, so none is set here.
+notes: An existing record (DOE awardee). Only the role is added, from the company's own page; the file states no country, HQ or website, so the record's own values are left as they are.
 description:
   source_url: https://www.pkmj.com/
   quote: we are a nuclear consulting organization providing software and engineering solutions.

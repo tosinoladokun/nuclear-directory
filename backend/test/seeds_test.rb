@@ -192,6 +192,23 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal "Dominion Energy Virginia currently owns the proposed site.", links["dominion-energy"].evidence.sole.quote
   end
 
+  test "a role-only company seed leaves the company's other fields as they are, now and on a re-seed" do
+    load_seeds
+    slugs = %w[general-atomics global-laser-enrichment good-energy-collective-incorporated pkmj-technical-services-llc advanced-conductor-technologies]
+    slugs.each do |slug|
+      Organization.find_by!(slug:).update_columns(country_code: "US", website: "https://example.org/#{slug}", legal_name: "#{slug} Inc.",
+        hq_city: "Springfield", hq_state: "IL", description: "Added later by hand")
+    end
+
+    2.times { load_seeds }
+
+    slugs.each do |slug|
+      company = Organization.find_by!(slug:)
+      assert_equal [ "US", "https://example.org/#{slug}", "#{slug} Inc.", "Springfield", "IL", "Added later by hand" ],
+        company.attributes.values_at("country_code", "website", "legal_name", "hq_city", "hq_state", "description"), slug
+    end
+  end
+
   test "is safe to re-run" do
     load_seeds
     Role.find_by!(key: "fuel").update!(name: "Edited")
