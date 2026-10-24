@@ -94,6 +94,7 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
   end
 
   test "a page readable again (even unchanged) re-reads every page, and undecided link claims from the old read are superseded" do
+    Organization.create!(name: "U.S. Department of Energy").tap { |c| c.verify!(by: "human:test"); c.aliases.create!(alias: c.name) }
     DataQuality::Pipeline.run("doe_programs", plugin:, only: %w[crawl extract match])
     stub_request(:get, DECONVERSION).to_return(status: 403, body: "Forbidden")
     Source.update_all(fetched_at: 2.days.ago)
@@ -106,6 +107,12 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_equal "readable_again", stats["DOE: HALEU deconversion services"]
     assert Source.where(source_kind: "doe_programs").all? { |s| s.extracted_sha256.nil? }
     assert Candidate.where(kind: "relationship", status: %w[new matched]).none?
+
+    DataQuality::Pipeline.run("doe_programs", plugin:, only: %w[extract match])
+    superseded = Candidate.where(kind: "relationship", status: "rejected").pluck(Arel.sql("payload->'to_organization'->>'name'"))
+    assert superseded.any?
+    replacement = Candidate.where(kind: "relationship", status: %w[new matched needs_review]).find { |c| superseded.include?(c.payload.dig("to_organization", "name")) }
+    assert_equal Plugin::REPLACEMENT, plugin.hold_for_review(replacement), "held like a first read, never taken in bulk"
   end
 
   test "a heading's date is read from the page: a changed date is a change, and the description follows it" do

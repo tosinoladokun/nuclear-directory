@@ -50,6 +50,19 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
     }
   }.freeze
 
+  SUPERSEDED = "Superseded: DOE's program pages changed, so the link is read again"
+  REPLACEMENT = "It replaces a claim from an earlier read of DOE's pages: check it as a first read"
+
+  # A link claim that replaces a superseded one waits for a person, as its
+  # first read did, so no recommendation can take it in bulk.
+  def hold_for_review(candidate)
+    return unless candidate.kind == "relationship"
+
+    name = candidate.payload.dig("to_organization", "name")
+    REPLACEMENT if Candidate.where(source_id: Source.where(source_kind:).select(:id), kind: "relationship", status: "rejected", notes: SUPERSEDED)
+      .where("candidates.payload->'to_organization'->>'name' = ?", name).exists?
+  end
+
   # A page missing a list it should have.
   class LayoutChanged < StandardError; end
 
@@ -88,7 +101,7 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
       # The links' combined descriptions were read from the old pages: their
       # claims not yet decided are withdrawn, and the fresh read proposes them again.
       superseded = Candidate.where(source_id: pages.select(:id), kind: "relationship", status: %w[new matched])
-        .update_all(status: "rejected", notes: "Superseded: DOE's program pages changed, so the link is read again", updated_at: Time.current)
+        .update_all(status: "rejected", notes: SUPERSEDED, updated_at: Time.current)
       stats["superseded"] = superseded if superseded.positive?
     end
     stats
