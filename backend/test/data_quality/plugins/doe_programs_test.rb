@@ -32,8 +32,8 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     second = crawl
 
     assert_equal 4 + 2 + 6 + 11, run.stats["companies"]
-    assert_equal %w[changed], run.stats.except("companies").values.uniq
-    assert_equal %w[skipped_recent], second.stats.except("companies").values.uniq
+    assert_equal %w[changed], run.stats.except("companies", "pages", "superseded").values.uniq
+    assert_equal %w[skipped_recent], second.stats.except("companies", "pages", "superseded").values.uniq
     @stubs.each_value { |stub| assert_requested stub, times: 1 }
   end
 
@@ -124,7 +124,8 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
 
     held = Candidate.create!(source:, kind: "relationship", status: "needs_review", notes: Plugin::REPLACEMENT, quote: "q",
       payload: { "to_organization" => { "name" => "Orano Federal Services, LLC" } })
-    reopened = Candidate.create!(source:, kind: "relationship", status: "needs_review", notes: "A person reopened this", quote: "q",
+    reopened = Candidate.create!(source:, kind: "relationship", status: "new", notes: Plugin::REPLACEMENT, quote: "q",
+      reopenings: [ { "by" => "human:tosin", "reason" => "look again" } ],
       payload: { "to_organization" => { "name" => "Louisiana Energy Services, LLC" } })
     stub_request(:get, DECONVERSION).to_return(status: 200, body: "")
     stub_request(:get, "https://www.energy.gov/robots.txt").to_return(body: "User-agent: *\nDisallow: /ne/haleu-deconversion-services\n")
@@ -132,13 +133,23 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
 
     assert_equal "disallowed", stats["DOE: HALEU deconversion services"]
     assert held.reload.status_rejected?
-    assert reopened.reload.status_needs_review?, "a person's own review stays"
+    assert reopened.reload.status_new?, "a claim a person reopened stays"
 
     # A crawl cut off after storing pages, before the re-read: the next crawl repairs it.
     Source.where(source_kind: "doe_programs").update_all(extracted_sha256: "old")
     Source.update_all(fetched_at: Time.current)
     crawl
     assert Source.where(source_kind: "doe_programs", crawl_status: "ok").all? { |s| s.extracted_sha256.nil? }
+  end
+
+  test "a crawl cut off after recording a block: a same-day retry still re-reads every page" do
+    crawl
+    Source.find_by!(url: DECONVERSION).update!(crawl_status: "blocked", status_reason: "HTTP 403")
+    Source.where(source_kind: "doe_programs").update_all(extracted_sha256: "read", extracted_rows_sha256: "read")
+    Source.where(source_kind: "doe_programs").find_each { |s| s.update_columns(extracted_sha256: s.content_sha256) }
+
+    crawl
+    assert Source.where(source_kind: "doe_programs").all? { |s| s.extracted_sha256.nil? }
   end
 
   test "a heading's date is read from the page: a changed date is a change, and the description follows it" do

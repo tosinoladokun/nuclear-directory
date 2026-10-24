@@ -98,17 +98,22 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
     # stopped being readable), every page is read again: the page that owns
     # a link may not have changed itself.
     pages = Source.where(source_kind:, url: @pages.keys)
-    # Also when a page's stored copy isn't read yet (a crawl cut off after
-    # storing it, before this ran): a retry repairs it.
+    # Which pages are readable and what they hold, against the last finished
+    # crawl's: any difference (a page changed, was blocked, came back, or a
+    # crawl was cut off before this ran) re-reads every page.
+    stats["pages"] = Digest::SHA256.hexdigest(pages.order(:url).pluck(:url, :crawl_status, :content_sha256).to_json)
+    last = CrawlRun.where(source_kind:, stage: "crawl", status: "succeeded").order(:id).last&.stats.to_h["pages"]
     unread = pages.where(crawl_status: "ok").where("content_sha256 IS DISTINCT FROM extracted_sha256").exists?
-    if unread || @pages.values.any? { |page| %w[changed blocked disallowed needs_human layout_changed readable_again].include?(stats[page[:title]]) }
+    if unread || stats["pages"] != last
       pages.update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
       # The links' combined descriptions were read from the old pages: their
       # claims not yet decided are withdrawn, and the fresh read proposes them again.
       # Including a replacement held for a person by this plug-in (not one a
       # person reopened or edited, whose notes say otherwise).
-      open = Candidate.where(source_id: pages.select(:id), kind: "relationship")
-        .where(status: %w[new matched]).or(Candidate.where(source_id: pages.select(:id), kind: "relationship", status: "needs_review", notes: REPLACEMENT))
+      # Never one a person reopened (it keeps its reopenings, as extract does).
+      open = Candidate.where(source_id: pages.select(:id), kind: "relationship").where("candidates.reopenings = '[]'::jsonb")
+        .where(status: %w[new matched]).or(Candidate.where(source_id: pages.select(:id), kind: "relationship", status: "needs_review", notes: REPLACEMENT)
+          .where("candidates.reopenings = '[]'::jsonb"))
       superseded = open.update_all(status: "rejected", notes: SUPERSEDED, updated_at: Time.current)
       stats["superseded"] = superseded if superseded.positive?
     end
