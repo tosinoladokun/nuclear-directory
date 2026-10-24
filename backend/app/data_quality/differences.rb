@@ -52,8 +52,15 @@ module DataQuality::Differences
   # it a person's: a seed, an admin edit, a repair, a merge, an edited
   # approval, another source. A blank no one ever wrote is no one's. One
   # person's field keeps them all, so a mixed claim stays a conflict.
+  # Identity keys: a different one is a different company, or a second ID
+  # for one, so it always goes to a person, whoever wrote the first (#382).
+  IDENTITY_KEYS = %w[sec_cik eia_utility_id].freeze
+
   def self.written_by_person(differences, candidate, record, directory:)
     return differences if differences.empty?
+
+    identity = differences.slice(*IDENTITY_KEYS)
+    return identity if identity.any?
 
     # A difference may be in a field the payload names another way (a
     # domain from a website), so the differences count too.

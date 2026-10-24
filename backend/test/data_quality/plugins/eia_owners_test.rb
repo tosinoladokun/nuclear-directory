@@ -196,9 +196,10 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
   FILE_2026 = "https://www.eia.gov/electricity/data/eia860/xls/eia8602026.zip"
 
   # The next year's release: a new source, an edition after the first.
-  def next_year!(**zip)
-    stub_request(:get, DataQuality::Plugins::EiaPlants::INDEX_URL).to_return(body: %(<a href="xls/eia8602026.zip">2026</a>))
-    stub_request(:get, FILE_2026).to_return(body: yearly_zip(**zip))
+  def next_year!(year: 2026, **zip)
+    file = "https://www.eia.gov/electricity/data/eia860/xls/eia860#{year}.zip"
+    stub_request(:get, DataQuality::Plugins::EiaPlants::INDEX_URL).to_return(body: %(<a href="xls/eia860#{year}.zip">#{year}</a>))
+    stub_request(:get, file).to_return(body: yearly_zip(**zip))
     Source.where(source_kind: %w[eia_owners eia_860_index]).update_all(fetched_at: 1.day.ago)
     run!
   end
@@ -266,6 +267,30 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     assert dropped&.status_needs_review?, "flagged on the 2026 file"
     assert_match "No longer in", dropped.notes
     assert calvert.reload.verified?, "still published until a person decides"
+    assert_equal SOURCE, dropped.source.url, "on the 2025 file that last stated it"
+
+    # A third year without it: no second review item while that one is open.
+    next_year!(year: 2027, operable: OPERABLE.reject { |row| %w[6011 6036].include?(row[2]) }, owners: OWNERS.reject { |row| row[2] == "6036" })
+    assert_equal 1, Candidate.where(review_origin: "dropped", subject_type: "FacilityRelationship", subject_id: calvert.id).count
+
+    # Keeping it cites the 2025 file again, never a newer one without the row.
+    DataQuality::Review.approve([ dropped.id ], by: "human:tosin")
+    assert_equal [ SOURCE ], calvert.evidence.map { |row| row.source.url }.uniq
+  end
+
+  test "a second EIA utility ID always goes to a person, even when the first came from EIA's own file" do
+    @georgia_power.update!(eia_utility_id: nil)
+    run!
+    company = Candidate.where(kind: "organization").find { |c| c.payload["eia_utility_id"] == "7140" }
+    DataQuality::Review.approve([ company.id ], by: "human:tosin") # unedited, from EIA: the pipeline's write
+    assert_equal "7140", @georgia_power.reload.eia_utility_id
+
+    renamed = OWNERS.map { |row| row[12] == "7140" ? row.dup.tap { |r| r[12] = "7141" } : row }
+    next_year!(owners: renamed)
+
+    second = Candidate.where(kind: "organization").find { |c| c.payload["eia_utility_id"] == "7141" }
+    assert second.status_needs_review?, [ second.status, second.notes ].inspect
+    assert_equal "7140", @georgia_power.reload.eia_utility_id
   end
 
   def owner_row(plant, name, generator, owner_name, owner_id, pct)
