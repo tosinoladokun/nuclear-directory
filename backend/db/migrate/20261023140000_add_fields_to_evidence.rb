@@ -5,6 +5,8 @@
 class AddFieldsToEvidence < ActiveRecord::Migration[8.1]
   def change
     add_column :evidence, :fields, :string, array: true
-    add_check_constraint :evidence, "fields IS NULL OR cardinality(fields) > 0", name: "evidence_fields_check"
+    # Added unvalidated, so this short transaction never scans evidence under
+    # its lock; the next migration validates it.
+    add_check_constraint :evidence, "fields IS NULL OR cardinality(fields) > 0", name: "evidence_fields_check", validate: false
   end
 end
