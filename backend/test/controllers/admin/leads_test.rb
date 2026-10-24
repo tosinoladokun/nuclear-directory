@@ -12,9 +12,11 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
   test "the list shows most-seen first with where each came from; the nav counts new leads" do
     get admin_leads_path
     assert_response :success
-    assert_select "ol.nd-waits > li", 2
-    assert_select "ol.nd-waits > li:first-child .type-subject", "Often Seen Fission"
-    assert_select "#lead-#{@once.id} a[href='https://example.com/n']", "News: a headline"
+    assert_select "table.nd-leads tbody tr", 2
+    get admin_leads_path(sort: "seen")
+    assert_select "table.nd-leads tbody tr:first-child .nd-leads__lead p", "Often Seen Fission"
+    assert_select "th[aria-sort=descending] a", /Seen/
+    assert_select "#lead-#{@once.id} a[href=?][title=?]", "https://example.com/n", "News: a headline", text: /example.com/
     assert_select "nav a", /Leads\s*2/
   end
 
@@ -91,5 +93,15 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
     post covered_admin_lead_path(@once), params: { record: "Once Seen Company" }
     assert_match "No company or plant is called", flash[:alert]
     assert @once.reload.status_new?
+  end
+
+  test "the cards' sort links, every source behind +N more, and Put back on a lead being researched" do
+    Lead.sighted!(name: "Often Seen Fission", kind: "company", key: "c", label: "Search with no results")
+    @often.reload.decide!("researching", by: "human:tosin")
+    get admin_leads_path(tab: "all")
+    assert_select ".nd-leads__sort a", 2
+    assert_select "#lead-#{@often.id} .nd-leads__more li", 1
+    assert_select "#lead-#{@often.id} form[action=?]", reopen_admin_lead_path(@often, tab: "all")
+    assert_select "#lead-#{@often.id} summary", /Already covered/
   end
 end

@@ -1,89 +1,127 @@
 <% content_for :title, "Leads" %>
+<% keep = { tab: (@tab unless @tab == "new"), sort: (@sort unless @sort == "date"), dir: (@dir unless @dir == "desc") }.compact %>
+<% sort_link = lambda do |key, label|
+     current = @sort == key
+     dir = current && @dir == "desc" ? "asc" : "desc"
+     link_to admin_leads_path(**keep, sort: key, dir:), class: "nd-link whitespace-nowrap" do
+       safe_join([ label, (icon(@dir == "desc" ? "caret-down" : "caret-up", size: 12) if current) ].compact, " ")
+     end
+   end %>
 
 <div>
-  <h1 class="type-admin-h1">Leads <span class="type-count"><%= @counts["new"].to_i %></span></h1>
-  <p class="type-body text-ink-muted">Names that aren't facts yet, most seen first. Nothing here goes on the site: a lead becomes facts only as claims you approve.</p>
+  <h1 class="type-admin-h1">Leads <span class="type-count"><%= @counts["new"] %></span></h1>
+  <p class="type-body text-ink-muted">Research: add it to the research list. Covered: we already have it, under another name. Ignore: not a lead.</p>
 </div>
 
 <div class="nd-row">
-  <%= button_to "Bring up to date", refresh_admin_leads_path(tab: (@tab unless @tab == "new")), class: "nd-btn nd-btn--outline type-ui" %>
+  <%= button_to "Bring up to date", refresh_admin_leads_path(**keep), class: "nd-btn nd-btn--outline type-ui" %>
 </div>
 
-<nav class="nd-fchips type-ui" aria-label="Leads">
-  <% Admin::LeadsController::TABS.each do |tab| %>
-    <%= link_to admin_leads_path(tab:), class: "nd-fchip", aria: { current: ("page" if tab == @tab) } do %>
-      <%= tab.humanize %> <span class="type-data nd-num"><%= @counts[tab].to_i %></span>
+<nav class="nd-fchips type-ui" aria-label="Status">
+  <% Admin::LeadsController::TABS.each do |tab, (label, _)| %>
+    <%= link_to admin_leads_path(**keep.except(:tab), tab: (tab unless tab == "new")), class: "nd-fchip", aria: { current: ("page" if tab == @tab) } do %>
+      <%= label %> <span class="type-data nd-num"><%= @counts[tab] %></span>
     <% end %>
   <% end %>
 </nav>
 
 <% if @leads.empty? %>
-  <p class="type-body text-ink-muted"><%= { "new" => "No new leads.", "researching" => "Nothing being researched.", "added" => "None linked yet.", "ignored" => "None ignored." }.fetch(@tab) %></p>
+  <p class="type-body text-ink-muted">Nothing here.</p>
 <% else %>
-  <ol class="nd-waits">
-    <% @leads.each do |lead| %>
-      <li class="nd-wait" id="lead-<%= lead.id %>">
-        <div class="nd-wait__what">
-          <p class="type-kicker text-ink-muted">
-            <%= lead.kind.humanize %> · seen <span class="nd-num"><%= lead.seen_count %></span> <%= "time".pluralize(lead.seen_count) %> ·
-            <%= data_date(lead.first_seen_on) %><%= " to #{data_date(lead.last_seen_on)}" unless lead.first_seen_on == lead.last_seen_on %>
-          </p>
-          <p class="type-subject wrap-anywhere"><%= lead.name %></p>
-          <% if (record = lead.record) %>
-            <p class="type-small m-0"><%= lead.status_added? ? "Covered by" : "Researching" %>
-              <%= link_to record.name, admin_record_path(type: lead.record_type, id: record.id), class: "nd-link" %></p>
-          <% end %>
-          <% if lead.status_ignored? && lead.reason.present? %>
-            <p class="type-small m-0">Ignored: <%= lead.reason %> · <%= who(lead.decided_by) %></p>
-          <% end %>
-          <% if lead.note.present? %><p class="type-small text-ink-muted m-0"><%= lead.note %></p><% end %>
-          <details>
-            <summary class="type-small">Where it came from (<%= lead.sources.size %>)</summary>
-            <ul class="nd-wait__more type-small">
-              <% lead.sources.each do |source| %>
-                <li>
-                  <% if (url = safe_url(source["url"])) %><%= link_to source["label"], url, class: "nd-link wrap-anywhere", target: "_blank", rel: "noopener" %>
-                  <% else %><%= source["label"] %><% end %>
-                  · <span class="nd-num"><%= source["times"] %></span>×
-                </li>
+  <%# When the table is cards its header is hidden, so the sort shows here instead. %>
+  <p class="nd-leads__sort type-small m-0">Sort by <%= sort_link.("date", "Date") %> · <%= sort_link.("seen", "Seen") %></p>
+  <table class="nd-numtable nd-stack-table nd-leads">
+    <thead>
+      <tr>
+        <th scope="col" class="nd-l" aria-sort="<%= @sort == "date" ? (@dir == "desc" ? "descending" : "ascending") : "none" %>"><%= sort_link.("date", "Date") %></th>
+        <th scope="col" class="nd-l">Lead</th>
+        <th scope="col" class="nd-l">Source</th>
+        <th scope="col" aria-sort="<%= @sort == "seen" ? (@dir == "desc" ? "descending" : "ascending") : "none" %>"><%= sort_link.("seen", "Seen") %></th>
+        <th scope="col" class="nd-l nd-leads__statuscol">Status</th>
+        <th scope="col" class="nd-l">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @leads.each do |lead| %>
+        <% source = lead.sources.max_by { |each| each["last"].to_s } %>
+        <tr id="lead-<%= lead.id %>">
+          <td class="nd-l type-data whitespace-nowrap nd-leads__date">
+            <span class="block">First <%= lead.first_seen_on.strftime("%-d %b") %></span>
+            <span class="block">Last <%= lead.last_seen_on.strftime("%-d %b") %></span>
+          </td>
+          <td class="nd-leads__lead nd-l whitespace-normal">
+            <p class="type-body-strong m-0 truncate max-w-[28ch]" title="<%= lead.name %>" data-truncate><%= lead.name %></p>
+            <p class="type-small text-ink-muted m-0"><%= lead.kind.humanize %>
+              <%# Between 1,200 and 1,440 the Status column folds in here. %>
+              <span class="nd-tag nd-leads__instatus"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></p>
+            <% if (record = lead.record) %>
+              <p class="type-small m-0"><%= link_to record.name, admin_record_path(type: lead.record_type, id: record.id), class: "nd-link" %></p>
+            <% end %>
+            <% if lead.status_ignored? && lead.reason.present? %><p class="type-small text-ink-muted m-0"><%= lead.reason %></p><% end %>
+            <% if lead.note.present? %><p class="type-small text-ink-muted m-0"><%= lead.note %></p><% end %>
+          </td>
+          <td class="nd-l type-small whitespace-nowrap nd-leads__source">
+            <% if (url = safe_url(source&.dig("url"))) %>
+              <%= link_to url, class: "nd-link", target: "_blank", rel: "noopener", title: source["label"] do %><%= source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %>
+            <% else %>
+              <span title="<%= source&.dig("label") %>"><%= source&.dig("key").to_s.start_with?("search:") ? "A search on the site" : source&.dig("label").to_s.truncate(28) %></span>
+            <% end %>
+            <% if lead.sources.size > 1 %>
+              <details class="nd-leads__more">
+                <summary class="text-ink-muted">+<%= lead.sources.size - 1 %> more</summary>
+                <ul class="m-0 p-0 list-none">
+                  <% (lead.sources - [ source ]).each do |other| %>
+                    <li><% if (other_url = safe_url(other["url"])) %><%= link_to other["label"], other_url, class: "nd-link", target: "_blank", rel: "noopener" %><% else %><%= other["label"] %><% end %></li>
+                  <% end %>
+                </ul>
+              </details>
+            <% end %>
+          </td>
+          <td class="type-cell-num" data-unit="seen"><%= lead.seen_count %></td>
+          <td class="nd-l nd-leads__statuscol"><span class="nd-tag"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></td>
+          <td class="nd-l nd-leads__actions">
+            <div class="nd-leads__buttons type-ui">
+              <% if lead.status_new? || lead.status_researching? %>
+                <% if lead.status_new? %>
+                  <%= button_to "Research", research_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline type-ui",
+                    title: lead.kind == "company" ? "Read its pages if we have it, or add it to the research list" : "Add it to the research list" %>
+                <% end %>
+                <%# Its form opens as a panel under the button (a sheet on phones), over the page, so the row keeps its shape (Design on #546). %>
+                <details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
+                  <summary class="nd-btn nd-btn--outline type-ui"><span class="nd-leads__long">Already covered</span><span class="nd-leads__short">Covered</span></summary>
+                  <div class="nd-rowmenu__panel">
+                    <%= form_with url: covered_admin_lead_path(lead, **keep), method: :post, class: "nd-rowmenu__takeoff" do %>
+                      <label for="record-<%= lead.id %>" class="type-body-strong">The company or plant that has it</label>
+                      <%= text_field_tag :record, nil, id: "record-#{lead.id}", class: "nd-input type-input", placeholder: "Its name in the directory", required: true %>
+                      <button type="submit" class="nd-btn nd-btn--primary type-ui">Link it</button>
+                      <button type="button" class="nd-btn nd-btn--outline type-ui nd-leads__cancel" data-action="row-menu#close">Cancel</button>
+                    <% end %>
+                  </div>
+                </details>
+                <details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
+                  <summary class="nd-btn nd-btn--outline type-ui">Ignore</summary>
+                  <div class="nd-rowmenu__panel">
+                    <%= form_with url: ignore_admin_lead_path(lead, **keep), method: :post, class: "nd-rowmenu__takeoff" do %>
+                      <label for="reason-<%= lead.id %>" class="type-body-strong">Why it's ignored</label>
+                      <%= text_field_tag :reason, nil, id: "reason-#{lead.id}", class: "nd-input type-input", required: true, placeholder: "Not nuclear, a typo…" %>
+                      <button type="submit" class="nd-btn nd-btn--primary type-ui">Ignore it</button>
+                      <button type="button" class="nd-btn nd-btn--outline type-ui nd-leads__cancel" data-action="row-menu#close">Cancel</button>
+                    <% end %>
+                  </div>
+                </details>
               <% end %>
-            </ul>
-          </details>
-          <% unless lead.status_added? || lead.status_ignored? %>
-            <details>
-              <summary class="type-small">Already covered or ignore</summary>
-              <div class="nd-wait__more nd-stack">
-                <%= form_with url: covered_admin_lead_path(lead, tab: (@tab unless @tab == "new")), method: :post, class: "nd-stack" do %>
-                  <div class="nd-field">
-                    <label for="record-<%= lead.id %>" class="type-small">The company or plant that has it</label>
-                    <%= text_field_tag :record, nil, id: "record-#{lead.id}", class: "nd-input type-input", placeholder: "Its name in the directory" %>
-                  </div>
-                  <button type="submit" class="nd-btn nd-btn--outline type-ui">Already covered</button>
-                <% end %>
-                <%= form_with url: ignore_admin_lead_path(lead, tab: (@tab unless @tab == "new")), method: :post, class: "nd-stack" do %>
-                  <div class="nd-field">
-                    <label for="reason-<%= lead.id %>" class="type-small">Why it's ignored</label>
-                    <%= text_field_tag :reason, nil, id: "reason-#{lead.id}", class: "nd-input type-input", required: true, placeholder: "Not nuclear, a typo…" %>
-                  </div>
-                  <button type="submit" class="nd-btn nd-btn--outline type-ui">Ignore</button>
-                <% end %>
-              </div>
-            </details>
-          <% end %>
-        </div>
-        <div class="nd-wait__actions type-ui">
-          <% if lead.status_new? %>
-            <%= button_to "Research", research_admin_lead_path(lead), class: "nd-btn nd-btn--primary",
-              title: lead.kind == "company" ? "Read its pages if we have it, or mark it for Data Quality" : "Mark it for Data Quality" %>
-          <% else %>
-            <%= button_to "Back to new", reopen_admin_lead_path(lead, tab: @tab), class: "nd-btn nd-btn--outline" %>
-          <% end %>
-        </div>
-      </li>
-    <% end %>
-  </ol>
+              <%# A lead being researched can go back to To do too (a mis-tap, or an address Enrich refused). %>
+              <% unless lead.status_new? %>
+                <%= button_to "Put back", reopen_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline type-ui" %>
+              <% end %>
+            </div>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
   <% if @more %>
-    <div><%= link_to "Next #{Admin::LeadsController::PAGE}", admin_leads_path(tab: @tab, page: @page + 1), class: "nd-btn nd-btn--outline type-ui" %></div>
+    <div><%= link_to "Next #{Admin::LeadsController::PAGE}", admin_leads_path(**keep, page: @page + 1), class: "nd-btn nd-btn--outline type-ui" %></div>
   <% end %>
 <% end %>
 
