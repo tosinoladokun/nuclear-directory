@@ -9,8 +9,11 @@
 # Part 1: description, HQ, founded year, legal name, roles, technologies.
 class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PAGES = 4
-  EDGAR = "https://data.sec.gov/submissions/CIK%010d.json".freeze
-  EDGAR_URL = %r{\Ahttps://data\.sec\.gov/submissions/CIK(\d{10})\.json\z}
+  # Its own address for the same record: Form D (#504) saves that file's
+  # filing rows under the plain URL, and Enrich keeps the raw JSON, so the
+  # two never share one snapshot (the query is ignored by the SEC).
+  EDGAR = "https://data.sec.gov/submissions/CIK%010d.json?enrich=1".freeze
+  EDGAR_URL = %r{\Ahttps://data\.sec\.gov/submissions/CIK(\d{10})\.json\?enrich=1\z}
   # EDGAR's exchange names, as the listing column has them.
   EDGAR_EXCHANGES = { "Nasdaq" => "NASDAQ", "NYSE" => "NYSE", "NYSE American" => "NYSE American", "OTC" => "OTC" }.freeze
   # US states: code => code, and name => code.
@@ -51,7 +54,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # A round, not a grant, award, loan or contract; an exact figure only.
   ROUND_WORDS = /\b(round|funding|financing|series\s+[a-z]\b|seed|investment|(raised|raise|raises)\s+(equity|capital))/i
   NOT_A_ROUND = /\b(awards?|grants?|contracts?|loans?|debt|credit\s+facility|PPA|power\s+purchase)\b/i
-  INEXACT = /\b(up\s+to|more\s+than|over|about|approximately|nearly|at\s+least|total|totals|totaling|totalling)\b/i
+  INEXACT = /\b(up\s+to|more\s+than|over|about|around|roughly|approximately|approx\.?|nearly|almost|some|close\s+to|in\s+excess\s+of|upwards\s+of|at\s+least|total|totals|totaling|totalling)\b|~/i
   # An MOU, letter of intent, framework, option, term sheet or non-binding agreement.
   PROVISIONAL = /\b(memorandum of understanding|MOU|letter of intent|LOI|framework|option|term sheet|non-binding)\b/i
   # An owner's quote says it owns.

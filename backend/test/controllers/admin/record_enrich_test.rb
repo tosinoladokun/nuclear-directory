@@ -98,7 +98,7 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
 
   test "findings from its SEC record show on its Enrich page too" do
     @company.update_columns(sec_cik: "0001849056")
-    edgar = Source.create!(url: "https://data.sec.gov/submissions/CIK0001849056.json", source_kind: "company_pages", crawl_status: "ok", content_sha256: "sha")
+    edgar = Source.create!(url: "https://data.sec.gov/submissions/CIK0001849056.json?enrich=1", source_kind: "company_pages", crawl_status: "ok", content_sha256: "sha")
     found = Candidate.create!(source: edgar, kind: "organization", payload: { "name" => "Acme Fission", "legal_name" => "ACME FISSION INC." },
       quote: '"name":"ACME FISSION INC."', status: "matched", subject_type: "Organization", subject_id: @company.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
     get enrich_path
@@ -199,7 +199,7 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
 
   test "a company read only through its SEC record says so, and says when that record couldn't be read" do
     @company.update_columns(website: nil, sec_cik: "0001849056", enrich_requested_at: 10.minutes.ago, enriched_at: 5.minutes.ago)
-    Source.create!(url: "https://data.sec.gov/submissions/CIK0001849056.json", source_kind: "company_pages", crawl_status: "blocked", status_reason: "HTTP 503")
+    Source.create!(url: "https://data.sec.gov/submissions/CIK0001849056.json?enrich=1", source_kind: "company_pages", crawl_status: "blocked", status_reason: "HTTP 503")
     get enrich_path
     assert_select ".nd-panel", /Its SEC record couldn't be read: HTTP 503/
     assert_select ".nd-panel a[href='']", 0
