@@ -435,24 +435,34 @@ class DataQuality::DirectoryClient
   end
 
   private
-    # "X is also known as Y": the alias goes on its company, which must be
-    # published already (approving an alias doesn't publish a company).
     # A news item (#137): the item (the same one by its link), then the
-    # companies and plants match found it's about.
+    # companies and plants match found it's about. One about nothing in the
+    # directory isn't written; one whose company or plant was taken off since
+    # is refused, item and mentions together, without stopping the batch.
     def write_news(candidate, verification:, evidence:)
       payload = candidate.payload.to_h
+      mentions = Array(payload["mentions"])
+      if candidate.subject_id.nil? || mentions.empty?
+        return WriteResult.new(ref: nil, errors: [ "it isn't about a company or plant in the directory yet" ])
+      end
+
       attributes = payload.slice("url", "title", "publisher", "published_on", "summary").symbolize_keys
       result = nil
-      ActiveRecord::Base.transaction(requires_new: true) do
-        result = fact_writer.write(:news_item, attributes, evidence:, verification:)
-        raise ActiveRecord::Rollback unless result.ok?
+      begin
+        ActiveRecord::Base.transaction(requires_new: true) do
+          result = fact_writer.write(:news_item, attributes, evidence:, verification:)
+          raise ActiveRecord::Rollback unless result.ok?
 
-        Array(payload["mentions"]).each do |type, id|
-          Directory::FactWriter.mention_news(news_item_id: result.id, subject_type: type, subject_id: id)
+          mentions.each { |type, id| Directory::FactWriter.mention_news(news_item_id: result.id, subject_type: type, subject_id: id) }
         end
+      rescue Directory::FactWriter::Invalid => error
+        return WriteResult.new(ref: nil, errors: [ error.message ])
       end
       write_result(result)
     end
+
+    # "X is also known as Y": the alias goes on its company, which must be
+    # published already (approving an alias doesn't publish a company).
 
     def write_alias(candidate, verification:, evidence:, by:)
       ends = candidate.payload["organization"].to_h

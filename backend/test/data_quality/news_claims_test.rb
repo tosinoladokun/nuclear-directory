@@ -50,6 +50,22 @@ class DataQuality::NewsClaimsTest < ActiveSupport::TestCase
 
   test "it reads in plain words" do
     claim = news([ { "name" => "Acme Fission", "type" => "organization" } ])
-    assert_equal "News: “Acme Fission files permit” (World Nuclear News, 2026-10-20), about Acme Fission.", DataQuality::Claim.describe(claim)
+    assert_equal "News: “Acme Fission files permit” (World Nuclear News, 2026-10-20), about Acme Fission. " \
+      "Summary: “Acme Fission filed a construction permit application.”", DataQuality::Claim.describe(claim)
+  end
+
+  test "approving news about nothing in the directory, or about a company taken off since, is refused without stopping the batch" do
+    loose = Candidate.create!(source: @source, kind: "news_item", quote: "Someone else files permit", status: "needs_review",
+      payload: { "url" => "https://example.com/elsewhere", "title" => "Someone else files permit", "about" => [] })
+    result = DataQuality::Review.approve([ loose.id ], by: BY).sole
+    assert_not result.ok?
+    assert_match "isn't about a company or plant in the directory yet", result.errors.to_sentence
+
+    claim = news([ { "name" => "Acme Fission", "type" => "organization" } ])
+    match!
+    @company.update_columns(verification_status: "rejected", verified_by: BY)
+    result = DataQuality::Review.approve([ claim.reload.id ], by: BY).sole
+    assert_not result.ok?
+    assert_empty NewsItem.all, "item and mentions together, or neither"
   end
 end

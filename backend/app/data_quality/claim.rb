@@ -47,7 +47,8 @@ module DataQuality::Claim
     when "news_item"
       about = Array(payload["about"]).map { |entry| entry["name"] }.compact
       "News: “#{payload['title']}”#{" (#{payload['publisher']}, #{payload['published_on']})" if payload['publisher'] || payload['published_on']}" \
-        "#{", about #{about.to_sentence}" if about.any?}."
+        "#{", about #{about.to_sentence}" if about.any?}." \
+        "#{" Summary: “#{payload['summary']}”" if payload['summary'].present?}"
     when "organization_alias"
       "#{name_of(payload['organization'])} is also known as “#{payload['alias']}”."
     # Enrichment (EIA) names an existing unit in "identify" and sets values on it.
