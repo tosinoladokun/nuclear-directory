@@ -76,6 +76,16 @@ module Directory
     # A newer request made meanwhile (a new website, say) stays waiting.
     def mark_enriched(id, requested_at) = Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current)
 
+    # A company's or plant's "Latest" (#137): its approved news, newest first.
+    # A unit's news is its site's.
+    def latest_news(type:, id:, limit: 10)
+      raise ArgumentError, "news is about a company or a plant, not a #{type}" unless NewsMention::SUBJECT_TYPES.include?(type.to_s)
+
+      record = type.to_s.constantize.find_by(id:) or return []
+      record = record.parent if record.is_a?(Facility) && record.parent
+      NewsItem.latest_for(record).limit(limit).map { |item| NewsItemRef.from(item) }
+    end
+
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
     # Facts a company can be given by hand (#202): kind => [model, its link's column].
@@ -263,6 +273,12 @@ module Directory
 
     # Whether a fact is public now, by its model's .published scope (a unit
     # under a closed site isn't, #104), so callers don't re-derive the rule.
+    # Sources cited by evidence on any published fact (#510's link check), as a relation of ids.
+    def published_source_ids
+      FACT_TYPES.map { |type| Evidence.where(subject_type: type, subject_id: type.constantize.published.select(:id)).distinct.select(:source_id) }
+        .reduce { |all, ids| all.or(ids) }
+    end
+
     def published?(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
 
