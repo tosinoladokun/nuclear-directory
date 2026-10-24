@@ -36,4 +36,13 @@ class SearchGapsTest < ActionDispatch::IntegrationTest
     assert_select "body", /Quillonworth Energy/
     assert_empty SearchGap.all
   end
+
+  test "a gap closes when a later search finds a close-name match" do
+    get companies_path(q: "zentravolt energy"), headers: BROWSER
+    assert_equal [ "open" ], SearchGap.where(query: "zentravolt energy").pluck(:status)
+    Organization.create!(name: "Zentravolta Energy", verification_status: "verified", verified_by: "human:tosin")
+    get companies_path(q: "zentravolt energy"), headers: BROWSER
+    assert_select "body", /Zentravolta Energy/
+    assert_equal [ "closed" ], SearchGap.where(query: "zentravolt energy").pluck(:status)
+  end
 end
