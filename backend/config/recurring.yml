@@ -24,7 +24,7 @@ production:
     class: DataQuality::CatchUpJob
     schedule: every hour at minute 30
 
-  # Asks for each source a published fact cites, oldest check first, and
+  # Asks for each source a published fact cites, never-checked first, then the oldest check, and
   # records its answer (#510). Never unpublishes anything.
   link_check:
     class: DataQuality::LinkCheckJob

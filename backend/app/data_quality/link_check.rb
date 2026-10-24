@@ -57,13 +57,14 @@ class DataQuality::LinkCheck
         when :blocked then "blocked"
         when :disallowed then "disallowed"
         else
-          failures += 1
           if DEAD.include?(response.status) then "dead"
-          elsif failures >= FAILING_AFTER then "failing"
-          else "error"
+          else
+            # Only other failures count toward failing; a 404 is dead at once.
+            failures += 1
+            failures >= FAILING_AFTER ? "failing" : "error"
           end
         end
-      failures = 0 if %w[ok blocked disallowed].include?(status)
+      failures = 0 if %w[ok blocked disallowed dead].include?(status)
       source.update_columns(link_checked_at: @clock.call, link_status: status, link_http_status: response.status, link_failures: failures)
       status
     end
