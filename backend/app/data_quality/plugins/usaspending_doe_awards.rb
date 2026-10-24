@@ -181,7 +181,17 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
         "from_organization" => { "name" => FUNDER }, "to_organization" => { "name" => recipient },
         "relationship_type" => "funds", "description" => summary(rows),
         "started_on" => rows.filter_map { |row| row["start_date"].presence }.min
-      }.compact }
+      }.compact },
+      # Each award as a term under that link (#256), as the backfill writes
+      # them: its own row is its quote, its award ID keeps a rerun on the same term.
+      *rows.select { |row| row["generated_award_id"].present? }.map do |row|
+        { kind: "deal_term", quote: row.to_csv.chomp, payload: {
+          "link_type" => "Relationship", "from_organization" => { "name" => FUNDER }, "to_organization" => { "name" => recipient },
+          "relationship_type" => "funds", "term_type" => "award", "external_id" => row["generated_award_id"],
+          "amount_usd" => row["amount_usd"], "starts_on" => row["start_date"].presence, "ends_on" => row["end_date"].presence,
+          "program" => row["assistance_listing"].presence || row["award_type"].presence
+        }.compact }
+      end
     ]
   end
 
