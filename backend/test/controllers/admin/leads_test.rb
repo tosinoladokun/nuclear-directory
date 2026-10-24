@@ -73,8 +73,10 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
     assert_equal [ "other", "new", 1 ], Lead.find_by!(name: "zentra fusion").values_at(:kind, :status, :seen_count)
     assert_equal [ "ignored", "not nuclear", 24 ], Lead.find_by!(name: "Not A Reactor Co").values_at(:status, :reason, :seen_count)
 
+    # Once per row: a decision made on the page stands when the file comes again.
+    Lead.find_by!(name: "zentra fusion").decide!("researching", by: "human:tosin")
     post admin_leads_path, params: { names: table.sub("| new |", "| dead: a typo |") }
-    assert_equal [ "ignored", "a typo" ], Lead.find_by!(name: "zentra fusion").values_at(:status, :reason)
+    assert_equal "researching", Lead.find_by!(name: "zentra fusion").status
     assert_equal 4, Lead.count - 2 # the two from setup
   end
 end

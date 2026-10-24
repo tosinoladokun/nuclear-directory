@@ -1,10 +1,10 @@
 # Data Quality's Leads.md (#484): one markdown table, a row per lead, with
 # the header | Lead | Kind | Came from | First seen | Count | Status | Next step |.
 # Each row's names (split on ';', a parenthetical kept as a note, not a
-# name) become leads with the row's text kept. Until the table here is the
-# source of truth, the file is: importing again sets each row's status, reason
-# and note from it. Statuses: new, researching, seeded (in a seed PR: being
-# researched), added, dead (ignored, with the reason after the colon).
+# name) become leads with the row's text kept. Once per row: a lead that
+# exists keeps whatever was decided on the page; importing again only adds
+# new leads and fills a blank note. Statuses: new, researching, seeded (in a
+# seed PR: being researched), added, dead (ignored, with the reason after the colon).
 class LeadImport
   HEADER = %w[lead kind came\ from first\ seen count status next\ step].freeze
   KINDS = { "company" => "company", "plant" => "plant", "search" => "other", "news name" => "other" }.freeze
@@ -46,10 +46,16 @@ class LeadImport
   def self.import!(text, by:)
     rows(text).sum do |row|
       row.names.count do |name|
+        existed = Lead.exists?(kind: row.kind, normalized_name: Lead.normalize(name))
         lead = Lead.sighted!(name:, kind: row.kind, key: "leads-md:#{Lead.normalize(name)}", label: row.came_from, times: row.count,
           first: row.first_seen) or next false
-        lead.update!(status: row.status, reason: row.reason, note: row.note, decided_by: (by unless row.status == "new"),
-          decided_at: (Time.current unless row.status == "new"))
+        if existed
+          # Never over a decision made on the page: only a blank note is filled.
+          lead.update!(note: row.note) if lead.note.blank? && row.note.present?
+        else
+          lead.update!(status: row.status, reason: row.reason, note: row.note, decided_by: (by unless row.status == "new"),
+            decided_at: (Time.current unless row.status == "new"))
+        end
         true
       end
     end
