@@ -41,6 +41,7 @@ class SourceCatalog
     "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
     "company_newsrooms" => { name: "Company newsrooms (RSS)", daily: true },
     "federal_register_nrc" => { name: "NRC notices (Federal Register)", daily: false },
+    "federal_register_index" => { name: "Federal Register API", note: "finds the NRC's notices", daily: false },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: false }
   }.freeze
   RESEARCH_KIND = "web_page"

@@ -6,15 +6,17 @@
 # approve each).
 #
 # Crawl asks the Federal Register's API once a day, through the shared
-# Fetcher, for the NRC's notices of the last WINDOW_DAYS, and stores one line
-# per notice (number, date, title, page, abstract). A block is recorded and
-# stops the crawl, never worked around.
+# Fetcher, for the NRC's notices of the last WINDOW_DAYS (an index source,
+# never extracted). A block is recorded and stops the crawl, never worked
+# around. Each notice whose title names its subject the NRC's way,
+# "<licensee>; <plant>; <action>" (two or more semicolons), is stored once
+# as its own source at its Federal Register page (number, date, title, page,
+# abstract), which its claim cites. Notices are told apart by document
+# number; a weekly repeat (its abstract says so) of a notice stored in the
+# last five weeks isn't stored again.
 #
-# Extract keeps only notices whose title names its subject the NRC's way,
-# "<licensee>; <plant>; <action>" (two or more semicolons). Everything before
-# the action is a name the item may be about; match keeps the ones it finds
-# in the directory. Notices the NRC repeats weekly are proposed once, from
-# their first date. A title naming the Commissioners is left out (people's
+# Extract reads one notice per source. Everything before the action is a
+# name the item may be about; match keeps the ones it finds in the directory. A title naming the Commissioners is left out (people's
 # names). No model is asked; no fact is proposed from a notice, only the news.
 class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
   API_URL = "https://www.federalregister.gov/api/v1/documents.json"
@@ -35,42 +37,42 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
     @today = today
   end
 
+  # The API's listing: an index, never extracted. Each notice is stored as
+  # its own source, at its Federal Register page, which its claim cites.
+  INDEX_SOURCE_KIND = "federal_register_index"
+  # The NRC's weekly repeats of one notice say so in their abstract.
+  WEEKLY_REPEAT = /\b(?:each week|consecutive weeks|weekly notification)/i
+  REPEAT_WINDOW = 35
+
   def crawl(_run)
-    source = Source.find_or_create_by!(url: API_URL) do |row|
-      row.source_kind = source_kind
+    index = Source.find_or_create_by!(url: API_URL) do |row|
+      row.source_kind = INDEX_SOURCE_KIND
       row.title = "Federal Register: NRC notices"
     end
-    outcome = DataQuality::Snapshot.take(source, fetcher: Query.new(@fetcher, query)) { |body| lines(body) }
+    outcome = DataQuality::Snapshot.take(index, fetcher: Query.new(@fetcher, query)) { |body| lines(body) }
     stats = { "notices" => outcome.to_s }
     return stats.merge("stopped" => "notices blocked") if outcome == :blocked
+    return stats unless index.crawl_ok? && index.content_text.present?
 
-    stats.merge("about a licensee" => notices(source).size)
+    listed = notices(index.content_text)
+    stats.merge("about a licensee" => listed.size, "new" => listed.count { |notice| store(notice) })
   end
 
   def extract(source, _run)
-    taken = decided(source)
-    notices(source).reject { |notice| taken.include?(notice.url) || taken.include?(notice.title) }.map do |notice|
-      names = notice.segments[0...-1]
-      about = names.flat_map { |name| [ { "name" => name, "type" => "organization" }, { "name" => name, "type" => "facility" } ] }
-      { kind: "news_item", quote: notice.title, payload: {
-        "url" => notice.url, "title" => notice.title, "publisher" => PUBLISHER, "published_on" => notice.published_on,
-        "summary" => notice.abstract.presence&.truncate(SUMMARY_LENGTH, separator: " "), "about" => about }.compact }
-    end
+    notice = parse(source.content_text) or return []
+    about = notice.segments[0...-1].flat_map { |name| [ { "name" => name, "type" => "organization" }, { "name" => name, "type" => "facility" } ] }
+    [ { kind: "news_item", quote: notice.title, payload: {
+      "url" => notice.url, "title" => notice.title, "publisher" => PUBLISHER, "published_on" => notice.published_on,
+      "summary" => notice.abstract.presence&.truncate(SUMMARY_LENGTH, separator: " "), "about" => about }.compact } ]
   end
 
-  # Notices age out of the window: none of that says a news item stopped being true.
+  # One notice per source; notices aging out of the window drop nothing.
   def max_dropped_share(_source) = 0.0
 
-  # The notices extract reads, so the API's own counts and paging don't count as a change.
-  def rows_sha256(source)
-    list = notices(source)
-    Digest::SHA256.hexdigest(list.map(&:line).join("\n")) if list.any?
-  end
+  def quote_in_source?(source, quote) = parse(source.content_text)&.title == quote.to_s.squish
 
-  def quote_in_source?(source, quote) = notices(source).any? { |notice| notice.title == quote.to_s.squish }
-
-  def verification_context(source, quote)
-    notice = notices(source).find { |each| each.title == quote.to_s.squish } or return
+  def verification_context(source, _quote)
+    notice = parse(source.content_text) or return
     [ notice.title, notice.published_on, notice.url, notice.abstract ].compact.join("\n")
   end
 
@@ -100,20 +102,35 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
       end.sort_by { |line| line.split("\t")[1] }.join("\n")
     end
 
-    # Notices about a named licensee, each title once (its first date), in the window.
-    def notices(source)
+    # Notices about a named licensee in the window, each known by its document number.
+    def notices(text)
       since = (@today.call - WINDOW_DAYS).iso8601
-      source.content_text.to_s.lines(chomp: true).filter_map do |line|
-        number, date, title, url, abstract = line.split("\t", 5)
-        Notice.new(number:, published_on: date, title:, url:, abstract:) if title.to_s.count(";") >= 2 && date.to_s >= since
-      end.reject { |notice| notice.title.match?(NOT_ABOUT_A_LICENSEE) }.uniq(&:title)
+      text.to_s.lines(chomp: true).filter_map { |line| parse(line) }
+        .select { |notice| notice.title.count(";") >= 2 && notice.published_on.to_s >= since && !notice.title.match?(NOT_ABOUT_A_LICENSEE) }
+        .uniq(&:number)
     end
 
-    # Pages and titles of notices a person or match already has: re-reading
-    # doesn't send them back, nor a weekly repeat once its first has gone.
-    def decided(source)
-      source.candidates.where(kind: "news_item").where.not(status: "new")
-        .reject { |claim| claim.status_needs_review? && claim.review_origin == "extract" }
-        .flat_map { |claim| claim.payload.values_at("url", "title") }.compact.to_set
+    def parse(line)
+      number, date, title, url, abstract = line.to_s.split("\t", 5)
+      Notice.new(number:, published_on: date, title:, url:, abstract:) if number.present? && title.present? && url.to_s.start_with?("https://")
+    end
+
+    # Stores a notice at its own page, once; a weekly repeat of a notice
+    # already stored in the last few weeks isn't stored again. Returns
+    # whether it was new.
+    def store(notice)
+      return false if Source.exists?(url: notice.url)
+      return false if repeat?(notice)
+
+      Source.create!(url: notice.url, source_kind:, title: notice.title.truncate(250), crawl_status: "ok", fetched_at: Time.current,
+        content_text: notice.line, content_sha256: Digest::SHA256.hexdigest(notice.line), published_on: notice.published_on)
+      true
+    end
+
+    def repeat?(notice)
+      return false unless notice.abstract.to_s.match?(WEEKLY_REPEAT)
+
+      from = (Date.iso8601(notice.published_on) - REPEAT_WINDOW).iso8601
+      Source.where(source_kind:, title: notice.title.truncate(250)).where(published_on: from..notice.published_on).exists?
     end
 end
