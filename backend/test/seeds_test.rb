@@ -22,7 +22,11 @@ class SeedsTest < ActiveSupport::TestCase
     def organizations = @files.size
     def roles = each_file("roles") { |slug, item| [ item["key"], item["subtype"] ].compact.map { |key| [ slug, key ] } }.uniq.size
     def technologies = each_file("technologies") { |slug, item| [ [ slug, item["key"] ] ] }.uniq.size
-    def relationships = each_file("relationships") { |slug, item| [ [ item["type"], slug, slug_of(item["to"]) ] ] }.uniq.size
+    # A company link stated pending in any file waits, and isn't counted as verified.
+    def relationships
+      links = each_file("relationships") { |slug, item| [ [ [ item["type"], slug, slug_of(item["to"]) ], item["pending"] ] ] }.group_by(&:first)
+      links.count { |_, rows| rows.none?(&:last) }
+    end
     # Each site and each unit once. A unit given with its site ("site:
     # Indian Point") is its own record under that site, and the site is one
     # too, even when they share a name (Callaway). A plain name that is one of
@@ -132,7 +136,7 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal expected.plant_links, [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal expected.facility_aliases, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
-    assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
+    assert_equal [ "human:tosin" ], Relationship.verified.distinct.pluck(:verified_by)
     assert_equal [ 1 ], OrganizationRole.distinct.pluck(:confidence)
 
     georgia_power = Directory::Lookup.organization(name: "Georgia Power Company")
@@ -246,15 +250,84 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal [ "venture_capital" ], Organization.find_by!(slug: "bernhard-capital-partners").roles.pluck(:key)
   end
 
-  test "CFS and Dominion share one ARC facility" do
+  test "CFS, Google and Eni share one ARC facility, and Dominion owns only the site, so has no link to the plant" do
     load_seeds
 
     arc = Facility.find_by!(name: "Fall Line Fusion Power Station")
     links = arc.facility_relationships.includes(:organization).to_h { |link| [ link.organization.slug, link ] }
-    assert_equal %w[commonwealth-fusion-systems dominion-energy google], links.keys.sort
+    assert_equal %w[commonwealth-fusion-systems eni google], links.keys.sort
     assert links["google"].offtakes_from?
-    assert_match "leasing rights", links["dominion-energy"].description
-    assert_equal "Dominion Energy Virginia currently owns the proposed site.", links["dominion-energy"].evidence.sole.quote
+    assert links["eni"].offtakes_from?
+    assert_match "more than $1 billion", links["eni"].evidence.sole.quote
+    assert_match "leasing rights", links["commonwealth-fusion-systems"].description
+  end
+
+  test "ENTRA1's 2023 SEC quotes come off after the seed attaches its own sources" do
+    load_seeds
+    load Rails.root.join("db/data/20261022200000_entra1_drop_sec_evidence.rb")
+    company = Organization.find_by!(slug: "entra1-energy")
+    sec = Source.find_or_create_by!(url: Entra1DropSecEvidence::SOURCE_URL) { |source| source.source_kind = "web_page" }
+    role = company.organization_roles.first
+    [ company, role ].each { |fact| Evidence.create!(subject: fact, source: sec, quote: "ENTRA1 is a company from the filing", confidence: 0.9, found_by: "human") }
+
+    Entra1DropSecEvidence.new(reason: "test").up
+
+    assert_empty Evidence.where(source: sec, subject: [ company, role ])
+    assert company.evidence.any?, "the company keeps its own site's quote"
+    assert role.evidence.any?, "the role keeps its own site's quote"
+    assert_nothing_raised { Entra1DropSecEvidence.new(reason: "test").up }
+  end
+
+  test "a role-only company seed leaves the company's other fields as they are, now and on a re-seed" do
+    load_seeds
+    slugs = %w[general-atomics global-laser-enrichment good-energy-collective-incorporated pkmj-technical-services-llc advanced-conductor-technologies]
+    slugs.each do |slug|
+      Organization.find_by!(slug:).update_columns(country_code: "US", website: "https://example.org/#{slug}", legal_name: "#{slug} Inc.",
+        hq_city: "Springfield", hq_state: "IL", description: "Added later by hand")
+    end
+
+    2.times { load_seeds }
+
+    slugs.each do |slug|
+      company = Organization.find_by!(slug:)
+      assert_equal [ "US", "https://example.org/#{slug}", "#{slug} Inc.", "Springfield", "IL", "Added later by hand" ],
+        company.attributes.values_at("country_code", "website", "legal_name", "hq_city", "hq_state", "description"), slug
+    end
+  end
+
+  test "Indian Point's units from two companies' files share one site" do
+    load_seeds
+
+    units = Facility.where(name: [ "Indian Point 2", "Indian Point 3" ])
+    assert_equal 2, units.count
+    assert_equal 1, units.pluck(:parent_id).uniq.size
+    assert_equal "Indian Point", units.first.parent.name
+    assert_equal [ "Holtec Decommissioning International", "Holtec International" ],
+      FacilityRelationship.where(facility: units).includes(:organization).map { |link| link.organization.name }.uniq.sort
+  end
+
+  test "ENTRA1's SEC cleanup fails loudly when a removal is refused, so it isn't recorded as applied" do
+    load_seeds
+    load Rails.root.join("db/data/20261022200000_entra1_drop_sec_evidence.rb")
+    company = Organization.find_by!(slug: "entra1-energy")
+    sec = Source.find_or_create_by!(url: Entra1DropSecEvidence::SOURCE_URL) { |source| source.source_kind = "web_page" }
+    Evidence.where(subject: company).delete_all
+    Evidence.create!(subject: company, source: sec, quote: "ENTRA1 is a company from the filing", confidence: 0.9, found_by: "human")
+
+    assert_raises(RuntimeError) { Entra1DropSecEvidence.new(reason: "test").up }
+    assert Evidence.where(subject: company, source: sec).exists?, "the only quote stays"
+  end
+
+  test "the TVA-ENTRA1 framework stays pending, outside ENTRA1's deals, after loading and reloading" do
+    load_seeds
+    tva = Organization.find_by!(slug: "tennessee-valley-authority")
+    entra1 = Organization.find_by!(slug: "entra1-energy")
+    link = Relationship.find_by!(from_organization_id: tva.id, to_organization_id: entra1.id, relationship_type: "offtake_with")
+    assert link.pending?
+
+    2.times { load_seeds }
+    assert link.reload.pending?
+    refute_includes CompanyProfile.new(entra1.reload).deals.map(&:id), link.id
   end
 
   test "is safe to re-run" do

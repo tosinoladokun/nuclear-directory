@@ -52,7 +52,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["subject_type", "subject_id"], name: "index_candidates_on_subject"
     t.check_constraint "ai_recommendation::text = ANY (ARRAY['recommend_publish'::character varying::text, 'needs_review'::character varying::text])", name: "candidates_ai_recommendation_check"
     t.check_constraint "dq_recommendation::text = ANY (ARRAY['approve'::character varying, 'reject'::character varying]::text[])", name: "candidates_dq_recommendation_check"
-    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text])", name: "candidates_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text, 'news_item'::character varying::text])", name: "candidates_kind_check"
     t.check_constraint "status::text = ANY (ARRAY['new'::character varying::text, 'matched'::character varying::text, 'merged'::character varying::text, 'rejected'::character varying::text, 'needs_review'::character varying::text, 'confirmed'::character varying::text])", name: "candidates_status_check"
   end
 
@@ -211,7 +211,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "facilities_confidence_check"
     t.check_constraint "facility_type::text = ANY (ARRAY['power_reactor'::character varying::text, 'research_reactor'::character varying::text, 'fuel_facility'::character varying::text, 'enrichment'::character varying::text, 'fusion_facility'::character varying::text, 'other'::character varying::text, 'uranium_mine'::character varying::text, 'mill'::character varying::text])", name: "facilities_facility_type_check"
     t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "facilities_short_name_check"
-    t.check_constraint "status::text = ANY (ARRAY['operating'::character varying, 'under_construction'::character varying, 'planned'::character varying, 'shut_down'::character varying, 'decommissioning'::character varying, 'not_operating'::character varying]::text[])", name: "facilities_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['operating'::character varying::text, 'under_construction'::character varying::text, 'planned'::character varying::text, 'shut_down'::character varying::text, 'decommissioning'::character varying::text, 'not_operating'::character varying::text])", name: "facilities_status_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "facilities_verification_status_check"
   end
 
@@ -276,7 +276,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["verification_status"], name: "index_news_items_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "news_items_confidence_check"
     t.check_constraint "url::text ~ '^https?://'::text", name: "news_items_url_check"
-    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "news_items_verification_status_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "news_items_verification_status_check"
   end
 
   create_table "news_mentions", force: :cascade do |t|
@@ -288,7 +288,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["news_item_id", "subject_type", "subject_id"], name: "index_news_mentions_uniqueness", unique: true
     t.index ["news_item_id"], name: "index_news_mentions_on_news_item_id"
     t.index ["subject_type", "subject_id"], name: "index_news_mentions_on_subject_type_and_subject_id"
-    t.check_constraint "subject_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])", name: "news_mentions_subject_type_check"
+    t.check_constraint "subject_type::text = ANY (ARRAY['Organization'::character varying::text, 'Facility'::character varying::text])", name: "news_mentions_subject_type_check"
   end
 
   create_table "organization_aliases", force: :cascade do |t|
@@ -648,7 +648,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.datetime "updated_at", null: false
     t.index ["on", "step"], name: "index_today_steps_on_on_and_step", unique: true
     t.check_constraint "done_by::text ~~ 'human:%'::text", name: "today_steps_done_by_check"
-    t.check_constraint "step::text = ANY (ARRAY['crawl'::character varying, 'list'::character varying, 'review'::character varying, 'left'::character varying]::text[])", name: "today_steps_step_check"
+    t.check_constraint "step::text = ANY (ARRAY['crawl'::character varying::text, 'list'::character varying::text, 'review'::character varying::text, 'left'::character varying::text])", name: "today_steps_step_check"
   end
 
   create_table "users", force: :cascade do |t|
