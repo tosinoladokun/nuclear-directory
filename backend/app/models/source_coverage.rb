@@ -17,7 +17,7 @@ class SourceCoverage
   # crawler is live only while that source is healthy too.
   COMPANIONS = { "usaspending_doe_awards" => %w[usaspending_api], "eia_generators" => %w[eia_860m_index],
     "nrc_research_reactors" => %w[nrc_research_reactors_index], "nrc_fuel_cycle" => %w[nrc_fuel_cycle_index],
-    "eia_plants" => %w[eia_860_index], "nrc_reactor_vendors" => %w[nrc_reactor_list] }.freeze
+    "eia_plants" => %w[eia_860_index], "nrc_reactor_vendors" => %w[nrc_reactor_list], "federal_register_nrc" => %w[federal_register_index] }.freeze
 
   Source = Data.define(:name, :status, :issue, :crawler, :kind, :leads, :note, :group, :domain, :documents) do
     def live? = status == "live"
