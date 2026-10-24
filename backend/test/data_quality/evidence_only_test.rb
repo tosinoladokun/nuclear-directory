@@ -33,4 +33,23 @@ class DataQuality::EvidenceOnlyTest < ActiveSupport::TestCase
     assert Evidence.exists?(subject: @urenco, source: @page)
     assert_equal [ "Urenco", nil ], @urenco.reload.values_at(:name, :hq_city)
   end
+
+  test "values approval would derive count too: a website filling a blank domain, a unit joining its site" do
+    held = "it would change a record a person decided"
+    assert_equal held, DataQuality::Review.held_reason(claim({ "name" => "Urenco", "website" => "https://urenco.com" }), firsts: {})
+    @urenco.update_columns(domain: "urenco.com", website: "https://www.urenco.com/")
+    assert_nil DataQuality::Review.held_reason(claim({ "name" => "Urenco", "website" => "https://www.urenco.com/" }), firsts: {})
+
+    site = Facility.create!(name: "Evidence Site", eia_plant_id: "99001", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Evidence Unit 1", nrc_docket: "05099101", verification_status: "verified", verified_by: "human:tosin")
+    grouped = Candidate.create!(source: @page, kind: "facility", payload: { "name" => "Evidence Unit 1", "identify" => { "eia_plant_id" => site.eia_plant_id } },
+      quote: "q", status: "matched", subject_type: "Facility", subject_id: unit.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    assert_not DataQuality::Review.evidence_only?(grouped, directory: DataQuality::DirectoryClient.new), "approving would set its site"
+  end
+
+  test "a news item is never evidence-only: approving writes a separate news record" do
+    news = Candidate.create!(source: @page, kind: "news_item", payload: { "title" => "Urenco expands", "organization" => { "name" => "Urenco" } },
+      quote: "q", status: "matched", subject_type: "Organization", subject_id: @urenco.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    assert_not DataQuality::Review.evidence_only?(news, directory: DataQuality::DirectoryClient.new)
+  end
 end
