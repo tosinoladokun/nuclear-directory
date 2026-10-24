@@ -166,6 +166,8 @@ class DataQuality::DirectoryClient
     # a slug in the payload (payloads aren't validated; Review locks these too).
     attributes = candidate.payload.except(*WRITE_SKIPPED).symbolize_keys
     attributes[:id] = candidate.subject_id if candidate.subject_id
+    # A deal term's link verb only finds its link; the term has no such field.
+    attributes.delete(:relationship_type) if candidate.kind == "deal_term"
     if candidate.kind == "organization"
       # The name it was found under becomes an alias only once a verdict accepts
       # it, and a matched company keeps its own name.
@@ -465,7 +467,10 @@ class DataQuality::DirectoryClient
       link_kind = DataQuality::Stages::Match::DEAL_LINKS[payload["link_type"]]
       return attributes.merge(link_id: ends[:organization_id]) unless link_kind
 
-      link = existing_fact(link_kind, ends.compact.merge(relationship_type: payload["relationship_type"]))
+      # Both ends must be found: with one missing, the other end and the verb
+      # alone could pick some other link.
+      needed = link_kind == "relationship" ? %i[from_organization_id to_organization_id] : %i[organization_id facility_id]
+      link = (existing_fact(link_kind, ends.slice(*needed).merge(relationship_type: payload["relationship_type"])) if needed.all? { |key| ends[key] })
       attributes.except(:relationship_type).merge(link_id: link&.id)
     end
 
