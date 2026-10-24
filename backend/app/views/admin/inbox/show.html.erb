@@ -1,0 +1,90 @@
+<% content_for :title, "Today" %>
+<% sections = @inbox.sections %>
+<% total = @inbox.size %>
+<% checked = @inbox.checked %>
+<% headings = { "new_record" => "New companies and plants", "new_fact" => "New facts and deals", "change" => "Changes to something you decided" } %>
+<%# One checked item needs no batch button: its own Yes does it (Design). %>
+<% batch_after = (%w[new_record new_fact].find { |key| sections[key].any?(&:checked) } if checked.size > 1) %>
+
+<div>
+  <h1 class="type-admin-h1">Today</h1>
+  <p class="type-body m-0"><%= total.zero? ? "Nothing to decide today." : "#{total} to decide. Nothing goes live until you say yes." %></p>
+</div>
+
+<% OwnerInbox::SECTIONS.each do |key| %>
+  <% entries = sections[key] %>
+  <% next if entries.empty? %>
+  <section class="nd-stack" aria-labelledby="inbox-<%= key %>">
+    <h2 id="inbox-<%= key %>" class="type-admin-h2 m-0"><%= headings.fetch(key) %> <span class="type-count"><%= entries.size %></span></h2>
+    <ol class="nd-waits">
+      <% entries.each do |entry| %>
+        <% item = entry.item %>
+        <li class="nd-wait nd-inbox__item" id="inbox-item-<%= item.candidate_id %>">
+          <div class="nd-wait__what">
+            <% if key == "new_record" %>
+              <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
+            <% end %>
+            <% if key == "change" %>
+              <% entry.changes.each do |field, (stored, stated)| %>
+                <p class="type-change m-0"><strong><%= field_label(field).upcase_first %></strong>
+                  <s class="text-ink-muted"><%= field_display(field, stored) %></s> → <strong><%= field_display(field, stated) %></strong></p>
+              <% end %>
+              <p class="type-small text-ink-muted m-0"><%= item.claim %></p>
+            <% else %>
+              <p class="<%= key == "new_record" ? "type-body" : "type-body-strong" %> m-0"><%= inbox_sentence(entry) %></p>
+              <% if key == "new_record" && (item.payload.to_h.keys - %w[name aliases]).empty? %>
+                <%# Only a name: the source's words say what it is (Design). %>
+                <p class="type-small text-ink-muted m-0">“<%= item.quote %>”</p>
+              <% end %>
+            <% end %>
+            <p class="type-small m-0">
+              <% if (url = safe_url(item.source&.url)) %><%= link_to url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener" do %><%= source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %> · <% end %>
+              <span class="nd-num">#<%= item.candidate_id %></span>
+            </p>
+            <details class="nd-fold">
+              <summary class="type-small">Why, and the source</summary>
+              <div class="nd-fold__body"><blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote></div>
+            </details>
+          </div>
+          <div class="nd-wait__actions nd-inbox__buttons type-ui">
+            <% yes, no = key == "change" ? [ "Approve the change", nil ] : [ key == "new_record" ? "Create" : "Approve", "No" ] %>
+            <%= button_to yes, admin_inbox_decide_path(item.candidate_id, "yes"), params: { ids: entry.ids }, class: "nd-btn nd-btn--primary" %>
+            <% if key == "change" %>
+              <%= button_to admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids }, class: "nd-btn nd-btn--outline" do %><span class="nd-inbox__long">Keep what I decided</span><span class="nd-inbox__short">Keep mine</span><% end %>
+            <% else %>
+              <%= button_to no, admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids }, class: "nd-btn nd-btn--outline" %>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ol>
+    <% if key == batch_after %>
+      <% ids = checked.flat_map(&:ids).sort %>
+      <div class="nd-panel nd-stack">
+        <p class="type-body m-0">Data Quality checked <%= checked.size %> of these <%= @inbox.checkable.size %>.</p>
+        <%= button_to "Yes to all #{checked.size} Data Quality checked", admin_inbox_yes_all_path, params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) },
+          class: "nd-btn nd-btn--primary type-ui nd-inbox__all", data: { turbo_confirm: "Approve all #{checked.size}? Each is checked once more before it goes live." } %>
+      </div>
+    <% end %>
+  </section>
+<% end %>
+
+<% recent = @inbox.recent.to_a %>
+<% if recent.any? %>
+  <details class="nd-fold">
+    <summary class="type-body-strong">Recently decided <span class="type-count"><%= recent.size %></span></summary>
+    <ul class="nd-stack m-0 p-0 list-none">
+      <% recent.each do |claim| %>
+        <li class="nd-inbox__recent" id="recent-<%= claim.id %>">
+          <span class="type-body"><%= inbox_decision(claim) %></span>
+          <span class="type-small text-ink-muted whitespace-nowrap"><%= claim.reviewed_at.today? ? "today" : (claim.reviewed_at.to_date == Date.yesterday ? "yesterday" : claim.reviewed_at.strftime("%-d %b")) %> <%= claim.reviewed_at.strftime("%H:%M") %></span>
+          <% if claim.status_rejected? %>
+            <%= button_to "Undo", admin_inbox_undo_path(claim.id), class: "nd-btn nd-btn--outline type-ui" %>
+          <% elsif claim.subject_id %>
+            <%= link_to "Open it", admin_fact_path(type: claim.subject_type, id: claim.subject_id), class: "nd-link type-small whitespace-nowrap", title: "To take it back, change it on its record" %>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  </details>
+<% end %>

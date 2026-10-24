@@ -135,10 +135,12 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
     changed = queue.find_by!(kind: "facility")
     assert changed.status_needs_review?
     assert_equal "human-verified status is operating; this source says shut_down", changed.notes
-    # The row's company and link claims now quote text the source didn't have:
-    # a person approves them, adding the current quote, rather than the old one being marked re-checked.
-    assert_equal %w[facility_relationship organization], queue.where.not(kind: "facility").pluck(:kind).sort
-    assert queue.where.not(kind: "facility").all?(&:status_matched?)
+    # The row's company and link claims quote text the source didn't have, but
+    # say nothing new: they add the current quote as evidence and confirm
+    # themselves (#548), so only the real change waits.
+    assert_empty queue.where.not(kind: "facility")
+    assert_equal %w[facility_relationship organization], Candidate.where(source:, status: "confirmed").where.not(kind: "facility")
+      .where("candidates.created_at > ?", 2.hours.ago).distinct.pluck(:kind).sort
   end
 
   test "a fact a person unpublished, stated again unchanged, stays unpublished without a review item" do

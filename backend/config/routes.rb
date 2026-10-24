@@ -47,6 +47,11 @@ Rails.application.routes.draw do
     get "sources/:key" => "sources#show", as: :source, constraints: { key: /[a-z0-9_-]+/ }
     get "status", to: redirect("/admin")
     # Today (#373): the day's review in four steps. Checks stays as step 3's list.
+    # Tosin's inbox (#548): what he decides.
+    get "inbox" => "inbox#show", as: :inbox
+    post "inbox/yes_all" => "inbox#yes_all", as: :inbox_yes_all
+    post "inbox/:candidate_id/undo" => "inbox#undo", as: :inbox_undo
+    post "inbox/:candidate_id/:decision" => "inbox#decide", as: :inbox_decide, constraints: { decision: /yes|no/ }
     get "today" => "today#show", as: :today
     post "today/list" => "today#list", as: :today_list
     # Step 3 (#373 part C): each fact with Joy's and Aminah's verdicts, decided here.

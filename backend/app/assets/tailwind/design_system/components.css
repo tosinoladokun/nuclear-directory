@@ -1008,6 +1008,24 @@
     .nd-leads__short { display: inline; }
   }
 
+  /* Today as Tosin's inbox (#548). */
+  .nd-shell__group { display: block; padding: var(--nd-space-4) var(--nd-space-4) var(--nd-space-1); }
+  .nd-inbox__buttons { display: flex; gap: var(--nd-space-2); }
+  .nd-inbox__short { display: none; }
+  .nd-inbox__recent { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-2) var(--nd-space-3); }
+  .nd-inbox__recent > .type-body { flex: 1 1 20rem; }
+  @media (max-width: 560px) {
+    .nd-inbox__buttons { width: 100%; }
+    .nd-inbox__buttons > form { flex: 1 1 0; }
+    .nd-inbox__buttons .nd-btn { width: 100%; justify-content: center; }
+    .nd-inbox__all { width: 100%; justify-content: center; }
+    .nd-inbox__recent .button_to, .nd-inbox__recent .button_to .nd-btn { width: 100%; justify-content: center; }
+  }
+  @media (max-width: 379px) {
+    .nd-inbox__long { display: none; }
+    .nd-inbox__short { display: inline; }
+  }
+
   @media (max-width: 560px) {
     .nd-stack-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .nd-stack-table, .nd-stack-table tbody { display: block; }

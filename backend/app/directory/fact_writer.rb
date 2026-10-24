@@ -535,7 +535,9 @@ module Directory
     # monthly file, a yearly re-issue) stating exactly what a published fact
     # already cites from an earlier issue of that kind adds its own evidence
     # and confirms, instead of waiting for a person to approve the same values.
-    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil)
+    # add_evidence: the caller found it only adds evidence (#548): a published
+    # fact's identical values from a crawled source confirm and cite it.
+    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil, add_evidence: false)
       kind = kind.to_sym
       spec = KINDS[kind] or return Confirmation.new(outcome: :missing, errors: [ "unknown kind #{kind.inspect}" ])
       attributes = attributes.to_h.symbolize_keys
@@ -568,7 +570,7 @@ module Directory
         current = Evidence.where(subject: record, source_id:).select { |row| still_there.call(row.quote) }
         # Research pages (web_page) share a kind but aren't issues of one source.
         if current.empty? && source_kind && source_kind != "web_page" && quote.present? && record.try(:verification_status) == "verified" &&
-            Evidence.joins(:source).where(subject: record, sources: { source_kind: }).where.not(source_id:).exists?
+            (add_evidence || Evidence.joins(:source).where(subject: record, sources: { source_kind: }).where.not(source_id:).exists?)
           current = [ Evidence.create!(subject: record, source_id:, quote:, found_by: "crawler") ]
         end
         next Confirmation.new(outcome: :unsourced, overruled:) if current.empty?
