@@ -124,10 +124,14 @@ class DataQuality::Plugins::NrcFuelCycleTest < ActiveSupport::TestCase
     assert page.candidates.where(review_origin: "withdrawn").exists?
   end
 
-  test "taking over a hand-cited page fetches it afresh and stores only its facts" do
+  test "taking over a hand-cited page: its copy is dropped, and it's fetched afresh on the next permitted day" do
     Source.create!(url: URENCO, source_kind: "web_page", crawl_status: "ok", content_text: "<html>whole page</html>", content_sha256: "old",
       fetched_at: Time.current)
 
+    crawl
+    assert_nil page.content_text, "fetched today already: not again, and the whole page isn't kept"
+    assert_not_requested :get, URENCO
+    Source.update_all(fetched_at: 2.days.ago)
     crawl
     assert_equal LINE, page.content_text
   end
