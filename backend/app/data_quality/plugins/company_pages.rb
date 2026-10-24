@@ -288,8 +288,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       starts_on = (Date.parse(date_text) if on_close && date_text.match?(/\b(19|20)\d\d\b/)) rescue nil
       { kind: "deal_term", quote:, payload: {
         "organization" => { "name" => name }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        # The amount as a number, so "$37 million" and "$37M" are the same round.
-        "external_id" => "page:#{url}##{[ round&.downcase&.squish, amount&.to_s('F') ].compact.join(' ')}", "amount_usd" => amount&.to_s("F"), "round" => round,
+        # The amount as a number, so "$37 million" and "$37M" are the same round;
+        # its closing date, or with neither a name nor a date its quote, tells
+        # two rounds of one amount apart.
+        "external_id" => "page:#{url}##{[ round&.downcase&.squish, amount&.to_s('F'), starts_on&.iso8601,
+          (Digest::SHA256.hexdigest(quote.downcase.squish)[0, 10] unless round || starts_on) ].compact.join(' ')}", "amount_usd" => amount&.to_s("F"), "round" => round,
         "starts_on" => starts_on&.iso8601 }.compact }
     end
 

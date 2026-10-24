@@ -190,7 +190,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#series b 37000000.0", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
+        "external_id" => "page:#{HOME}#series b 37000000.0 2024-12-06", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
         "external_id" => "page:#{HOME}#seed 12500000.0", "amount_usd" => "12500000.0", "round" => "seed" },
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
@@ -220,7 +220,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
   test "an amount stands whole and in US dollars; a closing date after the verb counts; a reread with $37M is the same round" do
     page = <<~HTML
       <html><body><p>Acme Fission closed a $37 million Series B on December 6, 2024.</p><p>We raised $12 million CAD in a seed round.</p>
-      <p>Acme Fission closed a $37M Series B.</p></body></html>
+      <p>Acme Fission closed a $37M Series B on December 6, 2024.</p></body></html>
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
@@ -231,7 +231,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
         round.("$37", "Series B", nil, "Acme Fission closed a $37 million Series B on December 6, 2024."),                     # a prefix
         round.("$37 million", "Series B", "December 6, 2024", "Acme Fission closed a $37 million Series B on December 6, 2024."),
         round.("$12 million", "seed", nil, "We raised $12 million CAD in a seed round."),                                    # not US dollars
-        round.("$37M", "Series B", nil, "Acme Fission closed a $37M Series B.") ] }
+        round.("$37M", "Series B", "December 6, 2024", "Acme Fission closed a $37M Series B on December 6, 2024.") ] }
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     payloads = claims.map { |c| c[:payload] }
     assert_equal [ "37000000.0", "37000000.0" ], payloads.map { |p| p["amount_usd"] }
@@ -249,6 +249,22 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
       "rounds" => [ { "amount" => "$37 million", "round" => "Series B", "date" => nil, "quote" => "We closed a Series B funding round of $37 million." } ] }
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [ "BRK-B", "37000000.0" ], [ claims.find { |c| c[:payload]["ticker"] }&.dig(:payload, "ticker"), claims.find { |c| c[:kind] == "deal_term" }&.dig(:payload, "amount_usd") ]
+  end
+
+  test "two unnamed rounds of one amount on a page are two rounds" do
+    page = <<~HTML
+      <html><body><p>On December 6, 2024, Acme Fission closed a $5 million round of funding.</p>
+      <p>On March 1, 2026, Acme Fission closed a $5 million round of funding.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    rounds = [ [ "December 6, 2024", "On December 6, 2024, Acme Fission closed a $5 million round of funding." ],
+      [ "March 1, 2026", "On March 1, 2026, Acme Fission closed a $5 million round of funding." ] ]
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [], "rounds" => rounds.map { |date, quote| { "amount" => "$5 million", "round" => nil, "date" => date, "quote" => quote } } }
+    claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    assert_equal 2, claims.map { |c| c[:payload]["external_id"] }.uniq.size
   end
 
   test "a deal runs buyer to seller for power and supplier to buyer for supply; loose agreement words aren't deals" do
