@@ -94,4 +94,14 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
     assert_match "No company or plant is called", flash[:alert]
     assert @once.reload.status_new?
   end
+
+  test "the cards' sort links, every source behind +N more, and Put back on a lead being researched" do
+    Lead.sighted!(name: "Often Seen Fission", kind: "company", key: "c", label: "Search with no results")
+    @often.reload.decide!("researching", by: "human:tosin")
+    get admin_leads_path(tab: "all")
+    assert_select ".nd-leads__sort a", 2
+    assert_select "#lead-#{@often.id} .nd-leads__more li", 1
+    assert_select "#lead-#{@often.id} form[action=?]", reopen_admin_lead_path(@often, tab: "all")
+    assert_select "#lead-#{@often.id} summary", /Already covered/
+  end
 end

@@ -28,6 +28,8 @@
 <% if @leads.empty? %>
   <p class="type-body text-ink-muted">Nothing here.</p>
 <% else %>
+  <%# When the table is cards its header is hidden, so the sort shows here instead. %>
+  <p class="nd-leads__sort type-small m-0">Sort by <%= sort_link.("date", "Date") %> · <%= sort_link.("seen", "Seen") %></p>
   <table class="nd-numtable nd-stack-table nd-leads">
     <thead>
       <tr>
@@ -47,7 +49,7 @@
             <span class="block">First <%= lead.first_seen_on.strftime("%-d %b") %></span>
             <span class="block">Last <%= lead.last_seen_on.strftime("%-d %b") %></span>
           </td>
-          <td class="nd-leads__lead nd-l">
+          <td class="nd-leads__lead nd-l whitespace-normal">
             <p class="type-body-strong m-0 truncate max-w-[28ch]" title="<%= lead.name %>" data-truncate><%= lead.name %></p>
             <p class="type-small text-ink-muted m-0"><%= lead.kind.humanize %></p>
             <% if (record = lead.record) %>
@@ -62,7 +64,16 @@
             <% else %>
               <span title="<%= source&.dig("label") %>"><%= source&.dig("key").to_s.start_with?("search:") ? "A search on the site" : source&.dig("label").to_s.truncate(28) %></span>
             <% end %>
-            <% if lead.sources.size > 1 %><span class="text-ink-muted"> +<%= lead.sources.size - 1 %></span><% end %>
+            <% if lead.sources.size > 1 %>
+              <details class="nd-leads__more">
+                <summary class="text-ink-muted">+<%= lead.sources.size - 1 %> more</summary>
+                <ul class="m-0 p-0 list-none">
+                  <% (lead.sources - [ source ]).each do |other| %>
+                    <li><% if (other_url = safe_url(other["url"])) %><%= link_to other["label"], other_url, class: "nd-link", target: "_blank", rel: "noopener" %><% else %><%= other["label"] %><% end %></li>
+                  <% end %>
+                </ul>
+              </details>
+            <% end %>
           </td>
           <td class="type-cell-num" data-unit="seen"><%= lead.seen_count %></td>
           <td class="nd-l"><span class="nd-tag"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></td>
@@ -96,7 +107,9 @@
                     <% end %>
                   </div>
                 </details>
-              <% else %>
+              <% end %>
+              <%# A lead being researched can go back to To do too (a mis-tap, or an address Enrich refused). %>
+              <% unless lead.status_new? %>
                 <%= button_to "Put back", reopen_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline type-ui" %>
               <% end %>
             </div>

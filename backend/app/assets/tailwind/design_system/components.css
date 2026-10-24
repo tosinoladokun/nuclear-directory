@@ -968,13 +968,17 @@
      (1,440px), so below that each lead is a card (as nd-stack-table on phones): the lead first,
      then its lines, then the actions as three equal 44px columns. */
   .nd-leads__cancel { display: none; }
+  .nd-leads__sort { display: none; }
+  .nd-leads__more > summary { cursor: pointer; }
+  .nd-leads__more ul { white-space: normal; }
   @media (max-width: 1439px) {
     .nd-leads thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .nd-leads, .nd-leads tbody { display: block; }
     .nd-leads tr { display: flex; flex-wrap: wrap; gap: var(--nd-space-1) var(--nd-space-3); padding: var(--nd-space-3) 14px; border-top: var(--nd-hairline) solid var(--nd-rule); }
     .nd-leads td { display: block; padding: 0; border: 0; white-space: normal; text-align: left; width: auto; }
     .nd-leads td[data-unit]::after { content: " " attr(data-unit); font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); }
-    .nd-leads .nd-leads__lead { order: -1; flex-basis: 100%; }
+    .nd-leads__sort { display: block; }
+    .nd-leads .nd-leads__lead { order: -1; flex-basis: 100%; min-width: 0; }
     .nd-leads .nd-leads__lead .truncate { max-width: none; }
     .nd-leads .nd-leads__actions { flex-basis: 100%; }
     .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 0; min-width: 0; display: flex; }
@@ -988,7 +992,7 @@
     .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 auto; }
   }
 
-  @media (max-width: 379px) {
+  @media (max-width: 399px) {
     .nd-leads__long { display: none; }
     .nd-leads__short { display: inline; }
   }
