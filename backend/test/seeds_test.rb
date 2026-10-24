@@ -50,7 +50,7 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 126, Organization.verified.count
+    assert_equal 127, Organization.verified.count
     assert_equal 143, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
@@ -61,11 +61,11 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 78, Relationship.verified.count
-    assert_equal 55, Facility.verified.count
+    assert_equal 80, Relationship.verified.count
+    assert_equal 56, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 78, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
-    assert_equal 27, FacilityAlias.count
+    assert_equal [ 80, 6 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal 28, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
     assert_equal [ 1 ], OrganizationRole.distinct.pluck(:confidence)
