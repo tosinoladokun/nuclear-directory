@@ -8,7 +8,7 @@
 <% shown = item.differences.any? ? item.differences : item.payload.except(*DataQuality::Review::LINK_ENDS, "identify").compact_blank %>
 <section class="nd-panel" id="proposed" aria-label="Proposed by this claim">
   <div class="nd-kick"><span class="type-kicker text-ink-muted"><%= claim_number(item.candidate_id) %></span><p class="type-kicker text-ink-muted m-0"><%= check_kicker(item) %></p></div>
-  <p class="type-body"><%= item.claim %></p>
+  <p class="type-body"><%= claim_text(item) %></p>
   <% if shown.any? %>
     <dl class="nd-kv type-body">
       <% shown.each do |name, value| %>
