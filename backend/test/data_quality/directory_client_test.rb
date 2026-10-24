@@ -210,6 +210,8 @@ class DataQuality::DirectoryClientTest < ActiveSupport::TestCase
     {
       "Lookup.organization" => [ Directory::Lookup.method(:organization), FakeDirectory::Lookup.instance_method(:organization) ],
       "Lookup.facility" => [ Directory::Lookup.method(:facility), FakeDirectory::Lookup.instance_method(:facility) ],
+      "Lookup.organizations_with_sec_cik" => [ Directory::Lookup.method(:organizations_with_sec_cik),
+        FakeDirectory::Lookup.instance_method(:organizations_with_sec_cik) ],
       "Lookup.similar_organizations" => [ Directory::Lookup.method(:similar_organizations),
         FakeDirectory::Lookup.instance_method(:similar_organizations) ],
       "Lookup.same_brand_organizations" => [ Directory::Lookup.method(:same_brand_organizations),

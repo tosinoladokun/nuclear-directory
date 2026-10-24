@@ -84,7 +84,7 @@ categories:
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
       # The same crawl as Fuel's isotope producers: the labs and universities it names.
       - { name: DOE Isotope Program (national labs and universities), kind: doe_isotope_sites, status: built, issue: 276 }
-      - { name: NRC research and test reactors list, status: missing }
+      - { name: NRC research and test reactors list, kind: nrc_research_reactors, status: built, issue: 387 }
 
 # Sources that cover the whole industry.
 general:
