@@ -1,6 +1,7 @@
 # One stage a reactor project or plant has reached with the NRC (#379):
 # pre-application, application accepted, construction permit, combined
-# licence (Part 52), operating licence, restart under NRC review, design
+# licence (Part 52), operating licence, restart under NRC review, restart
+# approved, design
 # approval, withdrawn or denied. A fact like any other:
 # verified by a human, sourced through evidence, audited.
 #
@@ -36,7 +37,7 @@ class CreateLicensingStages < ActiveRecord::Migration[8.1]
     add_index :licensing_stages, :verification_status
 
     add_check_constraint :licensing_stages,
-      "stage IN ('pre_application', 'application_accepted', 'construction_permit', 'combined_licence', 'operating_licence', 'restart_review', 'design_approval', 'withdrawn', 'denied')",
+      "stage IN ('pre_application', 'application_accepted', 'construction_permit', 'combined_licence', 'operating_licence', 'restart_review', 'restart_approved', 'design_approval', 'withdrawn', 'denied')",
       name: "licensing_stages_stage_check"
     # Exactly one of the two: the record that holds the docket.
     add_check_constraint :licensing_stages, "(facility_id IS NULL) <> (organization_id IS NULL)", name: "licensing_stages_owner_check"

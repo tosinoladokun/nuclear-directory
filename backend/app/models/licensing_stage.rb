@@ -15,8 +15,9 @@ class LicensingStage < ApplicationRecord
 
   # The stages (#379). combined_licence: a Part 52 COL (Vogtle 3 and 4).
   # restart_review: a shut plant's request to restore its operating basis,
-  # under NRC review (Duane Arnold); the approval is an operating_licence row.
-  enum :stage, %w[pre_application application_accepted construction_permit combined_licence operating_licence restart_review design_approval withdrawn denied].index_by(&:itself),
+  # under NRC review (Duane Arnold); restart_approved: NRC restored its
+  # operating basis (Palisades, 24 Jul 2025), beside the original licence.
+  enum :stage, %w[pre_application application_accepted construction_permit combined_licence operating_licence restart_review restart_approved design_approval withdrawn denied].index_by(&:itself),
     validate: true
 
   # What each stage is, in the words the issue uses. The site shows these.
@@ -27,6 +28,7 @@ class LicensingStage < ApplicationRecord
     "combined_licence" => "Combined licence",
     "operating_licence" => "Operating licence",
     "restart_review" => "Restart under NRC review",
+    "restart_approved" => "Restart approved",
     "design_approval" => "Design approval",
     "withdrawn" => "Withdrawn",
     "denied" => "Denied"

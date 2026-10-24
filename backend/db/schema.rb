@@ -273,7 +273,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_230100) do
     t.check_constraint "design_name IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_design_name_check"
     t.check_constraint "organization_id IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_organization_stage_check"
     t.check_constraint "(facility_id IS NULL) <> (organization_id IS NULL)", name: "licensing_stages_owner_check"
-    t.check_constraint "stage::text = ANY (ARRAY['pre_application'::character varying::text, 'application_accepted'::character varying::text, 'construction_permit'::character varying::text, 'combined_licence'::character varying::text, 'operating_licence'::character varying::text, 'restart_review'::character varying::text, 'design_approval'::character varying::text, 'withdrawn'::character varying::text, 'denied'::character varying::text])", name: "licensing_stages_stage_check"
+    t.check_constraint "stage::text = ANY (ARRAY['pre_application'::character varying::text, 'application_accepted'::character varying::text, 'construction_permit'::character varying::text, 'combined_licence'::character varying::text, 'operating_licence'::character varying::text, 'restart_review'::character varying::text, 'restart_approved'::character varying::text, 'design_approval'::character varying::text, 'withdrawn'::character varying::text, 'denied'::character varying::text])", name: "licensing_stages_stage_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "licensing_stages_verification_status_check"
   end
 

@@ -297,7 +297,7 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert_operator locks.index("facilities"), :<, locks.index("licensing_stages"), locks.inspect
   end
 
-  test "a stage on a unit whose id is lower than its site's locks the site first, as a merge does" do
+  test "a stage write locks its unit, never the site, so no unit-and-site lock order can deadlock with it" do
     unit = Facility.create!(name: "Low Id Unit", nrc_docket: "05009991", verification_status: "verified", verified_by: BY)
     site = Facility.create!(name: "High Id Site", verification_status: "verified", verified_by: BY)
     unit.update!(parent: site)
@@ -309,6 +309,16 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
         protect_human_verified: true)
     end
 
-    assert_equal [ site.id, unit.id ], locked.compact.uniq, "site, then unit"
+    assert_equal [ unit.id ], locked.compact.uniq
+  end
+
+  test "a restart keeps the history: the original licence, the restart review and the restart approval" do
+    by = { verification: { status: "verified", by: BY } }
+    [ [ "operating_licence", "1974-02-01" ], [ "restart_review", "2025-01-15" ], [ "restart_approved", "2026-06-01" ] ].each do |name, on|
+      assert write(stage(stage: name, effective_on: on), **by).ok?
+    end
+
+    assert_equal %w[operating_licence restart_review restart_approved], LicensingStage.where(facility: @unit).order(:effective_on).pluck(:stage)
+    assert_equal Date.new(1974, 2, 1), LicensingStage.find_by(stage: "operating_licence").effective_on, "the original licence is untouched"
   end
 end

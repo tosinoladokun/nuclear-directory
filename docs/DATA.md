@@ -18,7 +18,7 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 | Plant link (`FacilityRelationship`) | A company's role at a plant | Southern Nuclear operates Vogtle 3 | A deal between two companies |
 | Company link (`Relationship`) | A deal or tie between two companies | Centrus supplies TRISO-X | A role at a plant |
 | Deal term (`DealTerm`) | One award, power deal or funding round under its link, with amount and dates; or a company's own funding round when its filing names no investors (Form D) | A DOE award (ID, amount, start date) under "DOE funds X-energy"; a Form D round on the company that raised it | The link itself |
-| Licensing stage (`LicensingStage`) | One stage a reactor project or plant has reached with the NRC, with its docket and the date: pre-application, application accepted, construction permit, combined licence (Part 52), operating licence, restart under NRC review, design approval, withdrawn or denied | Hermes 1: construction permit, 14 Dec 2023, 50-7513 | A press release's say-so; the current stage as one field that overwrites the last |
+| Licensing stage (`LicensingStage`) | One stage a reactor project or plant has reached with the NRC, with its docket and the date: pre-application, application accepted, construction permit, combined licence (Part 52), operating licence, restart under NRC review, restart approved, design approval, withdrawn or denied | Hermes 1: construction permit, 14 Dec 2023, 50-7513 | A press release's say-so; the current stage as one field that overwrites the last |
 | Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor designer; SMR | A tag inferred without a quote |
 
 ### Site or unit
