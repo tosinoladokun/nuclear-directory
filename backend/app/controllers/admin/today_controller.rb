@@ -148,14 +148,20 @@ class Admin::TodayController < Admin::BaseController
         claim.reload
         key = [ claim.subject_type, claim.subject_id ]
         after_first[key] = record_state.(*key) if claim.subject_id && rest.any?
-        first + rest.flat_map do |id|
+        decided = first + rest.flat_map do |id|
           DataQuality::Review.approve([ id ], by: actor, reason: "Accepted in Today: another page of the same fact", safe_check: unchanged).tap do |result|
             # This group's own write is the new baseline for the next copy.
             after_first[key] = record_state.(*key) if result.sole.ok? && claim.subject_id
           end
         end
+        # Approve turns a lock conflict into a BUSY result inside its own
+        # savepoint, so whatever this group wrote before it would commit:
+        # raise, so the whole group rolls back as for a deadlock here.
+        raise GroupBusy if decided.any? { |result| Array(result.errors).include?(DataQuality::Review::BUSY) }
+
+        decided
       end
-    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
+    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout, GroupBusy
       # This group rolled back whole; groups before it stand.
       group.map { |id| DataQuality::Review::Result.new(candidate_id: id, ref: nil, errors: [ DataQuality::Review::BUSY ]) }
     end
@@ -167,6 +173,9 @@ class Admin::TodayController < Admin::BaseController
     end
     redirect_after admin_today_review_path(shown: shown_counts.presence)
   end
+
+  # One approval in a group met a lock: the group is rolled back whole.
+  class GroupBusy < StandardError; end
 
   private
     def undo_verifier = Rails.application.message_verifier(:today_undo)

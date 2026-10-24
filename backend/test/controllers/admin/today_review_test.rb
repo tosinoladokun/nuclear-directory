@@ -406,4 +406,30 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert_response :redirect
     assert_match DataQuality::Review::BUSY, flash[:alert]
   end
+
+  test "a copy that meets a lock inside its approval rolls back the whole group, including the first copy" do
+    other = Source.create!(url: "https://www.doe.gov/test/busy.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "sha")
+    copy = Candidate.create!(source: other, kind: "organization", payload: @both.payload, quote: "Agreed Fission Co holds a license.", crawl_run: @both.crawl_run,
+      status: "matched", subject_type: "Organization", subject_id: @both.subject_id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{copy.id} approve: named on the DOE page", by: "human:tosin")
+    review = TodayReview.new
+    shown = review.fingerprint
+    first, second = review.rows("agree").sole.then { |row| [ row.candidate_id, (row.candidate_ids - [ row.candidate_id ]).sole ] }
+
+    # Approve's own savepoint caught a lock timeout and returned BUSY.
+    approve = DataQuality::Review.method(:approve)
+    DataQuality::Review.define_singleton_method(:approve) do |ids, **options|
+      next approve.call(ids, **options) unless ids == [ second ]
+
+      [ DataQuality::Review::Result.new(candidate_id: second, ref: nil, errors: [ DataQuality::Review::BUSY ]) ]
+    end
+    begin
+      post admin_today_review_agreed_path, params: { shown_set: shown }
+    ensure
+      DataQuality::Review.define_singleton_method(:approve, approve)
+    end
+    assert Candidate.find(first).status_matched?, "the first copy's approval rolled back with the group"
+    assert Candidate.find(second).status_matched?
+    assert_match DataQuality::Review::BUSY, flash[:alert]
+  end
 end
