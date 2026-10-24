@@ -38,10 +38,12 @@ class DataQuality::DirectoryClient
 
   # Kinds whose payload names other records instead of carrying attributes;
   # the match stage resolves those names to ids and writes the fact.
-  LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship].freeze
+  # Kinds that name other records (match resolves their ends). A deal term's
+  # one end is the company or link it belongs to (#397).
+  LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship deal_term].freeze
   LINK_ENDS = %w[organization facility from_organization to_organization].freeze
   # Never taken from a payload: which record, which ends, and the slug.
-  PAYLOAD_LOCKED = %w[id slug organization_id facility_id from_organization_id to_organization_id].freeze
+  PAYLOAD_LOCKED = %w[id slug organization_id facility_id from_organization_id to_organization_id link_id].freeze
 
   def initialize(lookup: nil, fact_writer: nil)
     @owner_hints = []
@@ -56,6 +58,9 @@ class DataQuality::DirectoryClient
   def organization(name: nil, domain: nil, sec_cik: nil)
     record("Organization", lookup.organization(name:, domain:, sec_cik:))
   end
+
+  # Companies with an SEC CIK, live ones only (#129): [SecFilerRef].
+  def organizations_with_sec_cik = lookup.organizations_with_sec_cik
 
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
@@ -225,6 +230,8 @@ class DataQuality::DirectoryClient
     # A link's ends as the payload names them, found afresh, so a claim
     # attached to the wrong link (#226) doesn't pass as the same claim.
     attributes.merge!(link_end_ids(candidate.payload)) if LINK_KINDS.include?(candidate.kind)
+    # A company-level deal term's end is its link (#396).
+    attributes[:link_id] = attributes.delete(:organization_id) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
       at: candidate.source.fetched_at || Time.current)

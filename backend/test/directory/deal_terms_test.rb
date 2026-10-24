@@ -72,8 +72,8 @@ class Directory::DealTermsTest < ActiveSupport::TestCase
   end
 
   # #377: fact_state only knows FACT_TYPES, so a closed-fact error on a
-  # DealTerm (not in FACT_TYPES yet) used to raise "not a fact type".
-  # record_label labels the term from its own fields instead.
+  # DealTerm used to raise "not a fact type"; now it's labelled as a fact,
+  # under the link it belongs to.
   test "a write to a rejected deal term says what was rejected, not 'not a fact type' (#377)" do
     first = write(verification: { status: "verified", by: BY })
     term = DealTerm.find(first.id)
@@ -81,7 +81,7 @@ class Directory::DealTermsTest < ActiveSupport::TestCase
 
     result = write(award(amount_usd: "95000000.00"), protect_human_verified: true)
 
-    assert_match(/\AAward ASST_NON_DE-NE0009040_8900 \(##{term.id}\) was rejected by #{Regexp.escape(BY)}/, result.errors.join)
+    assert_match(/\AAward ASST_NON_DE-NE0009040_8900 under the fact .+ was rejected by #{Regexp.escape(BY)}/, result.errors.join)
     assert_equal 80_000_000, DealTerm.sole.amount_usd, "nothing written"
   end
 

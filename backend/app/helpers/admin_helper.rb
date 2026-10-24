@@ -4,12 +4,12 @@ module AdminHelper
   KIND_LABELS = {
     "organization" => "Companies", "facility" => "Plants and sites", "organization_role" => "Company roles",
     "organization_technology" => "Company technologies", "relationship" => "Deals between companies",
-    "facility_relationship" => "Plant owners and operators"
+    "facility_relationship" => "Plant owners and operators", "deal_term" => "Deal terms"
   }.freeze
   TYPE_LABELS = {
     "Organization" => "Company", "Facility" => "Plant or site", "OrganizationRole" => "Company role",
     "OrganizationTechnology" => "Company technology", "Relationship" => "Deal between companies",
-    "FacilityRelationship" => "Plant owner or operator"
+    "FacilityRelationship" => "Plant owner or operator", "DealTerm" => "Deal term"
   }.freeze
   STATUS_WORDS = { "verified" => "Verified", "pending" => "Pending", "rejected" => "Rejected", "unpublished" => "Unpublished" }.freeze
 
@@ -159,7 +159,7 @@ module AdminHelper
   end
 
   # Ids of linked records; their names are shown instead.
-  HIDDEN_FIELDS = %i[organization_id facility_id from_organization_id to_organization_id parent_id].freeze
+  HIDDEN_FIELDS = %i[organization_id facility_id from_organization_id to_organization_id parent_id link_id link_type].freeze
 
   def kind_label(kind) = KIND_LABELS.fetch(kind.to_s, kind.to_s.humanize)
 
@@ -185,6 +185,9 @@ module AdminHelper
     when "organization_technology" then "#{values[:organization_name]}: #{values[:technology].to_s.humanize(capitalize: false)}"
     when "relationship" then "#{values[:from_organization_name]} #{verb.(values[:relationship_type])} #{values[:to_organization_name]}"
     when "facility_relationship" then "#{values[:organization_name]} #{verb.(values[:relationship_type])} #{values[:facility_name]}"
+    # "X-energy: funding round 0001234567-24-000001"
+    when "deal_term"
+      "#{values[:link_name]}: #{[ values[:term_type].to_s.tr('_', ' '), values[:external_id].presence || values[:round] ].compact_blank.join(' ')}"
     else "#{type_label(fact.type)} #{fact.id}"
     end
   end
@@ -263,7 +266,12 @@ module AdminHelper
   def field_label(name) = DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize }
 
   # A value for its field: a role in visitors' words ("Reactor designer").
-  def field_display(name, value) = name.to_s == "role" && value.present? ? role_label(value) : field_value(value)
+  def field_display(name, value)
+    return role_label(value) if name.to_s == "role" && value.present?
+    return DataQuality::Claim.dollars(value) if %w[amount_usd amount_offered_usd].include?(name.to_s) && value.present?
+
+    field_value(value)
+  end
 
   # What a decision changed: "state DE to NJ; aliases …".
   def changes_text(changed_values)
