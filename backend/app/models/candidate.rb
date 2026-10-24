@@ -26,6 +26,8 @@ class Candidate < ApplicationRecord
   # Waiting for a human to approve: recommended by the agent, not yet decided.
   # Recommended against the source as it is now: once the source changes, the
   # recommendation lapses until verify checks it again.
+  # Trade-press leads (#127) are Data Quality's work: left out of the admin's counts and lists.
+  scope :not_leads, -> { where("candidates.payload->>'lead' IS DISTINCT FROM 'true'") }
   scope :recommended, -> {
     where(ai_recommendation: "recommend_publish", status: %w[new matched]).joins(:source)
       .where("candidates.ai_source_sha256 IS NOT DISTINCT FROM sources.content_sha256")

@@ -6,7 +6,7 @@
     <%= render "admin/crumbs", parent_label: from_fact ? "Back" : "Checks", parent_path: from_fact || back_path(admin_checks_path(filters.slice("category", "source"))), current: "Edit, then approve" %>
     <%= render "admin/itemnav", list: @list if @list %>
   </div>
-  <h1 class="type-admin-h1 m-0">Edit, then approve</h1>
+  <h1 class="type-admin-h1 m-0">Edit, then approve <span class="type-count text-ink-muted"><%= claim_number(@item.candidate_id) %></span></h1>
   <p class="nd-item__claim type-body-strong"><%= @item.claim %></p>
   <% if @item.quote.present? %><blockquote class="nd-quote">“<%= @item.quote %>”</blockquote><% end %>
   <% if source_url %>

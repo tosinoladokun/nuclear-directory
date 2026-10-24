@@ -19,7 +19,7 @@ module DataQuality::Differences
     "relationship" => %w[description started_on ended_on],
     "facility_relationship" => %w[ownership_pct description started_on ended_on],
     # Its link, type and external ID say which term it is; these are its values.
-    "deal_term" => %w[amount_usd amount_offered_usd starts_on ends_on round status]
+    "deal_term" => %w[amount_usd amount_offered_usd capacity_mw firm_mw term_years signed_on starts_on ends_on agreement conditions round status]
   }.freeze
 
   # Values stored by key whose history is recorded under their column
@@ -151,7 +151,7 @@ module DataQuality::Differences
   # "terrapower.com"), percentages as numbers (40 is 40.0), CIKs normalized
   # to 10 zero-padded digits ("320193" is "0000320193", #402).
   def self.comparable(name, value, directory:)
-    if %w[ownership_pct amount_usd amount_offered_usd].include?(name) && (number = BigDecimal(value.to_s, exception: false))
+    if %w[ownership_pct amount_usd amount_offered_usd capacity_mw firm_mw term_years].include?(name) && (number = BigDecimal(value.to_s, exception: false))
       return number.to_s("F").delete_suffix(".0")
     end
     return value.to_s.strip.upcase if name == "country_code"
