@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-pm",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "-p", "nd-pm", "run", "--rm", "-p", "3010:3000", "web", "bin/dev"],
+      "port": 3010
+    },
+    {
+      "name": "backend-rehearsal",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["run", "--rm", "--network", "nucelar-directory_default", "-p", "3011:3000",
+        "-v", "/Users/tosinoladokun/Desktop/nucelar-directory/.claude/worktrees/pm-session/backend:/rails",
+        "-v", "nd-pm_bundle:/usr/local/bundle",
+        "-e", "DATABASE_URL=postgres://postgres:postgres@nucelar-directory-db-1:5432/nd_rehearse_260",
+        "-e", "RAILS_ENV=development", "-w", "/rails", "nd-pm-web",
+        "sh", "-c", "bin/rails tailwindcss:build && bin/rails server -b 0.0.0.0 -p 3000"],
+      "port": 3011
+    }
+  ]
+}

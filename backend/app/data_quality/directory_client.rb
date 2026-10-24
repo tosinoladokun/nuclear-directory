@@ -56,6 +56,11 @@ class DataQuality::DirectoryClient
   def normalize_eia_utility_id(value) = lookup.eia_utility_id(value)
 
   # Exact lookups. Pass one keyword; returns a Record or nil.
+  # Enrich (#479): companies waiting for their pages to be read, and marking one read.
+  def enrich_queue(limit: 5) = lookup.enrich_queue(limit:)
+  def mark_enriched(id, requested_at) = lookup.mark_enriched(id, requested_at)
+  def company_fact_choices = lookup.company_fact_choices
+
   def organization(name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
     record("Organization", lookup.organization(name:, domain:, sec_cik:, eia_utility_id:))
   end

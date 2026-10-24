@@ -27,7 +27,7 @@ module DataQuality::Claim
     "venture_capital" => "a venture capital investor", "government_agency" => "a government agency",
     "national_lab" => "a national lab", "waste_decommissioning" => "a waste and decommissioning company"
   }.freeze
-  LABELS = { "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
+  LABELS = { "exchange" => "stock exchange", "ticker" => "ticker", "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
     "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity",
     "amount_usd" => "amount", "amount_offered_usd" => "amount offered", "external_id" => "external ID", "link_name" => "belongs to",
     "sec_cik" => "SEC CIK" }.freeze

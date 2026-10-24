@@ -54,7 +54,9 @@ class SourceCatalog
     # The annual plant file (#319): read once a year, not by the daily crawl.
     "eia_plants" => { name: "EIA-860 plants" },
     "eia_owners" => { name: "EIA-860 owners" },
-    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
+    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" },
+    # Enrich (#479): read only when the admin asks, one company at a time.
+    "company_pages" => { name: "Companies' own pages", note: "read on request (Enrich)" }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze

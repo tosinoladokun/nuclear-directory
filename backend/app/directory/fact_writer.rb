@@ -60,7 +60,8 @@ module Directory
     KINDS = {
       organization: {
         model: Organization,
-        attributes: %i[name short_name slug legal_name website domain sec_cik eia_utility_id description hq_city hq_state country_code founded_year status aliases]
+        attributes: %i[name short_name slug legal_name website domain sec_cik eia_utility_id description hq_city hq_state country_code founded_year status aliases
+          exchange ticker]
       },
       organization_role: { model: OrganizationRole, attributes: %i[organization_id role] },
       organization_technology: { model: OrganizationTechnology, attributes: %i[organization_id technology] },
@@ -224,6 +225,12 @@ module Directory
         if (cik = from.sec_cik)
           from.update_columns(sec_cik: nil)
           into.update!(sec_cik: cik) && moved["SEC CIK"] += 1 if into.sec_cik.blank?
+        end
+        # A stock listing moves like a CIK: into keeps its own if it has one.
+        if from.ticker.present?
+          listing = { exchange: from.exchange, ticker: from.ticker }
+          from.update_columns(exchange: nil, ticker: nil)
+          into.update!(listing) && moved["listing"] += 1 if into.ticker.blank?
         end
         if (utility = from.eia_utility_id)
           from.update_columns(eia_utility_id: nil)
@@ -929,6 +936,7 @@ module Directory
         moved["aliases"] += 1 unless name == OrganizationAlias.normalize(into.name) || OrganizationAlias.exists?(normalized_alias: name) || others.include?(name)
         moved["domain"] += 1 if from.domain && into.domain.blank?
         moved["SEC CIK"] += 1 if from.sec_cik && into.sec_cik.blank?
+        moved["listing"] += 1 if from.ticker.present? && into.ticker.blank?
         moved["EIA utility ID"] += 1 if from.eia_utility_id && into.eia_utility_id.blank?
         moved["news"] = news_moving(from, into)
         { organization_roles: :role_id, organization_technologies: :technology_id,

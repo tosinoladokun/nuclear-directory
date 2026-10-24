@@ -65,6 +65,23 @@ module Directory
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
 
+    # Enrich (#479): companies whose own pages (or SEC record) were asked for
+    # and not read since, oldest request first, as [id, name, website, sec_cik].
+    def enrich_queue(limit: 5)
+      Organization.where("enrich_requested_at IS NOT NULL AND (enriched_at IS NULL OR enriched_at < enrich_requested_at)")
+        .where("COALESCE(website, '') <> '' OR sec_cik IS NOT NULL").order(:enrich_requested_at).limit(limit)
+        .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik)
+    end
+
+    # The roles and technologies a company can be given: { "role" => [[key, name]], "technology" => [[key, name]] }.
+    def company_fact_choices
+      { "role" => Role.order(:key).pluck(:key, :name), "technology" => Technology.order(:key).pluck(:key, :name) }
+    end
+
+    # Enrich (#479): its pages were read for the request now.
+    # A newer request made meanwhile (a new website, say) stays waiting.
+    def mark_enriched(id, requested_at) = Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current)
+
     # A company's or plant's "Latest" (#137): its approved news, newest first.
     # A unit's news is its site's.
     def latest_news(type:, id:, limit: 10)

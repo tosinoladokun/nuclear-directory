@@ -142,6 +142,17 @@ module AdminHelper
     end
   end
 
+  # A public company's listing with a link to its quote on Google Finance
+  # (#479): a convenience link, never a source for any fact.
+  GOOGLE_FINANCE_EXCHANGES = { "NASDAQ" => "NASDAQ", "NYSE" => "NYSE", "NYSE American" => "NYSEAMERICAN", "TSX" => "TSE",
+    "TSXV" => "CVE", "LSE" => "LON", "ASX" => "ASX", "OTC" => "OTCMKTS" }.freeze
+  def stock_listing(exchange, ticker)
+    return if ticker.blank? || exchange.blank?
+
+    url = "https://www.google.com/finance/quote/#{ERB::Util.url_encode(ticker)}:#{GOOGLE_FINANCE_EXCHANGES.fetch(exchange, exchange)}"
+    safe_join([ "#{exchange}: #{ticker} ", link_to(url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener") { safe_join([ "Google Finance ", icon("arrow-square-out", size: 12) ]) } ])
+  end
+
   # Checks' groups (Design's spec on #373), in order: what has a
   # recommendation, what the admin decides, what isn't theirs yet.
   CHECK_GROUPS = { "ready" => "Ready for you", "decide" => "You decide", "not_yours" => "Not yours yet" }.freeze
@@ -299,6 +310,29 @@ module AdminHelper
     when "rejected" then tag.span(safe_join([ icon("x", weight: :bold, size: 12), word ]), class: "nd-badge nd-badge--rejected")
     when "pending" then tag.span(safe_join([ icon("clock", size: 12), word ]), class: "nd-badge nd-badge--pending")
     else tag.span(word, class: "nd-badge nd-badge--pending")
+    end
+  end
+
+  # A finding on the Enrich page as its field and value: "Headquarters city:
+  # Austin", "What it does: Reactor designer" (#479). Anything else, its claim.
+  def enrich_finding(item)
+    payload = item.payload.to_h
+    case item.kind
+    when "organization"
+      return "Listed on #{payload['exchange']} as #{payload['ticker']}" if payload["ticker"]
+
+      fields = payload.except("name")
+      return item.claim if fields.empty?
+
+      # Every field it would change ("HQ city: Santa Clara · HQ state: CA").
+      fields.map { |field, value| "#{field_label(field).upcase_first}: #{field_value(value)}" }.join(" · ")
+    when "organization_role" then "What it does: #{role_label(payload['role'])}"
+    when "organization_technology" then "Technology: #{Technology.find_by(key: payload['technology'])&.name || payload['technology']}"
+    when "deal_term"
+      parts = [ payload["round"], (DataQuality::Claim.dollars(payload["amount_usd"]) if payload["amount_usd"]),
+        (Date.iso8601(payload["starts_on"]).strftime("%-d %b %Y") if payload["starts_on"]) ].compact
+      "Funding round: #{parts.join(', ')}"
+    else item.claim
     end
   end
 
