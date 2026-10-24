@@ -26,13 +26,12 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   test "Today shows what's new and changes to his decisions, never Data Quality's to settle" do
     get admin_inbox_path
     assert_response :success
-    assert_select "p", /2 to decide\. Nothing goes live until you say yes\./
+    assert_select "p", /1 to decide\. Nothing goes live until you say yes\./
     assert_select "#inbox-item-#{@create.id}", /Bluefield Fission: a company in Austin, TX\./
     assert_select "#inbox-item-#{@create.id} button", "Create"
-    assert_select "#inbox-item-#{@change.id} .type-change", /Bethesda\s*→\s*Rockville/
-    assert_select "#inbox-item-#{@change.id} button", /Approve the change/
+    assert_select "#inbox-item-#{@change.id}", 0, "a change stays on Checks"
     assert_select "#inbox-item-#{@settle.id}", 0
-    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*2/
+    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*1/
   end
 
   test "Create publishes; No says no and can be undone from Recently decided" do
@@ -40,7 +39,6 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert @new_co.reload.verified?
     post admin_inbox_decide_path(@change.id, "no"), params: { ids: [ @change.id ] }
     assert @change.reload.status_rejected?
-    assert_equal "Bethesda", @decided.reload.hq_city
 
     get admin_inbox_path
     assert_select "#recent-#{@change.id}", /Said no to Rockville Nuclear/

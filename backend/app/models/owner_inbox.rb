@@ -4,7 +4,8 @@
 # pages decided with it). Everything else is Data Quality's to settle first
 # (Review.inbox_kind "dq"), and a restatement has already confirmed itself.
 class OwnerInbox
-  SECTIONS = %w[new_record new_fact change].freeze
+  # Only what's new (Tosin, 24 Oct); a change to his decision stays on Checks.
+  SECTIONS = %w[new_record new_fact].freeze
   # changes: { field => [stored, stated] } for a change, else {}.
   Entry = Data.define(:kind, :item, :copy_ids, :checked, :changes) do
     def ids = [ item.candidate_id, *copy_ids ]
@@ -20,7 +21,7 @@ class OwnerInbox
       waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all"))
         .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").includes(:source).order(id: :desc).to_a
       kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory) }
-      mine = waiting.reject { |candidate| kinds[candidate] == "dq" }
+      mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
       groups = mine.group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
       items = DataQuality::Review.items(groups.values.map { |copies| copies.first.id }, directory: @directory).index_by(&:candidate_id)
       entries = groups.filter_map do |(kind, *), copies|
