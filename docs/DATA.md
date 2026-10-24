@@ -36,7 +36,7 @@ The pipeline and FactWriter find an existing record by these, in this order. A r
 |---|---|
 | Unit | NRC docket; then a unit name or alias (e.g. a planned unit before it has a docket) |
 | Site | EIA plant ID; then a site name or alias |
-| Company | Its SEC CIK (`sec_cik`, 10 digits) when it has one; then a normalized name or alias (`OrganizationAlias.normalize`: case, punctuation and Inc./LLC/Co. dropped); then the website domain, unless several companies share it. A same-brand match ("Duke Energy Carolinas, LLC" → Duke Energy) is used by matching only, to propose; it never merges on its own |
+| Company | Its SEC CIK (`sec_cik`, 10 digits) when it has one; then its EIA utility ID (`eia_utility_id`, EIA-860's number for a utility or plant owner); then a normalized name or alias (`OrganizationAlias.normalize`: case, punctuation and Inc./LLC/Co. dropped); then the website domain, unless several companies share it. A same-brand match ("Duke Energy Carolinas, LLC" → Duke Energy) is used by matching only, to propose; it never merges on its own |
 | Link | Both ends and the type |
 | Deal term | The link (or, for a company's own round, the company), the term type and the external ID (award ID, or the original Form D's accession number) |
 | Licensing stage | The unit that holds the docket, the docket and the stage; for a design approval, the developer, the design and the stage |
@@ -214,6 +214,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 - **Publishing:** a fact is public only through its model's `.published` scope: a unit when verified under an open site; a pending site when it has such a unit; a link only when both ends are public; a deal term only with its link.
 - **Deal terms:** one term per link (or company), kind and award ID; an award needs an amount, a start date and an award ID; a term on a company itself is a funding round; dates in order; no negative amounts; no automated term on a rejected or unpublished link.
 - **SEC CIK:** 10 digits, zero-padded, unique among companies.
+- **EIA utility ID:** a plain number without leading zeros ("7140"), unique among companies. One company holds one; a brand with several EIA utilities (Duke Energy) keeps the one its owner claims use, and a second goes to review.
 - **Licensing stages:** exactly one of a unit or a developer, and a developer only for a design approval, with its design named; one stage per unit, docket and stage; a stage is verified only from an NRC record; no automated stage under a rejected or unpublished plant or company.
 - **First batches and Data Quality's list (PM, 22 Oct):** the Today screen's "accept the agreed" shortcut lifts a new source's first-batch hold when Data Quality's list has reviewed the claim. So Data Quality reads that list claim by claim for a new source's first batch, every quote, and never sends a bulk "accept" entry.
 
@@ -267,6 +268,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | "Reactor developers" becomes "Developers": reactor designers plus nuclear project developers (`project_developer`), so everything building new nuclear sits together; slug unchanged. A parent never inherits its subsidiaries' buckets | Tosin | #322 |
 | A Form D round is recorded on the company itself, never as a link to a placeholder investor; named investors are separate links | PM | #129 |
 | A company's SEC CIK identifies it before its name | PM | #129 |
+| Plant owners come from EIA-860: Schedule 3's sole owner (code S) at 100%, Schedule 4's owners and shares for J and W; per-unit shares (Catawba), totals off 100 by more than 1, and a new owner on a plant with published owners wait for a person | PM | #382 |
 | A short name is a display label only: never an identity key, never matched on | PM | #363 |
 | Meta–TerraPower (Jan 2026) is Meta funding TerraPower (`funds`), not a power deal: Meta pays for early development of up to eight Natrium units, and its rights to their energy are in the description. A deal whose main term is money for development is `funds`; a signed purchase of power is `offtake_with` (17 Oct 2026) | Tosin | #393 |
 | "Utilities and operators" becomes "Power plant owners and operators" (17 Oct 2026): named for what puts a company there; same rule, slug `utilities` unchanged. The homepage's short label is "Plant operators" | Tosin | #367 |

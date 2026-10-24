@@ -87,7 +87,9 @@ module DataQuality::Review
     organization_id facility_id from_organization_id to_organization_id].freeze
   # A link's type is part of which link it is, and a plant's parent site is
   # its place in the hierarchy: changing either means matching again.
-  NOT_EDITABLE = (LINK_ENDS + %w[id slug relationship_type parent_id]).freeze
+  # A news item's about and mentions are what match found it's about (#137):
+  # changed only by matching again, never edited in, like a link's ends.
+  NOT_EDITABLE = (LINK_ENDS + %w[id slug relationship_type parent_id about mentions]).freeze
   # What reasons() calls candidates with no notes.
   NO_REASON = "no reason"
   # The Checks screen's groups of waiting items (#201). Pending facts with no
@@ -447,6 +449,9 @@ module DataQuality::Review
       return Set.new if candidate_ids.empty?
 
       confirm_identical(candidate_ids, by:, dry_run: true, directory:).select(&:ok?).to_set(&:candidate_id)
+    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
+      # A merge under way holds the rows: the list shows without the Close label this time.
+      Set.new
     end
 
     # Closes open candidates whose source just restates a fact a person
@@ -1062,6 +1067,10 @@ module DataQuality::Review
       # Whether the candidate's source still contains a quote, as its plug-in
       # checks it; nil (only the claim's own quote counts) without a plug-in.
       def in_source(candidate)
+        # A page cited by hand (Research) with nothing stored can't be read:
+        # the exact-quote evidence check stands in, as before it had a plug-in.
+        return if candidate.source.source_kind == "web_page" && candidate.source.content_text.blank?
+
         plugin = DataQuality::Plugin.for(candidate.source.source_kind)
         ->(quote) { plugin.quote_in_source?(candidate.source, quote) }
       rescue DataQuality::Plugin::UnknownSourceKind

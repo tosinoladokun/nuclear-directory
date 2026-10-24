@@ -27,6 +27,24 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
   # Added to an older file's claim still waiting for a person.
   NEWER_FILE = "A newer EIA-860 file exists"
 
+  # The newest final yearly zip linked from the EIA-860 page, as an https URL
+  # on EIA's own site under the EIA-860 pages. A link anywhere else is
+  # ignored. Shared with EiaOwners, which reads the same zip.
+  def self.latest_file_url(html)
+    links = Nokogiri::HTML(html).css("a[href]").filter_map { |a| eia_file_url(a["href"].strip) }
+    links.max_by { |url| url.path[FILE_LINK, 1].to_i }&.to_s
+  end
+
+  def self.eia_file_url(href)
+    url = URI.join(INDEX_URL, href)
+    index = URI.parse(INDEX_URL)
+    url if url.scheme == "https" && url.host == index.host && url.port == index.port &&
+      url.path.start_with?(index.path) && url.path.match?(FILE_LINK)
+  rescue URI::Error
+    nil
+  end
+  private_class_method :eia_file_url
+
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new)
     @fetcher = fetcher
     @directory = directory
@@ -42,7 +60,7 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
     index_read = DataQuality::Snapshot.take(index, fetcher: @fetcher).to_s
     raise "EIA-860 page: #{index.status_reason || index.crawl_status}" unless index.crawl_ok? && index.content_text.present?
 
-    url = latest_file_url(index.content_text) or raise "EIA-860 page: no yearly zip link found; the page may have changed"
+    url = self.class.latest_file_url(index.content_text) or raise "EIA-860 page: no yearly zip link found; the page may have changed"
     source = Source.find_or_create_by!(url:) do |new_source|
       new_source.source_kind = source_kind
       new_source.title = "EIA-860 annual plant file, #{url[FILE_LINK, 1]}"
@@ -111,21 +129,5 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
         waiting.where(status: %w[new matched])
           .update_all(status: "rejected", notes: "Superseded by the newer #{source.title}", updated_at: Time.current)
       end
-    end
-
-    # The newest final yearly zip linked from the page, as an https URL on
-    # EIA's own site under the EIA-860 pages. A link anywhere else is ignored.
-    def latest_file_url(html)
-      links = Nokogiri::HTML(html).css("a[href]").filter_map { |a| eia_file_url(a["href"].strip) }
-      links.max_by { |url| url.path[FILE_LINK, 1].to_i }&.to_s
-    end
-
-    def eia_file_url(href)
-      url = URI.join(INDEX_URL, href)
-      index = URI.parse(INDEX_URL)
-      url if url.scheme == "https" && url.host == index.host && url.port == index.port &&
-        url.path.start_with?(index.path) && url.path.match?(FILE_LINK)
-    rescue URI::Error
-      nil
     end
 end

@@ -60,7 +60,7 @@ module Directory
     KINDS = {
       organization: {
         model: Organization,
-        attributes: %i[name short_name slug legal_name website domain sec_cik description hq_city hq_state country_code founded_year status aliases
+        attributes: %i[name short_name slug legal_name website domain sec_cik eia_utility_id description hq_city hq_state country_code founded_year status aliases
           exchange ticker]
       },
       organization_role: { model: OrganizationRole, attributes: %i[organization_id role] },
@@ -231,6 +231,10 @@ module Directory
           listing = { exchange: from.exchange, ticker: from.ticker }
           from.update_columns(exchange: nil, ticker: nil)
           into.update!(listing) && moved["listing"] += 1 if into.ticker.blank?
+        end
+        if (utility = from.eia_utility_id)
+          from.update_columns(eia_utility_id: nil)
+          into.update!(eia_utility_id: utility) && moved["EIA utility ID"] += 1 if into.eia_utility_id.blank?
         end
         retired = []
         { organization_roles: :role_id, organization_technologies: :technology_id,
@@ -933,6 +937,7 @@ module Directory
         moved["domain"] += 1 if from.domain && into.domain.blank?
         moved["SEC CIK"] += 1 if from.sec_cik && into.sec_cik.blank?
         moved["listing"] += 1 if from.ticker.present? && into.ticker.blank?
+        moved["EIA utility ID"] += 1 if from.eia_utility_id && into.eia_utility_id.blank?
         moved["news"] = news_moving(from, into)
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
@@ -1130,6 +1135,7 @@ module Directory
           # An exact government ID first (PM, 18 Oct 2026): the SEC's CIK
           # outranks any name, as NRC dockets and EIA plant IDs do.
           ref = Lookup.organization(sec_cik: attrs[:sec_cik]) if attrs[:sec_cik].present?
+          ref ||= Lookup.organization(eia_utility_id: attrs[:eia_utility_id]) if attrs[:eia_utility_id].present?
           ref ||= [ attrs[:name], *attrs[:aliases] ].compact.lazy.filter_map { |name| Lookup.organization(name:) }.first
           domain = attrs.key?(:domain) ? attrs[:domain] : Organization.domain_from(attrs[:website])
           ref ||= Lookup.organization(domain:) if domain.present?

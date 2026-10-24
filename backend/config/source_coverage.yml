@@ -24,6 +24,7 @@ categories:
       - { name: NRC reactor list, kind: nrc_reactor_list, status: built }
       - { name: EIA-860M generators, kind: eia_generators, status: built }
       - { name: EIA-860 plants, kind: eia_plants, status: built }
+      - { name: EIA-860 owners, kind: eia_owners, status: built }
       - { name: NRC licensing pages (new reactors), status: planned, issue: 130 }
       - { name: State utility commission filings, status: planned, issue: 131 }
   - key: reactor-developers

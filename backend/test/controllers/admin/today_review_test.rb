@@ -432,4 +432,25 @@ class Admin::TodayReviewTest < ActionDispatch::IntegrationTest
     assert Candidate.find(second).status_matched?
     assert_match DataQuality::Review::BUSY, flash[:alert]
   end
+
+  test "a hand-cited page with nothing stored still closes a claim its evidence already states; a busy merge just drops the Close label" do
+    page = Source.create!(url: "https://example.com/hand-cited", source_kind: "web_page", crawl_status: "ok")
+    company = Organization.find(@both.subject_id)
+    company.verify!(by: "human:tosin")
+    Evidence.create!(subject: company, source: page, quote: @both.quote, found_by: "human")
+    same = Candidate.create!(source: page, kind: "organization", payload: @both.payload, quote: @both.quote,
+      crawl_run: @both.crawl_run, status: "matched", subject_type: "Organization", subject_id: company.id, ai_recommendation: "recommend_publish",
+      ai_reason: "Listed.", ai_source_sha256: "sha")
+    assert_includes DataQuality::Review.restating_ids([ same.id ], by: "human:tosin"), same.id
+
+    confirm = DataQuality::Review.method(:confirm_identical)
+    DataQuality::Review.define_singleton_method(:confirm_identical) { |*, **| raise ActiveRecord::Deadlocked, "deadlock detected" }
+    begin
+      assert_equal Set.new, DataQuality::Review.restating_ids([ same.id ], by: "human:tosin")
+      get admin_today_review_path
+      assert_response :success
+    ensure
+      DataQuality::Review.define_singleton_method(:confirm_identical, confirm)
+    end
+  end
 end
