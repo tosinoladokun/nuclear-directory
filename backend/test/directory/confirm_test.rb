@@ -106,4 +106,25 @@ class Directory::ConfirmTest < ActiveSupport::TestCase
     assert_nil dropped_evidence.reload.last_confirmed_at, "not a fact the rows still support"
     assert_equal 0, Directory::FactWriter.reconfirm_source(source_id: @source.id, facts: [], quotes: [ "x" ], rows_sha256: "r")
   end
+
+  test "a new monthly file stating what an earlier one supports adds its evidence and confirms; another kind of source still waits" do
+    august = Source.create!(url: "https://www.eia.gov/test/august_generator2026.xlsx", source_kind: "eia_generators", crawl_status: "ok")
+    september = Source.create!(url: "https://www.eia.gov/test/september_generator2026.xlsx", source_kind: "eia_generators", crawl_status: "ok")
+    Evidence.create!(subject: @unit, source: august, quote: "Hope Creek 1,1227.4", found_by: "crawler")
+
+    result = Directory::FactWriter.confirm(:facility, { id: @unit.id, capacity_mw: "1227.4" }, source_id: september.id,
+      quote: "Hope Creek 1,1227.4", source_kind: "eia_generators")
+    assert result.confirmed?, result.inspect
+    assert Evidence.exists?(subject: @unit, source: september, quote: "Hope Creek 1,1227.4")
+
+    other = Source.create!(url: "https://example.com/other", source_kind: "web_page", crawl_status: "ok")
+    result = Directory::FactWriter.confirm(:facility, { id: @unit.id, capacity_mw: "1227.4" }, source_id: other.id, quote: "x", source_kind: "web_page")
+    assert_equal :unsourced, result.outcome, "a first source of its kind still waits for a person"
+  end
+
+  test "a value the source gives with fewer decimals agrees when ours rounds to it" do
+    @unit.update_columns(latitude: 39.467528, capacity_mw: "1227.40")
+    assert confirm({ latitude: "39.4675", capacity_mw: "1227" }).confirmed?
+    assert_not confirm({ latitude: "39.4699" }).confirmed?
+  end
 end
