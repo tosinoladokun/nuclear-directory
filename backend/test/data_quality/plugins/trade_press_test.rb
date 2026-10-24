@@ -20,17 +20,29 @@ class DataQuality::Plugins::TradePressTest < ActiveSupport::TestCase
     assert_equal [ "World Nuclear News", "ANS Nuclear Newswire" ], Plugin::FEEDS.keys
   end
 
-  test "each recent item is a lead: a news item about no one yet, marked lead" do
+  test "only an item naming a company or plant in the directory becomes a lead, about what it names" do
     DataQuality::Stages::Crawl.call(plugin:)
-    candidates = plugin.extract(source, nil)
+    assert_empty plugin.extract(source, nil), "nothing we have is named: no leads"
 
-    assert_equal 8, candidates.size, "all 8 are within #{Plugin::WINDOW_DAYS} days"
-    assert candidates.all? { |c| c[:payload]["lead"] == true && c[:payload]["about"] == [] && c[:payload]["publisher"] == "World Nuclear News" }
+    Organization.create!(name: "Rolls-Royce SMR").verify!(by: "human:tosin")
+    Facility.create!(name: "Akkuyu", facility_type: "power_reactor").verify!(by: "human:tosin")
+    candidates = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: { "World Nuclear News" => FEED }, today: -> { TODAY }).extract(source, nil)
+
+    assert_equal [ [ { "name" => "Akkuyu", "type" => "facility" } ], [ { "name" => "Rolls-Royce SMR", "type" => "organization" } ] ].sort_by(&:to_s),
+      candidates.map { |c| c[:payload]["about"] }.sort_by(&:to_s)
+    assert candidates.all? { |c| c[:payload]["lead"] == true && c[:payload]["publisher"] == "World Nuclear News" }
     assert candidates.all? { |c| plugin.quote_in_source?(source, c[:quote]) }
     assert_match "lead to the primary source", plugin.source_facts(source)
   end
 
+  test "at most #{Plugin::PER_FEED} leads a feed a night, newest first" do
+    Organization.create!(name: "Nuclear").verify!(by: "human:tosin")
+    DataQuality::Stages::Crawl.call(plugin:)
+    assert_operator plugin.extract(source, nil).size, :<=, Plugin::PER_FEED
+  end
+
   test "a lead is Data Quality's: held, refused if approved, listed but never counted" do
+    Organization.create!(name: "Rolls-Royce SMR").verify!(by: "human:tosin")
     DataQuality::Pipeline.run("trade_press", plugin:, only: %w[crawl extract match])
     lead = Candidate.where(kind: "news_item").first
 

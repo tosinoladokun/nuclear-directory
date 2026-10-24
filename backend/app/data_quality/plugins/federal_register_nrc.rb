@@ -37,6 +37,9 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
     @today = today
   end
 
+  # A title segment with these words names the licensee; the others name a plant.
+  COMPANY_WORDS = /\b(?:LLC|L\.L\.C|Inc|Incorporated|Company|Corporation|Corp|Co|Authority|Commission|University|Operating|Generation)\b\.?/i
+
   # The API's listing: an index, never extracted. Each notice is stored as
   # its own source, at its Federal Register page, which its claim cites.
   INDEX_SOURCE_KIND = "federal_register_index"
@@ -60,7 +63,7 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
 
   def extract(source, _run)
     notice = parse(source.content_text) or return []
-    about = notice.segments[0...-1].flat_map { |name| [ { "name" => name, "type" => "organization" }, { "name" => name, "type" => "facility" } ] }
+    about = notice.segments[0...-1].map { |name| { "name" => name, "type" => name.match?(COMPANY_WORDS) ? "organization" : "facility" } }
     [ { kind: "news_item", quote: notice.title, payload: {
       "url" => notice.url, "title" => notice.title, "publisher" => PUBLISHER, "published_on" => notice.published_on,
       "summary" => notice.abstract.presence&.truncate(SUMMARY_LENGTH, separator: " "), "about" => about }.compact } ]

@@ -240,6 +240,15 @@ module Directory
       type.to_s.constantize.where(slug: slugs).pluck(:slug, :id).to_h
     end
 
+    # The names (and aliases) of published companies and plants, to spot them
+    # in a trade-press headline (#127): { "organization" => [...], "facility" => [...] }.
+    def published_names
+      {
+        "organization" => Organization.published.pluck(:name) + OrganizationAlias.where(organization_id: Organization.published.select(:id)).pluck(:alias),
+        "facility" => Facility.published.pluck(:name) + FacilityAlias.where(facility_id: Facility.published.select(:id)).pluck(:alias)
+      }.transform_values { |names| names.compact.uniq }
+    end
+
     # Whether a fact is public now, by its model's .published scope (a unit
     # under a closed site isn't, #104), so callers don't re-derive the rule.
     def published?(type:, id:)

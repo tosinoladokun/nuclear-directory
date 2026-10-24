@@ -306,6 +306,9 @@ class DataQuality::DirectoryClient
   # Whether a fact is public now (its model's published scope).
   def published?(type:, id:) = lookup.published?(type:, id:)
 
+  # Published companies' and plants' names and aliases, by type (#127).
+  def published_names = lookup.published_names
+
   # Of these facts of one type, the ids a person decided (verified_by human:…).
   def human_decided_ids(type:, ids:) = lookup.human_decided_ids(type:, ids:)
 

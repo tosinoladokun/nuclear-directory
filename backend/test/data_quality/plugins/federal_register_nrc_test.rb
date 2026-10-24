@@ -57,7 +57,8 @@ class DataQuality::Plugins::FederalRegisterNrcTest < ActiveSupport::TestCase
 
     assert_equal source.url, claim[:payload]["url"]
     assert_equal "Federal Register (NRC)", claim[:payload]["publisher"]
-    assert_equal [ "SMR, LLC", "Palisades SMR, LLC", "Pioneer Units 1 and 2" ], claim[:payload]["about"].map { |a| a["name"] }.uniq
+    assert_equal [ { "name" => "SMR, LLC", "type" => "organization" }, { "name" => "Palisades SMR, LLC", "type" => "organization" },
+      { "name" => "Pioneer Units 1 and 2", "type" => "facility" } ], claim[:payload]["about"]
     assert plugin.quote_in_source?(source, claim[:quote])
     assert claim[:payload]["summary"].length <= Plugin::SUMMARY_LENGTH
   end
