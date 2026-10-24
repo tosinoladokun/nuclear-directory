@@ -701,7 +701,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       if record.verification_status == "pending"
         waiting = Candidate.where(source_id: candidate.source_id, subject_type: record.type, subject_id: record.id,
           status: %w[new matched needs_review]).where.not(id: candidate.id).where("payload = ?::jsonb", candidate.payload.to_json).first
-        return unless waiting
+        return replace_earlier_issue(candidate, record) unless waiting
 
         # The one that quotes the source as it reads now is the one kept.
         if waiting.quote == candidate.quote || plugin.quote_in_source?(candidate.source, waiting.quote)
@@ -720,6 +720,28 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
       confirmation = directory.confirm(candidate, in_source: in_source(candidate))
       confirmed(candidate, record, confirmed_note(record, confirmation)) if confirmation&.confirmed?
+    end
+
+    # The same claim waiting from an earlier edition of this source (last
+    # month's EIA file, as the plug-in's earlier_editions names them): only
+    # the newest waits, so the queue holds each pending fact once and it
+    # cites the file as it reads now. Pages of one kind that aren't editions
+    # (NRC's page per plant) are never replaced.
+    def replace_earlier_issue(candidate, record)
+      editions = plugin.earlier_editions(candidate.source)
+      return if editions.empty?
+
+      earlier = Candidate.where(source_id: editions)
+        .where(subject_type: record.type, subject_id: record.id, status: %w[new matched needs_review])
+        .where("candidates.payload = ?::jsonb", candidate.payload.to_json)
+      earlier.find_each do |older|
+        older.with_lock do
+          next unless %w[new matched needs_review].include?(older.status)
+
+          older.update!(status: "confirmed", notes: "Replaced by candidate ##{candidate.id}: a newer issue of the source says the same")
+          @stats["confirmed"] = @stats.fetch("confirmed", 0) + 1
+        end
+      end
     end
 
     # A record or link a human rejected or unpublished: the same claim again
