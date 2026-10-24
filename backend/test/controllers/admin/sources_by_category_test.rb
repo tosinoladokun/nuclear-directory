@@ -194,6 +194,17 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     assert_select "details#utilities .nd-cov__src", /EIA-860 plants.*Built/m
   end
 
+  test "EIA-860 owners isn't live while the EIA-860 page fails, though the cached zip reads fine" do
+    index = run_crawler("eia_860_index")
+    run_crawler("eia_owners")
+    get admin_sources_path(by: "category")
+    assert_select ".nd-cov__src", /EIA-860 owners.*Live/m
+
+    index.update!(status_reason: "HTTP 503", fetched_at: 10.minutes.ago)
+    get admin_sources_path(by: "category")
+    assert_select ".nd-cov__src", /EIA-860 owners.*Built/m
+  end
+
   test "a hand-research task's issue isn't called a crawler; a crawler's is" do
     get admin_sources_path(by: "category")
 

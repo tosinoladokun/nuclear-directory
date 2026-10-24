@@ -105,8 +105,12 @@ class DataQuality::Plugins::EiaOwners::OwnerFile
 
   # EIA's numbers as written, without the float noise of the workbook's
   # storage ("0.57410000000000005" is "0.5741"). nil when blank.
+  # A blank stays blank; anything else that isn't a number ("N/A") makes the
+  # file unreadable, so the last good copy is kept.
   def self.number(text, places)
-    value = BigDecimal(text.to_s, exception: false) or return text
+    return if text.to_s.strip.empty?
+
+    value = BigDecimal(text.to_s.strip, exception: false) or raise Unreadable, "#{text.inspect} isn't a number"
     value.round(places).to_s("F").sub(/\.0\z/, "")
   end
   private_class_method :nuclear_generators, :owners_of, :number

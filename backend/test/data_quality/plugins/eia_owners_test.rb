@@ -293,6 +293,46 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     assert_equal "7140", @georgia_power.reload.eia_utility_id
   end
 
+  test "a share that isn't a number makes the file unreadable: the last good copy stays" do
+    crawl!
+    good = source.content_text
+    source.update!(fetched_at: 1.day.ago)
+    stub_request(:get, FILE).to_return(body: yearly_zip(owners: OWNERS.map { |row| row[2] == "6127" ? row.dup.tap { |r| r[13] = "N/A" } : row }))
+
+    assert_equal "needs_human", crawl!["snapshot"]
+    assert_match '"N/A" isn\'t a number', source.reload.status_reason
+    assert_equal good, source.content_text
+  end
+
+  test "a failed read of the EIA-860 page is reported though its cached copy finds the file" do
+    crawl!
+    Source.find_by!(url: DataQuality::Plugins::EiaPlants::INDEX_URL).update!(fetched_at: 1.day.ago)
+    stub_request(:get, DataQuality::Plugins::EiaPlants::INDEX_URL).to_return(status: 503)
+
+    stats = crawl!
+    assert_equal [ "error", FILE ], stats.values_at("index", "file")
+  end
+
+  test "a dropped owner keeps the share a person approved, not a later proposal nobody decided" do
+    run!
+    approve_recommended # Calvert Cliffs at 100%, and Constellation itself
+    link = FacilityRelationship.find(claim("55951", "6011").subject_id)
+    assert link.verified?
+
+    # 2026 proposes 50%, and nobody decides it.
+    shared = OPERABLE.map { |row| row[2] == "6011" ? row.dup.tap { |r| r[7] = "J" } : row }
+    next_year!(owners: OWNERS + [ owner_row("6011", "Calvert Cliffs Nuclear Power Plant", "1", "Constellation Nuclear", "55951", "0.5"),
+      owner_row("6011", "Calvert Cliffs Nuclear Power Plant", "1", "Another Utility", "424242", "0.5") ], operable: shared)
+    # 2027 leaves Calvert Cliffs out.
+    plugin.define_singleton_method(:max_dropped_share) { |_source| 1.0 }
+    next_year!(year: 2027, operable: OPERABLE.reject { |row| %w[6011 6036].include?(row[2]) }, owners: OWNERS.reject { |row| row[2] == "6036" })
+
+    dropped = Candidate.find_by!(review_origin: "dropped", subject_type: "FacilityRelationship", subject_id: link.id)
+    assert_equal "100", dropped.payload["ownership_pct"].to_s.sub(/\.0+\z/, "")
+    DataQuality::Review.approve([ dropped.id ], by: "human:tosin")
+    assert_equal 100, link.reload.ownership_pct.to_i, "keeping it keeps the approved share"
+  end
+
   def owner_row(plant, name, generator, owner_name, owner_id, pct)
     [ "1", "Utility", plant, name, "XX", generator, "OP", owner_name, "", "", "", "", owner_id, pct ]
   end

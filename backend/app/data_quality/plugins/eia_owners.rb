@@ -33,7 +33,9 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
       new_source.source_kind = Plants::INDEX_SOURCE_KIND
       new_source.title = "EIA-860 annual electric generator data page"
     end
-    DataQuality::Snapshot.take(index, fetcher: @fetcher)
+    # Reported, so a failed fetch that falls back on an earlier copy still
+    # shows on Today (as EiaPlants does).
+    index_read = DataQuality::Snapshot.take(index, fetcher: @fetcher).to_s
     raise "EIA-860 page: #{index.status_reason || index.crawl_status}" unless index.crawl_ok? && index.content_text.present?
 
     file = Plants.latest_file_url(index.content_text) or raise "EIA-860 page: no yearly zip link found; the page may have changed"
@@ -44,11 +46,11 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true, max_bytes: Plants::MAX_BYTES) do |bytes|
       OwnerFile.to_csv(OwnerFile.rows(bytes))
     end
-    { "file" => file, "snapshot" => result.to_s, "rows" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
+    { "index" => index_read, "file" => file, "snapshot" => result.to_s, "rows" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
       "superseded" => (supersede_older_files(source) if source.crawl_ok?) }.compact
   rescue OwnerFile::Unreadable => error
     source.update!(crawl_status: "needs_human", status_reason: "Couldn't read EIA-860's ownership: #{error.message}")
-    { "file" => file, "snapshot" => "needs_human" }
+    { "index" => index_read, "file" => file, "snapshot" => "needs_human" }
   end
 
   def source_facts(source)
