@@ -22,7 +22,11 @@ class SeedsTest < ActiveSupport::TestCase
     def organizations = @files.size
     def roles = each_file("roles") { |slug, item| [ item["key"], item["subtype"] ].compact.map { |key| [ slug, key ] } }.uniq.size
     def technologies = each_file("technologies") { |slug, item| [ [ slug, item["key"] ] ] }.uniq.size
-    def relationships = each_file("relationships") { |slug, item| [ [ item["type"], slug, slug_of(item["to"]) ] ] }.uniq.size
+    # A company link stated pending in any file waits, and isn't counted as verified.
+    def relationships
+      links = each_file("relationships") { |slug, item| [ [ [ item["type"], slug, slug_of(item["to"]) ], item["pending"] ] ] }.group_by(&:first)
+      links.count { |_, rows| rows.none?(&:last) }
+    end
     # Each site and each unit once. A unit given with its site ("site:
     # Indian Point") is its own record under that site, and the site is one
     # too, even when they share a name (Callaway). A plain name that is one of
