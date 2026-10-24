@@ -116,6 +116,20 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 40, acme.facility_relationships.sole.ownership_pct
   end
 
+  test "each record quote says which fields it backs (#398)" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com",
+      legal_name: "Acme Fuel, Inc.",
+      description: { "text" => "Makes fuel.", "source_url" => "https://example.com/about", "quote" => "Acme Fuel, Inc. makes fuel." },
+      hq: [ { "state" => "TN" }, item(city: "Oak Ridge", source_url: "https://example.com/hq", quote: "Based in Oak Ridge.") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+    Seed::OrganizationLoader.new(@dir).load!
+
+    fields = Organization.find_by!(slug: "acme-fuel").evidence.to_h { |row| [ row.quote, row.fields ] }
+    assert_equal({ "Acme Fuel, Inc. makes fuel." => %w[description legal_name], "Based in Oak Ridge." => %w[hq_city] }, fields,
+      "the description's quote also states the legal name; the HQ entry gives only the city; a re-seed changes nothing")
+  end
+
   test "a legal name is cited by the quote that states it" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", legal_name: "Acme Fuel, Inc.",
       roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel, Inc. supplies fuel.") ]))
@@ -446,5 +460,88 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_match "unknown organization \"Nobody At All\"", error.message
     assert_nil Organization.find_by(slug: "acme-fuel"), "nothing is written"
     assert_equal 0, Source.where(url: "https://example.com/news").count
+  end
+
+  test "a unit given with its site loads under that site: one public plant, both units under it, on a fresh load and a re-seed" do
+    write_file("holtec", org("Holtec International", website: "https://holtec.com", facilities: [
+      item(name: "Indian Point 2", site: "Indian Point", type: "owns"), item(name: "Indian Point 3", site: "Indian Point", type: "owns") ]))
+    write_file("hdi", org("Holtec Decommissioning International", website: "https://hdi.example.com", facilities: [
+      item(name: "Indian Point 2", site: "Indian Point", type: "operates") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    site = Facility.find_by!(name: "Indian Point", parent_id: nil)
+    units = Facility.where(name: [ "Indian Point 2", "Indian Point 3" ])
+    assert_equal [ site.id ], units.pluck(:parent_id).uniq
+    assert_equal 2, units.count, "one unit per name, shared by both companies"
+    assert_equal [ "Indian Point" ], DirectoryListing.new(q: "Indian Point").plants.map(&:name)
+    assert_equal 3, FacilityRelationship.where(facility: units).count
+
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal 3, Facility.where("name LIKE 'Indian Point%'").count, "a re-seed makes nothing new"
+  end
+
+  test "a same-name plant without a site is taken in as the unit; one under another site fails the load" do
+    stray = Facility.create!(name: "Duane Arnold 1")
+    write_file("nextera", org("NextEra Energy", website: "https://nextera.example.com", facilities: [
+      item(name: "Duane Arnold 1", site: "Duane Arnold Energy Center", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal Facility.find_by!(name: "Duane Arnold Energy Center").id, stray.reload.parent_id
+
+    other = Facility.create!(name: "Elsewhere")
+    Facility.create!(name: "San Onofre 1", parent: other)
+    write_file("sce", org("Southern California Edison", website: "https://sce.example.com", facilities: [
+      item(name: "San Onofre 1", site: "San Onofre", type: "operates") ]))
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "already a unit of another site (Elsewhere), not San Onofre", error.message
+  end
+
+  test "a unit may share its site's name; an alias under another site isn't moved; re-casing never renames" do
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "Callaway", site: "Callaway", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    site = Facility.find_by!(name: "Callaway", parent_id: nil)
+    assert_equal [ site.id ], Facility.where(name: "Callaway").where.not(id: site.id).pluck(:parent_id)
+
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "CALLAWAY", site: "Callaway", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal 2, Facility.where("LOWER(name) = 'callaway'").count
+    assert_not Facility.exists?(name: "CALLAWAY"), "re-casing the entry doesn't rename the unit"
+
+    other = Facility.create!(name: "Elsewhere")
+    Facility.create!(name: "Elsewhere 2", parent: other).aliases.create!(alias: "SONGS 2")
+    write_file("sce", org("Southern California Edison", website: "https://sce.example.com", facilities: [ item(name: "SONGS 2", site: "San Onofre", type: "operates") ]))
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "already a unit of another site (Elsewhere), not San Onofre", error.message
+  end
+
+  test "a site named only through site: can take its details from facilities.yml" do
+    write_file("holtec", org("Holtec International", website: "https://holtec.com", facilities: [ item(name: "Indian Point 2", site: "Indian Point", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ {
+      "name" => "Indian Point", "state" => { "value" => "NY", "source_url" => "https://example.com/where", "quote" => "Indian Point is in New York." }
+    } ] }.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    assert_equal "NY", Facility.find_by!(name: "Indian Point", parent_id: nil).state
+  end
+
+  test "an older same-name NRC unit never takes its site's details; a loose unit is taken in by its alias; new sites and units count as created" do
+    Facility.create!(name: "Callaway", nrc_docket: "05000483")
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "Callaway 1", site: "Callaway", type: "operates") ]))
+    File.write(facilities_file, { "facilities" => [ {
+      "name" => "Callaway", "state" => { "value" => "MO", "source_url" => "https://example.com/where", "quote" => "Callaway is in Missouri." }
+    } ] }.to_yaml)
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file)
+    loader.load!
+    site = Facility.find_by!(name: "Callaway", nrc_docket: nil)
+    assert_equal "MO", site.state
+    assert_nil Facility.find_by!(nrc_docket: "05000483").state, "the docketed record isn't the site"
+    created = loader.results.dig(:facility, :created) || loader.results.dig("facility", "created")
+    assert created.to_i >= 2, "the new site and unit count as created: #{loader.results.inspect}"
+
+    loose = Facility.create!(name: "San Onofre 2")
+    loose.aliases.create!(alias: "SONGS 2")
+    write_file("sce", org("Southern California Edison", website: "https://sce.example.com", facilities: [ item(name: "SONGS 2", site: "San Onofre", type: "operates") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal Facility.find_by!(name: "San Onofre").id, loose.reload.parent_id, "taken in by its alias, keeping its name"
+    assert_not Facility.exists?(name: "SONGS 2")
   end
 end

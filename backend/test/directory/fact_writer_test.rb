@@ -8,6 +8,19 @@ class Directory::FactWriterTest < ActiveSupport::TestCase
 
   def write(...) = Directory::FactWriter.write(...)
 
+  test "a quote's fields gather across writes, sorted and unique; leaving them out never removes any (#398)" do
+    id = write(:organization, { name: "Kairos Power" }, evidence: [ @evidence.merge(fields: %w[hq_state hq_city]) ]).id
+    write(:organization, { id:, name: "Kairos Power" }, evidence: [ @evidence.merge(fields: %w[legal_name hq_city]) ])
+    row = Evidence.where(subject_type: "Organization", subject_id: id).sole
+    assert_equal %w[hq_city hq_state legal_name], row.fields
+
+    [ {}, { fields: nil }, { fields: [] } ].each do |extra|
+      write(:organization, { id:, name: "Kairos Power" }, evidence: [ @evidence.merge(extra) ])
+      assert_equal %w[hq_city hq_state legal_name], row.reload.fields, extra.inspect
+    end
+    assert_equal 1, Evidence.where(subject_type: "Organization", subject_id: id).count
+  end
+
   test "creates an organization with its name and aliases as aliases" do
     result = write(:organization, { name: "Kairos Power, LLC", website: "https://www.kairospower.com", aliases: [ "Kairos" ] })
 

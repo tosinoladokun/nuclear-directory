@@ -61,8 +61,10 @@ Details: [`backend/app/data_quality/README.md`](backend/app/data_quality/README.
 
 ## Licence
 
-The code is licensed under the [MIT License](LICENSE). Directory data and
-dataset releases are licensed under [CC BY 4.0](DATA_LICENSE). Credit:
+The code is licensed under the [MIT License](LICENSE). Directory data,
+including records, links, fields, and dataset releases, is licensed under
+[CC BY 4.0](DATA_LICENSE). Short source quotations are included for
+verification and remain the property of their respective owners. Credit:
 "Nuclear Directory, nuclear-directory.org".
 
 Operational runbooks (deploying to Render, backups and restores, UI previews,
