@@ -40,6 +40,27 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 1, 2), Source.find_by!(url: "https://example.com/news").published_on
   end
 
+  test "a file that states no field leaves it; a null description clears it; a source-only description leaves the text" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", description: { text: "By hand", source_url: "https://example.com/a", quote: "By hand" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    acme.update_columns(hq_city: "Springfield", legal_name: "Acme Fuel, Inc.")
+
+    sparse = { name: "Acme Fuel, Inc.", status: "active", roles: [], technologies: [], relationships: [], facilities: [], notes: "" }
+    write_file("acme-fuel", sparse)
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal [ "https://acmefuel.com", "US", "By hand", "Springfield", "Acme Fuel, Inc." ],
+      acme.reload.attributes.values_at("website", "country_code", "description", "hq_city", "legal_name")
+
+    write_file("acme-fuel", sparse.merge(description: { source_url: "https://example.com/a", quote: "By hand" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "By hand", acme.reload.description
+
+    write_file("acme-fuel", sparse.merge(description: nil))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_nil acme.reload.description
+  end
+
   test "a re-seed counts what it changed apart from what it only restated (#301)" do
     write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", roles: [ item(key: "fuel") ]))
     Seed::OrganizationLoader.new(@dir).load!
@@ -228,6 +249,23 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
       assert_match "confidence #{bad.inspect} isn't a number from 0 to 1", error.message
       assert_nil Facility.find_by(name: "Acme Plant"), "nothing was written"
     end
+  end
+
+  test "terms added under a pending plant link approved since are verified with it, though the YAML still says pending" do
+    entry = item(name: "Acme Plant", type: "offtakes_from", pending: true, pending_reason: "quote doesn't say it")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ entry ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    link = FacilityRelationship.sole
+
+    travel 1.hour do
+      link.verify!(by: "human:tosin")
+      terms = [ { key: "acme-plant-ppa", agreement: "ppa", status: "signed", capacity_mw: 100 } ]
+      write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ entry.merge(terms:) ]))
+      Seed::OrganizationLoader.new(@dir).load!
+    end
+
+    assert DealTerm.find_by!(external_id: "acme-plant-ppa").verified?
+    assert_equal [ "acme-plant-ppa" ], Directory::DealList.offtakes.map(&:key)
   end
 
   test "a plant link marked pending is created pending, and a rerun keeps a later decision" do
@@ -656,5 +694,18 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     Seed::OrganizationLoader.new(@dir).load!
     assert_equal Facility.find_by!(name: "San Onofre").id, loose.reload.parent_id, "taken in by its alias, keeping its name"
     assert_not Facility.exists?(name: "SONGS 2")
+  end
+
+  test "a site under a former name is found beside a same-name NRC unit, in the preflight and the rename" do
+    Facility.create!(name: "Callaway", nrc_docket: "05000483")
+    old = Facility.create!(name: "Callaway Energy Center", eia_plant_id: "6153")
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "Callaway 1", site: "Callaway", type: "operates") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Callaway", "other_names" => [ "Callaway Energy Center" ], "eia_plant_id" => "6153" } ] }.to_yaml)
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file)
+    assert_empty loader.plant_id_collisions, "the former-name site is the target, not the NRC unit"
+    loader.load!
+    assert_equal "Callaway", old.reload.name, "renamed in place"
+    assert_equal 1, Facility.where(name: "Callaway", nrc_docket: nil, parent_id: nil).count, "no duplicate site"
+    assert_equal old.id, Facility.find_by!(name: "Callaway 1").parent_id
   end
 end

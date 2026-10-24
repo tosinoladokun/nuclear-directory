@@ -43,15 +43,6 @@ facilities:
   quote: Dominion Energy's operating fleet includes two units at North Anna and two units at Surry in Virginia, two units at Millstone in Connecticut, and one unit at VC Summer in South Carolina.
   published: '2021-04-07'
   confidence: 0.8
-- name: Fall Line Fusion Power Station
-  type: owns
-  source_url: https://world-nuclear-news.org/articles/virginia-site-selected-to-host-fusion-power-plant
-  quote: Dominion Energy Virginia currently owns the proposed site.
-  published: '2024-12-18'
-  confidence: 0.8
-  note: "Dominion owns the site (James River Industrial Park, Chesterfield County, VA) and offers CFS leasing rights to it; CFS will own and operate the plant."
-  pending: true
-  pending_reason: "The source says Dominion owns the site and CFS will own and operate the plant; needs a quote that Dominion owns the plant, or the link should go."
 - name: North Anna Power Station
   type: owns
   ownership_pct: 88.4
