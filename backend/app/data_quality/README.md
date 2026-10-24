@@ -323,6 +323,13 @@ and each item gives the company and DOE's link to it (`funds` for a contract, `s
 allocation), described in the page's terms and quoting the item. No roles: being selected to bid doesn't say
 what a company does. A page missing an expected list goes to a person. ARDP's page names no companies, INL's
 GAIN pages answer our bot with 403, and the fusion milestone program's page moved: those come later.
+## NRC fuel cycle facilities (#386)
+
+`plugins/nrc_fuel_cycle.rb` reads NRC's fuel cycle locations page (an index, never extracted) and each
+facility page it links, at most once a day, storing only the facility's labelled facts (name, location,
+licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_facility`, city, state, docket)
+and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
+states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
 ## DOE Isotope Program: production sites (#276)
 

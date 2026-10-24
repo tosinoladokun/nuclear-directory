@@ -39,7 +39,9 @@ class SourceCatalog
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
     "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
-    "doe_programs" => { name: "DOE program pages", daily: false }
+    "doe_programs" => { name: "DOE program pages", daily: false },
+    "nrc_fuel_cycle" => { name: "NRC fuel cycle facilities", daily: false },
+    "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: false }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze
