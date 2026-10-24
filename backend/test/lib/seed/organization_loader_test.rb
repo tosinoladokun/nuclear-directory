@@ -544,4 +544,17 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal Facility.find_by!(name: "San Onofre").id, loose.reload.parent_id, "taken in by its alias, keeping its name"
     assert_not Facility.exists?(name: "SONGS 2")
   end
+
+  test "a site under a former name is found beside a same-name NRC unit, in the preflight and the rename" do
+    Facility.create!(name: "Callaway", nrc_docket: "05000483")
+    old = Facility.create!(name: "Callaway Energy Center", eia_plant_id: "6153")
+    write_file("ameren", org("Ameren", website: "https://ameren.example.com", facilities: [ item(name: "Callaway 1", site: "Callaway", type: "operates") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Callaway", "other_names" => [ "Callaway Energy Center" ], "eia_plant_id" => "6153" } ] }.to_yaml)
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file)
+    assert_empty loader.plant_id_collisions, "the former-name site is the target, not the NRC unit"
+    loader.load!
+    assert_equal "Callaway", old.reload.name, "renamed in place"
+    assert_equal 1, Facility.where(name: "Callaway", nrc_docket: nil, parent_id: nil).count, "no duplicate site"
+    assert_equal old.id, Facility.find_by!(name: "Callaway 1").parent_id
+  end
 end
