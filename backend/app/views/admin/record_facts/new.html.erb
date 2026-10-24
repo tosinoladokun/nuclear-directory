@@ -1,25 +1,33 @@
-<% content_for :title, "Add a fact to #{@company.name}" %>
 <%
-  role_kind = @kind == "role"
-  roles = Role.where(key: Category.buckets.flat_map(&:role_keys)).index_by(&:key)
-  options = if role_kind
-    grouped_options_for_select(Category.buckets.filter_map { |category|
-      choices = category.role_keys.filter_map { |key| roles[key] && [ role_label(roles[key]), key ] }
-      [ category.name, choices ] if choices.any?
-    }, params[:key])
-  else
-    options_for_select(Technology.order(:name).map { |technology| [ technology.name, technology.key ] }, params[:key])
+  name = @record.name
+  content_for :title, "Add a fact to #{name}"
+  link_kind = Admin::RecordFactsController::LINKS.include?(@kind)
+  record = admin_record_path(type: @type, id: @record.id, back: params[:back].presence)
+  # What the form has so far, carried by search, Change, Swap and the confirm form.
+  kept = params.permit(:back, :verb, :share, :started_on, :ended_on, :swap, :name, :docket, :key, :url, :quote).to_h.symbolize_keys.compact_blank
+  page = ->(**changes) { admin_record_new_fact_path(type: @type, id: @record.id, kind: @kind, other: @other&.id, **kept, **changes) }
+  verbs = @kind == "company_link" ? DataQuality::Review::COMPANY_LINK_VERBS : DataQuality::Review::PLANT_LINK_VERBS
+  if %w[role technology].include?(@kind)
+    role_kind = @kind == "role"
+    roles = Role.where(key: Category.buckets.flat_map(&:role_keys)).index_by(&:key)
+    options = if role_kind
+      grouped_options_for_select(Category.buckets.filter_map { |category|
+        choices = category.role_keys.filter_map { |key| roles[key] && [ role_label(roles[key]), key ] }
+        [ category.name, choices ] if choices.any?
+      }, params[:key])
+    else
+      options_for_select(Technology.order(:name).map { |technology| [ technology.name, technology.key ] }, params[:key])
+    end
+    chosen = (role_kind ? Role : Technology).find_by(key: params[:key].to_s)
   end
-  chosen = (role_kind ? Role : Technology).find_by(key: params[:key].to_s)
-  record = admin_record_path(type: "Organization", id: @company.id, back: params[:back].presence)
 %>
 
 <div class="nd-stack max-w-prose">
-  <%= render "admin/crumbs", parent_label: @company.name, parent_path: record, current: "Add a fact" %>
+  <%= render "admin/crumbs", parent_label: name, parent_path: record, current: "Add a fact" %>
   <h1 class="type-admin-h1 m-0">Add a fact</h1>
   <nav class="nd-fchips type-ui" aria-label="Kind of fact">
-    <% { "role" => "What it does", "technology" => "Technology" }.each do |kind, label| %>
-      <%= link_to label, admin_record_new_fact_path(type: "Organization", id: @company.id, kind:, back: params[:back].presence), class: "nd-fchip nd-fchip--tab",
+    <% Admin::RecordFactsController::KINDS.fetch(@type).each do |kind, label| %>
+      <%= link_to label, admin_record_new_fact_path(type: @type, id: @record.id, kind:, back: params[:back].presence), class: "nd-fchip nd-fchip--tab",
         aria: { current: ("page" if kind == @kind) } %>
     <% end %>
   </nav>
@@ -27,43 +35,128 @@
   <% if @added && !@added.ok? %>
     <div class="nd-alert" role="alert">
       <p class="type-body-strong">Not added yet. Fix this first:</p>
-      <ul class="type-body"><% @added.errors.each do |error| %><li><%= error %></li><% end %></ul>
+      <ul class="type-body">
+        <% @added.errors.each do |error| %>
+          <li><%= error %><% if @added.existing %> <%= link_to "Open it", existing_path(@added.existing), class: "nd-link" %><% end %></li>
+        <% end %>
+      </ul>
+      <% if @kind == "company_link" && @plan && @other %>
+        <%# The other direction may be free: Swap stays here, not only in the preview. %>
+        <p class="m-0"><%= link_to "Swap", page.(other: @other.id, swap: (params[:swap] == "1" ? nil : "1"), preview: 1, anchor: "preview-heading"), class: "nd-link nd-tap" %>
+          <span class="type-small text-ink-muted">to add it the other way round</span></p>
+      <% end %>
     </div>
   <% end %>
 
-  <%= form_with url: admin_record_new_fact_path(type: "Organization", id: @company.id, anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>
-    <%= hidden_field_tag :preview, 1, id: nil %>
-    <%= hidden_field_tag :kind, @kind, id: nil %>
-    <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
-    <div class="nd-field">
-      <label for="key" class="type-body-strong"><%= role_kind ? "What it does" : "Technology" %></label>
-      <%= select_tag :key, options, include_blank: (role_kind ? "Choose what it does" : "Choose a technology"), class: "nd-input type-input", required: true %>
-    </div>
-    <div class="nd-field">
-      <label for="url" class="type-body-strong">Link <span class="type-small text-ink-muted">(a public page that states it)</span></label>
-      <%= url_field_tag :url, params[:url], class: "nd-input type-input", placeholder: "https://", required: true %>
-    </div>
-    <div class="nd-field">
-      <label for="quote" class="type-body-strong">Quote <span class="type-small text-ink-muted">(the sentence from the source that states it)</span></label>
-      <%= text_field_tag :quote, params[:quote], class: "nd-input type-input", required: true %>
-    </div>
-    <div class="nd-row">
-      <button type="submit" class="nd-btn nd-btn--outline type-ui">Preview</button>
-      <%= link_to "Cancel", record, class: "nd-btn nd-btn--outline type-ui" %>
-    </div>
+  <% if link_kind && !@other %>
+    <%# The other end: a company already in the directory, found by name, never typed in. %>
+    <%= form_with url: admin_record_new_fact_path(type: @type, id: @record.id), method: :get, class: "nd-search", role: "search" do %>
+      <%= icon("magnifying-glass", size: 16) %>
+      <%= hidden_field_tag :kind, @kind, id: nil %>
+      <% kept.each do |key, value| %><%= hidden_field_tag key, value, id: nil %><% end %>
+      <label class="sr-only" for="company-q">Find the company</label>
+      <input type="search" id="company-q" name="q" value="<%= params[:q] %>" placeholder="Find the company" class="type-input" autofocus>
+    <% end %>
+    <% if params[:q].to_s.strip.length >= 2 %>
+      <% if @choices.empty? %>
+        <p class="type-body text-ink-muted">No company matches “<%= params[:q] %>”.</p>
+      <% else %>
+        <div class="nd-panel">
+          <% @choices.each do |choice| %>
+            <div class="nd-fold__row type-body">
+              <p class="nd-one-line" title="<%= choice.name %>"><%= link_to choice.name, page.(other: choice.id), class: "nd-link nd-tap" %></p>
+              <span class="type-small text-ink-muted"><%= choice.verification_status == "pending" ? "Not public yet" : "Live" %></span>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
+  <% else %>
+    <% if link_kind %>
+      <p class="type-body m-0 nd-chosen"><span class="nd-tag nd-one-line" title="<%= @other.name %>"><%= @other.name %></span>
+        <%= link_to "Change", page.(other: nil), class: "nd-link nd-tap" %></p>
+    <% end %>
+
+    <%= form_with url: admin_record_new_fact_path(type: @type, id: @record.id, anchor: "preview-heading"), method: :get, class: "nd-stack", data: { turbo: false } do %>
+      <%= hidden_field_tag :preview, 1, id: nil %>
+      <%= hidden_field_tag :kind, @kind, id: nil %>
+      <%= hidden_field_tag :other, @other.id, id: nil if @other %>
+      <%= hidden_field_tag :swap, params[:swap], id: nil if params[:swap].present? %>
+      <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
+      <% case @kind %>
+      <% when "role", "technology" %>
+        <div class="nd-field">
+          <label for="key" class="type-body-strong"><%= role_kind ? "What it does" : "Technology" %></label>
+          <%= select_tag :key, options, include_blank: (role_kind ? "Choose what it does" : "Choose a technology"), class: "nd-input type-input", required: true %>
+        </div>
+      <% when "unit" %>
+        <div class="nd-field">
+          <label for="name" class="type-body-strong">Name</label>
+          <%= text_field_tag :name, params[:name], class: "nd-input type-input", placeholder: "Unit 3", required: true %>
+        </div>
+        <div class="nd-field">
+          <label for="docket" class="type-body-strong">NRC docket <span class="type-small text-ink-muted">(optional)</span></label>
+          <%= text_field_tag :docket, params[:docket], class: "nd-input type-input", inputmode: "numeric", placeholder: "05000424" %>
+          <p class="type-small text-ink-muted m-0">Reactor type, capacity and status are set after, with Edit and Change status.</p>
+        </div>
+      <% else %>
+        <div class="nd-field">
+          <label for="verb" class="type-body-strong">How they're linked</label>
+          <%= select_tag :verb, options_for_select(verbs.map { |key, words| [ words, key ] }, params[:verb]), include_blank: "Choose how", class: "nd-input type-input", required: true %>
+        </div>
+        <% if @kind == "plant_link" %>
+          <div class="nd-field">
+            <label for="share" class="type-body-strong">Ownership share <span class="type-small text-ink-muted">(optional, owners only)</span></label>
+            <span class="nd-row"><%= number_field_tag :share, params[:share], min: 0, max: 100, step: "any", class: "nd-input type-input", style: "max-width: 8rem" %> <span class="type-body">%</span></span>
+          </div>
+        <% end %>
+        <div class="nd-row">
+          <div class="nd-field">
+            <label for="started_on" class="type-body-strong">Started <span class="type-small text-ink-muted">(optional)</span></label>
+            <%= date_field_tag :started_on, params[:started_on], class: "nd-input type-input" %>
+          </div>
+          <div class="nd-field">
+            <label for="ended_on" class="type-body-strong">Ended <span class="type-small text-ink-muted">(optional)</span></label>
+            <%= date_field_tag :ended_on, params[:ended_on], class: "nd-input type-input" %>
+          </div>
+        </div>
+      <% end %>
+      <div class="nd-field">
+        <label for="url" class="type-body-strong">Link <span class="type-small text-ink-muted">(a public page that states it)</span></label>
+        <%= url_field_tag :url, params[:url], class: "nd-input type-input", placeholder: "https://", required: true %>
+      </div>
+      <div class="nd-field">
+        <label for="quote" class="type-body-strong">Quote <span class="type-small text-ink-muted">(the sentence from the source that states it)</span></label>
+        <%= text_field_tag :quote, params[:quote], class: "nd-input type-input", required: true %>
+      </div>
+      <div class="nd-row">
+        <button type="submit" class="nd-btn nd-btn--outline type-ui">Preview</button>
+        <%= link_to "Cancel", record, class: "nd-btn nd-btn--outline type-ui" %>
+      </div>
+    <% end %>
   <% end %>
 
   <% if @added&.ok? %>
     <section class="nd-panel nd-stack" aria-labelledby="preview-heading">
       <h2 id="preview-heading" class="type-admin-h2 m-0">What will be added</h2>
+      <% if @kind == "company_link" %>
+        <p class="m-0"><%= link_to "Swap", page.(other: @other.id, swap: (params[:swap] == "1" ? nil : "1"), preview: 1, anchor: "preview-heading"), class: "nd-link nd-tap" %>
+          <span class="type-small text-ink-muted">if it reads backwards</span></p>
+      <% end %>
       <ul class="type-body">
-        <li><%= @company.name %>: <strong><%= role_kind ? "what it does: #{role_label(chosen)}" : "works on #{chosen.name}" %></strong></li>
-        <li>Starts unpublished: it's published like any fact waiting</li>
+        <li><strong><%=
+          case @kind
+          when "role" then "#{name}: what it does: #{role_label(chosen)}"
+          when "technology" then "#{name} works on #{chosen.name}"
+          when "unit" then "#{params[:name].to_s.squish} under #{name}#{", NRC docket #{params[:docket].strip}" if params[:docket].present?}"
+          else @plan.sentence
+          end %></strong><% if link_kind %><br><span class="text-ink-muted">Appears on both pages<%= ", from #{@plan.started_on.strftime("%B %-d, %Y")}" if @plan.started_on %><%= " to #{@plan.ended_on.strftime("%B %-d, %Y")}" if @plan.ended_on %>.</span><% end %></li>
+        <li>Not public yet: it waits with the other facts for you to decide</li>
         <li>Source: <span class="type-data"><%= params[:url].strip %></span><br><span class="text-ink-muted">“<%= params[:quote].to_s.squish %>”</span></li>
       </ul>
-      <%= form_with url: admin_record_facts_path(type: "Organization", id: @company.id) do %>
-        <% { kind: @kind, key: params[:key], url: params[:url], quote: params[:quote], back: params[:back].presence }.compact.each do |name, value| %>
-          <%= hidden_field_tag name, value, id: nil %>
+      <%= form_with url: admin_record_facts_path(type: @type, id: @record.id) do %>
+        <% { kind: @kind, other: @other&.id, **kept }.compact.each do |key, value| %>
+          <%= hidden_field_tag key, value, id: nil %>
         <% end %>
         <button type="submit" class="nd-btn nd-btn--primary type-ui">Add fact</button>
       <% end %>

@@ -394,7 +394,7 @@ class DataQuality::DirectoryClient
   # its source's quote as evidence, recorded as `by`. Publishing it is a
   # separate decision. Returns a WriteResult.
   def add_fact(kind, attributes, source_id:, quote:, by:, reason:)
-    result = fact_writer.write(kind, attributes.to_h.symbolize_keys,
+    result = fact_writer.write(kind, attributes.to_h.symbolize_keys, create_only: true,
       evidence: [ { source_id:, quote:, found_by: "human" } ], verification: { status: "pending", by:, reason: })
     write_result(result)
   end

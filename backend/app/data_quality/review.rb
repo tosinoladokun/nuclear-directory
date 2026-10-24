@@ -40,6 +40,17 @@ module DataQuality::Review
   PublishPlan = Data.define(:goes_live_with, :added_with)
   # What a company's Add a fact can add (#202): its fact kind.
   COMPANY_FACTS = { "role" => :organization_role, "technology" => :organization_technology }.freeze
+  # The verbs a link added by hand may use (#202 part 2b), in the admin's
+  # words: company to company, and company to plant.
+  COMPANY_LINK_VERBS = { "supplies" => "supplies", "invests_in" => "invests in", "funds" => "funds",
+    "offtake_with" => "buys power from", "subsidiary_of" => "is a subsidiary of" }.freeze
+  PLANT_LINK_VERBS = { "owns" => "owns", "operates" => "operates", "vendor_for" => "is the reactor developer for",
+    "offtakes_from" => "buys power from" }.freeze
+  # A link added by hand, as the preview says it: "Meta funds TerraPower".
+  # from/to: [type, id, name].
+  LinkPlan = Data.define(:from, :to, :verb, :share, :started_on, :ended_on) do
+    def sentence = "#{from.last} #{verb} #{to.last}#{" (#{share.to_s.sub(/\.0+\z/, '')}%)" if share}"
+  end
 
   # A candidate as the admin shows it. record: the directory fact it's
   # attached to (DirectoryClient::Record: name, decision, values), or nil.
@@ -565,17 +576,20 @@ module DataQuality::Review
 
       added = nil
       ApplicationRecord.transaction do
-        # The company locked and checked with the write: one taken off or
-        # merged away since the form was shown takes no new fact.
-        directory.lock_fact(type: "Organization", id: organization_id)
-        unless %w[verified pending].include?(directory.fact(type: "Organization", id: organization_id)&.verification_status)
-          added = Added.new(ref: nil, errors: [ "This company was taken off or merged since, so nothing was added" ], existing: nil)
-          raise ActiveRecord::Rollback
-        end
-
+        # The source first, key-share locked, then the company, as write_added
+        # and approvals take them, so the two can't deadlock.
         source = DataQuality::Sources.find_or_create(url:)
         unless source.ok?
           added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+        ::Source.lock("FOR KEY SHARE").find(source.ref.id)
+
+        # The company locked and checked with the write: one taken off or
+        # merged away since the form was shown takes no new fact.
+        directory.lock_fact(type: "Organization", id: organization_id)
+        unless ActiveRecord::Base.uncached { %w[verified pending].include?(directory.fact(type: "Organization", id: organization_id)&.verification_status) }
+          added = Added.new(ref: nil, errors: [ "This company was taken off or merged since, so nothing was added" ], existing: nil)
           raise ActiveRecord::Rollback
         end
 
@@ -585,6 +599,61 @@ module DataQuality::Review
         raise ActiveRecord::Rollback if dry_run || !added.ok?
       end
       added
+    end
+
+    # Adds a link by hand (#202 part 2b), pending, from a source and its
+    # quote. kind: "company_link" (record and other are companies; swap
+    # reverses which comes first) or "plant_link" (record is a plant site,
+    # other the company). share: owns only, 0 to 100. Dates optional.
+    # Returns [Added, LinkPlan or nil].
+    def add_link(kind:, record_id:, other_id:, verb:, url:, quote:, by:, share: nil, started_on: nil, ended_on: nil, swap: false,
+                 dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      company_link = kind == "company_link"
+      verbs = company_link ? COMPANY_LINK_VERBS : PLANT_LINK_VERBS
+      record = directory.fact(type: company_link ? "Organization" : "Facility", id: record_id)
+      other = (directory.fact(type: "Organization", id: other_id) if other_id.present?)
+      share = share.to_s.strip.presence
+      starts, ends = [ started_on, ended_on ].map { |date| date.presence && (Date.iso8601(date.to_s) rescue :bad) }
+      # Same id means the same record only between two companies (a plant and a company are different tables).
+      errors = [ ("That record is no longer in the directory" unless record),
+        ("Choose the company it's linked to" unless other && open_record?(other) && !(company_link && other.id == record&.id)),
+        ("Choose how they're linked" unless verbs.key?(verb.to_s)),
+        # Two decimal places at most, as the share is stored: what's confirmed is what's saved.
+        ("A share is a number from 0 to 100, with at most two decimal places" if share && !(share.match?(/\A\d+(\.\d{1,2})?\z/) && share.to_d.between?(0, 100))),
+        ("Only an owner has a share" if share && verb.to_s != "owns"),
+        ("Enter dates as they're shown" if [ starts, ends ].include?(:bad)),
+        ("It can't end before it starts" if starts.is_a?(Date) && ends.is_a?(Date) && ends < starts),
+        *source_errors(url, quote) ].compact
+      return [ Added.new(ref: nil, errors:, existing: nil), nil ] if errors.any?
+
+      ends_of = ->(fact, type) { [ type, fact.id, fact.name ] }
+      from, to = company_link ? [ ends_of.(record, "Organization"), ends_of.(other, "Organization") ] : [ ends_of.(other, "Organization"), ends_of.(record, "Facility") ]
+      from, to = to, from if company_link && swap
+      plan = LinkPlan.new(from:, to:, verb: verbs.fetch(verb.to_s), share: (share&.to_f), started_on: starts, ended_on: ends)
+      fact_kind, attributes = if company_link
+        [ :relationship, { from_organization_id: from[1], to_organization_id: to[1] } ]
+      else
+        [ :facility_relationship, { organization_id: from[1], facility_id: to[1], ownership_pct: share&.to_d } ]
+      end
+      attributes = attributes.merge(relationship_type: verb.to_s, started_on: starts, ended_on: ends).compact
+      [ write_added(fact_kind, attributes, url:, quote:, by:, dry_run:, duplicate: "That link already exists", directory:,
+        parents: [ from.first(2), to.first(2) ]), plan ]
+    end
+
+    # Adds a unit under a plant site by hand (#202 part 2b), pending: a name
+    # and an optional NRC docket. Type, capacity and status are set after,
+    # through Edit and Change status. Returns Added.
+    def add_unit(site_id:, name:, url:, quote:, by:, docket: nil, dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      name, docket = name.to_s.squish, docket.to_s.strip.presence
+      site = directory.fact(type: "Facility", id: site_id)
+      errors = [ ("That plant is no longer in the directory" unless site), ("Enter the unit's name" if name.empty?),
+        ("An NRC docket is 8 digits, like 05000424" if docket && !docket.match?(/\A\d{8}\z/)), *source_errors(url, quote) ].compact
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      write_added(:facility, { name:, parent_id: site.id, nrc_docket: docket }.compact, url:, quote:, by:, dry_run:,
+        duplicate: "That unit is already listed", directory:, parents: [ [ "Facility", site.id ] ])
     end
 
     # What publishing this record would put on the site (#202): its approved
@@ -851,6 +920,52 @@ module DataQuality::Review
         return scope.where(notes: [ nil, "" ]) if reason == NO_REASON
 
         scope.where("candidates.notes ILIKE ANY (ARRAY[?])", reason_patterns(reason))
+      end
+
+      def open_record?(fact) = %w[verified pending].include?(fact.verification_status)
+
+      def source_errors(url, quote)
+        [ ("Enter a link to a public source, starting with https://" unless url.to_s.strip.match?(%r{\Ahttps://\S+\z})),
+          ("Copy the sentence from the source that states it" if quote.to_s.squish.empty?) ]
+      end
+
+      # Writes a fact added by hand, pending, with its source; an existing
+      # one isn't touched: it's refused with `duplicate`, and its ref.
+      # parents: [[type, id], …] the fact hangs on, locked and checked still
+      # live or waiting with the write (one taken off meanwhile takes nothing).
+      def write_added(fact_kind, attributes, url:, quote:, by:, dry_run:, duplicate:, directory:, parents: [])
+        added = nil
+        ApplicationRecord.transaction do
+          # The source first, key-share locked (as its evidence's foreign key
+          # will), as a decision locks its source before its records; then the
+          # records in one order (table, then id), as FactWriter's link ends
+          # are. So this can't deadlock with an approval or another addition.
+          source = DataQuality::Sources.find_or_create(url: url.to_s.strip)
+          unless source.ok?
+            added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+            raise ActiveRecord::Rollback
+          end
+          ::Source.lock("FOR KEY SHARE").find(source.ref.id)
+
+          parents = parents.uniq.sort_by { |type, id| [ type, id ] }
+          parents.each { |type, id| directory.lock_fact(type:, id:) }
+          # Read fresh under the locks: a cached read from before them could
+          # miss a Take off or Merge committed in between.
+          if ActiveRecord::Base.uncached { parents.any? { |type, id| !(fact = directory.fact(type:, id:)) || !open_record?(fact) } }
+            added = Added.new(ref: nil, errors: [ "A record it's on was taken off or merged since, so nothing was added" ], existing: nil)
+            raise ActiveRecord::Rollback
+          end
+
+          written = directory.add_fact(fact_kind, attributes, source_id: source.ref.id, quote: quote.to_s.squish, by:, reason: ADDED_REASON)
+          added = if !written.success? then Added.new(ref: nil, errors: written.errors, existing: nil)
+          elsif written.created then Added.new(ref: written.ref, errors: [], existing: nil)
+          else Added.new(ref: nil, errors: [ duplicate ], existing: written.ref)
+          end
+          # Nothing's kept unless it's new and this isn't a preview (an existing
+          # one may have had this source added as evidence: undone too).
+          raise ActiveRecord::Rollback if dry_run || !added.ok?
+        end
+        added
       end
 
       def decide_fact(type, id, status, by:, reason:, attributes: {}, directory:, require_source: false)
