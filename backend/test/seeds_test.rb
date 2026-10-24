@@ -61,11 +61,11 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 79, Relationship.verified.count
-    assert_equal 53, Facility.verified.count
-    # 4 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 76, 6 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
-    assert_equal 28, FacilityAlias.count
+    assert_equal 78, Relationship.verified.count
+    assert_equal 55, Facility.verified.count
+    # 5 plant links wait for a direct quote (owns/operates not stated by the source).
+    assert_equal [ 78, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal 27, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
     assert_equal [ 1 ], OrganizationRole.distinct.pluck(:confidence)
@@ -222,6 +222,17 @@ class SeedsTest < ActiveSupport::TestCase
       assert_equal [ "US", "https://example.org/#{slug}", "#{slug} Inc.", "Springfield", "IL", "Added later by hand" ],
         company.attributes.values_at("country_code", "website", "legal_name", "hq_city", "hq_state", "description"), slug
     end
+  end
+
+  test "Indian Point's units from two companies' files share one site" do
+    load_seeds
+
+    units = Facility.where(name: [ "Indian Point 2", "Indian Point 3" ])
+    assert_equal 2, units.count
+    assert_equal 1, units.pluck(:parent_id).uniq.size
+    assert_equal "Indian Point", units.first.parent.name
+    assert_equal [ "Holtec Decommissioning International", "Holtec International" ],
+      FacilityRelationship.where(facility: units).includes(:organization).map { |link| link.organization.name }.uniq.sort
   end
 
   test "is safe to re-run" do
