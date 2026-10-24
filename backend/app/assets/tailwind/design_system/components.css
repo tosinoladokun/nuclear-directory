@@ -959,8 +959,15 @@
   .nd-sources td:first-child { width: 100%; }
 
   /* Leads (#484, Design on #543): an action's form opens under its row. */
-  .nd-leads__actions > div { flex-wrap: nowrap; align-items: flex-start; }
-  .nd-leads__actions .nd-btn--sm { height: 28px; min-height: 28px; min-width: 0; padding: 0 var(--nd-space-3); white-space: nowrap; }
+  /* Leads (Design on #546): default-size outline buttons in one row. */
+  .nd-leads__buttons { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--nd-space-2); }
+  .nd-leads__short { display: none; }
+  .nd-leads .nd-rowmenu > summary.nd-btn { padding: 0 var(--nd-space-4); }
+
+  @media (max-width: 379px) {
+    .nd-leads__long { display: none; }
+    .nd-leads__short { display: inline; }
+  }
 
   @media (max-width: 560px) {
     .nd-stack-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -988,12 +995,10 @@
     /* Leads on a phone: the lead first, then its lines; actions a full-width row of 44px targets. */
     .nd-leads .nd-leads__lead { order: -1; flex-basis: 100%; }
     .nd-leads .nd-leads__lead .truncate { max-width: none; }
+    /* Phone cards: the actions in three equal 44px columns; Put back alone. */
     .nd-leads .nd-leads__actions { flex-basis: 100%; }
-    .nd-leads .nd-leads__actions .nd-btn--sm { height: 44px; min-height: 44px; width: 100%;
-      padding: 0 var(--nd-space-2); justify-content: center; }
-    .nd-leads .nd-leads__actions > div > *, .nd-leads .nd-leads__actions form.button_to { flex: 1; }
-    .nd-leads .nd-rowmenu { display: flex; }
-    .nd-leads .nd-leads__actions .button_to .nd-btn { width: 100%; }
+    .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 0; min-width: 0; display: flex; }
+    .nd-leads .nd-leads__buttons .nd-btn { width: 100%; justify-content: center; padding: 0 var(--nd-space-2); }
   }
 }
 

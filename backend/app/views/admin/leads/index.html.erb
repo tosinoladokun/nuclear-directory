@@ -67,15 +67,15 @@
           <td class="type-cell-num" data-unit="seen"><%= lead.seen_count %></td>
           <td class="nd-l"><span class="nd-tag"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></td>
           <td class="nd-l nd-leads__actions">
-            <div class="flex gap-2 type-ui">
+            <div class="nd-leads__buttons type-ui">
               <% if lead.status_new? || lead.status_researching? %>
                 <% if lead.status_new? %>
-                  <%= button_to "Research", research_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline nd-btn--sm",
+                  <%= button_to "Research", research_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline type-ui",
                     title: lead.kind == "company" ? "Read its pages if we have it, or add it to the research list" : "Add it to the research list" %>
                 <% end %>
                 <%# Its form opens as a panel under the button (a sheet on phones), over the page, so the row keeps its shape (Design on #546). %>
                 <details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
-                  <summary class="nd-btn nd-btn--outline nd-btn--sm">Already covered</summary>
+                  <summary class="nd-btn nd-btn--outline type-ui"><span class="nd-leads__long">Already covered</span><span class="nd-leads__short">Covered</span></summary>
                   <div class="nd-rowmenu__panel">
                     <%= form_with url: covered_admin_lead_path(lead, **keep), method: :post, class: "nd-rowmenu__takeoff" do %>
                       <label for="record-<%= lead.id %>" class="type-body-strong">The company or plant that has it</label>
@@ -85,7 +85,7 @@
                   </div>
                 </details>
                 <details class="nd-rowmenu" data-controller="row-menu" data-action="toggle->row-menu#toggle keydown.esc->row-menu#close">
-                  <summary class="nd-btn nd-btn--outline nd-btn--sm">Ignore</summary>
+                  <summary class="nd-btn nd-btn--outline type-ui">Ignore</summary>
                   <div class="nd-rowmenu__panel">
                     <%= form_with url: ignore_admin_lead_path(lead, **keep), method: :post, class: "nd-rowmenu__takeoff" do %>
                       <label for="reason-<%= lead.id %>" class="type-body-strong">Why it's ignored</label>
@@ -95,7 +95,7 @@
                   </div>
                 </details>
               <% else %>
-                <%= button_to "Put back", reopen_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline nd-btn--sm" %>
+                <%= button_to "Put back", reopen_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline type-ui" %>
               <% end %>
             </div>
           </td>
