@@ -365,6 +365,15 @@ role: a licensee row doesn't say the company runs the site or what it does. A ro
 read is held for a person at verify; a row missing any value holds the whole read. The page's table of Agreement-State sites isn't read: NRC says it was last updated in
 2018 and makes no claim about it. Those sites come from each state's own list (#384).
 
+## DOE program pages (#124)
+
+`plugins/doe_programs.rb` reads the DOE program pages in its `PAGES` list once a day. First, the HALEU
+Availability Program's three pages that list companies: enrichment services, deconversion services and HALEU
+allocations. It reads only the lists it names, each found by the sentence or heading the page writes before it,
+and each item gives the company and DOE's link to it (`funds` for a contract, `supplies` for a conditional HALEU
+allocation), described in the page's terms and quoting the item. No roles: being selected to bid doesn't say
+what a company does. A page missing an expected list goes to a person. ARDP's page names no companies, INL's
+GAIN pages answer our bot with 403, and the fusion milestone program's page moved: those come later.
 ## NRC research and test reactors (#387)
 
 `plugins/nrc_research_reactors.rb` reads the "Locations of Research and Test Reactors" table on NRC's non-power

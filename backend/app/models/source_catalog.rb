@@ -39,6 +39,7 @@ class SourceCatalog
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
     "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
+    "doe_programs" => { name: "DOE program pages", daily: false },
     "nrc_research_reactors" => { name: "NRC research and test reactors", daily: false },
     "nrc_research_reactors_index" => { name: "NRC non-power reactor locations", note: "finds each reactor's page", daily: false },
     "nrc_fuel_cycle" => { name: "NRC fuel cycle facilities", daily: false },
