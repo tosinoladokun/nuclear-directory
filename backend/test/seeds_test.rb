@@ -62,7 +62,7 @@ class SeedsTest < ActiveSupport::TestCase
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
     assert_equal 78, Relationship.verified.count
-    assert_equal 54, Facility.verified.count
+    assert_equal 55, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
     assert_equal [ 78, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal 27, FacilityAlias.count
