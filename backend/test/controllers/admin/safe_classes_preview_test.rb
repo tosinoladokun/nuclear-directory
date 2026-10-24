@@ -79,6 +79,24 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
     assert_plain_words
   end
 
+  test "a pending review on the same link shows plain words (#424)" do
+    Candidate.create!(source: @source, kind: "relationship", status: "needs_review", quote: "other", crawl_run: crawl_run!("crawl", 30.minutes.ago),
+      payload: { "relationship_type" => "funds", "description" => "x" }, subject_type: "Relationship", subject_id: @link.id)
+    with_s1(enabled: true) do
+      get admin_recommendations_path
+    end
+
+    assert_select "#safe-#{@claim.id}", /another fact on its link waits for review/
+    assert_plain_words
+  end
+
+  test "an unknown id in a pasted list shows plain words (#424)" do
+    post admin_recommendations_path, params: { list: "99999999 approve: x" }
+
+    assert_select ".nd-alert li", /there's no fact 99999999/
+    assert_plain_words
+  end
+
   def assert_plain_words
     text = css_select("body").text.downcase
     [ "claim", "verifier", "safe class", "s1" ].each do |banned|

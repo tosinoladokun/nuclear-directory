@@ -138,7 +138,7 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
     waiting = claim({ "description" => "Something else." })
     waiting.update_columns(status: "needs_review", review_origin: "dropped")
     candidate = claim({ "description" => SECOND })
-    assert_equal "another claim on its link waits for review", why(candidate)
+    assert_equal "another fact on its link waits for review", why(candidate)
 
     waiting.update_columns(status: "rejected")
     CorrectionReport.create!(subject: @company.name, page_path: "/companies/#{@company.slug}?ref=x", message: "The DOE total is wrong.")
@@ -323,10 +323,10 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
 
     @index.update_columns(status_reason: nil)
     CrawlRun.create!(stage: "verify", source_kind: "usaspending_doe_awards", status: "running", started_at: Time.current)
-    assert_equal "the verifier is still checking this source", why(candidate)
+    assert_equal "Data Quality is still checking this source", why(candidate)
 
     CrawlRun.where(stage: "verify", status: "running").update_all(status: "failed")
-    assert_equal "the verifier's last run didn't finish", why(candidate), "a failed run keeps the recommendations it saved, a partial set"
+    assert_equal "Data Quality's last check didn't finish", why(candidate), "a failed run keeps the recommendations it saved, a partial set"
   end
 
   test "G4: a report on a company merged into the link's company still counts" do

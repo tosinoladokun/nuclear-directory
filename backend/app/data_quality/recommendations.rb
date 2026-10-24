@@ -64,8 +64,8 @@ module DataQuality::Recommendations
       recorded = 0
       calls.each do |line, id, call, reason, text|
         candidate = Candidate.find_by(id:) if id <= MAX_ID
-        next errors << LineError.new(line:, text:, problem: "there's no claim #{id}") unless candidate
-        next errors << LineError.new(line:, text:, problem: "claim #{id} is already #{candidate.status}") unless OPEN.include?(candidate.status)
+        next errors << LineError.new(line:, text:, problem: "there's no fact #{id}") unless candidate
+        next errors << LineError.new(line:, text:, problem: "fact #{id} is already #{candidate.status}") unless OPEN.include?(candidate.status)
 
         candidate.update!(dq_recommendation: call, dq_reason: reason, dq_by: by, dq_at: Time.current, dq_payload_sha256: digest(candidate))
         recorded += 1
@@ -117,12 +117,12 @@ module DataQuality::Recommendations
         result = nil
         Candidate.transaction do
           source_id = Candidate.where(id: item.candidate_id).pick(:source_id)
-          result = skipped(item, "this claim no longer exists") and next unless source_id
+          result = skipped(item, "this fact no longer exists") and next unless source_id
 
           ::Source.lock.find(source_id)
           # Read again under the source's lock: a crawl's extract can replace the claim meanwhile.
           candidate = Candidate.lock.find_by(id: item.candidate_id)
-          result = skipped(item, "this claim no longer exists") and next unless candidate
+          result = skipped(item, "this fact no longer exists") and next unless candidate
           unless [ candidate.dq_recommendation, candidate.dq_reason, candidate.dq_payload_sha256 ] == [ item.call, item.reason, item.snapshot ]
             result = skipped(item, "Data Quality's call on it changed after the page loaded")
             next
@@ -160,7 +160,7 @@ module DataQuality::Recommendations
 
           match = LINE.match(stripped)
           unless match
-            next errors << LineError.new(line:, text: stripped.truncate(120), problem: "it isn't “<claim id> approve: <reason>” or “… reject: …”")
+            next errors << LineError.new(line:, text: stripped.truncate(120), problem: "it isn't “<id> approve: <reason>” or “… reject: …”")
           end
 
           calls << [ line, match[1].to_i, match[2].downcase, match[3].truncate(REASON_LIMIT), stripped.truncate(120) ]
@@ -235,9 +235,9 @@ module DataQuality::Recommendations
         return "it fills in a record's details; decide it on its own page" if directory.enrichment?(candidate)
         return if candidate.dq_recommendation == "reject"
 
-        return "the verifier didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
+        return "Data Quality didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
         return "it's waiting for a person's review" if candidate.status_needs_review?
-        return "its source changed after the verifier checked it" unless recommended.include?(candidate.id)
+        return "its source changed after Data Quality checked it" unless recommended.include?(candidate.id)
         return "its company or plant isn't settled yet" unless candidate.subject_id
 
         held = DataQuality::Review.held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ]))
