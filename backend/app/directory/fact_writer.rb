@@ -524,7 +524,11 @@ module Directory
     # decided. When confirmed, the evidence from source_id gets
     # last_confirmed_at and the rows' hash; nothing else changes and nothing
     # is audited, so a fact's history doesn't fill with nightly checks.
-    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current)
+    # source_kind: the source's kind. A new issue of a dated source (EIA's
+    # monthly file, a yearly re-issue) stating exactly what a published fact
+    # already cites from an earlier issue of that kind adds its own evidence
+    # and confirms, instead of waiting for a person to approve the same values.
+    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil)
       kind = kind.to_sym
       spec = KINDS[kind] or return Confirmation.new(outcome: :missing, errors: [ "unknown kind #{kind.inspect}" ])
       attributes = attributes.to_h.symbolize_keys
@@ -555,6 +559,11 @@ module Directory
         # person approves and the current quote is added.
         still_there = in_source || ->(text) { text == quote }
         current = Evidence.where(subject: record, source_id:).select { |row| still_there.call(row.quote) }
+        # Research pages (web_page) share a kind but aren't issues of one source.
+        if current.empty? && source_kind && source_kind != "web_page" && quote.present? && record.try(:verification_status) == "verified" &&
+            Evidence.joins(:source).where(subject: record, sources: { source_kind: }).where.not(source_id:).exists?
+          current = [ Evidence.create!(subject: record, source_id:, quote:, found_by: "crawler") ]
+        end
         next Confirmation.new(outcome: :unsourced, overruled:) if current.empty?
 
         Evidence.where(id: current.map(&:id)).update_all(last_confirmed_at: at, confirmed_sha256: rows_sha256)
@@ -873,7 +882,12 @@ module Directory
       def same_stored_value?(record, name, stored, stated)
         column = record.class.columns_hash[name.to_s]
         if column&.type == :decimal && column.scale && (number = BigDecimal(stated.to_s, exception: false))
-          return stored == number.round(column.scale)
+          return true if stored == number.round(column.scale)
+
+          # A source that gives fewer decimals than we store (EIA's 33.142 for
+          # 33.142011) agrees when ours rounds to its precision.
+          places = stated.to_s.strip[/\.(\d+)\z/, 1].to_s.length
+          return places < column.scale && BigDecimal(stored.to_s).round(places) == number
         end
 
         same_value?(record, name, stored, stated)
