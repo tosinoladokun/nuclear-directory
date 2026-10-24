@@ -509,6 +509,15 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_empty Seed::OrganizationLoader.new(@dir).licensing_source_problems
   end
 
+  test "a licensing stage found by name on a unit with another docket fails the load" do
+    Facility.create!(name: "Hermes 1", nrc_docket: "05007513", verification_status: "verified", verified_by: "human:tosin")
+    write_file("acme", org("Acme", website: "https://acme.com", licensing: [ licensing(nrc_docket: "50-7514") ]))
+
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_match "Hermes 1 has docket 05007513, not 05007514", error.message
+    assert_equal 0, LicensingStage.count
+  end
+
   test "a licensing stage can name a plant a later file defines" do
     write_file("a-developer", org("A Developer", website: "https://developer.com", licensing: [ licensing ]))
     write_file("z-owner", org("Z Owner", website: "https://owner.com", facilities: [ item(name: "Hermes 1", type: "owns") ]))

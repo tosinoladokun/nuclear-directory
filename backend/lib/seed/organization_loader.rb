@@ -306,6 +306,12 @@ module Seed
             @errors << "#{slug}: licensing: unknown facility #{item["facility"].inspect}"
             return
           end
+          # Found by name with another docket: a typo or a missing unit, never
+          # a stage on the wrong reactor.
+          if docket && facility.nrc_docket.present? && facility.nrc_docket != docket
+            @errors << "#{slug}: licensing: #{item["facility"]} has docket #{facility.nrc_docket}, not #{docket}"
+            return
+          end
 
           attributes[:facility_id] = facility.id
         end

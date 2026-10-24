@@ -321,4 +321,38 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert_equal %w[operating_licence restart_review restart_approved], LicensingStage.where(facility: @unit).order(:effective_on).pluck(:stage)
     assert_equal Date.new(1974, 2, 1), LicensingStage.find_by(stage: "operating_licence").effective_on, "the original licence is untouched"
   end
+
+  test "a stage moved by a merge between finding and locking it stops the write instead of locking out of order" do
+    id = write(verification: { status: "pending", by: "agent:pipeline" }).id
+    other = Facility.create!(name: "Hermes 1 duplicate", verification_status: "verified", verified_by: BY)
+    # A merge commits between the owner lock and the stage lock.
+    moved_by_merge = lambda do |record|
+      LicensingStage.where(id: record.id).update_all(facility_id: other.id)
+      { "facility_id" => record.facility_id }
+    end
+    original = Directory::FactWriter.instance_method(:lock_licensing_stage_owner)
+    Directory::FactWriter.send(:define_method, :lock_licensing_stage_owner, &moved_by_merge)
+    result = Directory::FactWriter.write(:licensing_stage, { id:, effective_on: "2023-12-15" }, verification: { status: "verified", by: BY },
+      protect_human_verified: true)
+    assert_match "moved to another record while it was being written", result.errors.join
+  ensure
+    if original
+      Directory::FactWriter.send(:define_method, :lock_licensing_stage_owner, original)
+      Directory::FactWriter.send(:private, :lock_licensing_stage_owner)
+    end
+  end
+
+  test "a merge retires the duplicate stages it leaves behind, with the merge's actor" do
+    plant = Facility.create!(name: "Acme Test Reactor", verification_status: "verified", verified_by: BY)
+    duplicate = Facility.create!(name: "Acme Test Reactor Site", verification_status: "verified", verified_by: BY)
+    write(stage(facility_id: plant.id, nrc_docket: "50-9998"), verification: { status: "verified", by: BY })
+    left = write(stage(facility_id: duplicate.id, nrc_docket: "50-9998"), verification: { status: "verified", by: BY }).id
+
+    assert Directory::FactWriter.merge_facility(from_id: duplicate.id, into_id: plant.id, by: BY).ok?
+
+    stage = LicensingStage.find(left)
+    assert stage.rejected?
+    assert_equal BY, stage.verified_by
+    assert_match "already has this", stage.verification_events.order(:id).last.reason
+  end
 end

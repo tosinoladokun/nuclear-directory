@@ -199,6 +199,10 @@ module Directory
         # Its design approvals move with it (#379), or are retired when the
         # kept company already has that design at that stage.
         moved["licensing_stages"] += move_licensing_stages(from, into)
+        # What stayed behind is a duplicate of the kept record's stage: retired
+        # with the merge, as a duplicate link is, so it can't come back.
+        retired.concat(LicensingStage.where((from.is_a?(Organization) ? :organization_id : :facility_id) => from.id)
+          .where.not(verification_status: Verifiable::CLOSED_STATUSES).lock.to_a)
 
         note = "Merged into #{into.name} (##{into.id})"
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this, or it would point at itself") unless row.closed? }
@@ -299,6 +303,10 @@ module Directory
         moved["candidates"] = Candidate.where(subject_type: "Facility", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
         # Its own licensing stages move with it (#379), unless into has that docket at that stage.
         moved["licensing_stages"] += move_licensing_stages(from, into)
+        # What stayed behind is a duplicate of the kept record's stage: retired
+        # with the merge, as a duplicate link is, so it can't come back.
+        retired.concat(LicensingStage.where((from.is_a?(Organization) ? :organization_id : :facility_id) => from.id)
+          .where.not(verification_status: Verifiable::CLOSED_STATUSES).lock.to_a)
 
         retired.each { |row| row.reject!(by:, reason: "#{note}; #{into.name} already has this link") unless row.closed? }
         from.unpublish!(by:, reason: [ reason, "#{note}. Moved: #{merge_summary(moved, filled)}" ].compact.join(". "),
@@ -619,8 +627,13 @@ module Directory
         # the order they happen.
         # A licensing stage's owner is locked before the stage, the order merges
         # lock them in (owners, then their stages), so the two can't deadlock.
-        lock_licensing_stage_owner(record) if kind == :licensing_stage && !created
+        locked_owner = lock_licensing_stage_owner(record) if kind == :licensing_stage && !created
         record.lock! unless created
+        # A merge may have moved the stage between finding it and locking it:
+        # locking its new owner now would reverse the order, so stop instead.
+        if locked_owner && locked_owner != record.slice(:facility_id, :organization_id).compact
+          raise Invalid, "this licensing stage moved to another record while it was being written; try again"
+        end
         # What it was, read under the lock, so `changed` is about this write alone.
         before = record.attributes.except("updated_at") unless created
         # A rejected or unpublished fact only changes by a human's hand:
@@ -1238,14 +1251,18 @@ module Directory
       # The record a licensing stage hangs on must be open (#379): no
       # automated stage under a rejected or unpublished plant or company, or
       # on a unit whose site is. Only the unit is locked; the site is read.
+      # Returns the owner it locked, as { "facility_id" => id } or
+      # { "organization_id" => id }.
       def lock_licensing_stage_owner(record)
         if (id = record.facility_id)
           # Only the record the stage hangs on, never its site: other writes
           # lock a unit and its site in different orders (merges site first,
           # fill_site_from_unit unit first), so a stage write takes neither pair.
           Facility.lock.where(id:).load
+          { "facility_id" => id }
         elsif (id = record.organization_id)
           Organization.lock.where(id:).load
+          { "organization_id" => id }
         end
       end
 
