@@ -52,9 +52,12 @@ module CiScope
     %r{\Abackend/test/fixtures/files/}
   ].freeze
 
-  # Tests that can't change what the browser sees.
+  # Unit test files, which can't change what the browser sees. Shared test
+  # support (test_helper, helpers, fixtures, JavaScript the browser tests
+  # load) isn't listed: the system tests use it too, so a change to it runs
+  # everything.
   UNIT_TESTS = [
-    %r{\Abackend/test/(?!system/|application_system_test_case\.rb\z)}
+    %r{\Abackend/test/(?!system/).*_test\.rb\z}
   ].freeze
 
   # Code the public pages are built from: what Lighthouse audits (the home,

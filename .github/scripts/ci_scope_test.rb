@@ -49,6 +49,15 @@ class CiScopeTest < Minitest::Test
     assert_equal UNIT_ONLY, scope("backend/test/models/organization_test.rb", "backend/test/helpers/directory_helper_test.rb")
   end
 
+  def test_shared_test_support_runs_everything_because_the_browser_tests_use_it
+    %w[
+      backend/test/support/no_wrap_audit.js backend/test/test_helper.rb backend/test/fixtures/organizations.yml
+      backend/test/test_helpers/some_helper.rb
+    ].each do |path|
+      assert_equal ALL, scope(path), path
+    end
+  end
+
   def test_public_page_code_runs_everything
     %w[
       backend/app/views/companies/show.html.erb backend/app/views/layouts/application.html.erb
