@@ -35,7 +35,7 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
     flagged = css_select("details.nd-cov__cat summary .nd-flag").size
     assert_equal 8, flagged
     assert_select "p .nd-flag", "8 of 9 categories have no live source"
-    assert_select "details#utilities[open] summary", /1 of 4.*Live/m
+    assert_select "details#utilities[open] summary", /1 of 5.*Live/m
     assert_select "details#waste-decommissioning:not([open]) summary .nd-flag", "No live source"
   end
 
