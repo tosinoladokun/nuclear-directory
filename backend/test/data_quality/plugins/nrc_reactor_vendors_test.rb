@@ -73,8 +73,27 @@ class DataQuality::Plugins::NrcReactorVendorsTest < ActiveSupport::TestCase
     assert plugin.quote_in_source?(page("ano1"), ANO1)
   end
 
-  test "a vendor line naming no known vendor proposes nothing" do
+  test "a vendor line naming no known vendor proposes nothing, and a page that changes to one sends its published link to a person" do
     odd = Source.new(content_text: "Some Unit | Docket Number: 05099999 | Reactor Vendor/Type: Acme Reactors Type 9")
     assert_empty plugin.extract(odd, nil)
+
+    Facility.create!(name: "Arkansas Nuclear One, Unit 1", nrc_docket: "05000313", facility_type: "power_reactor").verify!(by: "human:test")
+    DataQuality::Pipeline.run("nrc_reactor_vendors", plugin:, only: %w[crawl extract match])
+    link = page("ano1").candidates.find_by!(kind: "facility_relationship")
+    assert_empty DataQuality::Review.approve(page("ano1").candidates.order(:id).pluck(:id), by: "human:test").flat_map(&:errors)
+    stub_request(:get, "#{UNITS}ano1").to_return(body: file_fixture("nrc/units/ano1.html").read.sub("Babcock &amp; Wilcox", "Acme"))
+    Source.update_all(fetched_at: 2.days.ago)
+    crawl
+
+    assert page("ano1").crawl_needs_human?
+    assert page("ano1").candidates.where(review_origin: "dropped", subject_id: link.reload.subject_id).exists?
+  end
+
+  test "a same-day rerun after a block requests no later page" do
+    stub_request(:get, /\A#{Regexp.escape(UNITS)}/).to_return(status: 403, body: file_fixture("nrc/akamai-403.html").read)
+    crawl
+
+    assert_equal "unit page blocked", crawl.stats["stopped"]
+    assert_requested :get, /\A#{Regexp.escape(UNITS)}/, times: 1
   end
 end

@@ -14,10 +14,14 @@
 # vendors keep their name (Combustion Engineering): whether that's an alias
 # or a former company is a person's call. No model is asked.
 class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
+  include DataQuality::UnlistedPages
+
   NRC = "https://www.nrc.gov".freeze
   UNIT_PATH = "/facilities-safety/facility-finder/reactors/".freeze
   LABEL = "Reactor Vendor/Type"
-  NO_VENDOR_LINE = "The unit's page has no Reactor Vendor/Type line; the page layout may have changed"
+  NO_VENDOR_LINE = "The unit's page has no Reactor Vendor/Type line naming a known vendor; check the page"
+  UNLISTED = "NRC's reactor list no longer links this unit's page"
+  LISTED_AGAIN = "NRC's reactor list links this unit's page again"
   # The line's start => the company, as NRC names it.
   VENDORS = {
     /\AWestinghouse\b/i => "Westinghouse",
@@ -38,7 +42,7 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
     @fetcher = fetcher
   end
 
-  def crawl(_run)
+  def crawl(run)
     list = Source.find_by(url: DataQuality::Plugins::NrcReactorList::LIST_URL)
     return { "units" => "no reactor list yet" } unless list&.content_text.present?
 
@@ -48,10 +52,17 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
     units = all.select { |unit| unit.nrc_path.to_s.start_with?(UNIT_PATH) }
     stats = { "units" => units.size, "unit_pages" => Hash.new(0) }
     stats["other_pages"] = all.size - units.size if all.size > units.size
+    withdrawn = withdraw_unlisted(units.map { |unit| url(unit) }, run, UNLISTED)
+    stats["withdrawn"] = withdrawn if withdrawn.positive?
     units.each do |unit|
-      result = read(unit)
+      result = read(unit, run)
       stats["unit_pages"][result] += 1
-      return stats.merge("stopped" => "unit page blocked") if result == "blocked"
+      page = Source.find_by(url: url(unit))
+      # A block recorded earlier today stops a same-day rerun too, before any later page.
+      return stats.merge("stopped" => "unit page blocked") if result == "blocked" || (page && still_blocked?(page))
+
+      restored = page ? restore_listed(page, LISTED_AGAIN) : 0
+      stats["restored"] = stats.fetch("restored", 0) + restored if restored.positive?
     end
     stats
   end
@@ -80,8 +91,10 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
   end
 
   private
-    def read(unit)
-      source = Source.find_or_create_by!(url: "#{NRC}#{unit.nrc_path}") do |row|
+    def url(unit) = "#{NRC}#{unit.nrc_path}"
+
+    def read(unit, run)
+      source = Source.find_or_create_by!(url: url(unit)) do |row|
         row.source_kind = source_kind
         row.title = "NRC: #{unit.name}"
       end
@@ -90,7 +103,9 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
 
       DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, unit) }.to_s
     rescue Unreadable
+      # A page that stopped naming its vendor: the link it supported goes to a person too.
       source.update!(crawl_status: "needs_human", status_reason: NO_VENDOR_LINE)
+      flag_published(source, run, NO_VENDOR_LINE)
       "needs_human"
     end
 
@@ -105,7 +120,7 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
         node = node.next_sibling
       end
       vendor_line = value.join.gsub(/[[:space:]]+/, " ").strip
-      raise Unreadable if vendor_line.empty?
+      raise Unreadable if vendor_line.empty? || VENDORS.none? { |pattern, _| vendor_line.match?(pattern) }
 
       # The page's own name for the unit ("Arkansas Nuclear One, Unit 1"); the docket is the list's.
       name = doc.at_css("main h1, h1")&.text.to_s.squish.presence || unit.name
