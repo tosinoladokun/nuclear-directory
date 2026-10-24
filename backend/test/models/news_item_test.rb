@@ -132,4 +132,16 @@ class NewsItemTest < ActiveSupport::TestCase
     assert_equal 0, moved
     assert_equal [ [ "Facility", site.id ] ], NewsMention.where(news_item: item).pluck(:subject_type, :subject_id)
   end
+
+  test "moving news puts the mentions on the site in news item order, so two groupings can't deadlock" do
+    site = Facility.create!(name: "Ordered Site", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Ordered Unit", verification_status: "verified", verified_by: "human:tosin")
+    items = 3.times.map { |n| NewsItem.create!(url: "https://example.com/ordered-#{n}", title: "A headline", published_on: Date.new(2026, 10, 1)) }
+    [ items[2], items[0], items[1] ].each { |item| NewsMention.create!(news_item: item, subject: unit) } # mention ids out of item order
+    inserted = []
+    callback = ->(*, payload) { inserted << payload[:sql][/VALUES \((\d+)/, 1].to_i if payload[:sql].start_with?("INSERT INTO \"news_mentions\"") }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { Directory::FactWriter.new.send(:move_news_mentions, unit, site) }
+
+    assert_equal items.map(&:id), inserted
+  end
 end

@@ -174,8 +174,10 @@ module Directory
     # or goes when into has it already. Returns how many moved.
     def move_news_mentions(from, into)
       # Each mention is put on into first, skipping one that's there already
-      # (or that a concurrent grouping put there), then taken off from.
-      NewsMention.where(subject: from).sum do |mention|
+      # (or that a concurrent grouping put there), then taken off from. In
+      # news_item_id order, so two groupings into the same site take the
+      # unique index's slots in the same order and can't deadlock.
+      NewsMention.where(subject: from).order(:news_item_id).sum do |mention|
         now = Time.current
         added = NewsMention.insert_all([ { news_item_id: mention.news_item_id, subject_type: into.class.name, subject_id: into.id,
           created_at: now, updated_at: now } ], unique_by: :index_news_mentions_uniqueness, returning: :id).length
