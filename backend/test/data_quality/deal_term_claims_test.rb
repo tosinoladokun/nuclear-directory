@@ -194,7 +194,7 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     Directory::FactWriter.write(:relationship, { from_organization_id: a.id, to_organization_id: b.id, relationship_type: "supplies" },
       verification: { status: "rejected", by: BY })
     deal = { "link_type" => "Relationship", "from_organization" => { "name" => "Rejected A" }, "to_organization" => { "name" => "Rejected B" },
-      "relationship_type" => "supplies", "term_type" => "offtake", "amount_usd" => "1000000" }
+      "relationship_type" => "supplies", "term_type" => "offtake", "amount_usd" => "1000000", "external_id" => "x-1" }
     c = claim(deal)
     run_stage("match", deal)
     assert_match "so no term is added to it", c.reload.notes
@@ -206,5 +206,16 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
       "relationship_type" => "offtake_with", "term_type" => "offtake", "capacity_mw" => "500" }
     text = DataQuality::Claim.describe(claim(deal))
     assert_match(/\ASmall Reactor Co has an offtake agreement with Big Data Co: an offtake, with .*500/, text)
+  end
+
+  test "a deal without an ID, or a counted offtake without its size, waits instead of failing the write" do
+    base = { "link_type" => "Relationship", "from_organization" => { "name" => "A Co" }, "to_organization" => { "name" => "B Co" },
+      "relationship_type" => "offtake_with", "term_type" => "offtake" }
+    no_id = claim(base.merge("capacity_mw" => "50"))
+    run_stage("match", base.merge("capacity_mw" => "50"))
+    assert_match "needs an external_id", no_id.reload.notes
+    no_size = claim(base.merge("external_id" => "y-1", "agreement" => "ppa"))
+    run_stage("match", base.merge("external_id" => "y-1", "agreement" => "ppa"))
+    assert_match "states its size", no_size.reload.notes
   end
 end

@@ -42,6 +42,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
   }.freeze
   # A deal term under a link (#256): the link's kind, found by its ends and verb.
   DEAL_LINKS = { "Relationship" => "relationship", "FacilityRelationship" => "facility_relationship" }.freeze
+  # Agreements counted as signed power deals: these state their size (#439).
+  COUNTED_AGREEMENTS = %w[ppa supply_agreement tariff_subscription].freeze
   LINK_KEYS = {
     "organization_role" => %w[role],
     "organization_technology" => %w[technology],
@@ -195,6 +197,15 @@ class DataQuality::Stages::Match < DataQuality::Stage
     def match_link(candidate, payload)
       if candidate.kind == "deal_term" && !(payload["link_type"] == "Organization" || DEAL_LINKS.key?(payload["link_type"]))
         return review(candidate, "a deal term's link_type must be Organization, Relationship or FacilityRelationship, not #{payload['link_type'].inspect}")
+      end
+      if candidate.kind == "deal_term" && DEAL_LINKS.key?(payload["link_type"])
+        # A rerun must find the same term (unique by link, type and ID), and a
+        # counted offtake needs its size (deal_terms_offtake_check, Database).
+        return review(candidate, "a deal needs an external_id, so reading it again updates the same term") if payload["external_id"].blank?
+        if payload["term_type"] == "offtake" && payload["capacity_mw"].blank? && payload["amount_usd"].blank? &&
+            (payload["agreement"].blank? || COUNTED_AGREEMENTS.include?(payload["agreement"]))
+          return review(candidate, "an offtake states its size (capacity_mw or amount_usd) unless it's a framework, MOU or similar")
+        end
       end
 
       attributes = payload.slice(*LINK_KEYS.fetch(candidate.kind)).symbolize_keys
