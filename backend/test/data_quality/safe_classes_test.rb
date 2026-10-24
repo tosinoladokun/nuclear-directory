@@ -98,7 +98,7 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
   end
 
   test "G1: the verifier's confidence must be at least 0.9" do
-    assert_equal "the verifier's confidence is below 0.9", why(claim({ "description" => SECOND }, confidence: 0.85))
+    assert_equal "Data Quality's confidence is below 0.9", why(claim({ "description" => SECOND }, confidence: 0.85))
   end
 
   test "G1: a claim whose source changed since the verifier checked it isn't covered" do

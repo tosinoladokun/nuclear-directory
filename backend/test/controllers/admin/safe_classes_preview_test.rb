@@ -47,7 +47,8 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
     with_s1(enabled: false) do
       get admin_recommendations_path
 
-      assert_select "#safe-#{@claim.id} .nd-tag", "Would be safe: USAspending update on a settled DOE link"
+      assert_select "#safe-#{@claim.id} .nd-tag", "Would be safe"
+      assert_select "#safe-#{@claim.id}", /USAspending update on a settled DOE link/
       assert_select "#safe-heading span", "1", "the heading counts the rows it lists"
       assert_select "#safe-#{@claim.id}", /Description.*1 award.*→.*2 awards/m
       assert_select "form[action=?]", admin_recommendations_accept_path, count: 0
@@ -63,18 +64,33 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
       get admin_recommendations_path
     end
 
-    html = response.body
-    [ "Claim #{@claim.id}", "Verifier, safe", "Safe: S1", "Would be safe: S1", "safe class" ].each do |banned|
-      assert_not_includes html, banned, "the admin page should not say #{banned.inspect} (#424)"
-    end
+    assert_plain_words
     # The id still shows, prefixed with #.
-    assert_includes html, "##{@claim.id}"
+    assert_includes response.body, "##{@claim.id}"
+  end
+
+  test "a low-confidence Not safe row uses plain words too (#424)" do
+    @claim.update!(ai_confidence: 0.5)
+    with_s1(enabled: true) do
+      get admin_recommendations_path
+    end
+
+    assert_select "#safe-#{@claim.id}", /Data Quality's confidence is below/
+    assert_plain_words
+  end
+
+  def assert_plain_words
+    text = css_select("body").text.downcase
+    [ "claim", "verifier", "safe class", "s1" ].each do |banned|
+      assert_no_match(/\b#{Regexp.escape(banned)}\b/, text, "the admin page should not say #{banned.inspect} (#424)")
+    end
   end
 
   test "with S1 on, Accept takes it in the same click, recorded as the verifier's recommendation" do
     with_s1(enabled: true) do
       get admin_recommendations_path
-      assert_select "#safe-#{@claim.id} .nd-tag", "Safe: USAspending update on a settled DOE link"
+      assert_select "#safe-#{@claim.id} .nd-tag", "Safe"
+      assert_select "#safe-#{@claim.id}", /USAspending update on a settled DOE link/
       assert_select "#accept-heading .type-count", "1"
       shown = DataQuality::Recommendations.plan.fingerprint
 

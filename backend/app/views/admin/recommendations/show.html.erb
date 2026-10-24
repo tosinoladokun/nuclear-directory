@@ -79,7 +79,7 @@
           <% safe_shown.each do |item| %>
             <tr id="safe-<%= item.candidate_id %>">
               <td class="type-body nd-l"><%= link_to item.claim.to_s.upcase_first, safe_path.(item), class: "nd-link" %> <span class="type-data-sm text-ink-muted">#<%= item.candidate_id %></span></td>
-              <td class="type-body-strong nd-l"><span class="nd-tag"><%= item.enabled ? "Safe: #{item.label}" : "Would be safe: #{item.label}" %></span></td>
+              <td class="type-body-strong nd-l"><span class="nd-tag"><%= item.enabled ? "Safe" : "Would be safe" %></span> <span class="type-body"><%= item.label %></span></td>
               <td class="type-body nd-l">
                 <% item.changes.each do |name, (before, after)| %>
                   <span class="type-label"><%= field_label(name) %></span> <%= field_value(before) %> → <%= field_value(after) %><br>
@@ -126,7 +126,7 @@
     <summary class="type-body">Paste Data Quality's list</summary>
     <%= form_with url: admin_recommendations_path, class: "nd-fold__body nd-stack" do %>
       <div class="nd-field">
-        <label for="list" class="type-body-strong">One claim a line</label>
+        <label for="list" class="type-body-strong">One fact a line</label>
         <p class="nd-field__hint type-small" id="list-hint">“1234 approve: reason” or “1234 reject: reason”. Lines starting with # are skipped. Adding the list decides nothing.</p>
         <%# Kept only when a line needs fixing; once added, the box is empty for the next list. %>
         <%= text_area_tag :list, (params[:list] if @errors.present?), class: "nd-input type-input", rows: 8, required: true, aria: { describedby: "list-hint" } %>

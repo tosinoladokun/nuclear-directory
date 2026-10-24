@@ -119,7 +119,7 @@ module DataQuality::SafeClasses
           throw :unsafe, context[:run_problem] if context[:run_problem]
           # G1
           if candidate.ai_confidence.to_f < config.fetch("min_confidence")
-            throw :unsafe, "the verifier's confidence is below #{config.fetch('min_confidence')}"
+            throw :unsafe, "Data Quality's confidence is below #{config.fetch('min_confidence')}"
           end
 
           changes = gates(candidate, config, context, directory)
