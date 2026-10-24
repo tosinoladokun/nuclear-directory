@@ -152,6 +152,12 @@ module Directory
           from.update_columns(sec_cik: nil)
           into.update!(sec_cik: cik) && moved["SEC CIK"] += 1 if into.sec_cik.blank?
         end
+        # A stock listing moves like a CIK: into keeps its own if it has one.
+        if from.ticker.present?
+          listing = { exchange: from.exchange, ticker: from.ticker }
+          from.update_columns(exchange: nil, ticker: nil)
+          into.update!(listing) && moved["listing"] += 1 if into.ticker.blank?
+        end
         retired = []
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
@@ -809,6 +815,7 @@ module Directory
         moved["aliases"] += 1 unless name == OrganizationAlias.normalize(into.name) || OrganizationAlias.exists?(normalized_alias: name) || others.include?(name)
         moved["domain"] += 1 if from.domain && into.domain.blank?
         moved["SEC CIK"] += 1 if from.sec_cik && into.sec_cik.blank?
+        moved["listing"] += 1 if from.ticker.present? && into.ticker.blank?
         { organization_roles: :role_id, organization_technologies: :technology_id,
           facility_relationships: %i[facility_id relationship_type] }.each do |table, key|
           from.public_send(table).each do |row|

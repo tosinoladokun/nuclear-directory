@@ -181,4 +181,19 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     post admin_record_enrich_agreed_path(type: "Organization", id: @company.id), params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) }
     assert_not_equal "verified", link.reload.verification_status
   end
+
+  test "two findings sharing one field aren't both approved; a 'no longer listed' flag stays in Checks" do
+    @company.update_columns(verification_status: "pending", verified_by: nil)
+    sec = Candidate.create!(source: @page, crawl_run: @agreed.crawl_run, kind: "organization", quote: "Acme Fission is headquartered in Austin.",
+      payload: { "name" => "Acme Fission", "hq_city" => "Round Rock", "hq_state" => "TX" }, status: "matched", subject_type: "Organization",
+      subject_id: @company.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    ids = [ @agreed.id, sec.id ].sort
+    post admin_record_enrich_agreed_path(type: "Organization", id: @company.id), params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) }
+    assert_equal "Approved 1 finding.", flash[:notice]
+    assert_match "another finding for the same field", flash[:alert]
+
+    @unsure.update_columns(review_origin: "dropped")
+    get enrich_path
+    assert_select "#finding-#{@unsure.id}", 0
+  end
 end
