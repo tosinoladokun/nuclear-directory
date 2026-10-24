@@ -53,6 +53,7 @@ class SourceCatalog
     "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: false },
     # The annual plant file (#319): read once a year, not by the daily crawl.
     "eia_plants" => { name: "EIA-860 plants" },
+    "eia_owners" => { name: "EIA-860 owners" },
     "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
   }.freeze
   RESEARCH_KIND = "web_page"

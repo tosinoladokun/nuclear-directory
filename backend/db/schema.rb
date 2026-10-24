@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_24_010100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_020000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -382,11 +382,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_010100) do
     t.datetime "updated_at", null: false
     t.string "sec_cik"
     t.string "short_name"
+    t.string "eia_utility_id"
     t.index ["domain"], name: "index_organizations_on_domain", unique: true
+    t.index ["eia_utility_id"], name: "index_organizations_on_eia_utility_id", unique: true, where: "(eia_utility_id IS NOT NULL)"
     t.index ["sec_cik"], name: "index_organizations_on_sec_cik", unique: true, where: "(sec_cik IS NOT NULL)"
     t.index ["slug"], name: "index_organizations_on_slug", unique: true
     t.index ["verification_status"], name: "index_organizations_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "organizations_confidence_check"
+    t.check_constraint "eia_utility_id IS NULL OR eia_utility_id::text ~ '^[1-9][0-9]{0,6}$'::text", name: "organizations_eia_utility_id_check"
     t.check_constraint "sec_cik IS NULL OR sec_cik::text ~ '^[0-9]{10}$'::text", name: "organizations_sec_cik_check"
     t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "organizations_short_name_check"
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying::text, 'acquired'::character varying::text, 'defunct'::character varying::text])", name: "organizations_status_check"

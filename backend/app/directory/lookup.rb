@@ -11,19 +11,25 @@ module Directory
 
     # A CIK as the directory stores it: 10 zero-padded digits ("320193" is
     # "0000320193"), nil when blank.
+    # EIA's utility ID as the directory stores it ("07140" is "7140").
+    def eia_utility_id(value) = Organization.normalize_value_for(:eia_utility_id, value)
+
     def cik(value) = Organization.cik_from(value)
 
     # Pass exactly one of id, slug, name or domain.
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
     # domain accepts a bare domain or a URL.
-    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
+    def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
       scope =
-        case one_of!(id:, slug:, name:, domain:, sec_cik:)
+        case one_of!(id:, slug:, name:, domain:, sec_cik:, eia_utility_id:)
         in [ :id, value ] then Organization.where(id: value)
         in [ :sec_cik, value ]
           cik = Organization.cik_from(value) or return
           Organization.where(sec_cik: cik)
+        in [ :eia_utility_id, value ]
+          utility = Organization.normalize_value_for(:eia_utility_id, value) or return
+          Organization.where(eia_utility_id: utility)
         in [ :slug, value ] then Organization.where(slug: value)
         in [ :name, value ]
           normalized = OrganizationAlias.normalize(value).presence or return
@@ -336,6 +342,12 @@ module Directory
       "national_lab" => "a national lab", "waste_decommissioning" => "a waste and decommissioning company"
     }.freeze
     private_constant :LINK_VERBS, :ROLE_WORDS
+
+    # The companies with a published "owns" link on this plant or unit
+    # (#382), as ids.
+    def published_owner_ids(facility_id:)
+      FacilityRelationship.published.where(facility_id:, relationship_type: "owns").distinct.pluck(:organization_id)
+    end
 
     # Any fact's current decision (Directory::FactStateRef), or nil.
     # The ids of these sites' units.

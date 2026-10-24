@@ -25,6 +25,9 @@ class Organization < ApplicationRecord
   # zero-padded ("320193" and "CIK0000320193" are "0000320193").
   normalizes :sec_cik, with: ->(cik) { Organization.cik_from(cik) }
   validates :sec_cik, format: { with: /\A\d{10}\z/ }, uniqueness: true, allow_nil: true
+  # EIA's utility ID (#382), as EIA-860 writes it: a plain number ("7140").
+  normalizes :eia_utility_id, with: ->(id) { id.to_s.strip.sub(/\A0+(?=\d)/, "").presence }
+  validates :eia_utility_id, format: { with: /\A[1-9]\d{0,6}\z/ }, uniqueness: true, allow_nil: true
   # A display label for tight spots ("Oglethorpe", "MEAG"), never an identity
   # key or matched on (DATA.md, Names).
   normalizes :short_name, with: ->(name) { name.squish.presence }

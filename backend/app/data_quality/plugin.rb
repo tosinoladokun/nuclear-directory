@@ -55,6 +55,20 @@ class DataQuality::Plugin
   # complete, can allow more; a dropped fact is only ever a review item.
   def max_dropped_share(_source) = 0.25
 
+  # The ids of earlier editions of the same document (#382), oldest first:
+  # an annual file whose every year is its own source. A newer edition
+  # isn't "another page" of a fact an older one cites (Match.other_page_on),
+  # and a fact an older edition supported counts as this one's for the
+  # dropped check (Match#flag_dropped). Default: none.
+  def earlier_editions(_source) = []
+
+  # Whether an unplaced claim (no record, or not yet matched) makes a read
+  # incomplete for the dropped check (Match#flag_dropped). Default: every
+  # one does. A plug-in whose file always lists things the directory doesn't
+  # have (EIA's owners of plants not listed yet) says no for those, as they
+  # can't hide a dropped fact.
+  def blocks_dropped_check?(_candidate) = true
+
   # Verify (#15) asks these two questions of the plug-in, because only it
   # knows how its quotes were taken from the source.
 
