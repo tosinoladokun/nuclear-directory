@@ -44,12 +44,15 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
 
   def crawl(run)
     list = Source.find_by(url: DataQuality::Plugins::NrcReactorList::LIST_URL)
-    return { "units" => "no reactor list yet" } unless list&.content_text.present?
+    # Only a usable list: one held for a person, or one that parses to nothing,
+    # would make every unit look unlisted.
+    return { "units" => "no usable reactor list" } unless list&.crawl_ok? && list.content_text.present?
 
     all = DataQuality::Plugins::NrcReactorList::Page.units(list.content_text)
     # Units NRC lists under its operating-reactor pages; a new plant's
     # licensing page (Vogtle 3 and 4) is another layout, left out.
     units = all.select { |unit| unit.nrc_path.to_s.start_with?(UNIT_PATH) }
+    return { "units" => "no usable reactor list" } if units.empty?
     stats = { "units" => units.size, "unit_pages" => Hash.new(0) }
     stats["other_pages"] = all.size - units.size if all.size > units.size
     withdrawn = withdraw_unlisted(units.map { |unit| url(unit) }, run, UNLISTED)
@@ -98,7 +101,7 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
         row.source_kind = source_kind
         row.title = "NRC: #{unit.name}"
       end
-      source.update!(source_kind:) if source.source_kind == "web_page"
+      take_over(source)
       return "another_kind" unless source.source_kind == source_kind
 
       DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, unit) }.to_s

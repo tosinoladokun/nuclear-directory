@@ -41,7 +41,21 @@ class DataQuality::Plugins::NrcReactorVendorsTest < ActiveSupport::TestCase
 
   test "no reactor list yet: nothing is read" do
     Source.delete_all
-    assert_equal({ "units" => "no reactor list yet" }, crawl.stats)
+    assert_equal({ "units" => "no usable reactor list" }, crawl.stats)
+  end
+
+  test "a list held for a person, or one that parses to nothing, withdraws nothing" do
+    crawl
+    claims = Candidate.count
+    list = Source.find_by!(url: DataQuality::Plugins::NrcReactorList::LIST_URL)
+    Source.where.not(id: list.id).update_all(fetched_at: 2.days.ago)
+
+    list.update!(crawl_status: "needs_human")
+    assert_equal({ "units" => "no usable reactor list" }, crawl.stats)
+    list.update!(crawl_status: "ok", content_text: "<html>no table</html>")
+    assert_equal({ "units" => "no usable reactor list" }, crawl.stats)
+    assert_equal claims, Candidate.count
+    assert Candidate.where(review_origin: "withdrawn").none?
   end
 
   test "a blocked unit page stops the crawl" do
