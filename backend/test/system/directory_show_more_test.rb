@@ -20,7 +20,14 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
   # frame-render event just after. Wait for them rather than reading at once, which
   # could land between the two.
   def eventually(message, wait: 15)
-    page.document.synchronize(wait) { raise Capybara::ExpectationNotMet, message unless yield }
+    page.document.synchronize(wait) do
+      ok = begin
+        yield
+      rescue Selenium::WebDriver::Error::StaleElementReferenceError
+        false # the frame was replaced under us; look again
+      end
+      raise Capybara::ExpectationNotMet, message unless ok
+    end
   end
 
   def rows = page.evaluate_script("document.querySelectorAll('main ul.nd-list > li').length")

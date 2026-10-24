@@ -29,4 +29,11 @@ class SearchGapsTest < ActionDispatch::IntegrationTest
     get companies_path(q: "Ocean#{' ' * 100}Atomics"), headers: BROWSER
     assert_equal [ "ocean" ], SearchGap.pluck(:query)
   end
+
+  test "a typo the close-match fallback answers isn't a gap" do
+    Organization.create!(name: "Quillonworth Energy", verification_status: "verified", verified_by: "human:tosin")
+    get companies_path(q: "quillonwerth energy"), headers: BROWSER
+    assert_select "body", /Quillonworth Energy/
+    assert_empty SearchGap.all
+  end
 end
