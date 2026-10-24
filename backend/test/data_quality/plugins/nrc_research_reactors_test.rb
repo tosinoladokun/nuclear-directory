@@ -45,10 +45,12 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
 
   test "a same-day rerun after a block requests no later page" do
     stub_request(:get, PAGES).to_return(status: 403, body: file_fixture("nrc/akamai-403.html").read)
-    crawl
+    first = crawl
+    second = crawl
 
-    assert_equal "reactor page blocked", crawl.stats["stopped"]
-    assert_requested :get, PAGES, times: 1
+    assert_equal "reactor page blocked", first.stats["stopped"]
+    assert_equal "reactor page blocked", second.stats["stopped"]
+    assert_requested :get, PAGES, times: 1 # the first run's blocked page; the rerun asks for none
   end
 
   test "the licensee is the page's, not the table's Name column (Texas A&M's two reactors)" do

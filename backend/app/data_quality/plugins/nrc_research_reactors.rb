@@ -31,7 +31,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
   FIELDS = [ "Licensee", "Location", "Docket Number", "Reactor Type" ].freeze
   STATE_CODES = LinkCard::US_STATES.invert.merge(LinkCard::US_STATES.keys.to_h { |code| [ code, code ] }).freeze
 
-  Row = Data.define(:licensee, :location, :path)
+  Row = Data.define(:listed_name, :location, :path)
   Reactor = Data.define(:name, :facts) do
     def line = [ name, *FIELDS.filter_map { |label| "#{label}: #{facts[label]}" if facts[label] } ].join(" | ")
     def city = facts["Location"].to_s[/\A([^,]+),/, 1]&.strip
@@ -71,9 +71,8 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
     withdrawn = withdraw_unlisted(rows.map { |row| "#{NRC}#{row.path}" }, run, UNLISTED)
     stats["withdrawn"] = withdrawn if withdrawn.positive?
     rows.each do |row|
-      result = read(row)
+      result, page = read(row)
       stats["reactor_pages"][result] += 1
-      page = Source.find_by(url: "#{NRC}#{row.path}")
       # A block recorded earlier today stops a same-day rerun too, before any later page.
       return stats.merge("stopped" => "reactor page blocked") if result == "blocked" || (page && still_blocked?(page))
 
@@ -116,7 +115,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
         link = cells[1]&.at_css("a[href]")
         next unless cells.size >= 3 && link && link["href"].start_with?("/facilities-safety/facility-finder/nonpower/")
 
-        Row.new(licensee: link.text.squish, location: cells[2].text.squish, path: link["href"])
+        Row.new(listed_name: link.text.squish, location: cells[2].text.squish, path: link["href"])
       end
       # A row without its page link makes the whole read unusable: a partial
       # list would look like reactors leaving it.
@@ -126,18 +125,18 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
     def read(row)
       source = Source.find_or_create_by!(url: "#{NRC}#{row.path}") do |new_source|
         new_source.source_kind = source_kind
-        new_source.title = "NRC: #{row.licensee} research reactor"
+        new_source.title = "NRC research reactor: #{row.listed_name}"
       end
       # A page someone cited by hand becomes this plug-in's; its stored copy is
       # the whole page, so it's fetched afresh and converted.
       take_over(source)
-      return "another_kind" unless source.source_kind == source_kind
+      return [ "another_kind", nil ] unless source.source_kind == source_kind
 
-      DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s
+      [ DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s, source.reload ]
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: NO_FACTS)
       hold_open(source, NO_FACTS)
-      "needs_human"
+      [ "needs_human", source ]
     end
 
     # The page's own name and labelled facts; never the page's people. The
