@@ -151,6 +151,18 @@
   /* The wordmark is an SVG cropped to cap height (shared/_wordmark): 19px tall matches 22px Anton. */
   .nd-wordmark { display: inline-flex; color: var(--nd-ink); text-decoration: none; }
   .nd-wordmark__svg { display: block; height: 19px; width: auto; overflow: visible; }
+  /* Checks' "Go to a number" (Tosin, 21 Oct): a short search box. */
+  .nd-search--short { max-width: 320px; height: 44px; }
+  @media (max-width: 560px) { .nd-search--short { max-width: none; } }
+  .nd-search--short input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
+  .nd-claim-no { white-space: nowrap; }
+  /* Same as… (#391): a company with its two choices. */
+  .nd-settle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nd-space-2) var(--nd-space-4); }
+  .nd-settle .nd-btn { white-space: nowrap; }
+  /* Checks' folded group: its rows sit straight in the fold, not as cards in a card. */
+  .nd-fold__body > .nd-waits .nd-wait { background: none; border-width: 0; border-top: var(--nd-hairline) solid var(--nd-rule); padding-inline: 0; }
+  .nd-kick { display: flex; gap: var(--nd-space-2); align-items: baseline; }
+  .nd-kick > span::after { content: " ·"; }
   .nd-sitebar .nd-search { flex: 1 1 320px; max-width: 560px; height: 42px; padding: 0 14px; background: var(--nd-paper-raised); border-color: var(--nd-ink); }
   /* 16px keeps iOS Safari from zooming the page when the field is focused. */
   .nd-sitebar .nd-search input { font-size: 16px; }
@@ -674,6 +686,11 @@
   .nd-today__body { margin: var(--nd-space-3) 0 0 calc(24px + var(--nd-space-3)); display: flex; flex-direction: column; gap: var(--nd-space-3); }
   .nd-today__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3); }
   .nd-today__actions .nd-btn, .nd-today__row .nd-btn { white-space: nowrap; }
+  /* An action inside a notice ("Rejected. Undo"): a link-styled button, 44px tall on phones. */
+  .nd-flash__undo { display: inline; }
+  .nd-flash:has(.nd-flash__undo) { align-items: center; }
+  .nd-flash__action { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; white-space: nowrap; }
+  @media (max-width: 560px) { .nd-flash__action { display: inline-flex; align-items: center; min-height: 44px; } }
   /* Today's step 3: a fact with Joy's and Aminah's verdicts (#373). */
   /* One line that shrinks and ends in an ellipsis (the full text in its title). */
   .nd-one-line { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

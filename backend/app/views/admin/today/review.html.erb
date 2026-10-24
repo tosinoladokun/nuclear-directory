@@ -12,6 +12,11 @@
 <div class="nd-stack">
   <%= render "admin/crumbs", parent_label: "Today", parent_path: admin_today_path, current: "Review and accept" %>
   <h1 class="type-admin-h1 m-0">Review and accept</h1>
+  <% if flash[:undo] %>
+    <% content_for :flash_action do %>
+      <%= button_to "Undo", admin_today_review_undo_path(shown:), params: { token: flash[:undo] }, class: "nd-link nd-flash__action type-body", form_class: "nd-flash__undo" %>
+    <% end %>
+  <% end %>
   <p class="type-body m-0"><%= pluralize(review.size, "fact") %> · about <%= pluralize([ minutes, 1 ].max, "minute") %>. Nothing goes live until you click.</p>
 
   <% if agree.any? %>
@@ -44,6 +49,7 @@
           <% item = row.item %>
           <li class="nd-wait nd-verdict" id="fact-<%= row.candidate_id %>">
             <div class="nd-wait__what">
+              <p class="type-small text-ink-muted m-0"><%= claim_number(*row.candidate_ids) %></p>
               <p class="type-body-strong m-0"><%= item.claim %></p>
               <p class="nd-verdict__chips type-ui m-0">
                 <span class="nd-tag<%= ' nd-verdict__chip--muted' unless row.joy == 'accept' %>"><%= row.joy == "accept" ? "✓ #{joy}: accept" : "#{joy}: check it" %></span>
@@ -51,6 +57,11 @@
               </p>
               <% if item.differences.any? %>
                 <p class="type-small m-0">Accepting replaces the checked <%= item.differences.map { |name, (stored, incoming)| "#{field_label(name).downcase_first} (#{stored} → #{incoming})" }.to_sentence %>.</p>
+              <% end %>
+              <% if row.others.any? %>
+                <p class="type-small m-0">Also on <%= pluralize(row.others.size, "other page") %>:
+                  <%= safe_join(row.others.map { |other| (url = safe_url(other.source.url)) ? link_to("#{source_host(url)} ↗", url, class: "nd-link", target: "_blank", rel: "noopener") : other.source.url }, ", ") %>.
+                  One decision covers <%= row.others.one? ? "both" : "all #{row.others.size + 1}" %>.</p>
               <% end %>
               <details class="type-small">
                 <summary class="nd-link">Why, and the source</summary>
@@ -61,12 +72,20 @@
                 <% end %>
               </details>
             </div>
+            <% if row.candidate_ids.all? { |id| @restating.include?(id) } %>
+              <p class="type-small m-0">It says what the site already shows. Closing notes that in the history and changes nothing live.</p>
+              <div class="nd-wait__actions nd-verdict__actions">
+                <%= button_to "Close: already on the site", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "close", shown:), params: { same: row.candidate_ids },
+                  class: "nd-btn nd-btn--primary type-ui" %>
+              </div>
+            <% else %>
             <div class="nd-wait__actions nd-verdict__actions">
-              <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept", shown:),
+              <%= button_to "Accept", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "accept", shown:), params: { same: row.candidate_ids },
                 class: "nd-btn #{row.agree? ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui" %>
-              <%= button_to row.item.differences.any? ? "Keep" : "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject", shown:),
+              <%= button_to row.item.differences.any? ? "Keep" : "Reject", admin_today_review_decide_path(candidate_id: row.candidate_id, decision: "reject", shown:), params: { same: row.candidate_ids },
                 class: "nd-btn nd-btn--outline type-ui" %>
             </div>
+            <% end %>
           </li>
         <% end %>
       </ol>

@@ -141,6 +141,41 @@ module AdminHelper
     end
   end
 
+  # Checks' groups (Design's spec on #373), in order: what has a
+  # recommendation, what the admin decides, what isn't theirs yet.
+  CHECK_GROUPS = { "ready" => "Ready for you", "decide" => "You decide", "not_yours" => "Not yours yet" }.freeze
+  NextStep = Data.define(:group, :verb, :why)
+
+  # What to do with a waiting claim, as one line: its group, the verb (bold
+  # on the page, and the black button's) and why. restating: it only
+  # restates the site (Review.restating_ids). Joy and Aminah agree only
+  # when both say accept; Joy's "not sure" never counts as a reject (PM).
+  def check_next_step(item, restating: false)
+    joy, aminah = t("admin.reviewers.checker"), t("admin.reviewers.reviewer")
+    held = item.held unless item.dq_recommendation && item.held == DataQuality::Review::FIRST_BATCH
+    return NextStep.new(group: "ready", verb: "Close", why: "already on the site") if restating
+    # A company still in question is the admin's to settle (#391), whatever else holds it.
+    if (open = DataQuality::Review.open_company_ends(item).first)
+      return NextStep.new(group: "decide", verb: "Decide", why: "which company is “#{open.last}”? Pick it with Same as…")
+    end
+    return NextStep.new(group: "not_yours", verb: "Wait", why: held == DataQuality::Review::FIRST_BATCH ? "#{aminah} hasn't checked it yet" : held) if held
+
+    # A claim sent back to review keeps its old verdict field; review wins (as in Today).
+    joy_accepts = item.ai_recommendation == "recommend_publish" && item.status.to_s != "needs_review"
+    why = case [ joy_accepts, item.dq_recommendation ]
+    in [ true, "approve" ] then return NextStep.new(group: "ready", verb: "Approve", why: "#{joy} and #{aminah} agree")
+    in [ true, "reject" ] then "#{joy} accepts, #{aminah} rejects"
+    in [ false, "approve" ] then "#{aminah} accepts, #{joy} isn't sure"
+    in [ false, "reject" ] then "#{aminah} rejects, #{joy} isn't sure"
+    in [ true, _ ] then "only #{joy} checked"
+    else [ "#{joy} isn't sure", (item.notes if item.notes.present? && item.notes.length <= 80) ].compact.join(": ")
+    end
+    NextStep.new(group: "decide", verb: "Decide", why:)
+  end
+
+  # A claim's number as the admin sees it ("#1234"), so "do 1234" is easy to find (Tosin, 21 Oct).
+  def claim_number(*ids) = tag.span(ids.map { |id| "##{id}" }.join(", "), class: "nd-claim-no type-data nd-num")
+
   # A source's crawl status in one wording, wherever it's shown.
   def crawl_status_label(status) = CRAWL_STATUS_LABELS.fetch(status.to_s, status.to_s.humanize)
 

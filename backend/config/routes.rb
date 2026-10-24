@@ -52,8 +52,9 @@ Rails.application.routes.draw do
     # Step 3 (#373 part C): each fact with Joy's and Aminah's verdicts, decided here.
     get "today/review" => "today#review", as: :today_review
     post "today/review/agreed" => "today#agreed", as: :today_review_agreed
+    post "today/review/undo" => "today#undo_decision", as: :today_review_undo
     post "today/review/:candidate_id/:decision" => "today#decide", as: :today_review_decide,
-      constraints: { candidate_id: /\d+/, decision: /accept|reject/ }
+      constraints: { candidate_id: /\d+/, decision: /accept|reject|close/ }
     post "today/steps/:step" => "today#done", as: :today_step, constraints: { step: /crawl|list/ }
     delete "today/steps/:step" => "today#undo", constraints: { step: /crawl|list/ }
     get "checks" => "checks#show", as: :checks
@@ -93,11 +94,15 @@ Rails.application.routes.draw do
       get "/" => "status_changes#edit"
       patch "/" => "status_changes#update"
     end
+    # "Same as…" (#391): settle a claim's company that's still a question.
+    get "candidates/:id/settle" => "candidate_settles#show", as: :candidate_settle, constraints: { id: /\d+/ }
+    post "candidates/:id/settle" => "candidate_settles#create", constraints: { id: /\d+/ }
     resources :candidates, only: %i[index edit update] do
       collection do
         post :approve
         post :approve_all, path: "approve-all"
         post :reject
+        post :close
       end
     end
     resources :pending_facts, only: :index, path: "pending" do
