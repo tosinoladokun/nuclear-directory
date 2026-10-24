@@ -613,14 +613,15 @@ module DataQuality::Review
       share = share.to_s.strip.presence
       starts, ends = [ started_on, ended_on ].map { |date| date.presence && (Date.iso8601(date.to_s) rescue :bad) }
       # Same id means the same record only between two companies (a plant and a company are different tables).
-      errors = [ ("Choose the company it's linked to" unless other && open_record?(other) && !(company_link && other.id == record&.id)),
+      errors = [ ("That record is no longer in the directory" unless record),
+        ("Choose the company it's linked to" unless other && open_record?(other) && !(company_link && other.id == record&.id)),
         ("Choose how they're linked" unless verbs.key?(verb.to_s)),
-        ("A share is a number from 0 to 100" if share && !(share.match?(/\A\d+(\.\d+)?\z/) && share.to_f.between?(0, 100))),
+        ("A share is a number from 0 to 100" if share && !(share.match?(/\A\d+(\.\d+)?\z/) && share.to_d.between?(0, 100))),
         ("Only an owner has a share" if share && verb.to_s != "owns"),
         ("Enter dates as they're shown" if [ starts, ends ].include?(:bad)),
         ("It can't end before it starts" if starts.is_a?(Date) && ends.is_a?(Date) && ends < starts),
         *source_errors(url, quote) ].compact
-      return [ Added.new(ref: nil, errors:, existing: nil), nil ] if errors.any? || !record
+      return [ Added.new(ref: nil, errors:, existing: nil), nil ] if errors.any?
 
       ends_of = ->(fact, type) { [ type, fact.id, fact.name ] }
       from, to = company_link ? [ ends_of.(record, "Organization"), ends_of.(other, "Organization") ] : [ ends_of.(other, "Organization"), ends_of.(record, "Facility") ]
@@ -643,9 +644,9 @@ module DataQuality::Review
       human!(by)
       name, docket = name.to_s.squish, docket.to_s.strip.presence
       site = directory.fact(type: "Facility", id: site_id)
-      errors = [ ("Enter the unit's name" if name.empty?),
+      errors = [ ("That plant is no longer in the directory" unless site), ("Enter the unit's name" if name.empty?),
         ("An NRC docket is 8 digits, like 05000424" if docket && !docket.match?(/\A\d{8}\z/)), *source_errors(url, quote) ].compact
-      return Added.new(ref: nil, errors:, existing: nil) if errors.any? || !site
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
 
       write_added(:facility, { name:, parent_id: site.id, nrc_docket: docket }.compact, url:, quote:, by:, dry_run:,
         duplicate: "That unit is already listed", directory:, parents: [ [ "Facility", site.id ] ])
@@ -920,7 +921,7 @@ module DataQuality::Review
       def open_record?(fact) = %w[verified pending].include?(fact.verification_status)
 
       def source_errors(url, quote)
-        [ ("Enter a link to a public source, starting with https://" unless url.to_s.strip.match?(%r{\Ahttps?://\S+\z})),
+        [ ("Enter a link to a public source, starting with https://" unless url.to_s.strip.match?(%r{\Ahttps://\S+\z})),
           ("Copy the sentence from the source that states it" if quote.to_s.squish.empty?) ]
       end
 

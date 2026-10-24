@@ -31,7 +31,16 @@ class Admin::RecordFactsController < Admin::BaseController
     redirect_after admin_record_path(type: @type, id: @record.id, back: params[:back].presence, anchor:)
   end
 
+  helper_method :existing_path
+
   private
+    # The fact that already exists: a company or a site opens as a record,
+    # a link or a unit as a fact.
+    def existing_path(existing)
+      site = existing.type == "Facility" && Facility.where(id: existing.id).pick(:parent_id).nil?
+      existing.type == "Organization" || site ? admin_record_path(type: existing.type, id: existing.id) : admin_fact_path(type: existing.type, id: existing.id)
+    end
+
     # A live or waiting company, or plant site: not a removed, rejected or
     # merged-away one (the page shows no Add fact there either), and not a
     # unit (its facts are its site's).

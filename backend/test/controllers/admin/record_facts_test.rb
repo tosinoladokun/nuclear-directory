@@ -154,8 +154,8 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
 
   test "a plant link to a company whose id equals the site's is allowed; the new link's row is the redirect's target" do
     site = Facility.create!(name: "Same Id Point", verification_status: "verified", verified_by: "human:tosin")
-    company = Organization.create!(name: "Same Id Co", verification_status: "verified", verified_by: "human:tosin")
-    company.update_columns(id: site.id) unless company.id == site.id
+    Organization.where(id: site.id).delete_all
+    Organization.create!(id: site.id, name: "Same Id Co", verification_status: "verified", verified_by: "human:tosin")
     post admin_record_facts_path(type: "Facility", id: site.id), params: { kind: "plant_link", other: site.id, verb: "operates", **SRC }
     link = FacilityRelationship.find_by!(organization_id: site.id, facility_id: site.id)
     assert_redirected_to admin_record_path(type: "Facility", id: site.id, anchor: "item-FacilityRelationship-#{link.id}")
@@ -197,5 +197,17 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     get admin_record_new_fact_path(type: "Facility", id: site.id, kind: "unit", preview: 1, name: "AP-1", **SRC)
     assert_select ".nd-alert", /That unit is already listed/
     assert_select ".nd-alert a[href=?]", admin_fact_path(type: "Facility", id: unit.id), text: "Open it"
+  end
+
+  test "a record gone before the form is sent says so; a share just over 100 is refused; a source must be https" do
+    added, = DataQuality::Review.add_link(kind: "plant_link", record_id: 0, other_id: @company.id, verb: "owns", url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
+    assert_includes added.errors, "That record is no longer in the directory"
+    unit = DataQuality::Review.add_unit(site_id: 0, name: "Nowhere 1", url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
+    assert_includes unit.errors, "That plant is no longer in the directory"
+    site = Facility.create!(name: "Share Point", verification_status: "verified", verified_by: "human:tosin")
+    added, = DataQuality::Review.add_link(kind: "plant_link", record_id: site.id, other_id: @company.id, verb: "owns", share: "100.00000000000000001",
+      url: "http://example.com/x", quote: SRC[:quote], by: "human:tosin")
+    assert_includes added.errors, "A share is a number from 0 to 100"
+    assert_includes added.errors, "Enter a link to a public source, starting with https://"
   end
 end
