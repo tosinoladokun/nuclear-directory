@@ -26,6 +26,8 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
       subject_id: role.id, proposed_subject: true, payload: { "organization" => { "name" => "Kind Fission" }, "role" => role.role.key })
     assert_equal "new_fact", kind(link)
     assert_equal "change", kind(claim({ "name" => "Kind Fission", "hq_city" => "Dallas" }, status: "matched", subject_type: "Organization", subject_id: @company.id))
+    assert_equal "dq", kind(claim({ "name" => "KIND FISSION INC.", "hq_city" => "Austin" }, status: "matched", subject_type: "Organization", subject_id: @company.id)),
+      "a restatement that slipped past match isn't a change"
     assert_equal "dq", kind(claim({ "name" => "Unsettled Co" }, status: "needs_review", notes: %(no exact match for "Unsettled Co")))
   end
 

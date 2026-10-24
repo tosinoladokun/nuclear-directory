@@ -221,6 +221,8 @@ module DataQuality::Review
       return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
       return "dq" if candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
       return "dq" if held_reason(candidate, directory:) == FIRST_BATCH
+      # A restatement that slipped past match changes nothing: never Tosin's.
+      return "dq" if !candidate.proposed_subject && evidence_only?(candidate, directory:)
 
       if candidate.proposed_subject
         %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
