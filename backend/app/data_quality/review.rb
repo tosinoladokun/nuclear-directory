@@ -349,13 +349,8 @@ module DataQuality::Review
       human!(by)
       fail_with = ->(why) { Result.new(candidate_id:, ref: nil, errors: [ why ]) }
       result = nil
-      # Matched again by its source's run, when it has one (Research has none).
+      # Matched and verified again by its source's plug-in (Research's too).
       source_kind = Candidate.joins(:source).where(id: candidate_id).pick("sources.source_kind")
-      rerun = begin
-        DataQuality::Plugin.for(source_kind) && true
-      rescue DataQuality::Plugin::UnknownSourceKind
-        false
-      end
       Candidate.transaction do
         candidate = Candidate.lock.find_by(id: candidate_id) or next result = fail_with.("it no longer exists")
         name = open_company_ends(candidate).to_h[end_key.presence] or next result = fail_with.("its company was settled already")
@@ -406,17 +401,11 @@ module DataQuality::Review
           # as another name, and matched again.
           payload = candidate.payload.deep_dup
           payload[end_key] = payload[end_key].merge("name" => company.name, "aliases" => [ *payload[end_key]["aliases"], (name unless name.casecmp?(company.name)) ].compact.uniq)
-          if rerun
-            candidate.update!(status: "new", payload:, notes: "#{note}. Was: #{candidate.notes}", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
-          else
-            # Research has no run to match it again: it stays in Checks, its
-            # end named exactly, for a person to approve or reject there.
-            candidate.update!(payload:, notes: "#{note}; approve or reject it here. Was: #{candidate.notes}")
-          end
+          candidate.update!(status: "new", payload:, notes: "#{note}. Was: #{candidate.notes}", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
         end
         result = Result.new(candidate_id:, ref: company.ref, errors: [])
       end
-      DataQuality::RunJob.perform_later(source_kind, only: %w[match verify]) if result&.ok? && rerun
+      DataQuality::RunJob.perform_later(source_kind, only: %w[match verify]) if result&.ok?
       result
     end
 

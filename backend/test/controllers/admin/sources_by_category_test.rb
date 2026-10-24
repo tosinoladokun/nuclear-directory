@@ -231,7 +231,8 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
 
   test "every crawler in the code is listed under its own kind, so a built one never reads Planned" do
     kinds = SourceCoverage.new.categories.flat_map(&:sources).filter_map(&:kind) + SourceCoverage.new.general.filter_map(&:kind)
-    crawlers = Dir[Rails.root.join("app/data_quality/plugins/*.rb")].map { |path| File.basename(path, ".rb") }
+    # Research (web_page) has a plug-in only to match and verify claims again (#391); it crawls nothing.
+    crawlers = Dir[Rails.root.join("app/data_quality/plugins/*.rb")].map { |path| File.basename(path, ".rb") } - [ SourceCatalog::RESEARCH_KIND ]
 
     assert_empty crawlers - kinds, "add these to config/source_coverage.yml with kind: and status: built"
   end

@@ -34,17 +34,20 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
     assert_select "#company-#{@ga.id} button[aria-label=?]", "Same as General Atomics", "Same as"
   end
 
-  test "Same as on a Research claim: the end is named as that company, its own name kept, and it stays in Checks to approve; nothing approved" do
-    assert_no_enqueued_jobs(only: DataQuality::RunJob) do
+  test "Same as on a Research claim: the end is named as that company, its own name kept, matched again, and then it can be approved" do
+    assert_enqueued_with(job: DataQuality::RunJob, args: [ "web_page", { only: %w[match verify] } ]) do
       post settle_path, params: { choice: "same", record_id: @ga.id }
     end
     assert_redirected_to admin_checks_path
     @link.reload
-    assert_equal "needs_review", @link.status, "Research has no run to match it again"
-    assert_match "approve or reject it here", @link.notes
+    assert_equal "new", @link.status
+    [ @acme, @ga ].each { |company| company.aliases.find_or_create_by!(alias: company.name) } # as loaded companies have
+    DataQuality::Pipeline.run("web_page", only: %w[match])
+    assert @link.reload.subject_id, @link.notes
+    assert DataQuality::Review.approve([ @link.id ], by: "human:tosin").sole.ok?
+    assert Relationship.find_by!(from_organization: @acme, to_organization: @ga, relationship_type: "funds")
     assert_equal({ "name" => "General Atomics", "aliases" => [ "GENERAL ATOMICS INC" ] }, @link.payload["to_organization"])
     assert_match "tosin settled \"GENERAL ATOMICS INC\" as the same as General Atomics", @link.notes
-    assert_equal 0, Relationship.count
   end
 
   test "New company: added not public yet, from the item's source; Subsidiary of adds its link too" do
@@ -96,12 +99,7 @@ class Admin::CandidateSettlesTest < ActionDispatch::IntegrationTest
 
   test "the settle note survives the match run it queues; a back link outside admin isn't used; a malformed end doesn't break Checks" do
     post settle_path, params: { choice: "same", record_id: @ga.id }
-    web_page = Class.new(DataQuality::Plugin) do
-      def source_kind = "web_page"
-      def crawl(_run) = {}
-      def extract(_source, _run) = []
-    end
-    DataQuality::Pipeline.run("web_page", plugin: web_page.new, only: %w[match])
+    DataQuality::Pipeline.run("web_page", only: %w[match])
     assert_match "tosin settled \"GENERAL ATOMICS INC\" as the same as General Atomics", @link.reload.notes
 
     get settle_path(Candidate.create!(source: @source, kind: "relationship", status: "needs_review", quote: "Acme funds GENERAL ATOMICS.",
