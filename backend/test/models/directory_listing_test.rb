@@ -346,4 +346,35 @@ class DirectoryListingTest < ActiveSupport::TestCase
     site = DirectoryListing.new(category: "plants").plants.first
     assert_equal 1, site.units_statuses.size
   end
+
+  test "Developers narrows to reactor designers or project developers; a company with both is in each" do
+    builder = company("Blue Builders", roles: [ role("project_developer") ])
+    both = company("Both Ways Nuclear", roles: [ Role.find_by!(key: "reactor_vendor"), Role.find_by!(key: "project_developer") ])
+    cite!(builder, both)
+
+    assert_equal [ "Blue Builders", "Both Ways Nuclear", "Kairos Power" ], names(DirectoryListing.new(category: "reactor-developers"))
+    assert_equal [ "Both Ways Nuclear", "Kairos Power" ], names(DirectoryListing.new(category: "reactor-developers", role: "reactor_vendor"))
+    assert_equal [ "Blue Builders", "Both Ways Nuclear" ], names(DirectoryListing.new(category: "reactor-developers", role: "project_developer"))
+    assert DirectoryListing.new(category: "reactor-developers", role: "project_developer").filtered?
+  end
+
+  test "a role that isn't one of the bucket's, or on a one-role bucket, is dropped" do
+    assert_nil DirectoryListing.new(category: "reactor-developers", role: "fuel").role
+    assert_nil DirectoryListing.new(category: "components", role: "components").role
+    assert_nil DirectoryListing.new(role: "reactor_vendor").role
+  end
+
+  test "search ignores spacing and punctuation, and finds every word of a name in any form (#431)" do
+    nextera = company("NextEra Energy")
+    browns = plant("Browns Ferry Nuclear Plant", state: "AL", facility_type: "power_reactor")
+    cite!(nextera)
+
+    assert_includes names(DirectoryListing.new(q: "next era")), "NextEra Energy"
+    assert_includes names(DirectoryListing.new(q: "Next-Era")), "NextEra Energy"
+    assert_includes DirectoryListing.new(q: "brown ferry").plants.map(&:name), browns.name
+    assert_empty names(DirectoryListing.new(q: "next banana")), "every word must be in the name"
+    unit_three = plant("Browns Unit 3", parent: browns)
+    assert_not_includes DirectoryListing.new(q: "Browns Unit 5").plants.map(&:name), browns.name, "a unit number must match, not any unit"
+    assert unit_three
+  end
 end

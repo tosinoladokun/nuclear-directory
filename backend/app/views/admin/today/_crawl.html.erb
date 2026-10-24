@@ -1,0 +1,31 @@
+<%# Step 1: last night's crawl, one row per kind of source, and when Joy checked it. %>
+<% if today.crawl_rows.empty? %>
+  <p class="type-body m-0">No crawl ran last night.</p>
+<% else %>
+  <table class="nd-numtable nd-stack-table" id="crawl-table">
+    <thead><tr><th scope="col">Source</th><th scope="col">Read</th><th scope="col">Same</th><th scope="col">Waiting</th></tr></thead>
+    <tbody>
+      <% today.crawl_rows.each do |row| %>
+        <% counts = @sources[row.source_kind] %>
+        <tr id="crawl-<%= row.source_kind %>">
+          <td class="type-body">
+            <%= link_to source_kind_label(row.source_kind), admin_source_path(key: row.source_kind), class: "nd-link" %>
+            <% if row.failed %><span class="block type-small text-critical"><%= row.problem.to_s.upcase_first %></span><% end %>
+            <% if row.running %><span class="block type-small text-ink-muted">Still reading</span><% end %>
+          </td>
+          <td class="type-data nd-num" data-label="Read"><%= number_with_delimiter(counts&.read.to_i) %></td>
+          <td class="type-data nd-num" data-label="Same"><%= number_with_delimiter(counts&.same.to_i) %></td>
+          <td class="type-data nd-num" data-label="Waiting"><%= number_with_delimiter(counts&.changed.to_i) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+  <% if (ran = today.checker_ran_at) %>
+    <p class="type-body m-0"><%= joy %> ran at <%= ran.in_time_zone(Today::ZONE).strftime("%-l:%M %P") %> and checked every new fact. You'll see <%= joy %>'s verdicts in step 3.</p>
+  <% else %>
+    <p class="type-body m-0"><%= joy %> hasn't checked last night's facts yet.</p>
+  <% end %>
+<% end %>
+<div class="nd-today__actions">
+  <%= button_to "Looks fine, next ›", admin_today_step_path("crawl"), class: "nd-btn nd-btn--primary type-ui" %>
+</div>

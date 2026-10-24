@@ -147,10 +147,14 @@ Disallow: /</pre>
     </div>
 
     <div class="flex flex-col gap-2">
-      <span class="type-label">Category pills (with and without counts) and boxes</span>
+      <span class="type-label">Category pills (with and without counts) and the home page's category cards</span>
       <%= render "shared/category_pills", current: Category.find("reactor-developers"), counts: { "fuel" => 11, "reactor-developers" => 9, "plants" => 28 } %>
       <%= render "shared/category_pills", current: nil %>
-      <%= render "shared/category_boxes", examples: { "fuel" => [ "Centrus Energy", "Urenco USA" ], "reactor-developers" => [ "Kairos Power", "X-energy", "TerraPower" ] } %>
+      <%= render "shared/category_cards", grid_class: "nd-catgrid--example", cards: [
+            HomeCategories::Card.new(category: Category.find("reactor-developers"), count: 20, records: [ m[:company], m[:company_sparse], m[:company] ]),
+            HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [ m[:company_sparse] ]),
+            HomeCategories::Card.new(category: Category.find("plants"), count: 79, records: [ m[:plant] ])
+          ] %>
     </div>
 
     <div class="flex flex-col gap-2">
@@ -166,7 +170,7 @@ Disallow: /</pre>
     <div class="flex flex-col gap-2">
       <span class="type-label">Profile header: company with description, plant without</span>
       <%= render "shared/profile_header", name: m[:company].name, kind: :company, description: m[:company].description,
-            citations: [ [ 1, m[:sources][0] ] ], tags: [ "Reactor developer", "Molten salt coolant", "Fission" ], heading_id: "design-profile-company" %>
+            citations: [ [ 1, m[:sources][0] ] ], tags: [ "Reactor designer", "Molten salt coolant", "Fission" ], heading_id: "design-profile-company" %>
       <%= render "shared/profile_header", name: m[:plant_sparse].name, kind: :plant, heading_id: "design-profile-plant" %>
     </div>
 
@@ -205,7 +209,7 @@ Disallow: /</pre>
         <%= render "shared/overview_panel", verified_at: m[:verified_at], correction_url: "#",
               rows: [ [ "Website", link_to("kairospower.com", "#", class: "nd-link"), nil ],
                       [ "HQ", nil, nil ],
-                      [ "Role", "Reactor developer", [ [ 1, m[:sources][0] ] ] ],
+                      [ "Role", "Reactor designer", [ [ 1, m[:sources][0] ] ] ],
                       [ "Technology", "Fission, small modular reactor", nil ] ] %>
         <%= render "shared/overview_panel", rows: [ [ "Website", nil, nil ] ] %>
       </div>

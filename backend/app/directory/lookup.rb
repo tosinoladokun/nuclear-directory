@@ -9,6 +9,10 @@ module Directory
   module Lookup
     extend self
 
+    # A CIK as the directory stores it: 10 zero-padded digits ("320193" is
+    # "0000320193"), nil when blank.
+    def cik(value) = Organization.cik_from(value)
+
     # Pass exactly one of id, slug, name or domain.
     # name matches the organization's name or any alias, compared after
     # OrganizationAlias.normalize, so "TerraPower, LLC" finds "TerraPower".
@@ -60,6 +64,46 @@ module Directory
 
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
+    # Facts a company can be given by hand (#202): kind => [model, its link's column].
+    COMPANY_FACT_MODELS = { "role" => [ Role, OrganizationRole, :role ], "technology" => [ Technology, OrganizationTechnology, :technology ] }.freeze
+
+    # Whether a role or technology with this key exists.
+    def company_fact_key?(kind, key)
+      model, = COMPANY_FACT_MODELS[kind.to_s]
+      model ? model.exists?(key: key.to_s) : false
+    end
+
+    # The status of that role or technology on this company, or nil when it has none.
+    def company_fact_status(organization_id:, kind:, key:)
+      model, link, column = COMPANY_FACT_MODELS.fetch(kind.to_s)
+      link.where(organization_id:, column => model.where(key: key.to_s)).pick(:verification_status)
+    end
+
+    # Publishing a record (#202): how many of its approved facts go public
+    # with it, and its waiting facts whose last decision was added_reason
+    # ([[type, id, name], …]).
+    def publish_counts(type:, id:, added_reason:)
+      record = { "Organization" => Organization, "Facility" => Facility }.fetch(type.to_s).find(id)
+      # A link goes public only when its other end is public too.
+      public_orgs, public_sites = Organization.published.select(:id), Facility.published.select(:id)
+      live = if record.is_a?(Organization)
+        [ record.organization_roles, record.organization_technologies, record.facility_relationships.where(facility_id: public_sites),
+          Relationship.where(from_organization: record, to_organization_id: public_orgs)
+            .or(Relationship.where(to_organization: record, from_organization_id: public_orgs)) ]
+      else
+        [ Facility.where(parent: record), record.facility_relationships.where(organization_id: public_orgs) ]
+      end
+      added = record.is_a?(Organization) ? [ record.organization_roles.includes(:role), record.organization_technologies.includes(:technology) ] : []
+      added_with = added.flat_map do |scope|
+        scope.where(verification_status: "pending").select { |fact| fact.verification_events.order(:id).last&.reason == added_reason }
+          .map { |fact| [ fact.class.name, fact.id, fact.respond_to?(:role) ? fact.role.name : fact.technology.name ] }
+      end
+      [ live.sum { |scope| scope.where(verification_status: "verified").count }, added_with ]
+    end
+
+    # A website's domain as a company's domain is stored (www. and the path dropped).
+    def domain_from(url) = Organization.domain_from(url)
+
     def deal_terms(link_type:, link_id:, published: true)
       raise ArgumentError, "not a link type: #{link_type.inspect}" unless DealTerm::LINK_TYPES.include?(link_type.to_s)
 
@@ -103,6 +147,45 @@ module Directory
 
       Evidence.where(subject_type: type.to_s, subject_id: id).order(:id).map { |row| EvidenceRef.from(row) }
     end
+
+    # Whether anyone has an unresolved correction report (open or reviewed,
+    # not closed) on the public page of a fact or, for a link, of either
+    # end: a company's or a plant's page, query, fragment and format aside. Its
+    # former addresses count too (a rename or a merge redirects them there),
+    # unless another record now lives at one, since that page is the other
+    # record's.
+    def open_corrections?(type:, id:)
+      raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
+
+      record = type.to_s.constantize.find_by(id:) or return false
+      company = ->(organization) { addresses("companies", organization) }
+      # A unit's own addresses redirect to its site's page, so a report filed
+      # there (before it was grouped, say) is about it too.
+      plant = ->(facility) { addresses("plants", facility) + (facility.parent ? addresses("plants", facility.parent) : []) }
+      pages = case record
+      when Organization then company.(record)
+      when Facility then plant.(record)
+      when Relationship then company.(record.from_organization) + company.(record.to_organization)
+      when FacilityRelationship then company.(record.organization) + plant.(record.facility)
+      else company.(record.organization)
+      end
+      CorrectionReport.where(status: %w[open reviewed])
+        # The page's own path: no query or fragment, no trailing slash and no
+        # format (/companies/x/ and /companies/x.html are /companies/x).
+        .where("regexp_replace(regexp_replace(split_part(split_part(page_path, '?', 1), '#', 1), '/+$', ''), '\\.[a-z]+$', '') IN (:pages)", pages:)
+        .exists?
+    end
+
+    # A company's or a plant's public paths: today's, then its former ones
+    # that no published record holds now. A merged company keeps its slug
+    # on its unpublished row, and its address redirects to the survivor, so
+    # only a published one wins the address (as the public pages decide).
+    def addresses(prefix, record)
+      former = record.former_slugs.pluck(:slug)
+      former -= record.class.published.where(slug: former).pluck(:slug)
+      [ record.slug, *former ].map { |slug| "/#{prefix}/#{slug}" }
+    end
+    private :addresses
 
     # How many public facts (any type) have evidence from these sources.
     def published_count_backed_by(source_ids:)

@@ -6,10 +6,24 @@ import { Controller } from "@hotwired/stimulus"
 // live region announces how many results there are.
 export default class extends Controller {
   static targets = ["input", "results", "frame", "status"]
-  static values = { url: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 } }
+  static values = { url: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, longPlaceholder: String }
+
+  // Below 380px the full placeholder doesn't fit at 16px (iOS zooms below
+  // 16px), so a shorter one takes its place (one-line law, #365). Both come
+  // from the page, never from the field: after a reconnect (a Turbo snapshot)
+  // the field may already hold the short one.
+  connect() {
+    if (!this.shortPlaceholderValue || !this.longPlaceholderValue) return
+    this.longPlaceholder = this.longPlaceholderValue
+    this.narrow = window.matchMedia("(max-width: 379px)")
+    this.fitPlaceholder = () => { this.inputTarget.placeholder = this.narrow.matches ? this.shortPlaceholderValue : this.longPlaceholder }
+    this.narrow.addEventListener("change", this.fitPlaceholder)
+    this.fitPlaceholder()
+  }
 
   disconnect() {
     clearTimeout(this.timer)
+    this.narrow?.removeEventListener("change", this.fitPlaceholder)
   }
 
   search(event) {
@@ -46,7 +60,10 @@ export default class extends Controller {
     if (!panel) return this.close()
 
     const count = Number(panel.dataset.instantSearchCount)
-    this.statusTarget.textContent = count === 0 ? "No results" : `${count} ${count === 1 ? "result" : "results"}, use the down arrow to browse`
+    const close = panel.dataset.instantSearchFuzzy === "true"
+    const results = `${count} ${close ? (count === 1 ? "close name" : "close names") : (count === 1 ? "result" : "results")}`
+    // Close names are approximate: say so, since ArrowDown skips the note in the panel.
+    this.statusTarget.textContent = count === 0 ? "No results" : `${close ? "No exact match. " : ""}${results}, use the down arrow to browse`
     this.open()
   }
 

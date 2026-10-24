@@ -158,7 +158,8 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
     first_read_approved!
 
     read!(ROWS.first(4), on: 1.hour.ago)
-    pipeline!
+    runs = pipeline!
+    assert_equal [ source.id ], runs.second.stats["dropped_checked_source_ids"], "the run says which sources it checked"
 
     flags = queue.where(review_origin: "dropped")
     assert_equal [ [ "Facility", unit("05099005").id ], [ "FacilityRelationship", unit("05099005").facility_relationships.sole.id ] ],
@@ -180,6 +181,7 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
 
     assert_empty queue.where(review_origin: "dropped")
     assert_equal 1, runs.second.stats["dropped_check_skipped"]
+    assert_nil runs.second.stats["dropped_checked_source_ids"], "a skipped source isn't one it checked"
   end
 
   test "an unchanged read stamps only what its rows still support; a failed fetch stamps nothing" do

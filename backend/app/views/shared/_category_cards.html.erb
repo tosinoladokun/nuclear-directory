@@ -1,0 +1,56 @@
+<%# The home page's category cards (#362): a 3-column grid (960px at most) on wide screens, an
+    open stack on phones. Locals:
+    cards: HomeCategories::Card list (buckets with companies, then Plants and sites)
+    Every line is one line (Tosin's rule, #365): titles use the category's full
+    name and shrink to fit; company names shrink, then end in an ellipsis
+    with the full name in title. The count shows once, in the wide-screen
+    header; phones show none. Wide screens: the header goes to the
+    category's list. Phones: the header is a heading that the catstack
+    controller turns into a button that opens and closes the card (all open
+    at first, the choice remembered); "See all" is the category link there.
+    Without JavaScript every card is open. Short cards get empty filler rows
+    on wide screens, so cards in a row match; phones drop them. %>
+<div class="nd-catgrid nd-catstack <%= local_assigns[:grid_class] %>" data-controller="catstack">
+  <button type="button" class="nd-catstack__all" data-catstack-target="all" data-action="catstack#toggleAll" hidden>Collapse all</button>
+  <% cards.each do |card| %>
+    <% category = card.category %>
+    <% noun = category.plants ? pluralize(card.count, "plant or site", plural: "plants and sites") : pluralize(card.count, "company", plural: "companies") %>
+    <%# The card's title is HomeCategories::LABELS (Tosin, 20 Oct); the category's
+        own name stays in title and aria-label where it differs, with the
+        count after it. %>
+    <% label = HomeCategories.label(category) %>
+    <% same = label.downcase.include?(category.name.downcase) %>
+    <% named = same ? label : "#{label} (#{category.name})" %>
+    <% head_name = "#{named}, #{noun}" %>
+    <% title = capture do %>
+      <%= bucket_icon(category, size: 24) %>
+      <%# A category label is one we write, so it fits: no ellipsis, no
+          data-truncate (DESIGN.md rule 5). The full name stays in the title. %>
+      <span class="nd-catcard__name" style="--chars: <%= label.length %>" title="<%= category.name %>"><%= label %></span>
+    <% end %>
+    <section class="nd-catcard nd-catcard--rows nd-catcard--compact nd-catcard--stack <%= bucket_class(category) %>" aria-label="<%= category.name %>"
+             data-catstack-target="card" data-key="<%= category.key %>" data-label="<%= head_name %>">
+      <%= link_to directory_url_for(category:), class: "nd-catcard__head nd-catcard__head--link", title: category.name, aria: { label: head_name } do %>
+        <%= title %><span class="nd-catcard__count" aria-hidden="true"><%= card.count %></span>
+      <% end %>
+      <h2 class="nd-catcard__head nd-catcard__head--toggle" data-catstack-target="head" title="<%= category.name %>"><%= title %><span class="sr-only"><%= " (#{category.name})" unless same %></span></h2>
+      <div class="nd-catcard__body" id="cat-body-<%= category.key %>">
+        <div class="nd-catcard__inner">
+          <ul class="nd-catcard__rows">
+            <% card.records.each do |record| %>
+              <li>
+                <%= link_to (category.plants ? plant_url_for(record) : company_url_for(record)), class: "nd-catcard__row", title: record.name do %>
+                  <span class="nd-catcard__rowname" data-truncate title="<%= record.name %>" style="--chars: <%= record.name.length %>"><%= record.name %></span><span class="nd-catcard__chev" aria-hidden="true">›</span>
+                <% end %>
+              </li>
+            <% end %>
+            <% (HomeCategories::SHOWN - card.records.size).times do %><li class="nd-catcard__filler" aria-hidden="true"></li><% end %>
+          </ul>
+          <%= link_to directory_url_for(category:), class: "nd-catcard__more", aria: { label: card.more? ? "See all #{card.count} in #{category.name}" : "Open the list of #{noun} in #{category.name}" } do %>
+            <%= card.more? ? "See all ›" : "Open the list ›" %>
+          <% end %>
+        </div>
+      </div>
+    </section>
+  <% end %>
+</div>

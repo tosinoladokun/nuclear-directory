@@ -204,8 +204,13 @@ module Seed
             next
           end
 
+          # #251: compact drops a nil description so a second entry about the
+          # same link (same from/to/type) doesn't clear a value another
+          # entry set. The seed describes what's known; a missing key is
+          # "nothing to say", not "clear it".
           write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
-            relationship_type: item["type"], description: item["description"] }, evidence(item, sources))
+            relationship_type: item["type"], description: item["description"] }.compact,
+            evidence(item, sources))
         end
 
         Array(doc["facilities"]).each do |item|
@@ -214,8 +219,12 @@ module Seed
           # A pending link a human has since rejected or unpublished stays decided.
           next if item["pending"] && closed_link?(organization.id, facility.id, item["type"])
 
+          # #251: nil-safe for ownership_pct (and the note), so a second
+          # entry about the same owns-link that omits a share doesn't
+          # clear the share another entry set, which was rewriting the
+          # value and logging four verification events on every re-seed.
           write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
-            relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] },
+            relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] }.compact,
             evidence(item, sources), pending: item["pending"], hold: hold_reason(organization.id, facility.id, item))
         end
       end

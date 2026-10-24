@@ -1,12 +1,12 @@
 <% content_for :title, "Search sources" %>
 
-<%= render "admin/crumbs", parent_label: "Sources", parent_path: admin_sources_path, current: "Search" %>
-<%= render "admin/sources/search_box", query: @query %>
+<%= render "admin/crumbs", parent_label: "Sources", parent_path: back_path(admin_sources_path), current: "Search" %>
+<%= render "admin/sources/search_box", query: @query, back: back_path(nil) %>
 
 <% if @query.present? %>
   <h1 class="type-admin-h2">“<%= @query %>” <span class="type-data text-ink-muted"><%= @documents.size %> of <%= number_with_delimiter(SourceCatalog.total) %></span></h1>
   <% if @documents.empty? %>
-    <p class="type-body">No sources match “<%= @query %>”. <%= link_to "Back to Sources", admin_sources_path, class: "nd-link" %></p>
+    <p class="type-body">No sources match “<%= @query %>”. <%= link_to "Back to Sources", back_path(admin_sources_path), class: "nd-link" %></p>
   <% else %>
     <div class="overflow-x-auto">
       <table class="nd-numtable nd-stack-table nd-sources">

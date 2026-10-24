@@ -40,7 +40,11 @@ class DataQuality::Plugins::EiaPlants::PlantFile
   def self.plants(bytes)
     with_workbooks(bytes, plant: ENTRY, generator: GENERATOR_ENTRY) do |paths|
       nuclear = nuclear_plant_codes(paths[:generator])
-      read(paths[:plant], keep: ->(plant) { nuclear.include?(plant["eia_plant_id"]) })
+      plants = read(paths[:plant], keep: ->(plant) { nuclear.include?(plant["eia_plant_id"]) })
+      # An incomplete release keeps the last good copy, and older claims stay.
+      raise Unreadable, "No row on the Plant sheet is a nuclear plant in the generator workbook" if plants.empty?
+
+      plants
     end
   end
 

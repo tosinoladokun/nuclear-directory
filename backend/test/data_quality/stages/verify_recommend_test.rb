@@ -207,6 +207,25 @@ class DataQuality::Stages::VerifyRecommendTest < ActiveSupport::TestCase
     assert_equal "human-verified domain is terrapower.com; this source says other.example", elsewhere.notes
   end
 
+  # #402: a company matched by name whose stored CIK differs from the
+  # source's goes to review, not through as a conflict that approval
+  # only surfaces. Equivalent CIKs ("320193" vs "0000320193") compare
+  # equal through Organization.cik_from.
+  test "a company on a human-verified record: a different sec_cik goes to review, equivalent CIKs don't" do
+    terrapower = organizations(:terrapower)
+    terrapower.update!(sec_cik: "0000320193")
+    terrapower.verify!(by: "human:tosin")
+    conflict = candidate("organization", { "name" => "TerraPower", "sec_cik" => "0001820953" })
+    equivalent = candidate("organization", { "name" => "TerraPower", "sec_cik" => "320193" })
+    [ conflict, equivalent ].each { |c| c.update!(status: "matched", subject_type: "Organization", subject_id: terrapower.id) }
+
+    run_stage("verify", verifier: CountingVerifier.new)
+
+    assert conflict.reload.status_needs_review?
+    assert_match "human-verified SEC CIK is 0000320193; this source says 0001820953", conflict.notes
+    assert_equal "recommend_publish", equivalent.reload.ai_recommendation, "320193 and 0000320193 are the same CIK"
+  end
+
   test "a candidate disagreeing with a human-verified record goes to review with both values, unasked" do
     unit = Facility.create!(name: "Hope Creek 1", nrc_docket: "05000354", state: "NJ", facility_type: "power_reactor")
     unit.verify!(by: "human:tosin")

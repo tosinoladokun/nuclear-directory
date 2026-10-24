@@ -24,6 +24,9 @@ module Analytics
   ANONYMOUS = { "$process_person_profile" => false, "$geoip_disable" => true, "$ip" => nil }.freeze
   DEFAULT_HOST = "https://us.i.posthog.com"
   MAX_QUERY_LENGTH = 200
+  # Where a search came from: typed in a field, or a suggested search on the
+  # home page, so suggestions don't count as demand for themselves.
+  SEARCH_SOURCES = %w[typed suggestion].freeze
 
   class << self
     # A PostHog::Client, or nil when analytics is off. Tests assign a fake.
@@ -61,10 +64,12 @@ module Analytics
     # normalized so "TerraPower " and "terrapower" count together, and
     # zero-result searches are flagged so they're easy to find.
     # visitor: the country and internal flag (TracksAnalytics#visitor_properties).
-    def track_search(query, results:, visitor: {})
+    # source: "typed" or "suggestion"; anything else counts as typed.
+    def track_search(query, results:, source: "typed", visitor: {})
       normalized = normalize_query(query) or return
+      source = SEARCH_SOURCES.include?(source.to_s) ? source.to_s : "typed"
 
-      capture("search", { query: normalized, results: results.to_i, zero_results: results.to_i.zero? }.merge(visitor))
+      capture("search", { query: normalized, results: results.to_i, zero_results: results.to_i.zero?, source: }.merge(visitor))
     end
 
     def normalize_query(query)

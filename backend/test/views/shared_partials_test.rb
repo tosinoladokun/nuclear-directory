@@ -108,7 +108,7 @@ class SharedPartialsTest < ActionView::TestCase
 
   test "overview panel skips rows without a value" do
     render partial: "shared/overview_panel", locals: { verified_at: Time.zone.parse("2026-10-09"),
-      rows: [ [ "Website", "kairospower.com", nil ], [ "HQ", nil, nil ], [ "Role", "Reactor developer", [ [ 1, @source ] ] ] ] }
+      rows: [ [ "Website", "kairospower.com", nil ], [ "HQ", nil, nil ], [ "Role", "Reactor designer", [ [ 1, @source ] ] ] ] }
 
     assert_select "dt", count: 2
     assert_select "dt", text: "HQ", count: 0
@@ -119,10 +119,10 @@ class SharedPartialsTest < ActionView::TestCase
 
   test "profile header with and without description and tags" do
     render partial: "shared/profile_header", locals: { name: "Kairos Power", kind: :company,
-      description: "Develops salt-cooled reactors.", citations: [ [ 1, @source ] ], tags: [ "Reactor developer" ] }
+      description: "Develops salt-cooled reactors.", citations: [ [ 1, @source ] ], tags: [ "Reactor designer" ] }
     assert_select "h1", "Kairos Power"
     assert_select ".nd-profile__desc", /Develops salt-cooled reactors./
-    assert_select ".nd-tag", "Reactor developer"
+    assert_select ".nd-tag", "Reactor designer"
 
     render partial: "shared/profile_header", locals: { name: "Hermes 2", kind: :plant, heading_id: "plant-name" }
     assert_select ".nd-ring--lg"
@@ -161,16 +161,23 @@ class SharedPartialsTest < ActionView::TestCase
     assert_select "a.nd-pill[aria-current='page']", /Components and manufacturing/
   end
 
-  test "category boxes show examples when there are any, and hide empty buckets" do
-    render partial: "shared/category_boxes", locals: { examples: { "fuel" => [ "Centrus Energy", "Urenco USA" ] } }
+  test "category cards: icon in the bucket's colour, names linking to their pages, fillers only when short" do
+    centrus = Organization.new(name: "Centrus Energy", slug: "centrus-energy")
+    vogtle = Facility.new(name: "Plant Vogtle", slug: "plant-vogtle")
+    render partial: "shared/category_cards", locals: { cards: [
+      HomeCategories::Card.new(category: Category.find("fuel"), count: 1, records: [ centrus ]),
+      HomeCategories::Card.new(category: Category.find("plants"), count: 5, records: [ vogtle ])
+    ] }
 
-    assert_select "a.nd-cat", count: 10
-    assert_select "a.nd-cat[href=?] span", "/companies?category=fuel", text: "Centrus Energy, Urenco USA"
-    assert_select "a.nd-cat.nd-bucket--fuel b svg.nd-ic.nd-ic--24", 1, "the bucket's icon beside its name, at 24px"
-    assert_select "a.nd-cat[href=?] span", "/companies?category=fusion", count: 0
+    assert_select "section.nd-catcard.nd-bucket--fuel .nd-catcard__head--link svg.nd-ic.nd-ic--24", 1
+    assert_select "section.nd-catcard.nd-bucket--fuel a.nd-catcard__row[href=?]", "/companies/centrus-energy", text: /Centrus Energy/
+    assert_select "section.nd-catcard.nd-bucket--fuel li.nd-catcard__filler", 2
+    assert_select "section.nd-catcard:not([class*=nd-bucket--]) a.nd-catcard__row[href=?]", "/plants/plant-vogtle"
+    assert_select "section.nd-catcard:not([class*=nd-bucket--]) a.nd-catcard__more[aria-label=?]", "See all 5 in Plants and sites", text: /See all ›/
+    assert_select "section.nd-catcard.nd-bucket--fuel a.nd-catcard__more[aria-label=?]", "Open the list of 1 company in Fuel and materials", text: /Open the list ›/
 
-    render partial: "shared/category_boxes", locals: { examples: {}, counts: { "fuel" => 3, "components" => 0 } }
-    assert_select "a.nd-cat[href=?]", "/companies?category=components", count: 0
+    render partial: "shared/category_cards", locals: { cards: [ HomeCategories::Card.new(category: Category.find("utilities"), count: 14, records: [ centrus ]) ] }
+    assert_select "a.nd-catcard__head[aria-label=?]", "Plant Operators (#{Category.find("utilities").name}), 14 companies"
   end
 
   test "empty state with and without an action" do

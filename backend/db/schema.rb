@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_210000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "pg_trgm"
 
   create_table "candidates", force: :cascade do |t|
     t.bigint "source_id", null: false
@@ -139,16 +140,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_210000) do
     t.check_constraint "amount_offered_usd IS NULL OR amount_offered_usd >= 0::numeric", name: "deal_terms_amount_offered_check"
     t.check_constraint "amount_usd IS NULL OR amount_usd >= 0::numeric", name: "deal_terms_amount_check"
     t.check_constraint "capacity_mw IS NULL OR capacity_mw >= 0::numeric", name: "deal_terms_capacity_check"
-    t.check_constraint "link_type::text <> 'Organization'::text OR term_type::text = 'funding_round'::text", name: "deal_terms_company_round_check"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "deal_terms_confidence_check"
     t.check_constraint "ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on", name: "deal_terms_dates_check"
-    t.check_constraint "link_type::text = ANY (ARRAY['Relationship'::character varying::text, 'FacilityRelationship'::character varying::text, 'Organization'::character varying::text])", name: "deal_terms_link_type_check"
-    t.check_constraint "status IS NULL OR (status::text = ANY (ARRAY['announced'::character varying::text, 'signed'::character varying::text, 'active'::character varying::text, 'completed'::character varying::text, 'terminated'::character varying::text]))", name: "deal_terms_status_check"
+    t.check_constraint "link_type::text <> 'Organization'::text OR term_type::text = 'funding_round'::text", name: "deal_terms_company_round_check"
+    t.check_constraint "link_type::text = ANY (ARRAY['Relationship'::character varying, 'FacilityRelationship'::character varying, 'Organization'::character varying]::text[])", name: "deal_terms_link_type_check"
+    t.check_constraint "status IS NULL OR (status::text = ANY (ARRAY['announced'::character varying, 'signed'::character varying, 'active'::character varying, 'completed'::character varying, 'terminated'::character varying]::text[]))", name: "deal_terms_status_check"
     t.check_constraint "term_type::text <> 'award'::text OR amount_usd IS NOT NULL AND starts_on IS NOT NULL AND external_id IS NOT NULL", name: "deal_terms_award_check"
     t.check_constraint "term_type::text <> 'funding_round'::text OR amount_usd IS NOT NULL OR round IS NOT NULL", name: "deal_terms_round_check"
     t.check_constraint "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL", name: "deal_terms_offtake_check"
-    t.check_constraint "term_type::text = ANY (ARRAY['award'::character varying::text, 'offtake'::character varying::text, 'funding_round'::character varying::text])", name: "deal_terms_term_type_check"
-    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "deal_terms_verification_status_check"
+    t.check_constraint "term_type::text = ANY (ARRAY['award'::character varying, 'offtake'::character varying, 'funding_round'::character varying]::text[])", name: "deal_terms_term_type_check"
+    t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "deal_terms_verification_status_check"
   end
 
   create_table "evidence", force: :cascade do |t|
@@ -574,6 +575,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_210000) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_technologies_on_key", unique: true
     t.index ["parent_id"], name: "index_technologies_on_parent_id"
+  end
+
+  create_table "today_steps", force: :cascade do |t|
+    t.date "on", null: false
+    t.string "step", null: false
+    t.string "done_by", null: false
+    t.string "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["on", "step"], name: "index_today_steps_on_on_and_step", unique: true
+    t.check_constraint "done_by::text ~~ 'human:%'::text", name: "today_steps_done_by_check"
+    t.check_constraint "step::text = ANY (ARRAY['crawl'::character varying, 'list'::character varying, 'review'::character varying, 'left'::character varying]::text[])", name: "today_steps_step_check"
   end
 
   create_table "users", force: :cascade do |t|

@@ -7,7 +7,8 @@
             elsif listing.searching? then "Results for “#{listing.query}”"
             else "All companies"
             end
-  total = @companies.size + @plants.size
+  total = @companies_total + @plants_total
+  more = @companies_total > @companies.size || @plants_total > @plants.size
   # The plants category mixes plants, mines and test reactors (VOICE.md).
   noun, plural = if listing.category&.plants then [ "plant or site", "plants and sites" ]
                  elsif listing.searching? && list_page.nil? then [ "result", "results" ]
@@ -29,7 +30,7 @@
 %>
 <% content_for :head do %>
   <meta name="description" content="<%= description %>">
-  <% if listing.searching? || listing.filtered? %><meta name="robots" content="noindex"><% end %>
+  <% if listing.searching? || listing.filtered? || @shown > DirectoryController::PAGE %><meta name="robots" content="noindex"><% end %>
   <%# Search and filters point back to the plain list or category. %>
   <link rel="canonical" href="<%= listing.category ? companies_url(category: listing.category.to_param) : listing.tag ? companies_url(tag: listing.tag.to_param) : companies_url %>">
 <% end %>
@@ -61,7 +62,11 @@
         <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#count" } do %>
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
           <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
+          <%# A category's role (Reactor designer, Project developer) stays through the filters and their count. %>
+          <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
+          <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
+          <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
           <label class="nd-select"><b>Technology</b>
             <%= select_tag :technology, options_for_select(listing.technology_options, listing.technology), include_blank: "Any", class: "type-input" %>
           </label>
@@ -80,12 +85,19 @@
     </div>
   </div>
 
+  <% if @fuzzy %><p class="nd-fuzzy-note type-small text-ink-muted">No exact match for “<%= listing.query %>”. Showing close names.</p><% end %>
+  <%# The rows and Show more are one Turbo frame: Show more swaps the next page in
+      place, so the page doesn't jump (advancing the address would scroll to the
+      top). The link is still a real page (?shown=2) for crawlers and without
+      JavaScript. Every other link in the frame (the company and plant rows)
+      leaves it: target=_top, so only Show more loads into the frame. %>
+  <turbo-frame id="directory-rows" target="_top" data-controller="keep-scroll">
   <% if total.zero? %>
     <% if listing.searching? %>
       <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{list_page.name}" if list_page}.",
             action_label: "Clear search",
             action_url: directory_url_for(category: listing.category, tag: listing.tag&.key, technology: listing.technology, state: listing.state,
-                                          sort: (listing.sort unless listing.sort == "name")) %>
+                                          role: listing.role, sort: (listing.sort unless listing.sort == "name")) %>
     <% elsif listing.filtered? %>
       <%= render "shared/empty_state", message: "Nothing matches these filters.", action_label: "Clear filters", action_url: directory_url_for(category: listing.category, tag: listing.tag&.key) %>
     <% else %>
@@ -111,4 +123,11 @@
       <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
     </ul>
   <% end %>
+  <% if more %>
+    <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
+      state: listing.state, role: listing.role, sort: (listing.sort unless listing.sort == "name"), shown: @shown / DirectoryController::PAGE + 1,
+      from: ("suggestion" if listing.searching? && params[:from] == "suggestion")),
+      class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
+  <% end %>
+  </turbo-frame>
 </main>

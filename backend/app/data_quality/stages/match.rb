@@ -44,6 +44,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
   }.freeze
 
   Found = Data.define(:record, :by)
+  # How a found record counts as the same one: its name or an alias
+  # (normalized), or an id. Not a domain, a brand or a similar name.
+  EXACT = [ "name", "NRC docket", "EIA plant ID" ].freeze
   Review = Data.define(:reason)
   # A new unit that belongs under an existing site record.
   Under = Data.define(:site)
@@ -57,6 +60,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
         # Every company name in this run counts as an owner for the brand
         # rule from the start, so matching doesn't depend on candidate order.
         directory.owner_hints = candidates.status_new.where(kind: "organization").filter_map { |c| c.payload["name"] }
+        rematch_settled_ends
         ORDER.each do |kind|
           candidates.status_new.where(kind: kind).find_each { |candidate| match(candidate) }
         end
@@ -91,11 +95,16 @@ class DataQuality::Stages::Match < DataQuality::Stage
       listed = read.distinct.pluck(:subject_type, :subject_id).to_set
       supported = from_source.where(status: %w[merged confirmed]).where.not(subject_id: nil).distinct.pluck(:subject_type, :subject_id)
       dropped = supported.reject { |pair| listed.include?(pair) }.select { |type, id| directory.published?(type:, id:) }
-      return if dropped.empty?
+      return checked_dropped(source) if dropped.empty?
       return skip_dropped_check if dropped.size > supported.size * plugin.max_dropped_share(source)
 
       dropped.each { |type, id| flag_one_dropped(source, from_source, type, id) }
+      checked_dropped(source)
     end
+
+    # The sources this run fully checked for dropped facts, by id (safe
+    # classes' G5 asks about a claim's own source).
+    def checked_dropped(source) = (@stats["dropped_checked_source_ids"] ||= []) << source.id
 
     def skip_dropped_check = @stats["dropped_check_skipped"] = @stats.fetch("dropped_check_skipped", 0) + 1
 
@@ -210,6 +219,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
       end
       return review(candidate, closed_end.reason) if closed_end
 
+      if existing && (other = other_page_on(candidate, existing))
+        return review(candidate, "#{existing.name.upcase_first} already cites #{other.title.presence || other.url}, another page of this source. " \
+          "Approving this would replace what that page says, so the two need combining first (#390).")
+      end
+
       # An existing link is attached without writing, as a record is, so a
       # read that only restates it changes nothing in the directory.
       if existing
@@ -218,6 +232,68 @@ class DataQuality::Stages::Match < DataQuality::Stage
       end
 
       write(candidate, attributes, evidence: false)
+    end
+
+    # A link claim waits in review when one of its ends had no exact match
+    # ("to_organization: no exact match for …", or "… isn't in the directory
+    # yet"). Once every end has one now (a name, an alias or an id), it's
+    # matched again, as new. Nothing is approved: it goes on to verify and
+    # a person like any claim. Never a dropped or extracted review item, a
+    # claim on a record already, or one with an end still in question.
+    def rematch_settled_ends
+      ends = LINK_ENDS.values.flat_map(&:keys).uniq.join("|")
+      # Only the two missing-match holds; others (a closed site, say) stay as they are.
+      question = /\A(?:(?:#{ends}): no exact match for |(?:#{ends}) ".*" isn't in the directory yet)/
+      waiting = candidates.where(status: "needs_review", subject_id: nil, review_origin: nil, kind: LINK_ENDS.keys)
+      waiting.find_each do |candidate|
+        next unless candidate.notes.to_s.match?(question)
+
+        payload = candidate.payload.to_h
+        settled = LINK_ENDS.fetch(candidate.kind).all? do |key, type|
+          found = resolve(type, payload[key], closed: :found) if payload[key].is_a?(Hash)
+          found.is_a?(Found) && EXACT.include?(found.by) && !found.record.closed?
+        end
+        next unless settled
+
+        # Under the decision's locks (its source, then the claim), and only if
+        # it's still waiting as it was: a person may have decided it meanwhile.
+        notes = candidate.notes
+        reopened = Candidate.transaction do
+          ::Source.lock.find(candidate.source_id)
+          candidate.lock!
+          next false unless candidate.status_needs_review? && candidate.subject_id.nil? && candidate.review_origin.nil? && candidate.notes == notes
+
+          candidate.update!(status: "new", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        end
+        next unless reopened
+
+        # Its old note is kept after what this run says, so its history shows why it moved.
+        (@rematched ||= {})[candidate.id] = notes
+        @stats["rematched"] = @stats.fetch("rematched", 0) + 1
+      end
+    end
+
+    # This run's note, and for a claim matched again, the note it had.
+    def noted(candidate, note)
+      was = @rematched&.dig(candidate.id) or return note
+      "#{note}. Matched again: its company or plant is in the directory now. Was: #{was}"
+    end
+
+    # A link already citing another page of the same kind of source (another
+    # USAspending recipient's awards on one company's link), which this claim
+    # would change: approving it would replace what that page says (#390).
+    def other_page_on(candidate, existing) = self.class.other_page_on(candidate, existing, directory:)
+
+    # Also asked when a link claim is approved (Review), under the link's lock:
+    # a claim attached before the other page's evidence was there can't be
+    # stopped here.
+    def self.other_page_on(candidate, existing, directory:)
+      cited = directory.evidence(type: existing.type, id: existing.id).map(&:source_id)
+      other = ::Source.where(id: cited, source_kind: candidate.source.source_kind).where.not(id: candidate.source_id).order(:id).first
+      return unless other
+
+      changes = DataQuality::Differences.changes(candidate, existing, directory:)
+      other if changes.nil? || changes.any?
     end
 
     # Found, Review or nil (nothing like it exists). A closed record, one that
@@ -360,8 +436,17 @@ class DataQuality::Stages::Match < DataQuality::Stage
       chosen ||= units.first if same_number.empty? && units.one? && unit_number(units.first.name).nil?
       label = "#{name} unit #{unit} (#{state})"
 
-      if chosen&.rejected?
-        settle_closed(candidate, chosen, "#{label} would be NRC unit #{chosen.name}, which was rejected")
+      if chosen&.closed?
+        # Rejected or unpublished: a person's decision that won't come back on
+        # its own, so this is as settled as a closed record match (#118).
+        settle_closed(candidate, chosen, "#{label} would be NRC unit #{chosen.name}, which was #{chosen.verification_status}")
+      elsif chosen && chosen.verification_status != "verified"
+        # The unit's own NRC record is still pending: enriching it would push
+        # EIA's values to a record that isn't public yet (#118). Wait and
+        # retry on the next match run, like a unit that doesn't exist yet.
+        # (chosen is a DirectoryClient::Record wrapper without .verified?.)
+        @stats["waiting"] += 1
+        candidate.update!(notes: "NRC unit for #{label} isn't verified yet; retried on the next match run")
       elsif chosen
         # Attach only: the values (and their evidence) are written when verify publishes.
         attach(candidate, chosen, "#{label} is NRC unit #{chosen.name}")
@@ -377,14 +462,23 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     # A plant-level enrichment (EIA-860's Plant file, #319) adds values to a
-    # site and never creates one. identify: { "eia_plant_id", "name", and
-    # "site_id" when the plug-in found a site with no EIA plant ID by name }.
-    # The site with that EIA plant ID wins; site_id counts only while that
-    # site still has no EIA plant ID. No site yet: retried on the next run.
+    # site and never creates one. identify: { "eia_plant_id", "name",
+    # "state", and "site_id" once a site with no EIA plant ID was found by
+    # name }. The site with that EIA plant ID wins; else a power plant with
+    # no EIA plant ID by name and state, looked up again on every run, so a
+    # plant added after the file was read is still found (the claim then
+    # records site_id, and for a site the plant ID to set, for verify's hold).
+    # site_id counts only while that site still has no EIA plant ID. No site
+    # yet: retried on the next run.
     def match_site_enrichment(candidate, identify)
-      plant, name, site_id = identify.values_at("eia_plant_id", "name", "site_id")
+      plant, name, state, site_id = identify.values_at("eia_plant_id", "name", "state", "site_id")
       label = "EIA plant #{plant} (#{name})"
       site = directory.facility(eia_plant_id: plant) if plant.present?
+      if site.nil? && site_id.blank? && (found = plant_by_name(name, state))
+        candidate.update!(payload: candidate.payload.merge("identify" => identify.merge("site_id" => found[:id]),
+          "eia_plant_id" => (plant if found[:site])).compact)
+        site_id = found[:id]
+      end
       if site.nil? && site_id.present?
         by_name = directory.facility(id: site_id)
         site = by_name if by_name && by_name.eia_plant_id.blank?
@@ -399,6 +493,21 @@ class DataQuality::Stages::Match < DataQuality::Stage
         attach(candidate, site, "#{label} is #{site.name}#{' (by name)' if site.eia_plant_id.blank?}")
         settle(candidate, site)
       end
+    end
+
+    # The power plant with no EIA plant ID that has this name (or an alias)
+    # in this state, as { id:, site: }, when exactly one does. Read once per
+    # run.
+    def plant_by_name(name, state)
+      key = plant_name_key(name, state) or return
+      @plants_by_name ||= directory.plants_without_eia_plant_id
+        .flat_map { |plant| plant[:names].map { |each| [ plant_name_key(each, plant[:state]), plant.slice(:id, :site) ] } }
+        .group_by(&:first).filter_map { |each_key, found| [ each_key, found.first.last ] if each_key && found.map(&:last).uniq.one? }.to_h
+      @plants_by_name[key]
+    end
+
+    def plant_name_key(name, state)
+      [ directory.normalize_facility_name(name), state.to_s.strip.upcase ] if name.present? && state.present?
     end
 
     # [units that fit the name, those of them with this unit number]
@@ -426,7 +535,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # Links don't know until FactWriter finds (or doesn't find) the link.
     def attach(candidate, record, note)
       @stats["matched"] += 1
-      candidate.update!(status: "matched", subject_type: record.type, subject_id: record.id, notes: note,
+      candidate.update!(status: "matched", subject_type: record.type, subject_id: record.id, notes: noted(candidate, note),
         proposed_subject: false)
     end
 
@@ -452,7 +561,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
         existing = !result.created if existing.nil?
         note ||= existing ? "Matched an existing record" : "No existing record; proposed a new pending one"
         # Remembered so a rejection can retire what match created, and only that.
-        candidate.update!(status: "matched", subject_type: result.ref.type, subject_id: result.ref.id, notes: note,
+        candidate.update!(status: "matched", subject_type: result.ref.type, subject_id: result.ref.id, notes: noted(candidate, note),
           proposed_subject: result.created)
       end
 
@@ -524,7 +633,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
         @stats["confirmed"] = @stats.fetch("confirmed", 0) + 1
         @stats["matched"] -= 1 if candidate.status_matched?
-        candidate.update!(status: "confirmed", subject_type: record.type, subject_id: record.id, notes: note)
+        candidate.update!(status: "confirmed", subject_type: record.type, subject_id: record.id, notes: noted(candidate, note))
       end
     end
 
@@ -539,7 +648,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
     def review(candidate, reason, write_error: false)
       @stats["write_errors"] += 1 if write_error
       @stats["needs_review"] += 1
-      candidate.update!(status: "needs_review", notes: reason)
+      candidate.update!(status: "needs_review", notes: noted(candidate, reason))
     end
 
     def label(payload) = payload["name"] || payload["nrc_docket"] || payload.to_s

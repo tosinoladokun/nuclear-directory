@@ -55,7 +55,9 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
       new_source.source_kind = INDEX_SOURCE_KIND
       new_source.title = "EIA-860 annual electric generator data page"
     end
-    DataQuality::Snapshot.take(index, fetcher: @fetcher)
+    # Reported, so a failed fetch that falls back on an earlier copy still
+    # shows on Today (a same-day rerun skips the fetch and keeps that outcome).
+    index_read = DataQuality::Snapshot.take(index, fetcher: @fetcher).to_s
     raise "EIA-860 page: #{index.status_reason || index.crawl_status}" unless index.crawl_ok? && index.content_text.present?
 
     url = self.class.latest_file_url(index.content_text) or raise "EIA-860 page: no yearly zip link found; the page may have changed"
@@ -67,11 +69,11 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true, max_bytes: MAX_BYTES) do |bytes|
       PlantFile.to_csv(PlantFile.plants(bytes))
     end
-    { "file" => url, "snapshot" => result.to_s, "plants" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
+    { "index" => index_read, "file" => url, "snapshot" => result.to_s, "plants" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
       "superseded" => (supersede_older_files(source) if source.crawl_ok?) }.compact
   rescue PlantFile::Unreadable => error
     source.update!(crawl_status: "needs_human", status_reason: "Couldn't read the EIA-860 plant file: #{error.message}")
-    { "file" => url, "snapshot" => "needs_human" }
+    { "index" => index_read, "file" => url, "snapshot" => "needs_human" }
   end
 
   def source_facts(source)
@@ -82,16 +84,14 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
       "plant's address."
   end
 
+  # Match finds the site: by EIA plant ID, or a power plant with none by
+  # name and state, looked up on every run (Match#match_site_enrichment).
   def extract(source, _run)
-    by_name = plants_by_name
     CSV.parse(source.content_text.to_s, headers: true).filter_map do |row|
       next if row["city"].blank?
 
-      plant = row["eia_plant_id"]
-      found = by_name[name_key(row["plant_name"], row["state"])] unless @directory.facility(eia_plant_id: plant)
-      identify = { "eia_plant_id" => plant, "name" => row["plant_name"], "site_id" => found&.dig(:id) }.compact
-      { kind: "facility", quote: row.to_csv.chomp,
-        payload: { "identify" => identify, "city" => row["city"], "eia_plant_id" => (plant if found&.dig(:site)) }.compact }
+      identify = { "eia_plant_id" => row["eia_plant_id"], "name" => row["plant_name"], "state" => row["state"] }.compact
+      { kind: "facility", quote: row.to_csv.chomp, payload: { "identify" => identify, "city" => row["city"] } }
     end
   end
 
@@ -112,19 +112,6 @@ class DataQuality::Plugins::EiaPlants < DataQuality::Plugin
   end
 
   private
-    # { [name, state] => { id:, site: } } for power plants with no EIA plant
-    # ID. A name two plants share in one state finds neither.
-    def plants_by_name
-      keys = @directory.plants_without_eia_plant_id.flat_map do |plant|
-        plant[:names].map { |name| [ name_key(name, plant[:state]), plant.slice(:id, :site) ] }
-      end
-      keys.group_by(&:first).filter_map { |key, found| [ key, found.first.last ] if key && found.map(&:last).uniq.one? }.to_h
-    end
-
-    def name_key(name, state)
-      [ @directory.normalize_facility_name(name), state.to_s.strip.upcase ] if name.present? && state.present?
-    end
-
     # Once a newer yearly file is read, candidates from older ones that
     # nobody has decided yet are withdrawn: an older year's address mustn't
     # be approved over the newer one. A claim already waiting for a person

@@ -32,19 +32,19 @@
   <%# Key facts come first in reading and focus order; wide screens place them on the right. %>
   <div class="nd-columns nd-columns--profile">
     <div class="nd-columns__side">
-      <%= render "shared/overview_panel", verified_at: p.verified_at, verified: p.site.verified?, correction_url: correction_url_for(p.name), rows: [
-            [ "Type", facility_type_label(p.facility_type), p.site_citations ],
-            [ "Status", facility_status_label(p.status), p.site_citations ],
-            [ "Location", where, p.site_citations ],
+      <%= render "shared/overview_panel", verified_at: p.verified_at, verified: p.site.verified?, correction_url: correction_url_for(p.name), sources_label: t("profile.sources.plant"), sources: p.site_citations, rows: [
+            [ "Type", facility_type_label(p.facility_type) ],
+            [ "Status", facility_status_label(p.status) ],
+            [ "Location", where ],
             [ owners.size > 1 ? "Owners" : "Owner", company_links.(owners), cited.("owns") ],
             [ operators.size > 1 ? "Operators" : "Operator", company_links.(operators), cited.("operates") ],
-            [ vendors.size > 1 ? "Reactor developers" : "Reactor developer", company_links.(vendors), cited.("vendor_for") ],
+            [ vendors.size > 1 ? "Reactor designers" : "Reactor designer", company_links.(vendors), cited.("vendor_for") ],
             [ buyers.size > 1 ? "Power buyers" : "Power buyer", company_links.(buyers), cited.("offtakes_from") ],
             [ "Technology", p.technologies.join(", ").presence, details_cited ],
             [ p.reactor_types.size > 1 ? "Reactor types" : "Reactor type", p.reactor_types.join(", ").presence, details_cited ],
             [ "Capacity", capacity, details_cited,
               p.capacity_leaves_out_units? ? "Net summer capacity of operating units, from EIA" : "Net summer capacity, from EIA" ],
-            [ "NRC docket", p.nrc_docket, p.site_citations ]
+            [ "NRC docket", p.nrc_docket ]
           ] %>
     </div>
 

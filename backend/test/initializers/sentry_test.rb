@@ -56,6 +56,13 @@ class ErrorReportingTest < ActiveSupport::TestCase
     with_env("SENTRY_DSN" => "https://public@o0.ingest.sentry.io/0") { assert ErrorReporting.enabled? }
   end
 
+  test "malformed request bodies are never reported" do
+    config = ErrorReporting.configure(Sentry::Configuration.new)
+    assert config.exception_class_allowed?(RuntimeError.new("boom"))
+    refute config.exception_class_allowed?(Rack::Multipart::BoundaryTooLongError.new("multipart boundary size too large (71 characters)"))
+    refute config.exception_class_allowed?(Rack::Multipart::EmptyContentError.new)
+  end
+
   private
     def with_env(values)
       saved = values.keys.index_with { |key| ENV[key] }
