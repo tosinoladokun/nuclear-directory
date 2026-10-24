@@ -964,14 +964,23 @@
   .nd-leads__short { display: none; }
   .nd-leads .nd-rowmenu > summary.nd-btn { padding: 0 var(--nd-space-4); }
 
-  /* Six columns and three full-size buttons need the full desktop width
-     (1,440px), so below that each lead is a card (as nd-stack-table on phones): the lead first,
+  /* Below 1,200px each lead is a card (Design on #546; from 1,200 to 1,440
+     the table tightens instead, below) (as nd-stack-table on phones): the lead first,
      then its lines, then the actions as three equal 44px columns. */
   .nd-leads__cancel { display: none; }
   .nd-leads__sort { display: none; }
   .nd-leads__more > summary { cursor: pointer; }
   .nd-leads__more ul { white-space: normal; }
-  @media (max-width: 1439px) {
+  .nd-leads__instatus { display: none; }
+  .nd-leads__source > a { display: inline-block; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  @media (min-width: 1200px) and (max-width: 1439px) {
+    /* Status folds into the Lead cell; Date narrows; actions wrap as whole buttons. */
+    .nd-leads .nd-leads__statuscol { display: none; }
+    .nd-leads .nd-leads__instatus { display: inline-block; margin-left: var(--nd-space-2); }
+    .nd-leads .nd-leads__date { width: 100px; }
+    .nd-leads .nd-leads__buttons { flex-wrap: wrap; }
+  }
+  @media (max-width: 1199px) {
     .nd-leads thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .nd-leads, .nd-leads tbody { display: block; }
     .nd-leads tr { display: flex; flex-wrap: wrap; gap: var(--nd-space-1) var(--nd-space-3); padding: var(--nd-space-3) 14px; border-top: var(--nd-hairline) solid var(--nd-rule); }
@@ -981,15 +990,17 @@
     .nd-leads .nd-leads__lead { order: -1; flex-basis: 100%; min-width: 0; }
     .nd-leads .nd-leads__lead .truncate { max-width: none; }
     .nd-leads .nd-leads__actions { flex-basis: 100%; }
-    .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 0; min-width: 0; display: flex; }
-    .nd-leads .nd-leads__buttons .nd-btn { width: 100%; justify-content: center; padding: 0 var(--nd-space-2); }
+    /* Cards keep each button at its own width; equal thirds only on phones. */
+    .nd-leads .nd-leads__buttons { flex-wrap: wrap; }
   }
   /* A phone's sheet has no Esc: a visible Cancel closes it. */
   @media (max-width: 560px) {
     .nd-leads__cancel { display: inline-flex; justify-content: center; }
-    /* On a phone each takes its label's width and shares what's left, so
-       "Already covered" stays in its box. */
-    .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 auto; }
+    /* On a phone the actions are equal thirds of the card, 44px tall
+       ("Covered" below 440px keeps the label inside). */
+    .nd-leads .nd-leads__buttons { flex-wrap: nowrap; }
+    .nd-leads .nd-leads__buttons > *, .nd-leads .nd-leads__buttons form.button_to { flex: 1 1 0; min-width: 0; display: flex; }
+    .nd-leads .nd-leads__buttons .nd-btn { width: 100%; justify-content: center; padding: 0 var(--nd-space-2); }
   }
 
   @media (max-width: 439px) {

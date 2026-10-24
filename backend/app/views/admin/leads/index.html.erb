@@ -37,7 +37,7 @@
         <th scope="col" class="nd-l">Lead</th>
         <th scope="col" class="nd-l">Source</th>
         <th scope="col" aria-sort="<%= @sort == "seen" ? (@dir == "desc" ? "descending" : "ascending") : "none" %>"><%= sort_link.("seen", "Seen") %></th>
-        <th scope="col" class="nd-l">Status</th>
+        <th scope="col" class="nd-l nd-leads__statuscol">Status</th>
         <th scope="col" class="nd-l">Actions</th>
       </tr>
     </thead>
@@ -45,20 +45,22 @@
       <% @leads.each do |lead| %>
         <% source = lead.sources.max_by { |each| each["last"].to_s } %>
         <tr id="lead-<%= lead.id %>">
-          <td class="nd-l type-data whitespace-nowrap">
+          <td class="nd-l type-data whitespace-nowrap nd-leads__date">
             <span class="block">First <%= lead.first_seen_on.strftime("%-d %b") %></span>
             <span class="block">Last <%= lead.last_seen_on.strftime("%-d %b") %></span>
           </td>
           <td class="nd-leads__lead nd-l whitespace-normal">
             <p class="type-body-strong m-0 truncate max-w-[28ch]" title="<%= lead.name %>" data-truncate><%= lead.name %></p>
-            <p class="type-small text-ink-muted m-0"><%= lead.kind.humanize %></p>
+            <p class="type-small text-ink-muted m-0"><%= lead.kind.humanize %>
+              <%# Between 1,200 and 1,440 the Status column folds in here. %>
+              <span class="nd-tag nd-leads__instatus"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></p>
             <% if (record = lead.record) %>
               <p class="type-small m-0"><%= link_to record.name, admin_record_path(type: lead.record_type, id: record.id), class: "nd-link" %></p>
             <% end %>
             <% if lead.status_ignored? && lead.reason.present? %><p class="type-small text-ink-muted m-0"><%= lead.reason %></p><% end %>
             <% if lead.note.present? %><p class="type-small text-ink-muted m-0"><%= lead.note %></p><% end %>
           </td>
-          <td class="nd-l type-small whitespace-nowrap">
+          <td class="nd-l type-small whitespace-nowrap nd-leads__source">
             <% if (url = safe_url(source&.dig("url"))) %>
               <%= link_to url, class: "nd-link", target: "_blank", rel: "noopener", title: source["label"] do %><%= source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %>
             <% else %>
@@ -76,7 +78,7 @@
             <% end %>
           </td>
           <td class="type-cell-num" data-unit="seen"><%= lead.seen_count %></td>
-          <td class="nd-l"><span class="nd-tag"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></td>
+          <td class="nd-l nd-leads__statuscol"><span class="nd-tag"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></td>
           <td class="nd-l nd-leads__actions">
             <div class="nd-leads__buttons type-ui">
               <% if lead.status_new? || lead.status_researching? %>
