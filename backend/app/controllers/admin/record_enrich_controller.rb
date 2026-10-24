@@ -16,8 +16,10 @@ class Admin::RecordEnrichController < Admin::BaseController
     # at a time, as on Checks).
     @agreed = @items.select { |item| item.ai_recommendation == "recommend_publish" && item.status != "needs_review" && item.held.nil? }.map(&:candidate_id)
     @runs = CrawlRun.where(source_kind: SOURCE_KIND).order(started_at: :desc).limit(4)
-    # Reading what its pages say, after they were fetched: still going, or stopped.
-    @extract = CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: @company.enriched_at..).order(:started_at).last if @company.enriched_at
+    # Reading what its pages say, after they were fetched: still going, or
+    # stopped. The first extraction after its read (runs go one at a time),
+    # so a later company's read never stands in for this one's.
+    @extract = CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: @company.enriched_at..).order(:started_at).first if @company.enriched_at
     # Its home page, when the last read couldn't use it (blocked, an error): said, with Read again.
     @home = Source.find_by(url: @company.website.to_s.strip) if @company.website.present?
   end
@@ -64,10 +66,15 @@ class Admin::RecordEnrichController < Admin::BaseController
     # hold back the rest), and two findings for one field never both land.
     directory = DataQuality::DirectoryClient.new
     results = ActiveRecord::Base.transaction do
+      # Approval's lock order: sources, then claims, then the company.
+      Source.lock.where(id: Candidate.where(id: ids).select(:source_id)).order(:id).ids
+      Candidate.lock.where(id: ids).order(:id).ids
       Organization.lock.find(@company.id)
-      decided = Candidate.where(id: ids).to_h do |claim|
-        [ claim.id, directory.attached_record(claim)&.verified_by.to_s.start_with?("human:") ]
-      end
+      # Only the company row, locked here, is read before the batch; any
+      # other record (a role, a technology) is checked live under its own lock.
+      own = Candidate.where(id: ids, subject_type: "Organization", subject_id: @company.id).ids
+      company_decided = @company.reload.verified_by.to_s.start_with?("human:")
+      decided = own.index_with { company_decided }
       fields = []
       check = lambda do |claim|
         held = DataQuality::Review.held_reason(claim, directory:, decided: decided[claim.id])
