@@ -197,32 +197,35 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert(claims.all? { |c| c[:kind] == "deal_term" })
   end
 
-  test "a deal with another company is an announced offtake on their link: its form from the quote, every value in it" do
+  test "a deal runs buyer to seller for power and supplier to buyer for supply; loose agreement words aren't deals" do
     page = <<~HTML
       <html><body><p>Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026.</p>
-      <p>We signed a memorandum of understanding with Grid Co.</p><p>We plan to sign a PPA with Later Co for 300 MW.</p>
-      <p>Bright Power signed a PPA with Dim Power for 100 MW.</p><p>We are working with Vague Co.</p>
-      <p>We signed a supply agreement with Fuel Co for up to $80 million.</p></body></html>
+      <p>We signed a memorandum of understanding with Grid Co to buy its power.</p>
+      <p>We signed a memorandum of understanding with Fuel Co for fuel supply.</p>
+      <p>We signed a PPA with Later Co for 300 MW, and plan to sign another.</p>
+      <p>Bright Power signed a PPA with Dim Power for 100 MW.</p><p>We work within the regulatory framework with Rule Co.</p>
+      <p>We signed a supply agreement with Steel Co for up to $80 million.</p></body></html>
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
     DataQuality::Plugins::CompanyPages.new.crawl(nil)
-    deal = ->(other, first, amount, capacity, date, quote) { { "other" => other, "company_first" => first, "amount" => amount, "capacity" => capacity, "date" => date, "quote" => quote } }
+    deal = ->(other, role, goods, capacity, date, quote) { { "other" => other, "role" => role, "goods" => goods, "amount" => nil, "capacity" => capacity, "date" => date, "quote" => quote } }
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [], "rounds" => [], "deals" => [
-        deal.("Big Data Co", true, nil, "500 MW", "March 3, 2026", "Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026."),
-        deal.("Grid Co", true, nil, nil, nil, "We signed a memorandum of understanding with Grid Co."),
-        deal.("Later Co", true, nil, "300 MW", nil, "We plan to sign a PPA with Later Co for 300 MW."),           # a plan
-        deal.("Dim Power", true, nil, "100 MW", nil, "Bright Power signed a PPA with Dim Power for 100 MW."),   # two other companies
-        deal.("Vague Co", true, nil, nil, nil, "We are working with Vague Co."),                                 # no form of agreement
-        deal.("Fuel Co", true, "$80 million", nil, nil, "We signed a supply agreement with Fuel Co for up to $80 million.") ] } # inexact
+        deal.("Big Data Co", "seller", "power", "500 MW", "March 3, 2026", "Acme Fission signed a power purchase agreement with Big Data Co for 500 MW on March 3, 2026."),
+        deal.("Grid Co", "buyer", "power", nil, nil, "We signed a memorandum of understanding with Grid Co to buy its power."),
+        deal.("Fuel Co", "buyer", "supply", nil, nil, "We signed a memorandum of understanding with Fuel Co for fuel supply."),
+        deal.("Later Co", "seller", "power", "300 MW", nil, "We signed a PPA with Later Co for 300 MW, and plan to sign another."), # a plan in the quote
+        deal.("Dim Power", "seller", "power", "100 MW", nil, "Bright Power signed a PPA with Dim Power for 100 MW."),               # two other companies
+        deal.("Rule Co", "seller", "power", nil, nil, "We work within the regulatory framework with Rule Co."),                     # not an agreement
+        deal.("Steel Co", "seller", "supply", nil, nil, "We signed a supply agreement with Steel Co for up to $80 million.") ] }    # inexact
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
+    ends = ->(claim) { [ claim[:payload].dig("from_organization", "name"), claim[:payload]["relationship_type"], claim[:payload].dig("to_organization", "name"), claim[:payload]["agreement"] ] }
     assert_equal [
-      { "link_type" => "Relationship", "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "Big Data Co" },
-        "relationship_type" => "offtake_with", "term_type" => "offtake", "agreement" => "ppa", "status" => "announced",
-        "external_id" => "page:#{HOME}#big data co ppa 500 mw", "capacity_mw" => "500.0", "signed_on" => "2026-03-03" },
-      { "link_type" => "Relationship", "from_organization" => { "name" => "Acme Fission" }, "to_organization" => { "name" => "Grid Co" },
-        "relationship_type" => "offtake_with", "term_type" => "offtake", "agreement" => "mou", "status" => "announced",
-        "external_id" => "page:#{HOME}#grid co mou" } ], claims.map { |c| c[:payload] }
+      [ "Big Data Co", "offtake_with", "Acme Fission", "ppa" ],   # Big Data Co buys Acme's power
+      [ "Acme Fission", "offtake_with", "Grid Co", "mou" ],       # Acme buys Grid Co's power
+      [ "Fuel Co", "supplies", "Acme Fission", "mou" ] ], claims.map(&ends)
+    first = claims.first[:payload]
+    assert_equal [ "announced", "500.0", "2026-03-03", "page:#{HOME}#big data co ppa 500 mw" ], first.values_at("status", "capacity_mw", "signed_on", "external_id")
   end
 end

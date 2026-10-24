@@ -27,7 +27,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-4".freeze
+  PROMPT_VERSION = "company_pages-5".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
@@ -40,10 +40,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # first that matches, early stages first so an "MOU for a PPA" stays an MOU.
   AGREEMENT_WORDS = {
     "mou" => /\b(memorandum of understanding|MOU)\b/i, "loi" => /\b(letter of intent|LOI)\b/i,
-    "framework" => /\bframework\b/i, "option" => /\boption\b/i, "preorder" => /\bpre-?order\b/i,
+    # Loose words only next to what makes them an agreement ("regulatory
+    # framework", a trade tariff or "another option" aren't deals).
+    "framework" => /\bframework (agreement|contract)\b/i, "option" => /\boption (agreement|contract|to (buy|purchase))\b/i,
+    "preorder" => /\bpre-?order\b/i,
     "development_agreement" => /\bdevelopment agreement\b/i, "prepayment" => /\bprepay(ment)?\b/i,
     "ppa" => /\b(power purchase agreement|PPA)\b/i, "supply_agreement" => /\bsupply (agreement|contract)\b/i,
-    "tariff_subscription" => /\btariff\b/i
+    "tariff_subscription" => /\btariff (subscription|agreement|contract)\b/i
   }.freeze
   # A round, not a grant, award, loan or contract; an exact figure only.
   ROUND_WORDS = /\b(round|funding|financing|series\s+[a-z]\b|seed|investment|(raised|raise|raises)\s+(equity|capital))/i
@@ -71,7 +74,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     - listing: a public company's stock listing (exchange and ticker, e.g. NASDAQ and OKLO), only as the page states it.
     - links: another company or a plant this company has a stated relationship with. The quote must name both this company (or
       "we") and the other party, and state the relationship in a sentence. Verbs: supplies, invests_in, funds, offtake_with
-      (buys or sells power under an agreement), subsidiary_of (only when the page says it is a subsidiary or wholly owned), and for
+      (the buyer offtakes power from the seller: company_first is true when this company buys, false when it sells), subsidiary_of (only when the page says it is a subsidiary or wholly owned), and for
       plants owns, operates, vendor_for (it designed the plant's reactor). company_first is true when this company does the verb to
       the other ("we supply X"), false when the other does it to this company ("X invested in us"). No amounts or dates here.
       Never a link from "plans to", "aims to", "will", "intends to", "in talks" or "exploring": only what is so now.
@@ -83,8 +86,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       date exactly as the quote writes it ("December 6, 2024"), or null. The quote must name this company (or "we") and the round.
       Not grants, awards, loans, debt or contracts; not a round of another company; amounts exactly as written, never summed.
       Never investors' names, valuations or totals across rounds.
-    - deals: an agreement this company has with another company to buy or sell power or fuel (offtake or supply). other: the other
-      company as named; company_first: true when this company sells or supplies to the other; amount and capacity exactly as the
+    - deals: an agreement this company has with another company to buy or sell power, or to supply fuel, equipment or services.
+      other: the other company as named; role: "buyer" when this company buys, "seller" when it sells or supplies; goods: "power"
+      for electricity or capacity, "supply" for fuel, equipment or services; amount and capacity exactly as the
       quote writes them ("$80 million", "500 MW"), or null; date as written, or null. The quote must name both parties (or "we"),
       say what kind of agreement it is (power purchase agreement, supply agreement, MOU, letter of intent, framework, option…),
       and state it as signed or in force, never planned.
@@ -296,10 +300,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       return if (amount_text && !amount) || (capacity_text && !capacity)
 
       signed_on = (Date.parse(date_text) if date_text&.match?(/\b(19|20)\d\d\b/) && quote.match?(/\bsign(ed|s)?\b/i)) rescue nil
-      ends = [ { "name" => name }, { "name" => other } ]
-      ends.reverse! unless item["company_first"]
+      return unless %w[buyer seller].include?(item["role"]) && %w[power supply].include?(item["goods"])
+
+      # The link's verb from what's traded; its direction from who buys (Data
+      # Quality): offtake_with runs buyer to seller, supplies supplier to buyer.
+      buyer, seller = item["role"] == "buyer" ? [ name, other ] : [ other, name ]
+      verb = item["goods"] == "power" ? "offtake_with" : "supplies"
+      from, to = verb == "offtake_with" ? [ buyer, seller ] : [ seller, buyer ]
       { kind: "deal_term", quote:, payload: {
-        "link_type" => "Relationship", "from_organization" => ends.first, "to_organization" => ends.last, "relationship_type" => (agreement == "supply_agreement" ? "supplies" : "offtake_with"),
+        "link_type" => "Relationship", "from_organization" => { "name" => from }, "to_organization" => { "name" => to }, "relationship_type" => verb,
         "term_type" => "offtake", "agreement" => agreement, "status" => "announced",
         "external_id" => "page:#{url}##{[ other, agreement, amount_text, capacity_text ].compact.join(' ').downcase.squish}",
         "amount_usd" => amount&.to_s("F"), "capacity_mw" => capacity&.to_s("F"), "signed_on" => signed_on&.iso8601 }.compact }
@@ -331,8 +340,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
           verb: { type: "string", enum: COMPANY_VERBS + PLANT_VERBS }, company_first: { type: "boolean" }, quote: { type: "string" } } } }
       maybe = { type: %w[string null] }
       deals = { type: "array", items: { type: "object", additionalProperties: false,
-        required: %w[other company_first amount capacity date quote],
-        properties: { other: { type: "string" }, company_first: { type: "boolean" }, amount: maybe, capacity: maybe, date: maybe,
+        required: %w[other role goods amount capacity date quote],
+        properties: { other: { type: "string" }, role: { type: "string", enum: %w[buyer seller] },
+          goods: { type: "string", enum: %w[power supply] }, amount: maybe, capacity: maybe, date: maybe,
           quote: { type: "string" } } } }
       rounds = { type: "array", items: { type: "object", additionalProperties: false, required: %w[amount round date quote],
         properties: { amount: maybe, round: maybe, date: maybe, quote: { type: "string" } } } }
