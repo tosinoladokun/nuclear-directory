@@ -4,10 +4,12 @@
 #
 # Crawl fetches the locations page (an index, never extracted), then each
 # reactor page its table links, at most once a day through the shared
-# Fetcher. It stores one line per reactor: the page's own name for it, its
-# licensee and location as the table gives them, and the page's Docket
-# Number and Reactor Type. Never the page's contacts. A block stops the
-# crawl; a page without a name or docket goes to a person. The medical
+# Fetcher. It stores one line per reactor from the page alone: its name and
+# its Licensee, Location, Docket Number and Reactor Type. Never the page's
+# contacts. A reactor the table stops linking has its waiting claims sent
+# to review (and its published facts flagged), until it's linked again. A block stops the
+# crawl (a same-day rerun too); a page without a name, licensee or docket
+# goes to a person. The medical
 # isotope and advanced reactor tables aren't read (applications and
 # construction, not licensed reactors).
 #
@@ -16,12 +18,16 @@
 # name says so. No operates link and no power level: the page doesn't state
 # that the reactor runs, and where thermal power goes is undecided (#387).
 class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
+  include DataQuality::UnlistedPages
+
   NRC = "https://www.nrc.gov".freeze
   LIST_URL = "https://www.nrc.gov/facilities-safety/facility-finder/nonpower".freeze
   INDEX_SOURCE_KIND = "nrc_research_reactors_index"
   TABLE_SUMMARY = "Locations of Research and Test Reactors"
   NO_TABLE = "Couldn't find the table of research and test reactors; the page layout may have changed"
-  NO_FACTS = "The reactor's page has no name or Docket Number; the page layout may have changed"
+  NO_FACTS = "The reactor's page has no name, Licensee or Docket Number; the page layout may have changed"
+  UNLISTED = "NRC's research and test reactor table no longer links this reactor"
+  LISTED_AGAIN = "NRC's research and test reactor table links this reactor again"
   FIELDS = [ "Licensee", "Location", "Docket Number", "Reactor Type" ].freeze
   STATE_CODES = LinkCard::US_STATES.invert.merge(LinkCard::US_STATES.keys.to_h { |code| [ code, code ] }).freeze
 
@@ -47,7 +53,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
     @fetcher = fetcher
   end
 
-  def crawl(_run)
+  def crawl(run)
     list = Source.find_or_create_by!(url: LIST_URL) do |row|
       row.source_kind = INDEX_SOURCE_KIND
       row.title = "NRC: locations of non-power reactors"
@@ -62,10 +68,17 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       return stats.merge("reactors" => 0)
     end
     stats.merge!("reactors" => rows.size, "reactor_pages" => Hash.new(0))
+    withdrawn = withdraw_unlisted(rows.map { |row| "#{NRC}#{row.path}" }, run, UNLISTED)
+    stats["withdrawn"] = withdrawn if withdrawn.positive?
     rows.each do |row|
       result = read(row)
       stats["reactor_pages"][result] += 1
-      return stats.merge("stopped" => "reactor page blocked") if result == "blocked"
+      page = Source.find_by(url: "#{NRC}#{row.path}")
+      # A block recorded earlier today stops a same-day rerun too, before any later page.
+      return stats.merge("stopped" => "reactor page blocked") if result == "blocked" || (page && still_blocked?(page))
+
+      restored = page ? restore_listed(page, LISTED_AGAIN) : 0
+      stats["restored"] = stats.fetch("restored", 0) + restored if restored.positive?
     end
     stats
   end
@@ -111,7 +124,11 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
         new_source.source_kind = source_kind
         new_source.title = "NRC: #{row.licensee} research reactor"
       end
-      source.update!(source_kind:) if source.source_kind == "web_page"
+      # A page someone cited by hand becomes this plug-in's; its stored copy is
+      # the whole page, so it's fetched afresh and converted.
+      if source.source_kind == "web_page"
+        source.update!(source_kind:, fetched_at: nil, etag: nil, last_modified: nil, content_text: nil, content_sha256: nil, extracted_sha256: nil)
+      end
       return "another_kind" unless source.source_kind == source_kind
 
       DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s
@@ -120,15 +137,15 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       "needs_human"
     end
 
-    # The page's name and docket with the table's licensee and location; never the page's people.
-    def stored_line(html, row)
+    # The page's own name and labelled facts; never the page's people. The
+    # table's Name column names the reactor, not always its licensee.
+    def stored_line(html, _row)
       doc = Nokogiri::HTML(html.to_s)
       name = doc.at_css("main h1, h1")&.text.to_s.squish
-      docket = value_after(doc, "Docket Number")
-      raise Unreadable if name.empty? || docket.blank?
+      facts = FIELDS.to_h { |label| [ label, value_after(doc, label) ] }.compact
+      raise Unreadable if name.empty? || facts["Licensee"].blank? || facts["Docket Number"].blank?
 
-      Reactor.new(name:, facts: { "Licensee" => row.licensee, "Location" => row.location, "Docket Number" => docket,
-        "Reactor Type" => value_after(doc, "Reactor Type") }.compact).line
+      Reactor.new(name:, facts:).line
     end
 
     def value_after(doc, label)

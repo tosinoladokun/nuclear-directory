@@ -15,8 +15,10 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     @list = stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/nonpower/list.html").read)
     @pages = stub_request(:get, PAGES).to_return do |request|
       slug = request.uri.path.split("/").last
-      { body: "<html><main><h1>Reactor #{slug}</h1><p><strong>Licensee:</strong> Someone<br><strong>Docket Number:</strong> 0500#{slug.sum.to_s.rjust(4, '0')}<br>" \
-        "<strong>Reactor Type:</strong> TRIGA<br><strong>Licensed Power:</strong> 1 MWt</p><p>Project Manager: (a person)</p></main></html>" }
+      licensee = slug.start_with?("mit") ? "Massachusetts Institute of Technology" : "Licensee of #{slug}"
+      { body: "<html><main><h1>Reactor #{slug}</h1><p><strong>Location:</strong> Cambridge, MA<br><strong>Licensee:</strong> #{licensee}<br>" \
+        "<strong>Docket Number:</strong> 0500#{slug.sum.to_s.rjust(4, '0')}<br><strong>Reactor Type:</strong> TRIGA<br>" \
+        "<strong>Licensed Power:</strong> 1 MWt</p><p>Project Manager: (a person)</p></main></html>" }
     end
   end
 
@@ -39,6 +41,31 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     assert_equal "Reactor mit-ma-hwr-reflected | Licensee: Massachusetts Institute of Technology | Location: Cambridge, MA | " \
       "Docket Number: 0500#{'mit-ma-hwr-reflected'.sum.to_s.rjust(4, '0')} | Reactor Type: TRIGA", mit.content_text
     refute_match(/Project Manager|Licensed Power/, mit.content_text)
+  end
+
+  test "a same-day rerun after a block requests no later page" do
+    stub_request(:get, PAGES).to_return(status: 403, body: file_fixture("nrc/akamai-403.html").read)
+    crawl
+
+    assert_equal "reactor page blocked", crawl.stats["stopped"]
+    assert_requested :get, PAGES, times: 1
+  end
+
+  test "the licensee is the page's, not the table's Name column (Texas A&M's two reactors)" do
+    crawl
+    tamu = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/tamu-tx-triga")
+    assert_equal "Licensee of tamu-tx-triga", plugin.extract(tamu, nil).second[:payload]["name"]
+  end
+
+  test "a reactor the table stops linking: its waiting claims go to review" do
+    DataQuality::Pipeline.run("nrc_research_reactors", plugin:, only: %w[crawl extract match])
+    waiting = mit.candidates.where(status: %w[new matched needs_review]).count
+    stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/nonpower/list.html").read.gsub("mit-ma-hwr-reflected", "gone"))
+    stub_request(:get, PAGES).to_return(status: 404)
+    Source.update_all(fetched_at: 2.days.ago)
+
+    assert_equal waiting, crawl.stats["withdrawn"]
+    assert_match Plugin::UNLISTED, mit.candidates.first.notes
   end
 
   test "a blocked reactor page stops the crawl; a page without a docket needs a person" do
