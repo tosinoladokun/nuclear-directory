@@ -196,6 +196,26 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
       [ :unreadable, source ]
     end
 
+    NOTHING_SOLD = "A later filing of this round reports nothing sold: keep this amount, or reject the round".freeze
+
+    # A round a person already decided whose latest filing now reports nothing
+    # sold: one review item on that filing for the round (its decision stands),
+    # so the published amount is checked. Never for a first filing that sold
+    # nothing (no round was proposed). Returns how many were added.
+    def flag_decided_rounds(waiting, latest)
+      decided = waiting.where(status: %w[merged confirmed]).where.not(subject_id: nil).to_a
+      decided.uniq(&:subject_id).count do |claim|
+        newest = latest[first_accession(fields(claim.source.content_text))] or next false
+        next false if amount(newest["amount sold"])&.positive?
+
+        filing = Source.where(source_kind:).where("content_text LIKE ?", "%accession: #{newest['accession']} |%").first or next false
+        next false if filing.candidates.where(kind: "deal_term", subject_type: claim.subject_type, subject_id: claim.subject_id).exists?
+
+        filing.candidates.create!(kind: "deal_term", payload: claim.payload, quote: filing.content_text, status: "needs_review",
+          review_origin: "dropped", subject_type: claim.subject_type, subject_id: claim.subject_id, notes: NOTHING_SOLD)
+      end
+    end
+
     def blocked?(outcome, source) = outcome == "blocked" || source&.blocked_streak.to_i.positive?
 
     # A filing that arrived after amendments naming it (a failed download
@@ -245,8 +265,8 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
         # Re-checked here: a person may have decided one since it was read.
         Candidate.where(id: replaced.map(&:id), status: %w[new matched]).update_all(status: "rejected", notes: "Superseded by a later filing of this round", updated_at: Time.current)
         Candidate.where(id: unreplaced.map(&:id), status: %w[new matched]).update_all(status: "needs_review",
-          notes: "A later filing of this round reports nothing sold: keep this amount, or reject the round", updated_at: Time.current)
-        replaced.size + unreplaced.size
+          notes: NOTHING_SOLD, updated_at: Time.current)
+        replaced.size + unreplaced.size + flag_decided_rounds(waiting, latest)
       end
     end
 

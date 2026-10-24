@@ -202,6 +202,25 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     assert_match "nothing sold", earlier.notes
   end
 
+  test "an approved round whose D/A reports nothing sold gets one review item; its decision stands" do
+    DataQuality::Pipeline.run("sec_form_d", plugin:, only: %w[crawl extract match])
+    original = Candidate.sole
+    assert DataQuality::Review.approve([ original.id ], by: "human:tosin").sole.ok?
+    list = JSON.parse(file_fixture("sec_form_d/newera_submissions.json").read)
+    %w[form accessionNumber filingDate primaryDocument].zip([ "D/A", "0002028336-25-000009", "2025-06-01", "primary_doc.xml" ]).each { |key, value| list["filings"]["recent"][key].unshift(value) }
+    stub_request(:get, LIST).to_return(body: list.to_json)
+    zero = file_fixture("sec_form_d/newera_d.xml").read.sub("<isAmendment>false</isAmendment>",
+      "<isAmendment>true</isAmendment><previousAccessionNumber>0002028336-24-000006</previousAccessionNumber>").sub("<totalAmountSold>37000000", "<totalAmountSold>0")
+    stub_request(:get, "https://www.sec.gov/Archives/edgar/data/2028336/000202833625000009/primary_doc.xml").to_return(body: zero)
+    Source.update_all(fetched_at: 2.days.ago)
+    2.times { crawl }
+
+    assert original.reload.status_merged?, "the decision stands"
+    flags = Candidate.where(review_origin: "dropped", subject_id: original.subject_id)
+    assert_equal 1, flags.count, "once, not every night"
+    assert_match "nothing sold", flags.sole.notes
+  end
+
   test "a D/A whose original isn't stored is the round of the filing it names" do
     amendment = filing("0002028336-25-000005", form: "D/A", amends: "0001012975-25-000531")
 
