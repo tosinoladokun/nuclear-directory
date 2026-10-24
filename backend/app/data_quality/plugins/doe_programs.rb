@@ -82,12 +82,19 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
     items = items(source) or raise LayoutChanged, "#{LAYOUT_CHANGED} (#{source.url})"
 
     companies = items.map { |item| { kind: "organization", quote: item.quote, payload: { "name" => item.name } } }
-    # One link per company and kind of link on a page, however many of its
-    # lists name it: a second claim would replace the first one's description.
-    links = items.group_by { |item| [ key(item.name), item.list.relationship_type ] }.map do |_, group|
+    # One link per company and kind of link, however many lists and pages
+    # name it, proposed from the first page (in PAGES order) that names it,
+    # with a description summing up every page's lists: a claim from each
+    # page would be stopped by #390's guard, since one page's claim would
+    # replace what the other's supports. Each page still proposes the company.
+    everywhere = other_pages_items(source) + items
+    links = items.group_by { |item| [ key(item.name), item.list.relationship_type ] }.filter_map do |group_key, group|
+      all = ordered(everywhere.select { |item| [ key(item.name), item.list.relationship_type ] == group_key })
+      next unless all.first.page == source.url
+
       { kind: "relationship", quote: group.first.quote, payload: { "from_organization" => { "name" => DOE },
         "to_organization" => { "name" => group.first.name }, "relationship_type" => group.first.list.relationship_type,
-        "description" => group.map(&:description).uniq.join("; ") } }
+        "description" => all.map(&:description).uniq.join("; ") } }
     end
     companies + links
   end
@@ -107,9 +114,12 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
   # The item with what the page says before its list, for every list that
   # names the same company: what the claim's description sums up.
   def verification_context(source, quote)
-    items = Array(items(source))
-    named = items.select { |item| item.quote == quote.to_s.squish }.map { |item| key(item.name) }
-    items.select { |item| named.include?(key(item.name)) }.map { |item| [ item.context, item.quote ].join("\n") }.uniq.join("\n\n").presence
+    mine = Array(items(source))
+    named = mine.select { |item| item.quote == quote.to_s.squish }.map { |item| key(item.name) }
+    everywhere = ordered(other_pages_items(source) + mine)
+    everywhere.select { |item| named.include?(key(item.name)) }
+      .map { |item| [ (@pages.dig(item.page, :title) if item.page != source.url), item.context, item.quote ].compact.join("\n") }
+      .uniq.join("\n\n").presence
   end
 
   def source_facts(source)
@@ -119,7 +129,19 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
   end
 
   private
-    Item = Data.define(:quote, :name, :list, :context, :description)
+    Item = Data.define(:quote, :name, :list, :context, :description, :page)
+
+    # The other pages' items, from their stored copies (an unreadable one adds nothing).
+    def other_pages_items(source)
+      Source.where(source_kind:, url: @pages.keys - [ source.url ]).where.not(content_text: nil)
+        .flat_map { |other| Array(items(other)) }
+    end
+
+    # In PAGES order, then each page's list order.
+    def ordered(items)
+      lists = @pages.values.flat_map { |page| page[:lists] }
+      items.sort_by.with_index { |item, i| [ lists.index(item.list) || lists.size, i ] }
+    end
 
     # The page's lists' items, or nil when a list is missing, names no one,
     # or its heading no longer gives the date its description needs.
@@ -134,7 +156,7 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
         entries = ul.css("li").map { |li| li.text.gsub(/[[:space:]]+/, " ").strip }.reject(&:empty?)
         return nil if entries.empty?
 
-        entries.each { |quote| names(quote).each { |name| found << Item.new(quote:, name:, list:, context:, description:) } }
+        entries.each { |quote| names(quote).each { |name| found << Item.new(quote:, name:, list:, context:, description:, page: source.url) } }
       end
     end
 

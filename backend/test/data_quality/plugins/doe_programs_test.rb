@@ -68,6 +68,19 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_match "General Matter ($900 million)", context
   end
 
+  test "a company on two pages gets one link, from the first page, summing up both, and the verifier reads both" do
+    crawl
+    from_enrichment = plugin.extract(Source.find_by!(url: ENRICHMENT), nil).select { |c| c[:payload].dig("to_organization", "name").to_s.start_with?("Orano") }
+    from_deconversion = plugin.extract(Source.find_by!(url: DECONVERSION), nil).select { |c| c[:payload].dig("to_organization", "name").to_s.start_with?("Orano") }
+
+    assert_equal [ "HALEU enrichment services contract: selected in 2024 to bid on task orders; " \
+      "HALEU deconversion services contract, to bid on deconversion work" ], from_enrichment.map { |c| c[:payload]["description"] }
+    assert_empty from_deconversion, "the deconversion page proposes the company, not a second link"
+    context = plugin.verification_context(Source.find_by!(url: ENRICHMENT), from_enrichment.sole[:quote])
+    assert_match "awarded contracts with 6 companies", context
+    assert_match "DOE selected four companies", context
+  end
+
   test "a heading's date is read from the page: a changed date is a change, and the description follows it" do
     source = stored(ALLOCATION)
     moved = Source.new(url: ALLOCATION, content_text: source.content_text.sub("Round 3 Conditional Selections (July 23, 2026)", "Round 3 Conditional Selections (August 23, 2026)"))
