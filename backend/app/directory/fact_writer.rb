@@ -85,7 +85,7 @@ module Directory
       }
     }.freeze
 
-    EVIDENCE_ATTRIBUTES = %i[source_id quote found_by confidence crawl_run_id].freeze
+    EVIDENCE_ATTRIBUTES = %i[source_id quote found_by confidence crawl_run_id fields].freeze
 
     def self.write(...) = new.write(...)
 
@@ -1099,6 +1099,9 @@ module Directory
 
         row = record.evidence.find_or_initialize_by(source_id: item[:source_id], quote: item[:quote])
         row.assign_attributes(item.slice(:found_by, :confidence, :crawl_run_id))
+        # A quote can back several fields (an HQ line that also states the
+        # legal name): each write adds its fields, never removes any.
+        row.fields = [ *row.fields, *item[:fields] ] if item[:fields].present?
         @evidence_changed = true if row.new_record? || row.changed?
         row.save!
       end

@@ -39,6 +39,8 @@ class SourceCatalog
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
     "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
+    "nrc_fuel_cycle" => { name: "NRC fuel cycle facilities", daily: false },
+    "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: false },
     # The annual plant file (#319): read once a year, not by the daily crawl.
     "eia_plants" => { name: "EIA-860 plants" },
     "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
