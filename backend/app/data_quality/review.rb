@@ -88,7 +88,8 @@ module DataQuality::Review
   DUPLICATE_NOTES = [ "but similar:", "could be the same brand" ].freeze
   # A company's role or technology is what that fact is (a plant's
   # technology is an ordinary value).
-  IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology] }.freeze
+  # A news item's lead mark (#127) is what makes it a lead: the edit form can't change it.
+  IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology], "news_item" => %w[lead] }.freeze
   # What a claim of this kind can't change when it's edited before approval:
   # its link's ends and type, and what identifies it (a role's role).
   def self.read_only_keys(kind) = NOT_EDITABLE + IDENTIFYING.fetch(kind.to_s, [])
@@ -306,6 +307,8 @@ module DataQuality::Review
     def edit_and_approve(candidate_id, attributes:, by:, reason: nil, directory: DataQuality::DirectoryClient.new)
       human!(by)
       candidate = Candidate.find_by(id: candidate_id) or return gone(candidate_id)
+      return Result.new(candidate_id:, ref: nil, errors: [ LEAD ]) if lead?(candidate)
+
       attributes = attributes.to_h.stringify_keys
       # A field that can't be edited here may come back unchanged (the form
       # shows it); only a changed one is refused.

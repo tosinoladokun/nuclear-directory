@@ -43,6 +43,9 @@ class DataQuality::Plugins::TradePressTest < ActiveSupport::TestCase
     assert_equal [ DataQuality::Review::LEAD ], result.errors
     result = DataQuality::Review.approve([ lead.id ], by: "human:dq", data_quality_reviewed: true).sole
     assert_equal [ DataQuality::Review::LEAD ], result.errors, "a recommendation doesn't lift it"
+    result = DataQuality::Review.edit_and_approve(lead.id, attributes: { "lead" => "true", "title" => "Edited" }, by: "human:tosin")
+    assert_equal [ DataQuality::Review::LEAD ], result.errors, "the form's lead field, sent back as text, changes nothing"
+    assert_equal true, lead.reload.payload["lead"]
     assert_empty NewsItem.all
   end
 end
