@@ -520,6 +520,11 @@ module DataQuality::Review
         result = Result.new(candidate_id: states.first["id"], ref: nil, errors: [])
       end
       result
+    # Undo locks claims before records, as a decision does; a merge locks
+    # records first. If the two meet, Postgres aborts one: the whole Undo
+    # rolled back, so it says to try again instead of an error page.
+    rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
+      Result.new(candidate_id: states.first&.dig("id"), ref: nil, errors: [ BUSY ])
     end
 
     # Rejects candidates. A record match created only for one of them (a

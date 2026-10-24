@@ -351,6 +351,22 @@ class DataQuality::ReviewTest < ActiveSupport::TestCase
     assert_match "no longer exists; refresh the queue", result.errors.join
   end
 
+  test "an Undo that meets a merge's locks says to try again, with nothing undone" do
+    Organization.create!(name: "Imaginary Fission Co", verification_status: "verified", verified_by: BY).aliases.create!(alias: "Imaginary Fission Co")
+    c = candidate("organization", { "name" => "Imaginary Fission Co" })
+    run_stage("match")
+    before = Review.undo_state(c.id)
+    Review.reject([ c.id ], by: BY)
+    state = Review.undoable(before, by: BY) or flunk "the Reject should be undoable"
+    directory = DataQuality::DirectoryClient.new
+    directory.define_singleton_method(:lock_fact) { |**| raise ActiveRecord::Deadlocked, "deadlock detected" }
+
+    result = Review.undo_all([ state ], by: BY, directory:)
+
+    assert_equal [ Review::BUSY ], result.errors
+    assert c.reload.status_rejected?, "the whole Undo rolled back"
+  end
+
   test "a rejection whose proposal can't be retired is undone, so it can be retried" do
     c = candidate("organization", { "name" => "Imaginary Fission Co" })
     run_stage("match")
