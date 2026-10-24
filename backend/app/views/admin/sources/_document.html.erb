@@ -21,7 +21,7 @@
     <% end %>
   </td>
   <% if local_assigns[:publisher] %>
-    <td class="type-body nd-l"><%= link_to mark_matches(document.domain.presence || source_host(document.url), local_assigns[:query]), admin_source_path(key: document.entry_key), class: "nd-link" %></td>
+    <td class="type-body nd-l"><%= link_to mark_matches(document.domain.presence || source_host(document.url), local_assigns[:query]), admin_source_path(key: document.entry_key, back: back_path(nil)), class: "nd-link" %></td>
   <% end %>
   <td class="type-cell-num" data-unit="<%= document.facts == 1 ? "fact" : "facts" %>"><%= document.facts.positive? ? link_to(number_with_delimiter(document.facts), admin_live_path(within: "doc-#{document.id}"), class: "nd-link") : 0 %></td>
   <td class="type-data text-ink-muted"><%= document.last_read_at&.strftime("%-d %b %H:%M") || "—" %></td>

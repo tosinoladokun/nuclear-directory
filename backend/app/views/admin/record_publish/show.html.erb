@@ -1,0 +1,31 @@
+<% content_for :title, "Publish #{@record.name}" %>
+<% record = admin_record_path(type: @type, id: @record.id, back: params[:back].presence) %>
+<% company = @type == "Organization" %>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: @record.name, parent_path: record, current: "Publish" %>
+  <h1 class="type-admin-h1 m-0">Publish <%= @record.name %></h1>
+
+  <section class="nd-panel nd-stack" aria-labelledby="preview-heading">
+    <h2 id="preview-heading" class="type-admin-h2 m-0">What goes public</h2>
+    <ul class="type-body">
+      <li>Appears on: its page, search, the sitemap<%= ", category lists" if company %></li>
+      <li><%= pluralize(@plan.goes_live_with, "approved fact") %> about it <%= @plan.goes_live_with == 1 ? "goes" : "go" %> public with it</li>
+      <li>Anything else waiting on it stays waiting</li>
+    </ul>
+    <%= form_with url: admin_record_publish_path(type: @type, id: @record.id) do %>
+      <%= hidden_field_tag :back, params[:back], id: nil if params[:back].present? %>
+      <% if @plan.added_with.any? %>
+        <label class="nd-row nd-choice type-body flex-nowrap">
+          <%= check_box_tag :with_added, "1", true, class: "nd-check" %>
+          <% @plan.added_with.each do |fact_type, fact_id, _| %><%= hidden_field_tag "added[]", "#{fact_type}:#{fact_id}", id: nil %><% end %>
+          <span class="min-w-0">Also publish what you added with it by hand: <%= @plan.added_with.map(&:last).to_sentence %></span>
+        </label>
+      <% end %>
+      <div class="nd-row">
+        <button type="submit" class="nd-btn nd-btn--primary type-ui">Publish</button>
+        <%= link_to "Cancel", record, class: "nd-btn nd-btn--outline type-ui" %>
+      </div>
+    <% end %>
+  </section>
+</div>

@@ -18,13 +18,14 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 | Plant link (`FacilityRelationship`) | A company's role at a plant | Southern Nuclear operates Vogtle 3 | A deal between two companies |
 | Company link (`Relationship`) | A deal or tie between two companies | Centrus supplies TRISO-X | A role at a plant |
 | Deal term (`DealTerm`) | One award, power deal or funding round under its link, with amount and dates; or a company's own funding round when its filing names no investors (Form D) | A DOE award (ID, amount, start date) under "DOE funds X-energy"; a Form D round on the company that raised it | The link itself |
-| Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor developer; SMR | A tag inferred without a quote |
+| Category (role) and technology | A tag on a company, each with its own quote | X-energy: reactor designer; SMR | A tag inferred without a quote |
 
 ### Site or unit
 
 - **A unit** has an NRC docket (or, before licensing, a unit number the developer states) and sits under its site. Two levels only: site, then unit.
 - **A site** has no parent. It holds the EIA plant ID, the location and the operator links. A single-unit plant can stand alone as one record until its EIA site exists (Columbia today).
 - Unit capacity, coordinates and state come from EIA's generator row. A unit's state should equal its site's (audited).
+- **In a company's seed file,** a link to one unit gives its site too: `- name: Indian Point 2` with `site: Indian Point`. The loader finds the site among sites by name (or makes it), then the unit under it by name (or makes it there). A same-name plant with no site becomes that unit; one already under another site fails the load. Write the site's name exactly as the directory has it (Indian Point, San Onofre, Duane Arnold Energy Center): a variant makes a second site. Without `site:`, the entry is a plant of its own, so use it only for a site or a single-unit plant.
 
 ### The same record
 
@@ -63,7 +64,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | `offtake_with` | offtakes from | Agreed to buy power from the company's existing or future fleet | Meta offtakes from Constellation | A power deal tied to one plant (use the plant link `offtakes_from`) |
 | `subsidiary_of` | is a subsidiary of | Points from the child to its parent | Georgia Power is a subsidiary of Southern Company | A partnership or joint venture |
 
-**Deal stage** goes in the link's description ("MOU", "framework", "signed PPA") and, once #264 merges, in the deal term's `status`: `announced`, `signed`, `active`, `completed` or `terminated`. An MOU or framework is `announced`, with "MOU" or "framework" in the description. Deal amounts and dates are deal terms (#264), never free text alone.
+**Deal stage** goes in the deal term (#256): its `agreement` (`ppa`, `supply_agreement`, `tariff_subscription`, `development_agreement`, `prepayment`, `framework`, `mou`, `loi`, `option` or `preorder`) and its `status` (`announced`, `signed`, `active`, `completed` or `terminated`). A **counted** deal is a PPA, supply agreement or tariff subscription that's signed, active or completed, with no open `conditions` (an approval it still waits for, named: "NRC approval", "Georgia PSC approval"); one with a condition shows as signed, pending. Development agreements, prepayments, frameworks, MOUs, letters of intent, options and preorders are listed by stage, never counted. Funding and equity are funding terms, not offtakes, and have no agreement. `capacity_mw` is the headline MW; `firm_mw` is what's firmly contracted, blank when the source doesn't state it (never estimated); `term_years` is the length when a source gives no dates. A deal listed by stage may state no MW. The link's description still says it in words, but amounts, MW and dates are deal terms, never free text alone. In the seed, each agreement is a `terms:` entry under its link, with a stable `key` (e.g. `google-kairos-mpda-2024`).
 
 **Funding rounds from Form D (PM, 18 Oct, #129):** a Form D states a round's amount sold, the amount offered and the date of first sale, but names no investors. It's recorded as a funding round on the company itself (`amount_usd` = sold, `amount_offered_usd` = offered, `starts_on` = first sale, `external_id` = the original filing's accession number, so a Form D/A amends the same round). It's never recorded as a link to a placeholder such as "undisclosed investors". An investor named by another primary source is a separate `invests_in` or `funds` link. A company's own round counts toward the company's funding, never toward an investor's total.
 
@@ -120,7 +121,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | Bucket | Means | A company is in it when it has | Today |
 |---|---|---|---|
 | Power plant owners and operators | Owns or runs nuclear power plants. Its slug stays `utilities` | `utility` or `operator`, or a published owns/operates link to an **operating power plant** | 33 |
-| Developers | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers` | `reactor_vendor` or `project_developer` | 19 |
+| Developers (home card: Reactor Developers) | Builds new nuclear: designs or sells reactors (fission or fusion), or develops, finances and will own or run new nuclear plants. Its slug stays `reactor-developers`. One category, told apart by the role shown on each company: **Reactor designer** (`reactor_vendor`, designs the reactor) and **Project developer** (`project_developer`, builds and develops plants); a company with both shows both (Tosin, 21 Oct) | `reactor_vendor` or `project_developer` | 19 |
 | Fuel and materials | Mines, converts, enriches or fabricates fuel; ships fresh fuel; supplies materials such as coolant; produces isotopes (medical and industrial) | `fuel` or its stages, `coolant` or its kinds, `isotopes` (new key), or the sourced tag "fresh-fuel transport" | 11 |
 | Components and manufacturing | Makes equipment: pumps, valves, forgings, steam generators, instrumentation and control hardware, naval and defense nuclear components | `components` (new key) | 0 |
 | Waste and decommissioning | Stores, transports and disposes of spent fuel and waste; decommissions plants | `waste_decommissioning` (new key), or the sourced tag "spent-fuel transport" | 0 |

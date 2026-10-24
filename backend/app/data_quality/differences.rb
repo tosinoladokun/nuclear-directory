@@ -2,17 +2,22 @@
 # Verify sends such candidates to review; the admin shows both values before
 # a human approves one (approving applies the source's value).
 #
-#   DataQuality::Differences.with_human_verified(candidate, record)
+#   DataQuality::Differences.with_human_verified(candidate, record, directory:)
 #   # => { "state" => ["NJ", "DE"] }   # [verified, this source]
 module DataQuality::Differences
   # Compared per kind. Names aren't: spelling and legal-form variants are
   # expected, and aliases cover them.
   COMPARED = {
-    "organization" => %w[domain],
-    "facility" => %w[nrc_docket eia_plant_id facility_type status state country_code],
+    # sec_cik: a company matched by name whose stored CIK differs from the
+    # source's goes to review, not through as a conflict only approval would
+    # see (#402). Equivalent CIKs ("320193" and "0000320193") compare equal.
+    "organization" => %w[domain sec_cik],
+    "facility" => %w[nrc_docket eia_plant_id facility_type status city state country_code],
     # A link's type and ends say which link it is; these are its details.
     "relationship" => %w[description started_on ended_on],
-    "facility_relationship" => %w[ownership_pct description started_on ended_on]
+    "facility_relationship" => %w[ownership_pct description started_on ended_on],
+    # Its link, type and external ID say which term it is; these are its values.
+    "deal_term" => %w[amount_usd amount_offered_usd starts_on ends_on round status]
   }.freeze
 
   # Values stored by key whose history is recorded under their column
@@ -22,12 +27,12 @@ module DataQuality::Differences
 
   # record: a DirectoryClient::Record (or nil). Only a record a human
   # verified counts; anything else has no human value to protect.
-  def self.with_human_verified(candidate, record)
+  def self.with_human_verified(candidate, record, directory:)
     return {} unless record && record.verification_status == "verified" && record.verified_by.to_s.start_with?("human:")
 
     COMPARED.fetch(candidate.kind, []).each_with_object({}) do |name, differences|
-      stored = comparable(name, record.values ? record.values[name] : record.public_send(name))
-      incoming = comparable(name, incoming_value(candidate, name))
+      stored = comparable(name, record.values ? record.values[name] : record.public_send(name), directory:)
+      incoming = comparable(name, incoming_value(candidate, name), directory:)
       next if stored.blank? || incoming.blank? || stored == incoming
 
       differences[name] = [ stored, incoming ]
@@ -57,7 +62,7 @@ module DataQuality::Differences
   # written by the pipeline from its own kind of source (the rule above).
   # also: more fields to count, { name => stored value }.
   def self.pipeline_written?(candidate, record, directory:, also: {})
-    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values) or return false
+    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values, directory:) or return false
     # Newest first, so find gives each field's latest write.
     history = directory.verification_history(type: record.type, id: record.id)
     evidence = directory.evidence(type: record.type, id: record.id)
@@ -71,7 +76,7 @@ module DataQuality::Differences
   # What approving the candidate would change on its record:
   # { name => [stored, incoming] }, or nil when a field can't be compared.
   def self.changes(candidate, record, directory:)
-    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values) or return
+    fields = changing(candidate, directory.fact(type: record.type, id: record.id)&.values, directory:) or return
     fields.to_h { |name, stored| [ name, [ stored, candidate.payload[name] ] ] }
   end
 
@@ -80,25 +85,25 @@ module DataQuality::Differences
   # written; a key with no value clears the field. A matched record keeps
   # its name, and aliases are only ever added. nil when a field can't be
   # compared (it isn't one the record stores).
-  def self.changing(candidate, stored)
+  def self.changing(candidate, stored, directory:)
     return unless stored
 
     written = candidate.payload.except(*DataQuality::DirectoryClient::WRITE_SKIPPED, "name", "aliases")
     written.each_with_object({}) do |(name, incoming), fields|
       return unless stored.key?(name)
-      next if same?(name, stored[name], incoming)
+      next if same?(name, stored[name], incoming, directory:)
 
       fields[name] = stored[name]
     end
   end
 
   # Numbers compare as numbers (40.123 is 40.123000), the rest as compared above.
-  def self.same?(name, stored, incoming)
+  def self.same?(name, stored, incoming, directory:)
     if stored.is_a?(Numeric) && (number = BigDecimal(incoming.to_s, exception: false))
       return BigDecimal(stored.to_s) == number
     end
 
-    comparable(name, stored) == comparable(name, incoming)
+    comparable(name, stored, directory:) == comparable(name, incoming, directory:)
   end
 
   # An unedited approval of a claim from the candidate's kind of source.
@@ -134,12 +139,14 @@ module DataQuality::Differences
 
   # Values compare as the directory stores them: text stripped, country
   # codes upcased, domains as hosts ("https://WWW.TerraPower.com/news" is
-  # "terrapower.com"), percentages as numbers (40 is 40.0).
-  def self.comparable(name, value)
-    if name == "ownership_pct" && (number = BigDecimal(value.to_s, exception: false))
+  # "terrapower.com"), percentages as numbers (40 is 40.0), CIKs normalized
+  # to 10 zero-padded digits ("320193" is "0000320193", #402).
+  def self.comparable(name, value, directory:)
+    if %w[ownership_pct amount_usd amount_offered_usd].include?(name) && (number = BigDecimal(value.to_s, exception: false))
       return number.to_s("F").delete_suffix(".0")
     end
     return value.to_s.strip.upcase if name == "country_code"
+    return directory.normalize_cik(value).to_s if name == "sec_cik"
     return value.to_s.strip unless name == "domain" && value.present?
 
     text = value.to_s.strip

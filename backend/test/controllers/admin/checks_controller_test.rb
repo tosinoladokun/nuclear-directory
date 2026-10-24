@@ -99,7 +99,7 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Overview: today's date, a tile per stage with its count, and each source's read, same and changed" do
+  test "Overview: the date, a tile per stage with its count; each source's read, same and changed is on Sources" do
     waiting("organization", { "name" => "Alpha Co" }, notes: "unsure")
     CrawlRun.create!(stage: "match", source_kind: "nrc_reactor_list", status: "succeeded", started_at: 1.hour.ago, finished_at: 1.hour.ago,
       stats: { "candidates" => 219, "confirmed" => 219 })
@@ -108,11 +108,17 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
     get admin_root_path
 
     assert_response :success
-    assert_select "h1", "Today"
+    assert_select "h1", "Overview"
     assert_select ".nd-shell__nav a[aria-current=page]", "Overview"
+    assert_select "details[open] summary", /Needs attention/
+    assert_select "details[open] summary", /Last run per stage/
+    assert_select ".nd-numtable", 0
     assert_select "a.nd-tile[href=?]", admin_checks_path, /Checks · waiting\s+#{1 + DataQuality::Review.pending_count}/
     assert_select "a.nd-tile.nd-tile--ink", 1
     assert_select "a.nd-tile[href=?]", admin_corrections_path, /Correction requests\s+1/
+
+    get admin_sources_path
+    assert_select "details[data-controller=desktop-open] summary", "Read, same, changed"
     row = css_select(".nd-numtable tbody tr").find { |tr| tr.text.include?("NRC") }
     assert_equal [ "NRC", "219", "219", "1" ], row.css("td").map { |td| td.text.squish }
   end
@@ -122,9 +128,27 @@ class Admin::ChecksControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "header.nd-shell__side[data-controller=admin-menu]" do
       assert_select "button.nd-shell__menu[hidden][aria-controls=admin-nav]", "Menu"
-      assert_select "nav#admin-nav a", 5
+      assert_select "nav#admin-nav a", 7
     end
-    assert_select ".nd-shell__nav a", /Checks/
+    assert_select ".nd-shell__nav a", /Today/
     assert_select ".nd-shell__nav a", text: /Queue|Pending facts/, count: 0
+  end
+
+  test "a waiting funding round and a pending one show under Facts, by their names" do
+    Directory::FactWriter.write(:organization, { name: "X-energy", sec_cik: "0001234567" }, verification: { status: "verified", by: "human:tosin" })
+    issuer = Organization.find_by!(name: "X-energy")
+    Directory::FactWriter.write(:deal_term, { link_type: "Organization", link_id: issuer.id, term_type: "funding_round",
+      external_id: "0001234567-24-000001", amount_usd: 50_000_000 })
+    claim = Candidate.create!(source: @web, kind: "deal_term", quote: "q", status: "needs_review", notes: "unsure", payload: {
+      "organization" => { "name" => "X-energy", "sec_cik" => "0001234567" }, "link_type" => "Organization",
+      "term_type" => "funding_round", "external_id" => "0001234567-24-000002", "amount_usd" => "25000000.0" })
+
+    get admin_checks_path(category: "facts")
+
+    assert_response :success
+    assert_includes claims_shown, claim.id
+    assert_includes response.body, "X-energy: funding round 0001234567-24-000001", "the pending term reads by its company and filing"
+    assert_includes response.body, "$50,000,000"
+    assert_not_includes response.body, "Deal term 39"
   end
 end

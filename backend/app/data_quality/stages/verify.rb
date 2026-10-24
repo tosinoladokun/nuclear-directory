@@ -96,7 +96,7 @@ class DataQuality::Stages::Verify < DataQuality::Stage
       closed = closed_hold(record)
       return closed if closed
 
-      differences = DataQuality::Differences.with_human_verified(candidate, record)
+      differences = DataQuality::Differences.with_human_verified(candidate, record, directory:)
       differences = DataQuality::Differences.written_by_person(differences, candidate, record, directory:)
       return [ "conflicts", DataQuality::Differences.describe(differences) ] if differences.any?
 

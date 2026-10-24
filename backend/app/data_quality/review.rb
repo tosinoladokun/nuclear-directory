@@ -28,6 +28,29 @@ module DataQuality::Review
   Result = Data.define(:candidate_id, :ref, :errors) do
     def ok? = errors.empty?
   end
+  # A record added by hand (#202): ref when it was written (or, in a dry
+  # run, would be), errors, and the record of the same name if one exists.
+  Added = Data.define(:ref, :errors, :existing) do
+    def ok? = errors.empty?
+  end
+  ADDED_REASON = "Added by hand".freeze
+  # Publishing a record (#202): how many of its approved facts go public
+  # with it, and the facts added by hand with it that are still waiting
+  # ([[type, id, name], …]).
+  PublishPlan = Data.define(:goes_live_with, :added_with)
+  # What a company's Add a fact can add (#202): its fact kind.
+  COMPANY_FACTS = { "role" => :organization_role, "technology" => :organization_technology }.freeze
+  # The verbs a link added by hand may use (#202 part 2b), in the admin's
+  # words: company to company, and company to plant.
+  COMPANY_LINK_VERBS = { "supplies" => "supplies", "invests_in" => "invests in", "funds" => "funds",
+    "offtake_with" => "buys power from", "subsidiary_of" => "is a subsidiary of" }.freeze
+  PLANT_LINK_VERBS = { "owns" => "owns", "operates" => "operates", "vendor_for" => "is the reactor developer for",
+    "offtakes_from" => "buys power from" }.freeze
+  # A link added by hand, as the preview says it: "Meta funds TerraPower".
+  # from/to: [type, id, name].
+  LinkPlan = Data.define(:from, :to, :verb, :share, :started_on, :ended_on) do
+    def sentence = "#{from.last} #{verb} #{to.last}#{" (#{share.to_s.sub(/\.0+\z/, '')}%)" if share}"
+  end
 
   # A candidate as the admin shows it. record: the directory fact it's
   # attached to (DirectoryClient::Record: name, decision, values), or nil.
@@ -76,13 +99,21 @@ module DataQuality::Review
   DUPLICATE_NOTES = [ "but similar:", "could be the same brand" ].freeze
   # A company's role or technology is what that fact is (a plant's
   # technology is an ordinary value).
-  IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology] }.freeze
+  IDENTIFYING = { "organization_role" => %w[role], "organization_technology" => %w[technology],
+    # A deal term is the same one only by its link (and the company or link it
+    # belongs to), type and external ID (DATA.md): an edit never moves a round.
+    "deal_term" => %w[link_type link_id term_type external_id] }.freeze
   # What a claim of this kind can't change when it's edited before approval:
   # its link's ends and type, and what identifies it (a role's role).
   def self.read_only_keys(kind) = NOT_EDITABLE + IDENTIFYING.fetch(kind.to_s, [])
 
   # The hold Data Quality's review lifts (#306): a source's first batch.
   FIRST_BATCH = "it's from this source's first batch".freeze
+  # A deal term (an award, a round) is never approved in bulk or in a safe
+  # class (PM, 18 Oct): a person decides it, or accepts Data Quality's call on it.
+  BY_A_PERSON = "a deal term is decided by a person".freeze
+  # The holds a person's Accept of Data Quality's reviewed list lifts.
+  REVIEWED_HOLDS = [ FIRST_BATCH, BY_A_PERSON ].freeze
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
@@ -161,6 +192,7 @@ module DataQuality::Review
         decided = record&.verified_by.to_s.start_with?("human:")
       end
       return "it would change a record a person decided" if decided || candidate.notes.to_s.match?(/\Ahuman-verified /i)
+      return BY_A_PERSON if candidate.kind_deal_term?
       return FIRST_BATCH if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
 
       nil
@@ -203,6 +235,12 @@ module DataQuality::Review
     def sourced?(type:, id:, directory: DataQuality::DirectoryClient.new) = directory.sourced?(type: type.to_s, id:)
 
     # Ids of the claims a Checks filter lists, in its order (oldest first).
+    # These waiting candidates as Checks items, in the order given (Today's review, #373).
+    def items(ids, directory: DataQuality::DirectoryClient.new)
+      by_id = Candidate.where(id: ids).includes(:source, :crawl_run).index_by(&:id)
+      ids.filter_map { |id| by_id[id] }.map { |candidate| item(candidate, directory) }
+    end
+
     def check_ids(category: "all", source_kind: nil) = category_scope(category, source_kind:).order(:id).pluck(:id)
 
     # The claims a Checks filter lists, in its order, as [type, id] of the
@@ -471,6 +509,211 @@ module DataQuality::Review
 
     def nrc_status_quote(name, directory: DataQuality::DirectoryClient.new) = directory.nrc_status_quote(name)
 
+    # Adds a company (with its first role) or a plant site by hand (#202),
+    # as `by`'s, from a public source and its quote. It starts unpublished
+    # (pending): publishing it is a separate decision. dry_run: everything is
+    # checked and written, then rolled back, for the preview. Returns Added.
+    def add_record(kind:, name:, url:, quote:, by:, website: nil, role: nil, facility_type: nil, dry_run: false,
+      directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      name, url, quote = name.to_s.squish, url.to_s.strip, quote.to_s.squish
+      errors = [ ("Give it a name" if name.empty?),
+        ("Choose what it does" if kind == "organization" && role.blank?),
+        ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
+        ("Copy the sentence from the source that names it" if quote.empty?) ].compact
+      errors << "Choose a company or a plant" unless %w[organization facility].include?(kind)
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      existing = kind == "organization" ? directory.organization(name:) : directory.facility(name:)
+      return Added.new(ref: nil, errors: [ "#{name} is already in the directory" ], existing:) if existing
+
+      # A company is also the same one by its website's domain: writing it
+      # would update that company (rename it, set it pending) instead.
+      domain = (directory.domain_from(website.to_s.strip) if kind == "organization" && website.present?)
+      if domain && (same_site = directory.organization(domain:))
+        return Added.new(ref: nil, errors: [ "#{same_site.name} already has the website #{domain}" ], existing: same_site)
+      end
+
+      added = nil
+      ApplicationRecord.transaction do
+        source = DataQuality::Sources.find_or_create(url:)
+        unless source.ok?
+          added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
+        attributes = kind == "organization" ? { name:, website: website.to_s.strip.presence } : { name:, facility_type: facility_type.presence }
+        written = directory.add_fact(kind.to_sym, attributes.compact, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        # Only ever a new record: one the write found by another key is left as it was.
+        if written.success? && !written.created
+          added = Added.new(ref: nil, errors: [ "It matches a record already in the directory" ],
+            existing: (directory.fact(type: written.ref.type, id: written.ref.id) if written.ref))
+          raise ActiveRecord::Rollback
+        end
+        if written.success? && kind == "organization"
+          role_written = directory.add_fact(:organization_role, { organization_id: written.ref.id, role: }, source_id: source.ref.id, quote:, by:,
+            reason: ADDED_REASON)
+          written = role_written.success? ? written : role_written
+        end
+        added = Added.new(ref: (written.ref if written.success?), errors: written.errors, existing: nil)
+        raise ActiveRecord::Rollback if dry_run || !added.ok?
+      end
+      added
+    end
+
+    # Adds a role or a technology to a company by hand (#202), as `by`'s,
+    # from a public source and its quote: written pending (publishing it is
+    # the usual approval), only ever as a new fact. kind: "role" or
+    # "technology"; key: the role's or technology's key. dry_run: checked and
+    # written, then rolled back, for the preview. Returns Added.
+
+    def add_company_fact(organization_id:, kind:, key:, url:, quote:, by:, dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      fact_kind = COMPANY_FACTS[kind]
+      url, quote = url.to_s.strip, quote.to_s.squish
+      errors = [ ("Choose a role or a technology" unless fact_kind),
+        ("Choose which #{kind}" if fact_kind && !directory.company_fact_key?(kind, key)),
+        ("Enter a link to a public source, starting with https://" unless url.match?(%r{\Ahttps?://\S+\z})),
+        ("Copy the sentence from the source that states it" if quote.empty?) ].compact
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      column = fact_kind == :organization_role ? :role : :technology
+      if (status = directory.company_fact_status(organization_id:, kind:, key:))
+        word = %w[rejected unpublished].include?(status) ? "was taken off this company before, so it can't be added again here" : "is already listed"
+        return Added.new(ref: nil, errors: [ "That #{kind} #{word}" ], existing: nil)
+      end
+
+      added = nil
+      ApplicationRecord.transaction do
+        # The source first, key-share locked, then the company, as write_added
+        # and approvals take them, so the two can't deadlock.
+        source = DataQuality::Sources.find_or_create(url:)
+        unless source.ok?
+          added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+        ::Source.lock("FOR KEY SHARE").find(source.ref.id)
+
+        # The company locked and checked with the write: one taken off or
+        # merged away since the form was shown takes no new fact.
+        directory.lock_fact(type: "Organization", id: organization_id)
+        unless ActiveRecord::Base.uncached { %w[verified pending].include?(directory.fact(type: "Organization", id: organization_id)&.verification_status) }
+          added = Added.new(ref: nil, errors: [ "This company was taken off or merged since, so nothing was added" ], existing: nil)
+          raise ActiveRecord::Rollback
+        end
+
+        written = directory.add_fact(fact_kind, { organization_id:, column => key.to_s }, source_id: source.ref.id, quote:, by:, reason: ADDED_REASON)
+        errors = written.success? ? (written.created ? [] : [ "That #{kind} is already listed" ]) : written.errors
+        added = Added.new(ref: (written.ref if errors.empty?), errors:, existing: nil)
+        raise ActiveRecord::Rollback if dry_run || !added.ok?
+      end
+      added
+    end
+
+    # Adds a link by hand (#202 part 2b), pending, from a source and its
+    # quote. kind: "company_link" (record and other are companies; swap
+    # reverses which comes first) or "plant_link" (record is a plant site,
+    # other the company). share: owns only, 0 to 100. Dates optional.
+    # Returns [Added, LinkPlan or nil].
+    def add_link(kind:, record_id:, other_id:, verb:, url:, quote:, by:, share: nil, started_on: nil, ended_on: nil, swap: false,
+                 dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      company_link = kind == "company_link"
+      verbs = company_link ? COMPANY_LINK_VERBS : PLANT_LINK_VERBS
+      record = directory.fact(type: company_link ? "Organization" : "Facility", id: record_id)
+      other = (directory.fact(type: "Organization", id: other_id) if other_id.present?)
+      share = share.to_s.strip.presence
+      starts, ends = [ started_on, ended_on ].map { |date| date.presence && (Date.iso8601(date.to_s) rescue :bad) }
+      # Same id means the same record only between two companies (a plant and a company are different tables).
+      errors = [ ("That record is no longer in the directory" unless record),
+        ("Choose the company it's linked to" unless other && open_record?(other) && !(company_link && other.id == record&.id)),
+        ("Choose how they're linked" unless verbs.key?(verb.to_s)),
+        # Two decimal places at most, as the share is stored: what's confirmed is what's saved.
+        ("A share is a number from 0 to 100, with at most two decimal places" if share && !(share.match?(/\A\d+(\.\d{1,2})?\z/) && share.to_d.between?(0, 100))),
+        ("Only an owner has a share" if share && verb.to_s != "owns"),
+        ("Enter dates as they're shown" if [ starts, ends ].include?(:bad)),
+        ("It can't end before it starts" if starts.is_a?(Date) && ends.is_a?(Date) && ends < starts),
+        *source_errors(url, quote) ].compact
+      return [ Added.new(ref: nil, errors:, existing: nil), nil ] if errors.any?
+
+      ends_of = ->(fact, type) { [ type, fact.id, fact.name ] }
+      from, to = company_link ? [ ends_of.(record, "Organization"), ends_of.(other, "Organization") ] : [ ends_of.(other, "Organization"), ends_of.(record, "Facility") ]
+      from, to = to, from if company_link && swap
+      plan = LinkPlan.new(from:, to:, verb: verbs.fetch(verb.to_s), share: (share&.to_f), started_on: starts, ended_on: ends)
+      fact_kind, attributes = if company_link
+        [ :relationship, { from_organization_id: from[1], to_organization_id: to[1] } ]
+      else
+        [ :facility_relationship, { organization_id: from[1], facility_id: to[1], ownership_pct: share&.to_d } ]
+      end
+      attributes = attributes.merge(relationship_type: verb.to_s, started_on: starts, ended_on: ends).compact
+      [ write_added(fact_kind, attributes, url:, quote:, by:, dry_run:, duplicate: "That link already exists", directory:,
+        parents: [ from.first(2), to.first(2) ]), plan ]
+    end
+
+    # Adds a unit under a plant site by hand (#202 part 2b), pending: a name
+    # and an optional NRC docket. Type, capacity and status are set after,
+    # through Edit and Change status. Returns Added.
+    def add_unit(site_id:, name:, url:, quote:, by:, docket: nil, dry_run: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      name, docket = name.to_s.squish, docket.to_s.strip.presence
+      site = directory.fact(type: "Facility", id: site_id)
+      errors = [ ("That plant is no longer in the directory" unless site), ("Enter the unit's name" if name.empty?),
+        ("An NRC docket is 8 digits, like 05000424" if docket && !docket.match?(/\A\d{8}\z/)), *source_errors(url, quote) ].compact
+      return Added.new(ref: nil, errors:, existing: nil) if errors.any?
+
+      write_added(:facility, { name:, parent_id: site.id, nrc_docket: docket }.compact, url:, quote:, by:, dry_run:,
+        duplicate: "That unit is already listed", directory:, parents: [ [ "Facility", site.id ] ])
+    end
+
+    # What publishing this record would put on the site (#202): its approved
+    # facts go public with it; the facts added by hand with it (Add a record,
+    # Add a fact) are still waiting, and publish with it only if asked.
+    def publish_plan(type:, id:, directory: DataQuality::DirectoryClient.new)
+      goes_live_with, added_with = directory.publish_counts(type:, id:, added_reason: ADDED_REASON)
+      PublishPlan.new(goes_live_with:, added_with:)
+    end
+
+    # Publishes a record not yet public (#202): it's approved as `by`'s
+    # decision (it needs a source), and with_added: the facts added by hand
+    # with it too. All or nothing. Returns a Result.
+    def publish(type:, id:, by:, with_added: false, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      result = nil
+      ApplicationRecord.transaction do
+        # Locked and checked with the write: a record rejected, taken off or
+        # merged since the page was shown isn't published again.
+        directory.lock_fact(type:, id:)
+        unless (now = directory.fact(type:, id:)&.verification_status) == "pending"
+          result = Result.new(candidate_id: nil, ref: nil, errors: [ "it's #{now || 'gone'} now, so it wasn't published" ])
+          raise ActiveRecord::Rollback
+        end
+        result = approve_fact(type:, id:, by:, reason: "Published", directory:)
+        raise ActiveRecord::Rollback unless result.ok?
+
+        # with_added: the facts the preview listed ("Type:id"), or a falsy
+        # value for none. Only exactly those: a fact added since isn't taken.
+        added_with = with_added ? publish_plan(type:, id:, directory:).added_with : []
+        if with_added.is_a?(Array) && with_added.map(&:to_s).sort != added_with.map { |fact_type, fact_id, _| "#{fact_type}:#{fact_id}" }.sort
+          result = Result.new(candidate_id: nil, ref: nil, errors: [ "what was added with it changed since the preview; check it again" ])
+          raise ActiveRecord::Rollback
+        end
+        added_with.each do |fact_type, fact_id, name|
+          # Each locked and still waiting, as the record is.
+          directory.lock_fact(type: fact_type, id: fact_id)
+          added = if directory.fact(type: fact_type, id: fact_id)&.verification_status == "pending"
+            approve_fact(type: fact_type, id: fact_id, by:, reason: "Published with its record", directory:)
+          else
+            Result.new(candidate_id: nil, ref: nil, errors: [ "it was decided since the preview" ])
+          end
+          next if added.ok?
+
+          result = Result.new(candidate_id: nil, ref: nil, errors: added.errors.map { |error| "#{name}: #{error}" })
+          raise ActiveRecord::Rollback
+        end
+      end
+      result
+    end
+
     # Merges a company or plant site into another, as a person's decision
     # (#142): a reason is required; dry_run says what would move and changes
     # nothing. Returns a MergeResult, never raises.
@@ -534,7 +777,7 @@ module DataQuality::Review
             if safe_check then safe_check.call(candidate)
             elsif only_recommended then held_reason(candidate, directory:, firsts: firsts || first_batches)
             end
-          held = nil if data_quality_reviewed && held == FIRST_BATCH
+          held = nil if data_quality_reviewed && REVIEWED_HOLDS.include?(held)
           if held
             why = safe_check ? "it's no longer safe: #{held}" : "it waits for Data Quality: #{held}"
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ why ])
@@ -544,12 +787,19 @@ module DataQuality::Review
           # link yet; without this check the write would find any link of the
           # same type and add the quote to it.
           if DataQuality::DirectoryClient::LINK_KINDS.include?(candidate.kind) && candidate.subject_id.nil?
+            key, type = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {}).find { |end_key, _| candidate.notes.to_s.start_with?(end_key) }
+            name = (candidate.payload.dig(key, "name") if key)
+            which = name ? "#{type == :facility ? 'plant' : 'company'} “#{name}” is" : "company or plant it names"
             next Result.new(candidate_id: candidate.id, ref: nil,
-              errors: [ "its company or plant isn't settled yet; decide that, and the next match run links it" ])
+              errors: [ "nothing was approved: which #{which} isn't settled yet. Settle that first (Same as…, or Data Quality), then approve it" ])
           end
           if lapsed?(candidate)
             next Result.new(candidate_id: candidate.id, ref: nil,
               errors: [ "its source changed after the verifier checked it; the next verify run checks it again" ])
+          end
+          if (other = other_page(candidate, directory))
+            next Result.new(candidate_id: candidate.id, ref: nil,
+              errors: [ "its link already cites #{other.title.presence || other.url}, another page of this source; approving this would replace what that page says (#390)" ])
           end
 
           # The evidence belongs to the run that judged it (verify), else the one that found it.
@@ -651,6 +901,17 @@ module DataQuality::Review
         nil
       end
 
+      # Match's guard again, at the decision (#392): another page of the same
+      # source kind that the claim's link cites now, which the claim would
+      # replace. Two claims can attach before either page's evidence is there.
+      def other_page(candidate, directory)
+        return unless %w[relationship facility_relationship].include?(candidate.kind) && candidate.subject_id
+
+        directory.lock_fact(type: candidate.subject_type, id: candidate.subject_id)
+        existing = directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return
+        DataQuality::Stages::Match.other_page_on(candidate, existing, directory:)
+      end
+
       def lock_for_decision(candidate)
         ::Source.lock.find(candidate.source_id)
         candidate.lock!
@@ -668,6 +929,52 @@ module DataQuality::Review
         return scope.where(notes: [ nil, "" ]) if reason == NO_REASON
 
         scope.where("candidates.notes ILIKE ANY (ARRAY[?])", reason_patterns(reason))
+      end
+
+      def open_record?(fact) = %w[verified pending].include?(fact.verification_status)
+
+      def source_errors(url, quote)
+        [ ("Enter a link to a public source, starting with https://" unless url.to_s.strip.match?(%r{\Ahttps://\S+\z})),
+          ("Copy the sentence from the source that states it" if quote.to_s.squish.empty?) ]
+      end
+
+      # Writes a fact added by hand, pending, with its source; an existing
+      # one isn't touched: it's refused with `duplicate`, and its ref.
+      # parents: [[type, id], …] the fact hangs on, locked and checked still
+      # live or waiting with the write (one taken off meanwhile takes nothing).
+      def write_added(fact_kind, attributes, url:, quote:, by:, dry_run:, duplicate:, directory:, parents: [])
+        added = nil
+        ApplicationRecord.transaction do
+          # The source first, key-share locked (as its evidence's foreign key
+          # will), as a decision locks its source before its records; then the
+          # records in one order (table, then id), as FactWriter's link ends
+          # are. So this can't deadlock with an approval or another addition.
+          source = DataQuality::Sources.find_or_create(url: url.to_s.strip)
+          unless source.ok?
+            added = Added.new(ref: nil, errors: [ "Enter a link to a public source, starting with https://" ], existing: nil)
+            raise ActiveRecord::Rollback
+          end
+          ::Source.lock("FOR KEY SHARE").find(source.ref.id)
+
+          parents = parents.uniq.sort_by { |type, id| [ type, id ] }
+          parents.each { |type, id| directory.lock_fact(type:, id:) }
+          # Read fresh under the locks: a cached read from before them could
+          # miss a Take off or Merge committed in between.
+          if ActiveRecord::Base.uncached { parents.any? { |type, id| !(fact = directory.fact(type:, id:)) || !open_record?(fact) } }
+            added = Added.new(ref: nil, errors: [ "A record it's on was taken off or merged since, so nothing was added" ], existing: nil)
+            raise ActiveRecord::Rollback
+          end
+
+          written = directory.add_fact(fact_kind, attributes, source_id: source.ref.id, quote: quote.to_s.squish, by:, reason: ADDED_REASON)
+          added = if !written.success? then Added.new(ref: nil, errors: written.errors, existing: nil)
+          elsif written.created then Added.new(ref: written.ref, errors: [], existing: nil)
+          else Added.new(ref: nil, errors: [ duplicate ], existing: written.ref)
+          end
+          # Nothing's kept unless it's new and this isn't a preview (an existing
+          # one may have had this source added as evidence: undone too).
+          raise ActiveRecord::Rollback if dry_run || !added.ok?
+        end
+        added
       end
 
       def decide_fact(type, id, status, by:, reason:, attributes: {}, directory:, require_source: false)
@@ -688,7 +995,7 @@ module DataQuality::Review
 
       def item(candidate, directory)
         record = directory.attached_record(candidate)
-        differences = DataQuality::Differences.with_human_verified(candidate, record)
+        differences = DataQuality::Differences.with_human_verified(candidate, record, directory:)
         Item.new(candidate_id: candidate.id, kind: candidate.kind, status: candidate.status, claim: DataQuality::Claim.describe(candidate),
           payload: candidate.payload, quote: candidate.quote, notes: candidate.notes,
           source: Source.new(id: candidate.source.id, url: candidate.source.url, title: candidate.source.title, source_kind: candidate.source.source_kind),

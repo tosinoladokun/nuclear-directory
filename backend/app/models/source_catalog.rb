@@ -38,7 +38,14 @@ class SourceCatalog
     "usaspending_api" => { name: "USAspending API", note: "the award search", daily: true },
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
-    "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true }
+    "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
+    "nrc_research_reactors" => { name: "NRC research and test reactors", daily: false },
+    "nrc_research_reactors_index" => { name: "NRC non-power reactor locations", note: "finds each reactor's page", daily: false },
+    "nrc_fuel_cycle" => { name: "NRC fuel cycle facilities", daily: false },
+    "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: false },
+    # The annual plant file (#319): read once a year, not by the daily crawl.
+    "eia_plants" => { name: "EIA-860 plants" },
+    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze
@@ -104,6 +111,10 @@ class SourceCatalog
     def total = Source.count
 
     # Source ids under a row's key, or a single document ("doc-12"), for Live's filter.
+    # How many published facts these rows (crawler kinds or groups) back
+    # together, each fact once however many of them back it.
+    def facts_backed_by(keys) = public_facts(keys.flat_map { |key| source_ids(key) }.uniq).map { |_, type, id| [ type, id ] }.uniq.size
+
     def source_ids(key)
       return Source.where(id: key.delete_prefix("doc-").to_i).ids if key.to_s.start_with?("doc-")
       return Source.where(source_kind: key).ids if OFFICIAL.key?(key) || (Source.exists?(source_kind: key) && key != RESEARCH_KIND)

@@ -10,16 +10,25 @@ module FakeDirectory
       @facilities = facilities
     end
 
+    def cik(value)
+      text = value.to_s.strip.presence or return
+      digits = text.sub(/\ACIK/i, "")
+      digits.match?(/\A\d{1,10}\z/) ? digits.rjust(10, "0") : text
+    end
+
     def organization(id: nil, slug: nil, name: nil, domain: nil, sec_cik: nil)
       one_of!(id:, slug:, name:, domain:, sec_cik:)
-      Directory::OrganizationRef.new(id: @organizations[name], slug: nil, name: name, domain: nil,
+      Directory::OrganizationRef.new(id: @organizations[name], slug: nil, name: name, domain: nil, sec_cik: nil,
         verification_status: "verified", verified_by: nil, verified_at: nil) if @organizations.key?(name)
     end
+
+    # No company in the fake has a CIK.
+    def organizations_with_sec_cik = []
 
     def facility(id: nil, slug: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
       one_of!(id:, slug:, name:, site_name:, nrc_docket:, eia_plant_id:)
       Directory::FacilityRef.new(id: @facilities[name], slug: nil, name: name, nrc_docket: nil, eia_plant_id: nil, parent_id: nil,
-        verification_status: "verified", verified_by: nil, verified_at: nil, facility_type: nil, status: nil, state: nil, country_code: nil,
+        verification_status: "verified", verified_by: nil, verified_at: nil, facility_type: nil, status: nil, city: nil, state: nil, country_code: nil,
         latitude: nil, longitude: nil) if @facilities.key?(name)
     end
 
@@ -59,7 +68,7 @@ module FakeDirectory
     def repoint_merged_claims = 0
 
     def write(kind, attributes, evidence: [], verification: nil, fill_blank: false, protect_human_verified: false,
-      remove_aliases: [])
+      remove_aliases: [], create_only: false)
       @writes << { kind:, attributes:, evidence:, verification:, fill_blank: }
       return Directory::FactWriter::Result.new(kind: kind.to_sym, id: nil, created: false, errors: [ @fail_with ]) if @fail_with
 

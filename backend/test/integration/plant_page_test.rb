@@ -28,6 +28,22 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     link(company("Pending Owner"), "owns", @vogtle, verified: false)
   end
 
+  test "schema.org JSON-LD describes the site as a Place with its facts and sources (#185)" do
+    get plant_path(slug: "plant-vogtle")
+
+    graph = JSON.parse(css_select("script[type='application/ld+json']").first.text).fetch("@graph")
+    page, place = graph
+    assert_equal "http://www.example.com/plants/plant-vogtle", page["url"]
+    assert_equal "2026-10-09", page["dateModified"]
+    assert_equal [ "Place", "Plant Vogtle" ], place.values_at("@type", "name")
+    assert_equal "Waynesboro", place.dig("address", "addressLocality")
+    props = place["additionalProperty"].to_h { |property| [ property["name"], property["value"] ] }
+    assert_equal "Operating", props["Status"]
+    assert_equal({ "@type" => "QuantitativeValue", "value" => 2228.0, "unitText" => "MW" }, props["Capacity"])
+    assert_includes page["citation"].map { |c| c["url"] }, "https://www.nrc.gov/vogtle"
+    assert_equal page["citation"].size, css_select("ol.nd-sources li").size
+  end
+
   test "a public plant's page shows its facts" do
     get plant_path(slug: "plant-vogtle")
 
@@ -122,11 +138,12 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-overview dt", "Owner"
     assert_select ".nd-overview dd a[href='/companies/georgia-power']", "Georgia Power"
     assert_select ".nd-overview dt", "Operator"
-    assert_select ".nd-overview dt", "Reactor developer"
+    assert_select ".nd-overview dt", "Reactor designer"
     assert_select ".nd-overview dd", text: /\AFission/
     assert_select ".nd-overview dd", text: /\AAP1000/
     assert_select ".nd-overview dd", text: /\A2,228 MW\b/
     assert_select ".nd-overview dt", text: "Power buyer", count: 0
+    assert_select ".nd-overview p.nd-overview__sources", text: /\AAbout this plant: sources\s*\d/
     assert_select ".nd-overview__foot", /checked 2026-10-09/
   end
 

@@ -12,7 +12,7 @@ class DataQuality::DirectoryClient
   Ref = Data.define(:type, :id)
   # What a lookup found: enough to match on and to explain a match.
   # values: a link's stored values ({ "ownership_pct" => 45.7, ... }), else nil.
-  Record = Data.define(:type, :id, :name, :domain, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :state,
+  Record = Data.define(:type, :id, :name, :domain, :sec_cik, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
     :country_code, :verification_status, :verified_by, :verified_at, :values) do
     def ref = Ref.new(type:, id:)
     def rejected? = verification_status == "rejected"
@@ -38,10 +38,12 @@ class DataQuality::DirectoryClient
 
   # Kinds whose payload names other records instead of carrying attributes;
   # the match stage resolves those names to ids and writes the fact.
-  LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship].freeze
+  # Kinds that name other records (match resolves their ends). A deal term's
+  # one end is the company or link it belongs to (#397).
+  LINK_KINDS = %w[organization_role organization_technology relationship facility_relationship deal_term].freeze
   LINK_ENDS = %w[organization facility from_organization to_organization].freeze
   # Never taken from a payload: which record, which ends, and the slug.
-  PAYLOAD_LOCKED = %w[id slug organization_id facility_id from_organization_id to_organization_id].freeze
+  PAYLOAD_LOCKED = %w[id slug organization_id facility_id from_organization_id to_organization_id link_id].freeze
 
   def initialize(lookup: nil, fact_writer: nil)
     @owner_hints = []
@@ -49,14 +51,25 @@ class DataQuality::DirectoryClient
     @fact_writer = fact_writer
   end
 
+  # A CIK as the directory stores it, so two spellings compare equal.
+  def normalize_cik(value) = lookup.cik(value)
+
   # Exact lookups. Pass one keyword; returns a Record or nil.
   def organization(name: nil, domain: nil, sec_cik: nil)
     record("Organization", lookup.organization(name:, domain:, sec_cik:))
   end
 
+  # Companies with an SEC CIK, live ones only (#129): [SecFilerRef].
+  def organizations_with_sec_cik = lookup.organizations_with_sec_cik
+
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
   end
+
+  # For a plant-level EIA file (#319): the power plants that have no EIA
+  # plant ID yet, to find by name and state.
+  def plants_without_eia_plant_id = lookup.plants_without_eia_plant_id
+  def normalize_facility_name(name) = lookup.normalize_facility_name(name)
 
   # Runs the block with the candidate's attached fact locked, unless it was
   # rejected or unpublished meanwhile: then returns that fact's Record and
@@ -222,6 +235,8 @@ class DataQuality::DirectoryClient
     # A link's ends as the payload names them, found afresh, so a claim
     # attached to the wrong link (#226) doesn't pass as the same claim.
     attributes.merge!(link_end_ids(candidate.payload)) if LINK_KINDS.include?(candidate.kind)
+    # A company-level deal term's end is its link (#396).
+    attributes[:link_id] = attributes.delete(:organization_id) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
       at: candidate.source.fetched_at || Time.current)
@@ -302,6 +317,9 @@ class DataQuality::DirectoryClient
   # Whether a fact is public now (its model's published scope).
   def published?(type:, id:) = lookup.published?(type:, id:)
 
+  # Ids of sources behind published facts (#510).
+  def published_source_ids = lookup.published_source_ids
+
   # Of these facts of one type, the ids a person decided (verified_by human:…).
   def human_decided_ids(type:, ids:) = lookup.human_decided_ids(type:, ids:)
 
@@ -376,6 +394,23 @@ class DataQuality::DirectoryClient
   def decide_fact(kind, id:, status:, by:, reason: nil, attributes: {}, context: nil)
     result = fact_writer.write(kind, attributes.to_h.symbolize_keys.merge(id:),
       verification: { status:, by:, reason:, context: }.compact)
+    write_result(result)
+  end
+
+  # Add a fact and Publish (#202): see Directory::Lookup.
+  def company_fact_key?(kind, key) = lookup.company_fact_key?(kind, key)
+  def company_fact_status(organization_id:, kind:, key:) = lookup.company_fact_status(organization_id:, kind:, key:)
+  def publish_counts(type:, id:, added_reason:) = lookup.publish_counts(type:, id:, added_reason:)
+
+  # A website's domain, as a company's is stored and matched.
+  def domain_from(url) = lookup.domain_from(url)
+
+  # A record or fact a person adds by hand (#202): written pending, with
+  # its source's quote as evidence, recorded as `by`. Publishing it is a
+  # separate decision. Returns a WriteResult.
+  def add_fact(kind, attributes, source_id:, quote:, by:, reason:)
+    result = fact_writer.write(kind, attributes.to_h.symbolize_keys, create_only: true,
+      evidence: [ { source_id:, quote:, found_by: "human" } ], verification: { status: "pending", by:, reason: })
     write_result(result)
   end
 
@@ -461,9 +496,9 @@ class DataQuality::DirectoryClient
     def plant_names = @plant_names ||= lookup.plant_names(owners: owner_hints)
 
     def record(type, ref, values: nil)
-      Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), nrc_docket: ref.try(:nrc_docket),
-        eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
-        facility_type: ref.try(:facility_type), status: ref.try(:status), state: ref.try(:state),
+      Record.new(type:, id: ref.id, name: ref.name, domain: ref.try(:domain), sec_cik: ref.try(:sec_cik),
+        nrc_docket: ref.try(:nrc_docket), eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
+        facility_type: ref.try(:facility_type), status: ref.try(:status), city: ref.try(:city), state: ref.try(:state),
         country_code: ref.try(:country_code), verification_status: ref.verification_status,
         verified_by: ref.try(:verified_by), verified_at: ref.try(:verified_at), values:) if ref
     end

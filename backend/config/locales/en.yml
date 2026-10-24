@@ -29,3 +29,16 @@
 
 en:
   hello: "Hello world"
+  profile:
+    sources:
+      # One line under a page's key facts for the record's own sources (#406).
+      # It names no fact until the render-time quote check (#407) says which
+      # facts one of the record's quotes states.
+      company: "About this company: sources"
+      plant: "About this plant: sources"
+  # The two reviewers on the admin's Today page (#373), admin only, never on
+  # the public site. Swapping who's who is a one-word change here.
+  admin:
+    reviewers:
+      checker: "Joy"
+      reviewer: "Aminah"

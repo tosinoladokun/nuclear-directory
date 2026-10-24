@@ -37,7 +37,8 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
       new_source.source_kind = INDEX_SOURCE_KIND
       new_source.title = "EIA-860M monthly generator inventory page"
     end
-    DataQuality::Snapshot.take(index, fetcher: @fetcher)
+    # Reported, so a failed fetch that falls back on yesterday's copy still shows on Today.
+    index_read = DataQuality::Snapshot.take(index, fetcher: @fetcher).to_s
     unless index.crawl_ok? && index.content_text.present?
       raise "EIA 860M page: #{index.status_reason || index.crawl_status}"
     end
@@ -53,12 +54,12 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true) do |bytes|
       Workbook.to_csv(Workbook.nuclear_generators(bytes))
     end
-    { "file" => url, "snapshot" => result.to_s, "generators" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
+    { "index" => index_read, "file" => url, "snapshot" => result.to_s, "generators" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
       "superseded" => (supersede_older_files(source, run) if source.crawl_ok?),
       "operator_claims_withdrawn" => (withdrawn if withdrawn.positive?) }.compact
   rescue Workbook::Unreadable => error
     source.update!(crawl_status: "needs_human", status_reason: "Couldn't read the EIA workbook: #{error.message}")
-    { "file" => url, "snapshot" => "needs_human", "operator_claims_withdrawn" => (withdrawn if withdrawn.to_i.positive?) }.compact
+    { "index" => index_read, "file" => url, "snapshot" => "needs_human", "operator_claims_withdrawn" => (withdrawn if withdrawn.to_i.positive?) }.compact
   end
 
   # EIA's status code for a plant in service; anything else (standby, out of

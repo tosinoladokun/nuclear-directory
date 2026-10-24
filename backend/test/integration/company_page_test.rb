@@ -39,7 +39,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select "main", 1
     assert_select "h1#profile-name", "Kairos Power"
     assert_select ".nd-profile__desc", /Develops salt-cooled reactors./
-    assert_select ".nd-tag", "Reactor developer"
+    assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
@@ -81,7 +81,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
 
     assert_select "body", text: /Google/, count: 0
     assert_select "body", text: /Hermes/, count: 0
-    assert_select "body", text: /Reactor developer/, count: 0
+    assert_select "body", text: /Reactor designer/, count: 0
 
     @google.verify!(by: "human:test")
     get company_path(slug: "kairos-power")
@@ -132,13 +132,67 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-factrow .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
   end
 
+  test "schema.org JSON-LD states the page's facts and lists its sources as citations (#185)" do
+    get company_path(slug: "kairos-power")
+
+    scripts = css_select("script[type='application/ld+json']")
+    assert_equal 1, scripts.size
+    graph = JSON.parse(scripts.first.text).fetch("@graph")
+    page, org = graph
+    assert_equal "http://www.example.com/companies/kairos-power", page["url"]
+    assert_equal "2026-10-09", page["dateModified"]
+    assert_equal org["@id"], page.dig("mainEntity", "@id")
+    assert_equal "Kairos Power", org["name"]
+    assert_equal "Develops salt-cooled reactors.", org["description"]
+    assert_equal "https://kairospower.com", org["url"]
+    assert_equal({ "@type" => "PostalAddress", "addressLocality" => "Alameda", "addressRegion" => "CA" }, org["address"], "no country: the profile holds none")
+    assert_includes org["alternateName"], "Kairos"
+    assert_includes page["citation"].map { |c| c["url"] }, "https://kairospower.com/news/google"
+    press = page["citation"].find { |c| c["url"] == "https://kairospower.com/news/google" }
+    assert_equal [ "Google and Kairos Power partner", "2024-10-14" ], press.values_at("name", "datePublished")
+    assert_equal page["citation"].size, css_select("ol.nd-sources li").size, "every source on the page is a citation"
+    assert_not_includes response.body, "Ghost Partner", "an unpublished company is nowhere in the page, JSON-LD included"
+  end
+
+  test "a name with markup cannot end the JSON-LD script" do
+    @kairos.update!(legal_name: "</script><script>alert(1)</script>")
+    get company_path(slug: "kairos-power")
+
+    assert_equal 1, css_select("script[type='application/ld+json']").size
+    assert_not_includes response.body, "</script><script>alert(1)"
+  end
+
+  test "a company with both roles shows both role labels by its name, and only there (the Developers list shows none)" do
+    designer = Role.find_or_create_by!(key: "reactor_vendor") { |role| role.name = "Reactor vendor" }
+    developer = Role.find_or_create_by!(key: "project_developer") { |role| role.name = "Project developer" }
+    both = cite!(company("Both Roles Holdings", roles: [ designer, developer ]))
+    get company_path(slug: both.slug)
+
+    assert_equal [ "Project developer", "Reactor designer" ], css_select(".nd-tag").map { |el| el.text.strip }.sort, "both role labels, in the tag row under the name"
+
+    get companies_path(category: "reactor-developers")
+    assert_select ".nd-listrow .nd-tag", 0
+  end
+
   test "key facts" do
     get company_path(slug: "kairos-power")
 
     assert_select ".nd-overview dt", text: "Website"
-    assert_select ".nd-overview dd a[href='https://kairospower.com']", "kairospower.com"
-    assert_select ".nd-overview dd", text: /\AKairos\s*1\z/
-    assert_select ".nd-overview dd", text: /\AAlameda, CA\s*1\z/
+    # #200: the Website link carries the referral UTM so companies see the
+    # visit in their own analytics. The href starts with the website, with
+    # utm_source / utm_medium / utm_campaign on the query string.
+    assert_select ".nd-overview dd a[href^='https://kairospower.com?']", text: "kairospower.com"
+    link = css_select(".nd-overview dd a[href^='https://kairospower.com?']").first
+    params = URI.decode_www_form(URI.parse(link["href"]).query).to_h
+    assert_equal "nuclear-directory", params["utm_source"]
+    assert_equal "referral", params["utm_medium"]
+    assert_equal "company-page", params["utm_campaign"]
+    assert_select ".nd-overview dd", text: /\AKairos\z/
+    assert_select ".nd-overview dd", text: /\AAlameda, CA\z/
+    # The record's sources show once, under the facts, and name no fact.
+    assert_select ".nd-overview p.nd-overview__sources", text: /\AAbout this company: sources\s*1\z/ do
+      assert_select "a.nd-src[href='#source-1']"
+    end
     assert_select ".nd-overview dt", text: "Founded", count: 0
     assert_select ".nd-overview__foot", /checked 2026-10-09/
   end

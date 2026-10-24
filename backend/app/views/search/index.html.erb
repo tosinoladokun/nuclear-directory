@@ -3,7 +3,8 @@
 <turbo-frame id="<%= @frame_id %>" target="_top">
   <% if @query %>
     <% total = @companies.size + @plants.size %>
-    <div class="nd-instant" data-instant-search-count="<%= total %>">
+    <div class="nd-instant" data-instant-search-count="<%= total %>"<%= ' data-instant-search-fuzzy="true"'.html_safe if @fuzzy %>>
+      <% if @fuzzy %><p class="nd-instant__note type-small">No exact match for “<%= @query %>”. Showing close names.</p><% end %>
       <% if @companies.any? %>
         <div class="nd-label nd-instant__group" id="<%= @frame_id %>-companies">Companies</div>
         <ul class="nd-instant__list" aria-labelledby="<%= @frame_id %>-companies">

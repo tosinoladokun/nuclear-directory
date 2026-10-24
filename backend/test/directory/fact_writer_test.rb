@@ -8,6 +8,19 @@ class Directory::FactWriterTest < ActiveSupport::TestCase
 
   def write(...) = Directory::FactWriter.write(...)
 
+  test "a quote's fields gather across writes, sorted and unique; leaving them out never removes any (#398)" do
+    id = write(:organization, { name: "Kairos Power" }, evidence: [ @evidence.merge(fields: %w[hq_state hq_city]) ]).id
+    write(:organization, { id:, name: "Kairos Power" }, evidence: [ @evidence.merge(fields: %w[legal_name hq_city]) ])
+    row = Evidence.where(subject_type: "Organization", subject_id: id).sole
+    assert_equal %w[hq_city hq_state legal_name], row.fields
+
+    [ {}, { fields: nil }, { fields: [] } ].each do |extra|
+      write(:organization, { id:, name: "Kairos Power" }, evidence: [ @evidence.merge(extra) ])
+      assert_equal %w[hq_city hq_state legal_name], row.reload.fields, extra.inspect
+    end
+    assert_equal 1, Evidence.where(subject_type: "Organization", subject_id: id).count
+  end
+
   test "creates an organization with its name and aliases as aliases" do
     result = write(:organization, { name: "Kairos Power, LLC", website: "https://www.kairospower.com", aliases: [ "Kairos" ] })
 
@@ -357,5 +370,48 @@ class Directory::FactWriterTest < ActiveSupport::TestCase
     assert link.ok?
 
     assert write(:facility_relationship, { id: link.id, description: "Runs it." }).ok?
+  end
+
+  # #287: renaming a plant on its Record would lose the old name a crawler
+  # still uses, since Lookup.facility only searches current names and
+  # aliases. Keep the old name as an alias in the same audited write.
+  test "renaming a plant keeps the old name as an alias, so a crawler still using it finds the plant" do
+    plant = Facility.create!(name: "Old Name Plant")
+    former = plant.name
+
+    result = write(:facility, { id: plant.id, name: "New Name Plant" })
+
+    assert result.ok?, result.errors.inspect
+    assert_equal "New Name Plant", plant.reload.name
+    assert_includes plant.aliases.pluck(:alias), former
+    assert_equal plant.id, Directory::Lookup.facility(name: former)&.id, "the old name resolves to this plant"
+  end
+
+  test "a plant rename whose old name is another facility's doesn't fail; the collision stays as it was" do
+    kept = Facility.create!(name: "Shared Name Plant")
+    other = Facility.create!(name: "Will Be Renamed")
+    former = other.name
+    kept.aliases.create!(alias: former) # another facility already lays claim
+
+    result = write(:facility, { id: other.id, name: "A Different New Name" },
+      verification: { status: "verified", by: "human:tosin", context: { "note" => "kept" } })
+
+    assert result.ok?, result.errors.inspect
+    event = other.verification_events.order(:id).last
+    assert_equal({ "note" => "kept", "skipped_alias" => former, "held_by" => "Shared Name Plant" }, event.context)
+    assert_equal "A Different New Name", other.reload.name
+    assert_not_includes other.aliases.pluck(:alias), former, "the collision stays on the other facility"
+    assert_equal kept.id, Directory::Lookup.facility(name: former)&.id
+  end
+
+  test "renaming a company keeps the old name as an alias too (#287)" do
+    company = Organization.create!(name: "Old Co Name")
+    former = company.name
+
+    result = write(:organization, { id: company.id, name: "New Co Name" })
+
+    assert result.ok?, result.errors.inspect
+    assert_includes company.reload.aliases.pluck(:alias), former
+    assert_equal company.id, Directory::Lookup.organization(name: former)&.id
   end
 end
