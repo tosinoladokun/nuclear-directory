@@ -317,6 +317,27 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
       [ "Acme Fission", "offtake_with", "Grid Co", "mou" ],       # Acme buys Grid Co's power
       [ "Fuel Co", "supplies", "Acme Fission", "mou" ] ], claims.map(&ends)
     first = claims.first[:payload]
-    assert_equal [ "announced", "500.0", "2026-03-03", "page:#{HOME}#big data co ppa 500.0 mw" ], first.values_at("status", "capacity_mw", "signed_on", "external_id")
+    assert_equal [ "announced", "500.0", "2026-03-03", "page:#{HOME}#big data co ppa 500.0 mw 2026-03-03" ], first.values_at("status", "capacity_mw", "signed_on", "external_id")
+  end
+
+  test "a capacity stands whole; an announcement's date isn't a signing date; two same-size deals with one company stay two" do
+    page = <<~HTML
+      <html><body><p>We signed a PPA with Big Data Co for 1,500 MW.</p>
+      <p>On March 1, 2026, we announced that we had signed a PPA with Grid Co for 500 MW.</p>
+      <p>We signed a PPA with Grid Co for 500 MW in 2024.</p></body></html>
+    HTML
+    stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    deal = ->(other, capacity, date, quote) { { "other" => other, "role" => "seller", "goods" => "power", "amount" => nil, "capacity" => capacity, "date" => date, "quote" => quote } }
+    found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
+      "listing" => nil, "links" => [], "rounds" => [], "deals" => [
+        deal.("Big Data Co", "500 MW", nil, "We signed a PPA with Big Data Co for 1,500 MW."),
+        deal.("Grid Co", "500 MW", "March 1, 2026", "On March 1, 2026, we announced that we had signed a PPA with Grid Co for 500 MW."),
+        deal.("Grid Co", "500 MW", nil, "We signed a PPA with Grid Co for 500 MW in 2024.") ] }
+    payloads = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil).map { |c| c[:payload] }
+    assert_equal [ "Grid Co", "Grid Co" ], payloads.map { |p| p.dig("from_organization", "name") }, "500 MW from '1,500 MW' is dropped"
+    assert_nil payloads.first["signed_on"]
+    assert_equal 2, payloads.map { |p| p["external_id"] }.uniq.size
   end
 end

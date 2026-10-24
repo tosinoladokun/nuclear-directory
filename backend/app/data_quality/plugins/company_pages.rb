@@ -315,9 +315,14 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
       amount = dollars(amount_text) if amount_text
       capacity = megawatts(capacity_text) if capacity_text
-      return if (amount_text && !(amount && whole_dollars?(amount_text, quote))) || (capacity_text && !capacity)
+      return if (amount_text && !(amount && whole_dollars?(amount_text, quote))) || (capacity_text && !(capacity && whole_number?(capacity_text, quote)))
 
-      signed_on = (Date.parse(date_text) if date_text&.match?(/\b(19|20)\d\d\b/) && quote.match?(/\bsign(ed|s)?\b/i)) rescue nil
+      # The date is the signing's only when the quote ties them: "signed … on
+      # <date>" or "On <date>, X signed", never an announcement's date.
+      date = Regexp.escape(date_text.to_s)
+      between = quote[/\bon\s+#{date},?\s+((?:\S+\s+){0,4}?)sign(?:ed|s)\b/i, 1] ||
+        quote[/\bsign(?:ed|s)\b((?:\s+\S+){0,14}?)\s+on\s+#{date}\b/i, 1] if date_text
+      signed_on = (Date.parse(date_text) if between && !between.match?(/announc|said|report/i) && date_text.match?(/\b(19|20)\d\d\b/)) rescue nil
       return unless %w[buyer seller].include?(item["role"]) && %w[power supply].include?(item["goods"])
 
       # The link's verb from what's traded; its direction from who buys (Data
@@ -329,7 +334,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         "link_type" => "Relationship", "from_organization" => { "name" => from }, "to_organization" => { "name" => to }, "relationship_type" => verb,
         "term_type" => "offtake", "agreement" => agreement, "status" => "announced",
         # Values, not their wording, so "500 MW" and "0.5 GW" are the same deal.
-        "external_id" => "page:#{url}##{[ other.downcase.squish, agreement, amount&.to_s('F'), capacity && "#{capacity.to_s('F')} mw" ].compact.join(' ')}",
+        # Its signing date when known, else the quote with its values as
+        # numbers, tells two same-size deals with one company apart.
+        "external_id" => "page:#{url}##{[ other.downcase.squish, agreement, amount&.to_s('F'), capacity && "#{capacity.to_s('F')} mw",
+          signed_on&.iso8601 || deal_digest(quote, { amount_text => amount, capacity_text => capacity && "#{capacity.to_s('F')} mw" }) ].compact.join(' ')}",
         "amount_usd" => amount&.to_s("F"), "capacity_mw" => capacity&.to_s("F"), "signed_on" => signed_on&.iso8601 }.compact }
     end
 
@@ -346,6 +354,20 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       text = quote.downcase.squish
       text = text.sub(amount_text.downcase, amount.to_s("F")) if amount_text && amount
       Digest::SHA256.hexdigest(text)[0, 10]
+    end
+
+    # A short digest of a deal's quote with its values written as numbers, so
+    # rewording "500 MW" as "0.5 GW" keeps the same ID.
+    def deal_digest(quote, values)
+      text = quote.downcase.squish
+      values.each { |written, value| text = text.sub(written.downcase, value.is_a?(BigDecimal) ? value.to_s("F") : value.to_s) if written && value }
+      Digest::SHA256.hexdigest(text)[0, 10]
+    end
+
+    # A number stands whole in its quote: "500 MW" isn't the end of "1,500 MW".
+    def whole_number?(text, quote)
+      at = quote.downcase.index(text.downcase) or return false
+      !quote[0...at].match?(/[\d.,]\z/)
     end
 
     # The amount stands whole in its quote, in US dollars: "$37" isn't
