@@ -176,6 +176,8 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     a = claim("Alpha Fission Co")
     match_and_verify
     Organization.find(a.reload.subject_id).verify!(by: "human:tosin")
+    # It changes a value the person's record holds; a claim that only adds its source isn't held (PM, 24 Oct).
+    a.update_columns(payload: a.payload.merge("description" => "A different description."))
     paste("#{a.id} approve: ok")
 
     get admin_recommendations_path

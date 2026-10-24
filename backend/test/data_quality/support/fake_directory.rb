@@ -53,6 +53,7 @@ module FakeDirectory
       def one_of!(**options)
         raise ArgumentError, "pass exactly one of #{options.keys.join(", ")}" unless options.compact.size == 1
       end
+    def known_name?(type:, id:, name:) = false
   end
 
   class FactWriter
