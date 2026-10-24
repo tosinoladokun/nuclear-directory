@@ -72,11 +72,11 @@ module DataQuality::SafeClasses
         result = nil
         Candidate.transaction do
           source_id = Candidate.where(id: item.candidate_id).pick(:source_id)
-          result = skipped(item, "this claim no longer exists") and next unless source_id
+          result = skipped(item, "this fact no longer exists") and next unless source_id
 
           ::Source.lock.find(source_id)
           candidate = Candidate.lock.find_by(id: item.candidate_id)
-          result = skipped(item, "this claim no longer exists") and next unless candidate
+          result = skipped(item, "this fact no longer exists") and next unless candidate
           result = skipped(item, "it changed after the page loaded") and next unless snapshot(candidate) == item.snapshot
           # G6 again, under its run's lock: another approval from the run may
           # have used the allowance since the page loaded.
@@ -104,7 +104,7 @@ module DataQuality::SafeClasses
     # Why a claim isn't safe in its class, or nil: every gate but the cap,
     # each read fresh (Accept asks this under the record's lock).
     def why_not(candidate, klass, directory:)
-      return "the verifier doesn't recommend it now" unless covered(klass).exists?(candidate.id)
+      return "it's no longer eligible as a safe recommendation" unless covered(klass).exists?(candidate.id)
 
       evaluate(candidate, klass, context: context_for(klass), directory:).first
     end
@@ -119,7 +119,7 @@ module DataQuality::SafeClasses
           throw :unsafe, context[:run_problem] if context[:run_problem]
           # G1
           if candidate.ai_confidence.to_f < config.fetch("min_confidence")
-            throw :unsafe, "the verifier's confidence is below #{config.fetch('min_confidence')}"
+            throw :unsafe, "the app's checker's confidence is below #{config.fetch('min_confidence')}"
           end
 
           changes = gates(candidate, config, context, directory)
@@ -162,7 +162,7 @@ module DataQuality::SafeClasses
 
         # G4
         waiting = Candidate.where(subject_type: type, subject_id: id).where.not(id: candidate.id)
-        throw :unsafe, "another claim on its link waits for review" if waiting.where(status: "needs_review").exists?
+        throw :unsafe, "another fact on its link waits for review" if waiting.where(status: "needs_review").exists?
         throw :unsafe, "a correction report on its page isn't resolved" if directory.open_corrections?(type:, id:)
 
         # G5, this claim's part (the run's is in context_for)
@@ -214,8 +214,8 @@ module DataQuality::SafeClasses
           # Verify saves its recommendations one claim at a time, and a run
           # that fails or is cut off keeps what it saved: the run's set (and
           # so the cap) is only whole once its latest run has succeeded.
-          elsif verify&.status == "running" then "the verifier is still checking this source"
-          elsif verify.nil? || verify.status != "succeeded" then "the verifier's last run didn't finish"
+          elsif verify&.status == "running" then "the app's checker is still checking this source"
+          elsif verify.nil? || verify.status != "succeeded" then "the app's checker's last run didn't finish"
           end
         # The last crawl that fetched: a same-day rerun answers "skipped_recent"
         # and stamps nothing, so it doesn't count as the answer pages are judged by.
