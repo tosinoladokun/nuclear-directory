@@ -40,6 +40,27 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 1, 2), Source.find_by!(url: "https://example.com/news").published_on
   end
 
+  test "a file that states no field leaves it; a null description clears it; a source-only description leaves the text" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", description: { text: "By hand", source_url: "https://example.com/a", quote: "By hand" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    acme.update_columns(hq_city: "Springfield", legal_name: "Acme Fuel, Inc.")
+
+    sparse = { name: "Acme Fuel, Inc.", status: "active", roles: [], technologies: [], relationships: [], facilities: [], notes: "" }
+    write_file("acme-fuel", sparse)
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal [ "https://acmefuel.com", "US", "By hand", "Springfield", "Acme Fuel, Inc." ],
+      acme.reload.attributes.values_at("website", "country_code", "description", "hq_city", "legal_name")
+
+    write_file("acme-fuel", sparse.merge(description: { source_url: "https://example.com/a", quote: "By hand" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "By hand", acme.reload.description
+
+    write_file("acme-fuel", sparse.merge(description: nil))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_nil acme.reload.description
+  end
+
   test "a re-seed counts what it changed apart from what it only restated (#301)" do
     write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", roles: [ item(key: "fuel") ]))
     Seed::OrganizationLoader.new(@dir).load!

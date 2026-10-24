@@ -50,8 +50,8 @@ class SeedsTest < ActiveSupport::TestCase
   test "loads the hand-checked organizations as verified facts with evidence" do
     load_seeds
 
-    assert_equal 122, Organization.verified.count
-    assert_equal 137, OrganizationRole.verified.count
+    assert_equal 126, Organization.verified.count
+    assert_equal 143, OrganizationRole.verified.count
     assert_equal 59, OrganizationTechnology.verified.count
     # Each operator company the NRC list row named carries that row as its own evidence.
     %w[ameren-ue arizona-public-service-co dte-electric-company duke-energy-florida duke-energy energy-harbor-nuclear-corp firstenergy-nuclear-operating-co indiana-michigan-power-co nebraska-public-power-district northern-states-power-company-minnesota pacific-gas-electric-co pseg-nuclear-llc south-carolina-electric-gas-co southern-nuclear-operating-co stp-nuclear-operating-co susquehanna-nuclear-llc wolf-creek-nuclear-operating-corp].each do |slug|
@@ -205,6 +205,23 @@ class SeedsTest < ActiveSupport::TestCase
     assert company.evidence.any?, "the company keeps its own site's quote"
     assert role.evidence.any?, "the role keeps its own site's quote"
     assert_nothing_raised { Entra1DropSecEvidence.new(reason: "test").up }
+  end
+
+  test "a role-only company seed leaves the company's other fields as they are, now and on a re-seed" do
+    load_seeds
+    slugs = %w[general-atomics global-laser-enrichment good-energy-collective-incorporated pkmj-technical-services-llc advanced-conductor-technologies]
+    slugs.each do |slug|
+      Organization.find_by!(slug:).update_columns(country_code: "US", website: "https://example.org/#{slug}", legal_name: "#{slug} Inc.",
+        hq_city: "Springfield", hq_state: "IL", description: "Added later by hand")
+    end
+
+    2.times { load_seeds }
+
+    slugs.each do |slug|
+      company = Organization.find_by!(slug:)
+      assert_equal [ "US", "https://example.org/#{slug}", "#{slug} Inc.", "Springfield", "IL", "Added later by hand" ],
+        company.attributes.values_at("country_code", "website", "legal_name", "hq_city", "hq_state", "description"), slug
+    end
   end
 
   test "is safe to re-run" do
