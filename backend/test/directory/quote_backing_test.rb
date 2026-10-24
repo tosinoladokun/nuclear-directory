@@ -37,6 +37,9 @@ class Directory::QuoteBackingTest < ActiveSupport::TestCase
     assert_not Backing.place?([ "MORGANTOWN, W.VA." ], city: "Morgantown", state: "VA"), "nor is W.VA."
     assert Backing.place?([ "Morgantown, West Virginia, and Bristol, Virginia" ], city: "Bristol", state: "VA"), "another mention of Virginia still counts"
     assert Backing.place?([ "Morgantown, West Virginia" ], city: "Morgantown", state: "WV")
+    assert Backing.place?([ "Bristol is in southwest Virginia." ], city: "Bristol", state: "VA"), "southwest is not West"
+    assert Backing.place?([ "Bristol is in northwest Virginia." ], city: "Bristol", state: "VA")
+    assert_not Backing.place?([ "Austin, TX; see https://ga.gov/help" ], city: "Austin", state: "GA"), "ga. inside a URL isn't Georgia"
     assert Backing.place?([ "Andrews, West Texas" ], city: "Andrews", state: "TX"), "West Texas is Texas"
     assert Backing.contains?([ "Northern States Power Company - Minnesota" ], "Northern States Power Company – Minnesota")
   end

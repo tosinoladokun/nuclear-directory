@@ -63,8 +63,8 @@ module Directory::QuoteBacking
         code, name = names(state.to_s.squish)
         text = normalize(quote)
         (code.present? && quote.to_s.match?(/(?<![[:alnum:].])#{Regexp.escape(code)}(?![[:alnum:]])/)) ||
-          (name.present? && text.match?(/(?<![[:alnum:]])#{"(?<!west )" if name.casecmp?("Virginia")}#{Regexp.escape(normalize(name))}(?![[:alnum:]])/)) ||
-          ((ap = AP_STATES[code]) && text.match?(/(?<![[:alnum:].])#{Regexp.escape(ap.downcase)}/))
+          (name.present? && text.match?(/(?<![[:alnum:]])#{"(?<!(?<![[:alnum:]])west )" if name.casecmp?("Virginia")}#{Regexp.escape(normalize(name))}(?![[:alnum:]])/)) ||
+          ((ap = AP_STATES[code]) && text.match?(/(?<![[:alnum:].])#{Regexp.escape(ap.downcase)}(?![[:alnum:]])/))
       end
 
       # [code, full name], either of which may be unknown.
