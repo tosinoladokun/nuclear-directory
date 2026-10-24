@@ -233,4 +233,20 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     run_stage("match", base.merge("external_id" => "y-1", "agreement" => "ppa"))
     assert_match "states its size", no_size.reload.notes
   end
+
+  test "a deal waiting for its link is matched again once the link is in" do
+    buyer = company(name: "Later Buyer", sec_cik: nil)
+    seller = company(name: "Later Seller", sec_cik: "0000000002")
+    deal = { "link_type" => "Relationship", "from_organization" => { "name" => "Later Seller" }, "to_organization" => { "name" => "Later Buyer" },
+      "relationship_type" => "offtake_with", "term_type" => "offtake", "external_id" => "z-1", "capacity_mw" => "20" }
+    waiting = claim(deal)
+    run_stage("match", deal)
+    assert_match "approve the link first", waiting.reload.notes
+
+    Directory::FactWriter.write(:relationship, { from_organization_id: seller.id, to_organization_id: buyer.id, relationship_type: "offtake_with" },
+      verification: { status: "verified", by: BY })
+    run_stage("match", deal)
+    assert waiting.reload.status_matched?, waiting.notes
+    assert_equal "DealTerm", waiting.subject_type
+  end
 end
