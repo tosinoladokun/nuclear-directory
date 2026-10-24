@@ -43,6 +43,13 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     assert_equal [ 0, 0 ], [ walled.reload.link_failures, busy.reload.link_failures ]
   end
 
+  test "a bot challenge on robots.txt blocks the host's sources, not fails them" do
+    walled = cite("https://walled.example/page")
+    stub_request(:get, "https://walled.example/robots.txt").to_return(status: 503, body: "Just a moment...", headers: { "cf-mitigated" => "challenge" })
+
+    assert_equal [ walled.id ], check["blocked"]
+  end
+
   test "a source cited only by a published role is checked too" do
     role = Role.create!(key: "fuel", name: "Fuel")
     fact = OrganizationRole.create!(organization: @company, role:).tap { |r| r.verify!(by: BY) }
