@@ -61,7 +61,7 @@ class SeedsTest < ActiveSupport::TestCase
     %w[adp-cr3 kewaunee-solutions-inc northstar-vallecitos-llc-nsv tmi-2-solutions].each do |slug|
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
-    assert_equal 78, Relationship.verified.count
+    assert_equal 79, Relationship.verified.count
     assert_equal 52, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
     assert_equal [ 76, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
@@ -190,6 +190,22 @@ class SeedsTest < ActiveSupport::TestCase
     assert links["google"].offtakes_from?
     assert_match "leasing rights", links["dominion-energy"].description
     assert_equal "Dominion Energy Virginia currently owns the proposed site.", links["dominion-energy"].evidence.sole.quote
+  end
+
+  test "ENTRA1's 2023 SEC quotes come off after the seed attaches its own sources" do
+    load_seeds
+    load Rails.root.join("db/data/20261022200000_entra1_drop_sec_evidence.rb")
+    company = Organization.find_by!(slug: "entra1-energy")
+    sec = Source.find_or_create_by!(url: Entra1DropSecEvidence::SOURCE_URL) { |source| source.source_kind = "web_page" }
+    role = company.organization_roles.first
+    [ company, role ].each { |fact| Evidence.create!(subject: fact, source: sec, quote: "ENTRA1 is a company from the filing", confidence: 0.9, found_by: "human") }
+
+    Entra1DropSecEvidence.new(reason: "test").up
+
+    assert_empty Evidence.where(source: sec, subject: [ company, role ])
+    assert company.evidence.any?, "the company keeps its own site's quote"
+    assert role.evidence.any?, "the role keeps its own site's quote"
+    assert_nothing_raised { Entra1DropSecEvidence.new(reason: "test").up }
   end
 
   test "is safe to re-run" do
