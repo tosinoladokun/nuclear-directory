@@ -39,6 +39,8 @@ class SourceCatalog
     "nrc_decommissioning" => { name: "NRC decommissioning list", daily: true },
     "doe_isotope_sites" => { name: "DOE Isotope Program sites", daily: true },
     "nrc_uranium_recovery" => { name: "NRC uranium recovery sites", daily: true },
+    "sec_form_d" => { name: "SEC Form D rounds", daily: false },
+    "sec_submissions" => { name: "SEC filing lists", note: "finds each company's Form D filings; the ticker-to-CIK list", daily: false },
     "company_newsrooms" => { name: "Company newsrooms (RSS)", daily: true },
     "federal_register_nrc" => { name: "NRC notices (Federal Register)", daily: false },
     "federal_register_index" => { name: "Federal Register API", note: "finds the NRC's notices", daily: false },

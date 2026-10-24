@@ -1,0 +1,29 @@
+{
+ "cik": "0002028336",
+ "name": "New ERA Energy & Digital, Inc.",
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0002028336-24-000006",
+    "0001225028-26-000008",
+    "0001225028-26-000007"
+   ],
+   "filingDate": [
+    "2024-12-19",
+    "2026-10-21",
+    "2026-10-16"
+   ],
+   "form": [
+    "D",
+    "SCHEDULE 13G/A",
+    "4"
+   ],
+   "primaryDocument": [
+    "xslFormDX01/primary_doc.xml",
+    "xslSCHEDULE_13G_X02/primary_doc.xml",
+    "xslF345X06/primary_doc.xml"
+   ]
+  },
+  "files": []
+ }
+}
