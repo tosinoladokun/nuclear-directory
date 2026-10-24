@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_24_020000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -257,6 +257,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_020000) do
     t.datetime "updated_at", null: false
     t.index ["sluggable_type", "slug"], name: "index_former_slugs_on_sluggable_type_and_slug", unique: true
     t.index ["sluggable_type", "sluggable_id"], name: "index_former_slugs_on_sluggable"
+  end
+
+  create_table "leads", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "normalized_name", null: false
+    t.string "kind", default: "other", null: false
+    t.jsonb "sources", default: [], null: false
+    t.date "first_seen_on", null: false
+    t.date "last_seen_on", null: false
+    t.integer "seen_count", default: 1, null: false
+    t.string "status", default: "new", null: false
+    t.text "reason"
+    t.string "record_type"
+    t.bigint "record_id"
+    t.text "note"
+    t.string "decided_by"
+    t.datetime "decided_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kind", "normalized_name"], name: "index_leads_on_kind_and_normalized_name", unique: true
+    t.index ["status", "seen_count"], name: "index_leads_on_status_and_seen_count"
+    t.check_constraint "(record_type IS NULL) = (record_id IS NULL) AND (record_type IS NULL OR (record_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])))", name: "leads_record_check"
+    t.check_constraint "kind::text = ANY (ARRAY['company'::character varying, 'plant'::character varying, 'other'::character varying]::text[])", name: "leads_kind_check"
+    t.check_constraint "seen_count >= 1", name: "leads_seen_count_check"
+    t.check_constraint "status::text <> 'ignored'::text OR reason IS NOT NULL", name: "leads_ignored_reason_check"
+    t.check_constraint "status::text = ANY (ARRAY['new'::character varying, 'researching'::character varying, 'added'::character varying, 'ignored'::character varying]::text[])", name: "leads_status_check"
   end
 
   create_table "licensing_stages", force: :cascade do |t|
