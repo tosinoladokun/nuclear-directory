@@ -86,7 +86,7 @@ class DataQuality::Plugins::NrcDecommissioning < DataQuality::Plugin
       return stats.merge("units" => rows.size, "stopped" => "a row has no site page link")
     end
 
-    stats.merge!("units" => rows.size, "site_pages" => Hash.new(0))
+    stats.merge!("units" => rows.size, "site_pages" => Hash.new(0), "failed_pages" => [])
     urls = rows.filter_map(&:page_url).uniq
     withdrawn = withdraw_unlisted_pages(urls, run)
     stats["withdrawn"] = withdrawn if withdrawn.positive?
@@ -99,7 +99,7 @@ class DataQuality::Plugins::NrcDecommissioning < DataQuality::Plugin
       stats["site_pages"][result] += 1
       # By id, so a same-day rerun that skips it still reports it (#429): a
       # failed fetch keeps its reason until the page reads cleanly.
-      (stats["failed_pages"] ||= []) << page.id if failed?(page, result)
+      stats["failed_pages"] << page.id if failed?(page, result)
       # A block recorded earlier today (still blocked, or escalated to
       # needs_human) stops a same-day rerun too, before any later page.
       return stats.merge("stopped" => "site page blocked") if result == "blocked" || page.blocked_streak.positive?

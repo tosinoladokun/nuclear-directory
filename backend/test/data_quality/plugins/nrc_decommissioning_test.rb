@@ -76,7 +76,7 @@ class DataQuality::Plugins::NrcDecommissioningTest < ActiveSupport::TestCase
     run = crawl
 
     assert run.succeeded?
-    assert_equal({ "list" => "changed", "units" => 21, "site_pages" => { "changed" => 20 } }, run.stats)
+    assert_equal({ "list" => "changed", "units" => 21, "site_pages" => { "changed" => 20 }, "failed_pages" => [] }, run.stats)
     assert_requested @pages, times: 20
     cr3 = Source.find_by!(url: CR3_URL)
     assert_equal [ "nrc_decommissioning", true ], [ cr3.source_kind, cr3.crawl_ok? ]
@@ -133,7 +133,7 @@ class DataQuality::Plugins::NrcDecommissioningTest < ActiveSupport::TestCase
 
     Source.update_all(fetched_at: 2.days.ago)
     stub_request(:get, CR3_URL).to_return(body: "<html><body><p>Crystal River</p></body></html>")
-    assert_nil crawl.stats["failed_pages"]
+    assert_equal [], crawl.stats["failed_pages"]
   end
 
   test "a site page is read again when the list maps a new unit to it, though its text is the same" do
