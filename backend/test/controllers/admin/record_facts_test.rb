@@ -208,7 +208,17 @@ class Admin::RecordFactsTest < ActionDispatch::IntegrationTest
     site = Facility.create!(name: "Share Point", verification_status: "verified", verified_by: "human:tosin")
     added, = DataQuality::Review.add_link(kind: "plant_link", record_id: site.id, other_id: @company.id, verb: "owns", share: "100.00000000000000001",
       url: "http://example.com/x", quote: SRC[:quote], by: "human:tosin")
-    assert_includes added.errors, "A share is a number from 0 to 100"
+    assert_includes added.errors, "A share is a number from 0 to 100, with at most two decimal places"
     assert_includes added.errors, "Enter a link to a public source, starting with https://"
+  end
+
+  test "a share with more than two decimal places is refused, so the preview is what's stored" do
+    site = Facility.create!(name: "Precise Point", verification_status: "verified", verified_by: "human:tosin")
+    added, = DataQuality::Review.add_link(kind: "plant_link", record_id: site.id, other_id: @company.id, verb: "owns", share: "99.999",
+      url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
+    assert_includes added.errors, "A share is a number from 0 to 100, with at most two decimal places"
+    added, = DataQuality::Review.add_link(kind: "plant_link", record_id: site.id, other_id: @company.id, verb: "owns", share: "99.99",
+      url: SRC[:url], quote: SRC[:quote], by: "human:tosin")
+    assert added.ok?, added.errors.inspect
   end
 end

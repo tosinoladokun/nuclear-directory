@@ -619,7 +619,8 @@ module DataQuality::Review
       errors = [ ("That record is no longer in the directory" unless record),
         ("Choose the company it's linked to" unless other && open_record?(other) && !(company_link && other.id == record&.id)),
         ("Choose how they're linked" unless verbs.key?(verb.to_s)),
-        ("A share is a number from 0 to 100" if share && !(share.match?(/\A\d+(\.\d+)?\z/) && share.to_d.between?(0, 100))),
+        # Two decimal places at most, as the share is stored: what's confirmed is what's saved.
+        ("A share is a number from 0 to 100, with at most two decimal places" if share && !(share.match?(/\A\d+(\.\d{1,2})?\z/) && share.to_d.between?(0, 100))),
         ("Only an owner has a share" if share && verb.to_s != "owns"),
         ("Enter dates as they're shown" if [ starts, ends ].include?(:bad)),
         ("It can't end before it starts" if starts.is_a?(Date) && ends.is_a?(Date) && ends < starts),
