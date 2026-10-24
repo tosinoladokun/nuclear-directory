@@ -728,6 +728,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # cites the file as it reads now. Pages of one kind that aren't editions
     # (NRC's page per plant) are never replaced.
     def replace_earlier_issue(candidate, record)
+      same = Candidate.where(subject_type: record.type, subject_id: record.id, status: %w[new matched needs_review])
+        .where.not(id: candidate.id).where("candidates.payload = ?::jsonb", candidate.payload.to_json)
+      # An older edition arriving second (re-read, or matched later): a newer
+      # one already waits with the same claim, so this one closes.
+      newer = same.joins(:source).where(sources: { source_kind: candidate.source.source_kind }).where.not(source_id: candidate.source_id)
+        .find { |other| plugin.earlier_editions(other.source).include?(candidate.source_id) }
+      return confirmed(candidate, record, "Same as candidate ##{newer.id} from a newer issue of the source, already waiting") if newer
+
       editions = plugin.earlier_editions(candidate.source)
       return if editions.empty?
 

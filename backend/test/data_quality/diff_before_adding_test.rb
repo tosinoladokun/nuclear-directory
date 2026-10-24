@@ -55,4 +55,14 @@ class DataQuality::DiffBeforeAddingTest < ActiveSupport::TestCase
     y2023, y2024 = year.(2023), year.(2024)
     assert_equal [ y2023.id ], DataQuality::Plugins::EiaPlants.new.earlier_editions(y2024)
   end
+
+  test "an older edition's claim arriving after the newer one closes, so one waits" do
+    newer = claim(@september)
+    DataQuality::Stages::Match.call(plugin: Editions.new)
+    older = claim(@august)
+    DataQuality::Stages::Match.call(plugin: Editions.new)
+    assert_equal "matched", newer.reload.status
+    assert_equal "confirmed", older.reload.status
+    assert_match "from a newer issue of the source", older.notes
+  end
 end
