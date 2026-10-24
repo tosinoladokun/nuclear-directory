@@ -221,6 +221,15 @@ class DataQuality::Plugins::SecFormDTest < ActiveSupport::TestCase
     assert_match "nothing sold", flags.sole.notes
   end
 
+  test "a clarification only under use of proceeds is kept, and holds the round" do
+    xml = file_fixture("sec_form_d/newera_d.xml").read.sub(%r{(<useOfProceeds>.*?<clarificationOfResponse>)(</clarificationOfResponse>)}m, '\\1Part of the proceeds repays a bridge loan.\\2')
+    stub_request(:get, NOTICE).to_return(body: xml)
+    crawl
+
+    assert_match "clarification: Part of the proceeds repays a bridge loan.", notice_source.content_text
+    assert_match "bridge loan", plugin.hold_for_review(Candidate.new(kind: "deal_term", quote: notice_source.content_text))
+  end
+
   test "a D/A whose original isn't stored is the round of the filing it names" do
     amendment = filing("0002028336-25-000005", form: "D/A", amends: "0001012975-25-000531")
 

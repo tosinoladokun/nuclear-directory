@@ -283,7 +283,9 @@ class DataQuality::Plugins::SecFormD < DataQuality::Plugin
         dollars(text.("offeringSalesAmounts/totalOfferingAmount")), dollars(text.("offeringSalesAmounts/totalAmountSold")),
         text.("typeOfFiling/newOrAmendment/previousAccessionNumber"),
         text.("businessCombinationTransaction/isBusinessCombinationTransaction") == "true" ? "yes" : "no",
-        [ text.("offeringSalesAmounts/clarificationOfResponse"), text.("businessCombinationTransaction/clarificationOfResponse") ].compact.join(" ").presence ]
+        # Every clarification the offering carries, so any of them holds it for a person.
+        %w[offeringSalesAmounts businessCombinationTransaction useOfProceeds salesCommissionsFindersFees]
+          .filter_map { |section| text.("#{section}/clarificationOfResponse") }.join(" ").presence ]
       return if values[3].blank? || values[4].blank?
 
       FIELDS.zip(values).map { |label, value| "#{label}: #{value.to_s.delete('|').presence || '-'}" }.join(" | ")
