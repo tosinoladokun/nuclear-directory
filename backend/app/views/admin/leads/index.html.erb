@@ -81,6 +81,7 @@
                       <label for="record-<%= lead.id %>" class="type-body-strong">The company or plant that has it</label>
                       <%= text_field_tag :record, nil, id: "record-#{lead.id}", class: "nd-input type-input", placeholder: "Its name in the directory", required: true %>
                       <button type="submit" class="nd-btn nd-btn--primary type-ui">Link it</button>
+                      <button type="button" class="nd-btn nd-btn--outline type-ui nd-leads__cancel" data-action="row-menu#close">Cancel</button>
                     <% end %>
                   </div>
                 </details>
@@ -91,6 +92,7 @@
                       <label for="reason-<%= lead.id %>" class="type-body-strong">Why it's ignored</label>
                       <%= text_field_tag :reason, nil, id: "reason-#{lead.id}", class: "nd-input type-input", required: true, placeholder: "Not nuclear, a typo…" %>
                       <button type="submit" class="nd-btn nd-btn--primary type-ui">Ignore it</button>
+                      <button type="button" class="nd-btn nd-btn--outline type-ui nd-leads__cancel" data-action="row-menu#close">Cancel</button>
                     <% end %>
                   </div>
                 </details>
