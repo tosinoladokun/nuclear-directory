@@ -62,9 +62,9 @@ class SeedsTest < ActiveSupport::TestCase
       assert Organization.find_by!(slug:).evidence.any?, "#{slug} has no quoted evidence"
     end
     assert_equal 78, Relationship.verified.count
-    assert_equal 52, Facility.verified.count
+    assert_equal 54, Facility.verified.count
     # 5 plant links wait for a direct quote (owns/operates not stated by the source).
-    assert_equal [ 75, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
+    assert_equal [ 78, 7 ], [ FacilityRelationship.verified.count, FacilityRelationship.pending.count ]
     assert_equal 27, FacilityAlias.count
     assert_equal "Kemmerer Unit 1", Directory::Lookup.facility(name: "Kemmerer Unit 1 (Natrium)")&.name, "found by its other name"
     assert_equal [ "human:tosin" ], Relationship.distinct.pluck(:verified_by)
@@ -190,6 +190,17 @@ class SeedsTest < ActiveSupport::TestCase
     assert links["google"].offtakes_from?
     assert_match "leasing rights", links["dominion-energy"].description
     assert_equal "Dominion Energy Virginia currently owns the proposed site.", links["dominion-energy"].evidence.sole.quote
+  end
+
+  test "Indian Point's units from two companies' files share one site" do
+    load_seeds
+
+    units = Facility.where(name: [ "Indian Point 2", "Indian Point 3" ])
+    assert_equal 2, units.count
+    assert_equal 1, units.pluck(:parent_id).uniq.size
+    assert_equal "Indian Point", units.first.parent.name
+    assert_equal [ "Holtec Decommissioning International", "Holtec International" ],
+      FacilityRelationship.where(facility: units).includes(:organization).map { |link| link.organization.name }.uniq.sort
   end
 
   test "is safe to re-run" do
