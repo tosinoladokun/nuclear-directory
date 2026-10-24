@@ -136,6 +136,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: NO_FACTS)
+      hold_open(source, NO_FACTS)
       "needs_human"
     end
 
