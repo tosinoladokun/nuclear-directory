@@ -28,7 +28,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
   # in the same run must already be known. Records before links, and deal
   # terms after the links and companies they belong to (#397).
   ORDER = %w[facility organization organization_role organization_technology relationship facility_relationship
-    deal_term organization_alias].freeze
+    deal_term organization_alias news_item].freeze
 
   # Payload keys that name another record, and what kind of record each is.
   LINK_ENDS = {
@@ -155,8 +155,28 @@ class DataQuality::Stages::Match < DataQuality::Stage
       when "facility" then payload.key?("identify") ? match_enrichment(candidate, payload["identify"]) : match_record(candidate, payload)
       when "organization" then match_record(candidate, payload)
       when *LINK_ENDS.keys then match_link(candidate, payload)
+      when "news_item" then match_news(candidate, payload)
       else review(candidate, "#{candidate.kind} candidates aren't matched automatically yet")
       end
+    end
+
+    # A news item (#137) is about the companies and plants it names: each
+    # found exactly (name, alias or docket) is noted as a mention, and the
+    # claim is attached to the first, so it's decided with that record. One
+    # naming nothing in the directory waits for a person.
+    def match_news(candidate, payload)
+      # A trade-press lead (#127) waits for Data Quality, whatever it names.
+      return review(candidate, DataQuality::Review::LEAD) if DataQuality::Review.lead?(candidate)
+
+      found = Array(payload["about"]).filter_map do |about|
+        type = about["type"] == "facility" ? :facility : :organization
+        hit = resolve(type, about.except("type"), closed: :found)
+        hit.record if hit.is_a?(Found) && EXACT.include?(hit.by) && !hit.record.closed?
+      end.uniq { |record| [ record.type, record.id ] }
+      return review(candidate, "it names no company or plant in the directory") if found.empty?
+
+      candidate.update!(payload: payload.merge("mentions" => found.map { |record| [ record.type, record.id ] }))
+      attach(candidate, found.first, "About #{found.map(&:name).to_sentence}")
     end
 
     def match_record(candidate, payload)
@@ -494,6 +514,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # still in review), the candidate stays new and is retried on the next run.
     # More than one fit goes to review.
     def match_enrichment(candidate, identify)
+      return match_site_enrichment(candidate, identify.to_h) unless identify.to_h.key?("unit")
+
       name, state, unit = identify.to_h.values_at("name", "state", "unit")
       number = unit.to_s[/\d+/]&.to_i
       units, same_number = enrichment_fits(name, state, number)
@@ -524,6 +546,55 @@ class DataQuality::Stages::Match < DataQuality::Stage
         @stats["waiting"] += 1
         candidate.update!(notes: "No NRC unit for #{label} yet; retried on the next match run")
       end
+    end
+
+    # A plant-level enrichment (EIA-860's Plant file, #319) adds values to a
+    # site and never creates one. identify: { "eia_plant_id", "name",
+    # "state", and "site_id" once a site with no EIA plant ID was found by
+    # name }. The site with that EIA plant ID wins; else a power plant with
+    # no EIA plant ID by name and state, looked up again on every run, so a
+    # plant added after the file was read is still found (the claim then
+    # records site_id, and for a site the plant ID to set, for verify's hold).
+    # site_id counts only while that site still has no EIA plant ID. No site
+    # yet: retried on the next run.
+    def match_site_enrichment(candidate, identify)
+      plant, name, state, site_id = identify.values_at("eia_plant_id", "name", "state", "site_id")
+      label = "EIA plant #{plant} (#{name})"
+      site = directory.facility(eia_plant_id: plant) if plant.present?
+      if site.nil? && site_id.blank? && (found = plant_by_name(name, state))
+        candidate.update!(payload: candidate.payload.merge("identify" => identify.merge("site_id" => found[:id]),
+          "eia_plant_id" => (plant if found[:site])).compact)
+        site_id = found[:id]
+      end
+      if site.nil? && site_id.present?
+        by_name = directory.facility(id: site_id)
+        site = by_name if by_name && by_name.eia_plant_id.blank?
+      end
+
+      if site.nil?
+        @stats["waiting"] += 1
+        candidate.update!(notes: "No site for #{label} yet; retried on the next match run")
+      elsif site.closed?
+        settle_closed(candidate, site, "#{label} is #{site.name}, which was #{site.verification_status}")
+      else
+        attach(candidate, site, "#{label} is #{site.name}#{' (by name)' if site.eia_plant_id.blank?}")
+        settle(candidate, site)
+      end
+    end
+
+    # The power plant with no EIA plant ID that has this name (or an alias)
+    # in this state, as { id:, site: }, when exactly one does. Read once per
+    # run.
+    def plant_by_name(name, state)
+      key = plant_name_key(name, state) or return
+      @plants_by_name ||= directory.plants_without_eia_plant_id
+        .flat_map { |plant| plant[:names].map { |each| [ plant_name_key(each, plant[:state]), plant.slice(:id, :site) ] } }
+        .group_by(&:first).filter_map { |each_key, found| [ each_key, found.first.last ] if each_key && found.map(&:last).uniq.one? }.to_h
+      @plants_by_name[key]
+    end
+
+    def plant_name_key(name, state)
+      [ directory.normalize_facility_name(name), state.to_s.strip.upcase ] if name.present? && state.present?
     end
 
     # [units that fit the name, those of them with this unit number]

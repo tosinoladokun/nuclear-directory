@@ -59,6 +59,16 @@ module Directory
     # How many of each fact type the public pages show: { "Organization" => 112, … }.
     def published_counts = FACT_TYPES.index_with { |type| type.constantize.published.count }
 
+    # A company's or plant's "Latest" (#137): its approved news, newest first.
+    # A unit's news is its site's.
+    def latest_news(type:, id:, limit: 10)
+      raise ArgumentError, "news is about a company or a plant, not a #{type}" unless NewsMention::SUBJECT_TYPES.include?(type.to_s)
+
+      record = type.to_s.constantize.find_by(id:) or return []
+      record = record.parent if record.is_a?(Facility) && record.parent
+      NewsItem.latest_for(record).limit(limit).map { |item| NewsItemRef.from(item) }
+    end
+
     # The awards, offtakes or rounds under one link (#256), oldest first.
     # published: true (the default) gives only what public pages may show.
     # Facts a company can be given by hand (#202): kind => [model, its link's column].
@@ -244,8 +254,23 @@ module Directory
       type.to_s.constantize.where(slug: slugs).pluck(:slug, :id).to_h
     end
 
+    # The names (and aliases) of published companies and plants, to spot them
+    # in a trade-press headline (#127): { "organization" => [...], "facility" => [...] }.
+    def published_names
+      {
+        "organization" => Organization.published.pluck(:name) + OrganizationAlias.where(organization_id: Organization.published.select(:id)).pluck(:alias),
+        "facility" => Facility.published.pluck(:name) + FacilityAlias.where(facility_id: Facility.published.select(:id)).pluck(:alias)
+      }.transform_values { |names| names.compact.uniq }
+    end
+
     # Whether a fact is public now, by its model's .published scope (a unit
     # under a closed site isn't, #104), so callers don't re-derive the rule.
+    # Sources cited by evidence on any published fact (#510's link check), as a relation of ids.
+    def published_source_ids
+      FACT_TYPES.map { |type| Evidence.where(subject_type: type, subject_id: type.constantize.published.select(:id)).distinct.select(:source_id) }
+        .reduce { |all, ids| all.or(ids) }
+    end
+
     def published?(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
 
@@ -355,6 +380,22 @@ module Directory
 
       record = scope.order(:id).first
       FacilityRef.from(record) if record
+    end
+
+    # A plant name as the directory compares names ("Plant Vogtle" and
+    # "PLANT VOGTLE" alike).
+    def normalize_facility_name(name) = FacilityAlias.normalize(name.to_s)
+
+    # Power plants with no EIA plant ID that aren't rejected or taken off:
+    # top-level records (a site, or a one-unit plant kept as one record,
+    # like Columbia), each as { id:, state:, site:, names: [name, *aliases] },
+    # for a plant-level EIA file to find by name and state (#319). site:
+    # false for a one-record plant with its NRC docket, which can't carry an
+    # EIA plant ID (only a site can).
+    def plants_without_eia_plant_id
+      Facility.where(parent_id: nil, eia_plant_id: [ nil, "" ], facility_type: [ "power_reactor", nil ])
+        .where.not(verification_status: %w[rejected unpublished]).includes(:aliases).order(:id)
+        .map { |plant| { id: plant.id, state: plant.state, site: plant.nrc_docket.blank?, names: [ plant.name, *plant.aliases.map(&:alias) ] } }
     end
 
     # Words too common in this industry to tell two names apart.

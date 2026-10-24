@@ -72,6 +72,9 @@ module Seed
     # A plant (site) by name: one with no parent first, as write_unit finds
     # a site (undocketed before docketed), so a same-name NRC unit never
     # takes the site's details.
+    # A site by name: undocketed, with no parent (as write_unit finds one).
+    def site_named(name) = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(:id).first
+
     def plant_named(name)
       Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
         Directory::Lookup.facility(name:)
@@ -84,7 +87,9 @@ module Seed
         holder = Facility.find_by(parent_id: nil, eia_plant_id: entry["eia_plant_id"].to_s) or next
         # The site the loader would write to, found as it finds it: by its
         # name, then by a former one (rename_from_former_name).
-        target = [ entry["name"], *entry["other_names"] ].compact_blank.lazy.filter_map { |name| plant_named(name) }.first
+        # A site under its name or a former one comes before a same-name NRC unit.
+        names = [ entry["name"], *entry["other_names"] ].compact_blank
+        target = names.lazy.filter_map { |name| site_named(name) }.first || names.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -178,6 +183,15 @@ module Seed
           country_code: doc["country_code"], status: doc["status"], description: description["text"],
           hq_city: hq.filter_map { |entry| entry["city"].presence }.last, hq_state: hq.filter_map { |entry| entry["state"].presence }.last
         }
+        # A field the file doesn't state at all is left as it is, so a role-only
+        # seed never blanks what the admin, Enrich or an earlier seed filled in
+        # (Copilot, #501). A key stated as null still clears it.
+        { website: "website", country_code: "country_code", legal_name: "legal_name", hq_city: "hq", hq_state: "hq" }.each do |attribute, key|
+          attributes.delete(attribute) unless doc.key?(key)
+        end
+        # A description stated as null, or with `text: null`, clears it; one with only a source and quote (no text key) leaves the text alone.
+        states_text = doc.key?("description") && (doc["description"].nil? || doc["description"].respond_to?(:key?) && doc["description"].key?("text"))
+        attributes.delete(:description) unless states_text
         attributes[:domain] = nil if shared.include?(Organization.domain_from(doc["website"]))
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
@@ -224,9 +238,13 @@ module Seed
           # same link (same from/to/type) doesn't clear a value another
           # entry set. The seed describes what's known; a missing key is
           # "nothing to say", not "clear it".
+          # A link marked pending stays pending, and a human's later decision on it holds, as for plant links.
+          existing = Relationship.find_by(from_organization_id: organization.id, to_organization_id: other.id, relationship_type: item["type"])
+          next if item["pending"] && existing&.closed?
+
           link = write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
             relationship_type: item["type"], description: item["description"] }.compact,
-            evidence(item, sources))
+            evidence(item, sources), pending: item["pending"], hold: held_link_reason(existing, item))
           write_terms(slug, "Relationship", link, item, sources)
         end
 
@@ -339,9 +357,16 @@ module Seed
       # already taken. It takes the slug a fresh seed would give it too, so
       # its URL doesn't depend on which seed loaded it first.
       def rename_from_former_name(entry)
-        return if Directory::Lookup.facility(name: entry["name"])
+        return if site_named(entry["name"])
 
-        former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
+        # A site under a former name is renamed, even beside a same-name NRC
+        # unit (a docketed Callaway and the site once called Callaway Energy Center).
+        former = Array(entry["other_names"]).lazy.filter_map { |name| site_named(name) }.first
+        unless former
+          return if Directory::Lookup.facility(name: entry["name"])
+
+          former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
+        end
         attributes = { id: former.id, name: entry["name"] }
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)
@@ -490,6 +515,18 @@ module Seed
         return unless link&.verified?
         # A seed-verified link is decided in the write that creates it; a
         # decision from pending made later is a human's (e.g. in the admin).
+        events = link.verification_events
+        decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
+        return if events.where(to_status: "pending").or(decided_later).exists?
+
+        item["pending_reason"]
+      end
+
+      # The pending reason to keep, when a link the seed marks pending was verified later by a person
+      # (a decision made after the seed's own write); nil otherwise. Plant links and company links.
+      def held_link_reason(link, item)
+        return unless item["pending"] && link&.verified?
+
         events = link.verification_events
         decided_later = events.where(from_status: "pending").where("verification_events.created_at > ?", link.created_at + 1.minute)
         return if events.where(to_status: "pending").or(decided_later).exists?

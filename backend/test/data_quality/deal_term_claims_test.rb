@@ -186,6 +186,27 @@ class DataQuality::DealTermClaimsTest < ActiveSupport::TestCase
     run_stage("match", deal)
     assert_equal term.id, again.reload.subject_id
     assert_equal 1, DealTerm.count
+
+    second_deal = deal.merge("external_id" => "release-2026-10-02")
+    second = claim(second_deal)
+    run_stage("match", second_deal)
+    result = DataQuality::Review.approve([ second.reload.id ], by: BY).sole
+    assert result.ok?, result.errors.inspect
+    assert DealTerm.find(second.reload.subject_id).verified?, "approving a deal on a link writes no relationship_type"
+
+    # A changed size on a deal a person decided is a conflict, not a quiet update.
+    bigger = claim(second_deal.merge("capacity_mw" => "800"))
+    run_stage("match", second_deal.merge("capacity_mw" => "800"))
+    directory = DataQuality::DirectoryClient.new
+    differences = DataQuality::Differences.with_human_verified(bigger.reload, directory.attached_record(bigger), directory:)
+    assert_equal [ "500", "800" ], differences["capacity_mw"]
+  end
+
+  test "a deal whose link end is no longer found isn't confirmed against another link" do
+    client = DataQuality::DirectoryClient.new
+    attributes = client.send(:deal_term_link, { "link_type" => "Relationship", "relationship_type" => "offtake_with" },
+      { from_organization_id: 1, to_organization_id: nil })
+    assert_nil attributes[:link_id]
   end
 
   test "a deal on a link a person rejected isn't added" do

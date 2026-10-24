@@ -29,7 +29,8 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
       [ "nuclear_energy_rd", 1 ] => { "results" => [ XENERGY ], "page_metadata" => { "page" => 1, "hasNext" => true } },
       [ "nuclear_energy_rd", 2 ] => { "results" => [ NUSCALE, XENERGY ], "page_metadata" => { "page" => 2, "hasNext" => false } },
       [ "haleu_fuel_contracts", 1 ] => { "results" => CENTRUS, "page_metadata" => { "page" => 1, "hasNext" => false } },
-      [ "fusion", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } }
+      [ "fusion", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } },
+      [ "small_business", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } }
     }
     @requests = []
     stub_request(:post, Plugin::API_URL).to_return do |request|
@@ -52,7 +53,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert_equal [ "category_business" ], first["filters"]["recipient_type_names"]
     assert_equal [ { "lower_bound" => 1_000_000 } ], first["filters"]["award_amounts"]
     assert_equal 5.years.ago.to_date.iso8601, first["filters"]["time_period"].first["start_date"]
-    assert_equal [ [ "81.121" ], [ "81.121" ], nil, [ "81.049" ] ], @requests.map { |body| body["filters"]["program_numbers"] }
+    assert_equal [ [ "81.121" ], [ "81.121" ], nil, [ "81.049" ], [ "81.049" ] ], @requests.map { |body| body["filters"]["program_numbers"] }
     assert_includes @requests.find { |body| body["filters"]["award_type_codes"] == Plugin::CONTRACTS }["fields"], "Award Amount"
   end
 
@@ -148,6 +149,56 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).select { |row| row["search"] == "fusion" } }
     assert_equal FUSION_KEPT.sort, kept.map { |row| row["description"] }.sort
     assert recipient(XENERGY["recipient_id"]), "the other searches are unaffected"
+  end
+
+  # Real descriptions from DOE's Office of Science grants to businesses, 23 Oct 2026.
+  SMALL_KEPT = [ "ELECTRODEPOSITED OVERLAYS FOR IMPROVED DURABILITY OF NUCLEAR REACTORS", "CORROSION SENSORS FOR MOLTEN SALT REACTORS",
+    "COMMERCIALIZATION OF MPFD SYSTEMS FOR ADVANCED REACTOR INSTRUMENTATION" ].freeze
+  SMALL_DROPPED = [ "NOVEL PROBE OF OXYGEN AND ITS ISOTOPES FOR MILLIMETER-SCALE MEASUREMENTS OF SOIL DYNAMICS",
+    "HIGH PERFORMANCE GLASS SCINTILLATORS FOR NUCLEAR PHYSICS EXPERIMENTS",
+    "MOLTEN SALT THERMAL ENERGY STORAGE FOR CONCENTRATING SOLAR POWER", "LOW-COST MOLTEN SALT PUMPS FOR INDUSTRIAL HEAT" ].freeze
+
+  test "small-business grants from $100,000, kept only for nuclear energy work (#125)" do
+    awards = (SMALL_KEPT + SMALL_DROPPED).each_with_index.map do |description, n|
+      XENERGY.merge("Award ID" => "SB#{n}", "Recipient Name" => "SMALL CO #{n}", "Award Amount" => 1_100_000, "Description" => description,
+        "generated_internal_id" => "ASST_NON_SB#{n}_089", "recipient_id" => "00000000-0000-0000-0000-#{(n + 50).to_s.rjust(12, '0')}-R")
+    end
+    @answers[[ "small_business", 1 ]] = { "results" => awards, "page_metadata" => { "hasNext" => false } }
+
+    crawl!
+
+    assert_equal [ { "lower_bound" => 100_000 } ], @requests.last["filters"]["award_amounts"]
+    refute @requests.last["filters"].key?("min_amount")
+    kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).select { |row| row["search"] == "small_business" } }
+    assert_equal SMALL_KEPT.sort, kept.map { |row| row["description"] }.sort
+    small = Source.find_by!(url: "https://www.usaspending.gov/recipient/00000000-0000-0000-0000-000000000050-R/latest")
+    assert_equal Plugin::SMALL_BUSINESS_HOLD, plugin.hold_for_review(Candidate.new(kind: "relationship", source: small))
+    assert_nil plugin.hold_for_review(Candidate.new(kind: "relationship", source: recipient(XENERGY["recipient_id"])))
+    mixed = Source.new(content_text: CSV.generate { |csv| csv << Plugin::COLUMNS; csv << Plugin::COLUMNS.map { |c| c == "search" ? "nuclear_energy_rd" : "x" }; csv << Plugin::COLUMNS.map { |c| c == "search" ? "small_business" : "x" } })
+    assert_equal Plugin::SMALL_BUSINESS_HOLD, plugin.hold_for_review(Candidate.new(kind: "relationship", source: mixed)), "mixed searches are held too"
+  end
+
+  test "at most 15 new recipients a night, largest awards first; the rest the next nights; ones read before always" do
+    sources = 20.times.map do |n|
+      csv = CSV.generate do |rows|
+        rows << Plugin::COLUMNS
+        rows << Plugin::COLUMNS.map { |c| { "award_id" => "A#{n}", "recipient_name" => "CO #{n} INC", "amount_usd" => (1_000_000 * (n + 1)).to_s,
+          "start_date" => "2024-01-01", "search" => "nuclear_energy_rd", "award_url" => "https://www.usaspending.gov/award/A#{n}",
+          "generated_award_id" => "A#{n}", "recipient_id" => "r#{n}" }.fetch(c, nil) }
+      end
+      Source.create!(url: "https://www.usaspending.gov/recipient/r#{n}/latest", source_kind: "usaspending_doe_awards", crawl_status: "ok",
+        content_text: csv, content_sha256: Digest::SHA256.hexdigest(csv))
+    end
+    extract = -> { DataQuality::Stages::Extract.call(plugin:) }
+
+    first = extract.()
+    assert_equal 5, first.stats["deferred"]
+    read = sources.select { |source| source.reload.extracted_sha256.present? }
+    assert_equal (5..19).map { |n| "r#{n}" }.sort, read.map { |source| source.url[%r{recipient/(r\d+)}, 1] }.sort, "largest totals first"
+
+    second = extract.()
+    assert_nil second.stats["deferred"]
+    assert sources.all? { |source| source.reload.extracted_sha256.present? }
   end
 
   test "a search with more awards than the pages read stores nothing, so the snapshots stay whole" do
