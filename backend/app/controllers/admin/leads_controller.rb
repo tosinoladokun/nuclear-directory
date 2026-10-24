@@ -19,6 +19,12 @@ class Admin::LeadsController < Admin::BaseController
 
   # A pasted list (one name per line, "Name: note" for a note), Data Quality's.
   def create
+    # Data Quality's Leads.md table, row by row, its text kept (#484).
+    if LeadImport.table?(params[:names])
+      count = LeadImport.import!(params[:names], by: actor)
+      return redirect_to(admin_leads_path, notice: "Imported #{helpers.pluralize(count, 'lead')} from the table.")
+    end
+
     kind = params[:kind].presence_in(Lead::KINDS) || "other"
     added = params[:names].to_s.lines.map(&:strip).reject(&:empty?).first(500).filter_map do |line|
       name, note = line.split(/\s*[:—–]\s+/, 2)

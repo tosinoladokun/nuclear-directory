@@ -91,7 +91,7 @@
   <summary class="type-body-strong">Add leads</summary>
   <%= form_with url: admin_leads_path, method: :post, class: "nd-stack" do %>
     <div class="nd-field">
-      <label for="names" class="type-small">One name per line. Add a note after a colon.</label>
+      <label for="names" class="type-small">One name per line, with a note after a colon, or Data Quality's Leads.md table as it is.</label>
       <%= text_area_tag :names, nil, rows: 6, class: "nd-input type-input", placeholder: "Example Fusion: named in a DOE GAIN list" %>
     </div>
     <div class="nd-field">

@@ -51,4 +51,30 @@ class Admin::LeadsTest < ActionDispatch::IntegrationTest
     assert_equal "Added 2 leads.", flash[:notice]
     assert_equal "from DOE GAIN", Lead.find_by!(name: "Pasted Fusion").note
   end
+
+  test "Data Quality's Leads.md table imports row by row, its text kept; importing again takes the file's status" do
+    table = <<~MD
+      Some notes above the table.
+
+      | Lead | Kind | Came from | First seen | Count | Status | Next step |
+      |---|---|---|---|---|---|---|
+      | Blue Energy; Blue Energy Inc. (a Blue Energy record exists, check) | company | company newsroom items 1541-1542 | 21 Oct 2026 | 2 awards | researching | find its own site |
+      | zentra fusion | search | zero-result search (PostHog, 21 Oct 17:48 PT) | - | - | new | |
+      | Not A Reactor Co | company | DOE SBIR claim 1521 | 20 Oct 2026 | 24 left (39 total) | dead: not nuclear | |
+    MD
+    post admin_leads_path, params: { names: table }
+    assert_equal "Imported 4 leads from the table.", flash[:notice]
+    blue = Lead.find_by!(name: "Blue Energy")
+    assert_equal [ "company", "researching", 2, Date.new(2026, 10, 21) ], blue.values_at(:kind, :status, :seen_count, :first_seen_on)
+    assert_match "a Blue Energy record exists, check", blue.note
+    assert_match "Next: find its own site", blue.note
+    assert_equal "company newsroom items 1541-1542", blue.sources.sole["label"]
+    assert Lead.exists?(name: "Blue Energy Inc.")
+    assert_equal [ "other", "new", 1 ], Lead.find_by!(name: "zentra fusion").values_at(:kind, :status, :seen_count)
+    assert_equal [ "ignored", "not nuclear", 24 ], Lead.find_by!(name: "Not A Reactor Co").values_at(:status, :reason, :seen_count)
+
+    post admin_leads_path, params: { names: table.sub("| new |", "| dead: a typo |") }
+    assert_equal [ "ignored", "a typo" ], Lead.find_by!(name: "zentra fusion").values_at(:status, :reason)
+    assert_equal 4, Lead.count - 2 # the two from setup
+  end
 end
