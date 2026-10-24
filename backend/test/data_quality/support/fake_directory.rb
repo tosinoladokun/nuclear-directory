@@ -22,6 +22,9 @@ module FakeDirectory
         verification_status: "verified", verified_by: nil, verified_at: nil) if @organizations.key?(name)
     end
 
+    # No company in the fake has a CIK.
+    def organizations_with_sec_cik = []
+
     def facility(id: nil, slug: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
       one_of!(id:, slug:, name:, site_name:, nrc_docket:, eia_plant_id:)
       Directory::FacilityRef.new(id: @facilities[name], slug: nil, name: name, nrc_docket: nil, eia_plant_id: nil, parent_id: nil,
@@ -65,7 +68,7 @@ module FakeDirectory
     def repoint_merged_claims = 0
 
     def write(kind, attributes, evidence: [], verification: nil, fill_blank: false, protect_human_verified: false,
-      remove_aliases: [])
+      remove_aliases: [], create_only: false)
       @writes << { kind:, attributes:, evidence:, verification:, fill_blank: }
       return Directory::FactWriter::Result.new(kind: kind.to_sym, id: nil, created: false, errors: [ @fail_with ]) if @fail_with
 

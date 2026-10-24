@@ -188,6 +188,31 @@ class TodayTest < ActiveSupport::TestCase
     assert_nil Today.new(on: Date.new(2026, 10, 20), now: NOW).crawl_rows.sole.problem, "a run that read every page clears it"
   end
 
+  test "a page named as failed by id stays a problem on a rerun that skipped it, until a run names none (#429)" do
+    run = ->(hour, stats) do
+      CrawlRun.create!(stage: "crawl", source_kind: "nrc_decommissioning", status: "succeeded", started_at: Time.utc(2026, 10, 20, hour),
+        stats: { "list" => "skipped_recent" }.merge(stats))
+    end
+    run.(7, { "site_pages" => { "changed" => 20 }, "failed_pages" => [ 12 ] })
+    assert_equal "1 page didn't answer", today.crawl_rows.sole.problem
+
+    run.(9, { "site_pages" => { "skipped_recent" => 18, "changed" => 2 }, "failed_pages" => [] })
+    assert_nil Today.new(on: Date.new(2026, 10, 20), now: NOW).crawl_rows.sole.problem, "the named pages read again; the skipped counts don't hold an old error"
+  end
+
+  test "the named pages replace the counts' generic error" do
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_decommissioning", status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
+      stats: { "list" => "changed", "site_pages" => { "changed" => 18, "error" => 2 }, "failed_pages" => [ 3, 4 ] })
+    assert_equal "2 pages didn't answer", today.crawl_rows.sole.problem
+  end
+
+  test "a skip-only rerun doesn't clear a failed run's error" do
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_decommissioning", status: "failed", error: "boom", started_at: Time.utc(2026, 10, 20, 7), stats: {})
+    CrawlRun.create!(stage: "crawl", source_kind: "nrc_decommissioning", status: "succeeded", started_at: Time.utc(2026, 10, 20, 8),
+      stats: { "list" => "skipped_recent", "site_pages" => { "skipped_recent" => 20 }, "failed_pages" => [] })
+    assert_equal "boom", today.crawl_rows.sole.problem
+  end
+
   test "failed reads counted inside a stat count; zero failures don't" do
     run = ->(kind, site_pages) do
       CrawlRun.create!(stage: "crawl", source_kind: kind, status: "succeeded", started_at: Time.utc(2026, 10, 20, 7),
