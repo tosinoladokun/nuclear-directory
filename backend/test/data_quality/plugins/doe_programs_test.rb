@@ -115,6 +115,32 @@ class DataQuality::Plugins::DoeProgramsTest < ActiveSupport::TestCase
     assert_equal Plugin::REPLACEMENT, plugin.hold_for_review(replacement), "held like a first read, never taken in bulk"
   end
 
+  test "the replacement hold matches names by key; robots denial and a cut-off crawl re-read; held replacements are superseded too" do
+    source = stored(ENRICHMENT)
+    Candidate.create!(source:, kind: "relationship", status: "rejected", notes: Plugin::SUPERSEDED, quote: "q",
+      payload: { "to_organization" => { "name" => "General Matter Inc." } })
+    later = Candidate.new(kind: "relationship", payload: { "to_organization" => { "name" => "General Matter" } })
+    assert_equal Plugin::REPLACEMENT, plugin.hold_for_review(later)
+
+    held = Candidate.create!(source:, kind: "relationship", status: "needs_review", notes: Plugin::REPLACEMENT, quote: "q",
+      payload: { "to_organization" => { "name" => "Orano Federal Services, LLC" } })
+    reopened = Candidate.create!(source:, kind: "relationship", status: "needs_review", notes: "A person reopened this", quote: "q",
+      payload: { "to_organization" => { "name" => "Louisiana Energy Services, LLC" } })
+    stub_request(:get, DECONVERSION).to_return(status: 200, body: "")
+    stub_request(:get, "https://www.energy.gov/robots.txt").to_return(body: "User-agent: *\nDisallow: /ne/haleu-deconversion-services\n")
+    stats = crawl.stats
+
+    assert_equal "disallowed", stats["DOE: HALEU deconversion services"]
+    assert held.reload.status_rejected?
+    assert reopened.reload.status_needs_review?, "a person's own review stays"
+
+    # A crawl cut off after storing pages, before the re-read: the next crawl repairs it.
+    Source.where(source_kind: "doe_programs").update_all(extracted_sha256: "old")
+    Source.update_all(fetched_at: Time.current)
+    crawl
+    assert Source.where(source_kind: "doe_programs", crawl_status: "ok").all? { |s| s.extracted_sha256.nil? }
+  end
+
   test "a heading's date is read from the page: a changed date is a change, and the description follows it" do
     source = stored(ALLOCATION)
     moved = Source.new(url: ALLOCATION, content_text: source.content_text.sub("Round 3 Conditional Selections (July 23, 2026)", "Round 3 Conditional Selections (August 23, 2026)"))

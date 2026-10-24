@@ -58,9 +58,11 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
   def hold_for_review(candidate)
     return unless candidate.kind == "relationship"
 
-    name = candidate.payload.dig("to_organization", "name")
-    REPLACEMENT if Candidate.where(source_id: Source.where(source_kind:).select(:id), kind: "relationship", status: "rejected", notes: SUPERSEDED)
-      .where("candidates.payload->'to_organization'->>'name' = ?", name).exists?
+    # By the same name key as extraction ("General Matter Inc." is "General Matter").
+    name = key(candidate.payload.dig("to_organization", "name").to_s)
+    superseded = Candidate.where(source_id: Source.where(source_kind:).select(:id), kind: "relationship", status: "rejected", notes: SUPERSEDED)
+      .pluck(Arel.sql("candidates.payload->'to_organization'->>'name'"))
+    REPLACEMENT if superseded.any? { |other| key(other.to_s) == name }
   end
 
   # A page missing a list it should have.
@@ -95,13 +97,19 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
     # A link's description sums up every page, so when one page changed (or
     # stopped being readable), every page is read again: the page that owns
     # a link may not have changed itself.
-    if @pages.values.any? { |page| %w[changed blocked layout_changed readable_again].include?(stats[page[:title]]) }
-      pages = Source.where(source_kind:, url: @pages.keys)
+    pages = Source.where(source_kind:, url: @pages.keys)
+    # Also when a page's stored copy isn't read yet (a crawl cut off after
+    # storing it, before this ran): a retry repairs it.
+    unread = pages.where(crawl_status: "ok").where("content_sha256 IS DISTINCT FROM extracted_sha256").exists?
+    if unread || @pages.values.any? { |page| %w[changed blocked disallowed needs_human layout_changed readable_again].include?(stats[page[:title]]) }
       pages.update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
       # The links' combined descriptions were read from the old pages: their
       # claims not yet decided are withdrawn, and the fresh read proposes them again.
-      superseded = Candidate.where(source_id: pages.select(:id), kind: "relationship", status: %w[new matched])
-        .update_all(status: "rejected", notes: SUPERSEDED, updated_at: Time.current)
+      # Including a replacement held for a person by this plug-in (not one a
+      # person reopened or edited, whose notes say otherwise).
+      open = Candidate.where(source_id: pages.select(:id), kind: "relationship")
+        .where(status: %w[new matched]).or(Candidate.where(source_id: pages.select(:id), kind: "relationship", status: "needs_review", notes: REPLACEMENT))
+      superseded = open.update_all(status: "rejected", notes: SUPERSEDED, updated_at: Time.current)
       stats["superseded"] = superseded if superseded.positive?
     end
     stats
