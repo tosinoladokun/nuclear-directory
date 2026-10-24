@@ -240,7 +240,11 @@ module DataQuality::Recommendations
         # read, a replacement): Data Quality's approve is that review, as it is
         # for the first batch, so the checker's verdict isn't needed. Every
         # other check stands, and a person's decision is never overwritten.
-        unless source_hold?(candidate)
+        if source_hold?(candidate)
+          # No checker verdict to say the source still holds it: its quote must.
+          plugin = DataQuality::Plugin.for(candidate.source.source_kind)
+          return "its quote isn't in the source any more" unless plugin.quote_in_source?(candidate.source, candidate.quote)
+        else
           return "the app's checker didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
           return "it's waiting for a person's review" if candidate.status_needs_review?
           return "its source changed after the app's checker checked it" unless recommended.include?(candidate.id)
@@ -257,7 +261,12 @@ module DataQuality::Recommendations
         return false unless candidate.status_needs_review?
 
         reason = DataQuality::Plugin.for(candidate.source.source_kind).hold_for_review(candidate)
-        reason.present? && candidate.notes.to_s.start_with?(reason)
+        return false if reason.blank?
+
+        # The hold's note exactly, or with only the settle sentence Verify keeps
+        # (#391): any other warning added after it means something else holds it.
+        rest = candidate.notes.to_s.delete_prefix(reason)
+        candidate.notes.to_s.start_with?(reason) && (rest.empty? || rest.match?(/\A\. #{DataQuality::Stages::Match::SETTLED.source}\z/))
       rescue DataQuality::Plugin::UnknownSourceKind
         false
       end

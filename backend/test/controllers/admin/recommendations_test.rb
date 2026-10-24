@@ -286,7 +286,7 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
   end
 
   test "a claim held only by its source's review hold is accepted with Data Quality's approve, unless it would change a person's decision" do
-    source = Source.create!(url: "https://www.nrc.gov/test/held.html", source_kind: "hold_dummy", crawl_status: "ok", title: "Held list")
+    source = Source.create!(url: "https://www.nrc.gov/test/held.html", source_kind: "hold_dummy", crawl_status: "ok", title: "Held list", content_text: "a quote")
     run = CrawlRun.create!(source_kind: "hold_dummy", stage: "crawl", status: "succeeded", started_at: 1.hour.ago)
     Directory::FactWriter.write(:organization, { name: "Held Fission Co" })
     decided = Organization.create!(name: "Decided Fission Co", verification_status: "verified", verified_by: "human:tosin")
@@ -308,5 +308,24 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
 
     assert held.reload.status_merged?, [ held.notes, flash[:alert], flash[:notice] ].inspect
     assert_not kept.reload.status_merged?, "a person's decision is never overwritten"
+  end
+
+  test "a source-held approval isn't accepted once the quote is gone from the source, or when another warning was added" do
+    source = Source.create!(url: "https://www.nrc.gov/test/held2.html", source_kind: "hold_dummy", crawl_status: "ok", content_text: "Gone Fission Co and Warned Fission Co.")
+    run = CrawlRun.create!(source_kind: "hold_dummy", stage: "crawl", status: "succeeded", started_at: 1.hour.ago)
+    gone, warned = [ "Gone Fission Co", "Warned Fission Co" ].map do |name|
+      Directory::FactWriter.write(:organization, { name: })
+      Candidate.create!(source:, kind: "organization", payload: { "name" => name }, quote: name, crawl_run: run)
+    end
+    plugin = DataQuality::Plugins::HoldDummy.new
+    DataQuality::Pipeline.run("hold_dummy", plugin:, only: "match")
+    DataQuality::Pipeline.run("hold_dummy", plugin:, only: "verify", verifier: Recommend.new)
+    warned.reload.update_columns(notes: "#{warned.notes}. A newer file exists: check this one against it")
+    paste("#{gone.id} approve: named\n#{warned.id} approve: named")
+    source.update_columns(content_text: "Warned Fission Co only.")
+
+    get admin_recommendations_path
+    assert_select "#rec-#{gone.id}", /quote isn.t in the source any more/
+    assert_select "#rec-#{warned.id}", /waiting for a person.s review|checker didn.t recommend/
   end
 end
