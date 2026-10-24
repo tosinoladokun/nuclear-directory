@@ -98,7 +98,7 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
   end
 
   test "G1: the verifier's confidence must be at least 0.9" do
-    assert_equal "Data Quality's confidence is below 0.9", why(claim({ "description" => SECOND }, confidence: 0.85))
+    assert_equal "the app's checker's confidence is below 0.9", why(claim({ "description" => SECOND }, confidence: 0.85))
   end
 
   test "G1: a claim whose source changed since the verifier checked it isn't covered" do
@@ -323,10 +323,10 @@ class DataQuality::SafeClassesTest < ActiveSupport::TestCase
 
     @index.update_columns(status_reason: nil)
     CrawlRun.create!(stage: "verify", source_kind: "usaspending_doe_awards", status: "running", started_at: Time.current)
-    assert_equal "Data Quality is still checking this source", why(candidate)
+    assert_equal "the app's checker is still checking this source", why(candidate)
 
     CrawlRun.where(stage: "verify", status: "running").update_all(status: "failed")
-    assert_equal "Data Quality's last check didn't finish", why(candidate), "a failed run keeps the recommendations it saved, a partial set"
+    assert_equal "the app's checker's last run didn't finish", why(candidate), "a failed run keeps the recommendations it saved, a partial set"
   end
 
   test "G4: a report on a company merged into the link's company still counts" do

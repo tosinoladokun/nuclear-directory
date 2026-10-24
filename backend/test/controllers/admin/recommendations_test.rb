@@ -125,7 +125,7 @@ class Admin::RecommendationsTest < ActionDispatch::IntegrationTest
     assert_select "#rec-#{rejected.id}", /Reject.*not nuclear/m
     assert_select "#left-heading", /Left for you\s*2/
     assert_select "#rec-#{changed.id}", /It changed after Data Quality looked at it/
-    assert_select "#rec-#{unrecommended.id}", /Data Quality didn't recommend it/
+    assert_select "#rec-#{unrecommended.id}", /The app's checker didn't recommend it/
   end
 
   test "Accept decides the shown list as the person, lifting only the first-batch hold" do

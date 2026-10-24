@@ -235,9 +235,9 @@ module DataQuality::Recommendations
         return "it fills in a record's details; decide it on its own page" if directory.enrichment?(candidate)
         return if candidate.dq_recommendation == "reject"
 
-        return "Data Quality didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
+        return "the app's checker didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
         return "it's waiting for a person's review" if candidate.status_needs_review?
-        return "its source changed after Data Quality checked it" unless recommended.include?(candidate.id)
+        return "its source changed after the app's checker checked it" unless recommended.include?(candidate.id)
         return "its company or plant isn't settled yet" unless candidate.subject_id
 
         held = DataQuality::Review.held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ]))

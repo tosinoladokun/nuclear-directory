@@ -104,7 +104,7 @@ module DataQuality::SafeClasses
     # Why a claim isn't safe in its class, or nil: every gate but the cap,
     # each read fresh (Accept asks this under the record's lock).
     def why_not(candidate, klass, directory:)
-      return "Data Quality doesn't recommend it now" unless covered(klass).exists?(candidate.id)
+      return "it's no longer eligible as a safe recommendation" unless covered(klass).exists?(candidate.id)
 
       evaluate(candidate, klass, context: context_for(klass), directory:).first
     end
@@ -119,7 +119,7 @@ module DataQuality::SafeClasses
           throw :unsafe, context[:run_problem] if context[:run_problem]
           # G1
           if candidate.ai_confidence.to_f < config.fetch("min_confidence")
-            throw :unsafe, "Data Quality's confidence is below #{config.fetch('min_confidence')}"
+            throw :unsafe, "the app's checker's confidence is below #{config.fetch('min_confidence')}"
           end
 
           changes = gates(candidate, config, context, directory)
@@ -214,8 +214,8 @@ module DataQuality::SafeClasses
           # Verify saves its recommendations one claim at a time, and a run
           # that fails or is cut off keeps what it saved: the run's set (and
           # so the cap) is only whole once its latest run has succeeded.
-          elsif verify&.status == "running" then "Data Quality is still checking this source"
-          elsif verify.nil? || verify.status != "succeeded" then "Data Quality's last check didn't finish"
+          elsif verify&.status == "running" then "the app's checker is still checking this source"
+          elsif verify.nil? || verify.status != "succeeded" then "the app's checker's last run didn't finish"
           end
         # The last crawl that fetched: a same-day rerun answers "skipped_recent"
         # and stamps nothing, so it doesn't count as the answer pages are judged by.

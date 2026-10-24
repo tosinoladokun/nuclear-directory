@@ -75,7 +75,7 @@ class Admin::SafeClassesPreviewTest < ActionDispatch::IntegrationTest
       get admin_recommendations_path
     end
 
-    assert_select "#safe-#{@claim.id}", /Data Quality's confidence is below/
+    assert_select "#safe-#{@claim.id}", /the app's checker's confidence is below/
     assert_plain_words
   end
 
