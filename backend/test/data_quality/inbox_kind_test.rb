@@ -57,4 +57,16 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
       proposed_subject: true)
     assert_equal "dq", kind(first)
   end
+
+  test "a restatement already waiting from before confirms itself on the next run" do
+    waiting = claim({ "name" => "KIND FISSION INC.", "hq_city" => "Austin" }, status: "matched", subject_type: "Organization", subject_id: @company.id)
+    waiting.update!(quote: "KIND FISSION INC.")
+    change = claim({ "name" => "Kind Fission", "hq_city" => "Dallas" }, status: "matched", subject_type: "Organization", subject_id: @company.id)
+    change.update!(quote: "Kind Fission is in Dallas.")
+    stats = DataQuality::Stages::Match.call(plugin: DummyPlugin.new).stats
+    assert waiting.reload.status_confirmed?, waiting.notes
+    assert change.reload.status_matched?, "a real change still waits"
+    assert_equal 1, stats["evidence_only"]
+    assert Evidence.exists?(subject: @company, quote: "KIND FISSION INC.")
+  end
 end

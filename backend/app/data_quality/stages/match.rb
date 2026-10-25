@@ -71,6 +71,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
         # rule from the start, so matching doesn't depend on candidate order.
         directory.owner_hints = candidates.status_new.where(kind: "organization").filter_map { |c| c.payload["name"] }
         rematch_settled_ends
+        sweep_restatements
         ORDER.each do |kind|
           candidates.status_new.where(kind: kind).find_each { |candidate| match(candidate) }
         end
@@ -727,6 +728,22 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # Counted for Data Quality's morning report: restatements that closed themselves.
       @stats["evidence_only"] = @stats.fetch("evidence_only", 0) + 1 if add_evidence
       confirmed(candidate, record, confirmed_note(record, confirmation))
+    end
+
+    # Claims matched before restatements confirmed themselves (#548), or
+    # whose record was published since: each run closes this source's
+    # waiting ones that would only add evidence, as match now does for new ones.
+    def sweep_restatements
+      candidates.status_matched.where.not(subject_id: nil).includes(:source).find_each do |candidate|
+        next unless DataQuality::Review.evidence_only?(candidate, directory:)
+
+        record = directory.attached_record(candidate) or next
+        confirmation = directory.confirm(candidate, in_source: in_source(candidate), add_evidence: true)
+        next unless confirmation&.confirmed?
+
+        @stats["evidence_only"] = @stats.fetch("evidence_only", 0) + 1
+        confirmed(candidate, record, confirmed_note(record, confirmation))
+      end
     end
 
     # The same claim waiting from an earlier edition of this source (last
