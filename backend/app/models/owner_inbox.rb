@@ -4,8 +4,9 @@
 # pages decided with it). Everything else is Data Quality's to settle first
 # (Review.inbox_kind "dq"), and a restatement has already confirmed itself.
 class OwnerInbox
-  # Only what's new (Tosin, 24 Oct); a change to his decision stays on Checks.
-  SECTIONS = %w[new_record new_fact].freeze
+  # Everything he needs to do (Tosin, 26 Oct): what's new, and changes to
+  # something already there.
+  SECTIONS = %w[new_record new_fact change].freeze
   # changes: { field => [stored, stated] } for a change, else {}.
   Entry = Data.define(:kind, :item, :copy_ids, :checked, :changes) do
     def ids = [ item.candidate_id, *copy_ids ]

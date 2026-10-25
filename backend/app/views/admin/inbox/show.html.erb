@@ -30,11 +30,11 @@
               <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
             <% end %>
             <% if key == "change" %>
+              <%# Design: the record named, then each field old → new. %>
               <% entry.changes.each do |field, (stored, stated)| %>
-                <p class="type-change m-0"><strong><%= field_label(field).upcase_first %></strong>
-                  <s class="text-ink-muted"><%= field_display(field, stored) %></s> → <strong><%= field_display(field, stated) %></strong></p>
+                <p class="type-body-strong m-0"><%= item.record&.name || item.payload.to_h["name"] %> · <%= field_label(field).upcase_first %>:
+                  <s class="text-ink-muted"><%= field_display(field, stored) %></s> → <%= field_display(field, stated) %></p>
               <% end %>
-              <p class="type-small text-ink-muted m-0"><%= item.claim %></p>
             <% else %>
               <p class="<%= key == "new_record" ? "type-body" : "type-body-strong" %> m-0"><%= inbox_sentence(entry) %></p>
               <% if key == "new_record" && (item.payload.to_h.keys - %w[name aliases]).empty? %>
@@ -55,7 +55,7 @@
             <% yes, no = key == "change" ? [ "Approve the change", nil ] : [ key == "new_record" ? "Create" : "Approve", "No" ] %>
             <%= button_to yes, admin_inbox_decide_path(item.candidate_id, "yes"), params: { ids: entry.ids }, class: "nd-btn nd-btn--primary" %>
             <% if key == "change" %>
-              <%= button_to admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids }, class: "nd-btn nd-btn--outline" do %><span class="nd-inbox__long">Keep what I decided</span><span class="nd-inbox__short">Keep mine</span><% end %>
+              <%= button_to admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids, kind: "change" }, class: "nd-btn nd-btn--outline" do %><span class="nd-inbox__long">Keep what I decided</span><span class="nd-inbox__short">Keep mine</span><% end %>
             <% else %>
               <%= button_to no, admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids }, class: "nd-btn nd-btn--outline" %>
             <% end %>
