@@ -18,10 +18,21 @@
     <% end %>
     <% @fields.each do |name| %>
       <% value = params.dig(:values, name) || @fact.values[name] %>
+      <% if name == "short_description" %>
+        <%# #559: 40 characters, one line on a phone; the row it makes, live. %>
+        <div class="nd-field" data-controller="short-description" data-short-description-max-value="<%= ShortDescription::MAX %>" data-short-description-width-value="330">
+          <%= label_tag "values_#{name}", field_label(name), class: "type-body-strong" %>
+          <%= text_field_tag "values[#{name}]", value, id: "values_#{name}", class: "nd-input type-input", maxlength: ShortDescription::MAX,
+            aria: { describedby: "short-description-count" }, data: { short_description_target: "input", action: "input->short-description#update" } %>
+          <p id="short-description-count" class="type-small text-ink-muted m-0" aria-live="polite" data-short-description-target="count"><%= ShortDescription::MAX - value.to_s.length %> left</p>
+          <p class="type-small m-0"><span class="type-body-strong"><%= @fact.name %></span> · <span data-short-description-target="preview"><%= value.presence || "Role · specialty until it's written" %></span></p>
+        </div>
+      <% else %>
       <div class="nd-field">
         <%= label_tag "values_#{name}", field_label(name), class: "type-body-strong" %>
         <%= text_field_tag "values[#{name}]", value, id: "values_#{name}", class: "nd-input type-input" %>
       </div>
+      <% end %>
     <% end %>
     <div class="nd-field">
       <label for="note" class="type-body-strong">What you changed and why <span class="type-small text-ink-muted">(optional, kept in the history)</span></label>

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -408,6 +408,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.datetime "updated_at", null: false
     t.string "sec_cik"
     t.string "short_name"
+    t.string "short_description"
     t.datetime "enrich_requested_at"
     t.datetime "enriched_at"
     t.string "exchange"
