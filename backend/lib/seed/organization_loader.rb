@@ -175,7 +175,7 @@ module Seed
         links = [ *doc["relationships"], *doc["facilities"] ].compact
         # A term's citation as it'll be written (its own quote, on its own page
         # or its link's), so its confidence is checked and consolidated too.
-        [ *hq_entries(doc), *description_items(doc), *doc["roles"], *doc["technologies"], *links, *doc["licensing"],
+        [ *hq_entries(doc), *description_items(doc), short_description_item(doc), *doc["roles"], *doc["technologies"], *links, *doc["licensing"],
           *links.flat_map { |link| Array(link["terms"]).map { |term| citation(term, link) } } ].compact.select { |item| item["source_url"] }
       end
 
@@ -184,6 +184,13 @@ module Seed
       def description_items(doc)
         description = doc["description"] or return []
         [ description, *Array(description["also"]).map { |extra| { "source_url" => description["source_url"] }.merge(extra) } ]
+      end
+
+      # short_description: { text, source_url, quote } (#559): the list row's
+      # label, 40 characters at most, sourced like the description.
+      def short_description_item(doc)
+        item = doc["short_description"]
+        item if item.respond_to?(:key?)
       end
 
       # A legal name is public only when one of the file's quotes states it
@@ -235,11 +242,16 @@ module Seed
         # A display label, set only when the file gives one: a seed without
         # it never clears a short name set in the admin.
         attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
+        # Stated: set (null or text: null clears); not stated: left as it is.
+        if doc.key?("short_description") && (doc["short_description"].nil? || short_description_item(doc)&.key?("text"))
+          attributes[:short_description] = short_description_item(doc)&.dig("text")
+        end
 
         # Which fields each quote backs (#398), by where it sits in the file.
         backs = Hash.new { |hash, item| hash[item] = [] }
         hq.each { |item| backs[item].concat({ "city" => "hq_city", "state" => "hq_state" }.select { |key, _| item[key].present? }.values) }
         description_items(doc).each { |item| backs[item] << "description" }
+        backs[short_description_item(doc)] << "short_description" if short_description_item(doc)&.dig("source_url")
         backs[legal] << "legal_name" if legal
         # An unquoted legal name still finds a record an earlier seed loaded
         # under it (it's in aliases), then is removed from the aliases in the

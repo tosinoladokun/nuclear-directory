@@ -708,4 +708,24 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 1, Facility.where(name: "Callaway", nrc_docket: nil, parent_id: nil).count, "no duplicate site"
     assert_equal old.id, Facility.find_by!(name: "Callaway 1").parent_id
   end
+
+  test "a short description loads with its source; a file without one leaves it; a second load changes nothing; over 40 is refused" do
+    short = { text: "Uranium enrichment, including HALEU", source_url: "https://example.com/enrich", quote: "We enrich uranium, including HALEU." }
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", short_description: short))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    assert_equal "Uranium enrichment, including HALEU", acme.short_description
+    assert Evidence.exists?(subject: acme, quote: "We enrich uranium, including HALEU.")
+
+    again = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal 0, again.results[:organization][:changed], "the same text again is a restatement"
+
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com"))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Uranium enrichment, including HALEU", acme.reload.short_description, "not stated: left as it is"
+
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", short_description: short.merge(text: "x" * 41)))
+    assert_raises(StandardError) { Seed::OrganizationLoader.new(@dir).load! }
+    assert_equal "Uranium enrichment, including HALEU", acme.reload.short_description
+  end
 end
