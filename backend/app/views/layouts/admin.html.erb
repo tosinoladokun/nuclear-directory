@@ -25,6 +25,11 @@
           </div>
           <nav id="admin-nav" class="nd-shell__nav type-body" aria-label="Admin">
             <% admin_nav_items.each do |item| %>
+              <% if item[:heading] %>
+                <%# A muted group label (#548): Data Quality's pages. %>
+                <span class="nd-shell__group type-small text-ink-muted"><%= item[:label] %></span>
+                <% next %>
+              <% end %>
               <% if item[:soon] %>
                 <span class="nd-shell__soon text-ink-muted"><span><%= item[:label] %><span class="sr-only">,</span></span> <span class="nd-tag">Soon</span></span>
                 <% next %>

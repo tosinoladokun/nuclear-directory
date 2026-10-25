@@ -113,7 +113,8 @@ class Admin::TodayTest < ActionDispatch::IntegrationTest
     CorrectionReport.create!(subject: "TerraPower", page_path: "/companies/terrapower", message: "Wrong city.")
 
     get admin_checks_path
-    assert_select "nav a[href=?]", admin_today_path, /Today\s*2/
+    # Data Quality's queue count is on Checks now; Today is Tosin's inbox (#548).
+    assert_select "nav a[href=?]", admin_checks_path, /Checks\s*2/
   end
 
   test "plain words only; the reviewers' names come from their keys" do

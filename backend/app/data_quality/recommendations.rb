@@ -270,6 +270,8 @@ module DataQuality::Recommendations
       rescue DataQuality::Plugin::UnknownSourceKind
         false
       end
+      # Also asked by Review.inbox_kind (#548).
+      public :source_hold?
 
       # The claim as Data Quality saw it: what it says and what it's attached to.
       # Reopening counts as a change: a reopened claim needs a fresh call.
