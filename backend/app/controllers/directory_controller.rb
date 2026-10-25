@@ -11,6 +11,14 @@ class DirectoryController < ApplicationController
       return redirect_to companies_url(params.permit(:q, :technology, :state, :sort).merge(tag:)), status: :moved_permanently
     end
 
+    # A tag we don't have (?tag=smr; SMR has no tag page by design) would
+    # show every company: search for its words instead, as the home page's
+    # "SMR" suggestion does.
+    if params[:tag].present? && Tag.find(params[:tag]).nil?
+      words = params[:tag].to_s.tr("-_", "  ").squish
+      return redirect_to companies_url(params.permit(:technology, :state, :sort).merge(q: words.length <= 4 ? words.upcase : words)), status: :moved_permanently
+    end
+
     @listing = DirectoryListing.new(**params.permit(:category, :tag, :q, :technology, :state, :sort, :role).to_h.symbolize_keys)
 
     # The first PAGE rows of each list (companies, plants), then PAGE more per "Show more" (?shown=2 is two

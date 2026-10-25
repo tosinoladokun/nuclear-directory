@@ -96,13 +96,6 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crumbs a", count: 0
   end
 
-  test "an unknown tag lists every company" do
-    get companies_path(tag: "nope")
-
-    assert_response :success
-    assert_select "h1", /All companies/
-  end
-
   test "a pending site's row shows its name and verified units, not its own type or place" do
     site = Facility.create!(name: "Quiet Station", verification_status: "pending", facility_type: "power_reactor", status: "planned", city: "Nowhere", state: "OR")
     Facility.create!(name: "Quiet Unit 1", parent: site, verification_status: "verified", verified_by: "human:test", capacity_mw: 300, status: "operating")
@@ -332,5 +325,15 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     get companies_path(category: "reactor-developers", state: "CA", format: :json)
     assert_equal({ "count" => 1 }, response.parsed_body)
+  end
+
+  test "a tag we don't have searches its words instead of listing every company" do
+    get companies_path(tag: "smr", state: "TX")
+    assert_redirected_to companies_url(q: "SMR", state: "TX")
+    assert_equal 301, response.status
+    get companies_path(tag: "molten-salt")
+    assert_redirected_to companies_url(q: "molten salt")
+    get companies_path(tag: "fusion")
+    assert_response :success
   end
 end
