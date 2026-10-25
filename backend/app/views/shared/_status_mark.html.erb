@@ -1,0 +1,2 @@
+<%# A status as a mark and its word (#558). Locals: status (a Facility status key), label (optional; default the status word). %>
+<span class="nd-st nd-st--<%= status_mark_kind(status) %>"><span class="nd-st__mark" aria-hidden="true"></span><%= local_assigns[:label] || facility_status_label(status) || status.to_s.humanize %></span>

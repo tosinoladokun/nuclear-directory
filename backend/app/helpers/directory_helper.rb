@@ -157,6 +157,38 @@ module DirectoryHelper
     [ city.presence, state.presence ].compact.join(", ").presence
   end
 
+  COUNTRY_NAMES = {
+    "US" => "United States", "CA" => "Canada", "MX" => "Mexico", "GB" => "United Kingdom", "FR" => "France", "DE" => "Germany",
+    "ES" => "Spain", "IT" => "Italy", "NL" => "Netherlands", "BE" => "Belgium", "CH" => "Switzerland", "SE" => "Sweden",
+    "FI" => "Finland", "NO" => "Norway", "DK" => "Denmark", "PL" => "Poland", "CZ" => "Czechia", "SK" => "Slovakia",
+    "HU" => "Hungary", "RO" => "Romania", "BG" => "Bulgaria", "UA" => "Ukraine", "RU" => "Russia", "TR" => "Turkey",
+    "JP" => "Japan", "KR" => "South Korea", "CN" => "China", "TW" => "Taiwan", "IN" => "India", "PK" => "Pakistan",
+    "AE" => "United Arab Emirates", "SA" => "Saudi Arabia", "EG" => "Egypt", "ZA" => "South Africa", "AU" => "Australia",
+    "ID" => "Indonesia", "AR" => "Argentina", "BR" => "Brazil", "KZ" => "Kazakhstan", "IE" => "Ireland", "AT" => "Austria"
+  }.freeze
+
+  # Where something is, written one way everywhere (#558): rows, key facts,
+  # search, map labels.
+  #   US:            "Bethesda, MD" (the state abbreviated, a full name too)
+  #   outside the US: "Courbevoie, France" (the country in full)
+  #   a state alone: "Georgia" (in full, never a lone code)
+  # Never a street address or ZIP code. nil when nothing is known.
+  def location(city, state = nil, country: "US")
+    city = city.to_s.squish.presence
+    state = state.to_s.squish.presence
+    code = country.to_s.strip.presence || "US"
+    if code.upcase == "US" || code.casecmp?("United States")
+      abbr = LinkCard::US_STATES.key?(state.to_s.upcase) ? state.upcase : LinkCard::US_STATES.find { |_c, full| full.casecmp?(state.to_s) }&.first
+      return [ city, abbr || state ].compact.join(", ").presence if city
+      return (LinkCard::US_STATES[abbr] || state) if state
+
+      nil
+    else
+      name = COUNTRY_NAMES[code.upcase] || (TZInfo::Country.get(code.upcase).name if code.match?(/\A[A-Za-z]{2}\z/) && TZInfo::Country.all_codes.include?(code.upcase)) || code
+      [ city, name ].compact.join(", ")
+    end
+  end
+
   # "Waynesboro, Georgia": the same, with the state's full name, for
   # descriptions people read in search results.
   def full_place(city, state)
@@ -204,6 +236,27 @@ module DirectoryHelper
   end
 
   UNIT_STATUS_ORDER = %w[operating not_operating under_construction planned shut_down decommissioning].freeze
+
+  # How a company name fits the 240px name column of a Row (#558): 15px up to
+  # about 26 characters, then 13px, then its short name if it has one; an
+  # ellipsis (with the full name in title) is the last resort. [text, small?]
+  LINE_NAME_FULL = 26
+  LINE_NAME_SMALL = 31
+  def line_name(name, short_name = nil)
+    return [ name, false ] if name.length <= LINE_NAME_FULL
+    return [ name, true ] if name.length <= LINE_NAME_SMALL
+    return [ short_name, true ] if short_name.present? && short_name.length <= LINE_NAME_SMALL
+
+    [ name, true ]
+  end
+
+  STATUS_MARKS = {
+    "operating" => "filled", "not_operating" => "open", "shut_down" => "open", "decommissioning" => "open",
+    "restart_under_review" => "dashed", "under_construction" => "half", "planned" => "dotted"
+  }.freeze
+
+  # The mark class for a status (#558): the word always shows beside it.
+  def status_mark_kind(status) = STATUS_MARKS.fetch(status.to_s, "open")
 
   # A plant's units by status, operating first, leaving out statuses no
   # unit has (PM, 16 Oct): "4 operating units", "2 operating units,

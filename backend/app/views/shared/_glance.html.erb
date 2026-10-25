@@ -1,0 +1,7 @@
+<%# The Glance panel (nd-glance): the key facts (#558). Locals:
+    facts: [{ label: "Headquarters", value: "Bethesda, MD", wide: (true for a long value on phones) }]. Facts with no value are left out. %>
+<dl class="nd-glance">
+  <% facts.select { |fact| fact[:value].present? }.each do |fact| %>
+    <div class="nd-glance__fact <%= "nd-glance__fact--wide" if fact[:wide] %>"><dt><%= fact[:label] %></dt><%= content_tag :dd, fact[:value], title: strip_tags(fact[:value].to_s) %></div>
+  <% end %>
+</dl>

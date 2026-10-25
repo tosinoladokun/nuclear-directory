@@ -16,8 +16,8 @@ class DesignSystemTest < ActionDispatch::IntegrationTest
   end
 
   # #332: these were documented but no page used them, so they were deleted.
-  # They come back only with the page that needs them.
-  REMOVED_COMPONENTS = %w[nd-az nd-banner nd-bulk nd-card nd-cards nd-chip nd-empty nd-fact nd-filterbar
+  # They come back only with the page that needs them (nd-chip did, with #558).
+  REMOVED_COMPONENTS = %w[nd-az nd-banner nd-bulk nd-card nd-cards nd-empty nd-fact nd-filterbar
                           nd-graph nd-items nd-muted nd-org nd-r nd-suggest nd-tabs nd-toggle].freeze
 
   test "removed components stay out of the stylesheet and the design page" do
@@ -45,5 +45,27 @@ class DesignSystemTest < ActionDispatch::IntegrationTest
       assert_select "#{within_parts} .#{part}", { minimum: 1 }, "missing #{part}"
     end
     assert_select "#{within_parts} .nd-listrow", 4
+  end
+
+  test "it shows the 25 Oct system's components (#558)" do
+    get design_system_path
+
+    scope = "#system-25-oct"
+    %w[nd-lines nd-line nd-chip nd-pagehead nd-idx nd-glance nd-st nd-sechead nd-toolbar nd-quiet].each do |part|
+      assert_select "#{scope} .#{part}", { minimum: 1 }, "missing #{part}"
+    end
+    assert_select "#{scope} .nd-line--bare", 4
+    assert_select "#{scope} .nd-line--bare .nd-line__end", text: "Courbevoie, France"
+    assert_select "#{scope} .nd-line__name[data-fit=small]", minimum: 1
+    assert_select "#{scope} .nd-chip[aria-current]", 1
+    assert_select "#{scope} .nd-chips[data-controller=pill-row] .nd-chip:nth-child(5)[aria-current]", 1, "a selected chip beyond the first, scrolled into view on phones"
+    assert_select "#{scope} .nd-glance__fact dt + dd", 3, "the label comes before the value in the markup"
+    assert_select "#{scope} .nd-lines__head[aria-hidden=true]", 1, "the header row is visual"
+    assert_select "#{scope} .nd-line__head .nd-st", 2, "the status sits right after the name"
+    assert_select "#{scope} .nd-line__foot .nd-line__cap", 2, "MW is its own element"
+    assert_select "#{scope} .nd-pagehead__count", "42 companies"
+    assert_select "#{scope} .nd-glance__fact", 3, "a fact with no value is left out"
+    assert_select "#{scope} .nd-st", 9, "five marks, and each plant row twice (beside the name; before the type on phones)"
+    assert_select "#{scope} .nd-st--filled, #{scope} .nd-st--open, #{scope} .nd-st--dashed, #{scope} .nd-st--half, #{scope} .nd-st--dotted", minimum: 5
   end
 end

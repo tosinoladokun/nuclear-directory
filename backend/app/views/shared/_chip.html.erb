@@ -1,0 +1,9 @@
+<%# A chip (nd-chip), the one look for category chips, suggestions and the type chip (#558). Locals:
+    label:   the text (required)
+    href:    a link target (optional; without it a plain span)
+    icon:    HTML for a 14px icon (optional)
+    current: true for the selected chip (aria-current; the category tint behind accent text)
+    bucket:  a Category, to colour it (optional) %>
+<% classes = [ "nd-chip", (bucket_class(bucket) if local_assigns[:bucket]) ] %>
+<% inner = capture do %><%= local_assigns[:icon] %><%= label %><% end %>
+<%= local_assigns[:href] ? tag.a(inner, href:, class: classes, aria: { current: ("page" if local_assigns[:current]) }) : tag.span(inner, class: classes, aria: { current: ("true" if local_assigns[:current]) }) %>

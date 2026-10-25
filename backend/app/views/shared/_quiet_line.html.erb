@@ -1,0 +1,4 @@
+<%# The quiet line (nd-quiet): the last line of a page, "13 sources · Cite this page · Report a correction" (#558). Locals: items: [{ label:, href:, icon: (name) }] %>
+<nav class="nd-quiet" aria-label="About this page">
+  <% items.each do |item| %><%= link_to item[:href] do %><%= icon(item[:icon], size: 16) if item[:icon] %><%= item[:label] %><% end %><% end %>
+</nav>

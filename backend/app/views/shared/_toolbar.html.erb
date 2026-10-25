@@ -1,0 +1,9 @@
+<%# The toolbar (nd-toolbar): sort and filters (#558). Locals:
+    selects: [{ label: "Sort", name: "sort", options: [["Most connected", "connections"], ...], selected: "connections" }]
+    Only the filters a list has today. On phones the Filters sheet button goes in the block. %>
+<div class="nd-toolbar">
+  <% selects.each do |select| %>
+    <label class="nd-toolbar__select type-ui"><span><%= select[:label] %></span><%= select_tag select[:name], options_for_select(select[:options], select[:selected]), class: "type-ui", form: select[:form] %></label>
+  <% end %>
+  <%= yield if block_given? %>
+</div>

@@ -267,6 +267,77 @@ Disallow: /</pre>
     </div>
   </section>
 
+  <section class="flex flex-col gap-8" id="system-25-oct">
+    <div class="flex flex-col gap-1">
+      <h2 class="type-title-md">The 25 Oct system (#558)</h2>
+      <p class="type-small text-ink-muted">Row, chip, page head, index, Glance panel, status mark, section head, toolbar, quiet line, and the location helper. Sample data.</p>
+    </div>
+    <% fuel = Category.find("fuel") %>
+    <% utilities = Category.find("utilities") %>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Row: company rows (name · description · location), then plant rows</span>
+      <ul class="nd-lines">
+        <li class="nd-lines__head type-label" aria-hidden="true"><span>Company</span><span>Description</span><span>Location</span></li>
+        <%= render "shared/line", variant: :bare, href: "#", name: "Centrus Energy", what: "Uranium enrichment and HALEU", place: location("Bethesda", "MD") %>
+        <%= render "shared/line", variant: :bare, href: "#", name: "Westinghouse Electric Company", what: "Reactor designer · AP1000", place: location("Cranberry Township", "PA") %>
+        <%= render "shared/line", variant: :bare, href: "#", name: "Électricité de France Nuclear Division", short_name: "EDF Nuclear", what: "Reactor operator", place: location("Courbevoie", nil, country: "FR") %>
+        <%= render "shared/line", variant: :bare, href: "#", name: "Tennessee Valley Authority and Associated Companies Limited", what: "Reactor designer · SMR", place: location(nil, "GA") %>
+      </ul>
+      <ul class="nd-lines">
+        <%= render "shared/line", href: "#", name: "Browns Ferry", mark: icon("site-plant", set: :nd, size: 20), status: "operating", what: "Power reactor · 3 units", cap: "3,926 MW", place: location("Athens", "AL") %>
+        <%= render "shared/line", href: "#", name: "Vogtle", mark: icon("site-plant", set: :nd, size: 20), status: "under_construction", what: "Power reactor · 2 units", cap: "2,430 MW", place: location(nil, "GA") %>
+      </ul>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Chip family, and a tag</span>
+      <div class="nd-chips" data-controller="pill-row">
+        <%= render "shared/chip", label: "All companies", href: "#", icon: icon("list") %>
+        <%= render "shared/chip", label: utilities.short_name, href: "#", icon: bucket_icon(utilities), bucket: utilities %>
+        <%= render "shared/chip", label: "Services", href: "#", icon: bucket_icon(Category.find("services")), bucket: Category.find("services") %>
+        <%= render "shared/chip", label: "Government", href: "#", icon: bucket_icon(Category.find("government-research")), bucket: Category.find("government-research") %>
+        <%= render "shared/chip", label: fuel.short_name, href: "#", icon: bucket_icon(fuel, size: 16), bucket: fuel, current: true %>
+        <%= render "shared/chip", label: "Oklo", href: "#" %>
+        <span class="nd-tag">SMR</span>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Page head</span>
+      <%= render "shared/page_head", name: "Power plant owners and operators", count: "42 companies", about: "Companies that mine, convert, enrich and fabricate nuclear fuel.", crumbs: [ [ "Companies", "#" ] ], square: bucket_icon(fuel, size: 24), bucket: fuel, tags: [ "HALEU", "TRISO" ] %>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Index (profile), and the list index with icons</span>
+      <div class="flex flex-wrap gap-8">
+        <%= render "shared/index", items: [ { label: "Overview", href: "#a", current: true }, { label: "Connections", href: "#b", count: 14 }, { label: "Sources", href: "#c", count: 13 } ] %>
+        <%= render "shared/index", variant: :list, label: "Categories", items: [ { label: "All companies", href: "#", icon: icon("list"), count: 214 }, { label: fuel.name, title: fuel.name, href: "#", icon: bucket_icon(fuel), bucket: fuel, current: true, count: 42 }, { label: "Plants and sites", href: "#", icon: icon("graph"), count: 96 } ] %>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Glance panel</span>
+      <%= render "shared/glance", facts: [ { label: "Headquarters", value: location("Bethesda", "MD") }, { label: "Founded", value: "1998" }, { label: "Website", value: "centrusenergy.com", wide: true }, { label: "Left out", value: nil } ] %>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Status mark</span>
+      <div class="flex flex-wrap gap-6">
+        <% { "operating" => nil, "not_operating" => nil, "restart_under_review" => "Restart under NRC review", "under_construction" => nil, "planned" => nil }.each do |status, label| %>
+          <%= render "shared/status_mark", status:, label: %>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <span class="type-label">Section head, toolbar, quiet line</span>
+      <%= render "shared/section_head", title: "Connections", count: "14" %>
+      <%= render "shared/toolbar", selects: [ { label: "Sort", name: "design_sort", options: [ [ "Most connected", "connections" ], [ "Name", "name" ] ], selected: "connections" } ] %>
+      <%= render "shared/quiet_line", items: [ { label: "13 sources", href: "#", icon: "link" }, { label: "Cite this page", href: "#", icon: "arrow-square-out" }, { label: "Report a correction", href: "#", icon: "flag" } ] %>
+    </div>
+  </section>
+
   <section class="flex flex-col gap-4" id="icons">
     <h2 class="type-title-md">Icons (Phosphor)</h2>
     <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">

@@ -1,0 +1,31 @@
+<%# A Row (nd-line), for every list (#558). Locals:
+    name:       the name (required)
+    href:       a link target (optional; without it the row is a plain div)
+    what:       the middle text (optional)
+    place:      the end slot text: a location, a number, a source mark (optional)
+    status:     a status key: the mark and word go right after the name (plants; optional)
+    cap:        capacity text ("3,926 MW"), its own mono element before the place (optional)
+    mark:       HTML for the 32px mark slot (optional)
+    short_name: a company's short name, for a long name (optional)
+    variant:    :bare (company rows: name, description, location) or :stack (plants and the rest)
+    A bare row always keeps its Description and Location columns, empty when a value is missing.
+    Renders one list item, inside an nd-lines panel. %>
+<% variant = local_assigns.fetch(:variant, :stack) %>
+<% text, small = line_name(name, local_assigns[:short_name]) %>
+<% classes = [ "nd-line", "nd-line--#{variant}" ] %>
+<% inner = capture do %>
+  <% if local_assigns[:mark] %><span class="nd-line__mark" aria-hidden="true"><%= mark %></span><% end %>
+  <span class="nd-line__head">
+    <span class="nd-line__name" title="<%= name %>" <%= 'data-fit=small'.html_safe if small %>><%= text %></span>
+    <% if local_assigns[:status].present? %><span class="nd-line__st nd-line__st--wide"><%= render "shared/status_mark", status: status %></span><% end %>
+  </span>
+  <%# On phones the status moves to line 2, before the type and units; only one of the two shows. %>
+  <% if local_assigns[:what].present? || local_assigns[:status].present? || variant == :bare %><span class="nd-line__what" title="<%= local_assigns[:what] %>"><% if local_assigns[:status].present? %><span class="nd-line__st nd-line__st--narrow"><%= render "shared/status_mark", status: status %></span><% end %><%= local_assigns[:what] %></span><% end %>
+  <% if local_assigns[:cap].present? || local_assigns[:place].present? || variant == :bare %>
+    <span class="nd-line__foot">
+      <% if local_assigns[:cap].present? %><span class="nd-line__cap"><%= cap %></span><% end %>
+      <% if local_assigns[:place].present? || variant == :bare %><span class="nd-line__end"><%= local_assigns[:place] %></span><% end %>
+    </span>
+  <% end %>
+<% end %>
+<li><%= local_assigns[:href] ? link_to(inner, href, class: classes) : tag.div(inner, class: classes) %></li>
