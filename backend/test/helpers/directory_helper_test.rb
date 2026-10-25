@@ -174,6 +174,7 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_equal "Courbevoie, France", location("Courbevoie", nil, country: "FR")
     assert_equal "London, United Kingdom", location("London", "England", country: "GB"), "no state abroad"
     assert_equal "France", location(nil, nil, country: "FR")
+    assert_equal "Ljubljana, Slovenia", location("Ljubljana", nil, country: "SI"), "a valid country outside the common ones is still named in full"
     assert_equal "Alameda", location("Alameda", nil), "a city with no state shows as it is"
     assert_nil location(nil, nil)
     assert_nil location("", "")

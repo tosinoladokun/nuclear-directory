@@ -58,6 +58,8 @@ class DesignSystemTest < ActionDispatch::IntegrationTest
     assert_select "#{scope} .nd-line--bare .nd-line__end", text: "Courbevoie, France"
     assert_select "#{scope} .nd-line__name[data-fit=small]", minimum: 1
     assert_select "#{scope} .nd-chip[aria-current]", 1
+    assert_select "#{scope} .nd-chips[data-controller=pill-row] .nd-chip:nth-child(5)[aria-current]", 1, "a selected chip beyond the first, scrolled into view on phones"
+    assert_select "#{scope} .nd-glance__fact dt + dd", 3, "the label comes before the value in the markup"
     assert_select "#{scope} .nd-lines__head[aria-hidden=true]", 1, "the header row is visual"
     assert_select "#{scope} .nd-line__head .nd-st", 2, "the status sits right after the name"
     assert_select "#{scope} .nd-line__foot .nd-line__cap", 2, "MW is its own element"

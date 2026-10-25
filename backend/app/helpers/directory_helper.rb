@@ -184,7 +184,7 @@ module DirectoryHelper
 
       nil
     else
-      name = COUNTRY_NAMES[code.upcase] || code
+      name = COUNTRY_NAMES[code.upcase] || (TZInfo::Country.get(code.upcase).name if code.match?(/\A[A-Za-z]{2}\z/) && TZInfo::Country.all_codes.include?(code.upcase)) || code
       [ city, name ].compact.join(", ")
     end
   end

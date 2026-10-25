@@ -1130,11 +1130,11 @@
   .nd-line__mark { flex: 0 0 var(--nd-row-mark); width: var(--nd-row-mark); height: var(--nd-row-mark); display: grid; place-items: center; }
   .nd-line__name { font: 600 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-line__what { flex: 1 1 0; min-width: 0; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nd-line__end { flex: none; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
+  .nd-line__end { margin-left: auto; flex: none; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
   /* Company rows: name 240px, the middle takes the rest, location 170px right-aligned. */
   .nd-line--bare .nd-line__name { flex: 0 0 240px; }
-  .nd-line--bare .nd-line__end { font-size: 13px; flex: 0 0 170px; justify-content: flex-end; overflow: hidden; text-overflow: ellipsis; display: block; text-align: right; }
-  .nd-line--bare .nd-line__name[data-fit="small"] { font-size: 13px; }
+  .nd-line--bare .nd-line__end { margin-left: 0; font-size: 13px; flex: 0 0 170px; justify-content: flex-end; overflow: hidden; text-overflow: ellipsis; display: block; text-align: right; }
+  .nd-line__name[data-fit="small"] { font-size: 13px; }
   /* Plant rows: the status right after the name; MW its own mono element before the location, never cut. */
   .nd-line__head, .nd-line__foot { display: contents; }
   .nd-line__st--narrow { display: none; }
@@ -1200,6 +1200,7 @@
   .nd-glance__fact { margin: 0; }
   .nd-glance__fact dd { margin: 0; font: 500 16px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-glance__fact dt { font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); order: 2; }
+  .nd-glance__fact dd { order: 1; }
   .nd-glance__fact { display: flex; flex-direction: column; }
   @media (max-width: 767px) {
     .nd-glance { width: auto; display: grid; grid-template-columns: 1fr 1fr; gap: var(--nd-space-4) var(--nd-space-3); padding: var(--nd-space-4) var(--nd-space-4); }

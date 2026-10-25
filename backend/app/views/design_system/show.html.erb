@@ -292,9 +292,12 @@ Disallow: /</pre>
 
     <div class="flex flex-col gap-2">
       <span class="type-label">Chip family, and a tag</span>
-      <div class="nd-chips">
-        <%= render "shared/chip", label: fuel.short_name, href: "#", icon: bucket_icon(fuel, size: 16), bucket: fuel, current: true %>
+      <div class="nd-chips" data-controller="pill-row">
+        <%= render "shared/chip", label: "All companies", href: "#", icon: icon("list") %>
         <%= render "shared/chip", label: utilities.short_name, href: "#", icon: bucket_icon(utilities), bucket: utilities %>
+        <%= render "shared/chip", label: "Services", href: "#", icon: bucket_icon(Category.find("services")), bucket: Category.find("services") %>
+        <%= render "shared/chip", label: "Government", href: "#", icon: bucket_icon(Category.find("government-research")), bucket: Category.find("government-research") %>
+        <%= render "shared/chip", label: fuel.short_name, href: "#", icon: bucket_icon(fuel, size: 16), bucket: fuel, current: true %>
         <%= render "shared/chip", label: "Oklo", href: "#" %>
         <span class="nd-tag">SMR</span>
       </div>
