@@ -6,7 +6,11 @@ export default class extends Controller {
   static targets = ["input", "count", "preview"]
   static values = { max: Number, width: Number }
 
-  connect() { this.update() }
+  connect() {
+    this.update()
+    // Measured again once Roboto Serif has loaded, not in a fallback font.
+    document.fonts?.ready.then(() => this.update())
+  }
 
   update() {
     const text = this.inputTarget.value.trim()

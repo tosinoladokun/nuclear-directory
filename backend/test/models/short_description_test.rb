@@ -8,10 +8,12 @@ class ShortDescriptionTest < ActiveSupport::TestCase
   end
 
   def role(key, name, parent: nil) = Role.find_by(key:) || Role.create!(key:, name:, parent:)
-  def give_role(company, role) = OrganizationRole.create!(organization: company, role:, verification_status: "verified", verified_by: "human:tosin")
+  def page = @page ||= Source.create!(url: "https://example.com/short", source_kind: "web_page", crawl_status: "ok", content_sha256: "s")
+  def cite(fact) = fact.tap { Evidence.create!(subject: fact, source: page, quote: "q", found_by: "human") }
+  def give_role(company, role) = cite(OrganizationRole.create!(organization: company, role:, verification_status: "verified", verified_by: "human:tosin"))
   def give_technology(company, key, name, parent: nil)
     technology = Technology.find_by(key:) || Technology.create!(key:, name:, parent:)
-    OrganizationTechnology.create!(organization: company, technology:, verification_status: "verified", verified_by: "human:tosin")
+    cite(OrganizationTechnology.create!(organization: company, technology:, verification_status: "verified", verified_by: "human:tosin"))
   end
 
   test "40 characters at most, squished; empty is none" do
@@ -32,6 +34,8 @@ class ShortDescriptionTest < ActiveSupport::TestCase
     assert_equal "Reactor designer · SMR", ShortDescription.for([ @company ], category: developers)[@company.id]
 
     @company.update!(short_description: "Molten salt–cooled reactor design")
+    assert_equal "Reactor designer · SMR", ShortDescription.for([ @company ], category: developers)[@company.id], "unsourced company: not shown"
+    cite(@company)
     assert_equal "Molten salt–cooled reactor design", ShortDescription.for([ @company ], category: developers)[@company.id]
   end
 
@@ -65,5 +69,14 @@ class ShortDescriptionTest < ActiveSupport::TestCase
     assert_equal "LEU and HALEU enrichment", link.short_phrase
     assert_not link.update(short_phrase: "x" * 41)
     assert_raises(ActiveRecord::StatementInvalid) { Relationship.transaction(requires_new: true) { link.update_columns(short_phrase: "x" * 41) } }
+  end
+
+  test "unsourced roles never show, and the fallback stays within 40" do
+    OrganizationRole.create!(organization: @company, role: role("isotopes", "Isotopes"), verification_status: "verified", verified_by: "human:tosin")
+    assert_nil ShortDescription.for([ @company ]).values.first, "a role with no evidence"
+    give_role(@company, role("mining", "Mining"))
+    give_role(@company, role("waste_decommissioning", "Waste"))
+    line = ShortDescription.for([ @company ]).values.first
+    assert_equal "Uranium mining and milling", line, "the two together would be over 40"
   end
 end
