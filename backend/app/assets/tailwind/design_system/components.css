@@ -1133,16 +1133,28 @@
   .nd-line__end { flex: none; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
   /* Company rows: name 240px, the middle takes the rest, location 170px right-aligned. */
   .nd-line--bare .nd-line__name { flex: 0 0 240px; }
-  .nd-line--bare .nd-line__end { flex: 0 0 170px; justify-content: flex-end; overflow: hidden; text-overflow: ellipsis; display: block; text-align: right; }
+  .nd-line--bare .nd-line__end { font-size: 13px; flex: 0 0 170px; justify-content: flex-end; overflow: hidden; text-overflow: ellipsis; display: block; text-align: right; }
   .nd-line--bare .nd-line__name[data-fit="small"] { font-size: 13px; }
-  .nd-line .nd-line__cap { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink); }
+  /* Plant rows: the status right after the name; MW its own mono element before the location, never cut. */
+  .nd-line__head, .nd-line__foot { display: contents; }
+  .nd-line__st--narrow { display: none; }
+  .nd-line__head .nd-st { flex: none; }
+  .nd-line__cap { flex: none; font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink); white-space: nowrap; }
+  .nd-line__foot .nd-line__end { flex: 0 0 auto; }
   @media (max-width: 639px) {
     .nd-lines { padding: 0 14px; }
     .nd-lines__head { display: none; }
     .nd-line--stack, .nd-line--bare { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px var(--nd-space-3); align-items: start; }
     .nd-line--stack:has(> .nd-line__mark) { grid-template-columns: var(--nd-row-mark) minmax(0, 1fr); }
     .nd-line--stack > .nd-line__mark { grid-row: 1 / span 3; align-self: center; }
-    .nd-line--bare .nd-line__name, .nd-line--bare .nd-line__what, .nd-line--bare .nd-line__end, .nd-line--stack > :not(.nd-line__mark) { grid-column: -2 / -1; flex: none; width: auto; text-align: left; justify-content: flex-start; display: block; overflow: hidden; text-overflow: ellipsis; }
+    .nd-line__head, .nd-line__foot { display: flex; align-items: baseline; flex-wrap: nowrap; gap: var(--nd-space-2) var(--nd-space-3); min-width: 0; grid-column: -2 / -1; }
+    .nd-line__st--wide { display: none; }
+    .nd-line__st--narrow { display: inline-flex; margin-right: var(--nd-space-3); }
+    .nd-line__head { overflow: hidden; }
+    .nd-line__head .nd-line__name, .nd-line--bare .nd-line__head .nd-line__name { flex: 0 1 auto; min-width: 0; }
+    .nd-line__foot .nd-line__end, .nd-line--bare .nd-line__foot .nd-line__end { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: 13px; }
+    .nd-line__foot .nd-line__cap + .nd-line__end::before { content: "· "; }
+    .nd-line--bare .nd-line__what, .nd-line--bare > .nd-line__end, .nd-line--stack > .nd-line__what, .nd-line--stack > .nd-line__end { grid-column: -2 / -1; flex: none; width: auto; text-align: left; justify-content: flex-start; display: block; overflow: hidden; text-overflow: ellipsis; }
   }
 
   /* Chip family (nd-chip): category chips, suggestions, the type chip. */
@@ -1150,26 +1162,30 @@
   .nd-chip:hover { border-color: var(--nd-ink); }
   .nd-chip .nd-ic { color: var(--nd-cat, currentColor); align-self: center; }
   .nd-chip[aria-current] { background: var(--nd-cat-tint, var(--nd-paper-sunken)); border-color: var(--nd-cat, var(--nd-ink)); color: var(--nd-cat, var(--nd-ink)); }
-  .nd-chips { display: flex; gap: var(--nd-space-2); flex-wrap: wrap; }
+  .nd-chips { display: flex; gap: var(--nd-space-2); flex-wrap: wrap; align-items: center; }
   @media (max-width: 639px) {
-    .nd-chips { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 0; margin: -4px 0; }
+    .nd-chips { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 0; margin: -4px 0; scrollbar-width: none;
+      mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); }
+    .nd-chips::-webkit-scrollbar { display: none; }
     .nd-chip { height: 36px; position: relative; flex: none; }
     .nd-chip::after { content: ""; position: absolute; inset: -4px 0; } /* a 44px tap area */
   }
 
   /* Page head (nd-pagehead): profiles and lists. */
-  .nd-pagehead { display: flex; flex-direction: column; gap: var(--nd-space-2); }
+  .nd-pagehead { display: flex; flex-direction: column; gap: var(--nd-space-2); container-type: inline-size; }
   .nd-pagehead__crumbs { font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); display: flex; gap: var(--nd-space-2); }
   .nd-pagehead__row { display: flex; align-items: center; gap: var(--nd-space-3); flex-wrap: wrap; }
   .nd-pagehead__square { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--nd-radius-md); background: var(--nd-cat-tint); color: var(--nd-cat); }
-  .nd-pagehead__name { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  /* One line: shrinks to fit (never below 20px) before any ellipsis. --chars is the name's length. */
+  .nd-pagehead__name { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; --nd-name-size: 40px; font-size: clamp(20px, calc((100cqw - 120px) / (var(--chars, 20) * 0.6)), var(--nd-name-size)); }
+  @media (max-width: 479px) { .nd-pagehead__name { --nd-name-size: 28px; } }
   .nd-pagehead__count { font: 400 14px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink-muted); }
   .nd-pagehead__about { margin: 0; font: 400 15px/24px var(--font-text); color: var(--nd-ink-muted); max-width: var(--nd-prose-max); }
   .nd-pagehead__tags { display: flex; gap: var(--nd-space-2); flex-wrap: wrap; }
 
   /* Index (nd-idx): the left column on desktop, sticky. */
   .nd-idx { position: sticky; top: var(--nd-space-6); width: var(--nd-index-width); display: flex; flex-direction: column; gap: 2px; align-self: flex-start; }
-  .nd-idx a { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nd-space-2); padding: 6px 0 6px 12px; border-left: 2px solid transparent; color: var(--nd-ink-muted); text-decoration: none; font: 400 14px/20px var(--font-text); white-space: nowrap; }
+  .nd-idx a { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nd-space-2); padding: 6px 0 6px 12px; border-left: 2px solid var(--nd-rule); color: var(--nd-ink-muted); text-decoration: none; font: 400 14px/20px var(--font-text); white-space: nowrap; }
   .nd-idx a:hover { color: var(--nd-ink); }
   .nd-idx a[aria-current] { border-left-color: var(--nd-cat, var(--nd-ink)); color: var(--nd-ink); font-weight: 600; }
   .nd-idx .nd-num { font-size: 12px; color: var(--nd-ink-muted); }

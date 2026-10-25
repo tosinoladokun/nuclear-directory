@@ -1,6 +1,6 @@
 <%# The page head (nd-pagehead), for profiles and lists (#558). Locals:
     name:     the page name (required, one line)
-    count:    a number or text in mono, beside the name (optional)
+    count:    the count and its noun in mono, beside the name: "42 companies" (optional)
     about:    a one-line description (optional)
     crumbs:   [[label, href], ...] (optional)
     square:   HTML for a 40px category square icon (optional); bucket: the Category that colours it
@@ -11,7 +11,7 @@
   <% end %>
   <div class="nd-pagehead__row">
     <% if local_assigns[:square] %><span class="nd-pagehead__square" aria-hidden="true"><%= square %></span><% end %>
-    <h1 class="nd-pagehead__name type-page-name" title="<%= name %>"><%= name %></h1>
+    <h1 class="nd-pagehead__name type-page-name" title="<%= name %>" style="--chars: <%= name.length %>"><%= name %></h1>
     <% if local_assigns[:count] %><span class="nd-pagehead__count"><%= count %></span><% end %>
   </div>
   <% if local_assigns[:about].present? %><p class="nd-pagehead__about"><%= about %></p><% end %>

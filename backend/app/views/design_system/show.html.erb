@@ -278,15 +278,15 @@ Disallow: /</pre>
     <div class="flex flex-col gap-2">
       <span class="type-label">Row: company rows (name · description · location), then plant rows</span>
       <ul class="nd-lines">
-        <li class="nd-lines__head type-label"><span>Company</span><span>Description</span><span>Location</span></li>
+        <li class="nd-lines__head type-label" aria-hidden="true"><span>Company</span><span>Description</span><span>Location</span></li>
         <%= render "shared/line", variant: :bare, href: "#", name: "Centrus Energy", what: "Uranium enrichment and HALEU", place: location("Bethesda", "MD") %>
-        <%= render "shared/line", variant: :bare, href: "#", name: "Westinghouse Electric Company", what: "Reactor designer · AP1000", place: location("Pittsburgh", "PA") %>
+        <%= render "shared/line", variant: :bare, href: "#", name: "Westinghouse Electric Company", what: "Reactor designer · AP1000", place: location("Cranberry Township", "PA") %>
         <%= render "shared/line", variant: :bare, href: "#", name: "Électricité de France Nuclear Division", short_name: "EDF Nuclear", what: "Reactor operator", place: location("Courbevoie", nil, country: "FR") %>
         <%= render "shared/line", variant: :bare, href: "#", name: "Tennessee Valley Authority and Associated Companies Limited", what: "Reactor designer · SMR", place: location(nil, "GA") %>
       </ul>
       <ul class="nd-lines">
-        <%= render "shared/line", href: "#", name: "Browns Ferry", mark: icon("site-plant", set: :nd, size: 20), what: "Power reactor · 3 operating units · 3,926 MW", place: location("Athens", "AL") %>
-        <%= render "shared/line", href: "#", name: "Vogtle", mark: icon("site-plant", set: :nd, size: 20), what: "Power reactor · 4 operating units", place: render("shared/status_mark", status: "operating") %>
+        <%= render "shared/line", href: "#", name: "Browns Ferry", mark: icon("site-plant", set: :nd, size: 20), status: "operating", what: "Power reactor · 3 units", cap: "3,926 MW", place: location("Athens", "AL") %>
+        <%= render "shared/line", href: "#", name: "Vogtle", mark: icon("site-plant", set: :nd, size: 20), status: "under_construction", what: "Power reactor · 2 units", cap: "2,430 MW", place: location(nil, "GA") %>
       </ul>
     </div>
 
@@ -302,7 +302,7 @@ Disallow: /</pre>
 
     <div class="flex flex-col gap-2">
       <span class="type-label">Page head</span>
-      <%= render "shared/page_head", name: "Fuel and enrichment", count: "42", about: "Companies that mine, convert, enrich and fabricate nuclear fuel.", crumbs: [ [ "Companies", "#" ] ], square: bucket_icon(fuel, size: 24), bucket: fuel, tags: [ "HALEU", "TRISO" ] %>
+      <%= render "shared/page_head", name: "Power plant owners and operators", count: "42 companies", about: "Companies that mine, convert, enrich and fabricate nuclear fuel.", crumbs: [ [ "Companies", "#" ] ], square: bucket_icon(fuel, size: 24), bucket: fuel, tags: [ "HALEU", "TRISO" ] %>
     </div>
 
     <div class="flex flex-col gap-2">
