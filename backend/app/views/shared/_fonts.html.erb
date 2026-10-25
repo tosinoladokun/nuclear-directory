@@ -6,9 +6,14 @@
     (layout shift 0.25 on /companies in CI), so Roboto Serif and Roboto Mono
     are font-display: optional: a font that is not ready within the first
     moments waits for the next page, so nothing moves. The wordmark is an SVG,
-    so Anton loads only where a display heading uses it. %>
+    so Anton loads only where a display heading uses it.
+    Admin passes display: "swap" (behind sign-in, no speed budget, and a serif
+    that sometimes doesn't load looks broken). On localhost the same: a dev
+    server answers slowly and misses the first moments, so the page kept the
+    fallback serif. Only production public pages use "optional". %>
+<% display = local_assigns[:display] || (Rails.env.production? ? "optional" : "swap") %>
 <style>
-  @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: optional; }
-  @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: optional; }
+  @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: <%= display %>; }
+  @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: <%= display %>; }
   @font-face { font-family: "Anton"; src: url("<%= asset_path "anton-latin.woff2" %>") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 </style>
