@@ -20,7 +20,8 @@ class Admin::InboxController < Admin::BaseController
     end
     stopped = results.reject(&:ok?)
     if stopped.empty?
-      flash[:notice] = yes ? "Done. It's live." : "Said no."
+      kept = keep_as_lead(ids.first) unless yes
+      flash[:notice] = yes ? "Done. It's live." : (kept ? "Said no. It's kept in Leads." : "Said no.")
       undoable = Array(before).map { |state| DataQuality::Review.undoable(state, by: actor) }
       flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour) if !yes && undoable.all? && undoable.size <= 20
     else
@@ -56,6 +57,16 @@ class Admin::InboxController < Admin::BaseController
   end
 
   private
+    # A No on a new company or plant is never final (PM, 25 Oct): its name
+    # goes to Leads, which are never thrown away.
+    def keep_as_lead(candidate_id)
+      claim = Candidate.includes(:source).find_by(id: candidate_id)
+      return unless claim&.proposed_subject && %w[organization facility].include?(claim.kind)
+
+      Lead.sighted!(name: claim.payload.to_h["name"], kind: claim.kind == "facility" ? "plant" : "company",
+        key: "today_no:#{claim.id}", label: "Said no in Today", url: claim.source&.url)
+    end
+
     # Its own key: a token works only on the page that made it.
     def undo_verifier = Rails.application.message_verifier(:owner_inbox_undo)
 end

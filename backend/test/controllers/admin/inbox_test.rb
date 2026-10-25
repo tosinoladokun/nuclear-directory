@@ -69,4 +69,13 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert other.reload.verified?
     assert_match "2 items live", flash[:notice]
   end
+
+  test "a No on a new company keeps it in Leads" do
+    post admin_inbox_decide_path(@create.id, "no"), params: { ids: [ @create.id ] }
+    assert @create.reload.status_rejected?
+    lead = Lead.find_by!(kind: "company", normalized_name: "bluefield fission")
+    assert lead.status_new?
+    assert_equal "Said no in Today", lead.sources.sole["label"]
+    assert_equal "Said no. It's kept in Leads.", flash[:notice]
+  end
 end
