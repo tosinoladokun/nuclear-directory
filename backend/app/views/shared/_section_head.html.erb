@@ -1,0 +1,2 @@
+<%# A section head (nd-sec): the title and its count in mono; no line above (#558). Locals: title (required), count (optional), id (optional), level (default 2). %>
+<%= content_tag "h#{local_assigns.fetch(:level, 2)}", id: local_assigns[:id], class: "nd-sechead type-section-title" do %><%= title %><% if local_assigns[:count] %><span class="nd-sechead__count"><%= count %></span><% end %><% end %>

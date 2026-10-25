@@ -1,0 +1,19 @@
+<%# The page head (nd-pagehead), for profiles and lists (#558). Locals:
+    name:     the page name (required, one line)
+    count:    a number or text in mono, beside the name (optional)
+    about:    a one-line description (optional)
+    crumbs:   [[label, href], ...] (optional)
+    square:   HTML for a 40px category square icon (optional); bucket: the Category that colours it
+    tags:     [text, ...] (optional) %>
+<header class="nd-pagehead <%= bucket_class(bucket) if local_assigns[:bucket] %>">
+  <% if local_assigns[:crumbs].present? %>
+    <nav class="nd-pagehead__crumbs" aria-label="Breadcrumb"><% crumbs.each_with_index do |(label, href), i| %><%= "›" if i.positive? %> <%= link_to label, href, class: "underline" %><% end %></nav>
+  <% end %>
+  <div class="nd-pagehead__row">
+    <% if local_assigns[:square] %><span class="nd-pagehead__square" aria-hidden="true"><%= square %></span><% end %>
+    <h1 class="nd-pagehead__name type-page-name" title="<%= name %>"><%= name %></h1>
+    <% if local_assigns[:count] %><span class="nd-pagehead__count"><%= count %></span><% end %>
+  </div>
+  <% if local_assigns[:about].present? %><p class="nd-pagehead__about"><%= about %></p><% end %>
+  <% if local_assigns[:tags].present? %><div class="nd-pagehead__tags"><% tags.each do |tag_text| %><span class="nd-tag"><%= tag_text %></span><% end %></div><% end %>
+</header>

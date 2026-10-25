@@ -1,0 +1,19 @@
+<%# A Row (nd-line), for every list (#558). Locals:
+    name:       the name (required)
+    href:       a link target (optional; without it the row is a plain div)
+    what:       the middle text (optional)
+    place:      the end slot text: a location, a number, a source mark (optional)
+    mark:       HTML for the 32px mark slot (optional)
+    short_name: a company's short name, for a long name (optional)
+    variant:    :bare (company rows: name, description, location) or :stack (plants and the rest)
+    Renders one list item, inside an nd-lines panel. %>
+<% variant = local_assigns.fetch(:variant, :stack) %>
+<% text, small = line_name(name, local_assigns[:short_name]) %>
+<% classes = [ "nd-line", "nd-line--#{variant}" ] %>
+<% inner = capture do %>
+  <% if local_assigns[:mark] %><span class="nd-line__mark" aria-hidden="true"><%= mark %></span><% end %>
+  <span class="nd-line__name" title="<%= name %>" <%= 'data-fit=small'.html_safe if small %>><%= text %></span>
+  <% if local_assigns[:what].present? %><span class="nd-line__what" title="<%= what %>"><%= what %></span><% end %>
+  <% if local_assigns[:place].present? %><span class="nd-line__end"><%= place %></span><% end %>
+<% end %>
+<li><%= local_assigns[:href] ? link_to(inner, href, class: classes) : tag.div(inner, class: classes) %></li>

@@ -166,6 +166,19 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_nil place("", nil)
   end
 
+  test "location: US city and state, a state alone, abroad, and nothing" do
+    assert_equal "Bethesda, MD", location("Bethesda", "MD")
+    assert_equal "Bethesda, MD", location("Bethesda", "Maryland"), "a full state name is abbreviated"
+    assert_equal "Georgia", location(nil, "GA"), "a state alone is written in full"
+    assert_equal "Georgia", location("", "Georgia")
+    assert_equal "Courbevoie, France", location("Courbevoie", nil, country: "FR")
+    assert_equal "London, United Kingdom", location("London", "England", country: "GB"), "no state abroad"
+    assert_equal "France", location(nil, nil, country: "FR")
+    assert_equal "Alameda", location("Alameda", nil), "a city with no state shows as it is"
+    assert_nil location(nil, nil)
+    assert_nil location("", "")
+  end
+
   test "public URLs" do
     assert_equal "/companies", directory_url_for
     assert_equal "/companies?category=fuel&q=haleu", directory_url_for(category: Category.find("fuel"), q: "haleu")

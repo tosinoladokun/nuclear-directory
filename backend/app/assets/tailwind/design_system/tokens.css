@@ -43,6 +43,7 @@
   --nd-space-4: 16px;
   --nd-space-6: 24px;
   --nd-space-8: 32px;
+  --nd-space-10: 40px;
   --nd-space-12: 48px;
   --nd-space-16: 64px;
 
@@ -50,6 +51,7 @@
   --nd-radius-0: 0px;
   --nd-radius-sm: 3px;
   --nd-radius-md: 6px;
+  --nd-radius-lg: 10px;
   --nd-hairline: 1px;
   --nd-focus-width: 2px;
 
@@ -57,6 +59,10 @@
   --nd-content-max: 1040px;
   --nd-prose-max: 640px;
   --nd-overview-width: 320px;
+  --nd-index-width: 160px;      /* profile section index */
+  --nd-list-index-width: 268px; /* category index on list pages */
+  --nd-glance-width: 280px;     /* Glance panel */
+  --nd-row-mark: 32px;          /* the mark slot at the start of a row */
 
   color-scheme: light;
 }
@@ -243,4 +249,14 @@
 @utility type-data-sm {
   font: 400 11px/16px var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* The 25 Oct system (#558): a page's name and a section's title. */
+@utility type-page-name {
+  font: 600 40px/46px var(--font-text);
+  @media (max-width: 479px) { font-size: 28px; line-height: 34px; }
+}
+@utility type-section-title {
+  font: 600 24px/32px var(--font-text);
+  @media (max-width: 479px) { font-size: 20px; line-height: 28px; }
 }
