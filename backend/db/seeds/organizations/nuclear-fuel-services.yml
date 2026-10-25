@@ -21,7 +21,13 @@ relationships:
   source_url: https://www.bwxt.com/sectors/nuclear-fuel/nuclear-fuel-services/
   quote: Our subsidiary Nuclear Fuel Services (NFS) is a leading manufacturer of fuel material for all naval nuclear reactors used in U.S. submarines and aircraft carriers.
   confidence: 1.0
-facilities: []
+facilities:
+- name: NFS
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/nuclear-fuel-services
+  quote: 'NFS | Location: Erwin, TN | Licensee: Nuclear Fuel Services, Inc. | Docket Number: 07000143 | Facility Type: Fuel Fabrication | Facility Status: Operating / Partial Decommissioning'
+  confidence: 1.0
+  note: NRC lists the licensee; status 'Operating / Partial Decommissioning' (part of the site is being decommissioned).
 notes: Its own domain doesn't resolve; quotes are from its parent's page. No website set (it would share BWXT's domain). Erwin, TN.
 description:
   text: BWXT subsidiary that makes fuel material for U.S. Navy submarine and aircraft carrier reactors.
