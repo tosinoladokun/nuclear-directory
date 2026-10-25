@@ -72,11 +72,11 @@ module Directory
       },
       relationship: {
         model: Relationship,
-        attributes: %i[from_organization_id to_organization_id relationship_type description started_on ended_on]
+        attributes: %i[from_organization_id to_organization_id relationship_type description short_phrase started_on ended_on]
       },
       facility_relationship: {
         model: FacilityRelationship,
-        attributes: %i[organization_id facility_id relationship_type ownership_pct description started_on ended_on]
+        attributes: %i[organization_id facility_id relationship_type ownership_pct description short_phrase started_on ended_on]
       },
       # A news item for "Latest" (#137), the same one by its link.
       news_item: { model: NewsItem, attributes: %i[url title publisher published_on summary] },

@@ -35,6 +35,7 @@ class Organization < ApplicationRecord
   # A list row's middle column (#559): a label, 40 characters at most.
   normalizes :short_description, with: ->(text) { text.squish.presence }
   validates :short_description, length: { maximum: ShortDescription::MAX }, allow_nil: true
+  validates :short_description, format: { without: /\.\z/, message: "is a label: no full stop" }, allow_nil: true
   # Blank when no source states it yet.
   validates :country_code, length: { is: 2 }, allow_nil: true
   validates :founded_year, numericality: { only_integer: true, in: 1800..2100 }, allow_nil: true

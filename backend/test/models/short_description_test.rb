@@ -55,4 +55,15 @@ class ShortDescriptionTest < ActiveSupport::TestCase
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { ShortDescription.for(companies) }
     assert_equal few, queries
   end
+
+  test "no full stop; the database refuses over 40 too; a link's short phrase has the same limit" do
+    assert_not @company.update(short_description: "Uranium enrichment.")
+    assert_raises(ActiveRecord::StatementInvalid) { Organization.transaction(requires_new: true) { @company.update_columns(short_description: "x" * 41) } }
+    other = Organization.create!(name: "Phrase Partner Co", verification_status: "verified", verified_by: "human:tosin")
+    link = Relationship.create!(from_organization: @company, to_organization: other, relationship_type: "supplies", verification_status: "pending")
+    assert link.update(short_phrase: " LEU and   HALEU enrichment ")
+    assert_equal "LEU and HALEU enrichment", link.short_phrase
+    assert_not link.update(short_phrase: "x" * 41)
+    assert_raises(ActiveRecord::StatementInvalid) { Relationship.transaction(requires_new: true) { link.update_columns(short_phrase: "x" * 41) } }
+  end
 end
