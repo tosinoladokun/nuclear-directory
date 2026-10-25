@@ -24,16 +24,69 @@ Read this before building or changing any view. It holds the rules; the code liv
 
 Token names below (`paper`, `ink-muted`, `space-4`, `radius-sm`, ...) are the same names as the utilities and `--nd-*` variables above.
 
+## The 25 Oct system (approved; specs #556 to #561)
+
+**Every public page moves to one system, approved by Tosin on 25 and 26 Oct.** Where an older line below disagrees, this section wins; the page entries below are updated where they changed. The boards are private ("Nuclear Directory" design system, and the canvases named in each spec; ask Tosin for access). Each spec stands on its own.
+
+| Spec | What |
+|---|---|
+| #558 | Shared components, built once: Row, chip family, Page head, Index, Glance panel, Status mark, Section head, Toolbar, Quiet line, and the location helper |
+| #559 | `short_description` on companies (40 characters), written by Data Quality. Build before #560 |
+| #560 | Category, technology and All companies pages |
+| #556 | Company page |
+| #557 | Plant page |
+| #561 | Connections map final look (restyles the #400 branch) |
+
+Build order: #558, #559, #560, then #556, #557, #561. Homepage: no change (kept as live, 25 Oct).
+
+### Rules
+- **Desktop shows what phones show, nothing more** (Tosin, 25 Oct). The layout may differ; the content may not. No desktop-only panels.
+- **Sections are told apart by space and type, never a line.** Section titles 24px (20px on phones), 64px between sections on desktop, 40px on phones. Rows inside a list panel are the one place with a 1px `rule` line between them.
+- **One surface:** `paper-raised` with 10px corners and no border, for the key facts panel and for list panels. Everything else sits on `paper`.
+- **Category colour** (`--nd-cat-<slug>` and its tint) marks a category only, always beside its icon and name: category squares, the index icons, a selected chip, the type chip.
+- **One row for every list:**
+  - Companies: **name · description · location**, in three columns on desktop (name 240px, description the rest, location 170px right-aligned), three lines on phones.
+  - No mark, no tags, no connection count on the row. Most connected stays as the sort.
+  - Plants: site ring, name, status mark and word, type and units, MW, location.
+- **Lists sit in a white panel with a header row** ("Company · Description · Location") on desktop; phones keep the panel and lines, with no header row.
+- **Short description** (#559):
+  - 40 characters at most, measured to fit 330px at 14px (the phone line is the tightest place).
+  - A description, not an action: "Uranium mining in Wyoming", not "Mines uranium in Wyoming".
+  - Until it's written, the row shows role · specialty ("Reactor designer · SMR").
+- **Locations, one way everywhere:**
+  - US: "City, ST".
+  - Abroad: "City, Country", with the country in full.
+  - A state with no city: in full ("Georgia").
+  - Never a street address or ZIP code.
+  - One helper formats them all.
+- **Status is a mark and a word:**
+
+  | Status | Mark |
+  |---|---|
+  | Operating | filled dot |
+  | Not operating, Being decommissioned | open circle |
+  | Restart under NRC review | dashed |
+  | Under construction | half-filled |
+  | Planned | dotted grey |
+
+- **Sources are quiet:** one source mark per row, and one quiet line at the end of a page ("13 sources · Cite this page · Report a correction"). No Verified badge, no checked date in the panel, no per-row Report a correction.
+- **No logos for now.** Page heads align left.
+- **Removals approved on 25 Oct**, as exceptions to "Nothing live is removed":
+  - on profiles: "Not verified yet", the Verified badge and checked date, per-row Report a correction, boxed source numbers;
+  - on list rows: the initials mark, the description sentence (replaced by the short description) and the connection count;
+  - on list pages: the desktop category pills (the index replaces them) and any About panel;
+  - on the map: the details card, "Show connections as a list", the flowing dots and the Notes under the map.
+
 ## What the product is
 
 Nuclear Directory is a free, public reference to the US nuclear industry: who makes fuel, who builds and services reactors, who runs the plants, who buys the power and who funds it. Every fact links to its source. The design has one job: make that data feel as trustworthy as it is. It should read like a serious reference work, not a startup landing page.
 
-The system is **monochrome**. Ink on paper, a gray scale, hairlines and three typefaces (Anton and Roboto Serif from techequity.us, plus Roboto Mono). Color comes from content (an organization's own logo, if we ever show one), never from the interface. The single exception is `critical`, which marks errors and nothing else: form errors, and in the admin a rejected fact or a failed pipeline run.
+The system is **ink on paper with one accent per category**. Ink, a gray scale and three typefaces (Anton and Roboto Serif from techequity.us, plus Roboto Mono). The only colours are the category accents and tints (they mark a category, always beside its icon and name) and `critical`, which marks errors and nothing else: form errors, and in the admin a rejected fact or a failed pipeline run.
 
 ## Principles
 
-1. **Sources are first-class UI.** Every fact on a profile carries a `SourceChip`: where it came from and when it was checked. Provenance is part of the layout, never a footnote.
-2. **Dense but calm.** Researchers want a lot on screen. Get density from type hierarchy and hairlines, not from boxes, color or icons.
+1. **Sources are first-class, and quiet.** Every row carries one small source mark that opens its sources, and every page ends with the quiet line: its sources, a citation, and one Report a correction (#556).
+2. **Dense but calm.** Researchers want a lot on screen. Get density from type hierarchy and space, not from boxes, lines, color or icons.
 3. **Neutral and credible.** No nuclear clichés: no glowing green, no radiation trefoil, no atom icons (the site icon is the one exception, see Iconography), no gradients, no hype words.
 4. **One system.** Every screen is built from these tokens and components, in light and dark.
 
@@ -114,7 +167,7 @@ The approved high-fidelity designs are on the [Nuclear Directory Screens canvas]
 | No results | One line that names the query, with "Clear search" or "Suggest a company" | Cosmos "not on Cosmos" |
 | Company page | One scrolling page, no tabs: `ProfileHeader` (initials, name, one-line description, tags), Deals and links, Plants and sites, Sources; `OverviewPanel` on the right. The black banner was dropped in the approved design. | Parallel company profiles, Wikipedia |
 | Power plant page | Same layout as the company page, for a site: `ProfileHeader` (ring, name, type, status, technology), Companies (owners, operator, reactor developer, power buyers), Units as a table that becomes cards on phones, Sources; `OverviewPanel` on the right. A unit's address goes to its row on the site's page. | Global Energy Monitor wiki, Wikipedia |
-| Relationship map | Not built yet; the connections view (Design canvas, Oct 2026) replaces the earlier `RelationshipGraph` sketch: selected record in the center, arrows from giver to receiver, details on tap | Memotron graph, Fibery workspace map |
+| Connections map | #561 (26 Oct), restyling the #400 build: in the profile's middle column after Latest. Desktop: the record in the centre, givers on the left and receivers on the right, curved arrows from giver to receiver with the verb on the line, category squares for nodes. Phones: a tree, one branch per partner. No details card, no list toggle, no flowing dots; partner names link to their pages | Memotron graph, Fibery workspace map |
 | Landscape view (later) | The whole graph at once, for the home page only | Delphi |
 
 ## Information architecture
@@ -160,6 +213,7 @@ Start a search, or browse the industry by category. **For:** Anyone arriving fro
 See every company in one list, then narrow it. **For:** People scanning the whole industry or building a shortlist.
 
 - **Questions, in order:** 1. Who's in the directory, and how many? 2. Which ones work in a technology or a state? 3. Which are the most connected?
+- **25 Oct (#560): All companies is the first entry of the category index** and uses the category page's layout below. These lines record what's live until #560 ships.
 - **Sections, top to bottom:** Header: wordmark + search; Category pills (sideways scroll); Title + count: All companies 89; Filters: Technology, State, Sort (one Filters button on phones); Rows: mark, name, one-line description, place, connections; Next page, only once the list passes about 200 (one list today); Footer.
 - **Above the fold:** at 390, header, pills, title and count, the Filters button, the first 4 rows. At 1440, header through about 9 rows.
 - **Key facts and sources:** Name; one-line description (sourced, ellipsis past one line); Headquarters as City, ST; Connection count: published, sourced links only (the same rule as the buckets, Bucket#sourced), computed for the whole list in one GROUP BY, never per row.
@@ -172,24 +226,35 @@ See every company in one list, then narrow it. **For:** People scanning the whol
 Everyone in one part of the industry (e.g. fuel and materials), most connected first. **For:** Someone who arrived from the homepage card or a search for "nuclear fuel suppliers".
 
 - **Questions, in order:** 1. Who works in this area? 2. What does the category include? 3. Which are the biggest or most connected?
-- **Sections, top to bottom:** Header + pills (current category selected); Title with category icon + count; One-line definition from the category's 'about'; Filters; Rows (plants: type · status · units · MW); Footer.
-- **Above the fold:** at 390, header, pills, title, the definition line, Filters, the first 3 rows. At 1440, header through about 8 rows.
+- **Sections, top to bottom (25 Oct, #560):**
+  - **Desktop,** two columns:
+    - **Left:** the category index (268px, sticky): All companies, then the ten categories with counts and their 16px icons. Short names where needed ("Plant operators", "Components").
+    - **Right:** the page head (category square, name, count, the one-line definition from the category's `about`); the toolbar (Sort, Technology, State); the list in a white panel with a header row "Company · Description · Location"; Show N more after 24; the quiet line "Missing a company? Report a correction".
+  - **Phones:** category chips scrolled to the current one (All companies first); page head; Filters and Sort; the list panel (no header row; name, description, location on three lines); Show N more after 12; the quiet line.
+  - **No About panel, on any size.**
+- **Above the fold:** at 390, header, chips, title, the definition line, Filters, the first 3 rows. At 1440, header through about 8 rows.
 - **Key facts and sources:** Category name and definition (Category model). Developers' line keeps the model's scope: companies designing reactors or developing new nuclear plants (reactor vendors and project developers); engineering contractors sit in Services and engineering; Count; For Plants and sites: type, status, units, operating MW.
 - **Links in:** Homepage cards; Type chips on profiles; Crumbs on profiles; Search engines (title: e.g. "Uranium, nuclear fuel and materials suppliers in the US"). **Links out:** Profiles; Other categories (pills).
-- **Keep (nothing live is removed):** Everything on today's category pages stays; A to Z stays as a sort; Most connected becomes the default, counting published, sourced links only, so it agrees with the homepage; Add the one-line definition under the title (confirmed).
-- **Spec:** #263
+- **Keep:** every category, the counts, every filter and both sorts (Most connected is the default, counting published, sourced links only; A to Z stays); the one-line definition. **Removed (approved 25 Oct):** the desktop pills (the index replaces them); on rows, the initials mark, the description sentence (the short description, #559, replaces it) and the connection count.
+- **Spec:** #263, #560
 
 ### Company profile (`/companies/terrapower`)
 
 Everything sourced about one company, and who it deals with. **For:** Someone checking a company: a journalist, an investor, a job seeker, a competitor.
 
 - **Questions, in order:** 1. What does it do? (one line) 2. What kind of company is it? 3. Who does it deal with, and how? (owns, operates, supplies, sells power to, funds) 4. Which plants and sites is it tied to? 5. For reactor developers: how far along is licensing? 6. Where's the proof?
-- **Sections, top to bottom:** Header; Crumbs: Category / Name; Mark, name, one-line description with sources; Role tag row (kept); Key facts: Type chips, Website, Also known as, Legal name, Role, Technology, Headquarters, Parent company, Licensing stage (developers); Connections map (#363); Deals and links (n); Plants and sites (n); Not verified yet (moved lower); Sources (n), ending with a "Cite this page" line; Report a correction; Footer.
+- **Sections, top to bottom:** Header; Crumbs: Category / Name; Mark, name, one-line description with sources; Role tag row (kept); Key facts: Type chips, Website, Also known as, Legal name, Role, Technology, Headquarters, Parent company, Licensing stage (developers); Connections map (#363); Deals and links (n); Plants and sites (n); Sources (n), ending with a "Cite this page" line; Report a correction; Footer.
 - **Above the fold:** at 390, header, crumbs, name, description, and the first rows of key facts (Type, Website). At 1440, name and description on the left; the whole key-facts panel on the right; the top of the map.
 - **Key facts and sources:** Description: from a source, numbered; Type: the company's categories (chips); Role, technology, HQ, parent: each with its source numbers; Licensing stage (reactor developers): NRC docket as the source; field defined by Data Quality; Deals and links: the five verbs, signed facts only.
 - **Links in:** Lists, categories, search; Other profiles' deals and maps; Plant pages' Companies. **Links out:** Partners' profiles; Plants; Sources (external); Report a correction.
-- **Keep (nothing live is removed):** Every fact and section live today stays: description, the role tag row, key facts, Deals and links, Plants and sites, Not verified yet, Sources; The role tag row under the name stays (restyle at most); Not verified yet stays, moved lower: after Plants and sites, before Sources, restyled as a quieter block.
-- **Spec:** #363, #369
+- **25 Oct (#556):**
+  - **Layout:**
+    - **Desktop:** a section index on the left (160px) and one middle column (header, Latest with 3 items at most, Connections map #561, Deals and links, Plants and sites, the quiet line). Key facts sit on the right in the soft white panel, value first with a small label.
+    - **Phones:** no section index, and key facts come after the header.
+  - **Rows:** Deals and links are one line each, with a short deal line built from deal terms ("$80M ARDP award"). One source mark per row.
+  - **No logo**; the head aligns left. The role tags stay under the summary.
+- **Keep:** description, the role tags, key facts, Latest, Deals and links, Plants and sites, Sources (behind "N sources" in the quiet line), Cite this page, Report a correction (one, in the quiet line). **Removed (approved 25 Oct):** "Not verified yet", the Verified badge and checked date, per-row Report a correction, boxed source numbers.
+- **Spec:** #363, #369, #556
 
 ### Company profile: one layout per category
 
@@ -199,7 +264,7 @@ Every company page shares one frame. Its first key facts and its first sections 
   - crumbs; mark, name and the one-line summary with its sources; the role tag row; Type chips;
   - the always-on key facts (Website, Headquarters, Parent company, Also known as, Legal name), after the category's own;
   - the connections map (#363);
-  - after the category's sections, everything live today: Deals and links (every link), Plants and sites, Not verified yet (moved lower), Sources, Report a correction.
+  - after the category's sections, everything live today: Deals and links (every link), Plants and sites, Sources, Report a correction ("Not verified yet" removed, 25 Oct).
   - Sources end with one line: "Cite this page: Nuclear Directory, {name}, {URL}, accessed {date}; dataset DOI {DOI}." (Founder),
 - **Varies by category:** the first 2 to 3 key facts; the category's own sections after the map, and their order; each section's table columns. The category sections are ordered views of the same sourced links; Deals and links still lists every link below them, so nothing disappears; an early-stage link there shows its stage label (MOU, LOI, term sheet) so it can't read as signed.
 - **Empty states, only what's sourced:**
@@ -230,12 +295,19 @@ Every company page shares one frame. Its first key facts and its first sections 
 What a plant or site is, whether it runs, and who owns and operates it. **For:** Someone looking up a plant: a reporter, a local resident, an analyst, a buyer of power.
 
 - **Questions, in order:** 1. What is it, and is it running? 2. Where is it? 3. Who owns it, who operates it, and are they the same company? 4. How big is it? (units, operating capacity) 5. Which reactor type and developer? 6. Who buys its power? 7. Where's the proof?
-- **Sections, top to bottom:** Header; Crumbs: Plants and sites / Name; Site ring, name, the ownership sentence; Type chip (with site icon) + status; Key facts: Type, Status, Location, Owners, Operator, Reactor developer, Reactor type, Capacity; Connections map (#363); Companies (n); Units (table; cards on phones): type, capacity, status, commercial operation, licence expiry, docket; Not verified yet (moved lower); Sources (n), ending with a "Cite this page" line; Report a correction; Footer.
+- **Sections, top to bottom:** Header; Crumbs: Plants and sites / Name; Site ring, name, the ownership sentence; Type chip (with site icon) + status; Key facts: Type, Status, Location, Owners, Operator, Reactor developer, Reactor type, Capacity; Connections map (#363); Companies (n); Units (table; cards on phones): type, capacity, status, commercial operation, licence expiry, docket; Sources (n), ending with a "Cite this page" line; Report a correction; Footer.
 - **Above the fold:** at 390, header, crumbs, name, the ownership sentence, the type chip, the first key facts (Type, Status). At 1440, name, ownership sentence and chips on the left; all key facts on the right.
 - **Key facts and sources:** The ownership sentence (Founder): "Owned by Georgia Power, Oglethorpe Power, MEAG Power and Dalton Utilities. Operated by Southern Nuclear, a different company." or "Owned and operated by Constellation." From the owns and operates links; only signed, sourced ones. Only the operator sourced: "Operated by Constellation." on its own; never "owner unknown" or an inferred owner; Status and type: the site's own, once sourced; Capacity: operating units only (PM, 16 Oct), labelled MW with the note "Net summer capacity, from EIA" (DATA.md D2); Reactor type: from the units when they agree; Reactor developer: only from a sourced link between the developer and the plant or its units, never inferred from the reactor type (AP1000 is not proof of Westinghouse). Source: NRC unit pages (#388); Owners' shares: a percentage only where that owns link's source states it; otherwise names without shares. EIA-860 Schedule 4 (#382) brings sourced shares; On phones the sentence names up to 2 owners, then "and N others", which jumps to the Owners row with every owner; desktop names them all. It's body text, so it may wrap to 2 lines.
 - **Links in:** Plants and sites list; Company profiles; Search (units land on their row). **Links out:** Owner and operator profiles; Units' NRC dockets; Sources.
-- **Keep (nothing live is removed):** Every fact and section live today stays: key facts (Owners, Operator, …), Companies, Units, Not verified yet, Sources; Not verified yet stays, moved lower: after Units, before Sources; The ownership sentence is added above, built only from sourced links.
-- **Spec:** #209, #246, #268, #363, Founder note 18 Oct
+- **25 Oct (#557):**
+  - **Layout:** the company page's layout.
+  - **Header:** a status line under the name ("● Operating · 4 units"), then the owner and operator sentence (phones: two owners, then "and N others").
+  - **Owners and operator:**
+    - **Owners:** one row per owner, with a share bar (112px desktop, 72px phones) only where a source states the share.
+    - **Operator:** one row per company, its unit links folded in.
+  - **Units:** the units table keeps `#unit-<slug>`. Status everywhere is a mark and a word.
+- **Keep:** key facts, the ownership sentence, Owners and operator (which replaces Companies, with the same links), Units, Sources (in the quiet line). **Removed (approved 25 Oct):** "Not verified yet" and the same items as the company page.
+- **Spec:** #209, #246, #268, #363, #557, Founder note 18 Oct
 
 ### Unit (`/plants/plant-vogtle#unit-vogtle-unit-3`)
 
@@ -266,7 +338,8 @@ Find a company, plant or site by name, alias or topic. **For:** Everyone; it's t
 Everyone working on one technology tag: fission, fusion, smr, and next htgr and fhr. HALEU is a fuel (Fuel and materials), not a tag. **For:** Someone who searched a technology or tapped a technology tag.
 
 - **Questions, in order:** 1. Who's working on it? 2. What is it, in one line? 3. Which plants or sites use it?
-- **Sections, top to bottom:** Header + pills; Title: technology name + count; One-line definition; Companies; Plants and sites using it (left out while unit technology is empty: 0 of 173 today); Footer.
+- **Sections, top to bottom:** the category page's layout (#560): the index with no entry selected; Title: technology name + count (no square); One-line definition from the Tag `about`; Companies, in the same rows; Plants and sites using it (left out while unit technology is empty: 0 of 173 today); Footer.
+- **SMR has no tag page.** The "SMR" homepage suggestion runs a search for companies tagged as SMR (an engineering fix: `?tag=smr` shows all companies today).
 - **Above the fold:** at 390, title, definition, the first 4 companies. At 1440, title, definition, about 8 companies.
 - **Key facts and sources:** Definition: plain, one line (VOICE.md); Companies tagged with it; plants whose units use it, once unit technology is populated; URL scheme: ?tag=… as shipped in #281 (directory#index). ?technology=… stays a working, combinable filter (it includes coolant values such as molten_salt that aren't tags), so it isn't redirected; the only legacy redirect is ?category=fusion to ?tag=fusion; Indexing: a noindex meta below 5 results, and the sitemap lists only tags with 5 or more.
 - **Links in:** Technology tags on profiles; Homepage suggestions (SMR); Search engines, only when it has 5+ results. **Links out:** Profiles; The full list with the filter.
@@ -340,6 +413,8 @@ Tags have their own list pages but aren't navigation (`Tag`): `/companies?tag=fu
 - **Labels:** org names in `small`, `ink`, on one line, following "Text in a box stays on one line": fit by measuring, down to the floor (12px on phones), then the record's `short_name`, and an ellipsis only as the last resort, with the full name in `<title>`, the aria-label and the detail sheet. Don't hide labels at small sizes; the map uses short names instead (#363).
 
 ## Components and alignment
+
+**25 Oct: the next set is specced in #558.** It covers Row (`nd-line`), the chip family (`nd-chip`), Page head (`nd-pagehead`), Index (`nd-idx`), Glance panel (`nd-glance`), Status mark (`nd-st`), Section head, Toolbar (`nd-toolbar`) and Quiet line (`nd-quiet`). They replace `nd-listrow`, `nd-listhead`, `nd-pill`, `nd-overview`, `nd-src` boxes and `nd-badge` on public pages as each page moves over (#560, #556, #557). The design system canvas shows them with previews; until they ship, the inventory below describes the live classes.
 
 Every page is built only from these components, in the order its page entry gives (Information architecture). The canvas has each one drawn with the site's own CSS: [Components and alignment](https://claude.ai/artifact/AyVhJjG4kLvYBmXdcHeAAb) (private; ask Tosin for access), 18 Oct. Approved by Tosin, 18 Oct. Nothing a page shows today is removed by these rules; they only align, space and restyle.
 
