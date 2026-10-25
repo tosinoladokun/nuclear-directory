@@ -217,18 +217,26 @@ module DataQuality::Review
     # first batches, a source's own hold), never his.
     INBOX_KINDS = %w[new_record new_fact change dq].freeze
 
-    def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new)
+    # firsts: first_batches, passed in once for a whole list.
+    def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new, firsts: first_batches)
       return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
       return "dq" if candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
-      return "dq" if held_reason(candidate, directory:) == FIRST_BATCH
-      # A restatement that slipped past match changes nothing: never Tosin's.
-      return "dq" if !candidate.proposed_subject && evidence_only?(candidate, directory:)
+      # Asked directly: a deal term's own hold would come first in held_reason.
+      return "dq" if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
+      # News is always a new fact about its company or plant.
+      return "new_fact" if candidate.kind == "news_item"
 
-      if candidate.proposed_subject
-        %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
-      else
-        "change"
+      # A claim on a record not yet published (whichever claim proposed it)
+      # is part of its first publication; Enrich's extra fields stay on Checks.
+      pending = directory.fact(type: candidate.subject_type, id: candidate.subject_id)&.verification_status == "pending"
+      if candidate.proposed_subject || pending
+        return "dq" if candidate.payload.to_h.key?(DataQuality::DirectoryClient::ENRICHMENT_KEY) && !candidate.proposed_subject
+        return %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
       end
+      # A restatement that slipped past match changes nothing: never Tosin's.
+      return "dq" if evidence_only?(candidate, directory:)
+
+      "change"
     end
 
     # Approving it would only add its source as evidence on a published

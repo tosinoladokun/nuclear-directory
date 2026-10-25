@@ -42,9 +42,9 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
 
     get admin_inbox_path
     assert_select "#recent-#{@change.id}", /Said no to Rockville Nuclear/
-    assert_select "#recent-#{@change.id} button", "Undo"
-    post admin_inbox_undo_path(@change.id)
-    assert_equal "new", @change.reload.status
+    post admin_inbox_undo_path, params: { token: flash[:undo] }
+    assert_equal "matched", @change.reload.status, "back as it was before the No"
+    assert_equal @decided.id, @change.subject_id
   end
 
   test "Yes to all takes only what Data Quality checked, each checked again" do
@@ -57,9 +57,14 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     get admin_inbox_path
     assert_select ".nd-panel", /Data Quality checked 2 of these 2\./
     assert_select "#inbox-item-#{second.id} .type-small", /“q”/, "a name-only company shows its quote"
-    form = css_select("form[action='#{admin_inbox_yes_all_path}']").first
-    ids = form.css("input[name='ids[]']").map { |input| input["value"].to_i }
-    post admin_inbox_yes_all_path, params: { ids:, shown: form.at_css("input[name=shown]")["value"] }
+    shown = css_select("form[action='#{admin_inbox_yes_all_path}'] input[name=shown]").first["value"]
+    DataQuality::Recommendations.record("#{second.id} approve: named on the NRC page again", by: "human:dq")
+    post admin_inbox_yes_all_path, params: { shown: }
+    assert_match "The list changed", flash[:alert], "a call changed after the page loaded"
+    assert_not @new_co.reload.verified?
+    get admin_inbox_path
+    shown = css_select("form[action='#{admin_inbox_yes_all_path}'] input[name=shown]").first["value"]
+    post admin_inbox_yes_all_path, params: { shown: }
     assert @new_co.reload.verified?
     assert other.reload.verified?
     assert_match "2 items live", flash[:notice]

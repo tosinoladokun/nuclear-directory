@@ -569,7 +569,8 @@ module Directory
         still_there = in_source || ->(text) { text == quote }
         current = Evidence.where(subject: record, source_id:).select { |row| still_there.call(row.quote) }
         # Research pages (web_page) share a kind but aren't issues of one source.
-        if current.empty? && source_kind && source_kind != "web_page" && quote.present? && record.try(:verification_status) == "verified" &&
+        if current.empty? && source_kind && source_kind != "web_page" && quote.present? && still_there.call(quote) &&
+            record.try(:verification_status) == "verified" &&
             (add_evidence || Evidence.joins(:source).where(subject: record, sources: { source_kind: }).where.not(source_id:).exists?)
           current = [ Evidence.create!(subject: record, source_id:, quote:, found_by: "crawler") ]
         end

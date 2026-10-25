@@ -185,8 +185,9 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
 
     match!
 
-    # A name it already has (normalized) only adds evidence, so it confirms itself (#548).
-    assert c.reload.status_confirmed?, c.notes
+    # A name it already has would confirm itself (#548), but only with a quote
+    # its stored source contains; this one isn't, so it waits.
+    assert c.reload.status_matched?, c.notes
     assert_equal terrapower.id, c.subject_id
     terrapower.reload
     assert terrapower.verified?

@@ -6,6 +6,11 @@
 <%# One checked item needs no batch button: its own Yes does it (Design). %>
 <% batch_after = (%w[new_record new_fact].find { |key| sections[key].any?(&:checked) } if checked.size > 1) %>
 
+<% if flash[:undo] %>
+  <% content_for :flash_action do %>
+    <%= button_to "Undo", admin_inbox_undo_path, params: { token: flash[:undo] }, class: "nd-link nd-flash__action type-body", form_class: "nd-flash__undo" %>
+  <% end %>
+<% end %>
 <div>
   <h1 class="type-admin-h1">Today</h1>
   <p class="type-body m-0"><%= total.zero? ? "Nothing to decide today." : "#{total} to decide. Nothing goes live until you say yes." %></p>
@@ -59,10 +64,9 @@
       <% end %>
     </ol>
     <% if key == batch_after %>
-      <% ids = checked.flat_map(&:ids).sort %>
       <div class="nd-panel nd-stack">
         <p class="type-body m-0">Data Quality checked <%= checked.size %> of these <%= @inbox.checkable.size %>.</p>
-        <%= button_to "Yes to all #{checked.size} Data Quality checked", admin_inbox_yes_all_path, params: { ids:, shown: Admin::CandidatesController.fingerprint(ids) },
+        <%= button_to "Yes to all #{checked.size} Data Quality checked", admin_inbox_yes_all_path, params: { shown: DataQuality::Recommendations.fingerprint(@inbox.checked_items) },
           class: "nd-btn nd-btn--primary type-ui nd-inbox__all", data: { turbo_confirm: "Approve all #{checked.size}? Each is checked once more before it goes live." } %>
       </div>
     <% end %>
@@ -78,10 +82,8 @@
         <li class="nd-inbox__recent" id="recent-<%= claim.id %>">
           <span class="type-body"><%= inbox_decision(claim) %></span>
           <span class="type-small text-ink-muted whitespace-nowrap"><%= claim.reviewed_at.today? ? "today" : (claim.reviewed_at.to_date == Date.yesterday ? "yesterday" : claim.reviewed_at.strftime("%-d %b")) %> <%= claim.reviewed_at.strftime("%H:%M") %></span>
-          <% if claim.status_rejected? %>
-            <%= button_to "Undo", admin_inbox_undo_path(claim.id), class: "nd-btn nd-btn--outline type-ui" %>
-          <% elsif claim.subject_id %>
-            <%= link_to "Open it", admin_fact_path(type: claim.subject_type, id: claim.subject_id), class: "nd-link type-small whitespace-nowrap", title: "To take it back, change it on its record" %>
+          <% if claim.subject_id %>
+            <%= link_to "Open it", admin_fact_path(type: claim.subject_type, id: claim.subject_id), class: "nd-link type-small whitespace-nowrap" %>
           <% end %>
         </li>
       <% end %>

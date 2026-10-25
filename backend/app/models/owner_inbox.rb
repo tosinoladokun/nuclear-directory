@@ -15,14 +15,24 @@ class OwnerInbox
     @directory = directory
   end
 
+  # { [kind, …] => [candidate, …] }: each fact's copies together, newest first.
+  def groups
+    @groups ||= begin
+      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all"))
+        .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").includes(:source).order(id: :desc).to_a
+      firsts = DataQuality::Review.first_batches
+      kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:) }
+      mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
+      mine.group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
+    end
+  end
+
+  # How many facts wait for him, without building their rows (the nav badge).
+  def size = @sections ? sections.values.sum(&:size) : groups.size
+
   # { "new_record" => [Entry, …], … }, newest first.
   def sections
     @sections ||= begin
-      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all"))
-        .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").includes(:source).order(id: :desc).to_a
-      kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory) }
-      mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
-      groups = mine.group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
       items = DataQuality::Review.items(groups.values.map { |copies| copies.first.id }, directory: @directory).index_by(&:candidate_id)
       entries = groups.filter_map do |(kind, *), copies|
         item = items[copies.first.id] or next
@@ -33,8 +43,17 @@ class OwnerInbox
     end
   end
 
-  def size = sections.values.sum(&:size)
   def checked = sections.values_at("new_record", "new_fact").flatten.select(&:checked)
+
+  # What "Yes to all" takes: each checked fact's first copy as Data Quality's
+  # call on it, for Recommendations.accept (rechecked under its locks).
+  def checked_items
+    checked.map do |entry|
+      candidate = Candidate.find(entry.item.candidate_id)
+      DataQuality::Recommendations::Item.new(candidate_id: candidate.id, call: candidate.dq_recommendation, reason: candidate.dq_reason,
+        snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
+    end
+  end
   def checkable = sections.values_at("new_record", "new_fact").flatten
 
   # Decisions a person made in the last week, newest first.

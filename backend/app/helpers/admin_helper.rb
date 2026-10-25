@@ -140,7 +140,8 @@ module AdminHelper
         live: Organization.published.count + Facility.published.where(parent_id: nil).count,
         corrections:,
         leads: Lead.status_new.count,
-        inbox: OwnerInbox.new.size,
+        # Today's own page has it loaded already.
+        inbox: (@inbox || OwnerInbox.new).size,
         outputs: PublicPages.new.count,
         removed: Directory::RemovedList.total,
         today: DataQuality::Review.check_counts["all"] + pending + corrections
