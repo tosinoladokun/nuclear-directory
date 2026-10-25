@@ -59,6 +59,12 @@ facilities:
   note: "Planned, at GNF-A's existing plant site near Wilmington, under a 2022 agreement with TerraPower."
   pending: true
   pending_reason: "The source says GNF-A and TerraPower agreed to build it at GNF-A's site; needs a quote saying who owns the Natrium Fuel Facility."
+- name: GNF-A
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/global-nuc-fuels-america-fuel-fab-lc
+  quote: 'GNF-A | Location: Wilmington, NC | Licensee: Global Nuclear Fuel – Americas, LLC | Docket Number: 07001113 | Facility Type: Uranium Fuel Fabrication | Facility Status: Operational'
+  confidence: 1.0
+  note: NRC lists the licensee for this operational facility.
 notes: 'GE Vernova-led JV with Hitachi. Website is GE Vernova''s nuclear page (no standalone GNF site checked). #63: Wilmington from same boilerplate (already the seed HQ quote).'
 description:
   text: GE Vernova-led fuel company in Wilmington, North Carolina that makes boiling water reactor fuel.

@@ -51,6 +51,12 @@ facilities:
   published: '2024-04-29'
   confidence: 1.0
   note: Units 3 and 4 (the AP1000 units).
+- name: Westinghouse
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/westinghouse-fuel-fab-fac-sc-lc
+  quote: 'Westinghouse | Location: Columbia, SC | Licensee: Westinghouse Electric Company, LLC | Docket Number: 07001151 | Facility Type: Fuel Fabrication | Facility Status: Operational'
+  confidence: 1.0
+  note: NRC lists the licensee for this operational facility.
 notes: 'HQ conflict: DOE/INL bulletin (2025) lists ''Westinghouse (Etna, Pennsylvania)''; Westinghouse''s 2024 Vogtle release is datelined Cranberry Township, PA. Fuel sub-type (fabrication) not separately sourced. eVinci is a microreactor; ''smr'' tag is approximate. DOE selected Westinghouse eVinci for first DOME tests at INL (see INL notes). Vogtle (2026-10-10): the vendor_for link sits on the Plant Vogtle site and covers Units 3 and 4 only; move it to NRC''s Vogtle 3 and 4 unit records once those are verified. #63: HQ is the company address on the contact page (listed under the ethics office, not labeled headquarters); press releases also carry a Cranberry Township, PA dateline (https://info.westinghousenuclear.com/news/tag/carbon-free).'
 description:
   text: Company whose reactor technology, services and fuel are used across the world's nuclear power plants.

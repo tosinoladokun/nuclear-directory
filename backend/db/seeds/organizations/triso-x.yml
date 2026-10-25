@@ -37,6 +37,14 @@ facilities:
   published: '2026-02-13'
   confidence: 1.0
   note: NRC Part 70 license Feb 2026; under construction.
+- name: TRISO-X
+  type: operates
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/triso-x
+  quote: 'TRISO-X | Location: Oak Ridge, TN | Licensee: TRISO-X, LLC | Docket Number: 07007027 | Facility Type: Uranium Fuel Fabrication | Facility Status: Licensing Application'
+  confidence: 1.0
+  note: NRC lists the licensee; the facility is at the licensing-application stage.
+  pending: true
+  pending_reason: A licence application doesn't say the plant runs; the link waits until NRC lists it as operational.
 notes: 'Subsidiary of X-energy (''a subsidiary of X-energy Reactor Company, LLC''). Operated a pilot line at Oak Ridge National Laboratory since 2016 per X-energy. #63: https://x-energy.com/fuel/triso-x lists "TRISO-X Completes Vertical Construction of TX-1 Fuel Fabrication Facility". HQ not stated on a fetched page.'
 description:
   text: X-energy fuel company building the TRISO-X fuel fabrication plant in Oak Ridge, Tennessee.
