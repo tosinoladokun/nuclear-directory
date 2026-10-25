@@ -7,7 +7,7 @@
     <%= render "admin/itemnav", list: @list if @list %>
   </div>
   <h1 class="type-admin-h1 m-0">Edit, then approve <span class="type-count text-ink-muted"><%= claim_number(@item.candidate_id) %></span></h1>
-  <p class="nd-item__claim type-body-strong"><%= @item.claim %></p>
+  <p class="nd-item__claim type-body-strong"><%= claim_text(@item) %></p>
   <% if @item.quote.present? %><blockquote class="nd-quote">“<%= @item.quote %>”</blockquote><% end %>
   <% if source_url %>
     <p class="type-small m-0"><%= link_to source_url, class: "nd-link nd-link--muted nd-tap", target: "_blank", rel: "noopener" do %><%= @item.source.title.presence || source_host(source_url) %> <%= icon("arrow-square-out", size: 12) %><% end %></p>

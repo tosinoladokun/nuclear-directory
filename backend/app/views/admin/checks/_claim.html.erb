@@ -34,7 +34,7 @@
       <details>
         <summary class="type-small">Details</summary>
         <div class="nd-wait__more">
-          <p class="type-body"><%= item.claim %></p>
+          <p class="type-body"><%= claim_text(item) %></p>
           <% if item.quote.present? %><blockquote class="nd-quote">“<%= item.quote %>”</blockquote><% end %>
           <p class="type-small text-ink-muted">
             <% if source_url %>

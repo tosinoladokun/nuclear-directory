@@ -356,6 +356,25 @@ module AdminHelper
     "Deal with #{other}: #{parts.join(', ')}"
   end
 
+  # A waiting claim in the admin's words. A company claim that only names a
+  # company we have, under another spelling ("URENCO–USA" for Urenco), never
+  # renames it (DATA.md D1): approving adds the source, and the spelling is
+  # kept as another name. Said so, rather than "There is a company named…".
+  def claim_text(item)
+    payload = item.payload.to_h
+    record = item.record
+    named = payload["name"].to_s.squish
+    if item.kind == "organization" && record && named.present? && (payload.keys - %w[name aliases]).empty? &&
+        !named.casecmp?(record.name.to_s.squish)
+      others = Array(payload["aliases"]).map { |name| name.to_s.squish }.compact_blank.uniq
+        .reject { |name| name.casecmp?(record.name.to_s.squish) || name.casecmp?(named) }
+      also = " It also lists #{others.map { |name| "“#{name}”" }.to_sentence} as other names." if others.any?
+      return "#{record.name}, named “#{named}” in this source. Approving adds the source; its name stays #{record.name}.#{also}"
+    end
+
+    item.claim
+  end
+
   def field_label(name) = DataQuality::Claim::LABELS.fetch(name.to_s) { name.to_s.humanize }
 
   # A value for its field: a role in visitors' words ("Reactor designer").
