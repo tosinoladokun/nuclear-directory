@@ -5,8 +5,9 @@ aliases:
 website: https://kairospower.com
 hq:
   city: Alameda
+  state: CA
   source_url: https://kairospower.com/company/
-  quote: Our headquarters in Alameda anchors a national footprint
+  quote: Kairos Power Headquarters Location Alameda, California United States
   confidence: 1.0
 country_code: US
 status: active
@@ -56,3 +57,7 @@ description:
   text: Reactor developer based in Alameda, with a manufacturing hub in Albuquerque and Hermes reactors under construction in Oak Ridge.
   source_url: https://kairospower.com/company/
   quote: Our headquarters in Alameda anchors a national footprint—from a manufacturing hub in Albuquerque to the Hermes reactor series now under construction in Oak Ridge.
+short_description:
+  text: 'Molten salt-cooled reactor developer'
+  source_url: https://kairospower.com/company/
+  quote: 'Our headquarters in Alameda anchors a national footprint—from a manufacturing hub in Albuquerque to the Hermes reactor series now under construction in Oak Ridge.'

@@ -14,3 +14,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Wolf Creek 1 | 05000482 | NPF-42 | PWR | 3.5 miles NE of Burlington, KS | Wolf Creek Nuclear Operating Corp. | 4
+short_description:
+  text: 'Nuclear plant operator in Kansas'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Wolf Creek 1 | 05000482 | NPF-42 | PWR | 3.5 miles NE of Burlington, KS | Wolf Creek Nuclear Operating Corp. | 4'

@@ -19,3 +19,7 @@ description:
   text: University named in DOE's University Isotope Network.
   source_url: https://www.isotopes.gov/production-network
   quote: 'The DOE IRP’s University Isotope Network (UIN) comprises six schools: the University of Washington, the University of Missouri Research Reactor Center, the University of Wisconsin, University of Alabama-Birmingham, Texas A&M University and Michigan State University.'
+short_description:
+  text: 'University in DOE''s isotope network'
+  source_url: https://www.isotopes.gov/production-network
+  quote: 'The DOE IRP’s University Isotope Network (UIN) comprises six schools: the University of Washington, the University of Missouri Research Reactor Center, the University of Wisconsin, University of Alabama-Birmingham, Texas A&M University and Michigan State University.'

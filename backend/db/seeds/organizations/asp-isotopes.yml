@@ -43,3 +43,7 @@ description:
   also:
   - source_url: https://www.aspisotopes.com/quantum-leap-energy
     quote: Quantum Leap Energy (QLE) plans to deliver secure, reliable nuclear materials through proprietary enrichment technologies and a robust supply chain.
+short_description:
+  text: 'Isotope enrichment company'
+  source_url: https://www.aspisotopes.com/
+  quote: 'ASPI’s advanced technology leverages 20+ years of R&D history to enrich isotopes in varying levels of atomic mass.'

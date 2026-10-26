@@ -62,3 +62,8 @@ description:
   text: Reactor developer behind the BWRX-300 small modular reactor that also provides nuclear fuel and services.
   source_url: https://www.gevernova.com/nuclear/about
   quote: GE Vernova Hitachi Nuclear Energy (GVH) is a world-leading provider of advanced reactors, fuel, and nuclear services.
+short_description:
+  text: 'BWRX-300 small modular reactor developer'
+  source_url: https://www.gevernova.com/nuclear/about
+  quote: 'GE Vernova Hitachi Nuclear Energy (GVH) is a world-leading provider of advanced reactors, fuel, and nuclear services.'
+short_name: GE Vernova Hitachi

@@ -14,3 +14,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Summer | 05000395 | NPF-12 | PWR | 26 miles NW of Columbia, SC | South Carolina Electric & Gas Co. | 2
+short_description:
+  text: 'Nuclear plant operator in South Carolina'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Summer | 05000395 | NPF-12 | PWR | 26 miles NW of Columbia, SC | South Carolina Electric & Gas Co. | 2'

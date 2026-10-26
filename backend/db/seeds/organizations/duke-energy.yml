@@ -17,3 +17,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Brunswick 1 | 05000325 | DPR-71 | BWR | 30 miles S of Wilmington, NC | Duke Energy Progress, LLC | 2
+short_description:
+  text: 'Nuclear plant operator in the Carolinas'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Brunswick 1 | 05000325 | DPR-71 | BWR | 30 miles S of Wilmington, NC | Duke Energy Progress, LLC | 2'

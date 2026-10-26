@@ -34,3 +34,7 @@ description:
   quote: General Matter is enriching uranium in America to fill the nuclear fuel gap.
   also:
   - quote: 'Under a $900 million contract, General Matter will produce and supply HALEU for the nation’s advanced reactors.'
+short_description:
+  text: 'US uranium enrichment, including HALEU'
+  source_url: https://www.generalmatter.com/news
+  quote: 'General Matter is enriching uranium in America to fill the nuclear fuel gap.'

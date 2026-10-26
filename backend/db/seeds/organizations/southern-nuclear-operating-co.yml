@@ -14,3 +14,8 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Farley 1 | 05000348 | NPF-2 | PWR | 18 miles E of Dothan, AL | Southern Nuclear Operating Co. | 2
+short_description:
+  text: 'Nuclear plant operator in the Southeast'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Farley 1 | 05000348 | NPF-2 | PWR | 18 miles E of Dothan, AL | Southern Nuclear Operating Co. | 2'
+short_name: Southern Nuclear
