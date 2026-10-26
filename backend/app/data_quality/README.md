@@ -438,6 +438,13 @@ licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_
 and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
 states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
+## DOE loans
+
+`plugins/doe_loans.rb` reads DOE's loan project pages for nuclear projects (Palisades, Crane Restart; the
+Energy Dominance Financing site, formerly the Loan Programs Office) once a day and stores only their Project
+Statistics table. Each gives the borrower and a "U.S. Department of Energy funds <borrower>" link described as
+the page states the loan (amount, program, closing date). No deal term: the deal_term kind has no loan type yet.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.

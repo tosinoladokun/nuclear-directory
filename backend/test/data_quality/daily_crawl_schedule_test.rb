@@ -36,7 +36,7 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
     assert recurring.valid?, recurring.errors.full_messages.to_sentence
     assert_equal "DataQuality::DailyCrawlJob", task["class"]
     DataQuality::DailyCrawlJob::SOURCE_KINDS.each { |kind| assert DataQuality::Plugin.for(kind), "#{kind} has a plug-in" }
-    assert_equal "sec_form_d", DataQuality::DailyCrawlJob::SOURCE_KINDS.last, "the new sources run daily, Form D last"
+    assert_equal "doe_loans", DataQuality::DailyCrawlJob::SOURCE_KINDS.last, "DOE loans run daily, last"
   end
 
   test "it runs once a day at 3am Eastern, through the change back from daylight saving time" do
@@ -54,13 +54,13 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
     ran, error = run_daily
 
     assert_nil error
-    assert_equal [ [ "nrc_reactor_list", nil ], [ "eia_generators", nil ], [ "usaspending_doe_awards", nil ], [ "nrc_decommissioning", nil ], [ "doe_isotope_sites", nil ], [ "nrc_uranium_recovery", nil ], [ "company_newsrooms", nil ], [ "nrc_reactor_vendors", nil ], [ "nrc_fuel_cycle", nil ], [ "nrc_research_reactors", nil ], [ "doe_programs", nil ], [ "federal_register_nrc", nil ], [ "trade_press", nil ], [ "sec_form_d", nil ] ], ran
+    assert_equal [ [ "nrc_reactor_list", nil ], [ "eia_generators", nil ], [ "usaspending_doe_awards", nil ], [ "nrc_decommissioning", nil ], [ "doe_isotope_sites", nil ], [ "nrc_uranium_recovery", nil ], [ "company_newsrooms", nil ], [ "nrc_reactor_vendors", nil ], [ "nrc_fuel_cycle", nil ], [ "nrc_research_reactors", nil ], [ "doe_programs", nil ], [ "federal_register_nrc", nil ], [ "trade_press", nil ], [ "sec_form_d", nil ], [ "doe_loans", nil ] ], ran
   end
 
   test "a failing source doesn't stop the next one, and the job still fails" do
     ran, error = run_daily(fail: { "nrc_reactor_list" => RuntimeError.new("NRC page changed") })
 
-    assert_equal %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d], ran.map(&:first)
+    assert_equal %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d doe_loans], ran.map(&:first)
     assert_equal "NRC page changed", error.message
   end
 
@@ -71,20 +71,20 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
 
     assert_equal %w[nrc_reactor_list eia_generators], ran.map(&:first)
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d doe_loans], { attempt: 2 } ]
   end
 
   test "a busy source doesn't run the ones after it alongside, and earlier failures still fail the job" do
     ran, error = run_daily(fail: { "nrc_reactor_list" => DataQuality::Pipeline::AlreadyRunning.new })
     assert_equal %w[nrc_reactor_list], ran.map(&:first), "EIA waits for NRC"
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d doe_loans], { attempt: 2 } ]
 
     clear_enqueued_jobs
     _, error = run_daily(fail: { "nrc_reactor_list" => RuntimeError.new("NRC page changed"),
       "eia_generators" => DataQuality::Pipeline::AlreadyRunning.new })
     assert_equal "NRC page changed", error.message
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d doe_loans], { attempt: 2 } ]
   end
 
   test "after the last attempt a busy source fails the job" do
@@ -101,6 +101,6 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
 
     assert_equal %w[nrc_reactor_list eia_generators], ran.map(&:first)
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d doe_loans], { attempt: 2 } ]
   end
 end
