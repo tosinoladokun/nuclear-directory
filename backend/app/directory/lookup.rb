@@ -44,6 +44,14 @@ module Directory
       OrganizationRef.from(record) if record
     end
 
+    # Every open company a name or alias names, so a caller can say when
+    # it's more than one rather than take the first (#548). Reads only.
+    def organization_ids_named(name)
+      normalized = OrganizationAlias.normalize(name).presence or return []
+      Organization.joins(:aliases).where(organization_aliases: { normalized_alias: normalized })
+        .where.not(verification_status: Verifiable::CLOSED_STATUSES).distinct.pluck(:id)
+    end
+
     # Facts taken out of the directory (#166): each decision that rejected or
     # unpublished one, newest first, since a time. A merge says what the
     # record went into. Reads only.

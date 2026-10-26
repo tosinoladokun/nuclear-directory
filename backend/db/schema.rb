@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -157,6 +157,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
     t.check_constraint "term_type::text = ANY (ARRAY['award'::character varying, 'offtake'::character varying, 'funding_round'::character varying]::text[])", name: "deal_terms_term_type_check"
     t.check_constraint "term_years IS NULL OR term_years > 0", name: "deal_terms_term_years_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "deal_terms_verification_status_check"
+  end
+
+  create_table "dq_actions", force: :cascade do |t|
+    t.bigint "candidate_id", null: false
+    t.string "action", null: false
+    t.string "target"
+    t.text "reason", null: false
+    t.jsonb "before", default: {}, null: false
+    t.jsonb "created", default: [], null: false
+    t.string "by", null: false
+    t.datetime "undone_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["candidate_id"], name: "index_dq_actions_on_candidate_id"
+    t.index ["created_at"], name: "index_dq_actions_on_created_at"
+    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying, 'subsidiary_of'::character varying, 'new'::character varying, 'close'::character varying]::text[])", name: "dq_actions_action_check"
   end
 
   create_table "evidence", force: :cascade do |t|
@@ -749,6 +765,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   add_foreign_key "candidates", "crawl_runs"
   add_foreign_key "candidates", "crawl_runs", column: "verify_run_id"
   add_foreign_key "candidates", "sources"
+  add_foreign_key "dq_actions", "candidates"
   add_foreign_key "evidence", "crawl_runs"
   add_foreign_key "evidence", "sources"
   add_foreign_key "facilities", "facilities", column: "parent_id"

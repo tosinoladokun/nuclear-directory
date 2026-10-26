@@ -26,6 +26,12 @@ Rails.application.routes.draw do
   get "llms.txt" => "sitemaps#llms", as: :llms, format: false
   # A public JSON summary for other sites (#193). GET only.
   get "api/snapshot.json" => "api/snapshots#show", as: :api_snapshot, format: false, defaults: { format: :json }
+  # Data Quality's matching actions (#548): token only, 404 without one configured.
+  scope "api/dq", module: "api/dq", defaults: { format: :json } do
+    get "matching" => "matching#index", as: :api_dq_matching
+    post "matching" => "matching#create"
+    post "matching/undo" => "matching#undo", as: :api_dq_matching_undo
+  end
   # The browser's PostHog traffic, through our site with the visitor's country (#205).
   match "relay/*path" => "relay#forward", via: %i[get post], format: false
 

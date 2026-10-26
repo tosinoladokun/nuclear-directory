@@ -8,7 +8,8 @@ require "ripper"
 # anything else.
 class DataQuality::BoundaryTest < ActiveSupport::TestCase
   MODULE_FILES = [ "app/data_quality/**/*.rb", "lib/tasks/data_quality.rake" ]
-  OWNED_MODELS = %w[Source CrawlRun Candidate].freeze
+  # DqAction: Data Quality's own log of its matching actions on claims (#548).
+  OWNED_MODELS = %w[Source CrawlRun Candidate DqAction].freeze
   # The one file allowed to name Directory:: interfaces.
   DOOR = "app/data_quality/directory_client.rb"
   # Files allowed to turn strings into constants (plug-in lookup, the door).
