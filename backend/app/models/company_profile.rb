@@ -63,7 +63,18 @@ class CompanyProfile
       .where.not(relationship_type: "subsidiary_of")
       .includes(:from_organization, :to_organization, evidence: :source).to_a
       .select { |deal| deal.evidence.any? }
-      .sort_by { |deal| [ deal.relationship_type, other_party(deal).name ] }
+      .sort_by { |deal| [ -(deal_date(deal)&.jd || 0), deal.relationship_type, other_party(deal).name ] }
+  end
+
+  # The short "what" of a deal row (#556): from its stored terms, else the
+  # sourced phrase kept on the link, else nothing. Never guessed or cut from a description.
+  def deal_line(deal)
+    DealLine.for_terms(terms_of(deal), company: organization) || deal.short_phrase
+  end
+
+  # When the deal was signed or started: its newest term's date, else the link's own.
+  def deal_date(deal)
+    terms_of(deal).filter_map { |term| term.signed_on || term.starts_on }.max || deal.started_on
   end
 
   def parents
@@ -94,6 +105,25 @@ class CompanyProfile
   def plant_link_citations(link)
     site = link.facility.parent || link.facility
     [ link, link.facility, site ].uniq.flat_map { |fact| citations_for(fact) }.uniq(&:first)
+  end
+
+  # A link's published terms, loaded once for every deal on the page.
+  def terms_of(link)
+    @terms ||= DealTerm.published.includes(evidence: :source).where(link_type: "Relationship", link_id: Relationship.published
+      .where(from_organization: organization).or(Relationship.published.where(to_organization: organization)).select(:id))
+      .select { |term| term.evidence.any? }.group_by(&:link_id)
+    @terms.fetch(link.id, [])
+  end
+
+  # The first category of each deal's other company, looked up once for the page.
+  def partner_category(company)
+    @partner_categories ||= Bucket.firsts(deals.map { |deal| other_party(deal) })
+    @partner_categories[company.id]
+  end
+
+  # A deal's sources: its own, then those of the terms that supply its short line or date.
+  def deal_citations(deal)
+    ([ deal ] + terms_of(deal)).flat_map { |fact| citations_for(fact) }.uniq(&:first)
   end
 
   def other_party(deal) = deal.from_organization_id == organization.id ? deal.to_organization : deal.from_organization
@@ -139,7 +169,10 @@ class CompanyProfile
       technologies.each { |technology| cite(technology) }
       cite(organization) if hq_city.present? || hq_state.present? || founded_year.present?
       (parents + subsidiaries).each { |link| cite(link) }
-      deals.each { |deal| cite(deal) }
+      deals.each do |deal|
+        cite(deal)
+        terms_of(deal).each { |term| cite(term) }
+      end
       plant_links.each do |link|
         cite(link)
         [ link.facility, link.facility.parent ].compact.each { |facility| cite(facility) if plant_facts?(facility) }

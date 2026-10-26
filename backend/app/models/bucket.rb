@@ -26,6 +26,18 @@ class Bucket
     new.ids(category)
   end
 
+  # The first category (in display order) of each of several companies, in one pass: { id => Category },
+  # absent for a company in none. Nine queries however many companies, instead of nine each.
+  def self.firsts(organizations)
+    ids = organizations.map(&:id).uniq
+    finder = new
+    found = {}
+    Category.buckets.each do |category|
+      Organization.where(id: ids).where(id: finder.ids(category)).pluck(:id).each { |id| found[id] ||= category }
+    end
+    found
+  end
+
   def self.for(organization)
     finder = new
     Category.buckets.select { |category| Organization.where(id: organization.id).where(id: finder.ids(category)).exists? }

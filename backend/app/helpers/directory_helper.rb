@@ -95,6 +95,8 @@ module DirectoryHelper
 
   def relationship_verb(type) = RELATIONSHIP_VERBS.fetch(type.to_s)
   def facility_relationship_verb(type) = FACILITY_RELATIONSHIP_VERBS.fetch(type.to_s)
+  FACILITY_ROLE_NOUNS = { "owns" => "owner", "operates" => "operator", "vendor_for" => "reactor developer", "offtakes_from" => "offtaker" }.freeze
+  def facility_role_noun(type) = FACILITY_ROLE_NOUNS.fetch(type.to_s, type.to_s.humanize.downcase)
   def facility_type_label(type) = FACILITY_TYPE_LABELS[type.to_s]
   def facility_status_label(status) = FACILITY_STATUS_LABELS[status.to_s]
 
@@ -236,6 +238,12 @@ module DirectoryHelper
   end
 
   UNIT_STATUS_ORDER = %w[operating not_operating under_construction planned shut_down decommissioning].freeze
+
+  # The 32px category square beside a deal's other company (#556): its first
+  # category's icon on its tint, else a plain building.
+  def company_square(organization, category: nil)
+    tag.span(category ? bucket_icon(category) : icon("buildings"), class: [ "nd-catsq", (bucket_class(category) if category) ], aria: { hidden: true })
+  end
 
   # How a company name fits the 240px name column of a Row (#558): 15px up to
   # about 26 characters, then 13px, then its short name if it has one; an

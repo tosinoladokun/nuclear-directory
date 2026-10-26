@@ -1,0 +1,10 @@
+<%# A list of rows (deals, plants): the first few show and the rest sit behind "Show all"
+    (CompanyProfile::VISIBLE_ITEMS). Locals: rows (rendered <li> HTML), label (e.g. "deals"). %>
+<% visible = CompanyProfile::VISIBLE_ITEMS %>
+<ul class="nd-crows"><%= safe_join(rows.first(visible)) %></ul>
+<% if rows.size > visible %>
+  <details class="nd-more">
+    <summary><span class="nd-more__open">Show all <%= rows.size %> <%= label %></span><span class="nd-more__close">Show fewer <%= label %></span></summary>
+    <ul class="nd-crows"><%= safe_join(rows.drop(visible)) %></ul>
+  </details>
+<% end %>

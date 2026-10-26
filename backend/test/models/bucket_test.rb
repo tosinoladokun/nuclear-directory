@@ -28,6 +28,18 @@ class BucketTest < ActiveSupport::TestCase
     assert_equal [ "Elementl Power" ], in_bucket("reactor-developers"), "Developers includes project developers (Tosin, 16 Oct)"
   end
 
+  test "firsts gives each company's first category in one pass, the same as for, and none for a company in none" do
+    fuel = role("fuel")
+    centrus = cite!(company("Centrus Energy", roles: [ role("enrichment", parent: fuel) ]))
+    holtec = cite!(company("Holtec", roles: [ role("waste_decommissioning") ]))
+    nowhere = cite!(company("Nowhere Co"))
+
+    firsts = Bucket.firsts([ centrus, holtec, nowhere ])
+
+    assert_equal [ Bucket.for(centrus).first, Bucket.for(holtec).first ], [ firsts[centrus.id], firsts[holtec.id] ]
+    assert_nil firsts[nowhere.id]
+  end
+
   test "power plant owners and operators: the role, or a current owns or operates link to an operating power plant" do
     cite!(company("Duke Energy", roles: [ @utility ]))
     cite!(link(company("Southern Nuclear").then { |org| cite!(org) }, "operates", @vogtle))
