@@ -68,6 +68,20 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
     assert_equal({ "name" => "Lawrence Livermore National Laboratory", "aliases" => [ "LLNL" ] }, plugin.extract(source, nil)[1][:payload])
   end
 
+  test "DQ's names: trailing acronym to an alias, spaces squished, a mid-name acronym left alone" do
+    names = {
+      "Idaho National Laboratory (INL)" => { "name" => "Idaho National Laboratory", "aliases" => [ "INL" ] },
+      "Princeton Plasma Physics Laboratory (PPPL)  " => { "name" => "Princeton Plasma Physics Laboratory", "aliases" => [ "PPPL" ] },
+      "Commonwealth Fusion Systems (CFS)" => { "name" => "Commonwealth Fusion Systems", "aliases" => [ "CFS" ] },
+      "General Electric (GE) Global Research" => { "name" => "General Electric (GE) Global Research" }
+    }
+    names.each do |raw, expected|
+      row = { "attributes" => { "fields" => { "title" => "X", "urls" => [ "/programs-and-initiatives/search-all-projects/x" ], "organization" => [ { "attributes" => { "title" => raw } } ] } } }
+      _url, line = plugin.send(:project_line, row, "nuclear fusion")
+      assert_equal expected, plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload], raw
+    end
+  end
+
   test "an unchanged project's read is refreshed; robots denial needs a person" do
     crawl
     travel 1.day do
