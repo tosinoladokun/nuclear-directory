@@ -438,6 +438,14 @@ licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_
 and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
 states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
+## ARPA-E fission and fusion projects
+
+`plugins/arpa_e_projects.rb` reads ARPA-E's project index (the JSON its project search reads) once a day for its
+Nuclear Fission and Nuclear Fusion sub-areas. Each project is stored as its own source at its public page, as
+one labelled line (project, organization, award, program, status, location, release date), written only when
+new or changed. Each proposes the organization and an "ARPA-E funds <organization>" link describing the award.
+Cancelled projects propose nothing. At most 15 new project pages are read a night.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.

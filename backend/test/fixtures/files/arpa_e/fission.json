@@ -1,0 +1,232 @@
+{
+ "data": [
+  {
+   "type": "node--project",
+   "attributes": {
+    "fields": {
+     "title": "Nb3Sn Proton Driver Linac for Accelerator Driven Systems",
+     "alias": "nb3sn-proton-driver-linac-accelerator-driven-systems",
+     "urls": [
+      "/programs-and-initiatives/search-all-projects/nb3sn-proton-driver-linac-accelerator-driven-systems",
+      "/node/5402"
+     ],
+     "award": "3,239,989",
+     "release_date": "Jul 16 2024",
+     "location": "Lemont, IL",
+     "state": "IL",
+     "status": "Active",
+     "related_programs": [
+      {
+       "fields": {
+        "title": "NEWTON"
+       }
+      }
+     ],
+     "organization": [
+      {
+       "attributes": {
+        "title": "Argonne National Laboratory"
+       },
+       "fields": {
+        "type": [
+         {
+          "name": "National Laboratory"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "node--project",
+   "attributes": {
+    "fields": {
+     "title": "High-Efficiency Continuous-Wave RF Sources for High-Power Particle Accelerators",
+     "alias": "high-efficiency-continuous-wave-rf-sources-high-power-particle-accelerators",
+     "urls": [
+      "/programs-and-initiatives/search-all-projects/high-efficiency-continuous-wave-rf-sources-high-power-particle-accelerators",
+      "/node/5410"
+     ],
+     "award": null,
+     "release_date": "Jul 16 2024",
+     "location": "Newport News, VA",
+     "state": "VA",
+     "status": "Selected",
+     "related_programs": [
+      {
+       "fields": {
+        "title": "NEWTON"
+       }
+      }
+     ],
+     "organization": [
+      {
+       "attributes": {
+        "title": "Jefferson Science Associates, LLC"
+       },
+       "fields": {
+        "type": []
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "node--project",
+   "attributes": {
+    "fields": {
+     "title": "Liquid Lead Suspended Fuel Subcritical Fission Blanket for Nuclear Waste Transmutation",
+     "alias": "liquid-lead-suspended-fuel-subcritical-fission-blanket-nuclear-waste-transmutation",
+     "urls": [
+      "/programs-and-initiatives/search-all-projects/liquid-lead-suspended-fuel-subcritical-fission-blanket-nuclear-waste-transmutation",
+      "/node/5401"
+     ],
+     "award": "7,000,000",
+     "release_date": "Jul 16 2024",
+     "location": "Lemont, IL",
+     "state": "IL",
+     "status": "Active",
+     "related_programs": [
+      {
+       "fields": {
+        "title": "NEWTON"
+       }
+      }
+     ],
+     "organization": [
+      {
+       "attributes": {
+        "title": "Argonne National Laboratory"
+       },
+       "fields": {
+        "type": [
+         {
+          "name": "National Laboratory"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "node--project",
+   "attributes": {
+    "fields": {
+     "title": "Technical Approach to Achieving Attractive Ads Economics Based on Near-Term High Current Cyclotrons",
+     "alias": "technical-approach-achieving-attractive-ads-economics-based-near-term-high-current-cyclotrons",
+     "urls": [
+      "/programs-and-initiatives/search-all-projects/technical-approach-achieving-attractive-ads-economics-based-near-term-high-current-cyclotrons",
+      "/node/5408"
+     ],
+     "award": "2,295,000",
+     "release_date": "Jul 16 2024",
+     "location": "Stony Brook, NY",
+     "state": "NY",
+     "status": "Active",
+     "related_programs": [
+      {
+       "fields": {
+        "title": "NEWTON"
+       }
+      }
+     ],
+     "organization": [
+      {
+       "attributes": {
+        "title": "SUNY University at Stony Brook"
+       },
+       "fields": {
+        "type": []
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "node--project",
+   "attributes": {
+    "fields": {
+     "title": "REDUCE: Recover Elements - Destroy Undesirables - Create Energy",
+     "alias": "reduce-recover-elements-destroy-undesirables-create-energy",
+     "urls": [
+      "/programs-and-initiatives/search-all-projects/reduce-recover-elements-destroy-undesirables-create-energy",
+      "/node/5407"
+     ],
+     "award": "4,030,306",
+     "release_date": "Jul 16 2024",
+     "location": "Janesville, WI",
+     "state": "WI",
+     "status": "Active",
+     "related_programs": [
+      {
+       "fields": {
+        "title": "NEWTON"
+       }
+      }
+     ],
+     "organization": [
+      {
+       "attributes": {
+        "title": "SHINE Technologies, LLC"
+       },
+       "fields": {
+        "type": [
+         {
+          "name": "Private Company"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "node--project",
+   "attributes": {
+    "fields": {
+     "title": "EINSTEIN: Enhanced Integrated Nuclear Systems for Transmutation and Efficient Isolation of Nuclides",
+     "alias": "einstein-enhanced-integrated-nuclear-systems-transmutation-and-efficient-isolation-nuclides",
+     "urls": [
+      "/programs-and-initiatives/search-all-projects/einstein-enhanced-integrated-nuclear-systems-transmutation-and-efficient-isolation-nuclides",
+      "/node/5414"
+     ],
+     "award": "1,025,404",
+     "release_date": "Jul 16 2024",
+     "location": "Champaign, IL",
+     "state": "IL",
+     "status": "Active",
+     "related_programs": [
+      {
+       "fields": {
+        "title": "NEWTON"
+       }
+      }
+     ],
+     "organization": [
+      {
+       "attributes": {
+        "title": "University of Illinois, Urbana-Champaign"
+       },
+       "fields": {
+        "type": []
+       }
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "meta": {
+  "count": {
+   "count": 6
+  }
+ },
+ "links": {}
+}

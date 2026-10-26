@@ -1,0 +1,142 @@
+# ARPA-E's nuclear fission and fusion projects: the companies, labs and
+# universities ARPA-E (DOE's Advanced Research Projects Agency–Energy)
+# selected, with each award's amount, program and status, from ARPA-E's
+# own project index (the JSON its project search reads).
+#
+# Crawl asks the index once a day, through the shared Fetcher, for the
+# projects in its Nuclear Fission and Nuclear Fusion research sub-areas, a
+# page of PAGE_SIZE at a time, recording that day's fetch on an index
+# source that's never extracted. Each project is stored as its own source,
+# at its public project page, as one labelled line (project, organization,
+# award, program, status, location, release date); only a new or changed
+# line is written. A block stops the crawl.
+#
+# Extract proposes each organization and an "ARPA-E funds <organization>"
+# link whose description states the award as ARPA-E does. A cancelled
+# project proposes nothing. No model is asked; a person approves.
+# New project pages are read at most NEW_PER_NIGHT a night (#541's cap).
+class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
+  API_URL = "https://arpa-e.energy.gov/JSONAPI/custom/index/project"
+  SITE = "https://arpa-e.energy.gov"
+  INDEX_SOURCE_KIND = "arpa_e_index"
+  FUNDER = "Advanced Research Projects Agency-Energy (ARPA-E)"
+  # ARPA-E's research sub-area ids: Nuclear Fission, Nuclear Fusion.
+  SUB_AREAS = { "74" => "nuclear fission", "81" => "nuclear fusion" }.freeze
+  PAGE_SIZE = 50
+  MAX_PAGES = 10
+  NEW_PER_NIGHT = 15
+  FIELDS = [ "Project", "Organization", "Award", "Program", "Status", "Location", "Released", "Area" ].freeze
+
+  Project = Data.define(:facts) do
+    def line = FIELDS.filter_map { |label| "#{label}: #{facts[label]}" if facts[label].present? }.join(" | ")
+  end
+
+  def initialize(fetcher: DataQuality::Fetcher.new)
+    @fetcher = fetcher
+  end
+
+  def crawl(_run)
+    index = Source.find_or_create_by!(url: API_URL) do |row|
+      row.source_kind = INDEX_SOURCE_KIND
+      row.title = "ARPA-E project index (nuclear fission and fusion)"
+    end
+    stats = {}
+    outcome = DataQuality::Snapshot.claim(index) do
+      next :skipped_recent if index.fetched_at&.to_date == Date.current
+
+      projects, failure = fetch_all
+      index.update!(fetched_at: Time.current, http_status: failure&.status || 200, status_reason: failure&.reason,
+        crawl_status: failure&.kind == :blocked ? "blocked" : "ok")
+      next failure.kind if failure
+
+      stats["projects"] = projects.size
+      stats["new"] = projects.count { |url, line| store(url, line) }
+      :ok
+    end
+    { "index" => outcome.to_s }.merge(stats).merge(outcome == :blocked ? { "stopped" => "ARPA-E blocked us" } : {})
+  end
+
+  def extract(source, _run)
+    facts = parse(source.content_text) or return []
+    return [] if facts["Status"].to_s.casecmp?("cancelled")
+
+    organization = facts["Organization"]
+    description = [ "ARPA-E #{facts['Area']} award", facts["Award"] && "of #{facts['Award']}", facts["Program"] && "(#{facts['Program']})",
+      "for \"#{facts['Project']}\"", facts["Status"] && "status #{facts['Status']}" ].compact.join(" ")
+    [
+      { kind: "organization", quote: source.content_text, payload: { "name" => organization } },
+      { kind: "relationship", quote: source.content_text, payload: { "from_organization" => { "name" => FUNDER },
+        "to_organization" => { "name" => organization }, "relationship_type" => "funds", "description" => description } }
+    ]
+  end
+
+  def new_sources_per_run = NEW_PER_NIGHT
+
+  # One project per source: a change goes to a person.
+  def max_dropped_share(_source) = 1.0
+
+  def quote_in_source?(source, quote) = source.content_text.to_s == quote.to_s
+
+  def verification_context(source, _quote) = source.content_text
+
+  def source_facts(_source)
+    "This is one project from ARPA-E's project index, as ARPA-E publishes it: the project's title, the organization " \
+      "ARPA-E selected for it, its award amount in US dollars, program, status, location and release date. ARPA-E is " \
+      "part of the U.S. Department of Energy and funds the project."
+  end
+
+  private
+    # { project page url => stored line } for every fission and fusion
+    # project, or [nil, failure response] when a request failed.
+    def fetch_all
+      projects = {}
+      SUB_AREAS.each do |id, area|
+        MAX_PAGES.times do |page|
+          query = URI.encode_www_form("page[limit]" => PAGE_SIZE, "page[offset]" => page * PAGE_SIZE, "filter[field_reference_technology_sub]" => id)
+          response = @fetcher.get("#{API_URL}?#{query}")
+          return [ nil, response ] unless response.kind == :ok
+
+          rows = Array(JSON.parse(response.body)["data"])
+          rows.each do |row|
+            url, line = project_line(row, area)
+            projects[url] ||= line if url
+          end
+          break if rows.size < PAGE_SIZE
+        end
+      end
+      [ projects, nil ]
+    rescue JSON::ParserError
+      [ nil, DataQuality::Fetcher::Response.new(url: API_URL, kind: :error, status: 200, body: nil, etag: nil, last_modified: nil,
+        reason: "ARPA-E answered with something that isn't JSON", block_reference: nil, content_type: nil, truncated: false) ]
+    end
+
+    def project_line(row, area)
+      fields = row.dig("attributes", "fields") || {}
+      path = Array(fields["urls"]).find { |url| url.start_with?("/programs-and-initiatives/") } or return
+      organization = Array(fields["organization"]).first&.dig("attributes", "title").to_s.squish
+      return if organization.empty? || fields["title"].blank?
+
+      award = fields["award"].to_s.delete(",")
+      facts = { "Project" => fields["title"].to_s.squish, "Organization" => organization,
+        "Award" => (award.match?(/\A\d+\z/) ? "$#{award.to_i.to_fs(:delimited)}" : nil),
+        "Program" => Array(fields["related_programs"]).filter_map { |program| program.dig("fields", "title") }.first,
+        "Status" => fields["status"], "Location" => fields["location"], "Released" => fields["release_date"], "Area" => area }
+      [ "#{SITE}#{path}", Project.new(facts:).line ]
+    end
+
+    # Writes a project's line on its own source when new or changed; true when new.
+    def store(url, line)
+      source = Source.find_or_initialize_by(url:)
+      fresh = source.new_record?
+      return false if !fresh && source.content_text == line
+
+      source.update!(source_kind:, title: "ARPA-E: #{parse(line)['Project'].truncate(200)}", content_text: line,
+        content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", fetched_at: Time.current)
+      fresh
+    end
+
+    def parse(text)
+      facts = text.to_s.split(" | ").to_h { |part| part.split(": ", 2) }
+      facts if facts["Project"].present? && facts["Organization"].present?
+    end
+end

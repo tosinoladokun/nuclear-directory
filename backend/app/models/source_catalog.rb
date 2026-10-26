@@ -44,6 +44,8 @@ class SourceCatalog
     "company_newsrooms" => { name: "Company newsrooms (RSS)", daily: true },
     "federal_register_nrc" => { name: "NRC notices (Federal Register)", daily: true },
     "federal_register_index" => { name: "Federal Register API", note: "finds the NRC's notices", daily: true },
+    "arpa_e_projects" => { name: "ARPA-E nuclear projects", daily: true },
+    "arpa_e_index" => { name: "ARPA-E project index", note: "finds the fission and fusion projects", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },
