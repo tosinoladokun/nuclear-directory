@@ -1253,3 +1253,17 @@
   .nd-quiet a:hover { color: var(--nd-ink); text-decoration: underline; }
   @media (max-width: 639px) { .nd-quiet { flex-direction: column; align-items: stretch; gap: 0; } .nd-quiet a { min-height: 44px; } }
 }
+
+/* The category, technology and All companies pages (#560): the index left, one list in a white panel. */
+@layer components {
+  .nd-page--wide { max-width: 1440px; }
+  .nd-listpage { display: flex; flex-direction: column; gap: var(--nd-space-6); }
+  .nd-listpage__index { display: none; }
+  .nd-listpage__main { display: flex; flex-direction: column; gap: var(--nd-space-6); min-width: 0; }
+  .nd-listhead--bare { border: 0; padding: 0; margin: 0; justify-content: flex-start; }
+  @media (min-width: 1024px) {
+    .nd-listpage { display: grid; grid-template-columns: var(--nd-list-index-width) minmax(0, 1fr); column-gap: var(--nd-space-12); align-items: start; }
+    .nd-listpage__index { display: block; }
+    .nd-listpage__chips { display: none; }
+  }
+}

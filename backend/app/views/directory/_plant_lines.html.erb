@@ -1,0 +1,16 @@
+<%# The plants and sites of a list as one white panel of rows (#560): site icon, name, status mark and word,
+    type and units, MW, location. The site's own type, status and place show only once it's verified (as on its page). Locals: plants. %>
+<ul class="nd-lines">
+  <% plants.each do |facility| %>
+    <% own = facility.verified? %>
+    <% sourced = own && facility.try(:site_sourced) %>
+    <% units = units_summary(Array(facility.try(:units_statuses)), shown_status: (facility.status if own)) %>
+    <% capacity = facility.try(:units_capacity_mw) %>
+    <% what = [ (facility_type_label(facility.facility_type) if own), units ].compact.join(" · ").presence %>
+    <%= render "shared/line", href: plant_url_for(facility), name: facility.name,
+          mark: icon(site_icon_name((facility.facility_type if sourced), reactor_types: [ (facility.reactor_type if sourced), *facility.try(:units_reactor_types) ], status: (facility.status if sourced)), set: :nd, size: 20),
+          status: (facility.status if own && facility.status.present?), what:,
+          cap: (number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present?),
+          place: (location(facility.city, facility.state) if own) %>
+  <% end %>
+</ul>

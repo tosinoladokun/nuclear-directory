@@ -36,12 +36,36 @@
 <% end %>
 <%= render "shared/site_header", query: listing.query %>
 
-<main class="nd-page">
-  <%= render "shared/category_pills", current: listing.category, counts: @counts if @counts %>
+<%
+  index_items = [ { label: "All companies", href: directory_url_for, icon: icon("list"), count: @all_count, current: list_page.nil? && !listing.searching?, title: "All companies" } ]
+  Category.all.each do |category|
+    break unless @counts
+    count = @counts[category.key]
+    next if !category.plants && count&.zero? && listing.category != category
+    index_items << { label: (category.name.length > 22 ? category.short_name : category.name), title: category.name, href: directory_url_for(category:), icon: bucket_icon(category),
+                     count:, bucket: (category unless category.plants), current: listing.category == category }
+  end
+  page_noun = noun
+%>
+<main class="nd-page nd-page--wide">
+  <div class="nd-listpage">
+    <% if @counts %>
+      <div class="nd-listpage__index"><%= render "shared/index", items: index_items, variant: :list, label: "Categories" %></div>
+      <%# Phones: the same categories as one scrolling row, opened with the current one in view. %>
+      <div class="nd-chips nd-listpage__chips" data-controller="pill-row" role="navigation" aria-label="Categories">
+        <%= render "shared/chip", label: "All companies", href: directory_url_for, icon: icon("list"), current: list_page.nil? && !listing.searching? %>
+        <% Category.all.each do |category| %>
+          <% next if !category.plants && @counts[category.key]&.zero? && listing.category != category %>
+          <%= render "shared/chip", label: category.name, href: directory_url_for(category:), icon: bucket_icon(category), bucket: (category unless category.plants), current: listing.category == category %>
+        <% end %>
+      </div>
+    <% end %>
 
-  <div class="nd-listhead">
-    <h1 class="type-title-md nd-listhead__title"><%= heading %> <span class="type-data nd-listhead__count"><%= pluralize(total, noun, plural:) %></span></h1>
+  <div class="nd-listpage__main">
+  <%= render "shared/page_head", name: heading, count: pluralize(total, noun, plural:), about: (list_page.description(1) if category_page),
+        square: (bucket_icon(listing.category, size: 24) if listing.category), bucket: (listing.category unless listing.category&.plants) %>
 
+  <div class="nd-listhead nd-listhead--bare">
     <%# On phones the filters open in a full-screen sheet behind "Filters (N)"
         (#90). Without JavaScript the sheet is a native popover the button
         opens and closes on its own; with it, the same contents open in a
@@ -108,20 +132,18 @@
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
         <h2 id="companies-heading" class="nd-label mb-1">Companies</h2>
-        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %></ul>
+        <%= render "directory/company_lines", companies: @companies, short: @short %>
       </section>
     <% end %>
     <% if @plants.any? %>
       <section aria-labelledby="plants-heading">
         <h2 id="plants-heading" class="nd-label mb-1">Plants and sites</h2>
-        <ul class="nd-list"><% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %></ul>
+        <%= render "directory/plant_lines", plants: @plants %>
       </section>
     <% end %>
   <% else %>
-    <ul class="nd-list">
-      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
-      <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
-    </ul>
+    <% if @companies.any? %><%= render "directory/company_lines", companies: @companies, short: @short %><% end %>
+    <% if @plants.any? %><%= render "directory/plant_lines", plants: @plants %><% end %>
   <% end %>
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
@@ -130,4 +152,10 @@
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
   </turbo-frame>
+  <nav class="nd-quiet" aria-label="About this list">
+    <span><%= listing.category&.plants ? "Missing a plant?" : "Missing a company?" %></span>
+    <%= link_to correction_url_for(listing.category&.plants ? "A missing plant" : "A missing company") do %><%= icon("flag", size: 16) %>Report a correction<% end %>
+  </nav>
+  </div>
+  </div>
 </main>

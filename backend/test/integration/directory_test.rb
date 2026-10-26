@@ -29,10 +29,10 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "nav[aria-label=Role]", 0, "no role filter in the page (the ?role= param still works)"
-    assert_select ".nd-listrow .nd-tag", 0, "the role is shown on the company page, not in the list"
+    assert_select ".nd-line .nd-tag", 0, "the role is shown on the company page, not in the list"
 
     get companies_path(category: "reactor-developers", role: "project_developer")
-    assert_select "a.nd-listrow", 2
+    assert_select "a.nd-line", 2
     assert_select "a[href='/companies/#{builder.slug}']"
     assert_select "a[href='/companies/kairos-power']", 0
     assert_select "meta[name=robots][content=noindex]"
@@ -43,7 +43,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "a[href='/companies/kairos-power']"
 
     get companies_path(category: "reactor-developers", role: "utility")
-    assert_select "a.nd-listrow", 4
+    assert_select "a.nd-line", 4
   end
 
   test "a role no source backs does not put the company under that role" do
@@ -61,7 +61,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "fuel", role: "reactor_vendor")
     assert_select "nav[aria-label=Role]", 0
     get companies_path
-    assert_select ".nd-listrow .nd-tag", 0
+    assert_select ".nd-line .nd-tag", 0
     assert_select "nav[aria-label=Role]", 0
   end
 
@@ -72,9 +72,9 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
     assert_select "h1", /Fusion/
-    assert_select "h1 .nd-listhead__count", "1 company"
-    assert_select "a.nd-listrow[href='/companies/helion']"
-    assert_select "a.nd-listrow[href='/companies/kairos-power']", count: 0
+    assert_select ".nd-pagehead__count", "1 company"
+    assert_select "a.nd-line[href='/companies/helion']"
+    assert_select "a.nd-line[href='/companies/kairos-power']", count: 0
     assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies?tag=fusion", 1
     assert_select "form.nd-filters input[type=hidden][name=tag][value=fusion]"
   end
@@ -85,10 +85,10 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_empty Bucket.for(nextera)
 
     get companies_path
-    assert_select "a.nd-listrow[href='/companies/#{nextera.slug}']"
+    assert_select "a.nd-line[href='/companies/#{nextera.slug}']"
 
     get companies_path(q: "NextEra")
-    assert_select "a.nd-listrow[href='/companies/#{nextera.slug}']"
+    assert_select "a.nd-line[href='/companies/#{nextera.slug}']"
 
     get company_path(slug: nextera.slug)
     assert_response :success
@@ -101,8 +101,10 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     Facility.create!(name: "Quiet Unit 1", parent: site, verification_status: "verified", verified_by: "human:test", capacity_mw: 300, status: "operating")
     get companies_path(category: "plants")
 
-    assert_select ".nd-listrow", text: /Quiet Station/ do
-      assert_select ".nd-listrow__desc", "1 operating unit · 300 MW", "the pending site's own status isn't shown, so the unit's is"
+    assert_select ".nd-line", text: /Quiet Station/ do
+      assert_select ".nd-line__what", /1 operating unit/, "the pending site's own status isn't shown, so the unit's is"
+      assert_select ".nd-line__cap", "300 MW"
+      assert_select ".nd-st", count: 0
     end
     assert_select "body", text: /Nowhere|Planned/, count: 0
   end
@@ -124,21 +126,24 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "title", "Nuclear reactor and project developers in the US · Nuclear Directory"
     assert_select "h1", /Developers/
-    assert_select "h1 .nd-listhead__count", "2 companies"
-    assert_select "a.nd-pill[aria-current=page]", /Developers/
-    assert_select "a.nd-listrow[href='/companies/kairos-power']", /Develops salt-cooled reactors./
-    assert_select "a.nd-listrow", text: /Pending Reactors/, count: 0
+    assert_select ".nd-pagehead__count", "2 companies"
+    assert_select ".nd-idx a[aria-current=page]", /Developers/
+    assert_select ".nd-chips a.nd-chip[aria-current=page]", /Developers/, "phones: the same categories as a scrolling row"
+    assert_select "a.nd-line[href='/companies/kairos-power'] .nd-line__what", /Reactor designer/, "no short description yet: role · specialty"
+    assert_select "a.nd-line[href='/companies/kairos-power'] .nd-line__end", "Alameda, CA"
+    assert_select "a.nd-line[href='/companies/kairos-power'] .nd-mono, a.nd-line[href='/companies/kairos-power'] .nd-tag", 0, "no mark, no tags on the row"
+    assert_select "a.nd-line", text: /Pending Reactors/, count: 0
   end
 
   test "a category narrows to one of its roles, with its canonical address the whole category" do
     get companies_path(category: "reactor-developers", role: "project_developer")
     assert_response :success
-    assert_select "a.nd-listrow[href='/companies/kairos-power']", 0
+    assert_select "a.nd-line[href='/companies/kairos-power']", 0
     assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies?category=reactor-developers", 1
     assert_select "meta[name=robots][content=noindex]"
 
     get companies_path(category: "reactor-developers", role: "reactor_vendor")
-    assert_select "a.nd-listrow[href='/companies/kairos-power']"
+    assert_select "a.nd-line[href='/companies/kairos-power']"
     assert_select "form.nd-filters input[type=hidden][name=role][value=reactor_vendor]"
 
     get companies_path(category: "reactor-developers", role: "project_developer", format: :json)
@@ -150,7 +155,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   test "a company without a description or HQ still lists" do
     get companies_path(category: "reactor-developers")
 
-    assert_select "a.nd-listrow[href='/companies/oklo'] .nd-listrow__desc", count: 0
+    assert_select "a.nd-line[href='/companies/oklo']"
+    assert_select "a.nd-line[href='/companies/oklo'] .nd-line__end", ""
   end
 
   test "search results group companies and power plants" do
@@ -160,7 +166,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "h1", /Results for “vogtle”/
     assert_select "#companies-heading", "Companies"
     assert_select "#plants-heading", "Plants and sites"
-    assert_select "a.nd-listrow[href='/plants/plant-vogtle']", /Power plant · Operating/
+    assert_select "a.nd-line[href='/plants/plant-vogtle']", /Power plant/
+    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-st", /Operating/
   end
 
   test "the search field keeps the query" do
@@ -213,7 +220,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "select[name=technology]"
     assert_select "select[name=technology] option", text: /coolant/, count: 0
     assert_select "select[name=state]"
-    assert_select "h1 .nd-listhead__count", "1 plant or site"
+    assert_select ".nd-pagehead__count", "1 plant or site"
   end
 
   test "search results are grouped even when only one kind matches" do
@@ -235,7 +242,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     cite!(plant("Quiet Research Site Reactor", parent: site, reactor_type: "TRIGA"))
     get companies_path(category: "plants")
 
-    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-ring").to_s, PLANT_ICON, "site-plant"
+    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-line__mark").to_s, PLANT_ICON, "site-plant"
   end
 
   test "an unsourced site's own status doesn't pick its icon, in the directory or instant search" do
@@ -244,7 +251,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     [ companies_path(category: "plants"), search_path(q: "quiet old") ].each do |path|
       get path
-      ring = css_select("a[href='/plants/quiet-old-station'] .nd-ring").to_s
+      ring = css_select("a[href='/plants/quiet-old-station'] .nd-line__mark, a[href='/plants/quiet-old-station'] .nd-ring").to_s
       assert_includes ring, "<svg", path
       assert_not_includes ring, waste, path
     end
@@ -257,8 +264,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     [ companies_path(category: "plants"), search_path(q: "station") ].each do |path|
       get path
-      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-ring").to_s
-      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-ring").to_s
+      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-line__mark, a[href='/plants/sourced-station'] .nd-ring").to_s
+      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-line__mark, a[href='/plants/quiet-station'] .nd-ring").to_s
 
       assert_includes sourced_ring, PWR_ICON, path
       assert_not_includes sourced_ring, BWR_ICON, "#{path}: an unsourced unit doesn't change it"
@@ -274,19 +281,20 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     plant("Vogtle Unit 5", parent: vogtle, capacity_mw: 999, status: "operating", verified: false)
     get companies_path(category: "plants")
 
-    assert_select "a.nd-listrow[href='/plants/plant-vogtle'] .nd-listrow__desc", "Power plant · Operating · 2 units · 2,234.5 MW"
+    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__what", /Power plant · 2 units/
+    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__cap", "2,234.5 MW"
 
     plant("Vogtle Unit 1", parent: vogtle, capacity_mw: 500, status: "decommissioning")
     get companies_path(category: "plants")
 
-    assert_select "a.nd-listrow[href='/plants/plant-vogtle'] .nd-listrow__desc",
-      "Power plant · Operating · 2 operating units, 1 being decommissioned · 2,234.5 MW", "capacity counts operating units only"
+    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__what", /Power plant · 2 operating units, 1 being decommissioned/
+    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__cap", "2,234.5 MW", "capacity counts operating units only"
   end
 
   test "an unknown filter value is ignored, not applied behind an Any control" do
     get companies_path(category: "reactor-developers", state: "ZZ")
 
-    assert_select "h1 .nd-listhead__count", "2 companies"
+    assert_select ".nd-pagehead__count", "2 companies"
     assert_select "select[name=state] option[selected]", count: 0
   end
 
@@ -335,5 +343,45 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_redirected_to companies_url(q: "molten salt")
     get companies_path(tag: "fusion")
     assert_response :success
+  end
+
+  test "the list page: the category index with counts, the page head, a white panel with a visual header row, one quiet line (#560)" do
+    get companies_path(category: "reactor-developers")
+
+    assert_select "nav.nd-idx--list[aria-label=Categories]" do
+      assert_select "a", text: /All companies/
+      assert_select "a[aria-current=page]", 1
+      assert_select "a[aria-current=page]", /Developers\s*2/
+    end
+    assert_select ".nd-pagehead .nd-pagehead__square svg"
+    assert_select ".nd-pagehead__about", /Companies designing reactors/
+    assert_select "ul.nd-lines li.nd-lines__head[aria-hidden=true]", 1
+    assert_select ".nd-line__end", /Alameda, CA/
+    assert_select "ul.nd-lines .nd-num", 0, "no connection count on the row"
+    assert_select "nav.nd-quiet", /Missing a company\?/
+    assert_select "nav.nd-quiet a[href^='/corrections/new']", /Report a correction/
+    get companies_path(category: "plants")
+    assert_select "nav.nd-quiet", /Missing a plant\?/
+  end
+
+  test "a tag page and All companies mark the right index entry, and a tag page has no head square" do
+    get companies_path
+    assert_select "nav.nd-idx a[aria-current=page]", /All companies/
+
+    get companies_path(tag: "fusion")
+    assert_select "nav.nd-idx a[aria-current=page]", 0
+    assert_select ".nd-pagehead__square", 0
+  end
+
+  test "a written short description is the row's middle column, with the location helper's place" do
+    kairos = Organization.find_by!(slug: "kairos-power")
+    kairos.update!(short_description: "Fluoride salt-cooled reactors")
+    kairos.update!(hq_city: "Courbevoie", hq_state: nil, country_code: "FR")
+    get companies_path(category: "reactor-developers")
+
+    assert_select "a.nd-line[href='/companies/kairos-power']" do
+      assert_select ".nd-line__what", "Fluoride salt-cooled reactors"
+      assert_select ".nd-line__end", "Courbevoie, France"
+    end
   end
 end
