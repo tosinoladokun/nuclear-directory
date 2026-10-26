@@ -226,4 +226,15 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "can't remove a quote a person added", result.errors.join
     assert Evidence.exists?(row.id)
   end
+
+  test "close applies to an unattached link claim too, with Undo; the other actions don't" do
+    link = Candidate.create!(source: @page, kind: "relationship", status: "needs_review", quote: "q",
+      payload: { "from_organization" => { "name" => "DOE" }, "to_organization" => { "name" => "Urenco" }, "relationship_type" => "funds" })
+    act({ id: link.id, action: "same_as", target: @holtec.id, reason: "r" }, { id: link.id, action: "close", reason: "Tosin rejected this link on 24 Oct" })
+    assert_match "only close applies", results.first["error"]
+    assert results.second["ok"], results.inspect
+    assert_equal "rejected", link.reload.status
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "needs_review", link.reload.status
+  end
 end
