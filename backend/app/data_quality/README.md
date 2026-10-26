@@ -436,6 +436,13 @@ licensee, docket, type, status). Each gives the facility (`enrichment` or `fuel_
 and its licensee. Only an operational facility adds the licensee's `operates` link and the fuel stage its type
 states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 
+## DOE nuclear energy news
+
+`plugins/doe_nuclear_news.rb` reads the Office of Nuclear Energy's news feed once a day (last 60 days, at most 15
+items a night). DOE is the primary source for its own announcements, so an item naming a company or plant in the
+directory becomes a `news_item` claim about DOE and those records (never a lead). Names are read as trade press
+reads them; an item naming nothing we have besides DOE isn't proposed. Every item waits for a person.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
