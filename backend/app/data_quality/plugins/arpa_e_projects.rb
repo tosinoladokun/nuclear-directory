@@ -19,13 +19,15 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   API_URL = "https://arpa-e.energy.gov/JSONAPI/custom/index/project"
   SITE = "https://arpa-e.energy.gov"
   INDEX_SOURCE_KIND = "arpa_e_index"
-  FUNDER = "Advanced Research Projects Agency-Energy (ARPA-E)"
+  FUNDER = "Advanced Research Projects Agency-Energy"
+  # "Name (ACRONYM)": the name, with the acronym kept as an alias (DQ).
+  ACRONYM = /\A(?<name>.+?)\s*\((?<acronym>[A-Z][A-Za-z0-9&.\-]{1,11})\)\z/
   # ARPA-E's research sub-area ids: Nuclear Fission, Nuclear Fusion.
   SUB_AREAS = { "74" => "nuclear fission", "81" => "nuclear fusion" }.freeze
   PAGE_SIZE = 50
   MAX_PAGES = 10
-  NEW_PER_NIGHT = 15
-  FIELDS = [ "Project", "Organization", "Award", "Program", "Status", "Location", "Released", "Area" ].freeze
+  NEW_PER_NIGHT = 5
+  FIELDS = [ "Project", "Organization", "Award", "Program", "Status", "Location", "Released", "Area", "Funder" ].freeze
 
   Project = Data.define(:facts) do
     def line = FIELDS.filter_map { |label| "#{label}: #{facts[label]}" if facts[label].present? }.join(" | ")
@@ -45,13 +47,16 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
       next :skipped_recent if index.fetched_at&.to_date == Date.current
 
       projects, failure = fetch_all
-      index.update!(fetched_at: Time.current, http_status: failure&.status || 200, status_reason: failure&.reason,
-        crawl_status: failure&.kind == :blocked ? "blocked" : "ok")
-      next failure.kind if failure
-
-      stats["projects"] = projects.size
-      stats["new"] = projects.count { |url, line| store(url, line) }
-      :ok
+      # The projects and the day's fetch in one savepoint (claim commits its
+      # lock even when the block raises): a failed store keeps nothing, so a
+      # rerun fetches and stores them all.
+      Source.transaction(requires_new: true) do
+        unless failure
+          stats["projects"] = projects.size
+          stats["new"] = projects.count { |url, line| store(url, line) }
+        end
+        record(index, failure)
+      end
     end
     { "index" => outcome.to_s }.merge(stats).merge(outcome == :blocked ? { "stopped" => "ARPA-E blocked us" } : {})
   end
@@ -60,13 +65,17 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     facts = parse(source.content_text) or return []
     return [] if facts["Status"].to_s.casecmp?("cancelled")
 
-    organization = facts["Organization"]
-    description = [ "ARPA-E #{facts['Area']} award", facts["Award"] && "of #{facts['Award']}", facts["Program"] && "(#{facts['Program']})",
-      "for \"#{facts['Project']}\"", facts["Status"] && "status #{facts['Status']}" ].compact.join(" ")
+    quote = source.content_text
+    recipient = organization(facts["Organization"])
+    link = { "from_organization" => { "name" => FUNDER }, "to_organization" => { "name" => recipient["name"] }, "relationship_type" => "funds" }
+    # One link per recipient, worded the same from every project page, so
+    # two projects for one lab agree; each project is its own award term.
     [
-      { kind: "organization", quote: source.content_text, payload: { "name" => organization } },
-      { kind: "relationship", quote: source.content_text, payload: { "from_organization" => { "name" => FUNDER },
-        "to_organization" => { "name" => organization }, "relationship_type" => "funds", "description" => description } }
+      { kind: "organization", quote:, payload: { "name" => FUNDER, "aliases" => [ "ARPA-E" ] } },
+      { kind: "organization", quote:, payload: recipient },
+      { kind: "relationship", quote:, payload: link.merge("description" => "Research funding from ARPA-E (nuclear fission and fusion)") },
+      { kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "award",
+        "external_id" => source.url, "amount_usd" => facts["Award"]&.delete("$,"), "program" => facts["Program"]).compact }
     ]
   end
 
@@ -86,6 +95,33 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   end
 
   private
+    def organization(name)
+      match = ACRONYM.match(name) or return { "name" => name }
+      { "name" => match[:name], "aliases" => [ match[:acronym] ] }
+    end
+
+    # The index fetch recorded as Snapshot records a page's: block streaks,
+    # robots denials, and no HTTP status when nothing answered.
+    def record(index, failure)
+      attempt = { fetched_at: Time.current, http_status: failure ? failure.status : 200 }
+      case failure&.kind
+      when nil
+        index.update!(attempt.merge(crawl_status: "ok", status_reason: nil, blocked_streak: 0))
+        :ok
+      when :blocked
+        streak = index.blocked_streak + 1
+        index.update!(attempt.merge(blocked_streak: streak, status_reason: failure.reason,
+          crawl_status: streak >= DataQuality::Snapshot::BLOCKED_STREAK_LIMIT ? "needs_human" : "blocked"))
+        :blocked
+      when :disallowed
+        index.update!(attempt.merge(crawl_status: "needs_human", status_reason: failure.reason))
+        :disallowed
+      else
+        index.update!(attempt.merge(status_reason: failure.reason))
+        :error
+      end
+    end
+
     # { project page url => stored line } for every fission and fusion
     # project, or [nil, failure response] when a request failed.
     def fetch_all
@@ -120,7 +156,8 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
       facts = { "Project" => fields["title"].to_s.squish, "Organization" => organization,
         "Award" => (award.match?(/\A\d+\z/) ? "$#{award.to_i.to_fs(:delimited)}" : nil),
         "Program" => Array(fields["related_programs"]).filter_map { |program| program.dig("fields", "title") }.first,
-        "Status" => fields["status"], "Location" => fields["location"], "Released" => fields["release_date"], "Area" => area }
+        "Status" => fields["status"], "Location" => fields["location"], "Released" => fields["release_date"], "Area" => area,
+        "Funder" => "#{FUNDER} (ARPA-E)" }
       [ "#{SITE}#{path}", Project.new(facts:).line ]
     end
 
@@ -128,10 +165,15 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     def store(url, line)
       source = Source.find_or_initialize_by(url:)
       fresh = source.new_record?
-      return false if !fresh && source.content_text == line
+      read = { fetched_at: Time.current, crawl_status: "ok", status_reason: nil, http_status: 200 }
+      # Unchanged: today's index still confirms it, so only the read is recorded.
+      if !fresh && source.content_text == line
+        source.update!(read)
+        return false
+      end
 
-      source.update!(source_kind:, title: "ARPA-E: #{parse(line)['Project'].truncate(200)}", content_text: line,
-        content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", fetched_at: Time.current)
+      source.update!(read.merge(source_kind:, title: "ARPA-E: #{parse(line)['Project'].truncate(200)}", content_text: line,
+        content_sha256: Digest::SHA256.hexdigest(line)))
       fresh
     end
 

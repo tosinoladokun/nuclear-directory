@@ -20,7 +20,7 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
   test "is the plug-in for arpa_e_projects, nightly, capped" do
     assert_instance_of Plugin, DataQuality::Plugin.for("arpa_e_projects")
     assert_includes DataQuality::DailyCrawlJob::SOURCE_KINDS, "arpa_e_projects"
-    assert_equal 15, plugin.new_sources_per_run
+    assert_equal 5, plugin.new_sources_per_run
   end
 
   test "reads the fission and fusion projects once a day, each stored at its page, only when new or changed" do
@@ -46,11 +46,39 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
 
   test "each project: the organization and ARPA-E's funds link, described as ARPA-E states the award" do
     crawl
-    company, link = plugin.extract(projects.find_by!(url: SHINE), nil)
+    funder, company, link, term = plugin.extract(projects.find_by!(url: SHINE), nil)
 
+    assert_equal({ "name" => "Advanced Research Projects Agency-Energy", "aliases" => [ "ARPA-E" ] }, funder[:payload])
     assert_equal({ "name" => "SHINE Technologies, LLC" }, company[:payload])
-    assert_equal "Advanced Research Projects Agency-Energy (ARPA-E)", link[:payload].dig("from_organization", "name")
-    assert_match(/\AARPA-E nuclear fission award of \$4,030,306 \(NEWTON\) for "REDUCE:/, link[:payload]["description"])
+    assert_equal "Advanced Research Projects Agency-Energy", link[:payload].dig("from_organization", "name")
+    assert_equal [ "award", "4030306", "NEWTON", SHINE ], term[:payload].values_at("term_type", "amount_usd", "program", "external_id")
+  end
+
+  test "two projects for one lab give the same link wording, each its own award" do
+    crawl
+    argonne = projects.select { |source| source.content_text.include?("Organization: Argonne National Laboratory") }
+    assert_equal 2, argonne.size
+    links, terms = argonne.map { |source| plugin.extract(source, nil) }.then { |all| [ all.map { |c| c[2][:payload] }, all.map { |c| c[3][:payload]["external_id"] } ] }
+    assert_equal 1, links.uniq.size
+    assert_equal 2, terms.uniq.size
+  end
+
+  test "a name with its acronym in brackets keeps the acronym as an alias" do
+    source = Source.new(url: "https://x", content_text: "Project: X | Organization: Lawrence Livermore National Laboratory (LLNL) | Status: Active")
+    assert_equal({ "name" => "Lawrence Livermore National Laboratory", "aliases" => [ "LLNL" ] }, plugin.extract(source, nil)[1][:payload])
+  end
+
+  test "an unchanged project's read is refreshed; robots denial needs a person" do
+    crawl
+    travel 1.day do
+      crawl
+      assert projects.all? { |source| source.fetched_at.to_date == Date.current }
+    end
+    travel 2.days do
+      stub_request(:get, "https://arpa-e.energy.gov/robots.txt").to_return(body: "User-agent: *\nDisallow: /JSONAPI/\n")
+      crawl
+      assert Source.find_by!(url: Plugin::API_URL).crawl_needs_human?
+    end
   end
 
   test "a cancelled project proposes nothing" do

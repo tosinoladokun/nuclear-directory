@@ -444,7 +444,7 @@ states (`enrichment`, `conversion`, `fabrication`). No capacity; no model.
 Nuclear Fission and Nuclear Fusion sub-areas. Each project is stored as its own source at its public page, as
 one labelled line (project, organization, award, program, status, location, release date), written only when
 new or changed. Each proposes the organization and an "ARPA-E funds <organization>" link describing the award.
-Cancelled projects propose nothing. At most 15 new project pages are read a night.
+Cancelled projects propose nothing. At most 5 new project pages are read a night. ARPA-E itself is proposed (alias ARPA-E); a name ending "(ACRONYM)" keeps the acronym as an alias. Each project is an award term under one link per recipient.
 
 ## DOE Isotope Program: production sites (#276)
 
