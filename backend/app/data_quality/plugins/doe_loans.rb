@@ -44,7 +44,8 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   def extract(source, _run)
     facts = parse(source.content_text) or return []
     borrower = facts["Owners"]
-    quote = source.content_text.lines.map(&:chomp).find { |line| line.start_with?("Loan Amount: ") }
+    # The borrower and the amount, both lines of the table, so the quote shows who and how much.
+    quote = source.content_text.lines.map(&:chomp).select { |line| line.start_with?("Owners: ", "Loan Amount: ") }.join("\n")
     description = [ "Loan of #{facts['Loan Amount']}", facts["Loan Program"] && "under the #{facts['Loan Program']}",
       facts["Issuance Date"] && "closed #{facts['Issuance Date']}" ].compact.join(", ")
     [
@@ -57,7 +58,11 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   # One loan per page: a change goes to a person.
   def max_dropped_share(_source) = 1.0
 
-  def quote_in_source?(source, quote) = source.content_text.to_s.lines.map(&:chomp).include?(quote.to_s)
+  # Every line of the quote is a line of the stored table.
+  def quote_in_source?(source, quote)
+    lines = source.content_text.to_s.lines.map(&:chomp)
+    quote.to_s.lines.map(&:chomp).then { |wanted| wanted.any? && (wanted - lines).empty? }
+  end
 
   def verification_context(source, _quote) = source.content_text
 

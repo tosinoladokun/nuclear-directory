@@ -49,5 +49,7 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
       [ link[:payload].dig("from_organization", "name"), link[:payload].dig("to_organization", "name"), link[:payload]["relationship_type"] ]
     assert_equal "Loan of $1.52 Billion, under the Energy Dominance Financing Program, closed September 2024", link[:payload]["description"]
     assert [ company, link ].all? { |claim| plugin.quote_in_source?(source, claim[:quote]) }
+    assert_equal "Owners: Holtec Palisades, LLC\nLoan Amount: $1.52 Billion", link[:quote], "who and how much"
+    refute plugin.quote_in_source?(source, "Owners: Holtec Palisades, LLC\nLoan Amount: $9 Billion")
   end
 end
