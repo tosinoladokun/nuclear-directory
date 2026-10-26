@@ -18,9 +18,9 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   # (not a blog of explainers), that answer our bot. Company => feed.
   FEEDS = {
     "Cameco" => "https://www.cameco.com/rss/news",
-    "Holtec International" => "https://www.holtecinternational.com/feed/",
+    "Holtec International" => "https://holtecinternational.com/feed/",
     "Deep Isolation" => "https://www.deepisolation.com/feed/",
-    "TAE Technologies" => "https://www.tae.com/feed/"
+    "TAE Technologies" => "https://tae.com/feed/"
   }.freeze
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
