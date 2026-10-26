@@ -58,7 +58,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
-        "summary" => item.summary, "about" => [ { "name" => company, "type" => "organization" } ] }.compact }
+        "summary" => item.summary, "about" => about(company, item) }.compact }
     end
   end
 
@@ -84,7 +84,37 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     "This is #{company}'s own news feed: each item is a release #{company} published, with its title, date and link."
   end
 
+  # A company the release names by its legal form ("Acme Fission, Inc.",
+  # "Bright Power LLC"): a partner worth a lead. Up to six capitalised words
+  # before the suffix; no model is asked.
+  LEGAL = "Inc|LLC|L\\.L\\.C|Corp|Corporation|Ltd|Limited|PLC|plc|GmbH|S\\.A|AG"
+  WORD = "(?!(?:#{LEGAL})\\b)[A-Z][\\w&'-]*"
+  PARTNER = /\b((?:#{WORD}\s+){0,5}#{WORD}),?\s+(?:#{LEGAL})\b\.?/
+
   private
+    # The company itself, then every other company the release names by its
+    # legal form. Match keeps the ones the directory has; the others become
+    # leads for Data Quality (LeadSync's news feed), never facts.
+    def about(company, item)
+      partners = [ item.title, item.summary ].compact.flat_map do |text|
+        text.to_enum(:scan, PARTNER).map { partner_name(Regexp.last_match[0]) }
+      end
+      names = [ company, *partners ].uniq { |name| name.downcase.gsub(/[^a-z0-9]/, "") }
+      names.reject! { |name| name != company && name.downcase.start_with?(company.downcase) }
+      names.map { |name| { "name" => name, "type" => "organization" } }
+    end
+
+    # A Title Case headline capitalises its verbs too ("Cameco Signs Agreement
+    # With Bright Fuel Holdings, Inc."): the name starts after the last joining
+    # word.
+    JOINING = /\b(?:with|and|by|from|for|to|between|acquires|selects|names|of)\s+/i
+
+    def partner_name(match)
+      name = match.strip.delete_suffix(".")
+      last = name.to_enum(:scan, JOINING).map { Regexp.last_match.end(0) }.last
+      (last ? name[last..] : name).sub(/\AThe\s+/, "")
+    end
+
     def company_for(source) = @feeds.key(source.url)
 
     # Items from this feed a person or match already has: a claim that isn't

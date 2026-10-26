@@ -384,7 +384,9 @@ day. A company's release is the primary source for its own announcement, so each
 No model is asked. Every item waits for a person's approval and shows in "Latest" only after it. Only feeds a
 company publishes itself, of its news or releases, that answer our bot are listed: a blocked feed is recorded
 and skipped, and a page that isn't a feed goes to a person. Feeds drop old items as new ones arrive, so an
-item leaving the feed flags nothing.
+item leaving the feed flags nothing. Other companies a release names by their legal form ("Bright Fuel Holdings,
+Inc.") join its `about`: match keeps the ones the directory has, and LeadSync turns the rest into leads for Data
+Quality, never facts.
 
 ## NRC notices in the Federal Register (#126)
 
