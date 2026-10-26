@@ -7,6 +7,7 @@
 <% verb = relationship_verb(deal.relationship_type) %>
 <% who = from_us ? [ profile.name, " #{verb} ", other.name ] : [ other.name, " #{verb} ", profile.name ] %>
 <% what = profile.deal_line(deal) %>
+<% _, small = line_name(other.name) %>
 <% date = profile.deal_date(deal) %>
 <% evidence = deal.evidence.max_by { |e| e.confidence || 0 } %>
 <% citations = profile.deal_citations(deal) %>
@@ -17,8 +18,8 @@
     <%= company_square(other, category: profile.partner_category(other)) %>
     <%# One line on desktop (name and verb); on phones the other company's name sits alone on line 1 and the rest on line 2. %>
     <span class="nd-crow__who" title="<%= who.join %>">
-      <% if from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name"><%= other.name %></b>
-      <% else %><b class="nd-crow__name"><%= other.name %></b><span class="nd-crow__rest"> <%= verb %><span class="nd-crow__us"> <%= profile.name %></span></span><% end %>
+      <% if from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b>
+      <% else %><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b><span class="nd-crow__rest"> <%= verb %><span class="nd-crow__us"> <%= profile.name %></span></span><% end %>
     </span>
     <% if what.present? %><span class="nd-crow__what" title="<%= what %>"><%= what %></span><% end %>
     <% if date %><time class="nd-crow__date" datetime="<%= date.iso8601 %>"><%= date.strftime("%b %Y") %></time><% end %>

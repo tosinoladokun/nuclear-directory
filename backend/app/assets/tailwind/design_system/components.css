@@ -1280,6 +1280,9 @@
   .nd-crow__line:hover, .nd-crow--open { background: var(--nd-paper-sunken); }
   .nd-crow__who { flex: 0 1 auto; min-width: 0; font: 400 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-crow__who b { font-weight: 600; }
+  /* The page's own company is left out of the verb on every width: the name and the verb read as the row; a long name drops to 13px before the "what" is cut. */
+  .nd-crow__us { display: none; }
+  .nd-crow__name[data-fit="small"] { font-size: 13px; }
   .nd-crow__what { flex: 1 1 0; min-width: 120px; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-crow__date { flex: none; font: 400 13px/20px var(--font-mono); color: var(--nd-ink-muted); white-space: nowrap; }
   .nd-crow__chev { position: absolute; right: 0; top: 0; height: 56px; width: 40px; display: grid; place-items: center; color: var(--nd-ink-muted); pointer-events: none; transition: transform .12s ease-out; }
@@ -1299,13 +1302,16 @@
     /* Two lines: the other company's name alone; then the verb, the short "what" and the date, with the
        source mark and chevron at the end of line 2 (the "what" gets the ellipsis). */
     .nd-crow__line { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; column-gap: var(--nd-space-3); row-gap: 2px; align-items: center; padding-right: 88px; }
-    .nd-crow__line > .nd-catsq { grid-row: 1 / span 2; }
+    .nd-crow__line > .nd-catsq { grid-row: 1 / span 3; align-self: start; }
     .nd-crow__who { display: contents; }
     .nd-crow__name { grid-column: 2 / -1; grid-row: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
-    .nd-crow__us { display: none; }
     .nd-crow__rest { grid-column: 2; grid-row: 2; white-space: nowrap; font-size: 14px; color: var(--nd-ink-muted); }
-    .nd-crow__what { grid-column: 3; grid-row: 2; min-width: 0; }
-    .nd-crow__date { grid-column: 4; grid-row: 2; }
+    .nd-crow__what { grid-column: 3 / -1; grid-row: 2; min-width: 0; }
+    /* Line 3: the date, with the source mark and chevron at its end. Without a date they sit at the end of line 2. */
+    .nd-crow__date { grid-column: 2 / -1; grid-row: 3; }
+    .nd-crow__line { padding-right: 0; }
+    .nd-crow__line:not(:has(.nd-crow__date)) { padding-right: 88px; }
+    .nd-crow__line:has(.nd-crow__date) { padding-bottom: 8px; }
     .nd-mark, .nd-crow__chev { top: auto; bottom: 0; height: 40px; }
     .nd-crow--plant .nd-crow__who { display: block; grid-column: 2 / -1; }
     .nd-crow--plant .nd-crow__what { grid-column: 2; }
