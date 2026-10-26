@@ -20,13 +20,13 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     assert_select "a[href^='mailto:hello@nuclear-directory.org?']"
   end
 
-  test "a fact with an ampersand prefills plain text, not an HTML entity" do
+  test "a company with an ampersand in its name shows it as text on its deal row (the page's one correction link is the quiet line's)" do
     kairos = company("Kairos Power")
     cite!(link(company("Sargent & Lundy"), "supplies", kairos))
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-factrow a.nd-factrow__fix[href=?]",
-      new_correction_path(subject: "Sargent & Lundy supplies Kairos Power", page: "/companies/kairos-power")
+    assert_select ".nd-crow__who", text: "Sargent & Lundy supplies Kairos Power"
+    assert_select ".nd-crow a[href^='/corrections/new']", 0, "no Report a correction per row (removed 25 Oct)"
   end
 
   test "the form leaves validation to the server, so its error summary shows" do
@@ -97,15 +97,13 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     assert_select ".nd-alert[role=alert]", /Wait a few minutes/
   end
 
-  test "company and plant pages link every fact to a prefilled correction" do
+  test "a company page has one Report a correction, in the quiet line, with the page as its subject" do
     kairos = company("Kairos Power")
     cite!(link(company("Google"), "offtake_with", kairos))
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-factrow a.nd-factrow__fix[href=?]",
-      new_correction_path(subject: "Google offtakes from Kairos Power", page: "/companies/kairos-power")
-    assert_select ".nd-overview a[href=?]", new_correction_path(subject: "Kairos Power", page: "/companies/kairos-power"), text: "Report a correction"
-    assert_select ".nd-gaps a[href^='/corrections/new']", "Suggest a source"
+    assert_select "a[href^='/corrections/new']", 1
+    assert_select ".nd-quiet a[href=?]", new_correction_path(subject: "Kairos Power", page: "/companies/kairos-power"), text: "Report a correction"
   end
 
   test "plant pages link their facts, key facts and gaps to a prefilled correction" do

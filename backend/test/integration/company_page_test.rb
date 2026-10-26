@@ -37,35 +37,71 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "title", "Kairos Power: reactor developer, plants and deals · Nuclear Directory"
     assert_select "main", 1
-    assert_select "h1#profile-name", "Kairos Power"
-    assert_select ".nd-profile__desc", /Develops salt-cooled reactors./
+    assert_select "h1.nd-pagehead__name", "Kairos Power"
+    assert_select ".nd-pagehead__about", "Develops salt-cooled reactors."
+    assert_select ".nd-pagehead__about .nd-src", 0, "the summary carries no source marks"
     assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
 
-  test "deals read left to right, link the other company, and carry sources" do
+  test "a deal is one line: the other company, the verb, the date and a source mark; it opens to its details" do
     get company_path(slug: "kairos-power")
 
-    assert_select "#deals-heading small", "2"
-    assert_select ".nd-factrow", text: /Google\s+offtakes from\s+Kairos Power/ do
-      assert_select "a[href='/companies/google']", "Google"
-      assert_select ".nd-factrow__detail", "500 MW by 2035."
-      assert_select ".nd-quote", "“Kairos Power and Google have signed”"
-      assert_select "a.nd-src[href='#source-1']", /kairospower.com · checked 2026-10-09/ do
-        # On a narrow screen the date wraps as one piece (#90).
-        assert_select "span.nd-src__checked", "· checked 2026-10-09"
+    assert_select "#deals-heading .nd-sechead__count", "2"
+    assert_select ".nd-crow", text: /Google offtakes from Kairos Power/ do
+      assert_select "button.nd-crow__line[aria-expanded=false][aria-controls]"
+      assert_select ".nd-crow__more[hidden]" do
+        assert_select "p", "500 MW by 2035."
+        assert_select ".nd-quote", "“Kairos Power and Google have signed”"
+        assert_select "a.nd-src[href='#source-1']", /kairospower.com · checked 2026-10-09/
+        assert_select ".nd-conf", /High/
       end
-      assert_select ".nd-conf", /High/
+      assert_select "a.nd-mark[href='#source-1'][aria-label='1 source']"
+      assert_select "a", text: "Report a correction", count: 0
     end
-    assert_select ".nd-factrow", text: /US Department of Energy\s+supplies\s+Kairos Power/
+    assert_select ".nd-crow", text: /US Department of Energy supplies Kairos Power/
+  end
+
+  test "a deal row's short line comes from stored terms, else the link's sourced phrase, else nothing" do
+    offtake = Relationship.find_by!(from_organization: @google, to_organization: @kairos)
+    DealTerm.create!(link: offtake, term_type: "offtake", capacity_mw: 5000, agreement: "framework", ends_on: Date.new(2039, 1, 1),
+      signed_on: Date.new(2026, 3, 1), **verification(true))
+    supply = Relationship.find_by!(from_organization: @doe, to_organization: @kairos)
+    supply.update!(short_phrase: "LEU and HALEU enrichment")
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-crow", text: /Google offtakes from Kairos Power/ do
+      assert_select ".nd-crow__what", "5 GW framework by 2039"
+      assert_select "time.nd-crow__date[datetime='2026-03-01']", "Mar 2026"
+    end
+    assert_select ".nd-crow", text: /US Department of Energy supplies/ do
+      assert_select ".nd-crow__what", "LEU and HALEU enrichment"
+    end
+    plain = company("Plain Partner")
+    cite!(link(plain, "supplies", @kairos))
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-crow", text: /Plain Partner supplies/ do
+      assert_select ".nd-crow__what", 0
+    end
+  end
+
+  test "deals are newest first" do
+    old = cite!(link(company("Old Partner"), "supplies", @kairos))
+    old.update!(started_on: Date.new(2019, 1, 1))
+    new = cite!(link(company("New Partner"), "supplies", @kairos))
+    new.update!(started_on: Date.new(2026, 6, 1))
+    get company_path(slug: "kairos-power")
+
+    names = css_select(".nd-crow .nd-crow__who").map { |el| el.text }
+    assert_operator names.index { |n| n.include?("New Partner") }, :<, names.index { |n| n.include?("Old Partner") }
   end
 
   test "unverified partners, deals and plants never appear" do
     get company_path(slug: "kairos-power")
 
     assert_select "body", text: /Ghost Partner/, count: 0
-    assert_select ".nd-factrow", text: /funds/, count: 0
+    assert_select ".nd-crow", text: /funds/, count: 0
     assert_select "body", text: /Hidden Site/, count: 0
   end
 
@@ -92,34 +128,37 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
-  test "a plant's type, status and place show beside a link only when the plant has its own source" do
+  test "a plant's status and place show on its row only when the plant has its own source" do
     bare = plant("Bare Reactor", facility_type: "power_reactor", status: "operating", city: "Nowhere", state: "OR")
     cite!(link(@kairos, "operates", bare))
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-factrow", text: /Kairos Power\s+operates\s+Bare Reactor/ do
-      assert_select ".nd-factrow__detail", count: 0
+    assert_select ".nd-crow--plant", text: /Bare Reactor/ do
+      assert_select ".nd-st", 0
+      assert_select ".nd-crow__place", 0
     end
   end
 
-  test "plants and sites link to the plant page" do
+  test "plants and sites link to the plant page, with status, place and a source mark" do
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-factrow", text: /Kairos Power\s+owns\s+Hermes/ do
+    assert_select ".nd-crow--plant", text: /Hermes/ do
       assert_select "a[href='/plants/hermes']", "Hermes"
-      assert_select ".nd-factrow__detail", "Test reactor · Under construction · Oak Ridge, TN"
+      assert_select ".nd-st", /Under construction/
+      assert_select ".nd-crow__place", "Oak Ridge, TN"
+      assert_select "a.nd-mark"
     end
+    assert_select "#plants-heading .nd-sechead__note", "· as owner", "every row shares the role, so the heading carries it"
   end
 
   test "sources are numbered once, in reading order" do
     get company_path(slug: "kairos-power")
 
-    assert_select "#sources-heading small", "2"
     assert_select "li#source-1 a[href='https://kairospower.com/news/google']", "Google and Kairos Power partner"
     assert_select "li#source-2 small", "energy.gov"
   end
 
-  test "on touch screens a source chip opens a sheet; without JavaScript it still jumps to the list" do
+  test "a source mark opens its sources in the sheet; the list sits behind the quiet line" do
     get company_path(slug: "kairos-power")
 
     assert_select "[data-controller=source-sheet][data-action='click@document->source-sheet#open']" do
@@ -127,9 +166,24 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
         assert_select "h2#source-sheet-title", /Source/
         assert_select "button[type=button][data-action='source-sheet#close']", "Close source details"
       end
+      assert_select "ol.nd-sources[id=sources][hidden]"
     end
-    assert_select ".nd-factrow a.nd-src[href='#source-1']"
-    assert_select ".nd-factrow .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
+    assert_select ".nd-crow a.nd-mark[href='#source-1'][data-sources='1']"
+    assert_select ".nd-crow__more .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
+  end
+
+  test "the quiet line is the page's last line: sources, cite this page, one Report a correction" do
+    get company_path(slug: "kairos-power")
+
+    assert_select "nav.nd-quiet" do
+      assert_select "button[data-panel=sources][aria-expanded=false]", /2\s+sources/
+      assert_select "button[data-panel=cite]", /Cite this page/
+      assert_select "a[href^='/corrections/new']", /Report a correction/
+    end
+    assert_select "#cite .nd-cite", /Nuclear Directory\. “Kairos Power\.” http.*\/companies\/kairos-power\. Accessed/
+    assert_select "#cite button[data-action='copy#copy']", "Copy"
+    assert_select "a", text: "Report a correction", count: 1
+    assert_select ".nd-badge--verified, .nd-gaps", 0
   end
 
   test "schema.org JSON-LD states the page's facts and lists its sources as citations (#185)" do
@@ -174,27 +228,24 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-listrow .nd-tag", 0
   end
 
-  test "key facts" do
+  test "key facts: the value first, its label under it, no source marks or verified badge" do
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-overview dt", text: "Website"
+    assert_select ".nd-glance dt", text: "Website"
     # #200: the Website link carries the referral UTM so companies see the
     # visit in their own analytics. The href starts with the website, with
     # utm_source / utm_medium / utm_campaign on the query string.
-    assert_select ".nd-overview dd a[href^='https://kairospower.com?']", text: "kairospower.com"
-    link = css_select(".nd-overview dd a[href^='https://kairospower.com?']").first
+    assert_select ".nd-glance dd a[href^='https://kairospower.com?']", text: "kairospower.com"
+    link = css_select(".nd-glance dd a[href^='https://kairospower.com?']").first
     params = URI.decode_www_form(URI.parse(link["href"]).query).to_h
     assert_equal "nuclear-directory", params["utm_source"]
     assert_equal "referral", params["utm_medium"]
     assert_equal "company-page", params["utm_campaign"]
-    assert_select ".nd-overview dd", text: /\AKairos\z/
-    assert_select ".nd-overview dd", text: /\AAlameda, CA\z/
-    # The record's sources show once, under the facts, and name no fact.
-    assert_select ".nd-overview p.nd-overview__sources", text: /\AAbout this company: sources\s*1\z/ do
-      assert_select "a.nd-src[href='#source-1']"
-    end
-    assert_select ".nd-overview dt", text: "Founded", count: 0
-    assert_select ".nd-overview__foot", /checked 2026-10-09/
+    assert_select ".nd-glance dd", text: "Alameda, CA"
+    assert_select ".nd-glance dt + dd", minimum: 4
+    assert_select ".nd-glance dt", text: "Founded", count: 0
+    assert_select ".nd-glance .nd-src, .nd-glance .nd-badge", 0
+    assert_select ".nd-glance", text: /checked/, count: 0
   end
 
   test "a parent company shows in the key facts, not as a deal" do
@@ -202,9 +253,9 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     cite!(link(@kairos, "subsidiary_of", parent))
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-overview dt", "Parent company"
-    assert_select ".nd-overview dd a[href='/companies/southern-company']", "Southern Company"
-    assert_select ".nd-factrow", text: /subsidiary/, count: 0
+    assert_select ".nd-glance dt", "Parent company"
+    assert_select ".nd-glance dd a[href='/companies/southern-company']", "Southern Company"
+    assert_select ".nd-crow", text: /subsidiary/, count: 0
   end
 
   test "a general role is left out when a more specific one under it is there" do
@@ -237,10 +288,17 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select "body", text: /Rejected/, count: 0
   end
 
-  test "key facts come first in the page, before deals" do
+  test "the page's order: index, header, key facts, deals, plants, the quiet line" do
     get company_path(slug: "kairos-power")
 
-    assert_select ".nd-columns--profile > :first-child.nd-columns__side"
+    order = css_select(".nd-company > *").map { |el| el["class"][/nd-company__\w+/] }
+    assert_equal %w[nd-company__index nd-company__head nd-company__glance nd-company__main nd-company__end], order
+    assert_select ".nd-company__index nav.nd-idx[aria-label='On this page']" do
+      assert_select "a", text: /Overview/
+      assert_select "a[href='#deals']", /Deals and links\s*2/
+      assert_select "a[href='#plants']", /Plants and sites\s*1/
+      assert_select "a[href='#sources']", /Sources\s*2/
+    end
   end
 
   test "facts without a source aren't shown" do
@@ -251,8 +309,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "body", text: /Runs plants|Austin|bare\.example|Kairos/, count: 0
     assert_select ".nd-tag", count: 0
-    assert_select ".nd-gaps li", text: "One-line description"
-    assert_select ".nd-gaps li", text: "Headquarters"
+    assert_select ".nd-gaps", 0, "no Not verified yet panel (removed 25 Oct)"
   end
 
   test "a company with only an invests-in deal gets the Investors breadcrumb" do
@@ -268,13 +325,11 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     cite!(link(westinghouse, "invests_in", @kairos))
     get company_path(slug: westinghouse.slug)
 
-    assert_select ".nd-overview dt", "Type"
-    assert_equal [ "Developers", "Services and engineering", "Investors" ], css_select(".nd-overview ul.nd-bucketchips li .nd-bucketchip__full").map { |label| label.text.strip }
-    assert_select ".nd-overview a.nd-bucketchip.nd-bucket--reactor-developers[href=?] svg", "/companies?category=reactor-developers"
-    assert_select ".nd-overview a.nd-bucketchip.nd-bucket--services[href=?][aria-label=?]", "/companies?category=services", "Services and engineering" do
-      assert_select ".nd-bucketchip__short[aria-hidden=true]", "Services", "the short label where the full one can't fit"
-    end
-    assert_select ".nd-overview a.nd-bucketchip.nd-bucket--investors[href=?]", "/companies?category=investors"
+    assert_select ".nd-glance dt", "Type"
+    assert_equal [ "Developers", "Services and engineering", "Investors" ], css_select(".nd-glance a.nd-chip").map { |chip| chip.text.strip }
+    assert_select ".nd-glance a.nd-chip.nd-bucket--reactor-developers[href=?] svg", "/companies?category=reactor-developers"
+    assert_select ".nd-glance a.nd-chip.nd-bucket--services[href=?]", "/companies?category=services"
+    assert_select ".nd-glance a.nd-chip.nd-bucket--investors[href=?]", "/companies?category=investors"
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
 
@@ -286,12 +341,12 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crumbs a", count: 0
   end
 
-  test "missing must-have fields are listed, not guessed" do
+  test "a missing description or headquarters is left out, with no list of what's missing" do
     get company_path(slug: "google")
 
-    assert_select ".nd-gaps li", text: "One-line description"
-    assert_select ".nd-gaps li", text: "Headquarters"
-    assert_select ".nd-profile__desc", count: 0
+    assert_select ".nd-gaps", 0
+    assert_select ".nd-pagehead__about", 0
+    assert_select ".nd-glance dt", text: "Headquarters", count: 0
   end
 
   test "long lists collapse behind Show all" do
@@ -300,7 +355,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     end
     get company_path(slug: "kairos-power")
 
-    assert_select "#deals-heading ~ ul.nd-list > li", CompanyProfile::VISIBLE_ITEMS
+    assert_select "#deals-heading ~ ul.nd-crows > li", CompanyProfile::VISIBLE_ITEMS
     assert_select "details.nd-more summary .nd-more__open", "Show all #{CompanyProfile::VISIBLE_ITEMS + 3} deals"
     assert_select "details.nd-more summary .nd-more__close", "Show fewer deals"
   end

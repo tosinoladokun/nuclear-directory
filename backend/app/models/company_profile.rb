@@ -63,7 +63,18 @@ class CompanyProfile
       .where.not(relationship_type: "subsidiary_of")
       .includes(:from_organization, :to_organization, evidence: :source).to_a
       .select { |deal| deal.evidence.any? }
-      .sort_by { |deal| [ deal.relationship_type, other_party(deal).name ] }
+      .sort_by { |deal| [ -(deal_date(deal)&.jd || 0), deal.relationship_type, other_party(deal).name ] }
+  end
+
+  # The short "what" of a deal row (#556): from its stored terms, else the
+  # sourced phrase kept on the link, else nothing. Never guessed or cut from a description.
+  def deal_line(deal)
+    DealLine.for_terms(terms_of(deal), company: organization) || deal.short_phrase
+  end
+
+  # When the deal was signed or started: its newest term's date, else the link's own.
+  def deal_date(deal)
+    terms_of(deal).filter_map { |term| term.signed_on || term.starts_on }.max || deal.started_on
   end
 
   def parents
@@ -94,6 +105,13 @@ class CompanyProfile
   def plant_link_citations(link)
     site = link.facility.parent || link.facility
     [ link, link.facility, site ].uniq.flat_map { |fact| citations_for(fact) }.uniq(&:first)
+  end
+
+  # A link's published terms, loaded once for every deal on the page.
+  def terms_of(link)
+    @terms ||= DealTerm.published.where(link_type: "Relationship", link_id: Relationship.published
+      .where(from_organization: organization).or(Relationship.published.where(to_organization: organization)).select(:id)).group_by(&:link_id)
+    @terms.fetch(link.id, [])
   end
 
   def other_party(deal) = deal.from_organization_id == organization.id ? deal.to_organization : deal.from_organization
