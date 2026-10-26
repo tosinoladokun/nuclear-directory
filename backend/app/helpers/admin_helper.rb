@@ -24,7 +24,7 @@ module AdminHelper
     "doe_programs" => "DOE",
     "nrc_research_reactors" => "NRC", "nrc_research_reactors_index" => "NRC",
     "nrc_fuel_cycle" => "NRC", "nrc_fuel_cycle_index" => "NRC",
-    "company_newsrooms" => "Newsroom", "federal_register_nrc" => "Federal Register", "federal_register_index" => "Federal Register", "trade_press" => "Trade press", "arpa_e_projects" => "ARPA-E", "arpa_e_index" => "ARPA-E",
+    "company_newsrooms" => "Newsroom", "federal_register_nrc" => "Federal Register", "federal_register_index" => "Federal Register", "trade_press" => "Trade press", "arpa_e_projects" => "ARPA-E", "arpa_e_index" => "ARPA-E", "nasa_nuclear_news" => "NASA",
     "web_page" => "Research"
   }.freeze
 

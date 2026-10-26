@@ -90,6 +90,7 @@ jobs:
     # answer is missing, runs anyway.
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.test != 'false') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -122,7 +123,18 @@ jobs:
 
       # Link-preview cards are rasterized with libvips (#245), as in the Docker images.
       - name: Install libvips
-        run: sudo apt-get update -qq && (sudo apt-get install -y --no-install-recommends libvips42t64 || sudo apt-get install -y --no-install-recommends libvips42)
+        timeout-minutes: 8
+        # apt on the runners stalls now and then (26 Oct: one run sat here for
+        # over 20 minutes; a normal install takes seconds). Each command is cut
+        # off after 2 minutes and the whole thing tried twice.
+        run: |
+          for attempt in 1 2; do
+            timeout 120 sudo apt-get update -qq &&
+              (timeout 120 sudo apt-get install -y --no-install-recommends libvips42t64 ||
+                timeout 120 sudo apt-get install -y --no-install-recommends libvips42) && exit 0
+            echo "apt stalled or failed (attempt $attempt)"
+          done
+          exit 1
 
       - name: Prepare database
         run: bin/rails db:prepare
@@ -139,6 +151,7 @@ jobs:
     needs: scope
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.system != 'false') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -170,7 +183,18 @@ jobs:
         run: bin/rails tailwindcss:build
 
       - name: Install libvips
-        run: sudo apt-get update -qq && (sudo apt-get install -y --no-install-recommends libvips42t64 || sudo apt-get install -y --no-install-recommends libvips42)
+        timeout-minutes: 8
+        # apt on the runners stalls now and then (26 Oct: one run sat here for
+        # over 20 minutes; a normal install takes seconds). Each command is cut
+        # off after 2 minutes and the whole thing tried twice.
+        run: |
+          for attempt in 1 2; do
+            timeout 120 sudo apt-get update -qq &&
+              (timeout 120 sudo apt-get install -y --no-install-recommends libvips42t64 ||
+                timeout 120 sudo apt-get install -y --no-install-recommends libvips42) && exit 0
+            echo "apt stalled or failed (attempt $attempt)"
+          done
+          exit 1
 
       - name: Prepare database
         run: bin/rails db:prepare
@@ -223,6 +247,7 @@ jobs:
     # Runs unless scope says it isn't needed; if scope itself failed, runs anyway.
     if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.lighthouse != 'false') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
