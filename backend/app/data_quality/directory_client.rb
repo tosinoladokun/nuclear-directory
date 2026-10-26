@@ -320,7 +320,7 @@ class DataQuality::DirectoryClient
   def fact_kinds = "Directory::Lookup::FACT_KINDS".constantize
 
   # Any fact (links included) with its decision and stored values, or nil.
-  def organization_ids_named(name) = lookup.organization_ids_named(name)
+  def organization_by_slug(slug) = lookup.organization(slug:)
 
   # A company name kept as a lead, never thrown away (#548).
   def keep_lead(name:, key:, label:, url: nil) = Directory::Leads.keep(name:, key:, label:, url:)

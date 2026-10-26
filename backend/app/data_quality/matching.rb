@@ -17,6 +17,9 @@
 module DataQuality::Matching
   BY = "agent:data-quality"
   OPEN = %w[new needs_review].freeze
+  MAX_REASON = 1_000
+  # A circuit breaker against a runaway agent (Infra): new companies a day.
+  DAILY_CREATES = 200
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
 
@@ -33,6 +36,10 @@ module DataQuality::Matching
     fail_with = ->(why) { Row.new(id:, ok: false, error: why, created_ids: []) }
     return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless DqAction::ACTIONS.include?(action)
     return fail_with.call("give a reason") if reason.blank?
+    return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
+    if %w[new subsidiary_of].include?(action) && DqAction.live.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
+      return fail_with.call("today's limit of #{DAILY_CREATES} new companies is reached; ask Backend")
+    end
 
     key = row["request_key"].presence&.to_s
     Candidate.transaction do
@@ -41,7 +48,9 @@ module DataQuality::Matching
       done = (DqAction.find_by(request_key: key) if key) || DqAction.live.find_by(candidate_id: id, action:)
       next Row.new(id:, ok: true, error: nil, created_ids: done.created.map { |ref| ref["id"] }) if done
       next fail_with.call("it isn't a company claim") unless candidate.kind == "organization"
-      next fail_with.call("it's already attached or decided (#{candidate.status})") unless OPEN.include?(candidate.status) && candidate.subject_id.nil?
+      # No longer open (settled meanwhile): skipped, not an error (Infra).
+      next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
+        OPEN.include?(candidate.status) && candidate.subject_id.nil?
 
       before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at).as_json
       created = []
@@ -105,22 +114,16 @@ module DataQuality::Matching
 
   class << self
     private
-      # target: a company id, or a name that names exactly one open company.
+      # target: a company's id or slug (Infra: never a name).
       def target(row, directory)
-        value = row["target"]
-        return [ nil, "give the company it's the same as (its id or exact name)" ] if value.blank?
+        value = row["target"].to_s
+        return [ nil, "give the company: its id or slug" ] if value.blank?
 
-        if value.to_s.match?(/\A\d+\z/)
-          record = directory.fact(type: "Organization", id: value.to_i)
-          return [ nil, "no company ##{value}" ] unless record && %w[verified pending].include?(record.verification_status)
+        ref = value.match?(/\A\d+\z/) ? directory.fact(type: "Organization", id: value.to_i) : directory.organization_by_slug(value)
+        record = ref && directory.fact(type: "Organization", id: ref.id)
+        return [ nil, "no open company #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
 
-          return [ record, nil ]
-        end
-        ids = directory.organization_ids_named(value.to_s)
-        return [ nil, "no company named #{value.to_s.inspect}; give its id" ] if ids.empty?
-        return [ nil, "#{value.to_s.inspect} names #{ids.size} companies (##{ids.join(', #')}); give the id" ] if ids.size > 1
-
-        [ directory.fact(type: "Organization", id: ids.first), nil ]
+        [ record, nil ]
       end
 
       def same_as(candidate, row, record, reason, directory)

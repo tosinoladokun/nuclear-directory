@@ -181,7 +181,7 @@ class CheckBlueprintTest < Minitest::Test
   end
 
   def test_tokens_and_the_kill_switch_are_never_checked_in
-    %w[BACKUP_GITHUB_TOKEN DEPLOY_REPORT_GITHUB_TOKEN AUTO_DATA_DEPLOY].each do |key|
+    %w[BACKUP_GITHUB_TOKEN DEPLOY_REPORT_GITHUB_TOKEN AUTO_DATA_DEPLOY DQ_AGENT_TOKEN_DIGEST].each do |key|
       ok, output = check_blueprint do |blueprint|
         web_vars(blueprint).find { |var| var["key"] == key }.replace("key" => key, "value" => "on")
       end

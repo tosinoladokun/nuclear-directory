@@ -13,25 +13,65 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
       content_text: "Licensee: Holtec. Licensee: Fresh Fission LLC. Licensee: Child Fission.")
   end
 
-  teardown { ENV.delete("DQ_AGENT_TOKEN_DIGEST") }
+  teardown do
+    ENV.delete("DQ_AGENT_TOKEN_DIGEST")
+    Api::Dq::MatchingController::RATE_LIMIT_STORE.clear
+  end
 
   def claim(name, quote: "Licensee: #{name}.", **payload) = Candidate.create!(source: @page, kind: "organization", status: "needs_review",
     payload: { "name" => name, **payload }, quote:, notes: %(no exact match for "#{name}"))
   def act(*rows, token: TOKEN) = post(api_dq_matching_path, params: { actions: rows }, as: :json, headers: { "Authorization" => "Bearer #{token}" })
   def results = response.parsed_body["results"]
 
-  test "no token configured: the endpoint doesn't exist; a wrong token is refused" do
+  test "no token configured, or a malformed digest: the endpoint doesn't exist" do
     ENV.delete("DQ_AGENT_TOKEN_DIGEST")
     act({ id: 1, action: "close", reason: "x" })
     assert_response :not_found
-    ENV["DQ_AGENT_TOKEN_DIGEST"] = Digest::SHA256.hexdigest(TOKEN)
+    ENV["DQ_AGENT_TOKEN_DIGEST"] = "not-a-digest"
+    act({ id: 1, action: "close", reason: "x" })
+    assert_response :not_found
+  end
+
+  test "a wrong, missing or cookie-only request is refused, without echoing anything" do
     act({ id: 1, action: "close", reason: "x" }, token: "wrong")
     assert_response :unauthorized
+    assert_equal({ "error" => "unauthorized" }, response.parsed_body)
+    assert_not_includes response.body, ENV["DQ_AGENT_TOKEN_DIGEST"]
+    post api_dq_matching_path, params: { actions: [] }, as: :json
+    assert_response :unauthorized
+    sign_in_as users(:admin)
+    post api_dq_matching_path, params: { actions: [] }, as: :json
+    assert_response :unauthorized, "an admin's session cookie is never enough"
+  end
+
+  test "the rate limit trips before auth, so guessing isn't free" do
+    61.times { act({ id: 1, action: "close", reason: "x" }, token: "wrong") }
+    assert_response :too_many_requests
+  ensure
+    Api::Dq::MatchingController::RATE_LIMIT_STORE.clear
+  end
+
+  test "the token never appears in the log" do
+    log = StringIO.new
+    old = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log)
+    act({ id: claim("Holtec").id, action: "close", reason: "r" })
+    assert_not_includes log.string, TOKEN
+  ensure
+    Rails.logger = old
+  end
+
+  test "a daily cap on new companies, and batches of at most 50" do
+    DataQuality::Matching::DAILY_CREATES.times { |i| DqAction.create!(candidate: claim("Cap #{i}"), action: "new", reason: "r", before: {}, by: DataQuality::Matching::BY) }
+    act({ id: claim("Fresh Fission LLC").id, action: "new", reason: "r" })
+    assert_match "today's limit", results.sole["error"]
+    act(*51.times.map { { id: 1, action: "close", reason: "r" } })
+    assert_response :unprocessable_content
   end
 
   test "same_as: a name variant confirms with its source, publishing nothing new; sent again it's a no-op" do
     variant = claim("Holtec")
-    act({ id: variant.id, action: "same_as", target: "Holtec International", reason: "Same company, short name" })
+    act({ id: variant.id, action: "same_as", target: @holtec.slug, reason: "Same company, short name" })
     assert_equal [ true ], results.map { |r| r["ok"] }, results.inspect
     assert_equal [ "confirmed", @holtec.id ], variant.reload.values_at(:status, :subject_id)
     assert Evidence.exists?(subject: @holtec, quote: "Licensee: Holtec.")
@@ -50,10 +90,10 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "change", DataQuality::Review.inbox_kind(variant)
   end
 
-  test "an unknown name is an error, and the claim is left as it was" do
+  test "a target is an id or slug, never a name; unknown or missing is an error, and the claim is left as it was" do
     c = claim("Holtec")
-    act({ id: c.id, action: "same_as", target: "Nobody Inc", reason: "r" }, { id: c.id, action: "same_as", reason: "r" })
-    assert_match "no company named", results.first["error"]
+    act({ id: c.id, action: "same_as", target: "Holtec International", reason: "r" }, { id: c.id, action: "same_as", reason: "r" })
+    assert_match "no open company", results.first["error"]
     assert_match "give the company", results.second["error"]
     assert_equal "needs_review", c.reload.status
   end
@@ -94,7 +134,9 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     c = claim("Holtec")
     c.update!(status: "matched", subject_type: "Organization", subject_id: @holtec.id)
     act({ id: c.id, action: "close", reason: "r" })
-    assert_match "already attached or decided", results.sole["error"]
+    assert results.sole["ok"], "skipped, not an error"
+    assert_match "skipped: it's already attached or decided", results.sole["error"]
+    assert_equal 0, DqAction.count
   end
 
   test "a retried request with the same key applies once; the new company's history says Data Quality proposed it" do
