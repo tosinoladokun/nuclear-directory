@@ -1256,7 +1256,7 @@
 
 /* The category, technology and All companies pages (#560): the index left, one list in a white panel. */
 @layer components {
-  .nd-page--wide { max-width: 1440px; }
+  .nd-page--wide { max-width: 1280px; }
   .nd-listpage { display: flex; flex-direction: column; gap: var(--nd-space-6); }
   .nd-listpage__index { display: none; }
   .nd-listpage__main { display: flex; flex-direction: column; gap: var(--nd-space-6); min-width: 0; }
