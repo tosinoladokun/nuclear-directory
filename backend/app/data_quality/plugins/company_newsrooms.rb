@@ -90,8 +90,10 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     # Items from this feed a person or match already has: a claim that isn't
     # one extract replaces on every read. Re-reading the feed doesn't send
     # them back to the queue.
-    def decided_urls(source)
-      source.candidates.where(kind: "news_item").where.not(status: "new")
+    # Across every feed of this kind, so a feed that moved address (Holtec's,
+    # TAE's) doesn't propose its old items again.
+    def decided_urls(_source)
+      Candidate.joins(:source).where(sources: { source_kind: }, kind: "news_item").where.not(status: "new")
         .reject { |claim| claim.status_needs_review? && claim.review_origin == "extract" }
         .to_set { |claim| claim.payload["url"] }
     end
