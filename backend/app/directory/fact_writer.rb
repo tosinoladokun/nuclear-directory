@@ -475,6 +475,10 @@ module Directory
         unless row.source_id == source_id && row.quote == quote
           raise Invalid, "evidence #{evidence_id} on #{name} isn't the source and quote given; not removed"
         end
+        # The agent only takes back what a crawl added, never a person's citation.
+        if by.to_s.start_with?("agent:") && row.found_by == "human"
+          raise Invalid, "evidence #{evidence_id} on #{name} was cited by a person; only a person removes it"
+        end
         # Public now (a pending site shows through a verified unit), or verified
         # and hidden only by its parent: either way it must stay sourced.
         public_or_verified = record.verified? || Lookup.published?(type: type.to_s, id:)
