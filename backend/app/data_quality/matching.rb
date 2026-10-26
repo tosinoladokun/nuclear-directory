@@ -22,6 +22,8 @@ module DataQuality::Matching
   # A circuit breaker against a runaway agent (Infra): new companies a day,
   # undone ones included, so create, undo, create never resets it.
   DAILY_CREATES = 200
+  # The same for closes (Infra): the widest action, undone ones included.
+  DAILY_CLOSES = 300
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
 
@@ -41,6 +43,9 @@ module DataQuality::Matching
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
     if %w[new subsidiary_of].include?(action) && DqAction.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
       return fail_with.call("today's limit of #{DAILY_CREATES} new companies is reached; ask Backend")
+    end
+    if action == "close" && DqAction.where(action: "close", created_at: Time.current.all_day).count >= DAILY_CLOSES
+      return fail_with.call("today's limit of #{DAILY_CLOSES} closes is reached; ask Backend")
     end
 
     key = row["request_key"].presence&.to_s

@@ -259,4 +259,10 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert results.sole["ok"], results.inspect
     assert_equal "GE Vernova", link.reload.payload.dig("organization", "name")
   end
+
+  test "a daily cap on closes, undone ones included" do
+    DataQuality::Matching::DAILY_CLOSES.times { |i| DqAction.create!(candidate: claim("Closed #{i}"), action: "close", reason: "r", before: {}, by: DataQuality::Matching::BY, undone_at: (Time.current if i.zero?)) }
+    act({ id: claim("One More").id, action: "close", reason: "r" })
+    assert_match "today's limit of 300 closes", results.sole["error"]
+  end
 end
