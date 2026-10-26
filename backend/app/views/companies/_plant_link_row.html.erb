@@ -13,5 +13,5 @@
     <% if facts && link.facility.status.present? %><span class="nd-crow__what"><%= render "shared/status_mark", status: link.facility.status %></span><% end %>
     <% if where %><span class="nd-crow__place"><%= where %></span><% end %>
   </div>
-  <%= render "shared/source_mark", citations: profile.plant_link_citations(link) %>
+  <%= render "shared/source_mark", citations: profile.plant_link_citations(link), checked: link.verified_at %>
 </li>

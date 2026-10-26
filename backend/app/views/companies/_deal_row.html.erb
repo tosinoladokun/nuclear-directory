@@ -9,12 +9,12 @@
 <% what = profile.deal_line(deal) %>
 <% date = profile.deal_date(deal) %>
 <% evidence = deal.evidence.max_by { |e| e.confidence || 0 } %>
-<% citations = profile.citations_for(deal) %>
+<% citations = profile.deal_citations(deal) %>
 <% quote = evidence&.quote %>
 <% detail_id = "deal-#{deal.id}" %>
 <li class="nd-crow" data-controller="row-open">
   <button type="button" class="nd-crow__line" aria-expanded="false" aria-controls="<%= detail_id %>" data-action="row-open#toggle" data-row-open-target="button">
-    <%= company_square(other) %>
+    <%= company_square(other, category: profile.partner_category(other)) %>
     <%# One line on desktop (name and verb); on phones the other company's name sits alone on line 1 and the rest on line 2. %>
     <span class="nd-crow__who" title="<%= who.join %>">
       <% if from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name"><%= other.name %></b>
@@ -23,10 +23,11 @@
     <% if what.present? %><span class="nd-crow__what" title="<%= what %>"><%= what %></span><% end %>
     <% if date %><time class="nd-crow__date" datetime="<%= date.iso8601 %>"><%= date.strftime("%b %Y") %></time><% end %>
   </button>
-  <%= render "shared/source_mark", citations: %>
+  <%= render "shared/source_mark", citations:, checked: deal.verified_at %>
   <span class="nd-crow__chev" aria-hidden="true"><%= icon("caret-down", size: 16) %></span>
   <div class="nd-crow__more" id="<%= detail_id %>" hidden data-row-open-target="panel">
     <% if deal.description.present? %><p class="type-body"><%= deal.description %></p><% end %>
+    <p class="type-ui"><%= link_to "View #{other.name}", company_url_for(other), class: "nd-link" %></p>
     <% fields = data_quote_fields(evidence) %>
     <% if fields %>
       <p class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>"><%= fields.join(" · ") %></p>

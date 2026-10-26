@@ -6,7 +6,7 @@
     jumping here (source_sheet_controller.js, #90).
     id / hidden: the list's own id and whether it starts closed (the company page's quiet line opens it, #556); the sheet stays in the page either way. %>
 <div data-controller="source-sheet" data-action="click@document->source-sheet#open">
-  <ol class="nd-sources" <%= 'id=sources hidden data-quiet-target=panel'.html_safe if local_assigns[:hidden] %>>
+  <ol class="nd-sources" <%= 'id=sources'.html_safe if local_assigns[:hidden] %>>
     <% sources.each do |number, source| %>
       <% href = safe_source_url(source) %>
       <li id="source-<%= number %>">

@@ -1314,10 +1314,17 @@
   }
   /* The quiet line's panels: sources and the citation, opened in place. */
   .nd-quietpanel { margin-top: var(--nd-space-4); }
-  .nd-quietpanel[hidden] { display: none; }
+  .nd-quietpanel[hidden], .nd-quietpanel [hidden] { display: none; }
   .nd-cite { background: var(--nd-paper-sunken); border-radius: var(--nd-radius-md); padding: var(--nd-space-4); display: flex; flex-direction: column; gap: var(--nd-space-3); }
   .nd-cite p { margin: 0; }
   .nd-quiet button { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
   .nd-quiet button:hover { color: var(--nd-ink); text-decoration: underline; }
   @media (max-width: 639px) { .nd-quiet button { min-height: 44px; } }
+}
+
+/* The company page's key facts below 1024px: the page is one column there, so the panel is full width in two columns (#556). */
+@layer components {
+  @media (max-width: 1023px) {
+    .nd-company__glance .nd-glance { width: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--nd-space-4) var(--nd-space-3); padding: var(--nd-space-4); }
+  }
 }

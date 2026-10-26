@@ -44,7 +44,7 @@ export default class extends Controller {
       label.className = "type-data-sm text-ink-muted"
       label.textContent = `Source ${numbers[index]}`
       return [label, copy]
-    }))
+    }).concat(mark.dataset.checked ? [this.checkedLine(mark.dataset.checked)] : []))
     this.dialogTarget.showModal()
   }
 
@@ -78,13 +78,15 @@ export default class extends Controller {
     }
 
     const checked = chip.getAttribute("aria-label")?.match(/checked (\d{4}-\d{2}-\d{2})/)?.[1]
-    if (checked) {
-      const line = document.createElement("p")
-      line.className = "type-data-sm text-ink-muted"
-      line.textContent = `Checked ${checked}`
-      parts.push(line)
-    }
+    if (checked) parts.push(this.checkedLine(checked))
     return parts
+  }
+
+  checkedLine(date) {
+    const line = document.createElement("p")
+    line.className = "type-data-sm text-ink-muted"
+    line.textContent = `Checked ${date}`
+    return line
   }
 
   copy(node) {

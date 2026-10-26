@@ -65,8 +65,10 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
 
   test "a deal row's short line comes from stored terms, else the link's sourced phrase, else nothing" do
     offtake = Relationship.find_by!(from_organization: @google, to_organization: @kairos)
-    DealTerm.create!(link: offtake, term_type: "offtake", capacity_mw: 5000, agreement: "framework", ends_on: Date.new(2039, 1, 1),
+    term = DealTerm.create!(link: offtake, term_type: "offtake", capacity_mw: 5000, agreement: "framework", ends_on: Date.new(2039, 1, 1),
       signed_on: Date.new(2026, 3, 1), **verification(true))
+    term.evidence.create!(source: @doe_page, quote: "5 GW framework", found_by: "human", confidence: 1)
+    DealTerm.create!(link: offtake, term_type: "offtake", capacity_mw: 1, agreement: "ppa", signed_on: Date.new(2030, 1, 1), **verification(true)) # no source: never shown
     supply = Relationship.find_by!(from_organization: @doe, to_organization: @kairos)
     supply.update!(short_phrase: "LEU and HALEU enrichment")
     get company_path(slug: "kairos-power")
@@ -74,7 +76,10 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crow", text: /Google offtakes from Kairos Power/ do
       assert_select ".nd-crow__what", "5 GW framework by 2039"
       assert_select "time.nd-crow__date[datetime='2026-03-01']", "Mar 2026"
+      assert_select "a.nd-mark[data-sources='1,2'][data-checked='2026-10-09']", 1, "the term's own source counts too, and the mark carries the checked date"
+      assert_select ".nd-crow__more a[href='/companies/google']", "View Google", "the toggle is a button; the company is one click inside"
     end
+    assert_select "li#source-2 small", "energy.gov", "a term's source is in the page's numbered list"
     assert_select ".nd-crow", text: /US Department of Energy supplies/ do
       assert_select ".nd-crow__what", "LEU and HALEU enrichment"
     end
@@ -84,6 +89,25 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crow", text: /Plain Partner supplies/ do
       assert_select ".nd-crow__what", 0
     end
+  end
+
+  test "a company with no evidence of its own shows no country as its headquarters" do
+    bare = company("Bare Abroad Co", city: nil)
+    bare.update!(country_code: "FR")
+    cite!(link(bare, "supplies", @kairos))
+    get company_path(slug: "bare-abroad-co")
+
+    assert_response :success
+    assert_select ".nd-glance dt", text: "Headquarters", count: 0
+    assert_select "body", text: /France/, count: 0
+  end
+
+  test "a plant link's role is named as the public wording does" do
+    designer = plant("Designer Site", facility_type: "power_reactor")
+    cite!(link(@kairos, "vendor_for", designer))
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-crow--plant", text: /Designer Site\s*reactor developer/
   end
 
   test "deals are newest first" do
@@ -166,7 +190,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
         assert_select "h2#source-sheet-title", /Source/
         assert_select "button[type=button][data-action='source-sheet#close']", "Close source details"
       end
-      assert_select "ol.nd-sources[id=sources][hidden]"
+      assert_select "ol.nd-sources#sources:not([hidden])", 1, "in the page open, so links and no-JavaScript visitors land; the script folds it"
     end
     assert_select ".nd-crow a.nd-mark[href='#source-1'][data-sources='1']"
     assert_select ".nd-crow__more .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"

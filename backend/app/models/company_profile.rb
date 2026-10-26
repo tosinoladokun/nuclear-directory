@@ -109,9 +109,21 @@ class CompanyProfile
 
   # A link's published terms, loaded once for every deal on the page.
   def terms_of(link)
-    @terms ||= DealTerm.published.where(link_type: "Relationship", link_id: Relationship.published
-      .where(from_organization: organization).or(Relationship.published.where(to_organization: organization)).select(:id)).group_by(&:link_id)
+    @terms ||= DealTerm.published.includes(evidence: :source).where(link_type: "Relationship", link_id: Relationship.published
+      .where(from_organization: organization).or(Relationship.published.where(to_organization: organization)).select(:id))
+      .select { |term| term.evidence.any? }.group_by(&:link_id)
     @terms.fetch(link.id, [])
+  end
+
+  # The first category of each deal's other company, looked up once for the page.
+  def partner_category(company)
+    @partner_categories ||= Bucket.firsts(deals.map { |deal| other_party(deal) })
+    @partner_categories[company.id]
+  end
+
+  # A deal's sources: its own, then those of the terms that supply its short line or date.
+  def deal_citations(deal)
+    ([ deal ] + terms_of(deal)).flat_map { |fact| citations_for(fact) }.uniq(&:first)
   end
 
   def other_party(deal) = deal.from_organization_id == organization.id ? deal.to_organization : deal.from_organization
@@ -157,7 +169,10 @@ class CompanyProfile
       technologies.each { |technology| cite(technology) }
       cite(organization) if hq_city.present? || hq_state.present? || founded_year.present?
       (parents + subsidiaries).each { |link| cite(link) }
-      deals.each { |deal| cite(deal) }
+      deals.each do |deal|
+        cite(deal)
+        terms_of(deal).each { |term| cite(term) }
+      end
       plant_links.each do |link|
         cite(link)
         [ link.facility, link.facility.parent ].compact.each { |facility| cite(facility) if plant_facts?(facility) }

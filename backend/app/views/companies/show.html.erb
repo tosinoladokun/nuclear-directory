@@ -37,7 +37,7 @@
       { label: "Type", value: (tag.span(class: "nd-chips") { safe_join(p.buckets.map { |b| render("shared/chip", label: b.name, href: directory_url_for(category: b), icon: bucket_icon(b), bucket: b) }) } if p.buckets.any?) },
       { label: role_tags.size > 1 ? "Roles" : "Role", value: name_list.(role_tags), wide: role_tags.size > 1 },
       { label: "Technology", value: name_list.(tech_tags), wide: tech_tags.size > 1 },
-      { label: "Headquarters", value: location(p.hq_city, p.hq_state, country: p.organization.country_code) },
+      { label: "Headquarters", value: location(p.hq_city, p.hq_state, country: (p.organization.country_code if p.sourced?)) },
       { label: "Website", value: (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) },
       { label: p.parents.size > 1 ? "Parent companies" : "Parent company", wide: p.parents.size > 1,
         value: (safe_join(p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") }, ", ") if p.parents.any?) },
@@ -84,7 +84,7 @@
       <% if p.citations.sources.any? %>
         <div class="nd-quietpanel"><%= render "shared/sources_list", sources: p.citations.sources, hidden: true %></div>
       <% end %>
-      <div class="nd-quietpanel" id="cite" hidden data-quiet-target="panel"><%= render "shared/cite_panel", text: cite_text %></div>
+      <div class="nd-quietpanel" id="cite"><%= render "shared/cite_panel", text: cite_text %></div>
     </div>
   </div>
 </main>

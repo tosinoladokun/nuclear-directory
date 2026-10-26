@@ -59,6 +59,15 @@ class CompanyPageSystemTest < ApplicationSystemTestCase
     assert_selector "#cite button", text: "Copy", exact_text: true, wait: 5
   end
 
+  test "the sources fold once the script runs, and a link to a source unfolds them" do
+    visit company_path(slug: @company.slug)
+    assert_selector "ol.nd-sources", visible: :hidden
+
+    visit "#{company_path(slug: @company.slug)}#source-1"
+    assert_selector "ol.nd-sources li#source-1", text: "Google and Kairos Power partner", wait: 10
+    assert_selector "button[data-panel=sources][aria-expanded=true]"
+  end
+
   [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
     test "nothing wraps on the company page at #{width}" do
       resize_viewport(width, height)

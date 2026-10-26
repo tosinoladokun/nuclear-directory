@@ -1,9 +1,10 @@
 <%# One source mark per row (#556): a document and the count of that row's sources. It opens
     those sources in the sheet; without JavaScript it jumps to the first one in the list.
-    Locals: citations [[number, source], ...]. Nothing when the row has none. %>
+    Locals: citations [[number, source], ...]; checked, when the row's fact was last checked (shown in the sheet).
+    Nothing when the row has none. %>
 <% if citations.present? %>
   <% label = pluralize(citations.size, "source") %>
-  <%= link_to "#source-#{citations.first.first}", class: "nd-mark", aria: { label: }, data: { sources: citations.map(&:first).join(",") } do %>
+  <%= link_to "#source-#{citations.first.first}", class: "nd-mark", aria: { label: }, data: { sources: citations.map(&:first).join(","), checked: (data_date(local_assigns[:checked]) if local_assigns[:checked]) } do %>
     <%= icon("link", size: 12) %><span aria-hidden="true"><%= citations.size %></span>
   <% end %>
 <% end %>
