@@ -21,7 +21,11 @@ class Admin::InboxController < Admin::BaseController
     stopped = results.reject(&:ok?)
     if stopped.empty?
       kept = keep_as_lead(ids.first) unless yes
-      flash[:notice] = yes ? "Done. It's live." : (kept ? "Said no. It's kept in Leads." : "Said no.")
+      flash[:notice] = if yes then "Done. It's live."
+      elsif kept then "Said no. It's kept in Leads."
+      elsif params[:kind] == "change" then "Kept what you decided."
+      else "Said no."
+      end
       undoable = Array(before).map { |state| DataQuality::Review.undoable(state, by: actor) }
       flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour) if !yes && undoable.all? && undoable.size <= 20
     else

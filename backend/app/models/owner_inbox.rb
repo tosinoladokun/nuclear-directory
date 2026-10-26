@@ -4,8 +4,9 @@
 # pages decided with it). Everything else is Data Quality's to settle first
 # (Review.inbox_kind "dq"), and a restatement has already confirmed itself.
 class OwnerInbox
-  # Only what's new (Tosin, 24 Oct); a change to his decision stays on Checks.
-  SECTIONS = %w[new_record new_fact].freeze
+  # Everything he needs to do (Tosin, 26 Oct): what's new, and changes to
+  # something already there.
+  SECTIONS = %w[new_record new_fact change].freeze
   # changes: { field => [stored, stated] } for a change, else {}.
   Entry = Data.define(:kind, :item, :copy_ids, :checked, :changes) do
     def ids = [ item.candidate_id, *copy_ids ]
@@ -66,7 +67,12 @@ class OwnerInbox
     # Data Quality said approve, and the claim is still as it looked at it.
     def changes_of(candidate)
       record = @directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return {}
-      DataQuality::Differences.changes(candidate, record, directory: @directory).to_h
+      changes = DataQuality::Differences.changes(candidate, record, directory: @directory).to_h
+      # A unit joining its site is a change too, though no field says so.
+      if candidate.kind == "facility" && (site_id = @directory.site_for_unit(candidate))
+        changes["parent_name"] = [ nil, @directory.fact(type: "Facility", id: site_id)&.name ]
+      end
+      changes
     end
 
     def checked?(candidate) = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
