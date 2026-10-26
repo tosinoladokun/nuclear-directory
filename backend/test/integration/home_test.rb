@@ -14,13 +14,23 @@ class HomeTest < ActionDispatch::IntegrationTest
     cite!(link(google, "offtake_with", kairos))
   end
 
+  # The public pages keep font-display: optional in production (the fonts partial uses
+  # swap elsewhere, so localhost shows the real serif); the page is rendered as production here.
+  def get_as_production(path)
+    env = Rails.env
+    Rails.env = "production"
+    get path
+  ensure
+    Rails.env = env
+  end
+
   test "Roboto Mono never swaps in late: a late swap shifted the /companies list (Lighthouse 0.85)" do
-    get root_path
+    get_as_production root_path
     assert_match(/font-family: "Roboto Mono".*?font-display: optional/, response.body)
   end
 
   test "no font is preloaded: the preload shared slow-4G bandwidth with the CSS and cost LCP 0.4 s" do
-    get root_path
+    get_as_production root_path
     assert_select "link[rel=preload][as=font]", count: 0
     assert_match(/font-family: "Roboto Serif".*?font-display: optional/, response.body, "a swapped-in serif moved the page (CLS 0.25 in CI)")
   end
