@@ -1,0 +1,28 @@
+# Seed research for the NASA news source (#585), 26 Oct 2026. Quotes copied from nasa.gov pages fetched this session.
+name: NASA
+aliases:
+- National Aeronautics and Space Administration
+website: https://www.nasa.gov
+status: active
+roles:
+- key: government_agency
+  source_url: https://www.nasa.gov/
+  quote: National Aeronautics and Space Administration NASA explores the unknown in air and space, innovates for the benefit of humanity, and inspires the world through discovery.
+  confidence: 1.0
+technologies:
+- key: fission
+  source_url: https://www.nasa.gov/centers-and-facilities/glenn/sr-1-freedom-advances-with-progress-on-nuclear-power-module/
+  quote: NASA’s Space Reactor-1 (SR-1) Freedom will be humanity’s first fission-powered spacecraft to travel outside Earth’s orbit.
+  published: '2026-10-20'
+  confidence: 1.0
+relationships: []
+facilities: []
+notes: 'No HQ or country stated in the quotes, so none is set. Added so the NASA nuclear news source (#585) has a record to attach to; NASA funds and buys nuclear work (Fission Surface Power, SR-1 Freedom).'
+description:
+  text: Space agency building SR-1 Freedom, its first fission-powered spacecraft.
+  source_url: https://www.nasa.gov/centers-and-facilities/glenn/sr-1-freedom-advances-with-progress-on-nuclear-power-module/
+  quote: NASA’s Space Reactor-1 (SR-1) Freedom will be humanity’s first fission-powered spacecraft to travel outside Earth’s orbit.
+short_description:
+  text: Space agency with a fission spacecraft
+  source_url: https://www.nasa.gov/centers-and-facilities/glenn/sr-1-freedom-advances-with-progress-on-nuclear-power-module/
+  quote: NASA’s Space Reactor-1 (SR-1) Freedom will be humanity’s first fission-powered spacecraft to travel outside Earth’s orbit.
