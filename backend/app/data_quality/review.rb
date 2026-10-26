@@ -233,9 +233,12 @@ module DataQuality::Review
         return "dq" if candidate.payload.to_h.key?(DataQuality::DirectoryClient::ENRICHMENT_KEY) && !candidate.proposed_subject
         return %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
       end
-      # A restatement, or only a new name for it (#548: name variants are
-      # Data Quality's): no value changes, so never Tosin's.
-      return "dq" if no_value_change?(candidate, directory:)
+      # A restatement, or only a new name for it, changes no value: Data
+      # Quality's (#548). Unless Data Quality settled it as Same as and kept the
+      # name (add_alias): then the new name on his record is his to decide.
+      if no_value_change?(candidate, directory:)
+        return DqAction.live.exists?(candidate_id: candidate.id, action: "same_as") ? "change" : "dq"
+      end
 
       "change"
     end
