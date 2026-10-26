@@ -1143,6 +1143,7 @@
   .nd-lines__head > :nth-child(2) { flex: 1 1 0; min-width: 0; }
   .nd-lines__head > :nth-child(3) { flex: 0 0 170px; text-align: right; }
   .nd-lines > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-lines > .nd-lines__head + li { border-top: 0; }
   .nd-line { display: flex; align-items: center; gap: var(--nd-space-4); min-height: 56px; padding: var(--nd-space-3) 0; color: var(--nd-ink); text-decoration: none; }
   a.nd-line:hover, .nd-line[aria-expanded="true"] { background: var(--nd-paper-sunken); }
   .nd-line__mark { flex: 0 0 var(--nd-row-mark); width: var(--nd-row-mark); height: var(--nd-row-mark); display: grid; place-items: center; }
@@ -1193,7 +1194,7 @@
   .nd-pagehead { display: flex; flex-direction: column; gap: var(--nd-space-2); container-type: inline-size; }
   .nd-pagehead__crumbs { font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); display: flex; gap: var(--nd-space-2); }
   .nd-pagehead__row { display: flex; align-items: center; gap: var(--nd-space-3); flex-wrap: wrap; }
-  .nd-pagehead__square { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--nd-radius-md); background: var(--nd-cat-tint); color: var(--nd-cat); }
+  .nd-pagehead__square { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--nd-radius-md); background: var(--nd-cat-tint, var(--nd-paper-sunken)); color: var(--nd-cat, var(--nd-ink)); }
   /* One line: shrinks to fit (never below 20px) before any ellipsis. --chars is the name's length. */
   .nd-pagehead__name { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; --nd-name-size: 40px; font-size: clamp(20px, calc((100cqw - 120px) / (var(--chars, 20) * 0.6)), var(--nd-name-size)); }
   @media (max-width: 479px) { .nd-pagehead__name { --nd-name-size: 28px; } }
@@ -1265,5 +1266,18 @@
     .nd-listpage { display: grid; grid-template-columns: var(--nd-list-index-width) minmax(0, 1fr); column-gap: var(--nd-space-12); align-items: start; }
     .nd-listpage__index { display: block; }
     .nd-listpage__chips { display: none; }
+  }
+}
+
+/* The list pages' toolbar (#560, Design's review): selects sized to their content; on phones Sort sits beside Filters, both 44px. */
+@layer components {
+  .nd-filters .nd-select select { field-sizing: content; }
+  .nd-sortbar { display: none; margin: 0; }
+  .nd-sortbar .nd-select select { field-sizing: content; }
+  @media (max-width: 560px) {
+    .nd-filterwrap { display: flex; align-items: center; gap: var(--nd-space-3); }
+    .nd-filterwrap__open, .nd-sortbar .nd-select { min-height: 44px; height: 44px; box-sizing: border-box; }
+    .nd-sortbar { display: block; }
+    .nd-filtersheet .nd-select--sort { display: none; }
   }
 }

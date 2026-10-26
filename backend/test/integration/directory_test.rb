@@ -358,10 +358,12 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "ul.nd-lines li.nd-lines__head[aria-hidden=true]", 1
     assert_select ".nd-line__end", /Alameda, CA/
     assert_select "ul.nd-lines .nd-num", 0, "no connection count on the row"
-    assert_select "nav.nd-quiet", /Missing a company\?/
-    assert_select "nav.nd-quiet a[href^='/corrections/new']", /Report a correction/
+    assert_select "nav.nd-quiet a[href^='/corrections/new']", 1, "one link, not two items"
+    assert_select "nav.nd-quiet a", /Missing a company\? Report a correction/
+    assert_select "nav.nd-quiet a svg"
     get companies_path(category: "plants")
-    assert_select "nav.nd-quiet", /Missing a plant\?/
+    assert_select "nav.nd-quiet a", /Missing a plant\? Report a correction/
+    assert_select "form.nd-sortbar[data-controller=auto-submit] select[name=sort]", 1, "phones: Sort beside Filters"
   end
 
   test "a tag page and All companies mark the right index entry, and a tag page has no head square" do
