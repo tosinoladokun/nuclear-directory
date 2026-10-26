@@ -18,6 +18,8 @@ sec.gov: { name: "U.S. Securities and Exchange Commission", kind: agency }
 federalregister.gov: { name: "Federal Register", kind: agency }
 govinfo.gov: { name: "U.S. Government Publishing Office", kind: agency }
 bpa.gov: { name: "Bonneville Power Administration", kind: agency }
+isotopes.gov: { name: "U.S. Department of Energy Isotope Program", kind: agency }
+sbir.gov: { name: "SBIR.gov (U.S. Small Business Administration)", kind: agency }
 fs.usda.gov: { name: "USDA Forest Service", kind: agency }
 
 # News and trade press
@@ -43,3 +45,4 @@ aboutamazon.com: { name: "Amazon", kind: company }
 blog.google: { name: "Google", kind: company }
 fb.com: { name: "Meta", kind: company }
 about.meta.com: { name: "Meta", kind: company }
+southernnuclear.com: { name: "Southern Nuclear", kind: company }
