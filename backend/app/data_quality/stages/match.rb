@@ -737,12 +737,24 @@ class DataQuality::Stages::Match < DataQuality::Stage
       candidates.status_matched.where.not(subject_id: nil).includes(:source).find_each do |candidate|
         next unless DataQuality::Review.evidence_only?(candidate, directory:)
 
-        record = directory.attached_record(candidate) or next
-        confirmation = directory.confirm(candidate, in_source: in_source(candidate), add_evidence: true)
-        next unless confirmation&.confirmed?
+        # Locked as a decision locks it (source, then claim), and still
+        # waiting: a person's decision meanwhile stands, and no evidence is
+        # added for a claim they rejected.
+        Candidate.transaction do
+          Source.lock.find(candidate.source_id)
+          candidate.lock!
+          next unless candidate.status_matched?
 
-        @stats["evidence_only"] = @stats.fetch("evidence_only", 0) + 1
-        confirmed(candidate, record, confirmed_note(record, confirmation))
+          record = directory.attached_record(candidate) or next
+          confirmation = directory.confirm(candidate, in_source: in_source(candidate), add_evidence: true)
+          next unless confirmation&.confirmed?
+
+          # Counted as this run's input, so the run's totals add up.
+          @stats["candidates"] += 1
+          @stats["matched"] += 1
+          @stats["evidence_only"] = @stats.fetch("evidence_only", 0) + 1
+          confirmed(candidate, record, confirmed_note(record, confirmation))
+        end
       end
     end
 

@@ -30,7 +30,10 @@
               <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
             <% end %>
             <% if key == "change" %>
-              <%# Design: the record named, then each field old → new. %>
+              <%# Design: the record named, then each field old → new; with none to show, what approving does. %>
+              <% if entry.changes.empty? %>
+                <p class="type-body-strong m-0"><%= claim_text(item) %></p>
+              <% end %>
               <% entry.changes.each do |field, (stored, stated)| %>
                 <p class="type-body-strong m-0"><%= item.record&.name || item.payload.to_h["name"] %> · <%= field_label(field).upcase_first %>:
                   <s class="text-ink-muted"><%= field_display(field, stored) %></s> → <%= field_display(field, stated) %></p>

@@ -30,7 +30,7 @@ module DataQuality::Claim
   LABELS = { "exchange" => "stock exchange", "ticker" => "ticker", "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
     "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity",
     "amount_usd" => "amount", "amount_offered_usd" => "amount offered", "external_id" => "external ID", "link_name" => "belongs to",
-    "sec_cik" => "SEC CIK" }.freeze
+    "sec_cik" => "SEC CIK", "parent_name" => "site" }.freeze
   # A Form D round's fields in its own words (#129): what it sold, and when it first sold.
   ROUND_LABELS = { "amount_usd" => "amount sold", "starts_on" => "first sale on", "external_id" => "filing" }.freeze
 

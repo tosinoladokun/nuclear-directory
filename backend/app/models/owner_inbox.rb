@@ -67,7 +67,12 @@ class OwnerInbox
     # Data Quality said approve, and the claim is still as it looked at it.
     def changes_of(candidate)
       record = @directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return {}
-      DataQuality::Differences.changes(candidate, record, directory: @directory).to_h
+      changes = DataQuality::Differences.changes(candidate, record, directory: @directory).to_h
+      # A unit joining its site is a change too, though no field says so.
+      if candidate.kind == "facility" && (site_id = @directory.site_for_unit(candidate))
+        changes["parent_name"] = [ nil, @directory.fact(type: "Facility", id: site_id)&.name ]
+      end
+      changes
     end
 
     def checked?(candidate) = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)

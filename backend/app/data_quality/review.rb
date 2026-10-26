@@ -233,8 +233,9 @@ module DataQuality::Review
         return "dq" if candidate.payload.to_h.key?(DataQuality::DirectoryClient::ENRICHMENT_KEY) && !candidate.proposed_subject
         return %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
       end
-      # A restatement that slipped past match changes nothing: never Tosin's.
-      return "dq" if evidence_only?(candidate, directory:)
+      # A restatement, or only a new name for it (#548: name variants are
+      # Data Quality's): no value changes, so never Tosin's.
+      return "dq" if no_value_change?(candidate, directory:)
 
       "change"
     end
@@ -245,6 +246,16 @@ module DataQuality::Review
     # the agreed shortcut; anything that would change a value still asks.
     # Asked again under the record's lock when the shortcut runs.
     def evidence_only?(candidate, directory:)
+      return false unless no_value_change?(candidate, directory:)
+
+      payload = candidate.payload.to_h
+      names = [ payload["name"], *Array(payload["aliases"]) ].compact_blank
+      names.all? { |name| directory.known_name?(type: candidate.subject_type, id: candidate.subject_id, name:) }
+    end
+
+    # Approving it would change no stored or derived value of a published
+    # record; at most it adds a name (an alias), which is Data Quality's (#548).
+    def no_value_change?(candidate, directory:)
       record = directory.fact(type: candidate.subject_type, id: candidate.subject_id)
       return false unless record&.verification_status == "verified"
 
@@ -260,8 +271,7 @@ module DataQuality::Review
       end
       return false if candidate.kind == "facility" && directory.site_for_unit(candidate)
 
-      names = [ payload["name"], *Array(payload["aliases"]) ].compact_blank
-      names.all? { |name| directory.known_name?(type: candidate.subject_type, id: candidate.subject_id, name:) }
+      true
     end
 
     # Each kind of source's first batch: { "usaspending_doe_awards" => crawl run id }.

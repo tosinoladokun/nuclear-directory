@@ -67,6 +67,12 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
     assert waiting.reload.status_confirmed?, waiting.notes
     assert change.reload.status_matched?, "a real change still waits"
     assert_equal 1, stats["evidence_only"]
+    assert_equal [ 1, 0, 1 ], stats.values_at("candidates", "matched", "confirmed"), "the run's totals add up"
     assert Evidence.exists?(subject: @company, quote: "KIND FISSION INC.")
+  end
+
+  test "only a new name for a published company is Data Quality's, not a Change" do
+    variant = claim({ "name" => "Kind Fission Holdings" }, status: "matched", subject_type: "Organization", subject_id: @company.id)
+    assert_equal "dq", kind(variant)
   end
 end
