@@ -32,10 +32,14 @@ module DataQuality::Matching
   end
 
   def self.apply(rows, directory: DataQuality::DirectoryClient.new)
-    Array(rows).map { |row| apply_one(row.to_h.stringify_keys, directory) }
+    # Each source matched again once per request, however many of its ends
+    # were settled (Infra: verify is the AI step).
+    requeue = Set.new
+    Array(rows).map { |row| apply_one(row.to_h.stringify_keys, directory, requeue) }
+      .tap { requeue.each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[match verify]) } }
   end
 
-  def self.apply_one(row, directory)
+  def self.apply_one(row, directory, requeue = Set.new)
     id, action, reason = row["id"].to_i, row["action"].to_s, row["reason"].to_s.squish
     fail_with = ->(why) { Row.new(id:, ok: false, error: why, created_ids: []) }
     return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless DqAction::ACTIONS.include?(action)
@@ -83,7 +87,7 @@ module DataQuality::Matching
         raise Abort, error if error
       end
       error = case action
-      when "same_as" then end_key ? settle_end(candidate, end_key, record, reason) : same_as(candidate, row, record, reason, directory, created)
+      when "same_as" then end_key ? settle_end(candidate, end_key, record, reason, requeue) : same_as(candidate, row, record, reason, directory, created)
       when "new" then propose(candidate, reason, directory, created)
       when "subsidiary_of" then subsidiary_of(candidate, record, reason, directory, created)
       when "close" then close(candidate, reason, directory)
@@ -228,7 +232,7 @@ module DataQuality::Matching
       # The end named as that record now (a plant by its docket when it has
       # one), the claim's own wording kept as another name; then matched
       # again for its source. Nothing is written to the directory.
-      def settle_end(candidate, end_key, record, reason)
+      def settle_end(candidate, end_key, record, reason, requeue)
         named = candidate.payload[end_key]
         return "its #{end_key} end is malformed" unless named.is_a?(Hash)
 
@@ -242,7 +246,7 @@ module DataQuality::Matching
         payload = candidate.payload.deep_dup.merge(end_key => settled)
         candidate.update!(status: "new", payload:, notes: "Data Quality: its #{end_key} is #{record.name}. #{reason}",
           ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
-        DataQuality::RunJob.perform_later(candidate.source.source_kind, only: %w[match verify])
+        requeue << candidate.source.source_kind
         nil
       end
 

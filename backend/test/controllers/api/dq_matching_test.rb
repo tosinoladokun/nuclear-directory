@@ -265,4 +265,15 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     act({ id: claim("One More").id, action: "close", reason: "r" })
     assert_match "today's limit of 300 closes", results.sole["error"]
   end
+
+  test "settling many ends of one source queues its match once" do
+    cooper = Facility.create!(name: "Cooper Nuclear Station", nrc_docket: "05000298", verification_status: "verified", verified_by: "human:tosin")
+    links = 3.times.map do |i|
+      Candidate.create!(source: @page, kind: "facility_relationship", status: "needs_review", quote: "q#{i}",
+        payload: { "organization" => { "name" => "Vendor #{i}" }, "facility" => { "name" => "Cooper" }, "relationship_type" => "vendor_for" })
+    end
+    assert_enqueued_jobs 1, only: DataQuality::RunJob do
+      act(*links.map { |link| { id: link.id, action: "same_as", end: "facility", target: cooper.id, reason: "r" } })
+    end
+  end
 end
