@@ -3,7 +3,7 @@
 <dl class="nd-glance">
   <% facts.select { |fact| fact[:value].present? }.each do |fact| %>
     <%# A long value spans both columns on phones, and drops to 13px before any ellipsis (one line, #556). %>
-    <% long = strip_tags(fact[:value].to_s).length > 24 %>
-    <div class="nd-glance__fact <%= "nd-glance__fact--wide" if fact[:wide] || long %> <%= "nd-glance__fact--long" if long %>"><dt><%= fact[:label] %></dt><%= content_tag :dd, fact[:value], title: strip_tags(fact[:value].to_s) %></div>
+    <% size = strip_tags(fact[:value].to_s).length %>
+    <div class="nd-glance__fact <%= "nd-glance__fact--wide" if fact[:wide] || size > 16 %> <%= "nd-glance__fact--long" if size > 24 %>"><dt><%= fact[:label] %></dt><%= content_tag :dd, fact[:value], title: strip_tags(fact[:value].to_s) %></div>
   <% end %>
 </dl>

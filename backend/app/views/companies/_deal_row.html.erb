@@ -15,7 +15,11 @@
 <li class="nd-crow" data-controller="row-open">
   <button type="button" class="nd-crow__line" aria-expanded="false" aria-controls="<%= detail_id %>" data-action="row-open#toggle" data-row-open-target="button">
     <%= company_square(other) %>
-    <span class="nd-crow__who" title="<%= who.join %>"><%= from_us ? tag.b(who[0]) : who[0] %><%= who[1] %><%= from_us ? who[2] : tag.b(who[2]) %></span>
+    <%# One line on desktop (name and verb); on phones the other company's name sits alone on line 1 and the rest on line 2. %>
+    <span class="nd-crow__who" title="<%= who.join %>">
+      <% if from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name"><%= other.name %></b>
+      <% else %><b class="nd-crow__name"><%= other.name %></b><span class="nd-crow__rest"> <%= verb %><span class="nd-crow__us"> <%= profile.name %></span></span><% end %>
+    </span>
     <% if what.present? %><span class="nd-crow__what" title="<%= what %>"><%= what %></span><% end %>
     <% if date %><time class="nd-crow__date" datetime="<%= date.iso8601 %>"><%= date.strftime("%b %Y") %></time><% end %>
   </button>

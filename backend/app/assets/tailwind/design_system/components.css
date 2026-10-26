@@ -1256,11 +1256,12 @@
 
 /* The company page (#556): index left, the page in one column, key facts right. */
 @layer components {
+  .nd-page--company { max-width: 1280px; }
   .nd-company { display: flex; flex-direction: column; gap: var(--nd-space-10); }
   .nd-company__index { display: none; }
   .nd-company__main { display: flex; flex-direction: column; gap: var(--nd-space-10); min-width: 0; }
   @media (min-width: 1024px) {
-    .nd-company { display: grid; grid-template-columns: var(--nd-index-width) minmax(0, 1fr) var(--nd-glance-width); column-gap: var(--nd-space-8); row-gap: var(--nd-space-16); align-items: start; }
+    .nd-company { display: grid; grid-template-columns: var(--nd-index-width) minmax(0, 1fr) var(--nd-glance-width); column-gap: var(--nd-space-10); row-gap: var(--nd-space-16); align-items: start; }
     .nd-company__index { display: block; grid-column: 1; grid-row: 1 / span 3; position: sticky; top: var(--nd-space-6); align-self: start; }
     .nd-company__index .nd-idx { position: static; width: auto; }
     .nd-company__head { grid-column: 2; grid-row: 1; }
@@ -1277,9 +1278,9 @@
   .nd-crow { position: relative; display: flex; flex-direction: column; }
   .nd-crow__line { display: flex; align-items: center; gap: var(--nd-space-3); width: 100%; min-height: 56px; padding: var(--nd-space-3) 96px var(--nd-space-3) 0; border: 0; background: transparent; color: var(--nd-ink); text-align: left; font: inherit; cursor: pointer; }
   .nd-crow__line:hover, .nd-crow--open { background: var(--nd-paper-sunken); }
-  .nd-crow__who { flex: 0 1 auto; max-width: 62%; min-width: 0; font: 400 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nd-crow__who { flex: 0 1 auto; min-width: 0; font: 400 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-crow__who b { font-weight: 600; }
-  .nd-crow__what { flex: 1 1 120px; min-width: 0; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nd-crow__what { flex: 1 1 0; min-width: 120px; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-crow__date { flex: none; font: 400 13px/20px var(--font-mono); color: var(--nd-ink-muted); white-space: nowrap; }
   .nd-crow__chev { position: absolute; right: 0; top: 0; height: 56px; width: 40px; display: grid; place-items: center; color: var(--nd-ink-muted); pointer-events: none; transition: transform .12s ease-out; }
   .nd-crow--open .nd-crow__chev { transform: rotate(180deg); }
@@ -1295,16 +1296,20 @@
   .nd-mark:hover { color: var(--nd-ink); }
   .nd-crow--plant .nd-mark { right: 0; }
   @media (max-width: 639px) {
-    /* Two lines: the name and verb; then the short "what" and the date (the "what" gets the ellipsis). */
-    .nd-crow__line { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: var(--nd-space-3); row-gap: 2px; align-items: center; }
+    /* Two lines: the other company's name alone; then the verb, the short "what" and the date, with the
+       source mark and chevron at the end of line 2 (the "what" gets the ellipsis). */
+    .nd-crow__line { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; column-gap: var(--nd-space-3); row-gap: 2px; align-items: center; padding-right: 88px; }
     .nd-crow__line > .nd-catsq { grid-row: 1 / span 2; }
-    .nd-crow__who { grid-column: 2 / span 2; }
-    .nd-crow__what { grid-column: 2; }
-    .nd-crow__date { grid-column: 3; }
-    .nd-crow__what:last-child, .nd-crow__date:first-of-type { grid-column: 2 / span 2; }
-    .nd-crow--plant .nd-crow__who { grid-column: 2 / span 2; }
+    .nd-crow__who { display: contents; }
+    .nd-crow__name { grid-column: 2 / -1; grid-row: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+    .nd-crow__us { display: none; }
+    .nd-crow__rest { grid-column: 2; grid-row: 2; white-space: nowrap; font-size: 14px; color: var(--nd-ink-muted); }
+    .nd-crow__what { grid-column: 3; grid-row: 2; min-width: 0; }
+    .nd-crow__date { grid-column: 4; grid-row: 2; }
+    .nd-mark, .nd-crow__chev { top: auto; bottom: 0; height: 40px; }
+    .nd-crow--plant .nd-crow__who { display: block; grid-column: 2 / -1; }
     .nd-crow--plant .nd-crow__what { grid-column: 2; }
-    .nd-crow--plant .nd-crow__place { grid-column: 3; margin-left: 0; }
+    .nd-crow--plant .nd-crow__place { grid-column: 3 / -1; margin-left: 0; }
     .nd-crow__more { padding-left: var(--nd-space-4); }
   }
   /* The quiet line's panels: sources and the citation, opened in place. */

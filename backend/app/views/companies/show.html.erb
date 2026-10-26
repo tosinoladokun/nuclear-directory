@@ -18,7 +18,7 @@
 <% end %>
 <%= render "shared/site_header" %>
 
-<main class="nd-page">
+<main class="nd-page nd-page--company">
   <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
   <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
   <nav class="nd-crumbs" aria-label="Breadcrumb">
