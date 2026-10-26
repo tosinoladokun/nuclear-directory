@@ -54,27 +54,38 @@ module DataQuality::Matching
       next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
       # Close applies to any open claim (a link, a deal term, news); the
       # others settle a company, so they need a company claim.
-      next fail_with.call("it isn't a company claim; only close applies to it") unless candidate.kind == "organization" || action == "close"
+      # same_as with an end settles that end of a link claim (#548): which
+      # company or plant it names. Otherwise only close applies to a link.
+      end_key = row["end"].presence&.to_s
+      if end_key
+        next fail_with.call("an end goes with same_as") unless action == "same_as"
+        next fail_with.call("#{end_key.inspect} isn't an end of a #{candidate.kind} claim") unless end_type(candidate, end_key)
+      elsif candidate.kind != "organization" && action != "close"
+        next fail_with.call("it isn't a company claim; only close applies to it (or same_as with an end)")
+      end
       # No longer open (settled meanwhile): skipped, not an error (Infra).
       next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
         OPEN.include?(candidate.status) && candidate.subject_id.nil?
 
-      before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at).as_json
+      before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at, :payload).as_json
       created = []
       record = nil
-      if %w[same_as subsidiary_of].include?(action)
+      if end_key
+        record, error = target(row, directory, type: end_type(candidate, end_key) == :facility ? "Facility" : "Organization")
+        raise Abort, error if error
+      elsif %w[same_as subsidiary_of].include?(action)
         record, error = target(row, directory)
         raise Abort, error if error
       end
       error = case action
-      when "same_as" then same_as(candidate, row, record, reason, directory, created)
+      when "same_as" then end_key ? settle_end(candidate, end_key, record, reason) : same_as(candidate, row, record, reason, directory, created)
       when "new" then propose(candidate, reason, directory, created)
       when "subsidiary_of" then subsidiary_of(candidate, record, reason, directory, created)
       when "close" then close(candidate, reason, directory)
       end
       raise Abort, error if error
 
-      DqAction.create!(candidate:, action:, target_type: ("Organization" if record), target_id: record&.id, reason:, before:, created:,
+      DqAction.create!(candidate:, action:, target_type: (record.type if record), target_id: record&.id, reason:, before:, created:,
         by: BY, request_key: key, after: stamp_of(candidate.reload))
       Row.new(id:, ok: true, error: nil, created_ids: ids_of(created))
     end
@@ -112,7 +123,7 @@ module DataQuality::Matching
         errors = directory.decide_fact(ref["type"].underscore, id: ref["id"], status: "rejected", by: BY, reason: "Data Quality undid #{action.action}").errors
         raise Abort, errors.to_sentence if errors.any?
       end
-      candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at"))
+      candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at", "payload"))
       action.update!(undone_at: Time.current, undone_by: BY)
       nil
     end
@@ -122,26 +133,31 @@ module DataQuality::Matching
     "someone was deciding on it just then; try again"
   end
 
-  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by].freeze
+  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by payload].freeze
 
   # The claim as an action left it, compared under its lock: anything since
   # (a decision, a reopen, a merge repointing it) means it isn't the same.
   def self.stamp_of(candidate) = candidate.slice(*STAMPED).as_json
-  def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate) == action.after
+  # Only the fields the action stamped (actions before payload was stamped keep working).
+  def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate).slice(*action.after.keys) == action.after
 
   # The records an action created (not the quotes it added).
   def self.ids_of(created) = created.reject { |ref| ref["type"] == "Evidence" }.map { |ref| ref["id"] }
 
   class << self
     private
-      # target: a company's id or slug (Infra: never a name).
-      def target(row, directory)
+      # target: a company's (or plant's) id or slug (Infra: never a name).
+      def target(row, directory, type: "Organization")
         value = row["target"].to_s
-        return [ nil, "give the company: its id or slug" ] if value.blank?
+        noun = type == "Facility" ? "plant" : "company"
+        return [ nil, "give the #{noun}: its id or slug" ] if value.blank?
 
-        ref = value.match?(/\A\d+\z/) ? directory.fact(type: "Organization", id: value.to_i) : directory.organization_by_slug(value)
-        record = ref && directory.fact(type: "Organization", id: ref.id)
-        return [ nil, "no open company #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
+        ref = if value.match?(/\A\d+\z/) then directory.fact(type:, id: value.to_i)
+        elsif type == "Organization" then directory.organization_by_slug(value)
+        else directory.facility_by_slug(value)
+        end
+        record = ref && directory.fact(type:, id: ref.id)
+        return [ nil, "no open #{noun} #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
 
         [ record, nil ]
       end
@@ -199,6 +215,29 @@ module DataQuality::Matching
         link.update!(status: "matched", subject_type: "Relationship", subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: #{name} is a subsidiary of #{parent.name}. #{reason}")
         created << stamp(directory, { "type" => "Relationship", "id" => result.ref.id, "candidate_id" => link.id, "link_claim" => true })
+        nil
+      end
+
+      def end_type(candidate, end_key) = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {})[end_key]
+
+      # The end named as that record now (a plant by its docket when it has
+      # one), the claim's own wording kept as another name; then matched
+      # again for its source. Nothing is written to the directory.
+      def settle_end(candidate, end_key, record, reason)
+        named = candidate.payload[end_key]
+        return "its #{end_key} end is malformed" unless named.is_a?(Hash)
+
+        settled = if end_type(candidate, end_key) == :facility
+          { "name" => record.name, "nrc_docket" => (record.nrc_docket || record.values.to_h["nrc_docket"]).presence }.compact
+        else
+          { "name" => record.name }
+        end
+        spelled = named["name"].to_s
+        settled["aliases"] = [ *named["aliases"], (spelled unless spelled.blank? || spelled.casecmp?(record.name)) ].compact.uniq
+        payload = candidate.payload.deep_dup.merge(end_key => settled)
+        candidate.update!(status: "new", payload:, notes: "Data Quality: its #{end_key} is #{record.name}. #{reason}",
+          ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        DataQuality::RunJob.perform_later(candidate.source.source_kind, only: %w[match verify])
         nil
       end
 

@@ -237,4 +237,26 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_nil DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal "needs_review", link.reload.status
   end
+
+  test "same_as on a link's end names it as that record and sends the claim back to match; Undo restores it" do
+    ge = Organization.create!(name: "GE Vernova", verification_status: "verified", verified_by: "human:tosin")
+    cooper = Facility.create!(name: "Cooper Nuclear Station", nrc_docket: "05000298", verification_status: "verified", verified_by: "human:tosin")
+    link = Candidate.create!(source: @page, kind: "facility_relationship", status: "needs_review", quote: "q",
+      payload: { "organization" => { "name" => "GE" }, "facility" => { "name" => "Cooper", "nrc_docket" => "05000999" }, "relationship_type" => "vendor_for" })
+    act({ id: link.id, action: "same_as", end: "nowhere", target: cooper.id, reason: "r" },
+      { id: link.id, action: "same_as", end: "facility", target: cooper.id, reason: "Cooper is docket 05000298" })
+    assert_match "isn't an end", results.first["error"]
+    assert results.second["ok"], results.inspect
+    link.reload
+    assert_equal "new", link.status
+    assert_equal({ "name" => "Cooper Nuclear Station", "nrc_docket" => "05000298", "aliases" => [ "Cooper" ] }, link.payload["facility"])
+    assert_equal [ "Facility", cooper.id ], DqAction.sole.values_at(:target_type, :target_id)
+
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal [ "needs_review", "Cooper" ], [ link.reload.status, link.payload.dig("facility", "name") ]
+
+    act({ id: link.id, action: "same_as", end: "organization", target: ge.slug, reason: "GE is GE Vernova" })
+    assert results.sole["ok"], results.inspect
+    assert_equal "GE Vernova", link.reload.payload.dig("organization", "name")
+  end
 end
