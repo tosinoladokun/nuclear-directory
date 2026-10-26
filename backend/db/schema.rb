@@ -167,6 +167,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
     t.text "reason", null: false
     t.jsonb "before", null: false
     t.jsonb "created", default: [], null: false
+    t.jsonb "after", default: {}, null: false
     t.string "by", null: false
     t.string "request_key"
     t.datetime "undone_at"

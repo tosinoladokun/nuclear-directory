@@ -46,7 +46,10 @@ module DataQuality::Matching
     Candidate.transaction do
       candidate = Candidate.lock.find_by(id:) or next fail_with.call("no claim ##{id}")
       # Sent again (the same key, or the same action already done): fine, nothing more happens.
-      done = (DqAction.find_by(request_key: key) if key) || DqAction.live.find_by(candidate_id: id, action:)
+      # A live action counts only while the claim is still as it left it
+      # (a person may have reopened it since).
+      done = (DqAction.find_by(request_key: key) if key) ||
+        DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) }
       next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
       next fail_with.call("it isn't a company claim") unless candidate.kind == "organization"
       # No longer open (settled meanwhile): skipped, not an error (Infra).
@@ -69,7 +72,7 @@ module DataQuality::Matching
       raise Abort, error if error
 
       DqAction.create!(candidate:, action:, target_type: ("Organization" if record), target_id: record&.id, reason:, before:, created:,
-        by: BY, request_key: key)
+        by: BY, request_key: key, after: stamp_of(candidate.reload))
       Row.new(id:, ok: true, error: nil, created_ids: ids_of(created))
     end
   rescue Abort => e
@@ -85,11 +88,7 @@ module DataQuality::Matching
       raise Abort, "it was undone already" if action.undone_at
 
       candidate = Candidate.lock.find(action.candidate_id)
-      after = { "same_as" => %w[matched confirmed], "new" => %w[matched], "subsidiary_of" => %w[matched], "close" => %w[rejected] }
-      left_as = after.fetch(action.action).include?(candidate.status) && candidate.reviewed_by.in?([ nil, BY ]) &&
-        (action.action == "close" || [ candidate.subject_type, candidate.subject_id ] ==
-          (action.action == "same_as" ? [ action.target_type, action.target_id ] : [ "Organization", action.created.first&.dig("id") ]))
-      raise Abort, "the claim was decided since, so it can't be undone here" unless left_as
+      raise Abort, "the claim was changed since (decided, reopened or moved by a merge), so it can't be undone here" unless left_as?(action, candidate)
 
       # What it created goes too, but only while it's still pending.
       action.created.each do |ref|
@@ -120,6 +119,13 @@ module DataQuality::Matching
     "someone was deciding on it just then; try again"
   end
 
+  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by].freeze
+
+  # The claim as an action left it, compared under its lock: anything since
+  # (a decision, a reopen, a merge repointing it) means it isn't the same.
+  def self.stamp_of(candidate) = candidate.slice(*STAMPED).as_json
+  def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate) == action.after
+
   # The records an action created (not the quotes it added).
   def self.ids_of(created) = created.reject { |ref| ref["type"] == "Evidence" }.map { |ref| ref["id"] }
 
@@ -146,7 +152,9 @@ module DataQuality::Matching
         rest = candidate.payload.to_h.except("name", "aliases")
         return unless rest.empty? || DataQuality::Differences.changes(candidate, record, directory:)&.empty?
 
-        in_source = ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
+        # The source's own plug-in reads its quote (an NRC row isn't verbatim
+        # in the stored HTML); without one, the stored text must contain it.
+        in_source = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
         had = directory.evidence_rows(type: "Organization", id: record.id).map(&:first)
         confirmation = directory.confirm(candidate, in_source:, add_evidence: true)
         # The quote it added, so Undo can take it back (Database).

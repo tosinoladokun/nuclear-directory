@@ -12,6 +12,8 @@ class CreateDqActions < ActiveRecord::Migration[8.1]
       t.text :reason, null: false
       t.jsonb :before, null: false
       t.jsonb :created, null: false, default: []
+      # The claim as the action left it, so Undo refuses once it changed.
+      t.jsonb :after, null: false, default: {}
       t.string :by, null: false
       # Sent with a row, so a retried request never applies twice.
       t.string :request_key

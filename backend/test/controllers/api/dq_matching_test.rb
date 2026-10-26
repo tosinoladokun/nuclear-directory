@@ -189,4 +189,31 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     post api_dq_matching_path, params: { actions: [ "x" ] }, as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" }
     assert_response :unprocessable_content
   end
+
+  test "a claim reopened after a close is closed again, not taken for a retry" do
+    c = claim("Maybe Fission")
+    act({ id: c.id, action: "close", reason: "Not a company" })
+    c.update!(status: "new", reviewed_by: nil, reviewed_at: nil)
+    act({ id: c.id, action: "close", reason: "Still not a company" })
+    assert_equal "rejected", c.reload.status
+    assert_equal 2, DqAction.count
+  end
+
+  test "Undo refuses once the claim was moved, e.g. by a merge repointing it" do
+    other = Organization.create!(name: "Holtec Survivor", verification_status: "verified", verified_by: "human:tosin")
+    variant = claim("Holtec", quote: "Licensee: Holtec.")
+    act({ id: variant.id, action: "same_as", target: @holtec.id, reason: "r", add_alias: true })
+    variant.update_columns(subject_id: other.id)
+    assert_match "changed since", DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal other.id, variant.reload.subject_id
+  end
+
+  test "a claim Data Quality acted on isn't deleted as stale when its source is read again" do
+    c = claim("Fresh Fission LLC")
+    act({ id: c.id, action: "close", reason: "r" })
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "needs_review", c.reload.status
+    stale = DataQuality::Stages::Extract.allocate.send(:stale, @page)
+    assert_not_includes stale.pluck(:id), c.id
+  end
 end

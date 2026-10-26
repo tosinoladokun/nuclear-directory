@@ -1136,6 +1136,8 @@ module DataQuality::Review
       rescue DataQuality::Plugin::UnknownSourceKind
         nil
       end
+      # Also used by DataQuality::Matching (#548).
+      public :in_source
 
       # Match's guard again, at the decision (#392): another page of the same
       # source kind that the claim's link cites now, which the claim would

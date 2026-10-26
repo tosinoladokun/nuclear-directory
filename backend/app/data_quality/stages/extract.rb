@@ -133,8 +133,10 @@ class DataQuality::Stages::Extract < DataQuality::Stage
     end
 
     # A candidate a person reopened (#228) is kept with its reopenings.
+    # A claim Data Quality acted on keeps its audit (#548), even once undone:
+    # it isn't deleted as stale.
     def stale(source)
       source.candidates.status_new.or(source.candidates.status_needs_review.where(review_origin: "extract"))
-        .where("candidates.reopenings = '[]'::jsonb")
+        .where("candidates.reopenings = '[]'::jsonb").where.not(id: DqAction.select(:candidate_id))
     end
 end
