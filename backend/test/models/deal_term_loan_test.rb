@@ -14,4 +14,9 @@ class DealTermLoanTest < ActiveSupport::TestCase
     loan = DealTerm.create!(link: @link, term_type: "loan", amount_usd: 1_520_000_000, program: "Energy Dominance Financing", term_years: 30)
     assert_equal "$1.52B DOE loan", DealLine.for(loan)
   end
+
+  test "the database refuses a loan without an amount" do
+    loan = DealTerm.create!(link: @link, term_type: "loan", amount_usd: 1_000_000)
+    assert_raises(ActiveRecord::StatementInvalid) { DealTerm.transaction(requires_new: true) { loan.update_columns(amount_usd: nil) } }
+  end
 end
