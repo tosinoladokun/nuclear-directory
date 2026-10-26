@@ -156,4 +156,29 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "claimed since", DataQuality::Matching.undo(DqAction.sole.id)
     assert_nil DqAction.sole.undone_at
   end
+
+  test "Undo of a confirmed same_as takes back the quote it added, and the claim waits again" do
+    page = Source.create!(url: "https://example.com/holtec", source_kind: "web_page", crawl_status: "ok", content_sha256: "h")
+    Evidence.create!(subject: @holtec, source: page, quote: "Holtec International, of Camden.", found_by: "human")
+    variant = claim("Holtec")
+    act({ id: variant.id, action: "same_as", target: @holtec.id, reason: "Short name" })
+    assert_equal "confirmed", variant.reload.status
+    assert Evidence.exists?(subject: @holtec, quote: "Licensee: Holtec.")
+
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_not Evidence.exists?(subject: @holtec, quote: "Licensee: Holtec."), "its quote is taken back"
+    assert Evidence.exists?(subject: @holtec, quote: "Holtec International, of Camden."), "the record's own stays"
+    assert_equal [ "needs_review", nil ], variant.reload.values_at(:status, :subject_id)
+  end
+
+  test "Undo never rejects a created company another claim now points at" do
+    c = claim("Fresh Fission LLC")
+    act({ id: c.id, action: "new", reason: "A new licensee" })
+    company = Organization.find(results.sole["created_ids"].sole)
+    Candidate.create!(source: @page, kind: "organization", status: "matched", payload: { "name" => "Fresh Fission LLC" }, quote: "q",
+      subject_type: "Organization", subject_id: company.id)
+    assert_match "claimed since", DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "pending", company.reload.verification_status
+    assert_equal "matched", c.reload.status
+  end
 end

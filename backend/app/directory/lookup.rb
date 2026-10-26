@@ -189,6 +189,14 @@ module Directory
       end.sort_by { |row| -row[:checked_at].to_f }
     end
 
+    # A fact's evidence rows as [id, source_id, quote], so a caller can name
+    # the one it added (#548's Undo). Reads only.
+    def evidence_rows(type:, id:)
+      raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
+
+      Evidence.where(subject_type: type.to_s, subject_id: id).order(:id).pluck(:id, :source_id, :quote)
+    end
+
     # A fact's evidence, as Directory::EvidenceRef values.
     def evidence(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)

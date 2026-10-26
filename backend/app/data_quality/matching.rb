@@ -46,7 +46,7 @@ module DataQuality::Matching
       candidate = Candidate.lock.find_by(id:) or next fail_with.call("no claim ##{id}")
       # Sent again (the same key, or the same action already done): fine, nothing more happens.
       done = (DqAction.find_by(request_key: key) if key) || DqAction.live.find_by(candidate_id: id, action:)
-      next Row.new(id:, ok: true, error: nil, created_ids: done.created.map { |ref| ref["id"] }) if done
+      next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
       next fail_with.call("it isn't a company claim") unless candidate.kind == "organization"
       # No longer open (settled meanwhile): skipped, not an error (Infra).
       next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
@@ -60,7 +60,7 @@ module DataQuality::Matching
         raise Abort, error if error
       end
       error = case action
-      when "same_as" then same_as(candidate, row, record, reason, directory)
+      when "same_as" then same_as(candidate, row, record, reason, directory, created)
       when "new" then propose(candidate, reason, directory, created)
       when "subsidiary_of" then subsidiary_of(candidate, record, reason, directory, created)
       when "close" then close(candidate, reason, directory)
@@ -69,7 +69,7 @@ module DataQuality::Matching
 
       DqAction.create!(candidate:, action:, target_type: ("Organization" if record), target_id: record&.id, reason:, before:, created:,
         by: BY, request_key: key)
-      Row.new(id:, ok: true, error: nil, created_ids: created.map { |ref| ref["id"] })
+      Row.new(id:, ok: true, error: nil, created_ids: ids_of(created))
     end
   rescue Abort => e
     Row.new(id: row["id"].to_i, ok: false, error: e.message, created_ids: [])
@@ -92,6 +92,13 @@ module DataQuality::Matching
 
       # What it created goes too, but only while it's still pending.
       action.created.each do |ref|
+        if ref["type"] == "Evidence"
+          result = directory.remove_evidence(type: ref["on"], id: ref["record_id"], evidence_id: ref["id"], source_id: ref["source_id"],
+            quote: ref["quote"], by: BY, reason: "Data Quality undid same_as")
+          raise Abort, "couldn't take back its quote: #{result.errors.to_sentence}" unless result.success?
+
+          next
+        end
         type, id = ref["type"], ref["id"]
         directory.lock_fact(type:, id:)
         decided = directory.fact(type:, id:)&.verification_status != "pending" || directory.verification_history(type:, id:).size != ref["events"]
@@ -112,6 +119,9 @@ module DataQuality::Matching
     "someone was deciding on it just then; try again"
   end
 
+  # The records an action created (not the quotes it added).
+  def self.ids_of(created) = created.reject { |ref| ref["type"] == "Evidence" }.map { |ref| ref["id"] }
+
   class << self
     private
       # target: a company's id or slug (Infra: never a name).
@@ -126,7 +136,7 @@ module DataQuality::Matching
         [ record, nil ]
       end
 
-      def same_as(candidate, row, record, reason, directory)
+      def same_as(candidate, row, record, reason, directory, created)
         candidate.update!(status: "matched", subject_type: "Organization", subject_id: record.id, proposed_subject: false,
           notes: "Data Quality: same as #{record.name}. #{reason}")
         return if row["add_alias"] || record.verification_status != "verified"
@@ -136,7 +146,12 @@ module DataQuality::Matching
         return unless rest.empty? || DataQuality::Differences.changes(candidate, record, directory:)&.empty?
 
         in_source = ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
+        had = directory.evidence_rows(type: "Organization", id: record.id).map(&:first)
         confirmation = directory.confirm(candidate, in_source:, add_evidence: true)
+        # The quote it added, so Undo can take it back (Database).
+        directory.evidence_rows(type: "Organization", id: record.id).reject { |row| had.include?(row.first) }.each do |evidence_id, source_id, quote|
+          created << { "type" => "Evidence", "on" => "Organization", "record_id" => record.id, "id" => evidence_id, "source_id" => source_id, "quote" => quote }
+        end
         if confirmation&.confirmed?
           candidate.update!(status: "confirmed", notes: "Data Quality: same as #{record.name}; adds the source. #{reason}")
         end
