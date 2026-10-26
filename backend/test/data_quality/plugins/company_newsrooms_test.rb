@@ -62,6 +62,19 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert_match "Cameco's own news feed", plugin.source_facts(source)
   end
 
+  test "a release names its partners by legal form: they join what it's about, so the ones we don't have become leads" do
+    atom = <<~XML
+      <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+        <entry><title>Acme signs fuel supply deal with Bright Fuel Holdings, Inc. and Grid Co LLC</title><link href="https://acme.example/n"/>
+          <published>2026-10-01T00:00:00Z</published><summary>Acme Fission, Inc. and its partners announced the deal.</summary></entry></feed>
+    XML
+    source = Source.create!(url: "https://acme.example/feed", source_kind: "company_newsrooms", crawl_status: "ok", content_text: atom, content_sha256: "x")
+
+    about = plugin(feeds: { "Acme" => source.url }).extract(source, nil).sole[:payload]["about"].map { |a| a["name"] }
+
+    assert_equal [ "Acme", "Bright Fuel Holdings, Inc", "Grid Co LLC" ], about
+  end
+
   test "an Atom feed reads the same way" do
     atom = <<~XML
       <?xml version="1.0" encoding="utf-8"?>
