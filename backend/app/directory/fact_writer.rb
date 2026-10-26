@@ -60,7 +60,7 @@ module Directory
     KINDS = {
       organization: {
         model: Organization,
-        attributes: %i[name short_name slug legal_name website domain sec_cik eia_utility_id description hq_city hq_state country_code founded_year status aliases
+        attributes: %i[name short_name slug legal_name website domain sec_cik eia_utility_id description short_description hq_city hq_state country_code founded_year status aliases
           exchange ticker]
       },
       organization_role: { model: OrganizationRole, attributes: %i[organization_id role] },
@@ -72,11 +72,11 @@ module Directory
       },
       relationship: {
         model: Relationship,
-        attributes: %i[from_organization_id to_organization_id relationship_type description started_on ended_on]
+        attributes: %i[from_organization_id to_organization_id relationship_type description short_phrase started_on ended_on]
       },
       facility_relationship: {
         model: FacilityRelationship,
-        attributes: %i[organization_id facility_id relationship_type ownership_pct description started_on ended_on]
+        attributes: %i[organization_id facility_id relationship_type ownership_pct description short_phrase started_on ended_on]
       },
       # A news item for "Latest" (#137), the same one by its link.
       news_item: { model: NewsItem, attributes: %i[url title publisher published_on summary] },

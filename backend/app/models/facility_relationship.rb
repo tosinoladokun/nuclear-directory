@@ -1,6 +1,9 @@
 # How an organization is tied to a facility: owns, operates, vendor_for or
 # offtakes_from. ownership_pct is only meaningful for owns.
 class FacilityRelationship < ApplicationRecord
+  # A deal row's "what" when it has no deal terms (#559, Design 4.2).
+  normalizes :short_phrase, with: ->(text) { text.squish.presence }
+  validates :short_phrase, length: { maximum: ShortDescription::MAX }, allow_nil: true
   include Verifiable
 
   enum :relationship_type, %w[owns operates vendor_for offtakes_from].index_by(&:itself), validate: true

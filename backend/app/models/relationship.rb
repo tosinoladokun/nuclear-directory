@@ -2,6 +2,9 @@
 # Read it as "from <type> to", e.g. Georgia Power subsidiary_of Southern Company.
 # Deal stage (MOU vs signed) goes in the description.
 class Relationship < ApplicationRecord
+  # A deal row's "what" when it has no deal terms (#559, Design 4.2).
+  normalizes :short_phrase, with: ->(text) { text.squish.presence }
+  validates :short_phrase, length: { maximum: ShortDescription::MAX }, allow_nil: true
   include Verifiable
 
   # funds = grants and awards; invests_in = equity;

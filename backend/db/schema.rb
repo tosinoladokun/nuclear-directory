@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -239,6 +239,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "description"
+    t.string "short_phrase"
     t.index ["facility_id"], name: "index_facility_relationships_on_facility_id"
     t.index ["organization_id", "facility_id", "relationship_type"], name: "index_facility_relationships_uniqueness", unique: true
     t.index ["organization_id"], name: "index_facility_relationships_on_organization_id"
@@ -247,6 +248,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.check_constraint "ownership_pct IS NULL OR ownership_pct >= 0::numeric AND ownership_pct <= 100::numeric", name: "facility_relationships_ownership_pct_check"
     t.check_constraint "relationship_type::text = ANY (ARRAY['owns'::character varying::text, 'operates'::character varying::text, 'vendor_for'::character varying::text, 'offtakes_from'::character varying::text])", name: "facility_relationships_relationship_type_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "facility_relationships_verification_status_check"
+    t.check_constraint "char_length(short_phrase::text) <= 40", name: "facility_relationships_short_phrase_length"
   end
 
   create_table "former_slugs", force: :cascade do |t|
@@ -408,6 +410,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.datetime "updated_at", null: false
     t.string "sec_cik"
     t.string "short_name"
+    t.string "short_description"
     t.datetime "enrich_requested_at"
     t.datetime "enriched_at"
     t.string "exchange"
@@ -428,6 +431,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "organizations_short_name_check"
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying::text, 'acquired'::character varying::text, 'defunct'::character varying::text])", name: "organizations_status_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "organizations_verification_status_check"
+    t.check_constraint "char_length(short_description::text) <= 40", name: "organizations_short_description_length"
   end
 
   create_table "relationships", force: :cascade do |t|
@@ -435,6 +439,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.bigint "to_organization_id", null: false
     t.string "relationship_type", null: false
     t.text "description"
+    t.string "short_phrase"
     t.date "started_on"
     t.date "ended_on"
     t.decimal "confidence", precision: 3, scale: 2
@@ -451,6 +456,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_24_200000) do
     t.check_constraint "from_organization_id <> to_organization_id", name: "relationships_not_self_check"
     t.check_constraint "relationship_type::text = ANY (ARRAY['supplies'::character varying::text, 'invests_in'::character varying::text, 'funds'::character varying::text, 'offtake_with'::character varying::text, 'subsidiary_of'::character varying::text])", name: "relationships_relationship_type_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "relationships_verification_status_check"
+    t.check_constraint "char_length(short_phrase::text) <= 40", name: "relationships_short_phrase_length"
   end
 
   create_table "roles", force: :cascade do |t|
