@@ -25,7 +25,7 @@ class DataQuality::Plugins::DoeNuclearNews < DataQuality::Plugins::TradePress
     taken = decided_urls(source)
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
       .sort_by(&:published_on).reverse.filter_map do |item|
-        named = named_in("#{item.title} #{item.summary}").reject { |hit| hit["name"].casecmp?(DOE) }
+        named = named_in("#{item.title} #{item.summary}").reject { |hit| doe?(hit) }
         next if named.empty?
 
         { kind: "news_item", quote: item.title, payload: {
@@ -34,6 +34,20 @@ class DataQuality::Plugins::DoeNuclearNews < DataQuality::Plugins::TradePress
           "about" => [ { "name" => DOE, "type" => "organization" }, *named ] }.compact }
       end.first(PER_FEED)
   end
+
+  private
+
+  # DOE itself, by any of its names ("Office of Nuclear Energy" is an alias
+  # of DOE's record): never a company the item is about besides DOE.
+  def doe?(hit)
+    return true if hit["name"].casecmp?(DOE)
+    return false unless hit["type"] == "organization"
+
+    @doe_id = @directory.organization(name: DOE)&.id unless defined?(@doe_id)
+    @doe_id.present? && @directory.organization(name: hit["name"])&.id == @doe_id
+  end
+
+  public
 
   def source_facts(_source)
     "This is the U.S. Department of Energy's Office of Nuclear Energy news feed: each item is DOE's own " \

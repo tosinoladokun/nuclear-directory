@@ -26,6 +26,18 @@ class DataQuality::Plugins::DoeNuclearNewsTest < ActiveSupport::TestCase
     assert_includes DataQuality::DailyCrawlJob::SOURCE_KINDS, "doe_nuclear_news"
   end
 
+  test "an item naming only DOE's own office isn't proposed" do
+    doe = Organization.find_by(name: "U.S. Department of Energy") || Organization.create!(name: "U.S. Department of Energy")
+    doe.verify!(by: "human:tosin") unless doe.verified?
+    doe.aliases.find_or_create_by!(alias: "U.S. Department of Energy")
+    doe.aliases.find_or_create_by!(alias: "Office of Nuclear Energy")
+    DataQuality::Stages::Crawl.call(plugin:)
+
+    titles = plugin.extract(source, nil).map { |c| c[:quote] }
+    refute_includes titles, "DOE Office of Nuclear Energy Announces $50M in Funding to Revolutionize Reactor Cladding Material"
+    assert_includes titles, "Department of Energy Provides Rare Salt Material to Natura Resources"
+  end
+
   test "each recent announcement naming a company we have is news about DOE and that company, never a lead" do
     DataQuality::Stages::Crawl.call(plugin:)
     claims = plugin.extract(source, nil)
