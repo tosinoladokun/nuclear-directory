@@ -23,3 +23,7 @@ description:
   also:
   - source_url: https://www.ampeers.com/blog/hts
     quote: By dramatically improving manufacturing efficiency and scale, AMPeers is enabling the widespread adoption of superconductors in fusion magnets, power transmission, and next-generation energy systems.
+short_description:
+  text: 'Superconducting wire for fusion magnets'
+  source_url: https://www.ampeers.com/blog/hts
+  quote: 'By dramatically improving manufacturing efficiency and scale, AMPeers is enabling the widespread adoption of superconductors in fusion magnets, power transmission, and next-generation energy systems.'

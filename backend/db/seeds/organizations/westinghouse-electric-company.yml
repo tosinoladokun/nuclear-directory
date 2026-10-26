@@ -62,3 +62,7 @@ description:
   text: Company whose reactor technology, services and fuel are used across the world's nuclear power plants.
   source_url: https://westinghousenuclear.com
   quote: Westinghouse technology powers 57% of the world's nuclear power plants, maintains nearly two-thirds of the world's nuclear fleet and fuels 40% of that fleet.
+short_description:
+  text: 'Reactor technology, services and fuel'
+  source_url: https://westinghousenuclear.com
+  quote: 'Westinghouse technology powers 57% of the world''s nuclear power plants, maintains nearly two-thirds of the world''s nuclear fleet and fuels 40% of that fleet.'

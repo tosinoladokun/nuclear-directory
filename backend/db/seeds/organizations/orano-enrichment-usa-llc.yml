@@ -16,3 +16,7 @@ notes: An existing record the NRC fuel cycle crawl proposed (Tosin approved it 2
 description:
   source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/orano-enrichment
   quote: 'Orano Enrichment USA | Location: Oak Ridge, TN | Licensee: Orano Enrichment USA, LLC | Docket Number: 07007038 | Facility Type: Uranium Enrichment | Facility Status: Licensing Application'
+short_description:
+  text: 'Uranium enrichment project, Oak Ridge'
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/orano-enrichment
+  quote: 'Orano Enrichment USA | Location: Oak Ridge, TN | Licensee: Orano Enrichment USA, LLC | Docket Number: 07007038 | Facility Type: Uranium Enrichment | Facility Status: Licensing Application'

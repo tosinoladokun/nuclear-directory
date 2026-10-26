@@ -40,3 +40,7 @@ description:
   quote: Allied Power, headquartered in Baton Rouge, LA, provides high-quality maintenance, modifications, and project services to the global power industry, prioritizing safety, efficiency, and reliability.
   also:
   - quote: 'We provide full-service nuclear maintenance across the entire asset lifecycle'
+short_description:
+  text: 'Nuclear plant maintenance and services'
+  source_url: https://alliedpwr.com/about
+  quote: 'We provide full-service nuclear maintenance across the entire asset lifecycle'

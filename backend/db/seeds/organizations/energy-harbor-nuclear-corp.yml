@@ -14,3 +14,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Davis-Besse | 05000346 | NPF-3 | PWR | 21 miles ESE of Toledo, OH | Energy Harbor Nuclear Corp. | 3
+short_description:
+  text: 'Nuclear plant operator'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Davis-Besse | 05000346 | NPF-3 | PWR | 21 miles ESE of Toledo, OH | Energy Harbor Nuclear Corp. | 3'

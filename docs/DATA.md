@@ -112,6 +112,12 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | Category (role) | See "Buckets and tags" below. One quote per category, saying what the company does |
 | Technology | `fission`, `fusion`, `smr` today. Planned design types (roadmap, #263): `molten_salt_reactor`, `htgr`, `sodium_fast`, `microreactor`, `light_water_smr`, tagged only from a source that states the design |
 
+### Location, short descriptions and short names (Design, 26 Oct)
+- **Location is only what a source states.** A city needs its state (a US company) or its country in a quote that says it, such as "Alameda, California United States". `country_code` stays blank unless a source states it. Never fill a state or country from a nearby fact, the company's other offices or what's likely.
+- **`short_description`** is a noun phrase of at most 40 characters, no final full stop, no company name, no hype: "Uranium mining in Wyoming", not "Mines uranium". It is sourced like the description, with a quote that supports it.
+- **`short_name`** is a display label for a long legal or registered name, only where the company itself uses the short form. It never replaces the name and is never a source of identity.
+- **A company with no current role** (defunct, or absorbed) gets status `acquired` or `defunct`, backed by a primary-source quote, so it leaves the lists. It is never given a role it doesn't have.
+
 ### Buckets and tags (Tosin, 15 Oct; #263, #267)
 
 **Scope: the whole US nuclear industry, not only power** (Tosin): fission and fusion, fuel, isotopes, equipment, waste, services, buyers, investors and research.

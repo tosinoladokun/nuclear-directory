@@ -16,3 +16,8 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Monticello | 05000263 | DPR-22 | BWR | 35 miles NW of Minneapolis, MN | Northern States Power Company – Minnesota | 3
+short_description:
+  text: 'Nuclear plant operator in Minnesota'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Monticello | 05000263 | DPR-22 | BWR | 35 miles NW of Minneapolis, MN | Northern States Power Company – Minnesota | 3'
+short_name: NSP-Minnesota

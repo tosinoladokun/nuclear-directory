@@ -60,3 +60,7 @@ description:
   quote: Centrus Energy is a trusted supplier of enriched uranium fuel for commercial nuclear power plants in the United States and around the world.
   also:
   - quote: 'Centrus is pioneering production of High-Assay, Low-Enriched Uranium'
+short_description:
+  text: 'High-assay enriched uranium production'
+  source_url: https://www.centrusenergy.com/who-we-are/
+  quote: 'Centrus is pioneering production of High-Assay, Low-Enriched Uranium'

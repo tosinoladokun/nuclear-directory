@@ -14,3 +14,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Diablo Canyon 1 | 05000275 | DPR-80 | PWR | 12 miles WSW of San Luis Obispo, CA | Pacific Gas & Electric Co. | 4
+short_description:
+  text: 'Nuclear plant operator in California'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Diablo Canyon 1 | 05000275 | DPR-80 | PWR | 12 miles WSW of San Luis Obispo, CA | Pacific Gas & Electric Co. | 4'

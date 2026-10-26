@@ -42,3 +42,7 @@ description:
   text: Small modular reactor company whose NuScale Power Module was the first SMR design approved by the NRC.
   source_url: https://www.nuscalepower.com/about
   quote: We made history in 2020 as the first SMR to receive U.S. Nuclear Regulatory Commission (NRC) design approval
+short_description:
+  text: 'First NRC-approved small modular reactor'
+  source_url: https://www.nuscalepower.com/about
+  quote: 'We made history in 2020 as the first SMR to receive U.S. Nuclear Regulatory Commission (NRC) design approval'

@@ -14,3 +14,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Susquehanna 1 | 05000387 | NPF-14 | BWR | 70 miles NE of Harrisburg, PA | Susquehanna Nuclear, LLC | 1
+short_description:
+  text: 'Nuclear plant operator in Pennsylvania'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Susquehanna 1 | 05000387 | NPF-14 | BWR | 70 miles NE of Harrisburg, PA | Susquehanna Nuclear, LLC | 1'

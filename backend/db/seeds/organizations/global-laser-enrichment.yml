@@ -13,3 +13,7 @@ notes: An existing record (DOE awardee). Only the role is added, from the compan
 description:
   source_url: https://www.gle-us.com/about
   quote: GLE was formed in 2007 to develop and commercialize laser-based uranium enrichment technology capability in the U.S.
+short_description:
+  text: 'Laser uranium enrichment'
+  source_url: https://www.gle-us.com/about
+  quote: 'GLE was formed in 2007 to develop and commercialize laser-based uranium enrichment technology capability in the U.S.'

@@ -63,3 +63,7 @@ description:
   quote: Urenco supplies uranium enrichment services and fuel cycle products to customers around the world, helping to provide reliable, low-carbon electricity through nuclear energy.
   also:
   - quote: 'These are located in Germany, the Netherlands, the UK and the USA.'
+short_description:
+  text: 'Uranium enrichment services'
+  source_url: https://www.urenco.com/about-us
+  quote: 'Urenco supplies uranium enrichment services and fuel cycle products to customers around the world, helping to provide reliable, low-carbon electricity through nuclear energy.'

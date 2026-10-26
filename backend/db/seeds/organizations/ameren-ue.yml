@@ -14,3 +14,7 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Callaway | 05000483 | NPF-30 | PWR | 25 miles ENE of Jefferson City, MO | Ameren UE | 4
+short_description:
+  text: 'Nuclear plant operator in Missouri'
+  source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
+  quote: 'Callaway | 05000483 | NPF-30 | PWR | 25 miles ENE of Jefferson City, MO | Ameren UE | 4'

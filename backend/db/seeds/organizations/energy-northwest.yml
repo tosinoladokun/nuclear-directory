@@ -58,3 +58,7 @@ description:
   also:
   - quote: 'Energy Northwest is a joint operating agency formed by the Washington State Legislature in 1957.'
     source_url: https://www.energy-northwest.com/who-we-are
+short_description:
+  text: 'Washington joint operating agency'
+  source_url: https://www.energy-northwest.com/who-we-are
+  quote: 'Energy Northwest is a joint operating agency formed by the Washington State Legislature in 1957.'

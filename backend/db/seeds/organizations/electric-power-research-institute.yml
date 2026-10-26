@@ -24,3 +24,7 @@ description:
   also:
   - source_url: https://nuclearplantmod.epri.com/Nuclear_Plant_Modernization_Toolbox
     quote: The Plant Modernization Toolbox (PMTB) Wiki is intended to be a resource to facilitate decision making and execution of the modernization process at nuclear power plants (NPPs).
+short_description:
+  text: 'Non-profit energy research institute'
+  source_url: https://europe.epri.com/
+  quote: 'EPRI Europe is the European research arm of EPRI, a world-recognised non-profit RD&D membership organization with global reach.'
