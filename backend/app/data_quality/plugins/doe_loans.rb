@@ -34,6 +34,7 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
         row.source_kind = source_kind
         row.title = "DOE loan: #{project}"
       end
+      take_over(source)
       stats[project] = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_text(html) }.to_s
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: NO_TABLE)
@@ -44,8 +45,8 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   def extract(source, _run)
     facts = parse(source.content_text) or return []
     borrower = facts["Owners"]
-    # The borrower and the amount, both lines of the table, so the quote shows who and how much.
-    quote = source.content_text.lines.map(&:chomp).select { |line| line.start_with?("Owners: ", "Loan Amount: ") }.join("\n")
+    # Every table line the link states: borrower, program, amount, closing date.
+    quote = source.content_text.lines.map(&:chomp).select { |line| line.start_with?("Owners: ", "Loan Program: ", "Loan Amount: ", "Issuance Date: ") }.join("\n")
     description = [ "Loan of #{facts['Loan Amount']}", facts["Loan Program"] && "under the #{facts['Loan Program']}",
       facts["Issuance Date"] && "closed #{facts['Issuance Date']}" ].compact.join(", ")
     [
@@ -73,6 +74,15 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   end
 
   private
+    # A research page already stored at this URL becomes this kind's; its
+    # fetch date stays (once a day holds) and its old HTML is cleared.
+    def take_over(source)
+      return unless source.source_kind == "web_page"
+
+      source.update!(source_kind:, etag: nil, last_modified: nil, content_text: nil, content_sha256: nil,
+        extracted_sha256: nil, extracted_rows_sha256: nil)
+    end
+
     # The Project Statistics table as "Label: value" lines.
     def stored_text(html)
       table = Nokogiri::HTML(html.to_s).css("table").find { |each| each.text.include?("Loan Amount") } or raise Unreadable

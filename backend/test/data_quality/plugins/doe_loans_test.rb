@@ -32,6 +32,14 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
     refute_match(/Jobs/, text)
   end
 
+  test "a research page already at the URL is taken over, keeping its fetch date" do
+    old = Source.create!(url: CRANE, source_kind: "web_page", content_text: "<html>old</html>", etag: "x", fetched_at: 1.day.ago)
+    crawl
+    old.reload
+    assert_equal "doe_loans", old.source_kind
+    assert_includes old.content_text, "Owners: Constellation Energy Generation, LLC"
+  end
+
   test "a page without the table needs a person" do
     stub_request(:get, PALISADES).to_return(body: "<html><main><h1>Palisades</h1><p>Moved.</p></main></html>")
 
@@ -49,7 +57,7 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
       [ link[:payload].dig("from_organization", "name"), link[:payload].dig("to_organization", "name"), link[:payload]["relationship_type"] ]
     assert_equal "Loan of $1.52 Billion, under the Energy Dominance Financing Program, closed September 2024", link[:payload]["description"]
     assert [ company, link ].all? { |claim| plugin.quote_in_source?(source, claim[:quote]) }
-    assert_equal "Owners: Holtec Palisades, LLC\nLoan Amount: $1.52 Billion", link[:quote], "who and how much"
+    assert_equal "Owners: Holtec Palisades, LLC\nLoan Program: Energy Dominance Financing Program\nLoan Amount: $1.52 Billion\nIssuance Date: September 2024", link[:quote]
     refute plugin.quote_in_source?(source, "Owners: Holtec Palisades, LLC\nLoan Amount: $9 Billion")
   end
 end
