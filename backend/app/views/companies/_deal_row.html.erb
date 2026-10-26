@@ -25,7 +25,7 @@
     <% if date %><time class="nd-crow__date" datetime="<%= date.iso8601 %>"><%= date.strftime("%b %Y") %></time><% end %>
   </button>
   <%= render "shared/source_mark", citations:, checked: deal.verified_at %>
-  <span class="nd-crow__chev" aria-hidden="true"><%= icon("caret-down", size: 16) %></span>
+  <span class="nd-crow__chev" aria-hidden="true"><span class="nd-crow__chev-down"><%= icon("caret-down", size: 16) %></span><span class="nd-crow__chev-up"><%= icon("caret-down", size: 16) %></span></span>
   <div class="nd-crow__more" id="<%= detail_id %>" hidden data-row-open-target="panel">
     <% if deal.description.present? %><p class="type-body"><%= deal.description %></p><% end %>
     <p class="type-ui"><%= link_to "View #{other.name}", company_url_for(other), class: "nd-link" %></p>

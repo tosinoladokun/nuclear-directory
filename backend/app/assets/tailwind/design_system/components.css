@@ -1285,8 +1285,11 @@
   .nd-crow__name[data-fit="small"] { font-size: 13px; }
   .nd-crow__what { flex: 1 1 0; min-width: 120px; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-crow__date { flex: none; font: 400 13px/20px var(--font-mono); color: var(--nd-ink-muted); white-space: nowrap; }
-  .nd-crow__chev { position: absolute; right: 0; top: 0; height: 56px; width: 40px; display: grid; place-items: center; color: var(--nd-ink-muted); pointer-events: none; transition: transform .12s ease-out; }
-  .nd-crow--open .nd-crow__chev { transform: rotate(180deg); }
+  .nd-crow__chev { position: absolute; right: 0; top: 0; height: 56px; width: 40px; display: grid; place-items: center; color: var(--nd-ink-muted); pointer-events: none; }
+  /* Two static glyphs swapped (down closed, up open), so no turn is ever caught half-way. */
+  .nd-crow__chev-up { display: none; transform: rotate(180deg); }
+  .nd-crow--open .nd-crow__chev-down { display: none; }
+  .nd-crow--open .nd-crow__chev-up { display: block; }
   .nd-crow__more { padding: var(--nd-space-2) var(--nd-space-4) var(--nd-space-4) 44px; display: flex; flex-direction: column; gap: var(--nd-space-2); background: var(--nd-paper-sunken); }
   .nd-crow__more > * { margin: 0; }
   .nd-crow--plant .nd-crow__line { cursor: default; padding-right: 56px; }
