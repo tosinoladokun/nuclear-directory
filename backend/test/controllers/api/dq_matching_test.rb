@@ -223,7 +223,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     Evidence.create!(subject: @holtec, source: @page, quote: "Licensee: Holtec.", found_by: "crawler")
     result = Directory::FactWriter.remove_evidence(type: "Organization", id: @holtec.id, evidence_id: row.id, source_id: page.id,
       quote: "Cited by hand.", by: DataQuality::Matching::BY, reason: "test")
-    assert_match "only a person removes it", result.errors.join
+    assert_match "can't remove a quote a person added", result.errors.join
     assert Evidence.exists?(row.id)
   end
 end

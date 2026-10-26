@@ -477,7 +477,7 @@ module Directory
         end
         # The agent only takes back what a crawl added, never a person's citation.
         if by.to_s.start_with?("agent:") && row.found_by == "human"
-          raise Invalid, "evidence #{evidence_id} on #{name} was cited by a person; only a person removes it"
+          raise Invalid, "Data Quality's agent can't remove a quote a person added"
         end
         # Public now (a pending site shows through a verified unit), or verified
         # and hidden only by its parent: either way it must stay sourced.
