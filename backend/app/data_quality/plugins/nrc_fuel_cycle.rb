@@ -21,7 +21,10 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
   LIST_URL = "https://www.nrc.gov/facilities-safety/facility-finder/fc".freeze
   PAGE_PATH = %r{\A/facilities-safety/facility-finder/fc/(?!project-managers)[a-z0-9-]+}
   LABELS = [ "Location", "Licensee", "Docket Number", "Facility Type", "Facility Status" ].freeze
-  NO_FACTS = "The facility's page is missing one of #{LABELS.join(', ')}; the page layout may have changed"
+  # A facility under licence application (Global Laser Enrichment) has no
+  # Facility Status line yet: it's read as not operational, never guessed.
+  REQUIRED = LABELS - [ "Facility Status" ]
+  NO_FACTS = "The facility's page is missing one of #{REQUIRED.join(', ')}; the page layout may have changed"
   UNLISTED = "NRC's fuel cycle locations page no longer links this facility"
   LISTED_AGAIN = "NRC's fuel cycle locations page links this facility again"
   NO_LINKS = "The locations page links no facility pages; the page layout may have changed"
@@ -133,7 +136,7 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
       doc = Nokogiri::HTML(html.to_s)
       name = doc.at_css("main h1, h1")&.text.to_s.squish
       facts = LABELS.to_h { |label| [ label, value_after(doc, label) ] }.compact
-      raise Unreadable if name.empty? || LABELS.any? { |label| facts[label].blank? }
+      raise Unreadable if name.empty? || REQUIRED.any? { |label| facts[label].blank? }
 
       Plant.new(name:, facts:).line
     end

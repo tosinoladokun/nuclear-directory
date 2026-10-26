@@ -62,6 +62,33 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert_match "Cameco's own news feed", plugin.source_facts(source)
   end
 
+  test "a release names its partners by legal form: they join what it's about, so the ones we don't have become leads" do
+    atom = <<~XML
+      <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+        <entry><title>Acme signs fuel supply deal with Bright Fuel Holdings, Inc. and Grid Co LLC</title><link href="https://acme.example/n"/>
+          <published>2026-10-01T00:00:00Z</published><summary>Acme Fission, Inc. and its partners announced the deal.</summary></entry></feed>
+    XML
+    source = Source.create!(url: "https://acme.example/feed", source_kind: "company_newsrooms", crawl_status: "ok", content_text: atom, content_sha256: "x")
+
+    about = plugin(feeds: { "Acme" => source.url }).extract(source, nil).sole[:payload]["about"].map { |a| a["name"] }
+
+    assert_equal [ "Acme", "Bright Fuel Holdings, Inc", "Grid Co LLC" ], about
+  end
+
+  test "a Title Case headline: the partner's name starts after the last joining word" do
+    atom = <<~XML
+      <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+        <entry><title>Acme Signs Agreement With Bright Fuel Holdings, Inc.</title><link href="https://acme.example/a"/><published>2026-10-01T00:00:00Z</published></entry>
+        <entry><title>Signs Deal With Grid Power LLC And Selects Nova Reactors Corp</title><link href="https://acme.example/b"/><published>2026-10-02T00:00:00Z</published></entry></feed>
+    XML
+    source = Source.create!(url: "https://acme.example/feed", source_kind: "company_newsrooms", crawl_status: "ok", content_text: atom, content_sha256: "x")
+
+    abouts = plugin(feeds: { "Acme" => source.url }).extract(source, nil).to_h { |c| [ c[:quote], c[:payload]["about"].map { |a| a["name"] } ] }
+
+    assert_equal [ "Acme", "Bright Fuel Holdings, Inc" ], abouts["Acme Signs Agreement With Bright Fuel Holdings, Inc."]
+    assert_equal [ "Acme", "Grid Power LLC", "Nova Reactors Corp" ], abouts["Signs Deal With Grid Power LLC And Selects Nova Reactors Corp"]
+  end
+
   test "an Atom feed reads the same way" do
     atom = <<~XML
       <?xml version="1.0" encoding="utf-8"?>
@@ -88,6 +115,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     urls = plugin.extract(source, nil).map { |c| c[:payload]["url"] }
     refute_includes urls, url
     assert urls.any?
+  end
+
+  test "a feed that moved address doesn't propose items already claimed from its old one" do
+    url = "https://www.cameco.com/media/news/cameco-provides-date-for-2026-q3-results-conference-call-and-webcast"
+    old = Source.create!(url: "https://old.cameco.example/rss", source_kind: "company_newsrooms", crawl_status: "ok", content_text: "x", content_sha256: "x")
+    old.candidates.create!(kind: "news_item", status: "rejected", quote: "q", payload: { "url" => url })
+
+    refute_includes plugin.extract(stored, nil).map { |c| c[:payload]["url"] }, url
   end
 
   test "a summary changing is a change; a summary is plain text, cut at a word" do

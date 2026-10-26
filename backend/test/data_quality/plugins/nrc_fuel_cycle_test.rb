@@ -56,8 +56,16 @@ class DataQuality::Plugins::NrcFuelCycleTest < ActiveSupport::TestCase
     assert_requested :get, %r{facility-finder/fc/}, times: 1
   end
 
-  test "a page missing its status is a changed layout, not a plant that stopped" do
+  test "a page with no status line (a licence application, as Global Laser Enrichment's) is read as not operational" do
     stub_request(:get, %r{facility-finder/fc/}).to_return(body: file_fixture("nrc/fuel_cycle/urenco.html").read.sub(%r{<br><strong>Facility Status:</strong> Operational}, ""))
+    crawl
+
+    assert page.crawl_ok?
+    assert_equal %w[facility organization], plugin.extract(page, nil).map { |c| c[:kind] }, "no operates link or stage without a status"
+  end
+
+  test "a page missing its docket is a changed layout and goes to a person" do
+    stub_request(:get, %r{facility-finder/fc/}).to_return(body: file_fixture("nrc/fuel_cycle/urenco.html").read.sub(%r{<strong>Docket Number:</strong> 07003103<br>}, ""))
 
     assert_equal 12, crawl.stats["facility_pages"]["needs_human"]
   end
