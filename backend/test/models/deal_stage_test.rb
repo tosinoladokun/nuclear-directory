@@ -40,4 +40,22 @@ class DealStageTest < ActionDispatch::IntegrationTest
     @signed.destroy!
     assert_not_includes Bucket.organization_ids(Category.find("power-buyers")).pluck(:id), @buyer.id
   end
+
+  test "a framework's term source is cited on its row; staged links add nothing to the home ranking" do
+    term_page = Source.create!(url: "https://example.com/framework-term", source_kind: "web_page", crawl_status: "ok", content_sha256: "t")
+    Evidence.create!(subject: @framework.deal_terms.sole, source: term_page, quote: "a 12 GW framework", found_by: "human")
+    profile = CompanyProfile.new(@buyer)
+    assert_equal 2, profile.citations_for(profile.deals.find { |deal| deal.id == @framework.id }).size, "the link's source and the term's"
+
+    score = ->(org) { HomeCategories.send(:new).send(:company_links_sql).then { |sql| Organization.where(id: org.id).pick(Arel.sql(sql)) } }
+    assert_equal 1, score.(@buyer), "the signed deal only"
+  end
+
+  test "a framework offtake from a plant is tagged too" do
+    plant = @cite.(Facility.create!(name: "Stage Plant", facility_type: "power_reactor", status: "operating", verification_status: "verified", verified_by: BY))
+    link = @cite.(FacilityRelationship.create!(organization: @buyer, facility: plant, relationship_type: "offtakes_from", verification_status: "verified", verified_by: BY))
+    DealTerm.create!(link:, term_type: "offtake", agreement: "mou", capacity_mw: 100, verification_status: "verified", verified_by: BY)
+    get company_path(slug: @buyer.slug)
+    assert_select "span.nd-tag", "Non-binding"
+  end
 end
