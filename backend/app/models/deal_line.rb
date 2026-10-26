@@ -39,7 +39,8 @@ module DealLine
       parts.pop
       line = parts.join(" ")
     end
-    line if line.length <= MAX
+    # A bare "Anchors" or "award" left after shortening says nothing.
+    line if line.length <= MAX && !%w[Anchors award].include?(line)
   end
 
   # $80M, $1.5B, $750K, $900.

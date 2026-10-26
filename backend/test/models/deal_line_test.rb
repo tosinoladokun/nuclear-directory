@@ -43,4 +43,11 @@ class DealLineTest < ActiveSupport::TestCase
     newer = Term.new(id: 2, term_type: "award", lead_investor_ids: [], signed_on: Date.new(2025, 1, 1))
     assert_equal "$10M GAIN award", DealLine.for_terms([ older, newer ]), "the newer has nothing stored"
   end
+
+  test "shortened to a bare prefix: nothing, so an older term can give the line" do
+    long = term(term_type: "funding_round", round: "Series C-1 Extension Preferred Units Tranche", lead_investor_ids: [ 7 ], signed_on: Date.new(2025, 1, 1))
+    assert_nil DealLine.for(long, company: Company.new(7))
+    older = Term.new(id: 2, term_type: "award", lead_investor_ids: [], amount_usd: 5_000_000, program: "GAIN", signed_on: Date.new(2023, 1, 1))
+    assert_equal "$5M GAIN award", DealLine.for_terms([ long, older ], company: Company.new(7))
+  end
 end
