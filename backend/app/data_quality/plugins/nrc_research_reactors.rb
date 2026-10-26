@@ -25,7 +25,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
   INDEX_SOURCE_KIND = "nrc_research_reactors_index"
   TABLE_SUMMARY = "Locations of Research and Test Reactors"
   NO_TABLE = "Couldn't find the table of research and test reactors; the page layout may have changed"
-  NO_FACTS = "The reactor's page has no name, Licensee or Docket Number; the page layout may have changed"
+  NO_FACTS = "The reactor's page has no title, Docket Number or Reactor Type; the page layout may have changed"
   UNLISTED = "NRC's research and test reactor table no longer links this reactor"
   LISTED_AGAIN = "NRC's research and test reactor table links this reactor again"
   FIELDS = [ "Licensee", "Location", "Docket Number", "Reactor Type" ].freeze
@@ -143,19 +143,27 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       [ "needs_human", source ]
     end
 
-    # The page's own name and labelled facts; never the page's people. The
-    # table's Name column names the reactor, not always its licensee.
+    # The page's own facts; never the page's people. NRC titles a reactor's
+    # page with its licensee ("Texas A&M University") and names no reactor,
+    # so the reactor is named from the licensee and its reactor type ("Texas
+    # A&M University TRIGA reactor"), which tells a licensee's two apart.
     def stored_line(html, _row)
       doc = Nokogiri::HTML(html.to_s)
-      name = doc.at_css("main h1, h1")&.text.to_s.squish
-      facts = FIELDS.to_h { |label| [ label, value_after(doc, label) ] }.compact
-      raise Unreadable if name.empty? || facts["Licensee"].blank? || facts["Docket Number"].blank?
+      licensee = doc.at_css("main h1, h1")&.text.to_s.squish
+      facts = { "Licensee" => licensee.presence, "Location" => value_after(doc, "Location"),
+        "Docket Number" => value_after(doc, "Docket Number"), "Reactor Type" => value_after(doc, "Reactor Type") }.compact
+      raise Unreadable if licensee.empty? || facts["Docket Number"].blank? || facts["Reactor Type"].blank?
 
-      Reactor.new(name:, facts:).line
+      Reactor.new(name: "#{licensee} #{facts['Reactor Type']} reactor", facts:).line
     end
 
     def value_after(doc, label)
       strong = doc.css("strong").find { |node| node.text.gsub(/[[:space:]]+/, " ").strip.delete_suffix(":").strip == label } or return
+      # A table row: the label's cell, then the value's.
+      if (cell = strong.ancestors("td").first) && cell.text.squish.delete_suffix(":").strip == label
+        return cell.next_element&.text.to_s.gsub(/[[:space:]]+/, " ").strip.presence
+      end
+
       text = +""
       node = strong.next_sibling
       while node && node.name != "br" && node.name != "strong"

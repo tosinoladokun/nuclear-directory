@@ -423,7 +423,8 @@ GAIN pages answer our bot with 403, and the fusion milestone program's page move
 
 `plugins/nrc_research_reactors.rb` reads the "Locations of Research and Test Reactors" table on NRC's non-power
 page (an index, never extracted) and each reactor page it links, at most once a day. It stores, from the reactor
-page alone, its name, Licensee, Location, Docket Number and Reactor Type; never contacts.
+page alone: its title (the licensee, as NRC names it), Location, Docket Number and Reactor Type, in label and value
+cells; never contacts. The reactor is named from its licensee and type ("Texas A&M University TRIGA reactor").
 Each gives the reactor (`research_reactor`, docket, city, state), its licensee, and `university` or
 `national_lab` only where the licensee's name says so. No operates link and no power level. The medical isotope
 and advanced reactor tables aren't read.

@@ -1,10 +1,10 @@
 require "test_helper"
 
-# The fixture is NRC's real non-power reactor locations page (fetched
-# 2026-10-22 with the plug-in's user agent). NRC blocked the next request,
-# so the reactor pages here are written in the layout of NRC's other
-# facility pages; the first production read checks the real ones, and a
-# page without a name or docket goes to a person.
+# Fixtures: NRC's real non-power reactor locations page and two real
+# reactor pages, MIT's and Texas A&M's TRIGA (fetched 2026-10-26 with the
+# plug-in's user agent, cut to their facts table). The other reactors are
+# written in the same layout: a title naming the licensee, then a table of
+# label and value cells.
 class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
   Plugin = DataQuality::Plugins::NrcResearchReactors
   PAGES = %r{\Ahttps://www\.nrc\.gov/facilities-safety/facility-finder/nonpower/}
@@ -15,10 +15,13 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     @list = stub_request(:get, Plugin::LIST_URL).to_return(body: file_fixture("nrc/nonpower/list.html").read)
     @pages = stub_request(:get, PAGES).to_return do |request|
       slug = request.uri.path.split("/").last
-      licensee = slug.start_with?("mit") ? "Massachusetts Institute of Technology" : "Licensee of #{slug}"
-      { body: "<html><main><h1>Reactor #{slug}</h1><p><strong>Location:</strong> Cambridge, MA<br><strong>Licensee:</strong> #{licensee}<br>" \
-        "<strong>Docket Number:</strong> 0500#{slug.sum.to_s.rjust(4, '0')}<br><strong>Reactor Type:</strong> TRIGA<br>" \
-        "<strong>Licensed Power:</strong> 1 MWt</p><p>Project Manager: (a person)</p></main></html>" }
+      real = Rails.root.join("test/fixtures/files/nrc/nonpower/#{{ "mit-ma-hwr-reflected" => "mit", "tamu-tx-triga" => "tamu" }[slug]}.html")
+      next { body: real.read } if %w[mit-ma-hwr-reflected tamu-tx-triga].include?(slug)
+
+      { body: "<html><main><h1>Licensee of #{slug}</h1><table><tr><td><strong>Location:</strong></td><td>Springfield, IL</td></tr>" \
+        "<tr><td><strong>Docket Number:</strong></td><td>0500#{slug.sum.to_s.rjust(4, '0')}</td></tr>" \
+        "<tr><td><strong>Reactor Type:</strong></td><td>TRIGA</td></tr><tr><td><strong>Power Level (kW):</strong></td><td>1,000</td></tr></table>" \
+        "<p>Project Manager: (a person)</p></main></html>" }
     end
   end
 
@@ -38,9 +41,9 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     assert_equal({ "changed" => 29 }, run.stats["reactor_pages"])
     assert_equal({ "skipped_recent" => 29 }, second.stats["reactor_pages"])
     assert_not_requested :get, %r{nonpower/shine-medical}
-    assert_equal "Reactor mit-ma-hwr-reflected | Licensee: Massachusetts Institute of Technology | Location: Cambridge, MA | " \
-      "Docket Number: 0500#{'mit-ma-hwr-reflected'.sum.to_s.rjust(4, '0')} | Reactor Type: TRIGA", mit.content_text
-    refute_match(/Project Manager|Licensed Power/, mit.content_text)
+    assert_equal "Massachusetts Institute of Technology HWR Reflected reactor | Licensee: Massachusetts Institute of Technology | " \
+      "Location: Cambridge, MA | Docket Number: 05000020 | Reactor Type: HWR Reflected", mit.content_text
+    refute_match(/Project Manager|Power Level|R-37/, mit.content_text)
   end
 
   test "a same-day rerun after a block requests no later page" do
@@ -53,10 +56,12 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     assert_requested :get, PAGES, times: 1 # the first run's blocked page; the rerun asks for none
   end
 
-  test "the licensee is the page's, not the table's Name column (Texas A&M's two reactors)" do
+  test "the licensee is the page's title, not the table's Name column, and the reactor type tells Texas A&M's two apart" do
     crawl
     tamu = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/tamu-tx-triga")
-    assert_equal "Licensee of tamu-tx-triga", plugin.extract(tamu, nil).second[:payload]["name"]
+    facility, organization = plugin.extract(tamu, nil)
+    assert_equal "Texas A&M University", organization[:payload]["name"]
+    assert_equal [ "Texas A&M University TRIGA reactor", "05000128" ], facility[:payload].values_at("name", "nrc_docket")
   end
 
   test "a table row without its page link makes the whole read unusable; nothing is withdrawn" do
@@ -108,7 +113,7 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     claims = plugin.extract(mit, nil)
 
     assert_equal %w[facility organization organization_role], claims.map { |c| c[:kind] }
-    assert_equal({ "name" => "Reactor mit-ma-hwr-reflected", "facility_type" => "research_reactor", "nrc_docket" => claims.first[:payload]["nrc_docket"],
+    assert_equal({ "name" => "Massachusetts Institute of Technology HWR Reflected reactor", "facility_type" => "research_reactor", "nrc_docket" => "05000020",
       "country_code" => "US", "city" => "Cambridge", "state" => "MA" }, claims.first[:payload])
     assert_equal "university", claims.last[:payload]["role"]
     dow = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/dcc-mi-triga")
