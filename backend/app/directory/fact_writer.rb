@@ -458,7 +458,8 @@ module Directory
     # source_id: and quote: must be the row's, so a wrong id can't remove
     # the right evidence.
     def remove_evidence(type:, id:, evidence_id:, source_id:, quote:, by:, reason:)
-      raise Invalid, "removing evidence is a human's decision (by: \"human:…\")" unless by.to_s.match?(/\Ahuman:\S+\z/)
+      # Or Data Quality's agent undoing evidence its own action added (#548).
+      raise Invalid, "removing evidence is a human's decision (by: \"human:…\")" unless by.to_s.match?(/\A(human:\S+|agent:data-quality)\z/)
       raise Invalid, "removing evidence needs a reason" if reason.blank?
       raise Invalid, "not a fact type: #{type.inspect}" unless Lookup::FACT_TYPES.include?(type.to_s)
 
@@ -473,6 +474,10 @@ module Directory
         # Compared exactly: "9oops" isn't source 9, and "" isn't a missing quote.
         unless row.source_id == source_id && row.quote == quote
           raise Invalid, "evidence #{evidence_id} on #{name} isn't the source and quote given; not removed"
+        end
+        # The agent only takes back what a crawl added, never a person's citation.
+        if by.to_s.start_with?("agent:") && row.found_by == "human"
+          raise Invalid, "Data Quality's agent can't remove a quote a person added"
         end
         # Public now (a pending site shows through a verified unit), or verified
         # and hidden only by its parent: either way it must stay sourced.

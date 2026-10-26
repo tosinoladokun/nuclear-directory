@@ -98,6 +98,11 @@ services:
       # else turns it off.
       - key: AUTO_DATA_DEPLOY
         sync: false
+      # Data Quality's matching endpoint (#548): the SHA-256 hex digest of its
+      # agent's token, set by hand. Unset (or not 64 hex characters), the
+      # endpoint is off; a new digest rotates the token without a deploy.
+      - key: DQ_AGENT_TOKEN_DIGEST
+        sync: false
       # Its backup before writing: the same script, key and repo as the
       # backup cron job below, tagged backup-<time>-predeploy.
       - key: BACKUP_AGE_RECIPIENT
