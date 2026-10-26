@@ -13,7 +13,8 @@
 # new:           a pending company from the claim, for Tosin's Create / No.
 # subsidiary_of: a pending company, plus a pending "subsidiary of" link to
 #                the target, both for his decision.
-# close:         reject the claim with the reason; a lead's name stays in Leads.
+# close:         reject any open, unattached claim (a company, link, deal term
+#                or news item) with the reason; a lead's name stays in Leads.
 module DataQuality::Matching
   BY = "agent:data-quality"
   OPEN = %w[new needs_review].freeze
@@ -51,7 +52,9 @@ module DataQuality::Matching
       done = (DqAction.find_by(request_key: key) if key) ||
         DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) }
       next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
-      next fail_with.call("it isn't a company claim") unless candidate.kind == "organization"
+      # Close applies to any open claim (a link, a deal term, news); the
+      # others settle a company, so they need a company claim.
+      next fail_with.call("it isn't a company claim; only close applies to it") unless candidate.kind == "organization" || action == "close"
       # No longer open (settled meanwhile): skipped, not an error (Infra).
       next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
         OPEN.include?(candidate.status) && candidate.subject_id.nil?
@@ -206,7 +209,7 @@ module DataQuality::Matching
       def close(candidate, reason, directory)
         candidate.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Data Quality closed it: #{reason}")
         # A lead is never thrown away (#548).
-        if DataQuality::Review.lead?(candidate) && (name = candidate.payload.to_h["name"]).present?
+        if candidate.kind == "organization" && DataQuality::Review.lead?(candidate) && (name = candidate.payload.to_h["name"]).present?
           directory.keep_lead(name:, key: "dq_close:#{candidate.id}", label: "Closed by Data Quality", url: candidate.source&.url)
         end
         nil
