@@ -61,7 +61,7 @@ class CompanyProfile
     @deals ||= Relationship.published
       .where(from_organization: organization).or(Relationship.published.where(to_organization: organization))
       .where.not(relationship_type: "subsidiary_of")
-      .includes(:from_organization, :to_organization, evidence: :source).to_a
+      .includes(:from_organization, :to_organization, :deal_terms, evidence: :source).to_a
       .select { |deal| deal.evidence.any? }
       .sort_by { |deal| [ -(deal_date(deal)&.jd || 0), deal.relationship_type, other_party(deal).name ] }
   end
@@ -76,6 +76,10 @@ class CompanyProfile
   def deal_date(deal)
     terms_of(deal).filter_map { |term| term.signed_on || term.starts_on }.max || deal.started_on
   end
+
+  # The deals counted as deals: a framework or other non-binding one is
+  # listed with its stage, never counted (#487).
+  def counted_deals = deals.reject(&:stage)
 
   def parents
     @parents ||= Relationship.published.subsidiary_of.where(from_organization: organization)
