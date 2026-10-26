@@ -181,4 +181,12 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "pending", company.reload.verification_status
     assert_equal "matched", c.reload.status
   end
+
+  test "a digest with spaces or capitals still works; actions that aren't a list of objects get a 422" do
+    ENV["DQ_AGENT_TOKEN_DIGEST"] = "  #{Digest::SHA256.hexdigest(TOKEN).upcase}\n"
+    post api_dq_matching_path, params: { actions: "close everything" }, as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    assert_response :unprocessable_content
+    post api_dq_matching_path, params: { actions: [ "x" ] }, as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    assert_response :unprocessable_content
+  end
 end

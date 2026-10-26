@@ -24,6 +24,9 @@ class Api::Dq::MatchingController < ActionController::API
     return head(:content_too_large) if request.content_length.to_i > MAX_BODY
 
     rows = params.permit!.to_h.then { |all| all["actions"] || all["_json"] || [] }
+    unless rows.is_a?(Array) && rows.all? { |row| row.is_a?(Hash) }
+      return render(json: { error: "send actions as a list of objects" }, status: :unprocessable_content)
+    end
     return render(json: { error: "send at most #{MAX_ROWS} actions at once" }, status: :unprocessable_content) if rows.size > MAX_ROWS
 
     render json: { results: DataQuality::Matching.apply(rows).map(&:to_h) }
@@ -43,11 +46,11 @@ class Api::Dq::MatchingController < ActionController::API
     # Bearer only: no session or cookie is ever read. The presented token's
     # SHA-256 is always compared (even with no header), in constant time.
     def require_agent
-      digest = ENV["DQ_AGENT_TOKEN_DIGEST"].to_s
+      digest = ENV["DQ_AGENT_TOKEN_DIGEST"].to_s.strip.downcase
       return head(:not_found) unless digest.match?(/\A\h{64}\z/)
 
       presented = request.authorization.to_s[/\ABearer (\S+)\z/, 1].to_s
-      ok = ActiveSupport::SecurityUtils.secure_compare(Digest::SHA256.hexdigest(presented), digest.downcase)
+      ok = ActiveSupport::SecurityUtils.secure_compare(Digest::SHA256.hexdigest(presented), digest)
       render(json: { error: "unauthorized" }, status: :unauthorized) unless ok && presented.present?
     end
 end
