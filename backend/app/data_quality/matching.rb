@@ -18,7 +18,8 @@ module DataQuality::Matching
   BY = "agent:data-quality"
   OPEN = %w[new needs_review].freeze
   MAX_REASON = 1_000
-  # A circuit breaker against a runaway agent (Infra): new companies a day.
+  # A circuit breaker against a runaway agent (Infra): new companies a day,
+  # undone ones included, so create, undo, create never resets it.
   DAILY_CREATES = 200
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
@@ -37,7 +38,7 @@ module DataQuality::Matching
     return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless DqAction::ACTIONS.include?(action)
     return fail_with.call("give a reason") if reason.blank?
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
-    if %w[new subsidiary_of].include?(action) && DqAction.live.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
+    if %w[new subsidiary_of].include?(action) && DqAction.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
       return fail_with.call("today's limit of #{DAILY_CREATES} new companies is reached; ask Backend")
     end
 
