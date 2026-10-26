@@ -34,25 +34,32 @@ module DataQuality::Matching
     return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless DqAction::ACTIONS.include?(action)
     return fail_with.call("give a reason") if reason.blank?
 
+    key = row["request_key"].presence&.to_s
     Candidate.transaction do
       candidate = Candidate.lock.find_by(id:) or next fail_with.call("no claim ##{id}")
-      # Sent again: the same action already done is fine, nothing more happens.
-      done = DqAction.live.find_by(candidate_id: id, action:)
+      # Sent again (the same key, or the same action already done): fine, nothing more happens.
+      done = (DqAction.find_by(request_key: key) if key) || DqAction.live.find_by(candidate_id: id, action:)
       next Row.new(id:, ok: true, error: nil, created_ids: done.created.map { |ref| ref["id"] }) if done
       next fail_with.call("it isn't a company claim") unless candidate.kind == "organization"
       next fail_with.call("it's already attached or decided (#{candidate.status})") unless OPEN.include?(candidate.status) && candidate.subject_id.nil?
 
       before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at).as_json
       created = []
+      record = nil
+      if %w[same_as subsidiary_of].include?(action)
+        record, error = target(row, directory)
+        raise Abort, error if error
+      end
       error = case action
-      when "same_as" then same_as(candidate, row, reason, directory)
+      when "same_as" then same_as(candidate, row, record, reason, directory)
       when "new" then propose(candidate, reason, directory, created)
-      when "subsidiary_of" then subsidiary_of(candidate, row, reason, directory, created)
+      when "subsidiary_of" then subsidiary_of(candidate, record, reason, directory, created)
       when "close" then close(candidate, reason, directory)
       end
       raise Abort, error if error
 
-      DqAction.create!(candidate:, action:, target: row["target"]&.to_s, reason:, before:, created:, by: BY)
+      DqAction.create!(candidate:, action:, target_type: ("Organization" if record), target_id: record&.id, reason:, before:, created:,
+        by: BY, request_key: key)
       Row.new(id:, ok: true, error: nil, created_ids: created.map { |ref| ref["id"] })
     end
   rescue Abort => e
@@ -69,19 +76,25 @@ module DataQuality::Matching
 
       candidate = Candidate.lock.find(action.candidate_id)
       after = { "same_as" => %w[matched confirmed], "new" => %w[matched], "subsidiary_of" => %w[matched], "close" => %w[rejected] }
-      raise Abort, "the claim was decided since, so it can't be undone here" unless after.fetch(action.action).include?(candidate.status) &&
-        candidate.reviewed_by.in?([ nil, BY ])
+      left_as = after.fetch(action.action).include?(candidate.status) && candidate.reviewed_by.in?([ nil, BY ]) &&
+        (action.action == "close" || [ candidate.subject_type, candidate.subject_id ] ==
+          (action.action == "same_as" ? [ action.target_type, action.target_id ] : [ "Organization", action.created.first&.dig("id") ]))
+      raise Abort, "the claim was decided since, so it can't be undone here" unless left_as
 
       # What it created goes too, but only while it's still pending.
       action.created.each do |ref|
-        raise Abort, "#{ref['type']} ##{ref['id']} was decided since" unless directory.fact(type: ref["type"], id: ref["id"])&.verification_status == "pending"
+        type, id = ref["type"], ref["id"]
+        directory.lock_fact(type:, id:)
+        decided = directory.fact(type:, id:)&.verification_status != "pending" || directory.verification_history(type:, id:).size != ref["events"]
+        others = Candidate.where(subject_type: type, subject_id: id).where.not(id: ref["candidate_id"]).where.not(status: "rejected").exists?
+        raise Abort, "#{type} ##{id} was decided or claimed since, so it can't be undone here" if decided || others
 
-        Candidate.find_by(id: ref["candidate_id"])&.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Undone by Data Quality") if ref["candidate_id"]
+        Candidate.find_by(id: ref["candidate_id"])&.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Undone by Data Quality") if ref["link_claim"]
         errors = directory.decide_fact(ref["type"].underscore, id: ref["id"], status: "rejected", by: BY, reason: "Data Quality undid #{action.action}").errors
         raise Abort, errors.to_sentence if errors.any?
       end
       candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at"))
-      action.update!(undone_at: Time.current)
+      action.update!(undone_at: Time.current, undone_by: BY)
       nil
     end
   rescue Abort => e
@@ -110,10 +123,7 @@ module DataQuality::Matching
         [ directory.fact(type: "Organization", id: ids.first), nil ]
       end
 
-      def same_as(candidate, row, reason, directory)
-        record, error = target(row, directory)
-        return error if error
-
+      def same_as(candidate, row, record, reason, directory)
         candidate.update!(status: "matched", subject_type: "Organization", subject_id: record.id, proposed_subject: false,
           notes: "Data Quality: same as #{record.name}. #{reason}")
         return if row["add_alias"] || record.verification_status != "verified"
@@ -133,19 +143,18 @@ module DataQuality::Matching
       def propose(candidate, reason, directory, created)
         payload = candidate.payload.to_h
         attributes = payload.slice(*%w[name hq_city hq_state description website]).symbolize_keys
-        result = directory.write_pending("organization", attributes, candidate:, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil))
+        result = directory.write_pending("organization", attributes, candidate:, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil),
+          verification: { status: "pending", by: BY, reason: })
         return "couldn't propose it: #{result.errors.to_sentence}" unless result.success?
         return "#{payload['name'].inspect} already exists (##{result.ref.id}); use same_as" unless result.created
 
-        created << { "type" => "Organization", "id" => result.ref.id }
+        created << stamp(directory, { "type" => "Organization", "id" => result.ref.id, "candidate_id" => candidate.id })
         candidate.update!(status: "matched", subject_type: "Organization", subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: a new company. #{reason}")
         nil
       end
 
-      def subsidiary_of(candidate, row, reason, directory, created)
-        parent, error = target(row, directory)
-        return error if error
+      def subsidiary_of(candidate, parent, reason, directory, created)
         error = propose(candidate, reason, directory, created)
         return error if error
 
@@ -154,14 +163,18 @@ module DataQuality::Matching
         link = Candidate.create!(source: candidate.source, crawl_run: candidate.crawl_run, kind: "relationship", quote: candidate.quote, status: "new",
           payload: { "from_organization" => { "name" => name }, "to_organization" => { "name" => parent.name }, "relationship_type" => "subsidiary_of" })
         result = directory.write_pending("relationship", { from_organization_id: child["id"], to_organization_id: parent.id, relationship_type: "subsidiary_of" },
-          candidate: link, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil))
+          candidate: link, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil), verification: { status: "pending", by: BY, reason: })
         return "couldn't propose the link: #{result.errors.to_sentence}" unless result.success?
 
         link.update!(status: "matched", subject_type: "Relationship", subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: #{name} is a subsidiary of #{parent.name}. #{reason}")
-        created << { "type" => "Relationship", "id" => result.ref.id, "candidate_id" => link.id }
+        created << stamp(directory, { "type" => "Relationship", "id" => result.ref.id, "candidate_id" => link.id, "link_claim" => true })
         nil
       end
+
+      # How many decisions the record had when it was created, so Undo can
+      # tell nobody has decided anything on it since.
+      def stamp(directory, ref) = ref.merge("events" => directory.verification_history(type: ref["type"], id: ref["id"]).size)
 
       def close(candidate, reason, directory)
         candidate.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Data Quality closed it: #{reason}")

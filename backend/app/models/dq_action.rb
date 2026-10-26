@@ -6,6 +6,7 @@ class DqAction < ApplicationRecord
   belongs_to :candidate
   validates :action, inclusion: { in: ACTIONS }
   validates :reason, presence: true
+  validates :request_key, uniqueness: true, allow_nil: true
 
   scope :live, -> { where(undone_at: nil) }
 end

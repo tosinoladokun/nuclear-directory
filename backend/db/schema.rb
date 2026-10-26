@@ -162,17 +162,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
   create_table "dq_actions", force: :cascade do |t|
     t.bigint "candidate_id", null: false
     t.string "action", null: false
-    t.string "target"
+    t.string "target_type"
+    t.bigint "target_id"
     t.text "reason", null: false
-    t.jsonb "before", default: {}, null: false
+    t.jsonb "before", null: false
     t.jsonb "created", default: [], null: false
     t.string "by", null: false
+    t.string "request_key"
     t.datetime "undone_at"
+    t.string "undone_by"
     t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
     t.index ["candidate_id"], name: "index_dq_actions_on_candidate_id"
-    t.index ["created_at"], name: "index_dq_actions_on_created_at"
+    t.index ["created_at"], name: "index_dq_actions_on_created_at", order: :desc
+    t.index ["request_key"], name: "index_dq_actions_on_request_key", unique: true, where: "(request_key IS NOT NULL)"
+    t.check_constraint "(target_type IS NULL) = (target_id IS NULL)", name: "dq_actions_target_check"
     t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying, 'subsidiary_of'::character varying, 'new'::character varying, 'close'::character varying]::text[])", name: "dq_actions_action_check"
+    t.check_constraint "by::text ~~ 'agent:%'::text OR by::text ~~ 'human:%'::text", name: "dq_actions_by_check"
+    t.check_constraint "char_length(btrim(reason)) > 0", name: "dq_actions_reason_check"
   end
 
   create_table "evidence", force: :cascade do |t|

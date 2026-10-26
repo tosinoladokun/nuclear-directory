@@ -142,9 +142,10 @@ class DataQuality::DirectoryClient
   # unpublished isn't changed (the result has an error).
   # evidence: false writes only the record (a link that may already exist
   # gets its evidence on publish, so nothing unverified lands on it early).
-  def write_pending(kind, attributes, candidate:, crawl_run:, evidence: true)
+  # verification: a pending decision to record (Data Quality's agent, #548).
+  def write_pending(kind, attributes, candidate:, crawl_run:, evidence: true, verification: nil)
     items = evidence ? [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", crawl_run_id: crawl_run.id } ] : []
-    result = fact_writer.write(kind, attributes, protect_human_verified: true, evidence: items)
+    result = fact_writer.write(kind, attributes, protect_human_verified: true, evidence: items, verification:)
     write_result(result)
   end
 

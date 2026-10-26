@@ -96,4 +96,22 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     act({ id: c.id, action: "close", reason: "r" })
     assert_match "already attached or decided", results.sole["error"]
   end
+
+  test "a retried request with the same key applies once; the new company's history says Data Quality proposed it" do
+    c = claim("Fresh Fission LLC")
+    2.times { act({ id: c.id, action: "new", reason: "A new licensee", request_key: "batch-1-row-1" }) }
+    assert_equal 1, DqAction.count
+    company = Organization.find(results.sole["created_ids"].sole)
+    event = DataQuality::DirectoryClient.new.verification_history(type: "Organization", id: company.id).last
+    assert_equal DataQuality::Matching::BY, event.by
+  end
+
+  test "Undo refuses once another claim is attached to what it created" do
+    c = claim("Fresh Fission LLC")
+    act({ id: c.id, action: "new", reason: "A new licensee" })
+    company_id = results.sole["created_ids"].sole
+    claim("Fresh Fission LLC").update!(status: "matched", subject_type: "Organization", subject_id: company_id)
+    assert_match "claimed since", DataQuality::Matching.undo(DqAction.sole.id)
+    assert_nil DqAction.sole.undone_at
+  end
 end

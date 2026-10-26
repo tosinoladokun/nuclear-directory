@@ -31,7 +31,8 @@ class Api::Dq::MatchingController < ActionController::API
   end
 
   def index
-    render json: { actions: DqAction.order(id: :desc).limit(100).as_json(only: %i[id candidate_id action target reason created undone_at created_at]) }
+    render json: { actions: DqAction.order(id: :desc).limit(100)
+      .as_json(only: %i[id candidate_id action target_type target_id reason created request_key undone_at created_at]) }
   end
 
   private
