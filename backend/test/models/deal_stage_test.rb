@@ -29,7 +29,7 @@ class DealStageTest < ActionDispatch::IntegrationTest
 
   test "the company page tags it and leaves it out of the count; the description says framework" do
     get company_path(slug: @buyer.slug)
-    assert_select "#deals-heading small", "1"
+    assert_select "#deals-heading .nd-sechead__count", "1 · 1 framework"
     assert_select "span.nd-tag", "Framework"
     assert_select "meta[name=description][content*=?]", "Framework offtake with Oklo Stage Co"
     assert_select "meta[name=description][content*=?]", "Offtakes from Signed Seller Co"
@@ -45,7 +45,7 @@ class DealStageTest < ActionDispatch::IntegrationTest
     term_page = Source.create!(url: "https://example.com/framework-term", source_kind: "web_page", crawl_status: "ok", content_sha256: "t")
     Evidence.create!(subject: @framework.deal_terms.sole, source: term_page, quote: "a 12 GW framework", found_by: "human")
     profile = CompanyProfile.new(@buyer)
-    assert_equal 2, profile.citations_for(profile.deals.find { |deal| deal.id == @framework.id }).size, "the link's source and the term's"
+    assert_equal 2, profile.deal_citations(profile.deals.find { |deal| deal.id == @framework.id }).size, "the link's source and the term's"
 
     score = ->(org) { HomeCategories.send(:new).send(:company_links_sql).then { |sql| Organization.where(id: org.id).pick(Arel.sql(sql)) } }
     assert_equal 1, score.(@buyer), "the signed deal only"

@@ -1294,6 +1294,8 @@
   .nd-crow--open .nd-crow__chev-up { display: block; }
   .nd-crow__more { padding: var(--nd-space-2) var(--nd-space-4) var(--nd-space-4) 44px; display: flex; flex-direction: column; gap: var(--nd-space-2); background: var(--nd-paper-sunken); }
   .nd-crow__more > * { margin: 0; }
+  /* A framework or non-binding deal's tag (#487): after name and verb, never wrapped. */
+  .nd-crow__stage { flex: none; white-space: nowrap; }
   .nd-crow--plant .nd-crow__line { cursor: default; padding-right: 56px; }
   .nd-crow--plant .nd-crow__what { flex: none; }
   .nd-crow--plant .nd-crow__place { margin-left: auto; }
@@ -1318,6 +1320,11 @@
     .nd-crow__line:not(:has(.nd-crow__date)) { padding-right: 88px; }
     .nd-crow__line:has(.nd-crow__date) { padding-bottom: 8px; }
     .nd-mark, .nd-crow__chev { top: auto; bottom: 0; height: 40px; }
+    /* With a stage tag, line 2 starts with it: tag, verb, then the "what". */
+    .nd-crow__line:has(.nd-crow__stage) { grid-template-columns: 32px auto auto minmax(0, 1fr) auto; }
+    .nd-crow__line:has(.nd-crow__stage) .nd-crow__stage { grid-column: 2; grid-row: 2; }
+    .nd-crow__line:has(.nd-crow__stage) .nd-crow__rest { grid-column: 3; }
+    .nd-crow__line:has(.nd-crow__stage) .nd-crow__what { grid-column: 4 / -1; }
     .nd-crow--plant .nd-crow__who { display: block; grid-column: 2 / -1; }
     .nd-crow--plant .nd-crow__what { grid-column: 2; }
     .nd-crow--plant .nd-crow__place { grid-column: 3 / -1; margin-left: 0; }
