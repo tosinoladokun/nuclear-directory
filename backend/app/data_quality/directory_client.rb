@@ -321,6 +321,7 @@ class DataQuality::DirectoryClient
 
   # Any fact (links included) with its decision and stored values, or nil.
   def organization_by_slug(slug) = lookup.organization(slug:)
+  def facility_by_slug(slug) = lookup.facility(slug:)
   def evidence_rows(type:, id:) = lookup.evidence_rows(type:, id:)
 
   # A company name kept as a lead, never thrown away (#548).
