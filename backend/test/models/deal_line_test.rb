@@ -57,5 +57,9 @@ class DealLineTest < ActiveSupport::TestCase
     loan = Struct.new(*Term.members, :link, keyword_init: true).new(id: 1, term_type: "loan", amount_usd: 1_520_000_000, lead_investor_ids: [], link:)
     assert_equal "$1.52B DOE loan", DealLine.for(loan)
     assert_equal "$1B loan", DealLine.for(term(term_type: "loan", amount_usd: 1_000_000_000))
+    bank = Struct.new(:name, :short_name).new("International Development Bank", nil)
+    long = Struct.new(*Term.members, :link, keyword_init: true).new(id: 2, term_type: "loan", amount_usd: 1_520_000_000, lead_investor_ids: [],
+      link: Struct.new(:from_organization).new(bank))
+    assert_equal "$1.52B loan", DealLine.for(long), "a long lender goes first, never the word loan"
   end
 end

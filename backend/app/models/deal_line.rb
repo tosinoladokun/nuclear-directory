@@ -35,6 +35,8 @@ module DealLine
     parts = Array(parts).compact
     return if parts.empty? || parts == [ "award" ] || parts == [ "Anchors" ] || parts == [ "loan" ]
 
+    # A loan too long drops its lender, never the word "loan".
+    parts.delete_at(1) if term.term_type == "loan" && parts.size == 3 && parts.join(" ").length > MAX
     line = parts.join(" ")
     # Too long: drop the last detail (end year, then agreement), never the amount.
     while line.length > MAX && parts.size > 1
