@@ -117,6 +117,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert urls.any?
   end
 
+  test "a feed that moved address doesn't propose items already claimed from its old one" do
+    url = "https://www.cameco.com/media/news/cameco-provides-date-for-2026-q3-results-conference-call-and-webcast"
+    old = Source.create!(url: "https://old.cameco.example/rss", source_kind: "company_newsrooms", crawl_status: "ok", content_text: "x", content_sha256: "x")
+    old.candidates.create!(kind: "news_item", status: "rejected", quote: "q", payload: { "url" => url })
+
+    refute_includes plugin.extract(stored, nil).map { |c| c[:payload]["url"] }, url
+  end
+
   test "a summary changing is a change; a summary is plain text, cut at a word" do
     atom = ->(summary) { <<~XML }
       <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
