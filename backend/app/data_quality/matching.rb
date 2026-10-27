@@ -24,6 +24,9 @@ module DataQuality::Matching
   DAILY_CREATES = 200
   # The same for closes (Infra): the widest action, undone ones included.
   DAILY_CLOSES = 300
+  # And for verdicts recorded through recommend.
+  DAILY_RECOMMENDS = 500
+  VERDICTS = %w[approve reject].freeze
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
 
@@ -51,6 +54,12 @@ module DataQuality::Matching
     if action == "close" && DqAction.where(action: "close", created_at: Time.current.all_day).count >= DAILY_CLOSES
       return fail_with.call("today's limit of #{DAILY_CLOSES} closes is reached; ask Backend")
     end
+    if action == "recommend"
+      return fail_with.call("verdict must be approve or reject") unless VERDICTS.include?(row["verdict"].to_s)
+      if DqAction.where(action: "recommend", created_at: Time.current.all_day).count >= DAILY_RECOMMENDS
+        return fail_with.call("today's limit of #{DAILY_RECOMMENDS} verdicts is reached; ask Backend")
+      end
+    end
 
     key = row["request_key"].presence&.to_s
     Candidate.transaction do
@@ -68,11 +77,22 @@ module DataQuality::Matching
       # same_as with an end settles that end of a link claim (#548): which
       # company or plant it names. Otherwise only close applies to a link.
       end_key = row["end"].presence&.to_s
+      # A verdict on any waiting claim (attached or not), as the paste box records it.
+      if action == "recommend"
+        next Row.new(id:, ok: true, error: "skipped: it's already #{candidate.status}", created_ids: []) unless
+          DataQuality::Recommendations::OPEN.include?(candidate.status)
+
+        before = candidate.slice(*RECOMMEND_FIELDS).as_json
+        candidate.update!(dq_recommendation: row["verdict"].to_s, dq_reason: reason, dq_by: BY, dq_at: Time.current,
+          dq_payload_sha256: DataQuality::Recommendations.digest(candidate))
+        DqAction.create!(candidate:, action:, reason:, before:, created: [], by: BY, request_key: key, after: stamp_of(candidate.reload))
+        next Row.new(id:, ok: true, error: nil, created_ids: [])
+      end
       if end_key
         next fail_with.call("an end goes with same_as") unless action == "same_as"
         next fail_with.call("#{end_key.inspect} isn't an end of a #{candidate.kind} claim") unless end_type(candidate, end_key)
-      elsif candidate.kind != "organization" && action != "close"
-        next fail_with.call("it isn't a company claim; only close applies to it (or same_as with an end)")
+      elsif !(candidate.kind == "organization" || action == "close" || (action == "new" && candidate.kind == "facility"))
+        next fail_with.call("it isn't a company claim; only close applies to it (new also takes a plant claim; same_as takes an end)")
       end
       # No longer open (settled meanwhile): skipped, not an error (Infra).
       next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
@@ -134,7 +154,11 @@ module DataQuality::Matching
         errors = directory.decide_fact(ref["type"].underscore, id: ref["id"], status: "rejected", by: BY, reason: "Data Quality undid #{action.action}").errors
         raise Abort, errors.to_sentence if errors.any?
       end
-      candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at", "payload"))
+      if action.action == "recommend"
+        candidate.update!(action.before.slice(*RECOMMEND_FIELDS))
+      else
+        candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at", "payload"))
+      end
       action.update!(undone_at: Time.current, undone_by: BY)
       nil
     end
@@ -144,7 +168,8 @@ module DataQuality::Matching
     "someone was deciding on it just then; try again"
   end
 
-  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by payload].freeze
+  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by payload dq_recommendation dq_reason].freeze
+  RECOMMEND_FIELDS = %w[dq_recommendation dq_reason dq_by dq_at dq_payload_sha256].freeze
 
   # The claim as an action left it, compared under its lock: anything since
   # (a decision, a reopen, a merge repointing it) means it isn't the same.
@@ -199,15 +224,18 @@ module DataQuality::Matching
 
       def propose(candidate, reason, directory, created)
         payload = candidate.payload.to_h
-        attributes = payload.slice(*%w[name hq_city hq_state description website]).symbolize_keys
-        result = directory.write_pending("organization", attributes, candidate:, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil),
+        plant = candidate.kind == "facility"
+        type = plant ? "Facility" : "Organization"
+        attributes = payload.slice(*(plant ? %w[name nrc_docket eia_plant_id facility_type status reactor_type capacity_mw city state] :
+          %w[name hq_city hq_state description website])).symbolize_keys
+        result = directory.write_pending(candidate.kind, attributes, candidate:, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil),
           verification: { status: "pending", by: BY, reason: })
         return "couldn't propose it: #{result.errors.to_sentence}" unless result.success?
         return "#{payload['name'].inspect} already exists (##{result.ref.id}); use same_as" unless result.created
 
-        created << stamp(directory, { "type" => "Organization", "id" => result.ref.id, "candidate_id" => candidate.id })
-        candidate.update!(status: "matched", subject_type: "Organization", subject_id: result.ref.id, proposed_subject: true,
-          notes: "Data Quality: a new company. #{reason}")
+        created << stamp(directory, { "type" => type, "id" => result.ref.id, "candidate_id" => candidate.id })
+        candidate.update!(status: "matched", subject_type: type, subject_id: result.ref.id, proposed_subject: true,
+          notes: "Data Quality: a new #{plant ? 'plant' : 'company'}. #{reason}")
         nil
       end
 

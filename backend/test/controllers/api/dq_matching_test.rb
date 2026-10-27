@@ -289,4 +289,31 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "GE Both Ends", link.payload.dig("organization", "name"), "the second end was settled, not taken for a retry"
     assert_equal 2, DqAction.count
   end
+
+  test "recommend records Data Quality's verdict on a waiting claim, feeds Yes to all, publishes nothing, and can be undone" do
+    pending = Organization.create!(name: "Fresh Fission LLC", verification_status: "pending")
+    c = Candidate.create!(source: @page, kind: "organization", status: "matched", payload: { "name" => "Fresh Fission LLC" }, quote: "Licensee: Fresh Fission LLC.",
+      subject_type: "Organization", subject_id: pending.id, proposed_subject: true)
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "Named on the NRC list" }, { id: c.id, action: "recommend", verdict: "maybe", reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "verdict must be", results.second["error"]
+    c.reload
+    assert_equal [ "approve", "Named on the NRC list", DataQuality::Matching::BY ], c.values_at(:dq_recommendation, :dq_reason, :dq_by)
+    assert DataQuality::Recommendations.current?(c)
+    assert_equal "pending", pending.reload.verification_status, "nothing publishes"
+
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_nil c.reload.dq_recommendation
+  end
+
+  test "new on a plant claim proposes a pending plant" do
+    c = Candidate.create!(source: @page, kind: "facility", status: "needs_review", quote: "NC State PULSTAR, docket 05000297",
+      payload: { "name" => "PULSTAR Reactor", "nrc_docket" => "05000297", "facility_type" => "research_reactor", "state" => "NC" },
+      notes: "similar: North Anna")
+    act({ id: c.id, action: "new", reason: "A research reactor, not North Anna" })
+    assert results.sole["ok"], results.inspect
+    plant = Facility.find(results.sole["created_ids"].sole)
+    assert_equal [ "pending", "05000297" ], plant.values_at(:verification_status, :nrc_docket)
+    assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
+  end
 end
