@@ -25,4 +25,16 @@ class ConnectionsMapTreeTest < ActionView::TestCase
     assert_includes summary, "owned by"
     map.edges.each { |edge| assert_includes summary, (edge.receiver.key == map.centre.key ? edge.giver.name : edge.receiver.name) }
   end
+
+  test "folded plants are named by how many a verb covers, and a row lists only those" do
+    map = ConnectionsMap.for_company(CompanyProfile.new(build_constellation))
+    summary = map_summary(map)
+    owns = map.folded.find { |edge| edge.verb == "owns" && edge.receiver.fold? }
+
+    if owns.covers < owns.receiver.members.size
+      assert_includes summary, "#{owns.covers} of #{owns.receiver.name}"
+      assert_not_includes summary, "owns #{owns.receiver.name}"
+    end
+    assert_equal owns.covers, map_tree_rows(map).find { |row| row.edge == owns }.edge.members.size
+  end
 end

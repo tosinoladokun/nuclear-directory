@@ -83,9 +83,10 @@
             <li class="nd-tree__row nd-tree__row--<%= row.inbound ? "in" : "out" %>">
               <span class="nd-tree__verb"><%= row.verb %></span><span class="nd-tree__branch" aria-hidden="true"></span>
               <details class="nd-tree__fold">
-                <summary><span class="nd-catsq" aria-hidden="true"><%= icon("site-plant", set: :nd, size: 16) %></span><span class="nd-tree__name"><%= node.name %></span></summary>
+                <summary><span class="nd-catsq" aria-hidden="true"><%= icon("site-plant", set: :nd, size: 16) %></span><span class="nd-tree__name"><%= map_partner_name(row.edge, node) %></span></summary>
                 <ul class="nd-tree__plants">
-                  <% node.members.sort_by { |plant| plant.name.downcase }.each do |plant| %>
+                  <%# Only the plants this verb covers, not every plant on the map. %>
+                  <% (row.edge.members || node.members).sort_by { |plant| plant.name.downcase }.each do |plant| %>
                     <li><%= link_to map_node_url(plant), class: "nd-tree__node" do %><span class="nd-catsq" aria-hidden="true"><%= icon(map_node_icon(map, plant), set: :nd, size: 16) %></span><span class="nd-tree__name" title="<%= plant.name %>"><%= plant.name %></span><% end %></li>
                   <% end %>
                 </ul>

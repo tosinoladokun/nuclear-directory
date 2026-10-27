@@ -62,17 +62,14 @@ class ConnectionsMap
 
     private
       def other(edge, inbound) = inbound ? edge.giver : edge.receiver
+      def side_key(node, side) = "#{node.key}@#{side}"
 
-      # Columns: givers to the centre prefer the left, receivers the right,
-      # and a group moves across when its side is already much taller.
+      # Columns: givers to the centre on the left, receivers on the right, always (#561). A partner that is both
+      # (funds the centre and buys its power) is drawn once on each side.
       def lay_out_wide(groups)
         sides = { left: [], right: [] }
         height_of = ->(list) { list.sum { |(_, inbound, edges)| fresh(edges, inbound, list).size * ROW + GROUP_GAP } }
-        groups.sort_by { |(_, _, edges)| -edges.size }.each do |group|
-          preferred, other_side = group[1] ? %i[left right] : %i[right left]
-          side = sharing(sides, group) || (height_of.(sides[preferred]) > height_of.(sides[other_side]) + group[2].size * ROW ? other_side : preferred)
-          sides[side] << group
-        end
+        groups.each { |group| sides[group[1] ? :left : :right] << group }
         sides.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ VERBS.index(verb), inbound ? 0 : 1 ] } }
 
         column = sides.values.map { |list| height_of.(list) - GROUP_GAP }.max.to_i
@@ -90,9 +87,9 @@ class ConnectionsMap
           list.each do |verb, inbound, edges|
             nodes = edges.map do |edge|
               node = other(edge, inbound)
-              next @placed[node.key] if @placed[node.key] # linked by another verb too: drawn once
+              next @placed[side_key(node, side)] if @placed[side_key(node, side)] # linked by another verb on this side too: drawn once
 
-              placed = place(node, x, y, r, name_x: side == :left ? x - r - 10 : x + r + 10, name_y: y + 4.5,
+              placed = place(node, x, y, r, side:, name_x: side == :left ? x - r - 10 : x + r + 10, name_y: y + 4.5,
                 anchor: side == :left ? "end" : "start", slot: size.slot)
               y += ROW
               placed
@@ -153,14 +150,6 @@ class ConnectionsMap
         (@junctions[key] += 1) - 1
       end
 
-      # The side a group goes on when one of its nodes is already in a group
-      # there (Constellation owns two of the plants it operates), so its lines
-      # don't cross the map.
-      def sharing(sides, group)
-        keys = group[2].map { |edge| other(edge, group[1]).key }
-        sides.find { |_, list| list.any? { |(_, inbound, edges)| edges.any? { |edge| keys.include?(other(edge, inbound).key) } } }&.first
-      end
-
       # The nodes of a group not already placed by an earlier group in the list.
       def fresh(edges, inbound, list)
         earlier = list.take_while { |(_, _, other)| !other.equal?(edges) }.flat_map { |(_, was_inbound, other)| other.map { |edge| other(edge, was_inbound).key } }
@@ -178,9 +167,9 @@ class ConnectionsMap
           label_reversed: (reverse(points) if finish[0] < start[0]), label_at: mid.map { |value| value.round(1) }, steep:)
       end
 
-      def place(node, x, y, r, name_x:, name_y:, anchor:, slot:)
+      def place(node, x, y, r, name_x:, name_y:, anchor:, slot:, side: nil)
         name = size.short_names && node.short_name ? node.short_name : node.name
-        @placed[node.key] = Placed.new(node:, x: x.round(1), y: y.round(1), r:, name:, name_x: name_x.round(1), name_y: name_y.round(1), anchor:, slot: slot.round)
+        @placed[side ? side_key(node, side) : node.key] = Placed.new(node:, x: x.round(1), y: y.round(1), r:, name:, name_x: name_x.round(1), name_y: name_y.round(1), anchor:, slot: slot.round)
       end
 
       # Geometry. Points are [x, y]; paths are one move and one cubic.

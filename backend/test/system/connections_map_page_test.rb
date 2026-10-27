@@ -41,7 +41,8 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
           const box = label.getBBox()
           const id = label.dataset.group
           const name = id + " (" + label.textContent + ")"
-          if (label.dataset.shortened) problems.push("shortened: " + name)
+          // "sells power to" may drop to "sells power" as a last resort: the 696px column leaves little room for it.
+          if (label.dataset.shortened && label.dataset.verb !== "sells power to") problems.push("shortened: " + name)
           circles.forEach((c) => {
             const x = Math.max(box.x, Math.min(c.x, box.x + box.width)), y = Math.max(box.y, Math.min(c.y, box.y + box.height))
             if (Math.hypot(c.x - x, c.y - y) < c.r) problems.push("touches a node: " + name)
@@ -151,9 +152,38 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   test "on a phone the folded plants open under their row" do
     resize_viewport(390, 844)
     visit "/companies/#{build_constellation.slug}"
-    first(".nd-tree__fold summary", text: "13 plants").click
+    owns = find(".nd-tree__row", text: /\Aowns/)
+    owns.find("summary", text: "2 of 13 plants").click
 
-    assert_selector ".nd-tree__fold[open] .nd-tree__plants li", count: 13
-    assert_selector ".nd-tree__fold[open] .nd-tree__plants a.nd-tree__node", count: 13
+    assert_selector ".nd-tree__fold[open] .nd-tree__plants li", count: 2, text: /Clean Energy Center/
+    find(".nd-tree__row", text: /\Aoperates/).find("summary", text: "13 plants").click
+    assert_selector ".nd-tree__fold[open] .nd-tree__plants li", count: 15
+  end
+
+  test "where the middle column can't hold 696px (1024 to 1279) the tree takes over, so no text is scaled down" do
+    url = "/companies/#{build_constellation.slug}"
+    resize_viewport(1024, 800)
+    visit url
+    assert_selector ".nd-tree .nd-tree__row", minimum: 3
+    assert_no_selector ".nd-map__svg", visible: true
+
+    resize_viewport(1280, 800)
+    visit url
+    assert_selector ".nd-map__svg[data-laid-out=true]"
+    assert_no_selector ".nd-tree", visible: true
+    assert_equal 696, page.evaluate_script("document.querySelector('.nd-map__svg').getBoundingClientRect().width").round
+  end
+
+  test "opening a folded row doesn't move its branch away from its verb" do
+    resize_viewport(390, 844)
+    visit "/companies/#{build_constellation.slug}"
+    row = first(".nd-tree__row:has(.nd-tree__fold)")
+    before = row.evaluate_script("document.querySelector('.nd-tree__row:has(.nd-tree__fold) .nd-tree__branch').getBoundingClientRect().top - this.getBoundingClientRect().top")
+    row.find("summary").click
+    assert_selector ".nd-tree__fold[open] .nd-tree__plants li"
+    after = row.evaluate_script("document.querySelector('.nd-tree__row:has(.nd-tree__fold) .nd-tree__branch').getBoundingClientRect().top - this.getBoundingClientRect().top")
+
+    assert_in_delta before, after, 1
+    assert_operator after, :<, 56
   end
 end

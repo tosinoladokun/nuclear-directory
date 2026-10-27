@@ -35,8 +35,9 @@ class ConnectionsMap
   # facts: the links behind it (several when units fold into their site);
   # details: what the card says under the verb; sources: unique, in order.
   # covers: on an arrow to folded plants, how many of them it's about.
-  Edge = Data.define(:id, :giver, :receiver, :verb, :facts, :details, :sources, :checked_on, :covers) do
-    def initialize(covers: nil, **fields) = super
+  # members: on an arrow to folded plants, the plants this arrow's verb covers (the fold node holds every plant on the map).
+  Edge = Data.define(:id, :giver, :receiver, :verb, :facts, :details, :sources, :checked_on, :covers, :members) do
+    def initialize(covers: nil, members: nil, **fields) = super
 
     # "Constellation owns 2 of 13 plants" when an arrow to a fold covers only some.
     def sentence
@@ -76,6 +77,15 @@ class ConnectionsMap
   # is pending.
   # plant: a plant link, which only its words can make early-stage.
   def self.signed?(deal, plant: false)
+    # A framework, MOU or other non-binding form is never an arrow (DealStage).
+    return false if deal.stage
+
+    # A power deal with verified terms is signed when a term is (agreement, status and conditions say so);
+    # its words only decide for a legacy link with no terms.
+    power = plant || deal.relationship_type == "offtake_with"
+    terms = deal.deal_terms.select { |term| term.verification_status == "verified" }
+    return terms.any?(&:counted?) if power && terms.any?
+
     text = deal.description.to_s.strip
     return text.match?(/\ASigned\b/i) if !plant && deal.relationship_type == "offtake_with"
 
@@ -112,7 +122,8 @@ class ConnectionsMap
       names = group.map { |edge| (from_plant ? edge.giver : edge.receiver).name }
       Edge.new(id: "fold-#{verb.parameterize}", giver: from_plant ? fold : centre, receiver: from_plant ? centre : fold, verb:,
         facts: group.flat_map(&:facts), details: [ names.size < plants.size ? "#{names.size} of #{plants.size}: #{names.join(', ')}" : names.join(", ") ],
-        sources: group.flat_map(&:sources).uniq, checked_on: group.filter_map(&:checked_on).max, covers: names.size)
+        sources: group.flat_map(&:sources).uniq, checked_on: group.filter_map(&:checked_on).max, covers: names.size,
+        members: group.map { |edge| from_plant ? edge.giver : edge.receiver })
     end
     others_edges + merged
   end
@@ -162,7 +173,8 @@ class ConnectionsMap
         .each { |(company, type), links| add_plant_link(company, centre.record, type, links) }
     end
 
-    def current(links) = links.reject { |link| link.ended_on && link.ended_on <= Date.current }
+    # In effect now: not ended, and (where it says) already started: a scheduled link isn't a present-tense arrow.
+    def current(links) = links.reject { |link| (link.ended_on && link.ended_on <= Date.current) || (link.started_on && link.started_on > Date.current) }
 
     def add_plant_link(company, site, type, links)
       case type

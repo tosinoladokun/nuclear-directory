@@ -40,10 +40,17 @@ module ConnectionsMapHelper
     phrases = map.folded.group_by { |edge| [ edge.receiver.key == map.centre.key, edge.verb ] }
       .sort_by { |(inbound, verb), _| [ inbound ? 0 : 1, ConnectionsMap::VERBS.index(verb) ] }
       .map do |(inbound, verb), edges|
-        names = edges.map { |edge| inbound ? edge.giver.name : edge.receiver.name }.to_sentence
+        names = edges.map { |edge| map_partner_name(edge, inbound ? edge.giver : edge.receiver) }.to_sentence
         "#{inbound ? PASSIVE.fetch(verb) : verb} #{names}"
       end
     "Connections. #{map.centre.name}: #{phrases.join("; ")}"
+  end
+
+  # A partner's name, or for folded plants how many of them this verb covers ("2 of 13 plants").
+  def map_partner_name(edge, node)
+    return node.name unless node.fold? && edge.covers && edge.covers < node.members.size
+
+    "#{edge.covers} of #{node.name}"
   end
 
   # The phone tree's rows (#561): givers first, then receivers, by verb in the spec's order.

@@ -164,4 +164,68 @@ class ConnectionsMapTest < ActiveSupport::TestCase
       assert_operator gap.(points.last, receiver), :<=, 2.5, "#{edge.sentence}: the tip meets the receiver's edge"
     end
   end
+
+  test "givers are always on the left and receivers on the right, whatever the heights" do
+    centre = cite!(company("Balanced Co", roles: [ role("utility") ]))
+    %w[Alpha Beta].each { |name| cite!(link(cite!(company("#{name} Fund")), "invests_in", centre)).update!(description: "Series A.") }
+    cite!(link(cite!(company("Gamma Supply")), "supplies", centre))
+    map = ConnectionsMap.for_company(CompanyProfile.new(centre))
+    layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t")
+    x = layout.nodes.to_h { |placed| [ placed.node.name, placed.x ] }
+
+    assert_operator x["Gamma Supply"], :<, layout.centre.x, "a supplier is a giver, so it stays left even when the left is taller"
+    assert(%w[Alpha\ Fund Beta\ Fund].all? { |name| x[name] < layout.centre.x })
+  end
+
+  test "a partner that both funds the centre and buys its power is drawn once on each side" do
+    centre = cite!(company("Two Way Co"))
+    partner = cite!(company("Amazon Demo"))
+    cite!(link(partner, "invests_in", centre))
+    deal = cite!(link(partner, "offtake_with", centre))
+    deal.update!(description: "Signed: 500 MW.")
+    map = ConnectionsMap.for_company(CompanyProfile.new(centre))
+    layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t")
+    copies = layout.nodes.select { |placed| placed.node.name == "Amazon Demo" }
+
+    assert_equal 2, copies.size
+    assert_equal [ true, true ], [ copies.any? { |placed| placed.x < layout.centre.x }, copies.any? { |placed| placed.x > layout.centre.x } ]
+  end
+
+  test "a power deal is signed by its terms, not only its words; a framework never is" do
+    centre = cite!(company("Terms Co"))
+    buyer = cite!(company("Buyer Co"))
+    deal = cite!(link(buyer, "offtake_with", centre))
+    deal.update!(description: "5 GW supply.") # no word 'Signed'
+    term = DealTerm.create!(link: deal, term_type: "offtake", capacity_mw: 5000, agreement: "ppa", status: "signed", **verification(true))
+    term.evidence.create!(source: default_source, quote: "q", found_by: "human", confidence: 1)
+
+    assert ConnectionsMap.signed?(deal.reload), "a signed PPA term makes it an arrow"
+    term.update!(agreement: "framework", status: "announced")
+    assert_not ConnectionsMap.signed?(deal.reload), "a framework is never an arrow"
+
+    mou = cite!(link(cite!(company("Mou Buyer")), "offtake_with", centre))
+    mou.update!(description: "")
+    DealTerm.create!(link: mou, term_type: "offtake", agreement: "mou", capacity_mw: 100, **verification(true))
+    assert_not ConnectionsMap.signed?(mou.reload), "a blank description with an MOU term is not a power sale"
+  end
+
+  test "a link that hasn't started yet isn't an arrow" do
+    centre = cite!(company("Schedule Co"))
+    later = cite!(link(cite!(company("Later Supplier")), "supplies", centre))
+    later.update!(started_on: 1.year.from_now.to_date)
+    now = cite!(link(cite!(company("Now Supplier")), "supplies", centre))
+    map = ConnectionsMap.for_company(CompanyProfile.new(centre))
+
+    assert_equal [ "Now Supplier supplies Schedule Co" ], map.edges.map(&:sentence)
+  end
+
+  test "an arrow to folded plants knows which plants its verb covers" do
+    map = ConnectionsMap.for_company(CompanyProfile.new(build_constellation))
+    folded = map.folded
+    owns = folded.find { |edge| edge.verb == "owns" && edge.receiver.fold? }
+
+    assert owns, "owns folds"
+    assert_operator owns.members.size, :<=, owns.receiver.members.size
+    assert_equal owns.covers, owns.members.size
+  end
 end
