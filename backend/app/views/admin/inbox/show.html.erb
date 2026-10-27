@@ -51,7 +51,16 @@
             </p>
             <details class="nd-fold">
               <summary class="type-small">Why, and the source</summary>
-              <div class="nd-fold__body"><blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote></div>
+              <div class="nd-fold__body nd-stack">
+                <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
+                <%# The checker's doubt and Data Quality's reason, side by side (PM, 27 Oct). %>
+                <% if item.ai_recommendation.present? && item.ai_recommendation != "recommend_publish" && item.ai_reason.present? %>
+                  <p class="type-small m-0"><strong>The checker wasn't sure:</strong> <%= item.ai_reason %></p>
+                <% end %>
+                <% if item.dq_recommendation == "approve" && item.dq_reason.present? %>
+                  <p class="type-small m-0"><strong>Data Quality checked it:</strong> <%= item.dq_reason %></p>
+                <% end %>
+              </div>
             </details>
           </div>
           <div class="nd-wait__actions nd-inbox__buttons type-ui">

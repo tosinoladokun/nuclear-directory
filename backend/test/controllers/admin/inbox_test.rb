@@ -5,7 +5,8 @@ require "test_helper"
 class Admin::InboxTest < ActionDispatch::IntegrationTest
   setup do
     sign_in_as users(:admin)
-    @page = Source.create!(url: "https://www.nrc.gov/test/inbox.html", source_kind: "dummy", crawl_status: "ok", content_sha256: "sha")
+    # The claims quote "q", which the page's stored text contains (Yes to all checks it).
+    @page = Source.create!(url: "https://www.nrc.gov/test/inbox.html", source_kind: "dummy", crawl_status: "ok", content_sha256: "sha", content_text: "q")
     first = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 2.days.ago)
     Candidate.create!(source: @page, crawl_run: first, kind: "organization", payload: { "name" => "x" }, quote: "q", status: "rejected")
     @run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
@@ -78,5 +79,21 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert lead.status_new?
     assert_equal "Said no in Today", lead.sources.sole["label"]
     assert_equal "Said no. It's kept in Leads.", flash[:notice]
+  end
+
+  test "Data Quality's own approve counts for Yes to all even where the checker doubted; the row shows both" do
+    @page.update!(content_text: "Bluefield Fission, of Austin, Texas.")
+    @create.update!(status: "needs_review", ai_recommendation: "needs_review", ai_reason: "Not sure the company is nuclear", quote: "Bluefield Fission, of Austin, Texas.")
+    DataQuality::Recommendations.record("#{@create.id} approve: Its NRC license names it", by: "human:dq")
+    other = Organization.create!(name: "Second Doubted Co", verification_status: "pending")
+    second = claim({ "name" => "Second Doubted Co" }, subject: other, proposed_subject: true)
+    DataQuality::Recommendations.record("#{second.id} approve: Named on the NRC page", by: "human:dq")
+    get admin_inbox_path
+    assert_select ".nd-panel", /Data Quality checked 2 of these 2\./
+    assert_select "#inbox-item-#{@create.id}", /The checker wasn't sure: Not sure the company is nuclear/
+    assert_select "#inbox-item-#{@create.id}", /Data Quality checked it: Its NRC license names it/
+    shown = css_select("form[action='#{admin_inbox_yes_all_path}'] input[name=shown]").first["value"]
+    post admin_inbox_yes_all_path, params: { shown: }
+    assert @new_co.reload.verified?, flash[:alert].to_s
   end
 end
