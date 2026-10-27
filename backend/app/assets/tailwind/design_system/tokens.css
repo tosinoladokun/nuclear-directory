@@ -252,9 +252,13 @@
 }
 
 /* The 25 Oct system (#558): a page's name and a section's title. */
+/* One line: shrinks to fit its box, never below 20px, before any ellipsis. --chars is the
+   name's length and --nd-name-room the width it has (set by .nd-pagehead; 100vw otherwise). */
 @utility type-page-name {
+  --nd-name-size: 40px;
   font: 600 40px/46px var(--font-text);
-  @media (max-width: 479px) { font-size: 28px; line-height: 34px; }
+  font-size: clamp(20px, calc(var(--nd-name-room, 100vw) / (var(--chars, 20) * 0.6)), var(--nd-name-size));
+  @media (max-width: 479px) { --nd-name-size: 28px; line-height: 34px; }
 }
 @utility type-section-title {
   font: 600 24px/32px var(--font-text);

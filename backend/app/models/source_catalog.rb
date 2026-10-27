@@ -45,6 +45,7 @@ class SourceCatalog
     "federal_register_nrc" => { name: "NRC notices (Federal Register)", daily: true },
     "federal_register_index" => { name: "Federal Register API", note: "finds the NRC's notices", daily: true },
     "nasa_nuclear_news" => { name: "NASA nuclear news", daily: true },
+    "first_read_pages" => { name: "First reads (not read yet)", note: "pages stored for a reader being built; no claims", daily: true },
     "doe_loans" => { name: "DOE loans (project pages)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },

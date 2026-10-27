@@ -3,8 +3,8 @@
   role_tags = p.shown_roles.map { |r| role_label(r.role) }
   tech_tags = p.technologies.map { |t| t.technology.name }
   record_citations = p.citations_for(p.organization)
-  # Two or more names go under their label, each its own no-wrap item (#406).
-  name_list = ->(names) { names.size > 1 ? safe_join(names.map { |name| tag.span(name, class: "nd-overview__name", title: name, data: { truncate: true }) }, ", ") : names.first.presence }
+  # Several names read as one line, shrunk to fit (the glance panel).
+  name_list = ->(names) { names.join(", ").presence }
   # Title and description say what this page adds, from published facts (#292).
   content_for :title, company_title(p)
   content_for :og_title, p.name
@@ -18,63 +18,73 @@
 <% end %>
 <%= render "shared/site_header" %>
 
-<main class="nd-page">
+<main class="nd-page nd-page--company">
   <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
   <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
   <nav class="nd-crumbs" aria-label="Breadcrumb">
     <% if p.category %><%= link_to p.category.name, directory_url_for(category: p.category), class: "nd-link nd-link--muted" %> / <% end %><span aria-current="page"><%= p.name %></span>
   </nav>
 
-  <%= render "shared/profile_header", name: p.name, kind: :company, description: p.description,
-        citations: p.description_citations, tags: role_tags + tech_tags %>
+  <%
+    index = [ { label: "Overview", href: "#overview", current: true } ]
+    index << { label: "Deals and links", href: "#deals", count: p.deals.size } if p.deals.any?
+    index << { label: "Plants and sites", href: "#plants", count: p.plant_links.size } if p.plant_links.any?
+    index << { label: "Sources", href: "#sources", count: p.citations.sources.size } if p.citations.sources.any?
+    plant_roles = p.plant_links.map(&:relationship_type).uniq
+    plant_role = ("as #{facility_role_noun(plant_roles.first)}" if plant_roles.one?)
+    cite_text = "Nuclear Directory. “#{p.name}.” #{company_url(slug: p.slug)}. Accessed #{Date.current.strftime("%-d %B %Y")}."
+    facts = [
+      { label: "Type", value: (tag.span(class: "nd-chips") { safe_join(p.buckets.map { |b| render("shared/chip", label: b.name, href: directory_url_for(category: b), icon: bucket_icon(b), bucket: b) }) } if p.buckets.any?) },
+      { label: role_tags.size > 1 ? "Roles" : "Role", value: name_list.(role_tags), wide: role_tags.size > 1 },
+      { label: "Technology", value: name_list.(tech_tags), wide: tech_tags.size > 1 },
+      { label: "Headquarters", value: location(p.hq_city, p.hq_state, country: (p.organization.country_code if p.sourced?)) },
+      { label: "Website", value: (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) },
+      { label: p.parents.size > 1 ? "Parent companies" : "Parent company", wide: p.parents.size > 1,
+        value: (safe_join(p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") }, ", ") if p.parents.any?) },
+      { label: "Subsidiaries", wide: true, value: (safe_join(p.subsidiaries.map { |l| link_to(l.from_organization.name, company_url_for(l.from_organization), class: "nd-link") }, ", ") if p.subsidiaries.any?) },
+      { label: "Also known as", value: name_list.(p.aliases), wide: p.aliases.size > 1 },
+      { label: "Legal name", value: p.legal_name, wide: true },
+      { label: "Founded", value: p.founded_year }
+    ]
+  %>
+  <div class="nd-company" data-controller="section-index">
+    <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
-  <%# Key facts come first in reading and focus order; wide screens place them on the right. %>
-  <div class="nd-columns nd-columns--profile">
-    <div class="nd-columns__side">
-      <%# Its buckets (#281) are computed from the roles and links below, so they carry no source of their own. %>
-      <%= render "shared/overview_panel", verified_at: p.verified_at, correction_url: correction_url_for(p.name), sources_label: t("profile.sources.company"), sources: record_citations, rows: [
-            [ "Type", (tag.ul(class: "nd-bucketchips") { safe_join(p.buckets.map { |b| tag.li { link_to(directory_url_for(category: b), class: [ "nd-bucketchip", bucket_class(b) ], aria: { label: b.name }, title: b.name) { bucket_icon(b) + tag.span(b.name, class: "nd-bucketchip__full") + (tag.span(b.short_name, class: "nd-bucketchip__short", aria: { hidden: true }) if b.short) } } }) } if p.buckets.any?) ],
-            [ "Website", (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) ],
-            [ "Also known as", name_list.(p.aliases), nil, nil, p.aliases.size > 1 ],
-            [ "Legal name", p.legal_name ],
-            [ role_tags.size > 1 ? "Roles" : "Role", name_list.(role_tags), p.shown_roles.flat_map { |r| p.citations_for(r) }.uniq(&:first), nil, role_tags.size > 1 ],
-            [ "Technology", name_list.(tech_tags), p.technologies.flat_map { |t| p.citations_for(t) }.uniq(&:first), nil, tech_tags.size > 1 ],
-            [ "Headquarters", place(p.hq_city, p.hq_state) ],
-            [ "Founded", p.founded_year ],
-            [ p.parents.size > 1 ? "Parent companies" : "Parent company",
-              (safe_join(p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") }, ", ") if p.parents.any?),
-              p.parents.flat_map { |l| p.citations_for(l) }.uniq(&:first) ],
-            [ "Subsidiaries",
-              (safe_join(p.subsidiaries.map { |l| link_to(l.from_organization.name, company_url_for(l.from_organization), class: "nd-link") }, ", ") if p.subsidiaries.any?),
-              p.subsidiaries.flat_map { |l| p.citations_for(l) }.uniq(&:first) ]
-          ] %>
+    <div class="nd-company__head" id="overview">
+      <%= render "shared/page_head", name: p.name, about: p.description, tags: role_tags + tech_tags %>
     </div>
 
-    <div class="nd-columns__main">
+    <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
+
+    <div class="nd-company__main nd-secs">
       <% if p.deals.any? %>
-        <section aria-labelledby="deals-heading">
-          <h2 id="deals-heading" class="nd-sec-h">Deals and links <small><%= p.deals.size %></small></h2>
-          <%= render "companies/collapsible_list", label: "deals",
-                rows: p.deals.map { |deal| render("companies/deal_row", deal:, profile: p) } %>
+        <section aria-labelledby="deals-heading" id="deals">
+          <%= render "shared/section_head", title: "Deals and links", count: p.deals.size, id: "deals-heading" %>
+          <%= render "companies/crows", label: "deals", rows: p.deals.map { |deal| render("companies/deal_row", deal:, profile: p) } %>
         </section>
       <% end %>
 
       <% if p.plant_links.any? %>
-        <section aria-labelledby="plants-heading">
-          <h2 id="plants-heading" class="nd-sec-h">Plants and sites <small><%= p.plant_links.size %></small></h2>
-          <%= render "companies/collapsible_list", label: "plants and sites",
-                rows: p.plant_links.map { |link| render("companies/plant_link_row", link:, profile: p) } %>
+        <section aria-labelledby="plants-heading" id="plants">
+          <h2 id="plants-heading" class="nd-sechead type-section-title">Plants and sites<span class="nd-sechead__count"><%= p.plant_links.size %></span><% if plant_role %><span class="nd-sechead__note">· <%= plant_role %></span><% end %></h2>
+          <%= render "companies/crows", label: "plants and sites",
+                rows: p.plant_links.map { |link| render("companies/plant_link_row", link:, profile: p, role: (facility_role_noun(link.relationship_type) unless plant_role)) } %>
         </section>
       <% end %>
+    </div>
 
-      <%= render "shared/missing_fields", fields: p.missing_fields, suggest_url: correction_url_for("#{p.name}: #{p.missing_fields.join(", ")}") %>
-
+    <div class="nd-company__end" data-controller="quiet">
+      <nav class="nd-quiet" aria-label="About this page">
+        <% if p.citations.sources.any? %>
+          <button type="button" aria-expanded="false" aria-controls="sources" data-action="quiet#toggle" data-quiet-target="button" data-panel="sources"><%= icon("link", size: 16) %><b class="nd-num"><%= p.citations.sources.size %></b> <%= "source".pluralize(p.citations.sources.size) %></button>
+        <% end %>
+        <button type="button" aria-expanded="false" aria-controls="cite" data-action="quiet#toggle" data-quiet-target="button" data-panel="cite"><%= icon("info", size: 16) %>Cite this page</button>
+        <%= link_to correction_url_for(p.name) do %><%= icon("flag", size: 16) %>Report a correction<% end %>
+      </nav>
       <% if p.citations.sources.any? %>
-        <section aria-labelledby="sources-heading">
-          <h2 id="sources-heading" class="nd-sec-h">Sources <small><%= p.citations.sources.size %></small></h2>
-          <%= render "shared/sources_list", sources: p.citations.sources %>
-        </section>
+        <div class="nd-quietpanel"><%= render "shared/sources_list", sources: p.citations.sources, hidden: true %></div>
       <% end %>
+      <div class="nd-quietpanel" id="cite"><%= render "shared/cite_panel", text: cite_text %></div>
     </div>
   </div>
 </main>
