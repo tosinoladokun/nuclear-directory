@@ -276,5 +276,7 @@ module DataQuality::Recommendations
       # The claim as Data Quality saw it: what it says and what it's attached to.
       # Reopening counts as a change: a reopened claim needs a fresh call.
       def digest(candidate) = Digest::SHA256.hexdigest([ candidate.payload, candidate.quote, candidate.subject_type, candidate.subject_id, candidate.reopenings ].to_json)
+      # Also stamped by DataQuality::Matching's recommend (#548).
+      public :digest
   end
 end
