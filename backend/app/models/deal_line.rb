@@ -4,6 +4,7 @@
 #   award          "$80M ARDP award"
 #   funding round  "Anchors $500M Series C-1" ("Anchors" when the company led it)
 #   offtake        "5 GW framework by 2039"
+#   loan           "$1.52B DOE loan" (the lender is the link's funding end)
 #   no term        nil: the row shows name and verb only
 #
 # A line too long drops its last part (the end year, then the agreement);
@@ -29,10 +30,13 @@ module DealLine
       anchors = "Anchors" if company && Array(term.lead_investor_ids).include?(company.id)
       [ anchors, money(term.amount_usd), term.round.presence || ("round" if term.amount_usd) ]
     when "offtake" then [ capacity(term.capacity_mw), AGREEMENTS[term.agreement.to_s], ending(term) ]
+    when "loan" then [ money(term.amount_usd), lender(term), "loan" ]
     end
     parts = Array(parts).compact
-    return if parts.empty? || parts == [ "award" ] || parts == [ "Anchors" ]
+    return if parts.empty? || parts == [ "award" ] || parts == [ "Anchors" ] || parts == [ "loan" ]
 
+    # A loan too long drops its lender, never the word "loan".
+    parts.delete_at(1) if term.term_type == "loan" && parts.size == 3 && parts.join(" ").length > MAX
     line = parts.join(" ")
     # Too long: drop the last detail (end year, then agreement), never the amount.
     while line.length > MAX && parts.size > 1
@@ -40,7 +44,13 @@ module DealLine
       line = parts.join(" ")
     end
     # A bare "Anchors" or "award" left after shortening says nothing.
-    line if line.length <= MAX && !%w[Anchors award].include?(line)
+    line if line.length <= MAX && !%w[Anchors award loan].include?(line)
+  end
+
+  # The lender as a row names it: the link's funding end, by its short name ("DOE").
+  def self.lender(term)
+    lender = term.try(:link).try(:from_organization) or return
+    lender.short_name.presence || lender.name
   end
 
   # $80M, $1.5B, $750K, $900.
@@ -53,7 +63,8 @@ module DealLine
     elsif amount >= 1_000 then [ amount / 1_000, "K" ]
     else [ amount, "" ]
     end
-    "$#{trim(value)}#{unit}"
+    # Billions keep two decimals ("$1.52B", #582); the rest one.
+    "$#{trim(value, unit == "B" ? 2 : 1)}#{unit}"
   end
 
   # 500 MW; 5 GW at 1,000 MW and above.
@@ -70,6 +81,6 @@ module DealLine
     end
   end
 
-  # One decimal at most, none when whole: 80, 1.5, 4.6.
-  def self.trim(value) = value.round(1).to_s("F").delete_suffix(".0")
+  # Up to `places` decimals, none when whole: 80, 1.5, 1.52.
+  def self.trim(value, places = 1) = value.round(places).to_s("F").sub(/\.?0+\z/) { |zeros| zeros.include?(".") ? "" : zeros }
 end

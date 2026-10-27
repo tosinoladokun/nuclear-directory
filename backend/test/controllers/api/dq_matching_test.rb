@@ -276,4 +276,17 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
       act(*links.map { |link| { id: link.id, action: "same_as", end: "facility", target: cooper.id, reason: "r" } })
     end
   end
+
+  test "both ends of one claim can be settled in one batch; a site keeps its EIA plant ID" do
+    ge = Organization.create!(name: "GE Both Ends", verification_status: "verified", verified_by: "human:tosin")
+    site = Facility.create!(name: "Both Ends Site", eia_plant_id: "99123", verification_status: "verified", verified_by: "human:tosin")
+    link = Candidate.create!(source: @page, kind: "facility_relationship", status: "needs_review", quote: "q",
+      payload: { "organization" => { "name" => "GE" }, "facility" => { "name" => "Both Ends" }, "relationship_type" => "vendor_for" })
+    act({ id: link.id, action: "same_as", end: "facility", target: site.id, reason: "r" }, { id: link.id, action: "same_as", end: "organization", target: ge.id, reason: "r" })
+    assert results.all? { |r| r["ok"] }, results.inspect
+    link.reload
+    assert_equal "99123", link.payload.dig("facility", "eia_plant_id")
+    assert_equal "GE Both Ends", link.payload.dig("organization", "name"), "the second end was settled, not taken for a retry"
+    assert_equal 2, DqAction.count
+  end
 end

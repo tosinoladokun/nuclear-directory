@@ -10,6 +10,8 @@
   <div class="nd-crow__line">
     <span class="nd-catsq" aria-hidden="true"><%= icon(site_icon_name((link.facility.facility_type if facts), reactor_types: [ (link.facility.reactor_type if facts) ].compact, status: (link.facility.status if facts)), set: :nd, size: 20) %></span>
     <span class="nd-crow__who" title="<%= label %>"><%= link_to label, plant_url_for(plant), class: "nd-link type-body-strong" %><% if local_assigns[:role] %> <span class="text-ink-muted"><%= role %></span><% end %></span>
+    <%# A framework or non-binding offtake says so (#487). %>
+    <% if link.stage %><span class="nd-tag nd-crow__stage"><%= link.stage_label %></span><% end %>
     <% if facts && link.facility.status.present? %><span class="nd-crow__what"><%= render "shared/status_mark", status: link.facility.status %></span><% end %>
     <% if where %><span class="nd-crow__place"><%= where %></span><% end %>
   </div>
