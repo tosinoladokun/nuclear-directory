@@ -352,6 +352,10 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-glance dt", text: "Type", count: 0
     assert_select ".nd-glance .nd-chip", 0
     assert_select ".nd-pagehead__tags .nd-tag", minimum: 2
+    # Every tag carries an icon; a role takes its category's icon and colour.
+    assert_select ".nd-pagehead__tags .nd-tag:not(.nd-tag--icon)", 0
+    assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--reactor-developers svg", minimum: 1
+    assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--services svg", minimum: 1
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
 

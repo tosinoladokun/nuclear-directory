@@ -1,7 +1,5 @@
 <%
   p = @profile
-  role_tags = p.shown_roles.map { |r| role_label(r.role) }
-  tech_tags = p.technologies.map { |t| t.technology.name }
   record_citations = p.citations_for(p.organization)
   # Title and description say what this page adds, from published facts (#292).
   content_for :title, company_title(p)
@@ -58,7 +56,7 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, about: p.description, tags: role_tags + tech_tags %>
+      <%= render "shared/page_head", name: p.name, about: p.description, tags: company_tags(p) %>
     </div>
 
     <%# No key facts, no empty card. %>
