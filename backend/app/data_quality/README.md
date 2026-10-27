@@ -445,6 +445,13 @@ items a night). DOE is the primary source for its own announcements, so an item 
 directory becomes a `news_item` claim about DOE and those records (never a lead). Names are read as trade press
 reads them; an item naming nothing we have besides DOE isn't proposed. Every item waits for a person.
 
+## DOE loans
+
+`plugins/doe_loans.rb` reads DOE's loan project pages for nuclear projects (Palisades, Crane Restart; the
+Energy Dominance Financing site, formerly the Loan Programs Office) once a day and stores only their Project
+Statistics table. Each gives the borrower and a "U.S. Department of Energy funds <borrower>" link described as
+the page states the loan (amount, program, closing date).
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
