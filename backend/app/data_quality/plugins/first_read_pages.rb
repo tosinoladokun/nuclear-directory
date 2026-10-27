@@ -6,7 +6,7 @@
 # extract returns no claims, and nothing here is cited. A block is recorded.
 class DataQuality::Plugins::FirstReadPages < DataQuality::Plugin
   PAGES = {
-    "https://www.nrc.gov/about-nrc/public-affairs/press-releases" => "NRC press releases (first read)",
+    "https://www.nrc.gov/reading-rm/doc-collections/news/" => "NRC news releases (first read)",
     "https://www.diu.mil/latest" => "DIU Latest (first read)"
   }.freeze
 
