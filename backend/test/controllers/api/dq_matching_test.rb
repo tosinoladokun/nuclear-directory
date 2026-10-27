@@ -370,4 +370,15 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert result.ok?, result.errors.inspect
     assert_equal "verified", pending.reload.verification_status, "his Yes to all publishes it"
   end
+
+  test "a first-batch claim with no checker verdict shows in Today once Data Quality approves it, with its own Create" do
+    run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
+    pending = Organization.create!(name: "No Verdict Reactor Co", verification_status: "pending")
+    c = Candidate.create!(source: @page, crawl_run: run, kind: "organization", status: "matched", quote: "Licensee: Holtec.",
+      payload: { "name" => "No Verdict Reactor Co" }, subject_type: "Organization", subject_id: pending.id, proposed_subject: true)
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "On the NRC list" })
+    entry = OwnerInbox.new.sections["new_record"].find { |e| e.item.candidate_id == c.id }
+    assert entry, "it's in Today"
+    assert entry.checked, "Data Quality's first-hand approve counts (#608)"
+  end
 end

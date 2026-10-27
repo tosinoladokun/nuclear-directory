@@ -19,7 +19,9 @@ class OwnerInbox
   # { [kind, …] => [candidate, …] }: each fact's copies together, newest first.
   def groups
     @groups ||= begin
-      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all"))
+      # Plus open claims Data Quality approved, which may have no checker verdict yet.
+      approved = Candidate.where(status: DataQuality::Recommendations::OPEN, dq_recommendation: "approve").select(:id)
+      waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all")).or(Candidate.where(id: approved))
         .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").includes(:source).order(id: :desc).to_a
       firsts = DataQuality::Review.first_batches
       kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:) }
@@ -76,8 +78,16 @@ class OwnerInbox
     end
 
     # Data Quality's own approve, still current, counts for "Yes to all N"
-    # even where the checker doubted (PM, 27 Oct); the row shows both.
-    # Never a claim the checker contradicted with a different value.
-    def checked?(candidate) = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
-      !DataQuality::Review.contradicted?(candidate)
+    # even where the checker doubted (PM, 27 Oct); the row shows both. Never
+    # a claim the checker contradicted with a different value, and only while
+    # its quote is still in the source, as Accept checks.
+    def checked?(candidate)
+      candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
+        !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate)
+    end
+
+    def quote_in_source?(candidate)
+      check = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
+      check.call(candidate.quote)
+    end
 end
