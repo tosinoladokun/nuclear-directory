@@ -72,12 +72,13 @@ class HomeCategories
 
     def sourced_ids(facts) = facts.where(id: Evidence.where(subject_type: facts.model.name).select(:subject_id)).select(:id).to_sql
 
-    # Links to other companies (either side) and to plants.
+    # Links to other companies (either side) and to plants; a framework or
+    # non-binding deal adds nothing to the ranking (#487).
     def company_links_sql
       <<~SQL.squish
-        (SELECT COUNT(*) FROM relationships r WHERE r.id IN (#{sourced_ids(Relationship.published)})
+        (SELECT COUNT(*) FROM relationships r WHERE r.id IN (#{sourced_ids(Relationship.published.signed_or_unstaged)})
           AND (r.from_organization_id = organizations.id OR r.to_organization_id = organizations.id))
-        + (SELECT COUNT(*) FROM facility_relationships fr WHERE fr.id IN (#{sourced_ids(FacilityRelationship.published)})
+        + (SELECT COUNT(*) FROM facility_relationships fr WHERE fr.id IN (#{sourced_ids(FacilityRelationship.published.signed_or_unstaged)})
           AND fr.organization_id = organizations.id)
       SQL
     end

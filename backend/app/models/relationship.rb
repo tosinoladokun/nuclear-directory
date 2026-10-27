@@ -6,6 +6,7 @@ class Relationship < ApplicationRecord
   normalizes :short_phrase, with: ->(text) { text.squish.presence }
   validates :short_phrase, length: { maximum: ShortDescription::MAX }, allow_nil: true
   include Verifiable
+  include DealStage
 
   # funds = grants and awards; invests_in = equity;
   # subsidiary_of points from the child to its parent.
