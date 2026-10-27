@@ -58,6 +58,8 @@ module Dataset
 
         In short: every published fact in [Nuclear Directory](#{Export::SITE}), the companies and facilities of the US nuclear industry and the links between them, with the public documents each fact comes from.
 
+        **Download:** #{download_line}
+
         Version #{@version}, released #{@released_on.iso8601}. #{doi_line}
 
         ## Files
@@ -251,6 +253,12 @@ module Dataset
 
       def doi_line
         concept_doi ? "DOI: [#{concept_doi}](https://doi.org/#{concept_doi}) (all versions)." : "Each release is archived on Zenodo, which gives it a DOI."
+      end
+
+      # Each table's CSV and JSON at this release's tag, as latest.json links them.
+      def download_line
+        base = "https://raw.githubusercontent.com/#{Export::DATA_REPO}/v#{@version}"
+        @counts.keys.map { |table| "#{table} [CSV](#{base}/#{table}.csv) | [JSON](#{base}/#{table}.json)" }.join(" · ")
       end
 
       def bibtex
