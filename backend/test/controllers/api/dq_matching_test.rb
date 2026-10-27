@@ -316,4 +316,15 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal [ "pending", "05000297" ], plant.values_at(:verification_status, :nrc_docket)
     assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
   end
+
+  test "a changed verdict is recorded, not taken for a repeat; the same verdict again is" do
+    c = Candidate.create!(source: @page, kind: "organization", status: "needs_review", payload: { "name" => "Verdict Co" }, quote: "q")
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "first" })
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "again" })
+    assert_equal 1, DqAction.count
+    act({ id: c.id, action: "recommend", verdict: "reject", reason: "Not a company after all" })
+    assert results.sole["ok"], results.inspect
+    assert_equal [ "reject", "Not a company after all" ], c.reload.values_at(:dq_recommendation, :dq_reason)
+    assert_equal 2, DqAction.count
+  end
 end

@@ -70,7 +70,7 @@ module DataQuality::Matching
       # Settling an end is never taken for a retry of another (a claim has two
       # ends); only its request_key makes it one.
       done = (DqAction.find_by(request_key: key) if key) || (row["end"].blank? &&
-        DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) })
+        DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) && same_verdict?(last, row) })
       next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
       # Close applies to any open claim (a link, a deal term, news); the
       # others settle a company, so they need a company claim.
@@ -175,6 +175,9 @@ module DataQuality::Matching
   # (a decision, a reopen, a merge repointing it) means it isn't the same.
   def self.stamp_of(candidate) = candidate.slice(*STAMPED).as_json
   # Only the fields the action stamped (actions before payload was stamped keep working).
+  # A verdict counts as a repeat only when it's the same verdict (Database).
+  def self.same_verdict?(action, row) = action.action != "recommend" || action.after["dq_recommendation"] == row["verdict"].to_s
+
   def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate).slice(*action.after.keys) == action.after
 
   # The records an action created (not the quotes it added).
