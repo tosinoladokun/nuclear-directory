@@ -27,7 +27,12 @@ class Lead < ApplicationRecord
     return if normalized.length < 2
 
     transaction(requires_new: true) do
-      lead = lock.find_or_initialize_by(kind:, normalized_name: normalized)
+      # A search's untyped lead and a typed sighting of the same name are one
+      # lead: the search's takes the type; a later search joins the typed one.
+      lead = lock.find_by(kind:, normalized_name: normalized) ||
+        (kind == "other" ? lock.where(normalized_name: normalized).order(:id).first : lock.find_by(kind: "other", normalized_name: normalized)) ||
+        new(kind:, normalized_name: normalized)
+      lead.kind = kind if lead.kind == "other" && kind != "other"
       lead.name = name if lead.new_record?
       seen = lead.sources.find { |source| source["key"] == key }
       # A source seen before keeps its earliest first and latest last date.
@@ -59,7 +64,8 @@ class Lead < ApplicationRecord
   def self.junk?(query)
     text = query.to_s.squish
     letters = text.scan(/\p{L}/).size
-    return true if letters < 3 || text.match?(%r{https?://|www\.|\.(com|org|net|gov|io)\b|@}i)
+    # An address: a scheme, www., an email, or one word with a dotted ending (example.co.uk, example.energy).
+    return true if letters < 3 || text.match?(%r{https?://|www\.|@}i) || text.match?(/\A\S+\.\p{L}{2,}(\/\S*)?\z/)
     words = text.downcase.scan(/\p{L}+/)
     return true if words.any? { |word| PROFANITY.include?(word) }
     # Gibberish: a long word with no vowel, or one letter over and over.

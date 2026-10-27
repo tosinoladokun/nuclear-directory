@@ -5,8 +5,8 @@ class LeadTriageTest < ActiveSupport::TestCase
   def gap(query, count = 1) = SearchGap.create!(query:, searches_count: count, first_searched_on: Date.current, last_searched_on: Date.current)
 
   test "junk never becomes a lead: too short, addresses, gibberish, profanity, names we have" do
-    %w[ab 1234 http://x.com a@b.co xkcdqwrt aaaaaa shit].each { |query| assert Lead.junk?(query), query }
-    assert_not Lead.junk?("Blue Energy")
+    %w[ab 1234 http://x.com a@b.co xkcdqwrt aaaaaa shit example.co.uk example.energy oklo.com/about].each { |query| assert Lead.junk?(query), query }
+    [ "Blue Energy", "St. Lucie", "X-energy" ].each { |query| assert_not Lead.junk?(query), query }
     Organization.create!(name: "Known Fission", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "Known Fission")
     gap("known fission")
     gap("qwrtzxpl")
@@ -57,5 +57,20 @@ class LeadTriageTest < ActiveSupport::TestCase
     AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:down)
     assert_equal [ "new", nil, nil ], headline.reload.values_at(:status, :reason, :decided_by), "down restores the headlines it set aside"
     assert searched.reload.status_new?
+  end
+
+  test "a searched name and a typed sighting are one lead, promoted through LeadSync" do
+    gap("Quillon Grid")
+    LeadSync.run
+    lead = Lead.sole
+    assert lead.status_triage?
+    site = Source.create!(url: "https://acme.example.com/about", source_kind: "company_pages", crawl_status: "ok")
+    Candidate.create!(source: site, kind: "relationship", status: "needs_review", quote: "q",
+      payload: { "from_organization" => { "name" => "Acme" }, "to_organization" => { "name" => "Quillon Grid" }, "relationship_type" => "supplies" },
+      notes: %(to_organization "Quillon Grid" isn't in the directory yet))
+    LeadSync.run
+    assert_equal 1, Lead.count, "one lead, not two"
+    assert_equal [ "company", "new" ], lead.reload.values_at(:kind, :status)
+    assert_equal 2, lead.sources.size
   end
 end
