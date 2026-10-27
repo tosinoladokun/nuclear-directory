@@ -10,7 +10,9 @@ class DealTerm < ApplicationRecord
   # (PM, 18 Oct 2026, #129): link_type "Organization", rounds only.
   LINK_TYPES = %w[Relationship FacilityRelationship Organization].freeze
 
-  enum :term_type, %w[award offtake funding_round].index_by(&:itself), validate: true
+  # loan (#582): amount_usd, with program and term_years when stated; the
+  # lender is the link's "funds" end (DOE funds Holtec Palisades).
+  enum :term_type, %w[award offtake funding_round loan].index_by(&:itself), validate: true
   enum :status, %w[announced signed active completed terminated].index_by(&:itself), validate: { allow_nil: true },
     prefix: :status
 
@@ -43,6 +45,7 @@ class DealTerm < ApplicationRecord
   validates :amount_usd, :starts_on, :external_id, presence: true, if: :award?
   validate :what_an_offtake_needs, if: :offtake?
   validate :what_a_round_needs, if: :funding_round?
+  validates :amount_usd, presence: true, if: :loan?
   validate :ends_after_start
 
   # Public with its link: verified, and the link it belongs to is published.

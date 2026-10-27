@@ -30,13 +30,13 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     end
   end
 
-  def rows = page.evaluate_script("document.querySelectorAll('main ul.nd-list > li').length")
+  def rows = page.evaluate_script("document.querySelectorAll('main ul.nd-lines > li:not(.nd-lines__head)').length")
 
   # Activates Show more once and waits for the rows. The page is several counts
   # and a list, which can take seconds when the machine is busy (in CI and locally
   # the request was answered late, never lost), so repeating the click only queues
   # more work: wait longer instead.
-  def show_more(expected_rows, via: :click, selector: "main ul.nd-list > li")
+  def show_more(expected_rows, via: :click, selector: "main ul.nd-lines > li:not(.nd-lines__head)")
     if via == :keyboard
       page.execute_script("[...document.querySelectorAll('a')].find((el) => el.textContent.trim() === 'Show more').focus()")
       page.send_keys(:enter)
@@ -72,10 +72,10 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
     show_more(DirectoryController::PAGE + 8, via: :keyboard)
 
     eventually("the first newly shown company should have focus") do
-      page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')]; return [rows.indexOf(document.activeElement), rows.length] })()") == [ DirectoryController::PAGE, DirectoryController::PAGE + 8 ]
+      page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-lines a.nd-line')]; return [rows.indexOf(document.activeElement), rows.length] })()") == [ DirectoryController::PAGE, DirectoryController::PAGE + 8 ]
     end
     page.send_keys(:tab)
-    assert_equal DirectoryController::PAGE + 1, page.evaluate_script("[...document.querySelectorAll('ul.nd-list a.nd-listrow')].indexOf(document.activeElement)"), "Tab moves to the next company"
+    assert_equal DirectoryController::PAGE + 1, page.evaluate_script("[...document.querySelectorAll('ul.nd-lines a.nd-line')].indexOf(document.activeElement)"), "Tab moves to the next company"
   end
 
   test "with companies and plants both expanding, keyboard focus lands on a new result that is on screen" do
@@ -83,19 +83,19 @@ class DirectoryShowMoreTest < ApplicationSystemTestCase
       verification_status: "verified", verified_by: "human:tosin", created_at: Time.current, updated_at: Time.current } })
     visit companies_path(q: "Paged")
     assert page.evaluate_script("typeof Turbo !== 'undefined' && !!document.querySelector('turbo-frame#directory-rows[data-controller=keep-scroll]')")
-    before = page.evaluate_script("document.querySelectorAll('ul.nd-list a.nd-listrow').length")
+    before = page.evaluate_script("document.querySelectorAll('ul.nd-lines a.nd-line').length")
     page.execute_script("[...document.querySelectorAll('a')].find((el) => el.textContent.trim() === 'Show more').scrollIntoView({ block: 'end' })")
-    show_more(before + 14, via: :keyboard, selector: "ul.nd-list > li")
+    show_more(before + 14, via: :keyboard, selector: "ul.nd-lines > li:not(.nd-lines__head)")
 
     eventually("focus should be on a newly shown row that is inside the viewport") do
-      page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-list a.nd-listrow')], i = rows.indexOf(document.activeElement), r = document.activeElement.getBoundingClientRect(); const page = #{DirectoryController::PAGE}; return [(i >= page && i < page + 8) || i >= page + 8 + page, r.top >= 0 && r.bottom <= innerHeight] })()") == [ true, true ]
+      page.evaluate_script("(() => { const rows = [...document.querySelectorAll('ul.nd-lines a.nd-line')], i = rows.indexOf(document.activeElement), r = document.activeElement.getBoundingClientRect(); const page = #{DirectoryController::PAGE}; return [(i >= page && i < page + 8) || i >= page + 8 + page, r.top >= 0 && r.bottom <= innerHeight] })()") == [ true, true ]
     end
   end
 
   test "a company link in the list opens its page, not a frame" do
     visit companies_path
-    first("main ul.nd-list > li a").click
-    assert_selector "h1.nd-pagehead__name", wait: 20
+    first("main ul.nd-lines > li a").click
+    assert_selector ".nd-company h1.nd-pagehead__name", wait: 20
     assert_match(%r{\A/companies/paged-company}, page.current_path)
   end
 end

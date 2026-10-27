@@ -94,6 +94,15 @@ module DirectoryHelper
   def plant_url_for(facility) = plant_path(slug: facility.slug)
 
   def relationship_verb(type) = RELATIONSHIP_VERBS.fetch(type.to_s)
+  # A company page groups its deals under a label that carries the verb, so a
+  # row is just the other company (Design, 27 Oct). Key: [type, from this company?].
+  DEAL_GROUP_LABELS = {
+    [ "funds", false ] => "Funded by", [ "funds", true ] => "Funds",
+    [ "invests_in", false ] => "Investors", [ "invests_in", true ] => "Invests in",
+    [ "offtake_with", false ] => "Power buyers", [ "offtake_with", true ] => "Buys power from",
+    [ "supplies", false ] => "Suppliers", [ "supplies", true ] => "Customers"
+  }.freeze
+  def deal_group_label(type, from_us) = DEAL_GROUP_LABELS.fetch([ type.to_s, from_us ]) { relationship_verb(type).capitalize }
   def facility_relationship_verb(type) = FACILITY_RELATIONSHIP_VERBS.fetch(type.to_s)
   FACILITY_ROLE_NOUNS = { "owns" => "owner", "operates" => "operator", "vendor_for" => "reactor developer", "offtakes_from" => "offtaker" }.freeze
   def facility_role_noun(type) = FACILITY_ROLE_NOUNS.fetch(type.to_s, type.to_s.humanize.downcase)
@@ -396,6 +405,13 @@ module DirectoryHelper
   # its plants and deals, each left out when it isn't known or doesn't fit.
   #   "Southern Nuclear: Operates Plant Vogtle and 2 other plants. Legal name:
   #    Southern Nuclear Operating Company, Inc."
+  # "3 · 1 framework" (#487, Design): signed deals counted, staged ones noted.
+  def deal_count(profile)
+    staged = profile.deals.filter_map(&:stage).tally
+    [ profile.counted_deals.size, ("#{staged['framework']} framework" if staged["framework"]),
+      ("#{staged['non_binding']} not binding" if staged["non_binding"]) ].compact.join(" · ")
+  end
+
   def company_description(profile)
     listed = ->(names, noun = nil) { names.many? ? "#{names.first} and #{pluralize(names.size - 1, [ "other", noun ].compact.join(" "))}" : names.first }
     # Present tense, so only links in effect today (as on the company's card).
@@ -405,7 +421,9 @@ module DirectoryHelper
     # "plant" only when every one is a published power plant; a mine, a fuel
     # plant or a type that isn't published makes it "site" (VOICE.md).
     noun = ->(type) { places.call(type).all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site" }
-    deals_out = ->(type) { profile.deals.select { |d| d.relationship_type == type && d.from_organization_id == profile.organization.id && current.call(d) }.map { |d| d.to_organization.name }.uniq }
+    # Signed deals said flat; a framework or non-binding one says so (#487).
+    deals_out = ->(type) { profile.counted_deals.select { |d| d.relationship_type == type && d.from_organization_id == profile.organization.id && current.call(d) }.map { |d| d.to_organization.name }.uniq }
+    staged_out = ->(stage) { profile.deals.select { |d| d.stage == stage && d.relationship_type == "offtake_with" && d.from_organization_id == profile.organization.id && current.call(d) }.map { |d| d.to_organization.name }.uniq }
     facts = [
       ("Owns #{listed.call(sites.call('owns'), noun.call('owns'))}" if sites.call("owns").any?),
       ("Operates #{listed.call(sites.call('operates'), noun.call('operates'))}" if sites.call("operates").any?),
@@ -413,6 +431,8 @@ module DirectoryHelper
       ("Invests in #{listed.call(deals_out.call('invests_in'))}" if deals_out.call("invests_in").any?),
       ("Supplies #{listed.call(deals_out.call('supplies'))}" if deals_out.call("supplies").any?),
       ("Offtakes from #{listed.call(deals_out.call('offtake_with'))}" if deals_out.call("offtake_with").any?),
+      ("Framework offtake with #{listed.call(staged_out.call('framework'))}" if staged_out.call("framework").any?),
+      ("Non-binding offtake with #{listed.call(staged_out.call('non_binding'))}" if staged_out.call("non_binding").any?),
       ("Legal name: #{profile.legal_name}" if profile.legal_name.present? && profile.legal_name != profile.name)
     ].compact.map { |fact| fact.end_with?(".") ? fact : "#{fact}." }
     role = profile.shown_roles.first && role_label(profile.shown_roles.first.role)

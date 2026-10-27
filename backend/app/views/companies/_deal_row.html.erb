@@ -1,7 +1,7 @@
 <%# One deal on a company page, on one line (#556): the other company's category square, its name and
     the link verb, the short "what" when stored data gives one, the date, a source mark and a chevron.
     The row opens (a button) to the full description, the quote, the source and the confidence.
-    Locals: deal, profile. %>
+    Locals: deal, profile, grouped (true under a group label: the row shows the name without the verb). %>
 <% other = profile.other_party(deal) %>
 <% from_us = deal.from_organization_id == profile.organization.id %>
 <% verb = relationship_verb(deal.relationship_type) %>
@@ -19,9 +19,15 @@
     <%= company_square(other, category: profile.partner_category(other)) %>
     <%# One line on desktop (name and verb); on phones the other company's name sits alone on line 1 and the rest on line 2. %>
     <span class="nd-crow__who" title="<%= who.join %>">
-      <% if from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b>
+      <% if local_assigns[:grouped] %>
+        <%# Under a group label ("Investors · 2") the row is the other company's name; the verb is read out, not shown. %>
+        <% if from_us %><span class="sr-only"><%= profile.name %> <%= verb %> </span><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b>
+        <% else %><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b><span class="sr-only"> <%= verb %> <%= profile.name %></span><% end %>
+      <% elsif from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b>
       <% else %><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b><span class="nd-crow__rest"> <%= verb %><span class="nd-crow__us"> <%= profile.name %></span></span><% end %>
     </span>
+    <%# A framework or non-binding deal says so first (#487; Design: after name and verb, before the "what"). %>
+    <% if deal.stage %><span class="nd-tag nd-crow__stage"><%= deal.stage_label %></span><% end %>
     <% if what.present? %><span class="nd-crow__what" title="<%= what %>"><%= what %></span><% end %>
     <% if date %><time class="nd-crow__date" datetime="<%= date.iso8601 %>"><%= date.strftime("%b %Y") %></time><% end %>
   </button>

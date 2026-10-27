@@ -117,6 +117,8 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     assert_includes readme, "This licence covers the data in this repository. The website's code is not covered."
     assert_includes readme, "Oladokun, T. (2026). *Nuclear Directory: US nuclear supply chain dataset* (Version 2026.12)"
     assert_match "| `companies` | 2 |", readme
+    assert_includes readme, "**Download:** companies [CSV](https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.12/companies.csv) | " \
+      "[JSON](https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.12/companies.json) · facilities"
     Export::TABLES.each { |table, columns| assert_includes readme, "| `#{table}` | #{columns.keys.map { |c| "`#{c}`" }.join(", ")} |" }
     assert_includes readme, "`facilities.site_slug` is the `slug` of a unit's site."
     assert_includes readme, "@misc{oladokun_nuclear_directory,\n  author    = {Oladokun, Tosin},"

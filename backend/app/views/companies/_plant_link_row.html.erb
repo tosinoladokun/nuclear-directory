@@ -1,7 +1,8 @@
 <%# One plant or site the company is linked to, on one line (#556): site icon, the plant's name (a link),
     its status, its place and a source mark. A link to a reactor unit names the unit and goes to its site.
     Type, status and place show only when the plant has its own source (CompanyProfile#plant_facts?).
-    Locals: link, profile, role (the verb shown on the row when the section heading doesn't carry it). %>
+    Locals: link, profile, role (the verb shown on the row when the section heading doesn't carry it),
+    links (optional: every link to this plant, when the company has more than one role there). %>
 <% plant = link.facility.parent || link.facility %>
 <% label = link.facility.parent ? "#{plant.name}, #{link.facility.name}" : plant.name %>
 <% facts = profile.plant_facts?(link.facility) %>
@@ -9,9 +10,12 @@
 <li class="nd-crow nd-crow--plant">
   <div class="nd-crow__line">
     <span class="nd-catsq" aria-hidden="true"><%= icon(site_icon_name((link.facility.facility_type if facts), reactor_types: [ (link.facility.reactor_type if facts) ].compact, status: (link.facility.status if facts)), set: :nd, size: 20) %></span>
-    <span class="nd-crow__who" title="<%= label %>"><%= link_to label, plant_url_for(plant), class: "nd-link type-body-strong" %><% if local_assigns[:role] %> <span class="text-ink-muted"><%= role %></span><% end %></span>
+    <span class="nd-crow__who" title="<%= label %>"><%= link_to label, plant_url_for(plant), class: "nd-link type-body-strong" %><% if local_assigns[:role] %> <span class="nd-crow__role text-ink-muted"><%= role %></span><% end %></span>
+    <%# A framework or non-binding offtake says so (#487). %>
+    <% if link.stage %><span class="nd-tag nd-crow__stage"><%= link.stage_label %></span><% end %>
     <% if facts && link.facility.status.present? %><span class="nd-crow__what"><%= render "shared/status_mark", status: link.facility.status %></span><% end %>
     <% if where %><span class="nd-crow__place"><%= where %></span><% end %>
   </div>
-  <%= render "shared/source_mark", citations: profile.plant_link_citations(link), checked: link.verified_at %>
+  <% links = local_assigns[:links] || [ link ] %>
+  <%= render "shared/source_mark", citations: links.flat_map { |each_link| profile.plant_link_citations(each_link) }.uniq, checked: links.filter_map(&:verified_at).max %>
 </li>

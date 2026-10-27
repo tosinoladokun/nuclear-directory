@@ -24,7 +24,7 @@
   <% if local_assigns[:cap].present? || local_assigns[:place].present? || variant == :bare %>
     <span class="nd-line__foot">
       <% if local_assigns[:cap].present? %><span class="nd-line__cap"><%= cap %></span><% end %>
-      <% if local_assigns[:place].present? || variant == :bare %><span class="nd-line__end"><%= local_assigns[:place] %></span><% end %>
+      <% if local_assigns[:place].present? || variant == :bare %><span class="nd-line__end" title="<%= local_assigns[:place] %>"><%= local_assigns[:place] %></span><% end %>
     </span>
   <% end %>
 <% end %>

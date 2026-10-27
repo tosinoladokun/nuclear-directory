@@ -46,3 +46,10 @@ blog.google: { name: "Google", kind: company }
 fb.com: { name: "Meta", kind: company }
 about.meta.com: { name: "Meta", kind: company }
 southernnuclear.com: { name: "Southern Nuclear", kind: company }
+advancedconductor.com: { name: "Advanced Conductor Technologies", kind: company }
+ga.com: { name: "General Atomics", kind: company }
+gle-us.com: { name: "Global Laser Enrichment", kind: company }
+goodenergycollective.org: { name: "Good Energy Collective", kind: company }
+h3dgamma.com: { name: "H3D", kind: company }
+news.duke-energy.com: { name: "Duke Energy", kind: company }
+pkmj.com: { name: "PKMJ Technical Services", kind: company }
