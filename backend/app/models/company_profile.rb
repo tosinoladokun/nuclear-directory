@@ -61,7 +61,7 @@ class CompanyProfile
     @deals ||= Relationship.published
       .where(from_organization: organization).or(Relationship.published.where(to_organization: organization))
       .where.not(relationship_type: "subsidiary_of")
-      .includes(:from_organization, :to_organization, evidence: :source).to_a
+      .includes(:from_organization, :to_organization, { deal_terms: { evidence: :source } }, evidence: :source).to_a
       .select { |deal| deal.evidence.any? }
       .sort_by { |deal| [ -(deal_date(deal)&.jd || 0), deal.relationship_type, other_party(deal).name ] }
   end
@@ -77,6 +77,10 @@ class CompanyProfile
     terms_of(deal).filter_map { |term| term.signed_on || term.starts_on }.max || deal.started_on
   end
 
+  # The deals counted as deals: a framework or other non-binding one is
+  # listed with its stage, never counted (#487).
+  def counted_deals = deals.reject(&:stage)
+
   def parents
     @parents ||= Relationship.published.subsidiary_of.where(from_organization: organization)
       .includes(:to_organization, evidence: :source).select { |link| link.evidence.any? }
@@ -91,7 +95,7 @@ class CompanyProfile
     @plant_links ||= begin
       organization.facility_relationships.published
         .where(facility_id: DirectoryListing.new.public_facilities.select(:id))
-        .includes({ facility: [ { evidence: :source }, { parent: { evidence: :source } } ] }, evidence: :source).to_a
+        .includes({ facility: [ { evidence: :source }, { parent: { evidence: :source } } ] }, { deal_terms: { evidence: :source } }, evidence: :source).to_a
         .select { |link| link.evidence.any? }
         .sort_by { |link| [ link.relationship_type, link.facility.name ] }
     end
@@ -174,14 +178,14 @@ class CompanyProfile
         terms_of(deal).each { |term| cite(term) }
       end
       plant_links.each do |link|
-        cite(link)
+        cite(link, also: link.stage ? link.deal_terms.select(&:verified?).flat_map(&:evidence) : [])
         [ link.facility, link.facility.parent ].compact.each { |facility| cite(facility) if plant_facts?(facility) }
       end
     end
 
     def sourced_only(records) = records.select { |record| record.evidence.any? }
 
-    def cite(fact)
-      @cited[fact] = citations.cite(fact.evidence)
+    def cite(fact, also: [])
+      @cited[fact] = citations.cite(fact.evidence.to_a + also)
     end
 end

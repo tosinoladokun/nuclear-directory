@@ -5,6 +5,7 @@ class FacilityRelationship < ApplicationRecord
   normalizes :short_phrase, with: ->(text) { text.squish.presence }
   validates :short_phrase, length: { maximum: ShortDescription::MAX }, allow_nil: true
   include Verifiable
+  include DealStage
 
   enum :relationship_type, %w[owns operates vendor_for offtakes_from].index_by(&:itself), validate: true
 

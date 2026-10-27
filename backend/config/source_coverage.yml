@@ -99,6 +99,7 @@ general:
   - { name: Company newsrooms, status: hand, group: company-sites, issue: 128, crawler: true }
   - { name: Companies' own pages (Enrich), kind: company_pages, status: built, issue: 479, note: "read on request, one company at a time" }
   - { name: Federal Register, status: planned, issue: 126 }
+  - { name: DOE Office of Nuclear Energy news, kind: doe_nuclear_news, status: built, note: "DOE's own announcements" }
   - { name: "First reads: NRC press releases, DIU (stored, no claims yet)", kind: first_read_pages, status: built }
   - { name: NASA nuclear news (fission power), kind: nasa_nuclear_news, status: built, note: "NASA's own announcements" }
   - { name: Trade press feeds (WNN and ANS), kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
