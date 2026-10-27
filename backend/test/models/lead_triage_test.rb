@@ -49,5 +49,13 @@ class LeadTriageTest < ActiveSupport::TestCase
     AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:up)
     assert_equal %w[triage ignored new researching], [ searched, headline, mixed, researching ].map { |lead| lead.reload.status }
     assert_match "A headline, not a name", headline.reason
+
+    empty = Lead.create!(name: "No Sources Co", normalized_name: "no sources co", kind: "other", sources: [], first_seen_on: Date.current, last_seen_on: Date.current)
+    AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:up)
+    assert empty.reload.status_new?, "a lead with no sources is left alone"
+
+    AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:down)
+    assert_equal [ "new", nil, nil ], headline.reload.values_at(:status, :reason, :decided_by), "down restores the headlines it set aside"
+    assert searched.reload.status_new?
   end
 end
