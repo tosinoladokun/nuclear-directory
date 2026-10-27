@@ -9,15 +9,14 @@
 <% share_text = "#{number_with_precision(share, precision: 2, strip_insignificant_zeros: true)}%" if share %>
 <% citations = profile.party_citations(party) %>
 <% evidence = party.links.flat_map(&:evidence).max_by { |e| e.confidence || 0 } %>
-<% since = party.links.filter_map(&:started_on).min %>
 <% detail_id = "party-#{type}-#{organization.id}" %>
-<% name_text, small = line_name(organization.name) %>
+<% name_text, small = line_name(organization.name, organization.short_name) %>
 <li class="nd-crow" data-controller="row-open">
   <div class="nd-crow__top">
   <button type="button" class="nd-crow__line" aria-expanded="false" aria-controls="<%= detail_id %>" data-action="row-open#toggle" data-row-open-target="button">
     <%= company_square(organization, category: profile.party_category(organization)) %>
     <span class="nd-crow__who" title="<%= organization.name %> <%= plant_verb(type) %>">
-      <b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= organization.name %></b><span class="nd-crow__rest"> <%= plant_verb(type) %></span>
+      <b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= name_text %></b><span class="nd-crow__rest"> <%= plant_verb(type) %></span>
     </span>
     <% if covers %><span class="nd-crow__what"><%= covers %></span><% end %>
     <% if share %>
@@ -31,12 +30,22 @@
   <span class="nd-crow__chev" aria-hidden="true"><span class="nd-crow__chev-down"><%= icon("caret-down", size: 16) %></span><span class="nd-crow__chev-up"><%= icon("caret-down", size: 16) %></span></span>
   </div>
   <div class="nd-crow__more" id="<%= detail_id %>" hidden data-row-open-target="panel">
-    <% description = party.links.map(&:description).compact_blank.first %>
-    <% if description || since %><p class="type-body"><%= [ description, ("#{since.future? ? "Starts" : "Since"} #{prose_month(since)}" if since) ].compact.join(" ") %></p><% end %>
+    <%# Each link's own description and start date, with its unit when the row folds several. %>
+    <% party.links.each do |each| %>
+      <% own_since = each.started_on ? "#{each.started_on.future? ? "Starts" : "Since"} #{prose_month(each.started_on)}" : nil %>
+      <% text = [ each.description.presence, own_since ].compact.join(" ").presence %>
+      <% if text %><p class="type-body"><% if party.links.size > 1 && each.facility != profile.site %><b><%= each.facility.name %>:</b> <% end %><%= text %></p><% end %>
+    <% end %>
     <p class="type-ui"><%= link_to "View #{organization.name}", company_url_for(organization), class: "nd-link" %></p>
     <% fields = data_quote_fields(evidence) %>
     <% if fields %>
-      <p class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>"><%= fields.join(" · ") %></p>
+      <div class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>">
+        <p><%= fields.join(" · ") %></p>
+        <details class="nd-quote__row">
+          <summary class="nd-link nd-link--muted type-small">Show source row</summary>
+          <code class="type-data-sm"><%= evidence.quote %></code>
+        </details>
+      </div>
     <% elsif evidence&.quote.present? %>
       <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= evidence.quote %>”</p>
     <% end %>

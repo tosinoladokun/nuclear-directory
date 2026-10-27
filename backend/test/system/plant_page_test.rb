@@ -38,6 +38,18 @@ class PlantPageSystemTest < ApplicationSystemTestCase
     assert_selector "dialog.nd-sheet[open]", text: "Vogtle"
   end
 
+  test "at 1024, where the middle column is 440px wide, an owner row keeps its name and the share clear of the source controls" do
+    resize_viewport(1024, 800)
+    visit plant_path(slug: @vogtle.slug)
+    row = find(".nd-crow", text: "Georgia Power")
+
+    name, share, mark = %w[.nd-crow__name .nd-share .nd-mark].map { |selector| row.find(selector).evaluate_script("this.getBoundingClientRect().toJSON()") }
+    assert_operator name["width"], :>=, 80, "the name isn't squeezed out"
+    assert_operator share["right"], :<=, mark["left"] + 1, "the share bar doesn't run under the source mark"
+    assert_equal 0, page.evaluate_script("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    assert_empty page.evaluate_script(AUDIT)
+  end
+
   [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
     test "nothing wraps on the plant page at #{width}" do
       resize_viewport(width, height)

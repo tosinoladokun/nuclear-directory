@@ -114,6 +114,43 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select "a", text: "Report a correction", count: 1
   end
 
+  test "a share shows only when every folded link states the same one" do
+    unit4 = @unit4
+    cite!(link(@georgia, "owns", unit4)) # no stated share on Unit 4
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select ".nd-crow", text: /Georgia Power owns/ do
+      assert_select ".nd-crow__what", "units 3 and 4"
+      assert_select ".nd-share", 0, "a 45.7% bar would claim a share for Unit 4 that no source states"
+    end
+  end
+
+  test "a folded row keeps each link's own description and start date, and the exact source row" do
+    FacilityRelationship.find_by!(organization: @georgia).update!(started_on: Date.new(2020, 1, 1))
+    later = cite!(link(@georgia, "owns", @unit4))
+    later.update!(description: "Conditional on state approval.", started_on: 2.years.from_now.to_date)
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select ".nd-crow", text: /Georgia Power owns/ do
+      assert_select ".nd-crow__more p", text: /Unit 3:.*Co-owned with Oglethorpe Power and MEAG Power\. Since January 2020/
+      assert_select ".nd-crow__more p", text: /Unit 4:.*Conditional on state approval\. Starts /
+    end
+  end
+
+  test "a row shows the stored source row behind a dataset quote" do
+    list = Source.create!(url: "https://www.nrc.gov/test/reactor-list", source_kind: "nrc_reactor_list")
+    row = "Byron 1 | 05000454 | NPF-37 | PWR | 17 miles SW of Rockford, IL | Constellation Energy Generation, LLC | 3"
+    byron = plant("Byron Generating Station", facility_type: "power_reactor", status: "operating")
+    unit = cite!(plant("Byron 1", parent: byron, status: "operating"), source: list)
+    link(company("Constellation"), "operates", unit).evidence.create!(source: list, quote: row, found_by: "human", confidence: 1)
+    get plant_path(slug: byron.slug)
+
+    assert_select ".nd-crow__more .nd-quote--data details.nd-quote__row" do
+      assert_select "summary", "Show source row"
+      assert_select "code", row
+    end
+  end
+
   test "a company with several unit links is one row naming the units it covers" do
     cite!(link(@southern, "operates", @unit3))
     cite!(link(@southern, "operates", @unit4))
@@ -148,7 +185,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
 
     get plant_path(slug: byron.slug)
 
-    assert_select ".nd-crow__more .nd-quote--data", "Byron 1 · Docket 05000454 · License NPF-37 · PWR · 17 miles SW of Rockford, IL · Constellation Energy Generation, LLC · NRC region 3"
+    assert_select ".nd-crow__more .nd-quote--data p", "Byron 1 · Docket 05000454 · License NPF-37 · PWR · 17 miles SW of Rockford, IL · Constellation Energy Generation, LLC · NRC region 3"
   end
 
   test "unverified companies and links never appear" do

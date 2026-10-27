@@ -1305,7 +1305,8 @@
   .nd-mark { position: absolute; right: 40px; top: 0; height: 56px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; color: var(--nd-ink-muted); text-decoration: none; font: 400 11px/16px var(--font-mono); }
   .nd-mark:hover { color: var(--nd-ink); }
   .nd-crow--plant .nd-mark { right: 0; }
-  @media (max-width: 639px) {
+  /* Rows stack below 640px, and at 1024 to 1143px, where the page's middle column is no wider than a phone's. */
+  @media (max-width: 639px), (min-width: 1024px) and (max-width: 1143px) {
     /* Two lines: the other company's name alone; then the verb, the short "what" and the date, with the
        source mark and chevron at the end of line 2 (the "what" gets the ellipsis). */
     .nd-crow__line { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; column-gap: var(--nd-space-3); row-gap: 2px; align-items: center; padding-right: 88px; }
@@ -1357,7 +1358,8 @@
   .nd-crow--open .nd-share, .nd-crow__line:hover .nd-share { background: var(--nd-rule); }
   .nd-share__fill { display: block; height: 100%; background: var(--nd-ink); }
   .nd-crow__pct { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
-  @media (max-width: 639px) {
+  /* Rows stack below 640px, and at 1024 to 1143px, where the page's middle column is no wider than a phone's. */
+  @media (max-width: 639px), (min-width: 1024px) and (max-width: 1143px) {
     .nd-share { width: 72px; }
     .nd-crow__share { grid-column: 2 / -1; grid-row: 3; }
   }
@@ -1372,6 +1374,8 @@
   .nd-utable tr:target th, .nd-utable tr:target td { background: var(--nd-paper-sunken); }
   .nd-utable__src { text-align: right; padding-right: 0; }
   .nd-utable__src .nd-mark { position: static; height: auto; min-width: 0; }
+  /* The small glyph stays; on touch screens its link keeps a 44px box. */
+  @media (pointer: coarse) { .nd-utable__src .nd-mark { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; } }
   @media (max-width: 639px) {
     .nd-utable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .nd-utable, .nd-utable tbody { display: block; }

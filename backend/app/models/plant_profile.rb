@@ -59,8 +59,9 @@ class PlantProfile
   # The companies behind links of one type, one row each, in link order.
   def parties_for(type)
     links.select { |link| link.relationship_type == type }.group_by(&:organization).map do |organization, own|
-      shares = own.filter_map(&:ownership_pct).uniq
-      Party.new(organization:, links: own, units: own.map(&:facility).reject { |facility| facility == site }.uniq, share: (shares.first if shares.one?))
+      # A share shows only when every link states the same one: a unit with none stated breaks it.
+      shares = own.map(&:ownership_pct).uniq
+      Party.new(organization:, links: own, units: own.map(&:facility).reject { |facility| facility == site }.uniq, share: (shares.first if shares.size == 1))
     end
   end
 
