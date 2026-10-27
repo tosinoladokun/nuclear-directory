@@ -52,6 +52,44 @@ class PlantProfile
       .sort_by { |link| [ LINK_ORDER.index(link.relationship_type), link.organization.name, link.facility.name ] }
   end
 
+  # One company with what it does here: its links collapsed into one row, with the units they cover
+  # and the share it states (only when every link states the same one; never estimated).
+  Party = Struct.new(:organization, :links, :units, :share, keyword_init: true)
+
+  # The companies behind links of one type, one row each, in link order.
+  def parties_for(type)
+    links.select { |link| link.relationship_type == type }.group_by(&:organization).map do |organization, own|
+      shares = own.filter_map(&:ownership_pct).uniq
+      Party.new(organization:, links: own, units: own.map(&:facility).reject { |facility| facility == site }.uniq, share: (shares.first if shares.one?))
+    end
+  end
+
+  # "units 3 and 4", "units 1 to 4", "unit 2": what a party's links cover, from the unit names' numbers; nil when
+  # a link names the site itself, or a name has no number.
+  def units_phrase(party)
+    return if party.units.empty? || party.links.any? { |link| link.facility == site }
+
+    numbers = party.units.map { |unit| unit.name[/(\d+)\s*\z/, 1]&.to_i }
+    return if numbers.any?(&:nil?)
+
+    numbers = numbers.sort.uniq
+    return "unit #{numbers.first}" if numbers.one?
+
+    list = if numbers.each_cons(2).all? { |a, b| b == a + 1 } && numbers.size > 2 then "#{numbers.first} to #{numbers.last}"
+    else "#{numbers[0..-2].join(", ")} and #{numbers.last}"
+    end
+    "units #{list}"
+  end
+
+  # The first category of a company, looked up once for all the page's parties.
+  def party_category(organization)
+    @party_categories ||= Bucket.firsts(links.map(&:organization))
+    @party_categories[organization.id]
+  end
+
+  # The sources behind a party's row.
+  def party_citations(party) = party.links.flat_map { |link| citations_for(link) }.uniq(&:first)
+
   def companies_for(type) = links.select { |link| link.relationship_type == type }.map(&:organization).uniq
 
   # Only links already in effect: the page shows a scheduled one as "Starts …",

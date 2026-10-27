@@ -1276,6 +1276,8 @@
   /* One row on the page (a deal, a plant): held apart by space, no lines. */
   .nd-crows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .nd-crow { position: relative; display: flex; flex-direction: column; }
+  /* The row's own line with its mark and chevron, apart from the opened details below it. */
+  .nd-crow__top { position: relative; }
   .nd-crow__line { display: flex; align-items: center; gap: var(--nd-space-3); width: 100%; min-height: 56px; padding: var(--nd-space-3) 96px var(--nd-space-3) 0; border: 0; background: transparent; color: var(--nd-ink); text-align: left; font: inherit; cursor: pointer; }
   .nd-crow__line:hover, .nd-crow--open { background: var(--nd-paper-sunken); }
   .nd-crow__who { flex: 0 1 auto; min-width: 0; max-width: 300px; font: 400 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1337,5 +1339,48 @@
 @layer components {
   @media (max-width: 1023px) {
     .nd-company__glance .nd-glance { width: auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--nd-space-4) var(--nd-space-3); padding: var(--nd-space-4); }
+  }
+}
+
+/* The plant page (#557): the company page's layout plus the status line, the owner sentence, share bars and the units table. */
+@layer components {
+  .nd-plantstatus { margin: 0; font: 400 15px/24px var(--font-text); }
+  .nd-sentence--narrow { display: none; }
+  @media (max-width: 639px) { .nd-sentence--wide { display: none; } .nd-sentence--narrow { display: block; } }
+  .nd-glance__note { display: block; }
+  .nd-partygroup { display: flex; flex-direction: column; gap: var(--nd-space-2); }
+  .nd-partygroup + .nd-partygroup { margin-top: var(--nd-space-6); }
+  .nd-partygroup > .nd-label { margin: 0; }
+  /* The share bar: ink fill on a sunken track (112px; 72px on phones), the percentage in mono at the end. */
+  .nd-crow__share { flex: none; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
+  .nd-share { width: 112px; height: 6px; border-radius: 3px; background: var(--nd-paper-sunken); overflow: hidden; display: inline-block; }
+  .nd-crow--open .nd-share, .nd-crow__line:hover .nd-share { background: var(--nd-rule); }
+  .nd-share__fill { display: block; height: 100%; background: var(--nd-ink); }
+  .nd-crow__pct { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+  @media (max-width: 639px) {
+    .nd-share { width: 72px; }
+    .nd-crow__share { grid-column: 2 / -1; grid-row: 3; }
+  }
+
+  /* Units: a table on desktop; two-line rows on phones (the unit and its status; then reactor, capacity, docket). */
+  .nd-utable-wrap { max-width: 100%; }
+  .nd-utable { width: 100%; border-collapse: collapse; }
+  .nd-utable th { text-align: left; font: 700 11px/16px var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); padding: 0 var(--nd-space-3) var(--nd-space-2) 0; white-space: nowrap; }
+  .nd-utable td, .nd-utable tbody th { padding: var(--nd-space-3) var(--nd-space-3) var(--nd-space-3) 0; font: 400 15px/22px var(--font-text); text-transform: none; letter-spacing: normal; color: var(--nd-ink); vertical-align: middle; white-space: nowrap; }
+  .nd-utable tbody th { font-weight: 600; }
+  .nd-utable td.type-data { font: 400 13px/20px var(--font-mono); }
+  .nd-utable tr:target th, .nd-utable tr:target td { background: var(--nd-paper-sunken); }
+  .nd-utable__src { text-align: right; padding-right: 0; }
+  .nd-utable__src .nd-mark { position: static; height: auto; min-width: 0; }
+  @media (max-width: 639px) {
+    .nd-utable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .nd-utable, .nd-utable tbody { display: block; }
+    .nd-utable tr { display: flex; flex-wrap: wrap; column-gap: var(--nd-space-3); row-gap: 2px; padding: var(--nd-space-3) 0; align-items: center; }
+    .nd-utable td, .nd-utable tbody th { padding: 0; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nd-utable__unit { order: 1; flex: 1 0 calc(100% - 150px); min-width: 0; }
+    .nd-utable__status { order: 2; flex: 0 0 auto; }
+    .nd-utable td[data-col="reactor"], .nd-utable td[data-col="capacity"], .nd-utable td[data-col="nrc-docket"] { order: 3; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); display: block; flex: 0 0 auto; }
+    .nd-utable td[data-col="capacity"], .nd-utable td[data-col="nrc-docket"] { font: 400 13px/20px var(--font-mono); }
+    .nd-utable__src { order: 4; margin-left: auto; }
   }
 }

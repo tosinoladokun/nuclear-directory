@@ -245,6 +245,31 @@ module DirectoryHelper
     tag.span(category ? bucket_icon(category) : icon("buildings"), class: [ "nd-catsq", (bucket_class(category) if category) ], aria: { hidden: true })
   end
 
+  # The plant page's one-sentence owner and operator line (#557), from sourced, current owns and operates
+  # links only; nothing inferred, never "owner unknown". Each name links to its company. Phones show the first
+  # two owners and "and N others" (narrow: true).
+  def plant_owner_sentence(profile, narrow: false)
+    owners = profile.current_companies_for("owns")
+    operators = profile.current_companies_for("operates")
+    names = lambda do |orgs, limit = nil|
+      shown = limit && orgs.size > limit + 1 ? orgs.first(limit) : orgs
+      links = shown.map { |org| link_to(org.name, company_url_for(org), class: "nd-link") }
+      links << "#{orgs.size - shown.size} others" if shown.size < orgs.size
+      links.size > 1 ? safe_join([ safe_join(links[0..-2], ", "), " and ", links.last ]) : links.first
+    end
+    limit = (2 if narrow)
+    if owners.one? && operators == owners then safe_join([ "Owned and operated by ", names.(owners), "." ])
+    else
+      parts = []
+      parts << safe_join([ "Owned by ", names.(owners, limit), "." ]) if owners.any?
+      parts << safe_join([ "Operated by ", names.(operators, limit), ((", a different company" if owners.any? && (operators & owners).empty?)), "." ].compact) if operators.any?
+      safe_join(parts, " ") if parts.any?
+    end
+  end
+
+  PLANT_VERBS = { "owns" => "owns", "operates" => "operates", "vendor_for" => "is the reactor developer", "offtakes_from" => "buys power" }.freeze
+  def plant_verb(type) = PLANT_VERBS.fetch(type.to_s)
+
   # How a company name fits the 240px name column of a Row (#558): 15px up to
   # about 26 characters, then 13px, then its short name if it has one; an
   # ellipsis (with the full name in title) is the last resort. [text, small?]
