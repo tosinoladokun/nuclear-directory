@@ -32,7 +32,15 @@ module Dataset
       "eia_generators" => "EIA's monthly generator inventory (EIA-860M)",
       "eia_plants" => "EIA's annual plant file (EIA-860)",
       "eia_owners" => "EIA's annual generator ownership (EIA-860, Schedules 3 and 4)",
-      "usaspending_doe_awards" => "DOE awards on USAspending.gov"
+      "usaspending_doe_awards" => "DOE awards on USAspending.gov",
+      "nrc_reactor_vendors" => "NRC's pages for each operating reactor (its vendor)",
+      "nrc_research_reactors" => "NRC's list of research and test reactors",
+      "nrc_fuel_cycle" => "NRC's fuel cycle facility pages",
+      "nrc_uranium_recovery" => "NRC's uranium recovery sites",
+      "federal_register_nrc" => "NRC notices in the Federal Register",
+      "sec_form_d" => "SEC Form D filings",
+      "doe_programs" => "DOE program pages",
+      "doe_isotope_sites" => "DOE Isotope Program sites"
     }.freeze
 
     def initialize(version:, released_on:, counts:, manifest:, previous:, crawled: [])
