@@ -3,7 +3,7 @@
     left some visits on the fallback serif). Swapping would move the page (CLS 0.25 on /companies in CI), so each
     has metric-matched fallbacks: local faces of the same widths and line heights (size-adjust and the
     ascent, descent and line-gap overrides, measured from the font files against Georgia, Times New Roman /
-    Liberation Serif, Menlo and Courier New / Liberation Mono), listed after the real font in the stacks in
+    Liberation Serif, DejaVu Serif, Menlo, Courier New / Liberation Mono and DejaVu Sans Mono), listed after the real font in the stacks in
     tokens.css. The swap then changes the letters, not the layout. The wordmark is an SVG, so Anton loads only
     where a display heading uses it. %>
 
@@ -11,9 +11,15 @@
   @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
   @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: swap; }
   @font-face { font-family: "Anton"; src: url("<%= asset_path "anton-latin.woff2" %>") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-  /* Fallbacks sized to Roboto's metrics, so the swap doesn't move the page. */
-  @font-face { font-family: "Roboto Serif Georgia"; src: local("Georgia"); font-weight: 400 700; size-adjust: 116.91%; ascent-override: 79.29%; descent-override: 20.87%; line-gap-override: 0%; }
-  @font-face { font-family: "Roboto Serif Times"; src: local("Times New Roman"), local("Liberation Serif"), local("Times"); font-weight: 400 700; size-adjust: 128.33%; ascent-override: 72.24%; descent-override: 19.01%; line-gap-override: 0%; }
-  @font-face { font-family: "Roboto Mono Menlo"; src: local("Menlo"); font-weight: 400 500; size-adjust: 99.68%; ascent-override: 105.12%; descent-override: 27.19%; line-gap-override: 0%; }
-  @font-face { font-family: "Roboto Mono Courier"; src: local("Courier New"), local("Liberation Mono"), local("Courier"); font-weight: 400 500; size-adjust: 100%; ascent-override: 104.79%; descent-override: 27.1%; line-gap-override: 0%; }
+  /* Fallbacks sized to Roboto's metrics, so the swap doesn't move the page: a regular face (400 to 500) and a bold one
+     (600 to 700) per local font, since a bold system face is far wider than Roboto Serif's 600. */
+  @font-face { font-family: "Roboto Serif Georgia"; src: local("Georgia"); font-weight: 400 500; size-adjust: 116.91%; ascent-override: 79.29%; descent-override: 20.87%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif Georgia"; src: local("Georgia Bold"), local("Georgia-Bold"); font-weight: 600 700; size-adjust: 104.01%; ascent-override: 89.12%; descent-override: 23.46%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif Times"; src: local("Times New Roman"), local("TimesNewRomanPSMT"), local("Liberation Serif"), local("Times"); font-weight: 400 500; size-adjust: 128.33%; ascent-override: 72.24%; descent-override: 19.01%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif Times"; src: local("Times New Roman Bold"), local("TimesNewRomanPS-BoldMT"), local("Liberation Serif Bold"), local("Times Bold"); font-weight: 600 700; size-adjust: 124.98%; ascent-override: 74.17%; descent-override: 19.52%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif DejaVu"; src: local("DejaVu Serif"), local("DejaVuSerif"); font-weight: 400 500; size-adjust: 100.28%; ascent-override: 92.44%; descent-override: 24.33%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif DejaVu"; src: local("DejaVu Serif Bold"), local("DejaVuSerif-Bold"); font-weight: 600 700; size-adjust: 94.09%; ascent-override: 98.52%; descent-override: 25.93%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Mono Menlo"; src: local("Menlo"), local("Menlo-Regular"); font-weight: 400 500; size-adjust: 99.68%; ascent-override: 105.12%; descent-override: 27.19%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Mono Courier"; src: local("Courier New"), local("CourierNewPSMT"), local("Liberation Mono"), local("Courier"); font-weight: 400 500; size-adjust: 100%; ascent-override: 104.79%; descent-override: 27.1%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Mono DejaVu"; src: local("DejaVu Sans Mono"), local("DejaVuSansMono"); font-weight: 400 500; size-adjust: 99.68%; ascent-override: 105.13%; descent-override: 27.19%; line-gap-override: 0%; }
 </style>

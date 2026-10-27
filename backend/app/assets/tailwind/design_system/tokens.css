@@ -136,8 +136,8 @@
 /* Fonts (self-hosted Latin subsets, shared/_fonts): Anton and Roboto Serif from techequity.us, plus Roboto Mono. */
 @theme {
   --font-display: "Anton", "Arial Narrow", Impact, sans-serif;
-  --font-text: "Roboto Serif", "Roboto Serif Georgia", "Roboto Serif Times", Georgia, serif;
-  --font-mono: "Roboto Mono", "Roboto Mono Menlo", "Roboto Mono Courier", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-text: "Roboto Serif", "Roboto Serif Georgia", "Roboto Serif Times", "Roboto Serif DejaVu", Georgia, serif;
+  --font-mono: "Roboto Mono", "Roboto Mono Menlo", "Roboto Mono Courier", "Roboto Mono DejaVu", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 /* Type styles. Use these instead of composing size, weight and family by hand. */

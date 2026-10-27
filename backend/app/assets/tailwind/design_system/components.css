@@ -274,6 +274,8 @@
 /* Directory and search results heading and filters (#40). */
 @layer components {
   .nd-listhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--nd-space-3) var(--nd-space-6); border-bottom: 2px solid var(--nd-ink); padding-bottom: var(--nd-space-3); margin-bottom: calc(var(--nd-space-8) * -1 + var(--nd-space-2)); }
+  /* On phones the filters always sit under the title, so a font swap can't tip them onto its row and shift the list. */
+  @media (max-width: 560px) { .nd-listhead > .nd-filterwrap { flex: 0 0 100%; } }
   .nd-listhead__title { margin: 0; }
   .nd-listhead__title .nd-listhead__count { margin-left: 6px; color: var(--nd-ink-muted); }
   .nd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-2); }
