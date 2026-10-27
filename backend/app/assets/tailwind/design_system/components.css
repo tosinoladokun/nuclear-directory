@@ -1350,6 +1350,8 @@
     .nd-partygroup .nd-crow__line:not(:has(.nd-crow__what, .nd-crow__date, .nd-crow__stage)) > .nd-catsq { grid-row: 1; align-self: center; }
     /* A plant row: its mark sits at the end of line 2, so the name has the full width; a place with no status starts line 2. */
     .nd-crow--plant .nd-crow__line, .nd-crow--plant .nd-crow__line:not(:has(.nd-crow__date)) { padding-right: 0; }
+    /* A row that is only a name (no status, no place) keeps room for its mark at the end of the line. */
+    .nd-crow--plant .nd-crow__line:not(:has(.nd-crow__what, .nd-crow__place)) { padding-right: 56px; }
     .nd-crow--plant .nd-crow__line:not(:has(.nd-crow__what)) .nd-crow__place { grid-column: 2 / -1; }
     /* On phones a plant row's role ("operator and owner") goes under its name. */
     .nd-crow--plant .nd-crow__role { display: block; }

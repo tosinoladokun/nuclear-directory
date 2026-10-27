@@ -431,6 +431,23 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crow--plant", text: /Both Roles Plant\s*operator and owner/
   end
 
+  test "two units of one site stay two rows, each with its own role and sources" do
+    site = plant("Split Site", facility_type: "power_reactor", status: "operating")
+    unit3 = cite!(plant("Split Unit 3", parent: site, status: "operating"), source: @doe_page)
+    unit4 = cite!(plant("Split Unit 4", parent: site, status: "operating"), source: @press)
+    cite!(link(@kairos, "operates", unit3), source: @doe_page)
+    cite!(link(@kairos, "owns", unit4), source: @press)
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-crow--plant", text: /Split Site, Split Unit 3\s*operator/ do
+      assert_select ".nd-crow__role", text: /operator\z/
+      assert_select "a.nd-mark[data-sources]", 1
+    end
+    assert_select ".nd-crow--plant", text: /Split Site, Split Unit 4\s*owner/
+    assert_select ".nd-crow--plant", text: /Split Unit 3.*owner/m, count: 0
+    assert_select ".nd-crow--plant", text: /Split Unit 4.*operator/m, count: 0
+  end
+
   test "key facts don't repeat the tags, and lists put one name per line" do
     get company_path(slug: "kairos-power")
 

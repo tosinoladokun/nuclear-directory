@@ -29,8 +29,9 @@
   <%
     index = [ { label: "Overview", href: "#overview", current: true } ]
     index << { label: "Deals and links", href: "#deals", count: p.counted_deals.size } if p.deals.any?
-    # A plant the company both owns and operates is one row ("owner and operator"), not two.
-    plants = p.plant_links.group_by { |link| link.facility.parent || link.facility }.values
+    # A plant the company both owns and operates is one row ("owner and operator"), not two. Only links to
+    # the same facility fold: two units of one site, one operated and one owned, stay two rows.
+    plants = p.plant_links.group_by(&:facility).values
     # Deals sit under labels that carry the verb ("Investors · 2"), biggest group first.
     deal_groups = p.deals.group_by { |deal| [ deal.relationship_type, deal.from_organization_id == p.organization.id ] }
       .sort_by { |(type, from_us), deals| [ -deals.size, deal_group_label(type, from_us) ] }
