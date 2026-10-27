@@ -14,25 +14,17 @@ class HomeTest < ActionDispatch::IntegrationTest
     cite!(link(google, "offtake_with", kairos))
   end
 
-  # The public pages keep font-display: optional in production (the fonts partial uses
-  # swap elsewhere, so localhost shows the real serif); the page is rendered as production here.
-  def get_as_production(path)
-    env = Rails.env
-    Rails.env = "production"
-    get path
-  ensure
-    Rails.env = env
-  end
+  test "the real fonts always show: Roboto Mono and Roboto Serif swap in, with metric-matched fallbacks so nothing moves" do
+    get root_path
 
-  test "Roboto Mono never swaps in late: a late swap shifted the /companies list (Lighthouse 0.85)" do
-    get_as_production root_path
-    assert_match(/font-family: "Roboto Mono".*?font-display: optional/, response.body)
+    assert_match(/font-family: "Roboto Mono"[^}]*font-display: swap/, response.body)
+    assert_match(/font-family: "Roboto Serif"[^}]*font-display: swap/, response.body)
+    assert_includes response.body, "size-adjust"
   end
 
   test "no font is preloaded: the preload shared slow-4G bandwidth with the CSS and cost LCP 0.4 s" do
-    get_as_production root_path
+    get root_path
     assert_select "link[rel=preload][as=font]", count: 0
-    assert_match(/font-family: "Roboto Serif".*?font-display: optional/, response.body, "a swapped-in serif moved the page (CLS 0.25 in CI)")
   end
 
   test "card titles are the home page's proper-noun labels; the category's name stays in title" do
