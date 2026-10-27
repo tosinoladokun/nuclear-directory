@@ -1,10 +1,43 @@
-<%# One deal on a company page, read left to right ("Google offtakes from
-    Kairos Power"). Locals: deal, profile. The page's own company isn't a link. %>
-<% from, to = [ deal.from_organization, deal.to_organization ].map do |o|
-     o == profile.organization ? o.name : link_to(o.name, company_url_for(o), class: "nd-link type-body-strong")
-   end %>
-<%= render "shared/fact_row",
-      sentence: safe_join([ from, " #{relationship_verb(deal.relationship_type)} ", to ]),
-      detail: [ deal.description, prose_month(deal.started_on) ].compact_blank.join(" ").presence,
-      evidence: deal.evidence.max_by { |e| e.confidence || 0 },
-      citations: profile.citations_for(deal), confidence: deal.confidence, checked: deal.verified_at, correctable: true %>
+<%# One deal on a company page, on one line (#556): the other company's category square, its name and
+    the link verb, the short "what" when stored data gives one, the date, a source mark and a chevron.
+    The row opens (a button) to the full description, the quote, the source and the confidence.
+    Locals: deal, profile. %>
+<% other = profile.other_party(deal) %>
+<% from_us = deal.from_organization_id == profile.organization.id %>
+<% verb = relationship_verb(deal.relationship_type) %>
+<% who = from_us ? [ profile.name, " #{verb} ", other.name ] : [ other.name, " #{verb} ", profile.name ] %>
+<% what = profile.deal_line(deal) %>
+<% _, small = line_name(other.name) %>
+<% date = profile.deal_date(deal) %>
+<% evidence = deal.evidence.max_by { |e| e.confidence || 0 } %>
+<% citations = profile.deal_citations(deal) %>
+<% quote = evidence&.quote %>
+<% detail_id = "deal-#{deal.id}" %>
+<li class="nd-crow" data-controller="row-open">
+  <button type="button" class="nd-crow__line" aria-expanded="false" aria-controls="<%= detail_id %>" data-action="row-open#toggle" data-row-open-target="button">
+    <%= company_square(other, category: profile.partner_category(other)) %>
+    <%# One line on desktop (name and verb); on phones the other company's name sits alone on line 1 and the rest on line 2. %>
+    <span class="nd-crow__who" title="<%= who.join %>">
+      <% if from_us %><span class="nd-crow__rest"><span class="nd-crow__us"><%= profile.name %> </span><%= verb %> </span><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b>
+      <% else %><b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= other.name %></b><span class="nd-crow__rest"> <%= verb %><span class="nd-crow__us"> <%= profile.name %></span></span><% end %>
+    </span>
+    <% if what.present? %><span class="nd-crow__what" title="<%= what %>"><%= what %></span><% end %>
+    <% if date %><time class="nd-crow__date" datetime="<%= date.iso8601 %>"><%= date.strftime("%b %Y") %></time><% end %>
+  </button>
+  <%= render "shared/source_mark", citations:, checked: deal.verified_at %>
+  <span class="nd-crow__chev" aria-hidden="true"><span class="nd-crow__chev-down"><%= icon("caret-down", size: 16) %></span><span class="nd-crow__chev-up"><%= icon("caret-down", size: 16) %></span></span>
+  <div class="nd-crow__more" id="<%= detail_id %>" hidden data-row-open-target="panel">
+    <% if deal.description.present? %><p class="type-body"><%= deal.description %></p><% end %>
+    <p class="type-ui"><%= link_to "View #{other.name}", company_url_for(other), class: "nd-link" %></p>
+    <% fields = data_quote_fields(evidence) %>
+    <% if fields %>
+      <p class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>"><%= fields.join(" · ") %></p>
+    <% elsif quote.present? %>
+      <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= quote %>”</p>
+    <% end %>
+    <div class="nd-row">
+      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, checked: (deal.verified_at if index.zero?) %><% end %>
+      <%= render "shared/confidence", value: deal.confidence %>
+    </div>
+  </div>
+</li>
