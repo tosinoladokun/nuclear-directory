@@ -360,10 +360,16 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
   end
 
   test "the legal name isn't listed again under Also known as" do
-    @kairos.update!(legal_name: "Kairos Power, LLC")
-    get company_path(slug: "kairos-power")
+    # A legal name that doesn't normalise to the display name, so the builder keeps it as an alias.
+    acme = company("Acme Nuclear", aliases: [ "Acme Holdings Group LLC", "Acme" ], description: "Makes parts.")
+    acme.update!(legal_name: "Acme Holdings Group LLC")
+    cite!(acme)
+    get company_path(slug: acme.slug)
 
-    assert_select ".nd-glance dd", text: "Kairos Power, LLC", count: 1
+    assert_select ".nd-glance dt", "Legal name"
+    assert_select ".nd-glance dd", text: "Acme Holdings Group LLC", count: 1
+    assert_select ".nd-glance .nd-glance__list > span", "Acme"
+    assert_select ".nd-glance .nd-glance__list > span", text: "Acme Holdings Group LLC", count: 0
   end
 
   test "a hidden invests-in deal doesn't make a company an investor" do
