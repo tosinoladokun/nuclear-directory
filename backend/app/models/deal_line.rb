@@ -25,7 +25,8 @@ module DealLine
 
   def self.for(term, company: nil)
     parts = case term.term_type
-    when "award" then [ money(term.amount_usd), term.program.presence, "award" ]
+    # A bare assistance-listing number ("81.121") means nothing to a reader: "$1.9M award".
+    when "award" then [ money(term.amount_usd), (term.program.presence unless term.program.to_s.match?(/\A\d+\.\d+\z/)), "award" ]
     when "funding_round"
       anchors = "Anchors" if company && Array(term.lead_investor_ids).include?(company.id)
       [ anchors, money(term.amount_usd), term.round.presence || ("round" if term.amount_usd) ]

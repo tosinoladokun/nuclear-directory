@@ -374,14 +374,87 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
   end
 
   test "long lists collapse behind Show all" do
+    (CompanyProfile::VISIBLE_ITEMS + 3).times do |i|
+      cite!(link(company("Supplier #{i}"), "supplies", @kairos))
+    end
+    get company_path(slug: "kairos-power")
+
+    suppliers = CompanyProfile::VISIBLE_ITEMS + 4 # and the DOE
+    assert_select ".nd-partygroup", text: /Suppliers · #{suppliers}/ do
+      assert_select "> ul.nd-crows > li", CompanyProfile::VISIBLE_ITEMS
+      assert_select "details.nd-more summary .nd-more__open", "Show all #{suppliers} deals"
+      assert_select "details.nd-more summary .nd-more__close", "Show fewer deals"
+    end
+  end
+
+  test "one or two rows past the first six show, with no button" do
     (CompanyProfile::VISIBLE_ITEMS + 1).times do |i|
       cite!(link(company("Supplier #{i}"), "supplies", @kairos))
     end
     get company_path(slug: "kairos-power")
 
-    assert_select "#deals-heading ~ ul.nd-crows > li", CompanyProfile::VISIBLE_ITEMS
-    assert_select "details.nd-more summary .nd-more__open", "Show all #{CompanyProfile::VISIBLE_ITEMS + 3} deals"
-    assert_select "details.nd-more summary .nd-more__close", "Show fewer deals"
+    assert_select ".nd-partygroup", text: /Suppliers/ do
+      assert_select "> ul.nd-crows > li", CompanyProfile::VISIBLE_ITEMS + 2
+      assert_select "details.nd-more", 0
+    end
+  end
+
+  test "deals sit under labels that carry the verb; each row is the other company" do
+    cite!(link(@kairos, "invests_in", company("Small Startup")))
+    get company_path(slug: "kairos-power")
+
+    assert_equal [ "Invests in", "Power buyers", "Suppliers" ], css_select(".nd-partygroup > h3.nd-label").map { |h| h.text.strip }
+    assert_select ".nd-partygroup", text: /Power buyers/ do
+      assert_select ".nd-crow__name", "Google"
+      assert_select ".nd-crow__rest", 0, "no verb on the row"
+      assert_select ".sr-only", /offtakes from Kairos Power/, "the full sentence is still read out"
+    end
+  end
+
+  test "a company with no category, facts or links has no trail of one and no empty facts panel" do
+    bare = company("Bare Co.")
+    cite!(bare)
+    get company_path(slug: bare.slug)
+
+    assert_select ".nd-crumbs", 0
+    assert_select ".nd-company__glance", 0
+    assert_select "#cite .nd-cite", /“Bare Co\.” http/, "a name ending in a full stop isn't given a second one"
+  end
+
+  test "a plant the company owns and operates is one row" do
+    both = cite!(plant("Both Roles Plant", facility_type: "power_reactor"))
+    cite!(link(@kairos, "operates", both))
+    cite!(link(@kairos, "owns", both))
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-crow--plant", text: /Both Roles Plant/, count: 1
+    assert_select ".nd-crow--plant", text: /Both Roles Plant\s*operator and owner/
+  end
+
+  test "two units of one site stay two rows, each with its own role and sources" do
+    site = plant("Split Site", facility_type: "power_reactor", status: "operating")
+    unit3 = cite!(plant("Split Unit 3", parent: site, status: "operating"), source: @doe_page)
+    unit4 = cite!(plant("Split Unit 4", parent: site, status: "operating"), source: @press)
+    cite!(link(@kairos, "operates", unit3), source: @doe_page)
+    cite!(link(@kairos, "owns", unit4), source: @press)
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-crow--plant", text: /Split Site, Split Unit 3\s*operator/ do
+      assert_select ".nd-crow__role", text: /operator\z/
+      assert_select "a.nd-mark[data-sources]", 1
+    end
+    assert_select ".nd-crow--plant", text: /Split Site, Split Unit 4\s*owner/
+    assert_select ".nd-crow--plant", text: /Split Unit 3.*owner/m, count: 0
+    assert_select ".nd-crow--plant", text: /Split Unit 4.*operator/m, count: 0
+  end
+
+  test "key facts don't repeat the tags, and lists put one name per line" do
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-tag", "Reactor designer"
+    assert_select ".nd-glance dt", text: /\ARoles?\z/, count: 0
+    assert_select ".nd-glance dt", text: "Technology", count: 0
+    assert_select ".nd-glance .nd-glance__list > span", "Kairos"
   end
 
   test "link preview tags" do
