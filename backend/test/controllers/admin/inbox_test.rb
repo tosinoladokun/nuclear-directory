@@ -82,7 +82,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   end
 
   test "Data Quality's own approve counts for Yes to all even where the checker doubted; the row shows both" do
-    @page.update!(content_text: "Bluefield Fission, of Austin, Texas.")
+    @page.update!(content_text: "Bluefield Fission, of Austin, Texas. q")
     @create.update!(status: "needs_review", ai_recommendation: "needs_review", ai_reason: "Not sure the company is nuclear", quote: "Bluefield Fission, of Austin, Texas.")
     DataQuality::Recommendations.record("#{@create.id} approve: Its NRC license names it", by: "human:dq")
     other = Organization.create!(name: "Second Doubted Co", verification_status: "pending")
