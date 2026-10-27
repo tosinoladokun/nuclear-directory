@@ -168,7 +168,8 @@ module DataQuality::Matching
     "someone was deciding on it just then; try again"
   end
 
-  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by payload dq_recommendation dq_reason].freeze
+  # Everything Recommendations.digest reads, so a changed claim is never taken for the same one.
+  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by payload quote reopenings dq_recommendation dq_reason].freeze
   RECOMMEND_FIELDS = %w[dq_recommendation dq_reason dq_by dq_at dq_payload_sha256].freeze
 
   # The claim as an action left it, compared under its lock: anything since
@@ -202,7 +203,7 @@ module DataQuality::Matching
       end
 
       def same_as(candidate, row, record, reason, directory, created)
-        candidate.update!(status: "matched", subject_type: "Organization", subject_id: record.id, proposed_subject: false,
+        candidate.update!(status: "needs_review", subject_type: "Organization", subject_id: record.id, proposed_subject: false,
           notes: "Data Quality: same as #{record.name}. #{reason}")
         return if row["add_alias"] || record.verification_status != "verified"
 
@@ -237,7 +238,8 @@ module DataQuality::Matching
         return "#{payload['name'].inspect} already exists (##{result.ref.id}); use same_as" unless result.created
 
         created << stamp(directory, { "type" => type, "id" => result.ref.id, "candidate_id" => candidate.id })
-        candidate.update!(status: "matched", subject_type: type, subject_id: result.ref.id, proposed_subject: true,
+        # needs_review, so it's in Tosin's inbox without a verifier's call (Review.check_ids).
+        candidate.update!(status: "needs_review", subject_type: type, subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: a new #{plant ? 'plant' : 'company'}. #{reason}")
         nil
       end
@@ -254,7 +256,7 @@ module DataQuality::Matching
           candidate: link, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil), verification: { status: "pending", by: BY, reason: })
         return "couldn't propose the link: #{result.errors.to_sentence}" unless result.success?
 
-        link.update!(status: "matched", subject_type: "Relationship", subject_id: result.ref.id, proposed_subject: true,
+        link.update!(status: "needs_review", subject_type: "Relationship", subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: #{name} is a subsidiary of #{parent.name}. #{reason}")
         created << stamp(directory, { "type" => "Relationship", "id" => result.ref.id, "candidate_id" => link.id, "link_claim" => true })
         nil

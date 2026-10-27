@@ -86,7 +86,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
   test "same_as with add_alias stays matched, so the new name is a Change for Tosin" do
     variant = claim("Holtec")
     act({ id: variant.id, action: "same_as", target: @holtec.id, reason: "Keep the short name", add_alias: true })
-    assert_equal "matched", variant.reload.status
+    assert_equal "needs_review", variant.reload.status
     assert_equal "change", DataQuality::Review.inbox_kind(variant)
   end
 
@@ -104,6 +104,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     company = Organization.find(results.sole["created_ids"].sole)
     assert company.verification_status == "pending"
     assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
+    assert_includes OwnerInbox.new.sections["new_record"].map { |entry| entry.item.candidate_id }, c.id, "it's in Tosin's inbox"
 
     post api_dq_matching_undo_path, params: { action_id: DqAction.sole.id }, as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" }
     assert response.parsed_body["ok"], response.parsed_body.inspect
@@ -179,7 +180,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
       subject_type: "Organization", subject_id: company.id)
     assert_match "claimed since", DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal "pending", company.reload.verification_status
-    assert_equal "matched", c.reload.status
+    assert_equal "needs_review", c.reload.status
   end
 
   test "a digest with spaces or capitals still works; actions that aren't a list of objects get a 422" do
@@ -315,6 +316,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     plant = Facility.find(results.sole["created_ids"].sole)
     assert_equal [ "pending", "05000297" ], plant.values_at(:verification_status, :nrc_docket)
     assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
+    assert_includes OwnerInbox.new.sections["new_record"].map { |entry| entry.item.candidate_id }, c.id, "the plant is in Tosin's inbox"
   end
 
   test "a changed verdict is recorded, not taken for a repeat; the same verdict again is" do
@@ -326,5 +328,12 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert results.sole["ok"], results.inspect
     assert_equal [ "reject", "Not a company after all" ], c.reload.values_at(:dq_recommendation, :dq_reason)
     assert_equal 2, DqAction.count
+  end
+
+  test "rolling back the recommend migration refuses while verdicts are recorded" do
+    c = claim("Rollback Co")
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "r" })
+    require Rails.root.join("db/migrate/20261027120000_allow_recommend_dq_actions")
+    assert_raises(ActiveRecord::IrreversibleMigration) { AllowRecommendDqActions.new.tap { |m| m.verbose = false }.migrate(:down) }
   end
 end
