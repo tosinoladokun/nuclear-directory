@@ -20,10 +20,10 @@ relationships: []
 facilities: []
 notes: 'Added for the Army Janus Program selection (26 Aug 2026; Antares at Fort Bragg). The Army page (army.mil/article/294891) refuses our fetch (403), so the selection itself is cited to Antares'' own announcement. The footer reads "© Antares Nuclear, Inc.", the source for the legal-form alias. No HQ or country stated.'
 description:
-  text: Antares builds factory-produced fission microreactors for strategic energy on Earth, in space and underwater.
+  text: Antares develops fission microreactors for strategic energy on Earth, in space and underwater.
   source_url: https://antaresindustries.com/
   quote: Fission microreactors to enable strategic energy for critical mission capabilities on Earth, in space, and underwater.
 short_description:
-  text: Factory-built fission microreactors
+  text: Fission microreactor developer
   source_url: https://antaresindustries.com/
   quote: Fission microreactors to enable strategic energy for critical mission capabilities on Earth, in space, and underwater.
