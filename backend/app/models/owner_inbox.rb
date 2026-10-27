@@ -75,5 +75,12 @@ class OwnerInbox
       changes
     end
 
-    def checked?(candidate) = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
+    # Counted in "Yes to all N" only when Accept would take it: Data
+    # Quality's approve stands in for the checker only on a source's own hold.
+    def checked?(candidate)
+      return false unless candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
+
+      DataQuality::Recommendations.source_hold?(candidate) ||
+        (candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
+    end
 end
