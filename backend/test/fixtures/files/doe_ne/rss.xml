@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:og="http://ogp.me/ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:schema="http://schema.org/" xmlns:sioc="http://rdfs.org/sioc/ns#" xmlns:sioct="http://rdfs.org/sioc/types#" xmlns:skos="http://www.w3.org/2004/02/skos/core#" xmlns:xsd="http://www.w3.org/2001/XMLSchema#" version="2.0" xml:base="https://www.energy.gov/ne/listings/ne-press-releases">
+  <channel>
+    <title>NE Press Releases</title>
+    <link>https://www.energy.gov/ne/listings/ne-press-releases</link>
+    <description>NE Press Releases</description>
+    <language>en</language>
+    
+    <item>
+  <title>DOE Office of Nuclear Energy Announces $50M in Funding to Revolutionize Reactor Cladding Material</title>
+  <link>https://www.energy.gov/ne/articles/doe-office-nuclear-energy-announces-50m-funding-revolutionize-reactor-cladding-material</link>
+  <description>New advanced fuel technology could lead to enhanced performance and safety of country’s reactor fleet</description>
+  <pubDate>Mon, 05 Oct 2026 11:48:55 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/doe-office-nuclear-energy-announces-50m-funding-revolutionize-reactor-cladding-material</guid>
+    </item>
+<item>
+  <title>Department of Energy Provides Rare Salt Material to Natura Resources</title>
+  <link>https://www.energy.gov/ne/articles/department-energy-provides-rare-salt-material-natura-resources</link>
+  <description>The Department of Energy in coordination with Oak Ridge National Laboratory and Idaho National Laboratory completed shipment of more than 4,700 pounds of a rare salt used in molten salt reactors to Natura Resources.</description>
+  <pubDate>Tue, 22 Sep 2026 12:00:14 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/department-energy-provides-rare-salt-material-natura-resources</guid>
+    </item>
+<item>
+  <title>Westinghouse eVinci Microreactor Achieves Criticality Milestone</title>
+  <link>https://www.energy.gov/ne/articles/westinghouse-evinci-microreactor-achieves-criticality-milestone</link>
+  <description>Westinghouse Electric Company reached a key milestone earlier this month when it successfully completed criticality testing for its eVinci microreactor.</description>
+  <pubDate>Wed, 16 Sep 2026 10:30:54 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/westinghouse-evinci-microreactor-achieves-criticality-milestone</guid>
+    </item>
+<item>
+  <title>More than a Decade of Data to Ensure a Lifetime of Reactor Safety</title>
+  <link>https://www.energy.gov/ne/articles/more-decade-data-ensure-lifetime-reactor-safety</link>
+  <description>Researchers at Argonne National Laboratory in Illinois completed a 14-year campaign to help inform the safety features of new advanced reactor designs.</description>
+  <pubDate>Wed, 09 Sep 2026 10:22:23 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/more-decade-data-ensure-lifetime-reactor-safety</guid>
+    </item>
+<item>
+  <title>Department of Energy Awards First Civil Nuclear Credit Payment to California Power Plant</title>
+  <link>https://www.energy.gov/ne/articles/department-energy-awards-first-civil-nuclear-credit-payment-california-power-plant</link>
+  <description>Today, Pacific Gas and Electric received $271 million to ensure the ongoing operation of Diablo Canyon Power Plant, responsible for producing nearly 10 percent of the state’s total power generation.</description>
+  <pubDate>Fri, 14 Aug 2026 10:30:39 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/department-energy-awards-first-civil-nuclear-credit-payment-california-power-plant</guid>
+    </item>
+<item>
+  <title>Office of Nuclear Energy Celebrates Fifth Advanced Reactor Criticality</title>
+  <link>https://www.energy.gov/ne/articles/office-nuclear-energy-celebrates-fifth-advanced-reactor-criticality</link>
+  <description>Oklo’s Groves Isotope Test Reactor successfully achieved criticality, becoming the fifth DOE-authorized reactor to go critical this summer.</description>
+  <pubDate>Thu, 06 Aug 2026 07:15:00 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/office-nuclear-energy-celebrates-fifth-advanced-reactor-criticality</guid>
+    </item>
+<item>
+  <title>Energy Department to Distribute Third Round of HALEU to NASA and Radiant</title>
+  <link>https://www.energy.gov/ne/articles/energy-department-distribute-third-round-haleu-nasa-and-radiant</link>
+  <description>U.S. Department of Energy made conditional commitments to provide high-assay low-enriched uranium (HALEU) to the National Aeronautics and Space Administration (NASA) and Radiant Industries, Inc. to meet near-term fuel needs.</description>
+  <pubDate>Thu, 23 Jul 2026 10:19:08 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/ne/articles/energy-department-distribute-third-round-haleu-nasa-and-radiant</guid>
+    </item>
+<item>
+  <title>Department of Energy Celebrates Fourth Criticality Ahead of July 4th Goal</title>
+  <link>https://www.energy.gov/articles/department-energy-celebrates-fourth-criticality-ahead-july-4th-goal</link>
+  <description>Early Saturday, as part of the U.S. Department of Energy Reactor Pilot Program, Aalo Atomics’ advanced reactor design, Aalo-X, successfully completed a zero-power fueled criticality demonstration.</description>
+  <pubDate>Mon, 06 Jul 2026 09:05:00 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/articles/department-energy-celebrates-fourth-criticality-ahead-july-4th-goal</guid>
+    </item>
+<item>
+  <title>U.S. Department of Energy Meets President Trump’s Goal, Delivers Third Advanced Reactor Criticality</title>
+  <link>https://www.energy.gov/articles/us-department-energy-meets-president-trumps-goal-delivers-third-advanced-reactor</link>
+  <description>Deployable Energy’s demonstration reactor, Unity, successfully achieved criticality, marking the fulfillment of President Trump’s executive order directing DOE to authorize three advanced reactors with the goal of achieving criticality in each by July 4, 2026.</description>
+  <pubDate>Wed, 01 Jul 2026 09:35:00 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/articles/us-department-energy-meets-president-trumps-goal-delivers-third-advanced-reactor</guid>
+    </item>
+<item>
+  <title>Department of Energy Announces American Nuclear Supply Chain Loans</title>
+  <link>https://www.energy.gov/articles/department-energy-announces-american-nuclear-supply-chain-loans</link>
+  <description>Financing will help rebuild America's nuclear supply chain and accelerate deployment of 10 new large-scale reactors.</description>
+  <pubDate>Tue, 23 Jun 2026 10:05:00 -0400</pubDate>
+    <dc:creator>Energy.gov</dc:creator>
+    <guid isPermaLink="true">https://www.energy.gov/articles/department-energy-announces-american-nuclear-supply-chain-loans</guid>
+    </item>
+
+  </channel>
+</rss>

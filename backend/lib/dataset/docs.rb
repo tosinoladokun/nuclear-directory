@@ -32,7 +32,15 @@ module Dataset
       "eia_generators" => "EIA's monthly generator inventory (EIA-860M)",
       "eia_plants" => "EIA's annual plant file (EIA-860)",
       "eia_owners" => "EIA's annual generator ownership (EIA-860, Schedules 3 and 4)",
-      "usaspending_doe_awards" => "DOE awards on USAspending.gov"
+      "usaspending_doe_awards" => "DOE awards on USAspending.gov",
+      "nrc_reactor_vendors" => "NRC's pages for each operating reactor (its vendor)",
+      "nrc_research_reactors" => "NRC's list of research and test reactors",
+      "nrc_fuel_cycle" => "NRC's fuel cycle facility pages",
+      "nrc_uranium_recovery" => "NRC's uranium recovery sites",
+      "federal_register_nrc" => "NRC notices in the Federal Register",
+      "sec_form_d" => "SEC Form D filings",
+      "doe_programs" => "DOE program pages",
+      "doe_isotope_sites" => "DOE Isotope Program sites"
     }.freeze
 
     def initialize(version:, released_on:, counts:, manifest:, previous:, crawled: [])
@@ -49,6 +57,8 @@ module Dataset
         # #{Export::TITLE}
 
         In short: every published fact in [Nuclear Directory](#{Export::SITE}), the companies and facilities of the US nuclear industry and the links between them, with the public documents each fact comes from.
+
+        **Download:** #{download_line}
 
         Version #{@version}, released #{@released_on.iso8601}. #{doi_line}
 
@@ -243,6 +253,12 @@ module Dataset
 
       def doi_line
         concept_doi ? "DOI: [#{concept_doi}](https://doi.org/#{concept_doi}) (all versions)." : "Each release is archived on Zenodo, which gives it a DOI."
+      end
+
+      # Each table's CSV and JSON at this release's tag, as latest.json links them.
+      def download_line
+        base = "https://raw.githubusercontent.com/#{Export::DATA_REPO}/v#{@version}"
+        @counts.keys.map { |table| "#{table} [CSV](#{base}/#{table}.csv) | [JSON](#{base}/#{table}.json)" }.join(" · ")
       end
 
       def bibtex

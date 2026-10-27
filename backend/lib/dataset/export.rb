@@ -113,7 +113,10 @@ module Dataset
       "web_page" => "Any other public page"
     }.freeze
     KIND_TYPES = { "eia_generators" => "government_dataset", "eia_plants" => "government_dataset", "eia_owners" => "government_dataset", "nrc_reactor_list" => "regulator_list",
-      "nrc_power_status" => "regulator_list", "nrc_decommissioning" => "regulator_list", "usaspending_doe_awards" => "award_record" }.freeze
+      "nrc_power_status" => "regulator_list", "nrc_decommissioning" => "regulator_list", "usaspending_doe_awards" => "award_record",
+      "nrc_reactor_vendors" => "regulator_list", "nrc_research_reactors" => "regulator_list", "nrc_fuel_cycle" => "government_page",
+      "nrc_uranium_recovery" => "regulator_list", "federal_register_nrc" => "federal_register", "sec_form_d" => "sec_filing",
+      "doe_programs" => "government_page", "doe_isotope_sites" => "government_page" }.freeze
     PUBLICATION_HOSTS = %w[federalregister.gov govinfo.gov].freeze
 
     def initialize(dir, version: Date.current.strftime("%Y.%m"), previous: nil, released_on: Date.current)

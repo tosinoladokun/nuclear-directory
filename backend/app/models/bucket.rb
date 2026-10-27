@@ -84,8 +84,9 @@ class Bucket
     end
 
     def power_deals
-      Organization.where(id: sourced(Relationship.published.offtake_with).select(:from_organization_id))
-        .or(Organization.where(id: sourced(FacilityRelationship.published.offtakes_from).select(:organization_id))).select(:id)
+      # A framework or other non-binding deal alone doesn't make a power buyer (#487).
+      Organization.where(id: sourced(Relationship.published.offtake_with.signed_or_unstaged).select(:from_organization_id))
+        .or(Organization.where(id: sourced(FacilityRelationship.published.offtakes_from.signed_or_unstaged).select(:organization_id))).select(:id)
     end
 
     def investments
