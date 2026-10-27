@@ -1009,13 +1009,18 @@ module DataQuality::Review
       # verify run moved to review a moment ago isn't published in bulk.
       # first_hand: Data Quality's own approve stands in for the checker (PM,
       # 27 Oct: Tosin's "Yes to all"); every other check stands.
+      # The checker named a different value than the claim's: a real conflict,
+      # never settled by Data Quality's first-hand approve (#608).
+      def contradicted?(candidate) = candidate.ai_reason.to_s.start_with?(DataQuality::Verifiers::Agent::CONTRADICTS)
+      public :contradicted?
+
       def approve_one(candidate, by:, reason:, directory:, edited: false, only_recommended: false, firsts: nil, data_quality_reviewed: false,
         safe_check: nil, source_held: false, first_hand: false)
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
-          if only_recommended && !((source_held || first_hand) && data_quality_reviewed) &&
+          if only_recommended && !((source_held || (first_hand && !contradicted?(candidate))) && data_quality_reviewed) &&
               !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end

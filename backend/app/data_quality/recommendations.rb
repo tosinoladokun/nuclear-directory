@@ -242,7 +242,7 @@ module DataQuality::Recommendations
         # read, a replacement): Data Quality's approve is that review, as it is
         # for the first batch, so the checker's verdict isn't needed. Every
         # other check stands, and a person's decision is never overwritten.
-        if source_hold?(candidate) || (first_hand && candidate.dq_recommendation == "approve")
+        if source_hold?(candidate) || (first_hand && candidate.dq_recommendation == "approve" && !DataQuality::Review.contradicted?(candidate))
           # No checker verdict to say the source still holds it: its quote must.
           # The source's plug-in reads it; without one, the stored text must contain it.
           in_source = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }

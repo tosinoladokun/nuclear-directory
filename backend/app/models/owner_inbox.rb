@@ -77,5 +77,7 @@ class OwnerInbox
 
     # Data Quality's own approve, still current, counts for "Yes to all N"
     # even where the checker doubted (PM, 27 Oct); the row shows both.
-    def checked?(candidate) = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
+    # Never a claim the checker contradicted with a different value.
+    def checked?(candidate) = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
+      !DataQuality::Review.contradicted?(candidate)
 end

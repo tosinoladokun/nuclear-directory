@@ -96,4 +96,18 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     post admin_inbox_yes_all_path, params: { shown: }
     assert @new_co.reload.verified?, flash[:alert].to_s
   end
+
+  test "a claim the checker contradicted with a different value never counts for Yes to all, whatever Data Quality says" do
+    @create.update!(status: "needs_review", ai_recommendation: "needs_review",
+      ai_reason: "#{DataQuality::Verifiers::Agent::CONTRADICTS} (the source gives Dallas): it says Dallas")
+    DataQuality::Recommendations.record("#{@create.id} approve: I read it as Austin", by: "human:dq")
+    get admin_inbox_path
+    assert_select ".nd-panel", 0, "nothing for the button: the only approve is contradicted"
+    item = DataQuality::Review.items([ @create.id ]).sole
+    result = DataQuality::Recommendations.accept([ DataQuality::Recommendations::Item.new(candidate_id: @create.id, call: "approve", reason: "I read it as Austin",
+      snapshot: @create.reload.dq_payload_sha256, claim: nil, subject_type: item.subject_type, subject_id: item.subject_id, why: nil, waiting: true) ],
+      by: "human:tosin", first_hand: true).sole
+    assert_not result.ok?
+    assert_not @new_co.reload.verified?
+  end
 end
