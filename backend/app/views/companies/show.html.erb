@@ -3,8 +3,6 @@
   role_tags = p.shown_roles.map { |r| role_label(r.role) }
   tech_tags = p.technologies.map { |t| t.technology.name }
   record_citations = p.citations_for(p.organization)
-  # Several names read as one line, shrunk to fit (the glance panel).
-  name_list = ->(names) { names.join(", ").presence }
   # Title and description say what this page adds, from published facts (#292).
   content_for :title, company_title(p)
   content_for :og_title, p.name
@@ -21,28 +19,36 @@
 <main class="nd-page nd-page--company">
   <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
   <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
-  <nav class="nd-crumbs" aria-label="Breadcrumb">
-    <% if p.category %><%= link_to p.category.name, directory_url_for(category: p.category), class: "nd-link nd-link--muted" %> / <% end %><span aria-current="page"><%= p.name %></span>
-  </nav>
+  <%# A trail of one (the page itself) says nothing, so a company with no category has none. %>
+  <% if p.category %>
+    <nav class="nd-crumbs" aria-label="Breadcrumb">
+      <%= link_to p.category.name, directory_url_for(category: p.category), class: "nd-link nd-link--muted" %><span class="nd-crumbs__here"> / <span aria-current="page"><%= p.name %></span></span>
+    </nav>
+  <% end %>
 
   <%
     index = [ { label: "Overview", href: "#overview", current: true } ]
     index << { label: "Deals and links", href: "#deals", count: p.counted_deals.size } if p.deals.any?
-    index << { label: "Plants and sites", href: "#plants", count: p.plant_links.size } if p.plant_links.any?
+    # A plant the company both owns and operates is one row ("owner and operator"), not two. Only links to
+    # the same facility fold: two units of one site, one operated and one owned, stay two rows.
+    plants = p.plant_links.group_by(&:facility).values
+    # Deals sit under labels that carry the verb ("Investors · 2"), biggest group first.
+    deal_groups = p.deals.group_by { |deal| [ deal.relationship_type, deal.from_organization_id == p.organization.id ] }
+      .sort_by { |(type, from_us), deals| [ -deals.size, deal_group_label(type, from_us) ] }
+    index << { label: "Plants and sites", href: "#plants", count: plants.size } if plants.any?
     index << { label: "Sources", href: "#sources", count: p.citations.sources.size } if p.citations.sources.any?
     plant_roles = p.plant_links.map(&:relationship_type).uniq
     plant_role = ("as #{facility_role_noun(plant_roles.first)}" if plant_roles.one?)
-    cite_text = "Nuclear Directory. “#{p.name}.” #{company_url(slug: p.slug)}. Accessed #{Date.current.strftime("%-d %B %Y")}."
+    cite_text = "Nuclear Directory. “#{p.name.chomp(".")}.” #{company_url(slug: p.slug)}. Accessed #{Date.current.strftime("%-d %B %Y")}."
     facts = [
       { label: "Type", value: (tag.span(class: "nd-chips") { safe_join(p.buckets.map { |b| render("shared/chip", label: b.name, href: directory_url_for(category: b), icon: bucket_icon(b), bucket: b) }) } if p.buckets.any?) },
-      { label: role_tags.size > 1 ? "Roles" : "Role", value: name_list.(role_tags), wide: role_tags.size > 1 },
-      { label: "Technology", value: name_list.(tech_tags), wide: tech_tags.size > 1 },
+      # Role and technology are the tags under the name; the key facts don't say them again (Design, 27 Oct).
       { label: "Headquarters", value: location(p.hq_city, p.hq_state, country: (p.organization.country_code if p.sourced?)) },
       { label: "Website", value: (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) },
       { label: p.parents.size > 1 ? "Parent companies" : "Parent company", wide: p.parents.size > 1,
-        value: (safe_join(p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") }, ", ") if p.parents.any?) },
-      { label: "Subsidiaries", wide: true, value: (safe_join(p.subsidiaries.map { |l| link_to(l.from_organization.name, company_url_for(l.from_organization), class: "nd-link") }, ", ") if p.subsidiaries.any?) },
-      { label: "Also known as", value: name_list.(p.aliases), wide: p.aliases.size > 1 },
+        list: p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") } },
+      { label: p.subsidiaries.size > 1 ? "Subsidiaries" : "Subsidiary", wide: true, list: p.subsidiaries.map { |l| link_to(l.from_organization.name, company_url_for(l.from_organization), class: "nd-link") } },
+      { label: "Also known as", list: p.aliases, wide: p.aliases.size > 1 },
       { label: "Legal name", value: p.legal_name, wide: true },
       { label: "Founded", value: p.founded_year }
     ]
@@ -54,28 +60,36 @@
       <%= render "shared/page_head", name: p.name, about: p.description, tags: role_tags + tech_tags %>
     </div>
 
-    <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
+    <%# No key facts, no empty card. %>
+    <% if facts.any? { |fact| fact[:value].present? || fact[:list].present? } %>
+      <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
+    <% end %>
 
-    <div class="nd-company__main nd-secs">
+    <% map = ConnectionsMap.for_company(p) %>
+    <%# Nothing to list, no empty column (it held a gap open under the name). %>
+    <% if map.edges.any? || p.deals.any? || plants.any? %><div class="nd-company__main nd-secs">
       <%# Connections (#363, #561): in the middle column, before Deals and links. %>
-      <% map = ConnectionsMap.for_company(p) %>
       <%= render("shared/connections_map", map:) if map.edges.any? %>
-
       <% if p.deals.any? %>
         <section aria-labelledby="deals-heading" id="deals">
           <%= render "shared/section_head", title: "Deals and links", count: deal_count(p), id: "deals-heading" %>
-          <%= render "companies/crows", label: "deals", rows: p.deals.map { |deal| render("companies/deal_row", deal:, profile: p) } %>
+          <% deal_groups.each do |(type, from_us), deals| %>
+            <div class="nd-partygroup">
+              <h3 class="nd-label"><%= deal_group_label(type, from_us) %><% if deals.size > 1 %> · <%= deals.size %><% end %></h3>
+              <%= render "companies/crows", label: "deals", rows: deals.map { |deal| render("companies/deal_row", deal:, profile: p, grouped: true) } %>
+            </div>
+          <% end %>
         </section>
       <% end %>
 
-      <% if p.plant_links.any? %>
+      <% if plants.any? %>
         <section aria-labelledby="plants-heading" id="plants">
-          <h2 id="plants-heading" class="nd-sechead type-section-title">Plants and sites<span class="nd-sechead__count"><%= p.plant_links.size %></span><% if plant_role %><span class="nd-sechead__note">· <%= plant_role %></span><% end %></h2>
+          <h2 id="plants-heading" class="nd-sechead type-section-title">Plants and sites<span class="nd-sechead__count"><%= plants.size %></span><% if plant_role %><span class="nd-sechead__note">· <%= plant_role %></span><% end %></h2>
           <%= render "companies/crows", label: "plants and sites",
-                rows: p.plant_links.map { |link| render("companies/plant_link_row", link:, profile: p, role: (facility_role_noun(link.relationship_type) unless plant_role)) } %>
+                rows: plants.map { |links| render("companies/plant_link_row", link: links.first, links:, profile: p, role: (links.map { |link| facility_role_noun(link.relationship_type) }.uniq.to_sentence unless plant_role)) } %>
         </section>
       <% end %>
-    </div>
+    </div><% end %>
 
     <div class="nd-company__end" data-controller="quiet">
       <nav class="nd-quiet" aria-label="About this page">

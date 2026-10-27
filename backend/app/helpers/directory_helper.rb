@@ -94,6 +94,15 @@ module DirectoryHelper
   def plant_url_for(facility) = plant_path(slug: facility.slug)
 
   def relationship_verb(type) = RELATIONSHIP_VERBS.fetch(type.to_s)
+  # A company page groups its deals under a label that carries the verb, so a
+  # row is just the other company (Design, 27 Oct). Key: [type, from this company?].
+  DEAL_GROUP_LABELS = {
+    [ "funds", false ] => "Funded by", [ "funds", true ] => "Funds",
+    [ "invests_in", false ] => "Investors", [ "invests_in", true ] => "Invests in",
+    [ "offtake_with", false ] => "Power buyers", [ "offtake_with", true ] => "Buys power from",
+    [ "supplies", false ] => "Suppliers", [ "supplies", true ] => "Customers"
+  }.freeze
+  def deal_group_label(type, from_us) = DEAL_GROUP_LABELS.fetch([ type.to_s, from_us ]) { relationship_verb(type).capitalize }
   def facility_relationship_verb(type) = FACILITY_RELATIONSHIP_VERBS.fetch(type.to_s)
   FACILITY_ROLE_NOUNS = { "owns" => "owner", "operates" => "operator", "vendor_for" => "reactor developer", "offtakes_from" => "offtaker" }.freeze
   def facility_role_noun(type) = FACILITY_ROLE_NOUNS.fetch(type.to_s, type.to_s.humanize.downcase)
