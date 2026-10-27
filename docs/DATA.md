@@ -62,7 +62,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 |---|---|---|---|---|
 | `supplies` | supplies | Provides fuel, equipment or services under a stated agreement | Centrus supplies TRISO-X (HALEU) | A memorandum with no supply (say "MOU" in the description, or wait) |
 | `invests_in` | invests in | Takes equity | Amazon invests in X-energy | A grant or award (`funds`), or an investment only a LinkedIn post claims |
-| `funds` | funds | Grants, awards, cost-shared programs | DOE funds X-energy (ARDP) | Equity |
+| `funds` | funds | Grants, awards, cost-shared programs and loans (Tosin, 26 Oct). A loan is always marked as one: the description quotes it ("$1.52 billion loan, closed September 2024") and, once the `loan` deal-term kind exists, its deal term says so | DOE funds X-energy (ARDP); DOE funds Holtec Palisades ($1.52 billion loan) | Equity |
 | `offtake_with` | offtakes from | Agreed to buy power from the company's existing or future fleet | Meta offtakes from Constellation | A power deal tied to one plant (use the plant link `offtakes_from`) |
 | `subsidiary_of` | is a subsidiary of | Points from the child to its parent | Georgia Power is a subsidiary of Southern Company | A partnership or joint venture |
 

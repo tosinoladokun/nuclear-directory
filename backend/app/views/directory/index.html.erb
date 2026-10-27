@@ -53,10 +53,10 @@
       <div class="nd-listpage__index"><%= render "shared/index", items: index_items, variant: :list, label: "Categories" %></div>
       <%# Phones: the same categories as one scrolling row, opened with the current one in view. %>
       <div class="nd-chips nd-listpage__chips" data-controller="pill-row" role="navigation" aria-label="Categories">
-        <%= render "shared/chip", label: "All companies", href: directory_url_for, icon: icon("list"), current: list_page.nil? && !listing.searching? %>
+        <%= render "shared/chip", label: "All companies", href: directory_url_for, icon: icon("list"), count: @all_count, current: list_page.nil? && !listing.searching? %>
         <% Category.all.each do |category| %>
           <% next if !category.plants && @counts[category.key]&.zero? && listing.category != category %>
-          <%= render "shared/chip", label: category.name, href: directory_url_for(category:), icon: bucket_icon(category), bucket: (category unless category.plants), current: listing.category == category %>
+          <%= render "shared/chip", label: category.name, href: directory_url_for(category:), icon: bucket_icon(category), count: @counts[category.key], bucket: (category unless category.plants), current: listing.category == category %>
         <% end %>
       </div>
     <% end %>

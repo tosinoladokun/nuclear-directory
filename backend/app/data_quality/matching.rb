@@ -13,7 +13,8 @@
 # new:           a pending company from the claim, for Tosin's Create / No.
 # subsidiary_of: a pending company, plus a pending "subsidiary of" link to
 #                the target, both for his decision.
-# close:         reject the claim with the reason; a lead's name stays in Leads.
+# close:         reject any open, unattached claim (a company, link, deal term
+#                or news item) with the reason; a lead's name stays in Leads.
 module DataQuality::Matching
   BY = "agent:data-quality"
   OPEN = %w[new needs_review].freeze
@@ -21,6 +22,8 @@ module DataQuality::Matching
   # A circuit breaker against a runaway agent (Infra): new companies a day,
   # undone ones included, so create, undo, create never resets it.
   DAILY_CREATES = 200
+  # The same for closes (Infra): the widest action, undone ones included.
+  DAILY_CLOSES = 300
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
 
@@ -29,10 +32,14 @@ module DataQuality::Matching
   end
 
   def self.apply(rows, directory: DataQuality::DirectoryClient.new)
-    Array(rows).map { |row| apply_one(row.to_h.stringify_keys, directory) }
+    # Each source matched again once per request, however many of its ends
+    # were settled (Infra: verify is the AI step).
+    requeue = Set.new
+    Array(rows).map { |row| apply_one(row.to_h.stringify_keys, directory, requeue) }
+      .tap { requeue.each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[match verify]) } }
   end
 
-  def self.apply_one(row, directory)
+  def self.apply_one(row, directory, requeue = Set.new)
     id, action, reason = row["id"].to_i, row["action"].to_s, row["reason"].to_s.squish
     fail_with = ->(why) { Row.new(id:, ok: false, error: why, created_ids: []) }
     return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless DqAction::ACTIONS.include?(action)
@@ -40,6 +47,9 @@ module DataQuality::Matching
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
     if %w[new subsidiary_of].include?(action) && DqAction.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
       return fail_with.call("today's limit of #{DAILY_CREATES} new companies is reached; ask Backend")
+    end
+    if action == "close" && DqAction.where(action: "close", created_at: Time.current.all_day).count >= DAILY_CLOSES
+      return fail_with.call("today's limit of #{DAILY_CLOSES} closes is reached; ask Backend")
     end
 
     key = row["request_key"].presence&.to_s
@@ -51,27 +61,40 @@ module DataQuality::Matching
       done = (DqAction.find_by(request_key: key) if key) ||
         DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) }
       next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
-      next fail_with.call("it isn't a company claim") unless candidate.kind == "organization"
+      # Close applies to any open claim (a link, a deal term, news); the
+      # others settle a company, so they need a company claim.
+      # same_as with an end settles that end of a link claim (#548): which
+      # company or plant it names. Otherwise only close applies to a link.
+      end_key = row["end"].presence&.to_s
+      if end_key
+        next fail_with.call("an end goes with same_as") unless action == "same_as"
+        next fail_with.call("#{end_key.inspect} isn't an end of a #{candidate.kind} claim") unless end_type(candidate, end_key)
+      elsif candidate.kind != "organization" && action != "close"
+        next fail_with.call("it isn't a company claim; only close applies to it (or same_as with an end)")
+      end
       # No longer open (settled meanwhile): skipped, not an error (Infra).
       next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
         OPEN.include?(candidate.status) && candidate.subject_id.nil?
 
-      before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at).as_json
+      before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at, :payload).as_json
       created = []
       record = nil
-      if %w[same_as subsidiary_of].include?(action)
+      if end_key
+        record, error = target(row, directory, type: end_type(candidate, end_key) == :facility ? "Facility" : "Organization")
+        raise Abort, error if error
+      elsif %w[same_as subsidiary_of].include?(action)
         record, error = target(row, directory)
         raise Abort, error if error
       end
       error = case action
-      when "same_as" then same_as(candidate, row, record, reason, directory, created)
+      when "same_as" then end_key ? settle_end(candidate, end_key, record, reason, requeue) : same_as(candidate, row, record, reason, directory, created)
       when "new" then propose(candidate, reason, directory, created)
       when "subsidiary_of" then subsidiary_of(candidate, record, reason, directory, created)
       when "close" then close(candidate, reason, directory)
       end
       raise Abort, error if error
 
-      DqAction.create!(candidate:, action:, target_type: ("Organization" if record), target_id: record&.id, reason:, before:, created:,
+      DqAction.create!(candidate:, action:, target_type: (record.type if record), target_id: record&.id, reason:, before:, created:,
         by: BY, request_key: key, after: stamp_of(candidate.reload))
       Row.new(id:, ok: true, error: nil, created_ids: ids_of(created))
     end
@@ -109,7 +132,7 @@ module DataQuality::Matching
         errors = directory.decide_fact(ref["type"].underscore, id: ref["id"], status: "rejected", by: BY, reason: "Data Quality undid #{action.action}").errors
         raise Abort, errors.to_sentence if errors.any?
       end
-      candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at"))
+      candidate.update!(action.before.slice("status", "subject_type", "subject_id", "proposed_subject", "notes", "reviewed_by", "reviewed_at", "payload"))
       action.update!(undone_at: Time.current, undone_by: BY)
       nil
     end
@@ -119,26 +142,31 @@ module DataQuality::Matching
     "someone was deciding on it just then; try again"
   end
 
-  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by].freeze
+  STAMPED = %w[status subject_type subject_id proposed_subject reviewed_by payload].freeze
 
   # The claim as an action left it, compared under its lock: anything since
   # (a decision, a reopen, a merge repointing it) means it isn't the same.
   def self.stamp_of(candidate) = candidate.slice(*STAMPED).as_json
-  def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate) == action.after
+  # Only the fields the action stamped (actions before payload was stamped keep working).
+  def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate).slice(*action.after.keys) == action.after
 
   # The records an action created (not the quotes it added).
   def self.ids_of(created) = created.reject { |ref| ref["type"] == "Evidence" }.map { |ref| ref["id"] }
 
   class << self
     private
-      # target: a company's id or slug (Infra: never a name).
-      def target(row, directory)
+      # target: a company's (or plant's) id or slug (Infra: never a name).
+      def target(row, directory, type: "Organization")
         value = row["target"].to_s
-        return [ nil, "give the company: its id or slug" ] if value.blank?
+        noun = type == "Facility" ? "plant" : "company"
+        return [ nil, "give the #{noun}: its id or slug" ] if value.blank?
 
-        ref = value.match?(/\A\d+\z/) ? directory.fact(type: "Organization", id: value.to_i) : directory.organization_by_slug(value)
-        record = ref && directory.fact(type: "Organization", id: ref.id)
-        return [ nil, "no open company #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
+        ref = if value.match?(/\A\d+\z/) then directory.fact(type:, id: value.to_i)
+        elsif type == "Organization" then directory.organization_by_slug(value)
+        else directory.facility_by_slug(value)
+        end
+        record = ref && directory.fact(type:, id: ref.id)
+        return [ nil, "no open #{noun} #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
 
         [ record, nil ]
       end
@@ -199,6 +227,29 @@ module DataQuality::Matching
         nil
       end
 
+      def end_type(candidate, end_key) = DataQuality::Stages::Match::LINK_ENDS.fetch(candidate.kind, {})[end_key]
+
+      # The end named as that record now (a plant by its docket when it has
+      # one), the claim's own wording kept as another name; then matched
+      # again for its source. Nothing is written to the directory.
+      def settle_end(candidate, end_key, record, reason, requeue)
+        named = candidate.payload[end_key]
+        return "its #{end_key} end is malformed" unless named.is_a?(Hash)
+
+        settled = if end_type(candidate, end_key) == :facility
+          { "name" => record.name, "nrc_docket" => (record.nrc_docket || record.values.to_h["nrc_docket"]).presence }.compact
+        else
+          { "name" => record.name }
+        end
+        spelled = named["name"].to_s
+        settled["aliases"] = [ *named["aliases"], (spelled unless spelled.blank? || spelled.casecmp?(record.name)) ].compact.uniq
+        payload = candidate.payload.deep_dup.merge(end_key => settled)
+        candidate.update!(status: "new", payload:, notes: "Data Quality: its #{end_key} is #{record.name}. #{reason}",
+          ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        requeue << candidate.source.source_kind
+        nil
+      end
+
       # How many decisions the record had when it was created, so Undo can
       # tell nobody has decided anything on it since.
       def stamp(directory, ref) = ref.merge("events" => directory.verification_history(type: ref["type"], id: ref["id"]).size)
@@ -206,7 +257,7 @@ module DataQuality::Matching
       def close(candidate, reason, directory)
         candidate.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Data Quality closed it: #{reason}")
         # A lead is never thrown away (#548).
-        if DataQuality::Review.lead?(candidate) && (name = candidate.payload.to_h["name"]).present?
+        if candidate.kind == "organization" && DataQuality::Review.lead?(candidate) && (name = candidate.payload.to_h["name"]).present?
           directory.keep_lead(name:, key: "dq_close:#{candidate.id}", label: "Closed by Data Quality", url: candidate.source&.url)
         end
         nil

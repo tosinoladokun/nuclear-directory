@@ -1,7 +1,10 @@
 // Tosin's rule (DESIGN.md, #365): text inside a box never wraps, and a source
 // number never starts a line on its own. Returns what breaks it, as strings.
 (() => {
-  const ONE_LINE = ".nd-bucketchip, .nd-btn, .nd-pill, .nd-tag, .nd-sugg, .nd-cat__name, .nd-cat__examples, .nd-listrow__name, .nd-listrow__desc, .nd-catcard__name, .nd-catcard__rowname, .nd-catcard__more, .nd-sitechip, .nd-overview__line--fit, .nd-overview dd a:not(.nd-src), .nd-home .nd-suggs, .nd-footer__links a, .nd-footer__credit"
+  const ONE_LINE = ".nd-bucketchip, .nd-btn, .nd-pill, .nd-tag, .nd-sugg, .nd-cat__name, .nd-cat__examples, .nd-listrow__name, .nd-listrow__desc, .nd-catcard__name, .nd-catcard__rowname, .nd-catcard__more, .nd-sitechip, .nd-overview__line--fit, .nd-overview dd a:not(.nd-src), .nd-home .nd-suggs, .nd-footer__links a, .nd-footer__credit, .nd-line__name, .nd-line__what, .nd-line__end, .nd-line__cap, .nd-chip, .nd-idx__label, .nd-crow__name, .nd-crow__rest, .nd-crow__what, .nd-st, .nd-glance dd, .nd-pagehead__name"
+  // The redesigned rows and index (#560): a name, description or location may end in an ellipsis,
+  // but only with its full text one hover away (a title on it or on the link around it).
+  const MAY_TRUNCATE = ".nd-line__name, .nd-line__what, .nd-line__end, .nd-idx__label, .nd-crow__name, .nd-crow__what, .nd-glance dd, .nd-pagehead__name"
   // Lines of text: text rects grouped by vertical overlap, so a smaller
   // count or a chip beside the text doesn't count as a line of its own.
   const lines = (el) => {
@@ -54,7 +57,8 @@
     const own = [...el.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim())
     const textRight = own.reduce((right, node) => { const range = document.createRange(); range.selectNodeContents(node); return Math.max(right, range.getBoundingClientRect().right) }, -Infinity)
     if (el.scrollWidth > el.clientWidth + 1 || textRight > el.getBoundingClientRect().right + 1) {
-      if (!el.hasAttribute("data-truncate")) problems.push(`cut short: ${label(el)}`)
+      if (el.matches(MAY_TRUNCATE)) { if (!el.closest("[title]")) problems.push(`cut short with no full text in title: ${label(el)}`) }
+      else if (!el.hasAttribute("data-truncate")) problems.push(`cut short: ${label(el)}`)
       else if (el.getAttribute("title") !== el.textContent.trim()) problems.push(`no full text in title: ${label(el)}`)
     }
   })

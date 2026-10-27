@@ -18,9 +18,9 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   # (not a blog of explainers), that answer our bot. Company => feed.
   FEEDS = {
     "Cameco" => "https://www.cameco.com/rss/news",
-    "Holtec International" => "https://www.holtecinternational.com/feed/",
+    "Holtec International" => "https://holtecinternational.com/feed/",
     "Deep Isolation" => "https://www.deepisolation.com/feed/",
-    "TAE Technologies" => "https://www.tae.com/feed/"
+    "TAE Technologies" => "https://tae.com/feed/"
   }.freeze
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
@@ -120,8 +120,10 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     # Items from this feed a person or match already has: a claim that isn't
     # one extract replaces on every read. Re-reading the feed doesn't send
     # them back to the queue.
-    def decided_urls(source)
-      source.candidates.where(kind: "news_item").where.not(status: "new")
+    # Across every feed of this kind, so a feed that moved address (Holtec's,
+    # TAE's) doesn't propose its old items again.
+    def decided_urls(_source)
+      Candidate.joins(:source).where(sources: { source_kind: }, kind: "news_item").where.not(status: "new")
         .reject { |claim| claim.status_needs_review? && claim.review_origin == "extract" }
         .to_set { |claim| claim.payload["url"] }
     end

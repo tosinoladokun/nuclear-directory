@@ -1,13 +1,17 @@
-<%# One link between the company and a plant ("Kairos Power owns Hermes 2").
-    A link to a reactor unit names the unit and goes to its site's page.
-    The plant's type, status and place show only when the plant has its own
-    source (CompanyProfile#plant_facts?). Locals: link, profile. %>
+<%# One plant or site the company is linked to, on one line (#556): site icon, the plant's name (a link),
+    its status, its place and a source mark. A link to a reactor unit names the unit and goes to its site.
+    Type, status and place show only when the plant has its own source (CompanyProfile#plant_facts?).
+    Locals: link, profile, role (the verb shown on the row when the section heading doesn't carry it). %>
 <% plant = link.facility.parent || link.facility %>
 <% label = link.facility.parent ? "#{plant.name}, #{link.facility.name}" : plant.name %>
-<%= render "shared/fact_row",
-      sentence: safe_join([ profile.name, " #{facility_relationship_verb(link.relationship_type)} ",
-                            link_to(label, plant_url_for(plant), class: "nd-link type-body-strong") ]),
-      detail: [ (facility_type_label(link.facility.facility_type) if profile.plant_facts?(link.facility)),
-                (facility_status_label(link.facility.status) if profile.plant_facts?(link.facility)),
-                (place(plant.city, plant.state) if profile.plant_facts?(plant)), link.description ].compact_blank.join(" · ").presence,
-      citations: profile.plant_link_citations(link), confidence: link.confidence, checked: link.verified_at, correctable: true %>
+<% facts = profile.plant_facts?(link.facility) %>
+<% where = location(plant.city, plant.state) if profile.plant_facts?(plant) %>
+<li class="nd-crow nd-crow--plant">
+  <div class="nd-crow__line">
+    <span class="nd-catsq" aria-hidden="true"><%= icon(site_icon_name((link.facility.facility_type if facts), reactor_types: [ (link.facility.reactor_type if facts) ].compact, status: (link.facility.status if facts)), set: :nd, size: 20) %></span>
+    <span class="nd-crow__who" title="<%= label %>"><%= link_to label, plant_url_for(plant), class: "nd-link type-body-strong" %><% if local_assigns[:role] %> <span class="text-ink-muted"><%= role %></span><% end %></span>
+    <% if facts && link.facility.status.present? %><span class="nd-crow__what"><%= render "shared/status_mark", status: link.facility.status %></span><% end %>
+    <% if where %><span class="nd-crow__place"><%= where %></span><% end %>
+  </div>
+  <%= render "shared/source_mark", citations: profile.plant_link_citations(link), checked: link.verified_at %>
+</li>
