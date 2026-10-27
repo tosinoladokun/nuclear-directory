@@ -1,9 +1,9 @@
 import { Controller } from "@hotwired/stimulus"
 
-// The connections map (#363). The server draws it; once the fonts are in,
+// The connections map (#363, #561). The server draws it; once the fonts are in,
 // this fits each name to its slot and moves any verb that would touch a
-// node, a name, another verb or another line. Then hovering, focusing or
-// tapping a line fills the details card (a sheet on phones).
+// node, a name, another verb or another line. Nothing is operated: no details
+// card, no hover (the names link to the partners' pages).
 //
 // Names: shrink 0.5px at a time to the floor, then the short name, then an
 // ellipsis (the full name stays in <title>). Verbs: along their line at 50%,
@@ -14,14 +14,10 @@ const OFFSETS = [ 0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7 ]
 const SHORTER = { "sells power to": "sells power" }
 
 export default class extends Controller {
-  static targets = [ "figure", "view", "svg", "card", "cardBody", "list" ]
+  static targets = [ "figure", "view", "svg" ]
 
   connect() {
-    if (this.hasListTarget) this.listTarget.open = false
-    this.pinned = null
     this.done = new WeakSet()
-    this.escape = (event) => { if (event.key === "Escape" && !this.cardTarget.hidden) this.close() }
-    document.addEventListener("keydown", this.escape)
     // Measure only once the web fonts are in: a fallback font's widths would stick.
     this.fontsReady = false
     this.observer = new ResizeObserver(() => this.layOut())
@@ -34,7 +30,6 @@ export default class extends Controller {
   }
 
   disconnect() {
-    document.removeEventListener("keydown", this.escape)
     this.observer.disconnect()
   }
 
@@ -80,7 +75,10 @@ export default class extends Controller {
   }
 
   placeLabels(svg) {
-    const circles = [ ...svg.querySelectorAll(".nd-map__ring") ].map((ring) => ({ x: ring.cx.baseVal.value, y: ring.cy.baseVal.value, r: ring.r.baseVal.value + 6 }))
+    const circles = [ ...svg.querySelectorAll(".nd-map__ring") ].map((ring) => {
+      const half = ring.width.baseVal.value / 2
+      return { x: ring.x.baseVal.value + half, y: ring.y.baseVal.value + half, r: half * 1.42 + 4 }
+    })
     // Arrowheads too: a word never butts against one.
     svg.querySelectorAll(".nd-map__line[marker-end]").forEach((line) => {
       const tip = line.getPointAtLength(line.getTotalLength())
@@ -153,64 +151,6 @@ export default class extends Controller {
     })
   }
 
-  // The details card: filled while a line is hovered or focused, kept on a click or Enter.
-  // On phones the card is a sheet over the map: only a tap or Enter opens it.
-  // A hover there would cover the line under the pointer and swallow the click.
-  preview(event) {
-    if (!this.pinned && !this.returning && !this.sheet()) this.show(event.currentTarget)
-  }
-
-  unpreview() {
-    if (!this.pinned && !this.sheet()) this.hide()
-  }
-
-  sheet() {
-    return window.matchMedia("(max-width: 639px)").matches
-  }
-
-  pin(event) {
-    const hit = event.currentTarget
-    if (this.pinned === hit) return this.close()
-    this.pinned = hit
-    this.show(hit)
-  }
-
-  key(event) {
-    if (event.key !== "Enter" && event.key !== " ") return
-    event.preventDefault()
-    this.pin(event)
-  }
-
-  close() {
-    const back = this.pinned
-    this.pinned = null
-    this.hide()
-    // Focus goes back to the line without opening its card again.
-    if (back && document.activeElement !== back) {
-      this.returning = true
-      back.focus({ preventScroll: true })
-      this.returning = false
-    }
-  }
-
-  show(hit) {
-    this.highlight(hit)
-    const template = this.element.querySelector(`template[data-card="${hit.dataset.card}"]`)
-    if (!template) return
-    this.cardBodyTarget.replaceChildren(template.content.cloneNode(true))
-    this.cardTarget.hidden = false
-  }
-
-  hide() {
-    this.highlight(null)
-    this.cardTarget.hidden = true
-  }
-
-  highlight(hit) {
-    this.element.querySelectorAll(".nd-map__edge.is-on").forEach((edge) => edge.classList.remove("is-on"))
-    if (hit) hit.ownerSVGElement.querySelector(`.nd-map__edge[data-group="${hit.dataset.group}"]`)?.classList.add("is-on")
-  }
-
   // Folded plants open in place; "Back to all connections" folds them again.
   open() {
     this.swap("opened")
@@ -225,13 +165,10 @@ export default class extends Controller {
 
   fold() {
     this.swap("folded")
-    // The fold node in whichever drawing is showing (wide or phone).
-    const folds = this.element.querySelectorAll(".nd-map__view[data-view=folded] .nd-map__node--fold")
-    ;[ ...folds ].find((node) => node.getClientRects().length > 0)?.focus()
+    this.element.querySelector(".nd-map__view[data-view=folded] .nd-map__node--fold")?.focus()
   }
 
   swap(name) {
-    this.close()
     this.viewTargets.forEach((view) => { view.hidden = view.dataset.view !== name })
     this.layOut()
   }

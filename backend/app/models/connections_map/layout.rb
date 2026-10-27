@@ -1,9 +1,9 @@
-# Where everything on a connections map sits (#363, Design's boards): the
-# page's own record in the centre, the others grouped by verb and direction.
-# Wide maps put the groups in columns left and right; narrow (phone) maps
-# put them in rows above and below. Arrows that share a verb and a
-# direction (two or more) merge into a bundle: each member curves into a
-# junction and one trunk carries the single label.
+# Where everything on a connections map sits (#363, #561): the page's own
+# record in the centre, the others grouped by verb and direction, givers in
+# a column on the left and receivers on the right. Arrows that share a verb
+# and a direction (two or more) merge into a bundle: each member curves into
+# a junction and one trunk carries the single label. Phones don't use this:
+# they get a tree (shared/_connections_tree), which needs no layout.
 #
 # The server works out every position, so the map reads without
 # JavaScript; connections_map_controller.js then fits the names and moves
@@ -14,24 +14,22 @@
 class ConnectionsMap
   class Layout
     # font and floor: a name's size and the smallest it shrinks to (DESIGN.md
-    # one-line law: 13px, 12px on phones); slot: the widest a name may be.
+    # one-line law: 13px); slot: the widest a name may be. centre_r and node_r
+    # are half the side of the boxes: a 36px square for the page's record, 28px
+    # for the others (#561). The map is 696px wide, the page's middle column.
     Size = Data.define(:key, :width, :centre_r, :node_r, :font, :floor, :label_font, :slot, :short_names)
-    WIDE = Size.new(key: "wide", width: 940, centre_r: 40, node_r: 24, font: 13, floor: 13, label_font: 13, slot: 180, short_names: false)
-    NARROW = Size.new(key: "narrow", width: 358, centre_r: 34, node_r: 22, font: 12, floor: 12, label_font: 12, slot: 84, short_names: true)
+    WIDE = Size.new(key: "wide", width: 696, centre_r: 18, node_r: 14, font: 13, floor: 13, label_font: 12, slot: 126, short_names: false)
 
     PAD = 24
-    ROW = 60         # wide: one node to the next in a column
+    PAD_X = 8        # the left and right edge of the map to the names: the page's column has no spare room
+    ROW = 48         # one node to the next in a column
     GROUP_GAP = 28   # wide: between groups in a column
-    NARROW_ROW = 84  # narrow: one row of nodes to the next
-    PER_ROW = 3      # narrow: nodes in a row at most (2 when names are long)
-    BAND = 112       # narrow: a row's node centre to the centre's edge
 
     # A node where it's drawn. anchor: the name's text-anchor.
     Placed = Data.define(:node, :x, :y, :r, :name, :name_x, :name_y, :anchor, :slot)
 
-    # One arrow of a group: its curve, and the path its dot runs (its branch,
-    # then the trunk, in the direction of flow).
-    Member = Data.define(:edge, :path, :dot_path, :arrow)
+    # One arrow of a group: its curve.
+    Member = Data.define(:edge, :path, :arrow)
 
     # A focusable line: one edge, or a bundle. label_path: the trunk (or the
     # edge) the verb sits on; label_reversed: the same, drawn the other way,
@@ -52,7 +50,7 @@ class ConnectionsMap
       groups = edges.group_by { |edge| [ edge.verb, edge.receiver.key == centre.key ] }
         .sort_by { |(verb, inbound), list| [ VERBS.index(verb), inbound ? 0 : 1, -list.size ] }
         .map { |(verb, inbound), list| [ verb, inbound, list.sort_by { |edge| other(edge, inbound).name.downcase } ] }
-      size.key == "wide" ? lay_out_wide(groups) : lay_out_narrow(groups)
+      lay_out_wide(groups)
     end
 
     def width = size.width
@@ -81,10 +79,10 @@ class ConnectionsMap
         @height = [ column, size.centre_r * 2 + 120 ].max + PAD * 2 + 20
         cx = width / 2.0
         cy = @height / 2.0 - 10
-        @centre = place(@centre_node, cx, cy, size.centre_r, name_x: cx, name_y: cy + size.centre_r + 22, anchor: "middle", slot: 220)
+        @centre = place(@centre_node, cx, cy, size.centre_r, name_x: cx, name_y: cy + size.centre_r + 30, anchor: "middle", slot: 240)
 
         r = size.node_r
-        left_x = PAD + size.slot + 10 + r
+        left_x = PAD_X + size.slot + 10 + r
         right_x = width - left_x
         sides.each do |side, list|
           y = (@height - (height_of.(list) - GROUP_GAP)) / 2.0 + ROW / 2.0 - 10
@@ -110,127 +108,26 @@ class ConnectionsMap
         cx, cy, big = @centre.x, @centre.y, size.centre_r
         if edges.size == 1
           path = single(nodes.first, inbound)
-          return group(verb, inbound, edges, [ Member.new(edge: edges.first, path:, dot_path: path, arrow: true) ], nil, path)
+          return group(verb, inbound, edges, [ Member.new(edge: edges.first, path:, arrow: true) ], nil, path)
         end
 
-        space = (cx - big) - (PAD + size.slot + 10 + size.node_r * 2)
+        space = (cx - big) - (PAD_X + size.slot + 10 + size.node_r * 2)
         trunk_length = [ [ Layout.label_width(verb, size.label_font) + 28, 88 ].max, space - 40 ].min
         mean = nodes.sum(&:y) / nodes.size
         # A second bundle to the same nodes (owns and operates the same plants)
         # meets at its own junction, lower down, so neither hides the other.
         again = reuse(nodes)
-        junction = [ cx + sign * (big + trunk_length), mean + again * 48 ]
-        centre_edge = towards([ cx, cy ], junction, big)
+        junction = [ cx + sign * (big + trunk_length), mean + again * 40 ]
+        centre_edge = box_edge([ cx, cy ], junction, big)
         trunk = inbound ? s_curve(junction, shorten(centre_edge, junction), push: 7) : s_curve(centre_edge, junction, push: 7)
         members = edges.zip(nodes).map do |edge, node|
           start = [ node.x - sign * node.r, node.y ]
           if inbound
             branch = elbow(start, junction)
-            Member.new(edge:, path: branch, dot_path: join(branch, trunk), arrow: false)
+            Member.new(edge:, path: branch, arrow: false)
           else
             branch = elbow(junction, shorten(start, junction))
-            Member.new(edge:, path: branch, dot_path: join(trunk, branch), arrow: true)
-          end
-        end
-        group(verb, inbound, edges, members, trunk, trunk)
-      end
-
-      # Rows: givers above (flowing down into the centre), receivers below.
-      def lay_out_narrow(groups)
-        bands = { top: [], bottom: [] }
-        count_of = ->(list) { list.sum { |(_, inbound, edges)| fresh(edges, inbound, list).size } }
-        rows_of = ->(list) { narrow_rows(names_of(list)).size }
-        # The biggest group takes its own side (givers above); the rest go
-        # where there are fewer nodes, so both rows stay short.
-        groups.sort_by { |(_, _, edges)| -edges.size }.each_with_index do |group, index|
-          preferred, other_band = group[1] ? %i[top bottom] : %i[bottom top]
-          band = sharing(bands, group) || (index.zero? || count_of.(bands[preferred]) <= count_of.(bands[other_band]) ? preferred : other_band)
-          bands[band] << group
-        end
-        bands.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ VERBS.index(verb), inbound ? 0 : 1 ] } }
-
-        r, big = size.node_r, size.centre_r
-        top_rows, bottom_rows = rows_of.(bands[:top]), rows_of.(bands[:bottom])
-        top = PAD + 18 + r
-        cy = top_rows.zero? ? PAD + big + 8 : top + (top_rows - 1) * NARROW_ROW + r + BAND + big
-        cx = width / 2.0
-        @height = (bottom_rows.zero? ? cy + big + 24 : cy + big + BAND + r + (bottom_rows - 1) * NARROW_ROW + r + 20) + PAD
-        @centre = place(@centre_node, cx, cy, big, name_x: cx + big + 8, name_y: cy + 4.5, anchor: "start", slot: width - cx - big - 12)
-
-        { top: bands[:top], bottom: bands[:bottom] }.each do |band, list|
-          spots = narrow_spots(names_of(list), band, top, cy)
-          list.each do |verb, inbound, edges|
-            nodes = edges.map do |edge|
-              node = other(edge, inbound)
-              next @placed[node.key] if @placed[node.key]
-
-              x, y, slot = spots.shift
-              place(node, x, y, r, name_x: x, name_y: band == :top ? y - r - 8 : y + r + 16, anchor: "middle", slot:)
-            end
-            @groups << narrow_group(verb, inbound, edges, nodes, band)
-          end
-        end
-      end
-
-      # The names a band will show, in order, each node once.
-      def names_of(list)
-        list.flat_map { |(_, inbound, edges)| edges.map { |edge| other(edge, inbound) } }.uniq(&:key)
-          .map { |node| size.short_names && node.short_name ? node.short_name : node.name }
-      end
-
-      # How many nodes each row of a band holds, nearest the centre first:
-      # three to a row when every name fits a third of the width, else two;
-      # every other row holds one fewer and sits in the gaps, so a line from
-      # a far row passes between the nodes of a near one.
-      def narrow_rows(names)
-        return [] if names.empty?
-
-        per = names.all? { |name| name.length * size.font * 0.66 <= width / 3.0 - 8 } ? 3 : 2
-        rows = []
-        left = names.size
-        while left.positive?
-          take = [ rows.size.odd? ? per - 1 : per, left ].min
-          rows << take
-          left -= take
-        end
-        rows
-      end
-
-      # Node centres for a band, nearest row to the centre first, with each name's slot.
-      def narrow_spots(names, band, top, cy)
-        rows = narrow_rows(names)
-        per = rows.first.to_i
-        column = width / per.to_f
-        rows.each_with_index.flat_map do |count, row|
-          offset = row.odd? ? column / 2 : 0
-          y = band == :top ? top + (rows.size - 1 - row) * NARROW_ROW : cy + size.centre_r + BAND + size.node_r + row * NARROW_ROW
-          # A short row takes its row's places nearest the middle.
-          places = Array.new(row.odd? ? per - 1 : per) { |index| offset + column / 2 + index * column }
-          places.sort_by { |x| [ (x - width / 2.0).abs, x ] }.first(count).sort.map { |x| [ x, y, column - 8 ] }
-        end
-      end
-
-      def narrow_group(verb, inbound, edges, nodes, band)
-        sign = band == :top ? -1 : 1
-        if edges.size == 1
-          path = single(nodes.first, inbound)
-          return group(verb, inbound, edges, [ Member.new(edge: edges.first, path:, dot_path: path, arrow: true) ], nil, path)
-        end
-
-        cx, cy, big = @centre.x, @centre.y, size.centre_r
-        mean = nodes.sum(&:x) / nodes.size
-        again = reuse(nodes)
-        junction = [ cx + (mean - cx) * 0.4 + again * 64, cy + sign * (big + 52 + again * 18) ]
-        centre_edge = towards([ cx, cy ], junction, big)
-        trunk = inbound ? s_curve(junction, shorten(centre_edge, junction), push: 6) : s_curve(centre_edge, junction, push: 6)
-        members = edges.zip(nodes).map do |edge, node|
-          start = [ node.x, node.y - sign * node.r ]
-          if inbound
-            branch = elbow(start, junction, vertical: true)
-            Member.new(edge:, path: branch, dot_path: join(branch, trunk), arrow: false)
-          else
-            branch = elbow(junction, shorten(start, junction), vertical: true)
-            Member.new(edge:, path: branch, dot_path: join(trunk, branch), arrow: true)
+            Member.new(edge:, path: branch, arrow: true)
           end
         end
         group(verb, inbound, edges, members, trunk, trunk)
@@ -240,7 +137,7 @@ class ConnectionsMap
       # (owns and operates) gets two arrows bowed apart, so neither hides the other.
       def single(node, inbound)
         @bows ||= Hash.new(0)
-        step = size.key == "wide" ? 30 : 52
+        step = 30
         bows = @links_to[node.node.key].even? ? [ -step, step, -step * 1.5, step * 1.5 ] : [ nil, -step, step, -step * 1.5, step * 1.5 ]
         bow = bows[@bows[node.node.key]]
         @bows[node.node.key] += 1
@@ -288,9 +185,16 @@ class ConnectionsMap
 
       # Geometry. Points are [x, y]; paths are one move and one cubic.
 
-      # Where a line from one node toward another leaves the first's circle;
-      # tip: 2px short, so the arrowhead's point touches the circle.
-      def edge_point(from, to, tip: false) = towards([ from.x, from.y ], [ to.x, to.y ], from.r + (tip ? 2 : 0))
+      # Where a line from one node toward another leaves the first's square (r is
+      # half its side); tip: 2px short, so the arrowhead's point touches the edge.
+      def edge_point(from, to, tip: false) = box_edge([ from.x, from.y ], [ to.x, to.y ], from.r + (tip ? 2 : 0))
+
+      # The point on the square of half-side `half` around `from`, on the line toward `to`.
+      def box_edge(from, to, half)
+        dx, dy = to[0] - from[0], to[1] - from[1]
+        reach = [ dx.abs, dy.abs ].max.nonzero? || 1
+        [ from[0] + dx / reach * half, from[1] + dy / reach * half ]
+      end
 
       def towards(from, to, distance)
         dx, dy = to[0] - from[0], to[1] - from[1]
@@ -320,22 +224,15 @@ class ConnectionsMap
         path(from, [ from[0] + dx / 3 + nx, from[1] + dy / 3 + ny ], [ from[0] + dx * 2 / 3 + nx, from[1] + dy * 2 / 3 + ny ], to)
       end
 
-      # A bundle branch: leaves its node level (or upright on phones) and
-      # turns into the junction.
-      def elbow(from, to, vertical: false)
-        if vertical
-          my = (from[1] + to[1]) / 2.0
-          path(from, [ from[0], my ], [ to[0], my ], to)
-        else
-          mx = (from[0] + to[0]) / 2.0
-          path(from, [ mx, from[1] ], [ mx, to[1] ], to)
-        end
+      # A bundle branch: leaves its node level and turns into the junction.
+      def elbow(from, to)
+        mx = (from[0] + to[0]) / 2.0
+        path(from, [ mx, from[1] ], [ mx, to[1] ], to)
       end
 
       def path(*points) = "M#{fmt(points[0])} C#{points[1..].map { |point| fmt(point) }.join(' ')}"
       def fmt(point) = point.map { |value| value.round(1).to_s.delete_suffix(".0") }.join(" ")
       def numbers(d) = d.scan(/-?\d+(?:\.\d+)?/).map(&:to_f)
-      def join(first, second) = "#{first} #{second.sub(/\AM[^C]*/, '')}"
 
       def reverse(points)
         pairs = points.each_slice(2).to_a.reverse

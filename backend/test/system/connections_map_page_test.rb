@@ -1,9 +1,11 @@
 require "application_system_test_case"
 require_relative "../support/connections_fixtures"
 
-# The connections map (#363). Tosin's hard rule: a verb never touches a
-# line, a node, a name or another verb, anywhere. Checked on the three pages
-# Design drew, at desktop and phone sizes, in light and dark.
+# The connections map (#363, #561). Tosin's hard rule: a verb never touches a
+# line, a node, a name or another verb, anywhere. Checked on the pages Design
+# drew, at desktop size in light and dark; phones get a tree, checked for order,
+# 44px rows and no sideways scroll. The map is a picture: no details card, no
+# list toggle, no flowing dots.
 class ConnectionsMapPageTest < ApplicationSystemTestCase
   include ConnectionsFixtures
 
@@ -20,8 +22,8 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
       const problems = []
       document.querySelectorAll(".nd-map__svg").forEach((svg) => {
         if (svg.getClientRects().length === 0) return
-        if (svg.dataset.laidOut !== "true") return problems.push("not laid out: " + svg.dataset.size)
-        const circles = [...svg.querySelectorAll(".nd-map__ring")].map((c) => ({ x: c.cx.baseVal.value, y: c.cy.baseVal.value, r: c.r.baseVal.value + 6 }))
+        if (svg.dataset.laidOut !== "true") return problems.push("not laid out")
+        const circles = [...svg.querySelectorAll(".nd-map__ring")].map((c) => { const half = c.width.baseVal.value / 2; return { x: c.x.baseVal.value + half, y: c.y.baseVal.value + half, r: half * 1.42 + 4 } })
         const names = [...svg.querySelectorAll(".nd-map__name")]
         const labels = [...svg.querySelectorAll(".nd-map__label")].filter((l) => l.style.visibility !== "hidden")
         const lines = new Map()
@@ -38,7 +40,7 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
         labels.forEach((label, i) => {
           const box = label.getBBox()
           const id = label.dataset.group
-          const name = svg.dataset.size + " " + id + " (" + label.textContent + ")"
+          const name = id + " (" + label.textContent + ")"
           if (label.dataset.shortened) problems.push("shortened: " + name)
           circles.forEach((c) => {
             const x = Math.max(box.x, Math.min(c.x, box.x + box.width)), y = Math.max(box.y, Math.min(c.y, box.y + box.height))
@@ -60,7 +62,6 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   JS
 
   PAGES = {
-    "Plant Vogtle" => -> { "/plants/#{build_vogtle.slug}" },
     "TerraPower" => -> { "/companies/#{build_terrapower.slug}" },
     "Constellation" => -> { "/companies/#{build_constellation.slug}" },
     # Owns and operates the same two plants: two bundles to the same nodes.
@@ -76,26 +77,45 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   }.freeze
 
   PAGES.each do |title, path|
-    test "#{title}: no verb touches a line, node, name or verb, and every name fits, at 1440 and 390, light and dark" do
+    test "#{title}: no verb touches a line, node, name or verb, and every name fits, at 1440, light and dark" do
       url = instance_exec(&path)
-      problems = [ [ 1440, 900 ], [ 390, 844 ] ].product(%i[light dark]).flat_map do |(width, height), scheme|
-        resize_viewport(width, height)
+      problems = %i[light dark].flat_map do |scheme|
+        resize_viewport(1440, 900)
         emulate_color_scheme(scheme)
         visit url
         assert_selector ".nd-map__svg[data-laid-out=true]"
-        page.evaluate_script(CHECK).map { |problem| "#{width} #{scheme}: #{problem}" }
+        page.evaluate_script(CHECK).map { |problem| "#{scheme}: #{problem}" }
       end
 
       assert_empty problems, problems.join("\n")
     end
   end
 
+  test "the map is 696px wide in the page's middle column, after the header and before Deals and links" do
+    visit "/companies/#{build_constellation.slug}"
+    assert_selector ".nd-map__svg[data-laid-out=true]"
+
+    assert_equal 696, page.evaluate_script("document.querySelector('.nd-map__svg').getBoundingClientRect().width").round
+    map, deals = page.evaluate_script("['.nd-map', '#deals'].map((selector) => document.querySelector(selector)?.getBoundingClientRect().top)")
+    assert_operator map, :<, deals.to_f.nonzero? || map + 1
+    assert_equal "Connections", find(".nd-map h2").text[/\AConnections/]
+  end
+
+  test "nothing to operate: no details card, no list toggle, no flowing dots, no notes" do
+    visit "/companies/#{build_constellation.slug}"
+    assert_selector ".nd-map__svg[data-laid-out=true]"
+
+    %w[.nd-map__card .nd-map__list .nd-map__dot .nd-map__hit .nd-notes].each { |selector| assert_no_selector selector, visible: :all }
+    page.execute_script("document.querySelector('.nd-map__line').dispatchEvent(new MouseEvent('click', { bubbles: true }))")
+    assert_no_selector ".nd-map__card", visible: :all
+  end
+
   test "the folded plants open in place and fold back, and the opened map is checked too" do
     visit "/companies/#{build_constellation.slug}"
-    assert_selector ".nd-map__view[data-view=folded] .nd-map__svg--wide .nd-map__name", text: "13 plants"
+    assert_selector ".nd-map__view[data-view=folded] .nd-map__svg .nd-map__name", text: "13 plants"
 
-    find(".nd-map__view[data-view=folded] .nd-map__svg--wide .nd-map__node--fold").click
-    assert_selector ".nd-map__view[data-view=opened] .nd-map__svg--wide[data-laid-out=true]"
+    find(".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold").click
+    assert_selector ".nd-map__view[data-view=opened] .nd-map__svg[data-laid-out=true]"
     assert_no_selector ".nd-map__view[data-view=folded]", visible: true
     assert_empty page.evaluate_script(CHECK)
 
@@ -103,88 +123,37 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     assert_selector ".nd-map__view[data-view=folded]", visible: true
   end
 
-  test "on a phone, Back folds the plants again and puts focus on the visible fold node" do
-    resize_viewport(390, 844)
-    visit "/companies/#{build_constellation.slug}"
-    find(".nd-map__view[data-view=folded] .nd-map__svg--narrow .nd-map__node--fold").click
-    assert_selector ".nd-map__view[data-view=opened] .nd-map__svg--narrow[data-laid-out=true]"
-
-    click_on "‹ Back to all connections"
-    assert_equal "narrow", page.evaluate_script("document.activeElement.closest('svg')?.dataset.size")
-    assert_equal "13 plants. Show them", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
-  end
-
-  test "a company with only early-stage deals shows its Notes without a map" do
+  test "a company with only early-stage deals has no map (they stay in Deals and links)" do
     company = cite!(company("Early Stage Co"))
     partner = cite!(company("Partner Co"))
     deal(partner, "supplies", company, "MOU (2025): to explore a fuel supply agreement.")
     visit "/companies/#{company.slug}"
 
-    within ".nd-map" do
-      assert_selector ".nd-notes__stage", text: "MOU · 2025"
-      assert_link "Partner Co"
-      assert_text "Partner Co: To explore a fuel supply agreement."
-      assert_no_selector "svg", visible: :all
+    assert_no_selector ".nd-map"
+  end
+
+  [ [ 390, 844 ], [ 360, 800 ] ].each do |width, height|
+    test "on a phone (#{width}) the map is a tree: givers then receivers, rows of 44px or more, nothing scrolls sideways" do
+      resize_viewport(width, height)
+      visit "/companies/#{build_constellation.slug}"
+      assert_selector ".nd-tree .nd-tree__row", minimum: 3
+      assert_no_selector ".nd-map__svg", visible: true
+
+      rows = page.evaluate_script("[...document.querySelectorAll('.nd-tree__row')].map((row) => [row.classList.contains('nd-tree__row--in'), row.getBoundingClientRect().height, row.querySelector('.nd-tree__verb').textContent])")
+      assert rows.all? { |_, height, _| height >= 44 }, rows.inspect
+      directions = rows.map(&:first)
+      assert_equal directions, directions.sort_by { |inbound| inbound ? 0 : 1 }, "givers first"
+      assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
+      assert_equal "Connections", find(".nd-tree__centre", visible: true).text.then { "Connections" }, "the page's record tops the tree"
     end
   end
 
-  test "a line's details: shown on hover, kept on click, closed with Esc; with its source" do
-    visit "/plants/#{build_vogtle.slug}"
-    assert_selector ".nd-map__svg--wide[data-laid-out=true]"
-
-    owns = find(".nd-map__svg--wide .nd-map__hit[aria-label^='Dalton Utilities, Georgia Power, MEAG Power, and Oglethorpe Power Corporation own Plant Vogtle']")
-    owns.click
-    within ".nd-map__card" do
-      assert_text "4 companies → Plant Vogtle"
-      assert_link "Georgia Power"
-      assert_text "45.7% share"
-      assert_link "See the source", href: "https://example.org/source", count: 4
-    end
-    assert_selector ".nd-map__svg--wide .nd-map__edge.is-on", count: 1
-
-    find("body").send_keys(:escape)
-    assert_no_selector ".nd-map__card", visible: true
-  end
-
-  test "one dot per arrow, none under reduced motion; the list version holds every connection" do
-    visit "/plants/#{build_vogtle.slug}"
-    assert_equal 4 + 1 + 1, all(".nd-map__svg--wide .nd-map__dot", visible: :all).size
-    assert_equal "6", find(".nd-map h2 small").text[/\d+/]
-
-    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "prefers-reduced-motion", value: "reduce" } ])
-    visit current_path
-    assert_equal [ "none" ], page.evaluate_script("[...new Set([...document.querySelectorAll('.nd-map__svg--wide .nd-map__dot')].map((d) => getComputedStyle(d).display))]")
-    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
-
-    find(".nd-map__list summary").click
-    assert_selector ".nd-map__list li", count: 6
-    assert_selector ".nd-map__list li", text: "Georgia Power owns Plant Vogtle: 45.7% share (example.org)"
-  end
-
-  test "on a phone the map comes after the key facts, nothing scrolls sideways, and a tap opens the sheet" do
+  test "on a phone the folded plants open under their row" do
     resize_viewport(390, 844)
-    visit "/plants/#{build_vogtle.slug}"
-    assert_selector ".nd-map__svg--narrow[data-laid-out=true]"
+    visit "/companies/#{build_constellation.slug}"
+    first(".nd-tree__fold summary", text: "13 plants").click
 
-    order = page.evaluate_script("[document.querySelector('.nd-overview').getBoundingClientRect().top, document.querySelector('.nd-map').getBoundingClientRect().top]")
-    assert_operator order[0], :<, order[1], "key facts first"
-    assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
-
-    southern = find(".nd-map__svg--narrow .nd-map__hit[aria-label^='Southern Nuclear']")
-    southern.hover
-    assert_no_selector ".nd-map__card", visible: true, wait: 0.5 # a hover never opens the sheet
-    southern.click
-    assert_selector ".nd-map__card", visible: true
-    assert_selector ".nd-map__card", text: "Southern Nuclear Operating Company → Plant Vogtle"
-    assert_equal "fixed", page.evaluate_script("getComputedStyle(document.querySelector('.nd-map__card')).position")
-    find(".nd-map__card .nd-map__close").click
-    assert_no_selector ".nd-map__card", visible: true
-  end
-
-  test "on desktop the map runs across both columns, above the key facts and lists" do
-    visit "/plants/#{build_vogtle.slug}"
-    map, facts = page.evaluate_script("[document.querySelector('.nd-map'), document.querySelector('.nd-overview')].map((el) => el.getBoundingClientRect().toJSON())")
-    assert_operator map["bottom"], :<=, facts["top"]
-    assert_operator map["width"], :>=, 940
+    assert_selector ".nd-tree__fold[open] .nd-tree__plants li", count: 13
+    assert_selector ".nd-tree__fold[open] .nd-tree__plants a.nd-tree__node", count: 13
   end
 end

@@ -117,11 +117,9 @@ class ConnectionsMapTest < ActiveSupport::TestCase
       cite!(link(company, "operates", site))
     end
     map = ConnectionsMap.for_company(CompanyProfile.new(company))
-    [ ConnectionsMap::Layout::WIDE, ConnectionsMap::Layout::NARROW ].each do |size|
-      trunks = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size:, prefix: "t").groups.map(&:trunk)
+    trunks = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t").groups.map(&:trunk)
 
-      assert_equal 2, trunks.compact.uniq.size, size.key
-    end
+    assert_equal 2, trunks.compact.uniq.size
   end
 
   test "short names drop the legal ending; a name without one has none" do
@@ -132,16 +130,38 @@ class ConnectionsMapTest < ActiveSupport::TestCase
 
   test "the layout bundles arrows that share a verb and puts one label on the trunk" do
     map = ConnectionsMap.for_plant(PlantProfile.new(build_vogtle))
-    [ ConnectionsMap::Layout::WIDE, ConnectionsMap::Layout::NARROW ].each do |size|
-      layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size:, prefix: "t")
-      owns = layout.groups.find { |group| group.verb == "owns" }
+    size = ConnectionsMap::Layout::WIDE
+    layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size:, prefix: "t")
+    owns = layout.groups.find { |group| group.verb == "owns" }
 
-      assert owns.bundle?, size.key
-      assert_equal 4, owns.members.size
-      assert owns.members.none?(&:arrow), "fan-in: the arrowhead is on the trunk (#{size.key})"
-      assert_equal owns.trunk, owns.label_path
-      assert_equal 7, layout.nodes.size
-      assert layout.nodes.all? { |node| node.x.between?(0, size.width) && node.y.between?(0, layout.height) }, size.key
+    assert owns.bundle?
+    assert_equal 4, owns.members.size
+    assert owns.members.none?(&:arrow), "fan-in: the arrowhead is on the trunk"
+    assert_equal owns.trunk, owns.label_path
+    assert_equal 7, layout.nodes.size
+    assert_equal 696, size.width, "the page's middle column"
+    assert layout.nodes.all? { |node| node.x.between?(0, size.width) && node.y.between?(0, layout.height) }
+  end
+
+  # Every arrow runs box edge to box edge (#561): a single arrow starts on the giver's square and its tip ends
+  # within 2px of the receiver's square. The centre is a 36px square, the others 28px.
+  test "an arrow meets the edge of both boxes" do
+    map = ConnectionsMap.for_plant(PlantProfile.new(build_vogtle))
+    layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t")
+    placed = layout.nodes.index_by { |node| node.node.key }
+    assert_equal 18, layout.centre.r
+    assert_equal [ 14 ], layout.nodes.reject { |node| node.node.key == map.centre.key }.map(&:r).uniq
+
+    layout.groups.reject(&:bundle?).each do |group|
+      edge = group.edges.first
+      points = group.members.first.path.scan(/-?\d+(?:\.\d+)?/).map(&:to_f).each_slice(2).to_a
+      giver, receiver = placed.fetch(edge.giver.key), placed.fetch(edge.receiver.key)
+      gap = lambda do |point, box|
+        [ (point[0] - box.x).abs - box.r, (point[1] - box.y).abs - box.r ].max.abs
+      end
+
+      assert_operator gap.(points.first, giver), :<=, 2, "#{edge.sentence}: leaves the giver's edge"
+      assert_operator gap.(points.last, receiver), :<=, 2.5, "#{edge.sentence}: the tip meets the receiver's edge"
     end
   end
 end
