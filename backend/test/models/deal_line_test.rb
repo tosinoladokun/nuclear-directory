@@ -12,6 +12,8 @@ class DealLineTest < ActiveSupport::TestCase
     assert_equal "$80M ARDP award", DealLine.for(term(term_type: "award", amount_usd: 80_000_000, program: "ARDP"))
     assert_equal "$1.23B award", DealLine.for(term(term_type: "award", amount_usd: 1_234_000_000))
     assert_nil DealLine.for(term(term_type: "award")), "nothing stored: nothing said"
+    assert_equal "$1.9M award", DealLine.for(term(term_type: "award", amount_usd: 1_900_000, program: "81.121")),
+      "a bare assistance-listing number means nothing to a reader"
   end
 
   test "a funding round: amount and round, Anchors when this company led it" do
