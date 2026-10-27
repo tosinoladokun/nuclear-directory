@@ -1,0 +1,154 @@
+<%#
+  The connections map (#363): map, a ConnectionsMap. Each view (folded, and
+  opened when plants fold) is drawn twice: wide and narrow (phones). The
+  server places everything; connections_map_controller.js fits the names,
+  moves colliding labels and fills the details card. Without JavaScript the
+  map shows as drawn and the list below is open.
+%>
+<% views = if map.edges.empty? then {} elsif map.folds? then { "folded" => map.folded, "opened" => map.opened } else { "folded" => map.edges } end %>
+<% counts = [ (pluralize(map.companies, "company", "companies") if map.companies.positive?), (pluralize(map.plants, "plant") if map.plants.positive?) ].compact.join(" · ") %>
+<section class="nd-map<%= " nd-map--busy" if map.edges.size > 24 %>" aria-labelledby="connections-heading" data-controller="connections-map">
+  <h2 id="connections-heading" class="nd-sec-h">Connections <small><%= counts %></small></h2>
+  <% if map.edges.any? %><p class="nd-map__hint">Dots flow from giver to receiver. Hover or tap a line for its details and source.</p><% end %>
+  <div class="nd-map__body">
+    <%# A company with only early-stage deals has Notes and no map. %>
+    <div class="nd-map__figure" data-connections-map-target="figure"<%= " hidden" if map.edges.empty? %>>
+      <% cards = {} %>
+      <% views.each do |view, edges| %>
+        <div class="nd-map__view" data-view="<%= view %>" data-connections-map-target="view"<%= " hidden" if view == "opened" %>>
+          <% if view == "opened" %>
+            <button type="button" class="nd-map__back" data-action="connections-map#fold">‹ Back to all connections</button>
+          <% end %>
+          <% [ ConnectionsMap::Layout::WIDE, ConnectionsMap::Layout::NARROW ].each do |size| %>
+            <% prefix = "cm-#{view[0]}#{size.key[0]}" %>
+            <% layout = ConnectionsMap::Layout.new(edges, centre: map.centre, size:, prefix:) %>
+            <% layout.groups.each { |group| cards[map_card_key(group)] ||= group } %>
+            <svg class="nd-map__svg nd-map__svg--<%= size.key %>" viewBox="0 0 <%= layout.width %> <%= layout.height.ceil %>"
+                 width="<%= layout.width %>" height="<%= layout.height.ceil %>" role="group"
+                 aria-label="Map of <%= map.centre.name %>'s connections. The list below has the same connections as text."
+                 data-connections-map-target="svg" data-size="<%= size.key %>">
+              <defs>
+                <marker id="<%= prefix %>-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                  <path class="nd-map__head" d="M0 0L10 5L0 10z"></path>
+                </marker>
+                <% layout.groups.each do |group| %>
+                  <% if group.label_reversed %><path id="<%= group.id %>-rev" d="<%= group.label_reversed %>"></path><% end %>
+                <% end %>
+              </defs>
+              <g class="nd-map__lines" aria-hidden="true">
+                <% layout.groups.each_with_index do |group, index| %>
+                  <g class="nd-map__edge" data-group="<%= group.id %>">
+                    <% group.members.each do |member| %>
+                      <path class="nd-map__line" d="<%= member.path %>"<% if member.arrow %> marker-end="url(#<%= prefix %>-arrow)"<% end %><% if !group.trunk %> id="<%= group.id %>-path"<% end %>></path>
+                    <% end %>
+                    <% if group.trunk %>
+                      <path class="nd-map__line" id="<%= group.id %>-path" d="<%= group.trunk %>"<% if group.inbound %> marker-end="url(#<%= prefix %>-arrow)"<% end %>></path>
+                    <% end %>
+                    <% group.members.each_with_index do |member, n| %>
+                      <circle class="nd-map__dot" r="3" style="offset-path: path('<%= member.dot_path %>'); animation-delay: -<%= ((index * 0.9 + n * 0.7) % 3.6).round(1) %>s"></circle>
+                    <% end %>
+                  </g>
+                <% end %>
+              </g>
+              <g class="nd-map__nodes">
+                <% layout.nodes.each do |placed| %>
+                  <% node = placed.node %>
+                  <% centre = node.key == map.centre.key %>
+                  <% category = map.category(node) %>
+                  <% classes = [ "nd-map__node", ("nd-map__node--centre" if centre), ("nd-map__node--plant" if node.plant? || node.fold?), ("nd-map__node--fold" if node.fold?), (bucket_class(category) if category) ] %>
+                  <% inner = capture do %>
+                    <circle class="nd-map__ring" cx="<%= placed.x %>" cy="<%= placed.y %>" r="<%= placed.r %>"></circle>
+                    <% if (icon_name = map_node_icon(map, node)) %><%= map_icon(icon_name, placed.x, placed.y, centre ? 28 : 18) %><% end %>
+                    <text class="nd-map__name" x="<%= placed.name_x %>" y="<%= placed.name_y %>" text-anchor="<%= placed.anchor %>"
+                          data-slot="<%= placed.slot %>" data-font="<%= centre ? size.font + 2 : size.font %>" data-floor="<%= size.floor %>"
+                          data-short="<%= node.short_name if placed.name == node.name %>" style="font-size: <%= centre ? size.font + 2 : size.font %>px"><%= placed.name %><title><%= node.name %></title></text>
+                  <% end %>
+                  <% if centre %>
+                    <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>"><%= inner %></g>
+                  <% elsif node.fold? %>
+                    <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" role="button" tabindex="0"
+                       aria-label="<%= node.name %>. Show them" data-action="click->connections-map#open keydown->connections-map#openKey"><%= inner %></g>
+                  <% else %>
+                    <a href="<%= map_node_url(node) %>" class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" aria-label="<%= node.name %>"><%= inner %></a>
+                  <% end %>
+                <% end %>
+              </g>
+              <g class="nd-map__hits">
+                <% layout.groups.each do |group| %>
+                  <g class="nd-map__hit" data-group="<%= group.id %>" data-card="<%= map_card_key(group) %>" tabindex="0" role="button"
+                     aria-label="<%= map_group_label(group) %>. Show details"
+                     data-action="mouseenter->connections-map#preview mouseleave->connections-map#unpreview focus->connections-map#preview blur->connections-map#unpreview click->connections-map#pin keydown->connections-map#key">
+                    <% group.members.each do |member| %><path d="<%= member.path %>"></path><% end %>
+                    <% if group.trunk %><path d="<%= group.trunk %>"></path><% end %>
+                  </g>
+                <% end %>
+              </g>
+              <g class="nd-map__labels" aria-hidden="true">
+                <% layout.groups.each do |group| %>
+                  <%# The halo is its own copy behind the word: Chrome won't apply paint-order to a textPath. %>
+                  <text class="nd-map__halo" data-group="<%= group.id %>" dy="4"<%= raw(%( style="visibility: hidden")) if group.steep %>><textPath href="#<%= group.id %>-<%= group.label_reversed ? "rev" : "path" %>" startOffset="50%" text-anchor="middle"><%= group.verb %></textPath></text>
+                  <text class="nd-map__label nd-map__label--path" data-group="<%= group.id %>" data-verb="<%= group.verb %>" dy="4"<%= raw(%( style="visibility: hidden")) if group.steep %>><textPath href="#<%= group.id %>-<%= group.label_reversed ? "rev" : "path" %>" startOffset="50%" text-anchor="middle"><%= group.verb %></textPath></text>
+                  <text class="nd-map__label nd-map__label--flat" data-group="<%= group.id %>" data-verb="<%= group.verb %>" x="<%= group.label_at[0] %>" y="<%= group.label_at[1] + 4 %>" text-anchor="middle"<%= raw(%( style="visibility: hidden")) unless group.steep %>><%= group.verb %></text>
+                <% end %>
+              </g>
+            </svg>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="nd-map__aside">
+      <div class="nd-map__card" data-connections-map-target="card" role="region" aria-label="Connection details" aria-live="polite" hidden>
+        <span class="nd-map__grab" aria-hidden="true"></span>
+        <div data-connections-map-target="cardBody"></div>
+        <button type="button" class="nd-map__close" data-action="connections-map#close">Close</button>
+      </div>
+      <% cards.each do |key, group| %>
+        <template data-card="<%= key %>">
+          <p class="nd-map__card-title" title="<%= map_card_title(group) %>" data-truncate><%= map_card_title(group) %></p>
+          <p class="nd-map__card-verb"><%= group.verb %></p>
+          <ul class="nd-map__card-rows">
+            <% group.edges.each do |edge| %>
+              <% other = group.inbound ? edge.giver : edge.receiver %>
+              <li>
+                <% if group.bundle? && (url = map_node_url(other)) %><%= link_to other.name, url, class: "nd-link nd-map__card-name" %><% end %>
+                <% if edge.details.any? %><span class="nd-map__card-detail"><%= edge.details.join(" · ") %></span><% end %>
+                <span class="nd-map__card-source"><%= map_source_line(edge) %></span>
+                <span class="nd-map__card-actions">
+                  <% if !group.bundle? && (url = map_node_url(other)) %><%= link_to "Open #{other.name}", url, class: "nd-map__action" %><% end %>
+                  <%= link_to "See the source", edge.sources.first.url, class: "nd-map__action", rel: "noopener noreferrer", target: "_blank" %>
+                </span>
+              </li>
+            <% end %>
+          </ul>
+        </template>
+      <% end %>
+
+      <% if map.notes.any? %>
+        <section class="nd-notes" aria-labelledby="notes-heading">
+          <h3 id="notes-heading" class="nd-notes__h">Notes</h3>
+          <ul class="nd-notes__list">
+            <% map.notes.each do |note| %>
+              <li class="nd-notes__item">
+                <% other_url = note.other.is_a?(Facility) ? plant_url_for(note.other) : company_url_for(note.other) %>
+                <p class="nd-notes__text"><% if note.stage %><span class="nd-notes__stage"><%= note.stage %></span><% end %><%= link_to note.other.name, other_url, class: "nd-link nd-notes__who" %>: <%= note.text %></p>
+                <%= link_to note.sources.map(&:domain).compact.uniq.join(", "), note.sources.first.url, class: "nd-notes__source", rel: "noopener noreferrer", target: "_blank" %>
+              </li>
+            <% end %>
+          </ul>
+        </section>
+      <% end %>
+
+      <% if map.edges.any? %>
+      <details class="nd-map__list" open data-connections-map-target="list">
+        <summary>Show connections as a list</summary>
+        <ul>
+          <% map.opened.sort_by { |edge| [ ConnectionsMap::VERBS.index(edge.verb), edge.sentence ] }.each do |edge| %>
+            <li><%= map_list_item(edge) %></li>
+          <% end %>
+        </ul>
+      </details>
+      <% end %>
+    </div>
+  </div>
+</section>

@@ -57,6 +57,10 @@
     <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
 
     <div class="nd-company__main nd-secs">
+      <%# Connections (#363, #561): in the middle column, before Deals and links. %>
+      <% map = ConnectionsMap.for_company(p) %>
+      <%= render("shared/connections_map", map:) if map.edges.any? %>
+
       <% if p.deals.any? %>
         <section aria-labelledby="deals-heading" id="deals">
           <%= render "shared/section_head", title: "Deals and links", count: deal_count(p), id: "deals-heading" %>

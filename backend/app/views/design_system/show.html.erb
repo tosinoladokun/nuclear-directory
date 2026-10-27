@@ -216,6 +216,12 @@ Disallow: /</pre>
     </div>
   </section>
 
+  <section class="flex flex-col gap-4" id="connections">
+    <h2 class="type-title-md">Connections map and Notes (#363)</h2>
+    <p class="type-body text-ink-muted">nd-map: arrows from giver to receiver, a dot flowing along each, the verb on the line (nd-map__label, with its nd-map__halo). Arrows that share a verb merge into a bundle with one label. nd-notes holds early-stage deals with their stage. Hover or tap a line.</p>
+    <%= render "shared/connections_map", map: m[:connections] %>
+  </section>
+
   <section class="flex flex-col gap-6" id="admin">
     <h2 class="type-title-md">Admin (#86)</h2>
     <p class="type-small text-ink-muted m-0">Only behind sign-in. Desktop-first; on phones the checkboxes are hidden and buttons are 44px tall.</p>
