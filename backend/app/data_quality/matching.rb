@@ -58,8 +58,10 @@ module DataQuality::Matching
       # Sent again (the same key, or the same action already done): fine, nothing more happens.
       # A live action counts only while the claim is still as it left it
       # (a person may have reopened it since).
-      done = (DqAction.find_by(request_key: key) if key) ||
-        DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) }
+      # Settling an end is never taken for a retry of another (a claim has two
+      # ends); only its request_key makes it one.
+      done = (DqAction.find_by(request_key: key) if key) || (row["end"].blank? &&
+        DqAction.live.where(candidate_id: id, action:).order(:id).last&.then { |last| last if left_as?(last, candidate) })
       next Row.new(id:, ok: true, error: nil, created_ids: ids_of(done.created)) if done
       # Close applies to any open claim (a link, a deal term, news); the
       # others settle a company, so they need a company claim.
@@ -237,7 +239,10 @@ module DataQuality::Matching
         return "its #{end_key} end is malformed" unless named.is_a?(Hash)
 
         settled = if end_type(candidate, end_key) == :facility
-          { "name" => record.name, "nrc_docket" => (record.nrc_docket || record.values.to_h["nrc_docket"]).presence }.compact
+          # Its identifiers, so the rematch finds this record and not a namesake (a site by its EIA plant ID).
+          values = record.values.to_h
+          { "name" => record.name, "nrc_docket" => (record.nrc_docket || values["nrc_docket"]).presence,
+            "eia_plant_id" => (record.eia_plant_id || values["eia_plant_id"]).presence }.compact
         else
           { "name" => record.name }
         end

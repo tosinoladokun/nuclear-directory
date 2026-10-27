@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -149,12 +149,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
     t.check_constraint "ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on", name: "deal_terms_dates_check"
     t.check_constraint "link_type::text <> 'Organization'::text OR term_type::text = 'funding_round'::text", name: "deal_terms_company_round_check"
     t.check_constraint "firm_mw IS NULL OR firm_mw >= 0::numeric", name: "deal_terms_firm_mw_check"
+    t.check_constraint "term_type::text <> 'loan'::text OR amount_usd IS NOT NULL", name: "deal_terms_loan_check"
     t.check_constraint "link_type::text = ANY (ARRAY['Relationship'::character varying, 'FacilityRelationship'::character varying, 'Organization'::character varying]::text[])", name: "deal_terms_link_type_check"
     t.check_constraint "status IS NULL OR (status::text = ANY (ARRAY['announced'::character varying, 'signed'::character varying, 'active'::character varying, 'completed'::character varying, 'terminated'::character varying]::text[]))", name: "deal_terms_status_check"
     t.check_constraint "term_type::text <> 'award'::text OR amount_usd IS NOT NULL AND starts_on IS NOT NULL AND external_id IS NOT NULL", name: "deal_terms_award_check"
     t.check_constraint "term_type::text <> 'funding_round'::text OR amount_usd IS NOT NULL OR round IS NOT NULL", name: "deal_terms_round_check"
     t.check_constraint "term_type::text <> 'offtake'::text OR capacity_mw IS NOT NULL OR amount_usd IS NOT NULL OR agreement IS NOT NULL AND (agreement::text <> ALL (ARRAY['ppa'::character varying, 'supply_agreement'::character varying, 'tariff_subscription'::character varying]::text[]))", name: "deal_terms_offtake_check"
-    t.check_constraint "term_type::text = ANY (ARRAY['award'::character varying, 'offtake'::character varying, 'funding_round'::character varying]::text[])", name: "deal_terms_term_type_check"
+    t.check_constraint "term_type::text = ANY (ARRAY['award'::character varying, 'offtake'::character varying, 'funding_round'::character varying, 'loan'::character varying]::text[])", name: "deal_terms_term_type_check"
     t.check_constraint "term_years IS NULL OR term_years > 0", name: "deal_terms_term_years_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'unpublished'::character varying]::text[])", name: "deal_terms_verification_status_check"
   end
