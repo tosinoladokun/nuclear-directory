@@ -5,9 +5,9 @@
 # becomes facts only as pending claims through the usual path.
 class Admin::LeadsController < Admin::BaseController
   # The status filter (Design, on #543): its label and the statuses it shows.
-  TABS = { "all" => [ "All", Lead::STATUSES ], "new" => [ "To do", %w[new] ], "researching" => [ "Researching", %w[researching] ],
+  TABS = { "all" => [ "All", Lead::STATUSES ], "new" => [ "To do", %w[new] ], "triage" => [ "Triage", %w[triage] ], "researching" => [ "Researching", %w[researching] ],
     "added" => [ "Covered", %w[added] ], "ignored" => [ "Ignored", %w[ignored] ] }.freeze
-  STATUS_LABELS = { "new" => "To do", "researching" => "Researching", "added" => "Covered", "ignored" => "Ignored" }.freeze
+  STATUS_LABELS = { "triage" => "Triage", "new" => "To do", "researching" => "Researching", "added" => "Covered", "ignored" => "Ignored" }.freeze
   # Sortable columns: Date is the last time a lead came up.
   SORTS = { "date" => :last_seen_on, "seen" => :seen_count }.freeze
   PAGE = 50

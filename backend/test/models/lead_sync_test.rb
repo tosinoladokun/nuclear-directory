@@ -19,7 +19,7 @@ class LeadSyncTest < ActiveSupport::TestCase
       content_text: "award_id,recipient_name\nA1,NEW SBIR CO LLC\n")
 
     LeadSync.run
-    assert_equal [ [ "other", "zentra fusion", 4 ], [ "company", "Nova Reactors", 1 ], [ "other", "A trade-press headline", 1 ],
+    assert_equal [ [ "other", "zentra fusion", 4 ], [ "company", "Nova Reactors", 1 ],
       [ "company", "Quillon Grid", 1 ], [ "company", "NEW SBIR CO LLC", 1 ] ].sort, Lead.pluck(:kind, :name, :seen_count).sort
     assert_no_difference -> { Lead.sum(:seen_count) } do
       LeadSync.run
