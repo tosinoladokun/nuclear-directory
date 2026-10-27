@@ -36,12 +36,36 @@
 <% end %>
 <%= render "shared/site_header", query: listing.query %>
 
-<main class="nd-page">
-  <%= render "shared/category_pills", current: listing.category, counts: @counts if @counts %>
+<%
+  index_items = [ { label: "All companies", href: directory_url_for, icon: icon("list"), count: @all_count, current: list_page.nil? && !listing.searching?, title: "All companies" } ]
+  Category.all.each do |category|
+    break unless @counts
+    count = @counts[category.key]
+    next if !category.plants && count&.zero? && listing.category != category
+    index_items << { label: (category.name.length > 22 ? category.short_name : category.name), title: category.name, href: directory_url_for(category:), icon: bucket_icon(category),
+                     count:, bucket: (category unless category.plants), current: listing.category == category }
+  end
+  page_noun = noun
+%>
+<main class="nd-page nd-page--wide">
+  <div class="nd-listpage">
+    <% if @counts %>
+      <div class="nd-listpage__index"><%= render "shared/index", items: index_items, variant: :list, label: "Categories" %></div>
+      <%# Phones: the same categories as one scrolling row, opened with the current one in view. %>
+      <div class="nd-chips nd-listpage__chips" data-controller="pill-row" role="navigation" aria-label="Categories">
+        <%= render "shared/chip", label: "All companies", href: directory_url_for, icon: icon("list"), count: @all_count, current: list_page.nil? && !listing.searching? %>
+        <% Category.all.each do |category| %>
+          <% next if !category.plants && @counts[category.key]&.zero? && listing.category != category %>
+          <%= render "shared/chip", label: category.name, href: directory_url_for(category:), icon: bucket_icon(category), count: @counts[category.key], bucket: (category unless category.plants), current: listing.category == category %>
+        <% end %>
+      </div>
+    <% end %>
 
-  <div class="nd-listhead">
-    <h1 class="type-title-md nd-listhead__title"><%= heading %> <span class="type-data nd-listhead__count"><%= pluralize(total, noun, plural:) %></span></h1>
+  <div class="nd-listpage__main">
+  <%= render "shared/page_head", name: heading, count: pluralize(total, noun, plural:), about: (list_page.description(1) if category_page),
+        square: (bucket_icon(listing.category, size: 24) if listing.category), bucket: (listing.category unless listing.category&.plants) %>
 
+  <div class="nd-listhead nd-listhead--bare">
     <%# On phones the filters open in a full-screen sheet behind "Filters (N)"
         (#90). Without JavaScript the sheet is a native popover the button
         opens and closes on its own; with it, the same contents open in a
@@ -50,6 +74,19 @@
     <% active = [ listing.technology, listing.state ].compact.size %>
     <div class="nd-filterwrap" data-controller="filter-sheet" data-filter-sheet-count-url-value="<%= companies_path(format: :json) %>"
          data-action="turbo:before-cache@document->filter-sheet#close">
+      <%# On phones Sort sits beside Filters, outside the sheet; it applies as it changes. %>
+      <%= form_with url: companies_path, method: :get, class: "nd-sortbar", data: { controller: "auto-submit" } do %>
+        <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
+        <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
+        <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
+        <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
+        <%= hidden_field_tag :technology, listing.technology, id: nil if listing.technology %>
+        <%= hidden_field_tag :state, listing.state, id: nil if listing.state %>
+        <label class="nd-select"><b>Sort</b>
+          <%= select_tag :sort, options_for_select(DirectoryListing::SORTS.invert, listing.sort), id: "sort-phone", class: "type-input", data: { action: "change->auto-submit#submit" } %>
+        </label>
+        <noscript><button type="submit" class="nd-btn nd-btn--sm">Apply</button></noscript>
+      <% end %>
       <button type="button" class="nd-btn nd-btn--sm nd-filterwrap__open" popovertarget="filter-sheet" popovertargetaction="show" data-action="filter-sheet#open">
         <%= icon("sliders-horizontal") %>Filters<% if active.positive? %> <span class="type-data">(<%= active %>)</span><% end %>
       </button>
@@ -73,7 +110,7 @@
           <label class="nd-select"><b>State</b>
             <%= select_tag :state, options_for_select(listing.state_options, listing.state), include_blank: "Any", class: "type-input" %>
           </label>
-          <label class="nd-select"><b>Sort</b>
+          <label class="nd-select nd-select--sort"><b>Sort</b>
             <%= select_tag :sort, options_for_select(DirectoryListing::SORTS.invert, listing.sort), class: "type-input" %>
           </label>
           <button type="submit" class="nd-btn nd-btn--sm" data-filter-sheet-target="submit">Apply filters</button>
@@ -108,20 +145,18 @@
     <% if @companies.any? %>
       <section aria-labelledby="companies-heading">
         <h2 id="companies-heading" class="nd-label mb-1">Companies</h2>
-        <ul class="nd-list"><% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %></ul>
+        <%= render "directory/company_lines", companies: @companies, short: @short %>
       </section>
     <% end %>
     <% if @plants.any? %>
       <section aria-labelledby="plants-heading">
         <h2 id="plants-heading" class="nd-label mb-1">Plants and sites</h2>
-        <ul class="nd-list"><% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %></ul>
+        <%= render "directory/plant_lines", plants: @plants %>
       </section>
     <% end %>
   <% else %>
-    <ul class="nd-list">
-      <% @companies.each do |company| %><%= render "shared/company_row", organization: company, connections: company.connections_count %><% end %>
-      <% @plants.each do |plant| %><%= render "shared/plant_row", facility: plant, connections: plant.connections_count %><% end %>
-    </ul>
+    <% if @companies.any? %><%= render "directory/company_lines", companies: @companies, short: @short %><% end %>
+    <% if @plants.any? %><%= render "directory/plant_lines", plants: @plants %><% end %>
   <% end %>
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
@@ -130,4 +165,9 @@
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
   </turbo-frame>
+  <nav class="nd-quiet" aria-label="About this list">
+    <%= link_to correction_url_for(listing.category&.plants ? "A missing plant" : "A missing company") do %><%= icon("flag", size: 16) %><%= listing.category&.plants ? "Missing a plant?" : "Missing a company?" %> Report a correction<% end %>
+  </nav>
+  </div>
+  </div>
 </main>
