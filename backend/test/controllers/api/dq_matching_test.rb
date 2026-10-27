@@ -86,7 +86,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
   test "same_as with add_alias stays matched, so the new name is a Change for Tosin" do
     variant = claim("Holtec")
     act({ id: variant.id, action: "same_as", target: @holtec.id, reason: "Keep the short name", add_alias: true })
-    assert_equal "matched", variant.reload.status
+    assert_equal "needs_review", variant.reload.status
     assert_equal "change", DataQuality::Review.inbox_kind(variant)
   end
 
@@ -104,6 +104,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     company = Organization.find(results.sole["created_ids"].sole)
     assert company.verification_status == "pending"
     assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
+    assert_includes OwnerInbox.new.sections["new_record"].map { |entry| entry.item.candidate_id }, c.id, "it's in Tosin's inbox"
 
     post api_dq_matching_undo_path, params: { action_id: DqAction.sole.id }, as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" }
     assert response.parsed_body["ok"], response.parsed_body.inspect
@@ -179,7 +180,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
       subject_type: "Organization", subject_id: company.id)
     assert_match "claimed since", DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal "pending", company.reload.verification_status
-    assert_equal "matched", c.reload.status
+    assert_equal "needs_review", c.reload.status
   end
 
   test "a digest with spaces or capitals still works; actions that aren't a list of objects get a 422" do
@@ -288,5 +289,51 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "99123", link.payload.dig("facility", "eia_plant_id")
     assert_equal "GE Both Ends", link.payload.dig("organization", "name"), "the second end was settled, not taken for a retry"
     assert_equal 2, DqAction.count
+  end
+
+  test "recommend records Data Quality's verdict on a waiting claim, feeds Yes to all, publishes nothing, and can be undone" do
+    pending = Organization.create!(name: "Fresh Fission LLC", verification_status: "pending")
+    c = Candidate.create!(source: @page, kind: "organization", status: "matched", payload: { "name" => "Fresh Fission LLC" }, quote: "Licensee: Fresh Fission LLC.",
+      subject_type: "Organization", subject_id: pending.id, proposed_subject: true)
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "Named on the NRC list" }, { id: c.id, action: "recommend", verdict: "maybe", reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "verdict must be", results.second["error"]
+    c.reload
+    assert_equal [ "approve", "Named on the NRC list", DataQuality::Matching::BY ], c.values_at(:dq_recommendation, :dq_reason, :dq_by)
+    assert DataQuality::Recommendations.current?(c)
+    assert_equal "pending", pending.reload.verification_status, "nothing publishes"
+
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_nil c.reload.dq_recommendation
+  end
+
+  test "new on a plant claim proposes a pending plant" do
+    c = Candidate.create!(source: @page, kind: "facility", status: "needs_review", quote: "NC State PULSTAR, docket 05000297",
+      payload: { "name" => "PULSTAR Reactor", "nrc_docket" => "05000297", "facility_type" => "research_reactor", "state" => "NC" },
+      notes: "similar: North Anna")
+    act({ id: c.id, action: "new", reason: "A research reactor, not North Anna" })
+    assert results.sole["ok"], results.inspect
+    plant = Facility.find(results.sole["created_ids"].sole)
+    assert_equal [ "pending", "05000297" ], plant.values_at(:verification_status, :nrc_docket)
+    assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
+    assert_includes OwnerInbox.new.sections["new_record"].map { |entry| entry.item.candidate_id }, c.id, "the plant is in Tosin's inbox"
+  end
+
+  test "a changed verdict is recorded, not taken for a repeat; the same verdict again is" do
+    c = Candidate.create!(source: @page, kind: "organization", status: "needs_review", payload: { "name" => "Verdict Co" }, quote: "q")
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "first" })
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "again" })
+    assert_equal 1, DqAction.count
+    act({ id: c.id, action: "recommend", verdict: "reject", reason: "Not a company after all" })
+    assert results.sole["ok"], results.inspect
+    assert_equal [ "reject", "Not a company after all" ], c.reload.values_at(:dq_recommendation, :dq_reason)
+    assert_equal 2, DqAction.count
+  end
+
+  test "rolling back the recommend migration refuses while verdicts are recorded" do
+    c = claim("Rollback Co")
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "r" })
+    require Rails.root.join("db/migrate/20261027120000_allow_recommend_dq_actions")
+    assert_raises(ActiveRecord::IrreversibleMigration) { AllowRecommendDqActions.new.tap { |m| m.verbose = false }.migrate(:down) }
   end
 end

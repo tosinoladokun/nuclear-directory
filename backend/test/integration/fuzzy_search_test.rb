@@ -14,14 +14,14 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
     @browns = cite!(plant("Browns Ferry Nuclear Plant", facility_type: "power_reactor", status: "operating", city: "Athens", state: "AL"))
   end
 
-  def names = css_select("main ul.nd-list a.nd-listrow .nd-listrow__name").map { |el| el.text.strip }
+  def names = css_select("main ul.nd-lines a.nd-line .nd-line__name").map { |el| el.text.strip }
 
   test "a missing letter finds the name, and the page says these are close names" do
     get companies_path(q: "browns fery")
 
     assert_equal [ "Browns Ferry Nuclear Plant" ], names
     assert_select ".nd-fuzzy-note", "No exact match for “browns fery”. Showing close names."
-    assert_select "h1 .nd-listhead__count", /1 result/
+    assert_select ".nd-pagehead__count", /1 result/
   end
 
   test "typos in a company name: 'westinghus', 'nextara energy'" do

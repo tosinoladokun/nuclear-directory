@@ -10,11 +10,11 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
       verified_by: "human:tosin", created_at: Time.current, updated_at: Time.current } })
   end
 
-  def rows = css_select("main ul.nd-list > li").size
+  def rows = css_select("main ul.nd-lines > li:not(.nd-lines__head)").size
 
   test "the first page, the full count, and Show more with the filters kept" do
     get companies_path(q: "Paged Fission")
-    assert_select "h1 .nd-listhead__count", /#{PAGE + 5} results/
+    assert_select ".nd-pagehead__count", /#{PAGE + 5} results/
     assert_equal PAGE, rows
     assert_select "turbo-frame#directory-rows[target=_top]", 1, "company and plant links leave the frame; only Show more targets it"
     assert_select "turbo-frame#directory-rows a.nd-btn[href=?][data-turbo-frame=directory-rows]", companies_path(q: "Paged Fission", shown: 2), "Show more"
@@ -67,11 +67,11 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
 
   test "a Show more frame request skips the category counts" do
     get companies_path(shown: 2)
-    assert_select "nav.nd-pills", 1
+    assert_select "nav.nd-idx", 1
 
     get companies_path(shown: 2), headers: { "Turbo-Frame" => "directory-rows" }
     assert_response :success
-    assert_select "nav.nd-pills", 0
+    assert_select "nav.nd-idx", 0
     assert_select "turbo-frame#directory-rows"
   end
 end

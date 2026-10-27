@@ -3,7 +3,8 @@
     href:    a link target (optional; without it a plain span)
     icon:    HTML for a 14px icon (optional)
     current: true for the selected chip (aria-current; the category tint behind accent text)
-    bucket:  a Category, to colour it (optional) %>
+    bucket:  a Category, to colour it (optional)
+    count:   a number shown after the label in mono (optional) %>
 <% classes = [ "nd-chip", (bucket_class(bucket) if local_assigns[:bucket]) ] %>
-<% inner = capture do %><%= local_assigns[:icon] %><%= label %><% end %>
+<% inner = capture do %><%= local_assigns[:icon] %><%= label %><% if local_assigns[:count] %> <span class="nd-num nd-chip__count"><%= count %></span><% end %><% end %>
 <%= local_assigns[:href] ? tag.a(inner, href:, class: classes, aria: { current: ("page" if local_assigns[:current]) }) : tag.span(inner, class: classes, aria: { current: ("true" if local_assigns[:current]) }) %>
