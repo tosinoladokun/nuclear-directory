@@ -187,11 +187,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     def own_links(home)
       return [] unless home.crawl_ok? && home.content_text.present?
 
-      host = URI(home.url).host.to_s.downcase.delete_prefix("www.")
+      # Relative links are read against where the page ended (#525).
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
       Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
-        url = URI.join(home.url, link["href"]).to_s.split("#").first rescue next
+        url = URI.join(base, link["href"]).to_s.split("#").first rescue next
         uri = URI(url)
-        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && url != home.url && "#{uri.path} #{link.text}".match?(LINK)
+        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) && "#{uri.path} #{link.text}".match?(LINK)
       end.uniq
     end
 
