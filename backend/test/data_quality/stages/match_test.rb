@@ -71,6 +71,7 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
     assert facility.pending?
     assert_match "proposed a new pending one", c.notes
     assert_equal 1, run.stats["proposed"]
+    assert_nil run.stats["new_companies_proposed"], "a plant isn't a company"
   end
 
   test "units with different dockets aren't mistaken for duplicates" do
@@ -462,6 +463,7 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
     assert_equal "Arkansas Nuclear 1", record.facility.name
     assert_equal [ link.quote ], record.evidence.pluck(:quote), "a new link is a proposal and carries its quote"
     assert_equal 3, run.stats["proposed"]
+    assert_equal 1, run.stats["new_companies_proposed"], "Entergy is the one new company"
   end
 
   test "matching an existing link leaves its curated attributes and verification alone" do
