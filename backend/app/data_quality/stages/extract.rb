@@ -138,5 +138,7 @@ class DataQuality::Stages::Extract < DataQuality::Stage
     def stale(source)
       source.candidates.status_new.or(source.candidates.status_needs_review.where(review_origin: "extract"))
         .where("candidates.reopenings = '[]'::jsonb").where.not(id: DqAction.select(:candidate_id))
+        # Nor a proposal made from a lead (#572): it isn't this extract's row.
+        .where("candidates.notes IS NULL OR candidates.notes NOT LIKE 'Proposed from a lead%'")
     end
 end
