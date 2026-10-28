@@ -20,6 +20,16 @@ class SharedComponentsTest < ActionView::TestCase
     assert_select_in html, ".nd-line--bare .nd-line__end", 1
   end
 
+  test "a company row's long name stays full size: its short name, or an ellipsis, never 13px" do
+    html = render("shared/line", variant: :bare, name: "Breakthrough Energy Ventures Holdings", short_name: "Breakthrough Energy", href: "/x")
+    assert_select_in html, ".nd-line__name[data-fit=small]", 0
+    assert_select_in html, ".nd-line__name", 1
+    assert_includes html, ">Breakthrough Energy<"
+    assert_includes html, 'title="Breakthrough Energy Ventures Holdings"'
+    plain = render("shared/line", variant: :bare, name: "Commonwealth Fusion Systems Incorporated", href: "/x")
+    assert_select_in plain, ".nd-line__name[data-fit=small]", 0
+  end
+
   test "a long plant name also drops to the small size" do
     html = render("shared/line", name: "Tennessee Valley Authority Watts Bar", href: "/x")
 

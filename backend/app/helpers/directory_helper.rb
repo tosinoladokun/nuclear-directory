@@ -259,7 +259,13 @@ module DirectoryHelper
   # ellipsis (with the full name in title) is the last resort. [text, small?]
   LINE_NAME_FULL = 26
   LINE_NAME_SMALL = 31
-  def line_name(name, short_name = nil)
+  #
+  # shrink: false is a list's company column (#560, Design's audit): every name in it is the
+  # same size, so a long one uses its short name when it has one, else ends in an ellipsis.
+  def line_name(name, short_name = nil, shrink: true)
+    unless shrink
+      return [ (short_name.presence if name.length > LINE_NAME_FULL) || name, false ]
+    end
     return [ name, false ] if name.length <= LINE_NAME_FULL
     return [ name, true ] if name.length <= LINE_NAME_SMALL
     return [ short_name, true ] if short_name.present? && short_name.length <= LINE_NAME_SMALL

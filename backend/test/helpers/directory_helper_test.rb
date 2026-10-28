@@ -180,6 +180,14 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_nil location("", "")
   end
 
+  test "line_name: a company column keeps one size, using a short name or an ellipsis, never 13px" do
+    long = "Breakthrough Energy Ventures Holdings"
+    assert_equal [ long, true ], line_name(long, nil), "a plant or other row still shrinks"
+    assert_equal [ long, false ], line_name(long, nil, shrink: false), "no short name: the name, cut by an ellipsis in CSS"
+    assert_equal [ "Breakthrough Energy", false ], line_name(long, "Breakthrough Energy", shrink: false)
+    assert_equal [ "Oklo", false ], line_name("Oklo", "Oklo Inc", shrink: false), "a short name isn't swapped in when the name fits"
+  end
+
   test "public URLs" do
     assert_equal "/companies", directory_url_for
     assert_equal "/companies?category=fuel&q=haleu", directory_url_for(category: Category.find("fuel"), q: "haleu")
