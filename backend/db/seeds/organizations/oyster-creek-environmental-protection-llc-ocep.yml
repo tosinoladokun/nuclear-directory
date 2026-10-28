@@ -2,7 +2,11 @@
 name: Oyster Creek Environmental Protection, LLC (OCEP)
 country_code: US
 status: active
-roles: []
+roles:
+- key: waste_decommissioning
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/oc
+  quote: "to Oyster Creek Environmental Protection, LLC (OCEP), as the licensed owner and to Holtec Decommissioning International (HDI), as the licensed operator. The license transfer was approved by the NRC staff and became effective on July 1, 2019."
+  confidence: 1.0
 technologies: []
 relationships: []
 facilities:

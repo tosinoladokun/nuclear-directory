@@ -6,7 +6,11 @@ website: https://sabeydatacenters.com
 hq: null
 country_code: null
 status: active
-roles: []
+roles:
+- key: data_center_offtaker
+  source_url: https://www.terrapower.com/terrapower-and-sabey-data-centers-agreement-for-natrium-wide-scale-deployment
+  quote: "Sabey Data Centers (SDC), a leading data center developer, owner and operator, announced today a memorandum of understanding to develop a strategic collaboration agreement to leverage advanced nuclear Natrium plants into SDC’s current and future data center operations."
+  confidence: 1.0
 technologies: []
 relationships:
 - type: offtake_with
