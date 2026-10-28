@@ -14,7 +14,7 @@ class FontsTest < ActionView::TestCase
   test "each text font has local fallbacks with its metrics, and the stacks name them after the real font" do
     html = render("shared/fonts")
 
-    [ "Roboto Serif Georgia", "Roboto Serif Times", "Roboto Serif DejaVu", "Roboto Mono Menlo", "Roboto Mono Courier", "Roboto Mono DejaVu" ].each do |family|
+    [ "Roboto Serif Georgia", "Roboto Serif Times", "Roboto Serif DejaVu", "Roboto Serif Noto", "Roboto Mono Menlo", "Roboto Mono Courier", "Roboto Mono DejaVu", "Roboto Mono Noto" ].each do |family|
       faces = html.scan(/@font-face \{ font-family: "#{family}"[^}]*\}/)
       assert faces.any?, "#{family} is declared"
       faces.each do |face|
@@ -22,9 +22,9 @@ class FontsTest < ActionView::TestCase
         %w[size-adjust ascent-override descent-override line-gap-override].each { |descriptor| assert_includes face, descriptor, "#{family} #{descriptor}" }
       end
     end
-    %w[Georgia Times DejaVu].each { |family| assert_equal 2, html.scan(/font-family: "Roboto Serif #{family}"/).size, "#{family}: a regular face and a bold one" }
+    %w[Georgia Times DejaVu Noto].each { |family| assert_equal 2, html.scan(/font-family: "Roboto Serif #{family}"/).size, "#{family}: a regular face and a bold one" }
     tokens = Rails.root.join("app/assets/tailwind/design_system/tokens.css").read
-    assert_match(/--font-text: "Roboto Serif", "Roboto Serif Georgia", "Roboto Serif Times", "Roboto Serif DejaVu", Georgia, serif;/, tokens)
-    assert_match(/--font-mono: "Roboto Mono", "Roboto Mono Menlo", "Roboto Mono Courier", "Roboto Mono DejaVu"/, tokens)
+    assert_match(/--font-text: "Roboto Serif", "Roboto Serif Georgia", "Roboto Serif Times", "Roboto Serif DejaVu", "Roboto Serif Noto", Georgia, serif;/, tokens)
+    assert_match(/--font-mono: "Roboto Mono", "Roboto Mono Menlo", "Roboto Mono Courier", "Roboto Mono DejaVu", "Roboto Mono Noto"/, tokens)
   end
 end
