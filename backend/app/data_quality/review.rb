@@ -220,9 +220,13 @@ module DataQuality::Review
     # firsts: first_batches, passed in once for a whole list.
     def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new, firsts: first_batches)
       return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
-      return "dq" if candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
+      # A source's own hold and its first batch are Data Quality's to read;
+      # once it has approved the claim (still current), it's Tosin's to
+      # decide, and his Yes (Data Quality's Accept) lifts the hold.
+      checked = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
+      return "dq" if !checked && candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
       # Asked directly: a deal term's own hold would come first in held_reason.
-      return "dq" if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
+      return "dq" if !checked && candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
       # News is always a new fact about its company or plant.
       return "new_fact" if candidate.kind == "news_item"
 

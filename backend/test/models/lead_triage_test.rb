@@ -1,0 +1,76 @@
+require "test_helper"
+
+# Tosin, 27 Oct: "people are searching rubbish, it should be on triage".
+class LeadTriageTest < ActiveSupport::TestCase
+  def gap(query, count = 1) = SearchGap.create!(query:, searches_count: count, first_searched_on: Date.current, last_searched_on: Date.current)
+
+  test "junk never becomes a lead: too short, addresses, gibberish, profanity, names we have" do
+    %w[ab 1234 http://x.com a@b.co xkcdqwrt aaaaaa shit example.co.uk example.energy oklo.com/about].each { |query| assert Lead.junk?(query), query }
+    [ "Blue Energy", "St. Lucie", "X-energy" ].each { |query| assert_not Lead.junk?(query), query }
+    Organization.create!(name: "Known Fission", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "Known Fission")
+    gap("known fission")
+    gap("qwrtzxpl")
+    LeadSync.run
+    assert_equal 0, Lead.count
+  end
+
+  test "a searched name waits in triage, and moves to To do after 3 searches or when a source names it too" do
+    gap("Blue Energy")
+    LeadSync.run
+    lead = Lead.sole
+    assert lead.status_triage?
+    SearchGap.sole.update!(searches_count: 3)
+    LeadSync.run
+    assert lead.reload.status_new?, "searched 3 times"
+
+    gap("Copenhagen Atomics")
+    LeadSync.run
+    other = Lead.find_by!(normalized_name: "copenhagen atomics")
+    assert other.status_triage?
+    Lead.sighted!(name: "Copenhagen Atomics", kind: "other", key: "news:x", label: "News")
+    assert other.reload.status_new?, "a source named it too"
+  end
+
+  test "trade-press headlines don't become leads" do
+    page = Source.create!(url: "https://example.com/press", source_kind: "trade_press", crawl_status: "ok", content_sha256: "p")
+    Candidate.create!(source: page, kind: "news_item", status: "new", quote: "q",
+      payload: { "title" => "Oklo plans isotope facility", "lead" => true, "publisher" => "Press" })
+    LeadSync.run
+    assert_equal 0, Lead.count
+  end
+
+  test "the data step moves search-only leads to triage and sets headlines aside, keeping the rest" do
+    searched = Lead.sighted!(name: "Old Search", kind: "other", key: "search:1", label: "Search").tap { |l| l.update_columns(status: "new") }
+    headline = Lead.sighted!(name: "Oklo plans isotope facility", kind: "other", key: "trade_press:9", label: "Trade press").tap { |l| l.update_columns(status: "new") }
+    mixed = Lead.sighted!(name: "Mixed Co", kind: "company", key: "search:2", label: "Search")
+    Lead.sighted!(name: "Mixed Co", kind: "company", key: "news:5", label: "News")
+    researching = Lead.sighted!(name: "Busy Co", kind: "company", key: "search:3", label: "Search").tap { |l| l.update_columns(status: "researching") }
+    require Rails.root.join("db/migrate/20261027180000_add_triage_to_leads")
+    AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:up)
+    assert_equal %w[triage ignored new researching], [ searched, headline, mixed, researching ].map { |lead| lead.reload.status }
+    assert_match "A headline, not a name", headline.reason
+
+    empty = Lead.create!(name: "No Sources Co", normalized_name: "no sources co", kind: "other", sources: [], first_seen_on: Date.current, last_seen_on: Date.current)
+    AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:up)
+    assert empty.reload.status_new?, "a lead with no sources is left alone"
+
+    AddTriageToLeads.new.tap { |m| m.verbose = false }.migrate(:down)
+    assert_equal [ "new", nil, nil ], headline.reload.values_at(:status, :reason, :decided_by), "down restores the headlines it set aside"
+    assert searched.reload.status_new?
+  end
+
+  test "a searched name and a typed sighting are one lead, promoted through LeadSync" do
+    gap("Quillon Grid")
+    LeadSync.run
+    lead = Lead.sole
+    assert lead.status_triage?
+    site = Source.create!(url: "https://acme.example.com/about", source_kind: "company_pages", crawl_status: "ok")
+    Candidate.create!(source: site, kind: "relationship", status: "needs_review", quote: "q",
+      payload: { "from_organization" => { "name" => "Acme" }, "to_organization" => { "name" => "Quillon Grid" }, "relationship_type" => "supplies" },
+      notes: %(to_organization "Quillon Grid" isn't in the directory yet))
+    LeadSync.run
+    assert_equal 1, Lead.count, "one lead, not two"
+    assert_equal [ "company", "new" ], lead.reload.values_at(:kind, :status)
+    assert_equal 2, lead.sources.size
+  end
+end
