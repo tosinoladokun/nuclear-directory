@@ -18,6 +18,7 @@ Rails.application.routes.draw do
   get "cards/:kind/:key/:digest.png" => "link_cards#show", as: :link_card, format: false,
     constraints: { kind: /plants|companies|categories/ }
 
+  get "about" => "pages#about", as: :about
   get "privacy" => "pages#privacy", as: :privacy
   get "disclaimer" => "pages#disclaimer", as: :disclaimer
   get "bot" => "pages#bot", as: :bot

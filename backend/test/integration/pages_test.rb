@@ -23,6 +23,7 @@ class PagesTest < ActionDispatch::IntegrationTest
   test "privacy, disclaimer and the crawler page are linked from every page's footer" do
     get root_path
     assert_select "footer.nd-footer nav[aria-label='About this site']" do
+      assert_select "a[href='/about']", "About"
       assert_select "a[href='/privacy']", "Privacy"
       assert_select "a[href='/disclaimer']", "Disclaimer"
       assert_select "a[href='/bot']", "Our crawler"
@@ -32,7 +33,7 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select "a[href='https://render.com'][rel~=noopener]", "Render"
     end
 
-    { privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
+    { about_path => "About", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
       get path
       assert_response :success
       assert_select "main", 1
@@ -41,8 +42,16 @@ class PagesTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "the about page has the licences and the dataset DOI" do
+    get about_path
+    assert_select "a[href='https://doi.org/10.5281/zenodo.23703377']", "doi:10.5281/zenodo.23703377"
+    assert_select "main", text: /MIT/
+    assert_select "main", text: /CC BY 4\.0/
+  end
+
   test "text pages have a skeleton: a summary, topic headings, a short lead, details as a list (#215)" do
-    { privacy_path => %w[collect counts cookie corrections errors hosting contact],
+    { about_path => %w[what checked licences cite thanks contact],
+      privacy_path => %w[collect counts cookie corrections errors hosting contact],
       bot_path => %w[identity behaviour blocking contact],
       disclaimer_path => %w[sources currency advice endorsement mistakes] }.each do |path, sections|
       get path
