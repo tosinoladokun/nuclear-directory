@@ -152,14 +152,6 @@ class DirectoryHelperTest < ActionView::TestCase
     assert_nil confidence_level(nil)
   end
 
-  test "a list keeps names at one size up to 33 characters; a deal row's narrower column shrinks sooner" do
-    list = { full: DirectoryHelper::LIST_NAME_FULL, small: DirectoryHelper::LIST_NAME_SMALL }
-    assert_equal [ "Analysis and Measurement Services", false ], line_name("Analysis and Measurement Services", **list)
-    assert_equal [ "Commonwealth Fusion Systems", false ], line_name("Commonwealth Fusion Systems", **list)
-    assert_equal [ "TVA", true ], line_name("Tennessee Valley Authority and Associated Companies", "TVA", **list)
-    assert_equal [ "Commonwealth Fusion Systems", true ], line_name("Commonwealth Fusion Systems")
-  end
-
   test "initials take the first two words" do
     assert_equal "KP", initials("Kairos Power")
     assert_equal "XE", initials("X-energy")

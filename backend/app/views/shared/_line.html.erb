@@ -11,7 +11,7 @@
     A bare row always keeps its Description and Location columns, empty when a value is missing.
     Renders one list item, inside an nd-lines panel. %>
 <% variant = local_assigns.fetch(:variant, :stack) %>
-<% text, small = line_name(name, local_assigns[:short_name], full: DirectoryHelper::LIST_NAME_FULL, small: DirectoryHelper::LIST_NAME_SMALL) %>
+<% text, small = line_name(name, local_assigns[:short_name]) %>
 <% classes = [ "nd-line", "nd-line--#{variant}" ] %>
 <% inner = capture do %>
   <% if local_assigns[:mark] %><span class="nd-line__mark" aria-hidden="true"><%= mark %></span><% end %>
