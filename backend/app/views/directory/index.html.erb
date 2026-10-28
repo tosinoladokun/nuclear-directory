@@ -29,6 +29,8 @@
   @link_card = [ LinkCard.for_category(listing.category, @counts.fetch(listing.category.key)), "categories", listing.category.key ] if @counts && listing.category && !listing.searching? && !listing.filtered?
 %>
 <% content_for :head do %>
+  <%# /companies only: its heading is the LCP and the serif was fetched only once the text was laid out (LCP ~0.2 s sooner). Not on the home page, where a preload shared bandwidth with the CSS and cost LCP 0.4 s. %>
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="<%= asset_path "roboto-serif-latin.woff2" %>">
   <meta name="description" content="<%= description %>">
   <% if listing.searching? || listing.filtered? || @shown > DirectoryController::PAGE %><meta name="robots" content="noindex"><% end %>
   <%# Search and filters point back to the plain list or category. %>
