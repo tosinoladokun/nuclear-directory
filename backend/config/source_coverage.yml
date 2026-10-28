@@ -34,6 +34,7 @@ categories:
       - { name: NRC unit pages (reactor vendor per plant), kind: nrc_reactor_vendors, status: built, issue: 388 }
       - { name: "DOE program pages (ARDP, GAIN vouchers, Fusion Milestone)", status: planned, issue: 124 }
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
+      - { name: SEC current reports (8-K deal items), kind: sec_current_reports, status: built }
       - { name: DOE loans (project pages), kind: doe_loans, status: built }
       - { name: SBIR awards, status: planned, issue: 125 }
       - { name: ARPA-E fission and fusion projects, kind: arpa_e_projects, status: built }
