@@ -109,13 +109,14 @@ class DataQuality::Fetcher
   # spacing between requests, the body limit, an honest user agent, no
   # retries. A redirect isn't followed (an API that redirects a POST is
   # reported as an error); there are no ETags.
-  def post_json(url, payload, max_bytes: MAX_BYTES)
+  # headers: extra request headers, e.g. an API's subscription key.
+  def post_json(url, payload, max_bytes: MAX_BYTES, headers: {})
     uri = URI.parse(url)
     check_url!(uri, first_host: nil)
     verdict = robots_verdict(uri)
     return verdict if verdict
 
-    fetched = request(uri, { "Content-Type" => "application/json", "Accept" => "application/json" }, max_bytes:, post_body: payload.to_json)
+    fetched = request(uri, { "Content-Type" => "application/json", "Accept" => "application/json" }.merge(headers), max_bytes:, post_body: payload.to_json)
     if fetched.http.is_a?(Net::HTTPRedirection)
       return response(url, :error, status: fetched.http.code.to_i, reason: "HTTP #{fetched.http.code}: a redirect after a POST isn't followed")
     end

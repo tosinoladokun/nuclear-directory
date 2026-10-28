@@ -18,9 +18,10 @@
 
 <% OwnerInbox::SECTIONS.each do |key| %>
   <% entries = sections[key] %>
-  <% next if entries.empty? %>
+  <% records = key == "new_record" ? @inbox.records : [] %>
+  <% next if entries.empty? && records.empty? %>
   <section class="nd-stack" aria-labelledby="inbox-<%= key %>">
-    <h2 id="inbox-<%= key %>" class="type-admin-h2 m-0"><%= headings.fetch(key) %> <span class="type-count"><%= entries.size %></span></h2>
+    <h2 id="inbox-<%= key %>" class="type-admin-h2 m-0"><%= headings.fetch(key) %> <span class="type-count"><%= entries.size + records.size %></span></h2>
     <ol class="nd-waits">
       <% entries.each do |entry| %>
         <% item = entry.item %>
@@ -71,6 +72,30 @@
             <% else %>
               <%= button_to no, admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids }, class: "nd-btn nd-btn--outline" %>
             <% end %>
+          </div>
+        </li>
+      <% end %>
+      <%# Pending companies and plants with no open claim: decided on the record. %>
+      <% records.each do |fact| %>
+        <% name = fact.attributes.to_h.with_indifferent_access[:name] %>
+        <% quote = fact.evidence.first %>
+        <li class="nd-wait nd-inbox__item" id="inbox-record-<%= fact.type.underscore %>-<%= fact.id %>">
+          <div class="nd-wait__what">
+            <p class="m-0"><span class="nd-tag"><%= fact.type == "Facility" ? "Plant" : "Company" %></span></p>
+            <p class="type-body m-0"><%= link_to name, admin_fact_path(type: fact.type, id: fact.id), class: "nd-link type-body-strong" %></p>
+            <% if quote&.source&.url && (url = safe_url(quote.source.url)) %>
+              <p class="type-small m-0"><%= link_to url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener" do %><%= source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %></p>
+            <% end %>
+            <% if quote&.quote.present? %>
+              <details class="nd-fold">
+                <summary class="type-small">Why, and the source</summary>
+                <div class="nd-fold__body"><blockquote class="nd-quote m-0">“<%= quote.quote %>”</blockquote></div>
+              </details>
+            <% end %>
+          </div>
+          <div class="nd-wait__actions nd-inbox__buttons type-ui">
+            <%= button_to "Create", admin_inbox_decide_record_path(fact.type, fact.id, "yes"), class: "nd-btn nd-btn--primary" %>
+            <%= button_to "No", admin_inbox_decide_record_path(fact.type, fact.id, "no"), class: "nd-btn nd-btn--outline" %>
           </div>
         </li>
       <% end %>

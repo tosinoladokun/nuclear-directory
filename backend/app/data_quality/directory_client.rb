@@ -68,6 +68,9 @@ class DataQuality::DirectoryClient
   # Companies with an SEC CIK, live ones only (#129): [SecFilerRef].
   def organizations_with_sec_cik = lookup.organizations_with_sec_cik
 
+  # Published companies with a website: [[name, website]].
+  def organizations_with_website = lookup.organizations_with_website
+
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
   end

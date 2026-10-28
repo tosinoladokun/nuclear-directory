@@ -96,7 +96,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
   # One reactor per page: anything it stops stating goes to a person.
   # Pages never read before, at most 15 reactor pages a night (about 40 claims), so Data Quality reads
   # each night's batch claim by claim (#541); pages read before are never held back.
-  def new_sources_per_run = 15
+  def new_sources_per_run = 29
 
   def max_dropped_share(_source) = 1.0
 
