@@ -26,6 +26,7 @@ module DataQuality::Matching
   DAILY_CLOSES = 300
   # And for verdicts recorded through recommend.
   DAILY_RECOMMENDS = 500
+  DAILY_ROLES = 200
   VERDICTS = %w[approve reject].freeze
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
@@ -43,9 +44,11 @@ module DataQuality::Matching
   end
 
   def self.apply_one(row, directory, requeue = Set.new)
+    return propose_role(row, directory, requeue) if row["action"].to_s == "propose_role"
+
     id, action, reason = row["id"].to_i, row["action"].to_s, row["reason"].to_s.squish
     fail_with = ->(why) { Row.new(id:, ok: false, error: why, created_ids: []) }
-    return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless DqAction::ACTIONS.include?(action)
+    return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless (DqAction::ACTIONS - %w[propose_role]).include?(action)
     return fail_with.call("give a reason") if reason.blank?
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
     if %w[new subsidiary_of].include?(action) && DqAction.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
@@ -133,6 +136,10 @@ module DataQuality::Matching
       raise Abort, "it was undone already" if action.undone_at
 
       candidate = Candidate.lock.find(action.candidate_id)
+      if action.action == "propose_role"
+        undo_role(action, candidate, directory)
+        next nil
+      end
       raise Abort, "the claim was changed since (decided, reopened or moved by a merge), so it can't be undone here" unless left_as?(action, candidate)
 
       # What it created goes too, but only while it's still pending.
@@ -180,6 +187,61 @@ module DataQuality::Matching
   def self.same_verdict?(action, row) = action.action != "recommend" || action.after["dq_recommendation"] == row["verdict"].to_s
 
   def self.left_as?(action, candidate) = action.after.present? && stamp_of(candidate).slice(*action.after.keys) == action.after
+
+  # propose_role (#548): Data Quality proposes a sourced role for a company,
+  # as a claim with its quote and source, matched and verified like any
+  # other and decided by Tosin. Nothing publishes here.
+  #   { action: "propose_role", target: company id or slug, role: "reactor_vendor",
+  #     quote: "…", source_url: "https://…", reason: "…" }
+  def self.propose_role(row, directory, requeue)
+    reason, quote, role = row["reason"].to_s.squish, row["quote"].to_s.squish, row["role"].to_s
+    fail_with = ->(why) { Row.new(id: nil, ok: false, error: why, created_ids: []) }
+    return fail_with.call("give a reason") if reason.blank?
+    return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
+    return fail_with.call("give the quote that states the role") if quote.blank?
+    return fail_with.call("#{role.inspect} isn't a role") unless directory.role_key?(role)
+    if DqAction.where(action: "propose_role", created_at: Time.current.all_day).count >= DAILY_ROLES
+      return fail_with.call("today's limit of #{DAILY_ROLES} roles is reached; ask Backend")
+    end
+
+    key = row["request_key"].presence&.to_s
+    if key && (done = DqAction.find_by(request_key: key))
+      return Row.new(id: done.candidate_id, ok: true, error: nil, created_ids: [ done.candidate_id ])
+    end
+
+    Candidate.transaction do
+      record, error = target(row, directory)
+      raise Abort, error if error
+
+      source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
+      raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
+
+      claim = Candidate.create!(source_id: source.ref.id, kind: "organization_role", status: "new", quote:,
+        payload: { "organization" => { "name" => record.name }, "role" => role }, notes: "Data Quality proposed it: #{reason}")
+      DqAction.create!(candidate: claim, action: "propose_role", target_type: "Organization", target_id: record.id, reason:,
+        before: {}, created: [], by: BY, request_key: key, after: stamp_of(claim))
+      requeue << source.ref.source_kind
+      Row.new(id: claim.id, ok: true, error: nil, created_ids: [ claim.id ])
+    end
+  rescue Abort => e
+    Row.new(id: nil, ok: false, error: e.message, created_ids: [])
+  end
+
+  # Undoing a proposed role: the claim closes, and a pending role it
+  # proposed is taken off, while no person has decided either.
+  def self.undo_role(action, claim, directory)
+    raise Abort, "the role was decided since, so it can't be undone here" unless %w[new matched needs_review].include?(claim.status) && claim.reviewed_by.nil?
+
+    if claim.proposed_subject && claim.subject_id
+      directory.lock_fact(type: claim.subject_type, id: claim.subject_id)
+      raise Abort, "the role was decided since" unless directory.fact(type: claim.subject_type, id: claim.subject_id)&.verification_status == "pending"
+
+      errors = directory.decide_fact("organization_role", id: claim.subject_id, status: "rejected", by: BY, reason: "Data Quality undid propose_role").errors
+      raise Abort, errors.to_sentence if errors.any?
+    end
+    claim.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Undone by Data Quality")
+    action.update!(undone_at: Time.current, undone_by: BY)
+  end
 
   # The records an action created (not the quotes it added).
   def self.ids_of(created) = created.reject { |ref| ref["type"] == "Evidence" }.map { |ref| ref["id"] }

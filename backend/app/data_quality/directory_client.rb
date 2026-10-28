@@ -326,6 +326,7 @@ class DataQuality::DirectoryClient
   def organization_by_slug(slug) = lookup.organization(slug:)
   def facility_by_slug(slug) = lookup.facility(slug:)
   def evidence_rows(type:, id:) = lookup.evidence_rows(type:, id:)
+  def role_key?(key) = lookup.role_key?(key)
 
   # A company name kept as a lead, never thrown away (#548).
   def keep_lead(name:, key:, label:, url: nil) = Directory::Leads.keep(name:, key:, label:, url:)

@@ -48,6 +48,7 @@ module FakeDirectory
     def similar_facilities(name) = []
     def facility_units(name:, state: nil) = []
     def known_name?(type:, id:, name:) = false
+    def role_key?(key) = true
     def domain_from(url) = Organization.domain_from(url)
 
     private

@@ -389,4 +389,22 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     act({ id: c.id, action: "new", reason: "A research reactor" })
     assert_includes OwnerInbox.new.sections["new_record"].map { |e| e.item.candidate_id }, c.id
   end
+
+  test "propose_role: a sourced role claim for a company, matched and verified like any claim; Undo takes it back" do
+    Role.find_by(key: "reactor_vendor") || Role.create!(key: "reactor_vendor", name: "Reactor vendor")
+    act({ action: "propose_role", target: @holtec.id, role: "reactor_vendor", quote: "Holtec designs the SMR-300.",
+      source_url: "https://holtecinternational.com/smr", reason: "Holtec's own page" },
+      { action: "propose_role", target: @holtec.id, role: "nonsense", quote: "q", source_url: "https://example.com", reason: "r" },
+      { action: "propose_role", target: @holtec.id, role: "reactor_vendor", quote: "", source_url: "https://example.com", reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "isn't a role", results.second["error"]
+    assert_match "give the quote", results.third["error"]
+    claim = Candidate.find(results.first["id"])
+    assert_equal [ "organization_role", "new", "reactor_vendor", "Holtec International" ],
+      [ claim.kind, claim.status, claim.payload["role"], claim.payload.dig("organization", "name") ]
+    assert_equal "https://holtecinternational.com/smr", claim.source.url
+
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "rejected", claim.reload.status
+  end
 end

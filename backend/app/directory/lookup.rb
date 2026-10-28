@@ -189,6 +189,8 @@ module Directory
       end.sort_by { |row| -row[:checked_at].to_f }
     end
 
+    def role_key?(key) = key.present? && Role.exists?(key:)
+
     # A fact's evidence rows as [id, source_id, quote], so a caller can name
     # the one it added (#548's Undo). Reads only.
     def evidence_rows(type:, id:)
