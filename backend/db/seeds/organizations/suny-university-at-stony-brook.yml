@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: SUNY University at Stony Brook
+status: active
+roles:
+- key: university
+  source_url: https://arpa-e.energy.gov/programs-and-initiatives/search-all-projects/technical-approach-achieving-attractive-ads-economics-based-near-term-high-current-cyclotrons
+  quote: "Project: Technical Approach to Achieving Attractive Ads Economics Based on Near-Term High Current Cyclotrons | Organization: SUNY University at Stony Brook | Award: $2,295,000 | Program: NEWTON | Status: Active | Location: Stony Brook, NY | Released: Jul 16 2024 | Area: nuclear fission | Funder: Advanced Research Projects Agency-Energy (ARPA-E)"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

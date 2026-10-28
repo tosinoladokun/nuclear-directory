@@ -4,7 +4,11 @@ aliases:
 - H3d
 - H3D INC
 status: active
-roles: []
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/dac2805a-4051-3737-5b11-9ac8f48caa47-C/latest
+  quote: "DESC0019883,H3D INC,1299732.41,2019-07-01,2022-08-23,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0019883_089,ASST_NON_DESC0019883_089,dac2805a-4051-3737-5b11-9ac8f48caa47-C,ROUTINE SAMPLE REDUCTION FOR COMMERCIAL NUCLEAR POWER"
+  confidence: 1.0
 technologies: []
 relationships: []
 facilities: []

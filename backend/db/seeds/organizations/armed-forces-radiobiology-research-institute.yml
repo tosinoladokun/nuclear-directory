@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Armed Forces Radiobiology Research Institute
+status: active
+roles:
+- key: research_organization
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/affri-md-triga
+  quote: "Armed Forces Radiobiology Research Institute TRIGA reactor | Licensee: Armed Forces Radiobiology Research Institute | Location: Bethesda, MD | Docket Number: 05000170 | Reactor Type: TRIGA"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
