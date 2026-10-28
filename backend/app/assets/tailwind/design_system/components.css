@@ -1207,6 +1207,9 @@
   .nd-pagehead__count { font: 400 14px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink-muted); }
   .nd-pagehead__about { margin: 0; font: 400 15px/24px var(--font-text); color: var(--nd-ink-muted); max-width: var(--nd-prose-max); }
   .nd-pagehead__tags { display: flex; gap: var(--nd-space-2); flex-wrap: wrap; }
+  /* A square tag with an icon: a role in its category's colour, a technology in ink. */
+  .nd-tag--icon { display: inline-flex; align-items: center; gap: 5px; }
+  .nd-tag--icon .nd-ic { flex: none; color: var(--nd-cat, var(--nd-ink-muted)); }
 
   /* Index (nd-idx): the left column on desktop, sticky. */
   .nd-idx { position: sticky; top: var(--nd-space-6); width: var(--nd-index-width); display: flex; flex-direction: column; gap: 2px; align-self: flex-start; }

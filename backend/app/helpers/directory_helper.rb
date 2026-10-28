@@ -143,6 +143,24 @@ module DirectoryHelper
 
   def bucket_class(category) = ("nd-bucket--#{category.key}" unless category.plants)
 
+  # The tags under a company's summary, each with an icon (Tosin, 27 Oct): a role carries its
+  # category's icon and colour ("Fuel supplier" the fuel can), a technology the closest site icon.
+  # [{ text:, icon:, bucket: }, ...]
+  TECHNOLOGY_ICONS = { "fusion" => "site-fusion", "smr" => "site-advanced" }.freeze
+  def company_tags(profile)
+    roles = profile.shown_roles.map do |link|
+      keys = [ link.role.key, link.role.parent&.key ].compact
+      bucket = Category.buckets.find { |category| (category.role_keys & keys).any? }
+      { text: role_label(link.role), icon: (bucket_icon(bucket, size: 16) if bucket), bucket: }
+    end
+    techs = profile.technologies.map do |link|
+      tech = link.technology
+      name = TECHNOLOGY_ICONS[tech.key] || TECHNOLOGY_ICONS[tech.parent&.key] || "site-plant"
+      { text: tech.name, icon: icon(name, set: :nd, size: 16), bucket: nil }
+    end
+    roles + techs
+  end
+
   # Roles whose parent is shown instead (enrichment under fuel) are left to the caller.
   def role_label(role)
     key = role.respond_to?(:key) ? role.key : role.to_s

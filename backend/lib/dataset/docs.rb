@@ -71,6 +71,8 @@ module Dataset
         | `companies` | #{@counts["companies"]} | One row per company, by brand |
         | `facilities` | #{@counts["facilities"]} | Sites (power plants, fuel plants, test reactors, mines, fusion plants) and the reactor units under them |
         | `relationships` | #{@counts["relationships"]} | Links between two companies, and companies' roles at facilities |
+        | `deal_terms` | #{@counts["deal_terms"]} | The terms of a deal: a power deal's MW, form and status, an award's or loan's amount, a funding round |
+        | `licensing_stages` | #{@counts["licensing_stages"]} | Each stage a reactor project or design has reached with the NRC, dated, from NRC records |
         | `sources` | #{@counts["sources"]} | The public documents the facts come from |
         | `evidence` | #{@counts["evidence"]} | Which source states each fact |
 
@@ -86,7 +88,9 @@ module Dataset
 
         - `facilities.site_slug` is the `slug` of a unit's site.
         - `relationships.from_slug` is a company `slug`. `relationships.to_slug` is a `slug` in `companies` or `facilities`, as `to_table` says.
-        - `evidence.fact_table` and `evidence.fact_key` point at a row in `companies`, `facilities` or `relationships`, and `evidence.source_id` is a `sources.id`. For a company's category or technology, `fact_part` says which one (`role:<key>` or `technology:<key>`).
+        - `deal_terms.attached_key` is a `relationships.id`, or a company `slug` for a company's own funding round, as `attached_to` says.
+        - `licensing_stages.facility_slug` is a facility `slug`; `company_slug` is a company `slug` (a design approval).
+        - `evidence.fact_table` and `evidence.fact_key` point at a row in `companies`, `facilities`, `relationships`, `deal_terms` or `licensing_stages`, and `evidence.source_id` is a `sources.id`. For a company's category or technology, `fact_part` says which one (`role:<key>` or `technology:<key>`).
 
         ## How it's collected
 
