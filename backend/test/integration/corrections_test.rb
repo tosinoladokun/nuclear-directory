@@ -50,6 +50,7 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
   end
 
   test "sending saves an open report, without any IP, and confirms" do
+    plant("Plant Vogtle")
     assert_difference "CorrectionReport.count", 1 do
       post corrections_path, params: { subject: "Plant Vogtle", page_path: "/plants/plant-vogtle", message: "Unit 4 started in 2024.", contact: "a@example.com" }
     end
@@ -63,7 +64,25 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_select "h1", "Correction sent"
     assert_select "[role=status]", /We'll review it against the source./
-    assert_select "a[href='/plants/plant-vogtle']", "Back to the page"
+    assert_select "a[href='/plants/plant-vogtle']", "Back to Plant Vogtle", "back names the page the correction was about"
+  end
+
+  test "the sent page goes back to the page it was about: a company, a list, an unknown page, or search" do
+    company("Kairos Power")
+    get correction_sent_path(page: "/companies/kairos-power")
+    assert_select "a[href='/companies/kairos-power']", "Back to Kairos Power"
+
+    get correction_sent_path(page: "/companies?category=fuel")
+    assert_select "a[href=?]", "/companies?category=fuel", "Back to the list"
+
+    get correction_sent_path(page: "/about")
+    assert_select "a[href='/about']", "Back to the page"
+
+    get correction_sent_path(page: "/")
+    assert_select "a[href='/']", "Back to search"
+
+    get correction_sent_path(page: "//evil.example")
+    assert_select "a[href='/']", "Back to search", "only paths on this site"
   end
 
   test "an empty message is sent back with an error that says how to fix it" do

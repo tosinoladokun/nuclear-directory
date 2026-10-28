@@ -35,6 +35,7 @@ class CorrectionsController < ApplicationController
 
   def sent
     @page_path = safe_path(params[:page])
+    @back = back_label(@page_path)
   end
 
   private
@@ -49,6 +50,19 @@ class CorrectionsController < ApplicationController
     # read a leading "//" or "/\" as another host, so neither may start it,
     # and no backslash or whitespace is allowed anywhere.
     def safe_path(path) = CorrectionReport.local_path?(path) ? path.to_s : "/"
+
+    # Where "back" goes, in words: the company or plant the correction was about ("Back to Plant Vogtle"), the
+    # directory list, or the home page's search.
+    def back_label(path)
+      return "Back to search" if path == "/"
+
+      type, id = record_on(path)
+      record = type&.constantize&.find_by(id:)
+      return "Back to #{record.name}" if record
+      return "Back to the list" if path.start_with?("/companies")
+
+      "Back to the page"
+    end
 
     # What kind of page a correction is about, for analytics: never which one.
     def page_kind(path)
