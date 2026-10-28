@@ -45,4 +45,16 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_equal "blocked", crawl.stats.values.first
     assert Source.find_by!(url: "#{Plugin::API_URL}#pre-application").crawl_blocked?
   end
+
+  test "robots' refusal needs a person at once; repeated blocks too" do
+    stub_request(:get, "https://adams-api.nrc.gov/robots.txt").to_return(body: "User-agent: *\nDisallow: /\n")
+    crawl
+    assert Source.find_by!(url: "#{Plugin::API_URL}#pre-application").crawl_needs_human?
+  end
+
+  test "documents with unexpected fields keep their field names" do
+    stub_request(:post, Plugin::API_URL).to_return(body: { "results" => [ { "accessionNumber" => "ML1" } ] }.to_json)
+    crawl
+    assert_equal({ "unexpected_fields" => [ "accessionNumber" ] }, JSON.parse(Source.find_by!(url: "#{Plugin::API_URL}#pre-application").content_text))
+  end
 end

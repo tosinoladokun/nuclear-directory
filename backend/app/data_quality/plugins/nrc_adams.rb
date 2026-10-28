@@ -50,12 +50,7 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
         "anyFilters" => [], "legacyLibFilter" => false, "mainLibFilter" => true, "sort" => "DocumentDate", "sortDirection" => 1, "skip" => 0 }
       response = @fetcher.post_json(API_URL, body, headers: { "Ocp-Apim-Subscription-Key" => @key })
       attempt = { fetched_at: Time.current, http_status: response.status }
-      unless response.kind == :ok
-        streak = response.kind == :blocked ? source.blocked_streak + 1 : source.blocked_streak
-        source.update!(attempt.merge(status_reason: response.reason, blocked_streak: streak,
-          crawl_status: response.kind == :blocked ? "blocked" : source.crawl_status))
-        return response.kind
-      end
+      return failed(source, attempt, response) unless response.kind == :ok
 
       text = lines(response.body)
       sha = Digest::SHA256.hexdigest(text)
@@ -68,6 +63,23 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
       :needs_human
     end
 
+    # As Snapshot records a failure: robots' refusal needs a person at once,
+    # a block after BLOCKED_STREAK_LIMIT in a row; anything else is retried.
+    def failed(source, attempt, response)
+      attempt = attempt.merge(status_reason: response.reason)
+      case response.kind
+      when :blocked
+        streak = source.blocked_streak + 1
+        source.update!(attempt.merge(blocked_streak: streak,
+          crawl_status: streak >= DataQuality::Snapshot::BLOCKED_STREAK_LIMIT ? "needs_human" : "blocked"))
+      when :disallowed
+        source.update!(attempt.merge(crawl_status: "needs_human"))
+      else
+        source.update!(attempt)
+      end
+      response.kind
+    end
+
     # The documents' catalogue fields, one JSON line each; never their text.
     def lines(body)
       json = JSON.parse(body)
@@ -75,6 +87,7 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
       rows = documents.map { |each| each.is_a?(Hash) && each["document"].is_a?(Hash) ? each["document"] : each }.grep(Hash)
       return "No documents in the answer; keys: #{json.is_a?(Hash) ? json.keys.join(', ') : json.class}" if rows.empty?
 
-      rows.map { |row| row.slice(*FIELDS).to_json }.join("\n")
+      # A document with none of the expected fields keeps its field names, so the reader can be adapted.
+      rows.map { |row| (row.slice(*FIELDS).presence || { "unexpected_fields" => row.keys }).to_json }.join("\n")
     end
 end
