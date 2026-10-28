@@ -1,12 +1,12 @@
 # Design's 27 Oct audit (PM): "Also known as" showed registry names in ALL
 # CAPS ("AMPEERS LLC", "BWXT NUCLEAR OPERATIONS GROUP, INC."), copied from
-# USAspending and NRC. Same names, proper case; three that only repeated the
-# company's own name (BWXT, ENERCON, NASA) come off. Acronyms (EPRI, ORNL,
-# TVA) stay. The matcher compares a normalized form (case and legal suffix
-# dropped), so no match changes. Merging this PR is Tosin's approval.
+# USAspending and NRC. Same names, proper case; the three that only repeat the
+# company's own name (BWXT, ENERCON, NASA) stay as they are: Lookup finds a
+# company by its name through that alias. Acronyms (EPRI, ORNL, TVA) stay. The matcher compares a
+# normalized form (case and legal suffix dropped), so no match changes. Merging this PR is Tosin's approval.
 class AliasesProperCase < DeployData::Migration
   BY = "human:tosin"
-  # alias id => [ the text it has now, its proper-case text or nil to drop it ]
+  # alias id => [ the text it has now, its proper-case text ]
   CHANGES = {
     165 => [ "3M COMPANY", "3M Company" ], # 3M
     156 => [ "ADVANCED REACTOR CONCEPTS, LLC", "Advanced Reactor Concepts, LLC" ], # Advanced Reactor Concepts
@@ -37,25 +37,17 @@ class AliasesProperCase < DeployData::Migration
     206 => [ "SOUTHERN COMPANY SERVICES, INC.", "Southern Company Services, Inc." ], # Southern Company
     176 => [ "SYDOR INSTRUMENTS, LLC", "Sydor Instruments, LLC" ], # Sydor Instruments
     178 => [ "XUV LASERS, INC.", "XUV Lasers, Inc." ], # XUV Lasers
-    298 => [ "BWXT", nil ], # BWXT: the same as its name
-    22 => [ "ENERCON", nil ], # ENERCON: the same as its name
-    411 => [ "NASA", nil ], # NASA: the same as its name
   }.freeze
 
   def up
     CHANGES.each do |id, (old, new)|
       row = OrganizationAlias.find_by(id:)
       next say("Alias #{id} is already gone") if row.nil?
-      next if new && row.alias == new
+      next if row.alias == new
       raise "alias #{id} is #{row.alias.inspect}, not #{old.inspect}" unless row.alias == old
 
-      if new
-        row.update!(alias: new)
-        say "Alias #{id} (#{row.organization.name}): #{old} -> #{new}"
-      else
-        say "Alias #{id} (#{row.organization.name}): dropped #{old.inspect} (same as its name)"
-        row.destroy!
-      end
+      row.update!(alias: new)
+      say "Alias #{id} (#{row.organization.name}): #{old} -> #{new}"
     end
   end
 end
