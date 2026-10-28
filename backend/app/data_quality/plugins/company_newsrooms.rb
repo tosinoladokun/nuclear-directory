@@ -139,17 +139,19 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
         next if @feeds.key?(company)
 
         url = homepage(website) or next
-        page = Source.find_or_create_by!(url:) do |row|
+        # Its own row ("#newsroom"), apart from any homepage the directory
+        # cites as evidence: the fetch is the same page, the record isn't.
+        page = Source.find_or_create_by!(url: "#{url}#newsroom") do |row|
           row.source_kind = HOMEPAGE_KIND
           row.title = "#{company}: homepage (newsroom feed)"
         end
-        page if page.source_kind == HOMEPAGE_KIND && (page.fetched_at.nil? || page.fetched_at < REDISCOVER_DAYS.days.ago)
+        [ company, page ] if page.fetched_at.nil? || page.fetched_at < REDISCOVER_DAYS.days.ago
       rescue ActiveRecord::RecordInvalid
         nil
       end
-      read = pages.sort_by { |page| page.fetched_at || Time.at(0) }.first(DISCOVER_PER_NIGHT)
-      found = read.count do |page|
-        company = page.title.delete_suffix(": homepage (newsroom feed)")
+      read = pages.sort_by { |_, page| page.fetched_at || Time.at(0) }.first(DISCOVER_PER_NIGHT)
+      # The company's name from the directory, never the page's title.
+      found = read.count do |company, page|
         DataQuality::Snapshot.take(page, fetcher: @fetcher) { |html| "Company: #{company}\nFeed: #{feed_link(html, page.url) || 'none'}" }
         discovered(page.reload.content_text)
       end

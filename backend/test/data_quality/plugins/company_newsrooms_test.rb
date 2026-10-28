@@ -186,6 +186,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert claims.all? { |claim| claim[:payload]["publisher"] == "Acme Fission" }
     assert_operator claims.size, :<=, Plugin::FIRST_READ_ITEMS, "a found feed's back catalogue: only its newest items"
     assert_equal claims.map { |c| c[:payload]["published_on"] }.sort.reverse, claims.map { |c| c[:payload]["published_on"] }
+    assert_equal "Company: Acme Fission", Source.find_by!(url: "https://acmefission.com/#newsroom").content_text.lines.first.chomp
     assert_equal({ "homepages_read" => 0, "feeds_found" => 0 }, DataQuality::Stages::Crawl.call(plugin:).stats.slice("homepages_read", "feeds_found"))
   end
 
@@ -214,5 +215,15 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
     assert_equal [ "Acme", "Known Fission, Inc" ], found.send(:about, "Acme", item, directory_only: true).map { |each| each["name"] }
     assert_equal [ "Acme", "Known Fission, Inc", "Stray Parts, LLC" ], listed.send(:about, "Acme", item).map { |each| each["name"] }
+  end
+
+  test "a homepage the directory already cites is read for its feed on a row of its own" do
+    cited = Source.create!(url: "https://acmefission.com/", source_kind: "web_page", content_text: "evidence", crawl_status: "ok")
+    stub_request(:get, "https://acmefission.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://acmefission.com/").to_return(body: '<html><head><link rel="alternate" type="application/rss+xml" href="/feed/"></head></html>')
+    stub_request(:get, "https://acmefission.com/feed/").to_return(body: xml, headers: { "Content-Type" => "application/rss+xml" })
+
+    assert_equal 1, DataQuality::Stages::Crawl.call(plugin: discovering([ [ "Acme Fission", "acmefission.com" ] ])).stats["homepages_read"]
+    assert_equal [ "web_page", "evidence" ], cited.reload.values_at(:source_kind, :content_text)
   end
 end
