@@ -296,6 +296,12 @@ module Directory
         .map { |organization| SecFilerRef.from(organization) }
     end
 
+    # Published companies with a website (#newsroom discovery), oldest first:
+    # [[name, website]].
+    def organizations_with_website
+      Organization.where(verification_status: "verified").where.not(website: [ nil, "" ]).order(:id).pluck(:name, :website)
+    end
+
     # Ids of companies or plants by slug, in one query: { "terrapower" => 12 }.
     def ids_by_slug(type:, slugs:)
       raise ArgumentError, "not a company or plant: #{type.inspect}" unless %w[Organization Facility].include?(type.to_s)
