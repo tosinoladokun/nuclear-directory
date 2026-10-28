@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Vega Wave Systems
+status: active
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/f23c7429-7333-0da4-9506-2e32f41d11bb-C/latest
+  quote: "DESC0022802,VEGA WAVE SYSTEMS INC,206500.0,2022-06-27,2023-03-26,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0022802_089,ASST_NON_DESC0022802_089,f23c7429-7333-0da4-9506-2e32f41d11bb-C,RADIATION-HARDENED ROBOTICS FOR FUEL INVENTORY AND INSPECTIONS IN NUCLEAR REACTOR VESSELS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

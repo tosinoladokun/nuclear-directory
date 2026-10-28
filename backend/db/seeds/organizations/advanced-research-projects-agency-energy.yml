@@ -1,0 +1,13 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Quote copied from energy.gov's ARPA-E page, fetched this session.
+name: Advanced Research Projects Agency-Energy
+aliases:
+- ARPA-E
+status: active
+roles:
+- key: government_agency
+  source_url: https://www.energy.gov/advanced-research-projects-agency-energy-arpa-e
+  quote: Advanced Research Projects Agency-Energy (ARPA-E) advances high-potential, high-impact energy technologies that are too early for private-sector investment.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

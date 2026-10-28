@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Tda Research
+status: active
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/bc22aa27-9417-cfea-2afb-789cf5280d1c-C/latest
+  quote: "DESC0024743,\"TDA RESEARCH, INC.\",250000.0,2024-02-12,2024-11-11,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0024743_089,ASST_NON_DESC0024743_089,bc22aa27-9417-cfea-2afb-789cf5280d1c-C,REGENERATABLE SALT VAPOR AND CHLORINE GAS DUAL CARTRIDGE SORBENT SYSTEM FOR THE MOLTEN SALTS NUCLEAR REACTORS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

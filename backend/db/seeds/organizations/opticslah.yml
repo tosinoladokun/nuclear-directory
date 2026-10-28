@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Opticslah
+status: active
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/e8cbd99d-044d-5c2e-5976-2e7b8b05e6f7-C/latest
+  quote: "DESC0021919,\"OPTICSLAH, LLC\",1350000.0,2021-06-28,2024-08-21,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0021919_089,ASST_NON_DESC0021919_089,e8cbd99d-044d-5c2e-5976-2e7b8b05e6f7-C,HIGH PRECISION BROADBAND OPTICAL SPECTROMETER FOR MOLTEN SALT REACTORS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

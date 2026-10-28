@@ -1,0 +1,11 @@
+# Seed research for the no-category audit, batch 2 (PM, 28 Oct 2026). Role quote is on the page cited.
+name: U.S. Geological Survey
+status: active
+roles:
+- key: research_organization
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/usgs-co-triga
+  quote: "U.S. Geological Survey TRIGA Mark I reactor | Licensee: U.S. Geological Survey | Location: Denver, CO | Docket Number: 05000274 | Reactor Type: TRIGA Mark I"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
