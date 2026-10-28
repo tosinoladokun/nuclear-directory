@@ -1158,6 +1158,8 @@
   .nd-map__halo { font: 500 12px var(--font-text); fill: var(--nd-paper); stroke: var(--nd-paper); stroke-width: 6; stroke-linejoin: round; }
   .nd-map__label--flat { stroke: var(--nd-paper); stroke-width: 6; stroke-linejoin: round; paint-order: stroke; }
 
+  .nd-map__note { margin: var(--nd-space-3) 0 0; }
+
   /* Phones: the page's record on top, a trunk down the left, one row (44px at least) per partner. */
   .nd-tree { display: none; }
   .nd-tree__centre { display: flex; align-items: center; gap: var(--nd-space-3); margin: 0; font: 600 16px/24px var(--font-text); }

@@ -111,6 +111,11 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     assert_no_selector ".nd-map__card", visible: :all
   end
 
+  test "a map with early-stage deals says they are under Deals and links" do
+    visit "/companies/#{build_constellation.slug}"
+    assert_selector ".nd-map__note", text: "Early-stage deals are listed under Deals and links."
+  end
+
   test "the folded plants open in place and fold back, and the opened map is checked too" do
     visit "/companies/#{build_constellation.slug}"
     assert_selector ".nd-map__view[data-view=folded] .nd-map__svg .nd-map__name", text: "13 plants"

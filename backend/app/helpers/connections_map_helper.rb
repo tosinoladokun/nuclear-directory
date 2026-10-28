@@ -36,6 +36,9 @@ module ConnectionsMapHelper
   # "Connections. X-energy: funded by DOE; supplied by Centrus and Sargent & Lundy; sells power to Amazon; owns TRISO-X".
   PASSIVE = { "owns" => "owned by", "operates" => "operated by", "supplies" => "supplied by", "sells power to" => "buys power from", "funds" => "funded by", ConnectionsMap::BOTH => "owned and operated by" }.freeze
 
+  # Why the map can count fewer than Deals and links (#561): early-stage deals aren't arrows.
+  EARLY_STAGE = "Early-stage deals are listed under Deals and links."
+
   def map_summary(map)
     phrases = map.folded.group_by { |edge| [ edge.receiver.key == map.centre.key, edge.verb ] }
       .sort_by { |(inbound, verb), _| [ inbound ? 0 : 1, ConnectionsMap.verb_rank(verb) ] }
@@ -43,7 +46,7 @@ module ConnectionsMapHelper
         names = edges.map { |edge| map_partner_name(edge, inbound ? edge.giver : edge.receiver) }.to_sentence
         "#{inbound ? PASSIVE.fetch(verb) : verb} #{names}"
       end
-    "Connections. #{map.centre.name}: #{phrases.join("; ")}"
+    "Connections. #{map.centre.name}: #{phrases.join("; ")}.#{" #{EARLY_STAGE}" if map.notes.any?}"
   end
 
   # A partner's name, or for folded plants how many of them this verb covers ("2 of 13 plants").
