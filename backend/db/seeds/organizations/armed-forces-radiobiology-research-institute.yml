@@ -1,5 +1,7 @@
 # Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
 name: Armed Forces Radiobiology Research Institute
+aliases:
+- Armed Forces Radiobiology Research
 status: active
 roles:
 - key: research_organization

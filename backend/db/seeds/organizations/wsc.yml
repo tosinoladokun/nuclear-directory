@@ -6,7 +6,7 @@ status: active
 roles:
 - key: reactor_services
   source_url: https://www.3keysoft.com/default.asp?PageID=51
-  quote: WSC, a business of Curtiss-Wright, is a technology driven company with engineering simulation as its core competence.
+  quote: "WSC's state of the art 3KEYSOFTWARE® technology has its roots in the nuclear and thermal power plant Operator Training Simulators."
   confidence: 1.0
 technologies: []
 relationships: []
