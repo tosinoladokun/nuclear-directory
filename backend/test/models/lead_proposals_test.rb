@@ -11,7 +11,8 @@ class LeadProposalsTest < ActiveSupport::TestCase
     lead = Lead.sighted!(name: "NEUTRON FORGE LLC", kind: "company", key: "awards:#{@award.id}", label: "DOE awards", url: @award.url)
     assert_equal 1, LeadProposals.run
     claim = Candidate.find_by!(kind: "organization", source: @award)
-    assert_equal [ "new", "NEUTRON FORGE LLC" ], [ claim.status, claim.payload["name"] ]
+    assert_equal [ "new", "Neutron Forge", [ "NEUTRON FORGE LLC" ] ], [ claim.status, claim.payload["name"], claim.payload["aliases"] ],
+      "named as people read it, the registry spelling kept as another name"
     assert_equal "A1,NEUTRON FORGE LLC,Advanced reactor fuel cladding", claim.quote
     assert lead.reload.status_researching?
     assert_equal 0, LeadProposals.run, "once"
@@ -31,5 +32,13 @@ class LeadProposalsTest < ActiveSupport::TestCase
     LeadProposals.run
     stale = DataQuality::Stages::Extract.allocate.send(:stale, @award)
     assert_empty stale.where(kind: "organization")
+  end
+
+  test "a name the directory already has is never proposed" do
+    known = Organization.create!(name: "Neutron Forge", verification_status: "verified", verified_by: "human:tosin")
+    known.aliases.create!(alias: "Neutron Forge")
+    lead = Lead.sighted!(name: "NEUTRON FORGE LLC", kind: "company", key: "awards:#{@award.id}", label: "DOE awards", url: @award.url)
+    assert_equal 0, LeadProposals.run
+    assert lead.reload.status_new?
   end
 end

@@ -25,9 +25,14 @@ class LeadProposals
       found = official_line(lead) or next
       source, line = found
       kind = lead.kind == "plant" ? "facility" : "organization"
-      next if Candidate.where(kind:, status: %w[new matched needs_review]).where("candidates.payload->>'name' = ?", lead.name).exists?
+      name = display_name(source, lead.name)
+      # Only a name the directory doesn't have yet (DQ): a known one would be a pointless claim.
+      next if known?(kind, name) || known?(kind, lead.name)
+      next if Candidate.where(kind:, status: %w[new matched needs_review]).where("candidates.payload->>'name' IN (?)", [ name, lead.name ]).exists?
 
-      Candidate.create!(source:, kind:, status: "new", payload: { "name" => lead.name }, quote: line,
+      payload = { "name" => name }
+      payload["aliases"] = [ lead.name ] unless lead.name.casecmp?(name)
+      Candidate.create!(source:, kind:, status: "new", payload:, quote: line,
         notes: "#{NOTE}: named in #{source.source_kind}")
       lead.decide!("researching", by: BY)
       made << lead.id
@@ -35,6 +40,19 @@ class LeadProposals
   end
 
   private
+    def known?(kind, name)
+      kind == "facility" ? Directory::Lookup.facility(name:).present? : Directory::Lookup.organization(name:).present?
+    end
+
+    # The name as people read it: an award's registry spelling ("SAWTOOTH
+    # SIMULATION, LLC") through its plug-in's display_name, as its own claims are.
+    def display_name(source, spelling)
+      plugin = DataQuality::Plugin.for(source.source_kind)
+      plugin.respond_to?(:display_name) ? plugin.display_name(spelling) : spelling
+    rescue DataQuality::Plugin::UnknownSourceKind
+      spelling
+    end
+
     # The first official source of the lead whose stored text names it, and that line.
     def official_line(lead)
       ids = lead.sources.filter_map { |entry| entry["key"].to_s[/\Aawards:(\d+)\z/, 1]&.to_i }
