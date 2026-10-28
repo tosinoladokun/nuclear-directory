@@ -1,0 +1,30 @@
+# Seed research for the Design audit (PM, 28 Oct 2026): International Isotopes Inc. was published with no facts of its own (only the NRC licence for its Hobbs, NM facility). Quote copied from the company's own press release on PR Newswire, fetched this session.
+name: International Isotopes Inc.
+aliases:
+- INIS
+hq:
+  city: Idaho Falls
+  state: ID
+  source_url: https://www.prnewswire.com/news-releases/international-isotopes-to-divest-depleted-uranium-deconversion-assets-to-american-fuel-resources-for-12-500-000-cash-302057986.html
+  quote: '(INIS), established in 1995, with its headquarters in Idaho Falls, ID , USA, manufactures a wide range of radioisotope-focused products.'
+  confidence: 1.0
+country_code: US
+status: active
+roles:
+- key: isotopes
+  source_url: https://www.prnewswire.com/news-releases/international-isotopes-to-divest-depleted-uranium-deconversion-assets-to-american-fuel-resources-for-12-500-000-cash-302057986.html
+  quote: '(INIS), established in 1995, with its headquarters in Idaho Falls, ID , USA, manufactures a wide range of radioisotope-focused products.'
+  published: '2024-02-08'
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'The company site (intisoid.com) does not resolve from here and SEC filings are not fetched, so the one fetchable primary page is the company''s own 8 Feb 2024 release (About International Isotopes Inc.). The Hobbs, NM deconversion facility and its NRC licence are already recorded from NRC''s page; the company agreed on 8 Feb 2024 to sell those assets (not recorded here: the transfer is not complete).'
+description:
+  text: Manufacturer of radioisotope-focused products, based in Idaho Falls, Idaho.
+  source_url: https://www.prnewswire.com/news-releases/international-isotopes-to-divest-depleted-uranium-deconversion-assets-to-american-fuel-resources-for-12-500-000-cash-302057986.html
+  quote: '(INIS), established in 1995, with its headquarters in Idaho Falls, ID , USA, manufactures a wide range of radioisotope-focused products.'
+short_description:
+  text: Radioisotope products manufacturer
+  source_url: https://www.prnewswire.com/news-releases/international-isotopes-to-divest-depleted-uranium-deconversion-assets-to-american-fuel-resources-for-12-500-000-cash-302057986.html
+  quote: '(INIS), established in 1995, with its headquarters in Idaho Falls, ID , USA, manufactures a wide range of radioisotope-focused products.'
