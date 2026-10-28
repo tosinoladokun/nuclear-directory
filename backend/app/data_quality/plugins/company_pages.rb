@@ -107,7 +107,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
+    read_for = {}
     @directory.enrich_queue.each do |id, _name, website, requested_at, sec_cik|
+      # A website another queued company shares was read for it tonight: this
+      # request waits for tomorrow, once that one's findings are extracted (#534).
+      if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
+        stats["deferred_shared_website"] = stats.fetch("deferred_shared_website", 0) + 1
+        next
+      end
+      read_for[home_url] = id if home_url
       # Part 3: a public company's SEC record (EDGAR), the primary source for
       # its legal name, listing and headquarters address (Data Quality).
       if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))
@@ -185,7 +193,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
       source = Source.find_or_create_by!(url:) { |new_page| new_page.source_kind = source_kind }
       source.update!(source_kind:) if source.source_kind == "web_page"
-      source.update!(enrich_organization_id: for_id) if for_id && source.enrich_organization_id != for_id
+      # Read for another company now: extracted again, in this one's name.
+      if for_id && source.enrich_organization_id != for_id
+        source.update!(enrich_organization_id: for_id, extracted_sha256: nil, extracted_rows_sha256: nil)
+      end
       source
     end
 
