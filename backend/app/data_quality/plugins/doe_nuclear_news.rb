@@ -11,6 +11,8 @@
 # No model is asked.
 class DataQuality::Plugins::DoeNuclearNews < DataQuality::Plugins::TradePress
   DOE = "U.S. Department of Energy"
+  AGENCY = DOE
+  PUBLISHER = "#{DOE}, Office of Nuclear Energy"
   FEEDS = { DOE => "https://www.energy.gov/ne/rss.xml" }.freeze
   WINDOW_DAYS = 60
   PER_FEED = 15
@@ -25,26 +27,26 @@ class DataQuality::Plugins::DoeNuclearNews < DataQuality::Plugins::TradePress
     taken = decided_urls(source)
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
       .sort_by(&:published_on).reverse.filter_map do |item|
-        named = named_in("#{item.title} #{item.summary}").reject { |hit| doe?(hit) }
+        named = named_in("#{item.title} #{item.summary}").reject { |hit| agency?(hit) }
         next if named.empty?
 
         { kind: "news_item", quote: item.title, payload: {
-          "url" => item.url, "title" => item.title, "publisher" => "#{DOE}, Office of Nuclear Energy",
+          "url" => item.url, "title" => item.title, "publisher" => self.class::PUBLISHER,
           "published_on" => item.published_on.iso8601, "summary" => item.summary,
-          "about" => [ { "name" => DOE, "type" => "organization" }, *named ] }.compact }
+          "about" => [ { "name" => self.class::AGENCY, "type" => "organization" }, *named ] }.compact }
       end.first(PER_FEED)
   end
 
   private
 
-  # DOE itself, by any of its names ("Office of Nuclear Energy" is an alias
-  # of DOE's record): never a company the item is about besides DOE.
-  def doe?(hit)
-    return true if hit["name"].casecmp?(DOE)
+  # The agency itself, by any of its names ("Office of Nuclear Energy" is an
+  # alias of DOE's record): never a company the item is about besides it.
+  def agency?(hit)
+    return true if hit["name"].casecmp?(self.class::AGENCY)
     return false unless hit["type"] == "organization"
 
-    @doe_id = @directory.organization(name: DOE)&.id unless defined?(@doe_id)
-    @doe_id.present? && @directory.organization(name: hit["name"])&.id == @doe_id
+    @agency_id = @directory.organization(name: self.class::AGENCY)&.id unless defined?(@agency_id)
+    @agency_id.present? && @directory.organization(name: hit["name"])&.id == @agency_id
   end
 
   public

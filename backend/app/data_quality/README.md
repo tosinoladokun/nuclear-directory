@@ -460,6 +460,13 @@ Energy Dominance Financing site, formerly the Loan Programs Office) once a day a
 Statistics table. Each gives the borrower and a "U.S. Department of Energy funds <borrower>" link described as
 the page states the loan (amount, program, closing date).
 
+## NRC news releases
+
+`plugins/nrc_news.rb` reads NRC's news releases feed (`/public-involve/rss?feed=news`; the news releases page
+itself is drawn by script) once a day, exactly as DOE's news is read: an item naming a company or plant in the
+directory besides NRC becomes a `news_item` about NRC and those records, never a lead. Last 60 days, at most 15
+a night; every item waits for a person.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
