@@ -189,6 +189,13 @@ module Directory
       end.sort_by { |row| -row[:checked_at].to_f }
     end
 
+    # Whether a company has a role with a source (pending or published), so
+    # a new company reaches the owner with its category (#548). Reads only.
+    def sourced_role?(organization_id)
+      OrganizationRole.where(organization_id:, verification_status: %w[pending verified])
+        .where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id)).exists?
+    end
+
     # A fact's evidence rows as [id, source_id, quote], so a caller can name
     # the one it added (#548's Undo). Reads only.
     def evidence_rows(type:, id:)

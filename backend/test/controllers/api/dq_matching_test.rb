@@ -103,6 +103,8 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     act({ id: c.id, action: "new", reason: "A new licensee" })
     company = Organization.find(results.sole["created_ids"].sole)
     assert company.verification_status == "pending"
+    assert_equal "dq", DataQuality::Review.inbox_kind(c.reload), "no category yet: Data Quality's"
+    give_sourced_role(company)
     assert_equal "new_record", DataQuality::Review.inbox_kind(c.reload)
     assert_includes OwnerInbox.new.sections["new_record"].map { |entry| entry.item.candidate_id }, c.id, "it's in Tosin's inbox"
 
@@ -338,7 +340,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
   end
 
   test "a claim held by its source reaches Tosin once Data Quality approves it" do
-    pending = Organization.create!(name: "Held Ceramics Co", verification_status: "pending")
+    pending = give_sourced_role(Organization.create!(name: "Held Ceramics Co", verification_status: "pending"))
     # An earlier, decided batch first, so this one isn't the source's first.
     CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 2.days.ago)
       .then { |first| Candidate.create!(source: @page, crawl_run: first, kind: "organization", payload: { "name" => "x" }, quote: "q", status: "rejected") }
@@ -357,7 +359,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
 
   test "a first-batch claim reaches Tosin once Data Quality approves it" do
     run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
-    pending = Organization.create!(name: "First Batch Reactor Co", verification_status: "pending")
+    pending = give_sourced_role(Organization.create!(name: "First Batch Reactor Co", verification_status: "pending"))
     first = Candidate.create!(source: @page, crawl_run: run, kind: "organization", status: "matched", quote: "Licensee: Holtec.",
       payload: { "name" => "First Batch Reactor Co" }, subject_type: "Organization", subject_id: pending.id, proposed_subject: true,
       ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
@@ -373,7 +375,7 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
 
   test "a first-batch claim with no checker verdict shows in Today once Data Quality approves it, with its own Create" do
     run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
-    pending = Organization.create!(name: "No Verdict Reactor Co", verification_status: "pending")
+    pending = give_sourced_role(Organization.create!(name: "No Verdict Reactor Co", verification_status: "pending"))
     c = Candidate.create!(source: @page, crawl_run: run, kind: "organization", status: "matched", quote: "Licensee: Holtec.",
       payload: { "name" => "No Verdict Reactor Co" }, subject_type: "Organization", subject_id: pending.id, proposed_subject: true)
     act({ id: c.id, action: "recommend", verdict: "approve", reason: "On the NRC list" })

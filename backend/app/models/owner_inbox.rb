@@ -36,7 +36,9 @@ class OwnerInbox
   # Pending companies and plants with no open claim (seeded, or a claim
   # decided since): his too, decided on the record itself.
   def records
+    # A company only with a sourced category (role), as for claims (PM, 28 Oct).
     @records ||= %w[organization facility].flat_map { |kind| DataQuality::Review.pending_facts(kind:, limit: 200, directory: @directory) }
+      .select { |fact| fact.type != "Organization" || @directory.sourced_role?(fact.id) }
   end
 
   # { "new_record" => [Entry, …], … }, newest first.

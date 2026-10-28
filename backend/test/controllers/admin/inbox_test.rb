@@ -10,7 +10,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     first = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 2.days.ago)
     Candidate.create!(source: @page, crawl_run: first, kind: "organization", payload: { "name" => "x" }, quote: "q", status: "rejected")
     @run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
-    @new_co = Organization.create!(name: "Bluefield Fission", verification_status: "pending")
+    @new_co = give_sourced_role(Organization.create!(name: "Bluefield Fission", verification_status: "pending"))
     @create = claim({ "name" => "Bluefield Fission", "hq_city" => "Austin", "hq_state" => "TX" }, subject: @new_co, proposed_subject: true)
     @decided = Organization.create!(name: "Rockville Nuclear", hq_city: "Bethesda", verification_status: "verified", verified_by: "human:tosin")
     @decided.aliases.create!(alias: "Rockville Nuclear")
@@ -55,7 +55,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
     get admin_inbox_path
     assert_select ".nd-panel", 0, "one checked item needs no batch button"
-    other = Organization.create!(name: "Second Fission", verification_status: "pending")
+    other = give_sourced_role(Organization.create!(name: "Second Fission", verification_status: "pending"))
     second = claim({ "name" => "Second Fission" }, subject: other, proposed_subject: true)
     DataQuality::Recommendations.record("#{second.id} approve: named on the NRC page", by: "human:dq")
     get admin_inbox_path
@@ -87,7 +87,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     @page.update!(content_text: "Bluefield Fission, of Austin, Texas. q")
     @create.update!(status: "needs_review", ai_recommendation: "needs_review", ai_reason: "Not sure the company is nuclear", quote: "Bluefield Fission, of Austin, Texas.")
     DataQuality::Recommendations.record("#{@create.id} approve: Its NRC license names it", by: "human:dq")
-    other = Organization.create!(name: "Second Doubted Co", verification_status: "pending")
+    other = give_sourced_role(Organization.create!(name: "Second Doubted Co", verification_status: "pending"))
     second = claim({ "name" => "Second Doubted Co" }, subject: other, proposed_subject: true)
     DataQuality::Recommendations.record("#{second.id} approve: Named on the NRC page", by: "human:dq")
     get admin_inbox_path
@@ -127,13 +127,17 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
 
   test "a pending company or plant with no open claim is in Today; Create publishes it, No rejects it" do
     src = Source.create!(url: "https://www.nrc.gov/test/seeded.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "s")
-    seeded = Organization.create!(name: "Seeded Pending Co", verification_status: "pending")
+    seeded = give_sourced_role(Organization.create!(name: "Seeded Pending Co", verification_status: "pending"))
+    no_role = Organization.create!(name: "Roleless Pending Co", verification_status: "pending")
+    Evidence.create!(subject: no_role, source: Source.create!(url: "https://example.com/roleless", source_kind: "web_page", crawl_status: "ok", content_sha256: "x"),
+      quote: "Roleless Pending Co.", found_by: "human")
     Evidence.create!(subject: seeded, source: src, quote: "Seeded Pending Co builds reactors.", found_by: "human")
     plant = Facility.create!(name: "PULSTAR Reactor", verification_status: "pending")
     Evidence.create!(subject: plant, source: src, quote: "NC State's PULSTAR reactor.", found_by: "human")
     get admin_inbox_path
     assert_select "#inbox-record-organization-#{seeded.id}", /Seeded Pending Co/
     assert_select "#inbox-record-facility-#{plant.id}", /PULSTAR Reactor/
+    assert_select "#inbox-record-organization-#{no_role.id}", 0, "a company without a sourced category stays Data Quality's"
     assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*#{OwnerInbox.new.size}/
 
     post admin_inbox_decide_record_path("Organization", seeded.id, "yes")
