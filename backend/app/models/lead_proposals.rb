@@ -7,10 +7,12 @@
 # ever guessed.
 class LeadProposals
   # Government and registry sources whose stored text we read.
-  OFFICIAL = %w[nrc_reactor_list nrc_power_status nrc_decommissioning nrc_uranium_recovery nrc_adams nrc_reactor_vendors
-    nrc_research_reactors nrc_fuel_cycle usaspending_doe_awards usaspending_api doe_isotope_sites doe_nuclear_news doe_programs
-    doe_loans arpa_e_projects sec_form_d sec_submissions federal_register_nrc federal_register_index eia_plants eia_owners
-    eia_generators].freeze
+  # Only kinds with a plug-in, so their claims are matched and verified.
+  OFFICIAL = %w[nrc_reactor_list nrc_decommissioning nrc_uranium_recovery nrc_adams nrc_reactor_vendors
+    nrc_research_reactors nrc_fuel_cycle usaspending_doe_awards doe_isotope_sites doe_nuclear_news doe_programs
+    doe_loans arpa_e_projects sec_form_d federal_register_nrc eia_plants eia_owners eia_generators].freeze
+  # Characters quoted either side of the name.
+  AROUND = 200
   NOTE = "Proposed from a lead".freeze
   PER_NIGHT = 20
   BY = "agent:leads".freeze
@@ -19,8 +21,10 @@ class LeadProposals
 
   # Returns how many leads became proposals.
   def run
-    Lead.where(status: %w[triage new], kind: %w[company plant]).order(:last_seen_on).limit(500).each.with_object([]) do |lead, made|
-      break made if made.size >= PER_NIGHT
+    made = []
+    # Every eligible lead in turn, so ineligible ones never block newer ones.
+    Lead.where(status: %w[triage new], kind: %w[company plant]).order(:last_seen_on, :id).find_each(batch_size: 200) do |lead|
+      break if made.size >= PER_NIGHT
 
       found = official_line(lead) or next
       source, line = found
@@ -36,10 +40,18 @@ class LeadProposals
         notes: "#{NOTE}: named in #{source.source_kind}")
       lead.decide!("researching", by: BY)
       made << lead.id
-    end.size
+    end
+    made.size
   end
 
   private
+    # The source's own check, as verify will ask it.
+    def quote_in_source?(source, quote)
+      DataQuality::Plugin.for(source.source_kind).quote_in_source?(source, quote)
+    rescue DataQuality::Plugin::UnknownSourceKind
+      false
+    end
+
     def known?(kind, name)
       kind == "facility" ? Directory::Lookup.facility(name:).present? : Directory::Lookup.organization(name:).present?
     end
@@ -57,9 +69,20 @@ class LeadProposals
     def official_line(lead)
       ids = lead.sources.filter_map { |entry| entry["key"].to_s[/\Aawards:(\d+)\z/, 1]&.to_i }
       urls = lead.sources.filter_map { |entry| entry["url"].presence }
-      Source.where(source_kind: OFFICIAL).where(id: ids).or(Source.where(source_kind: OFFICIAL, url: urls)).where.not(content_text: [ nil, "" ]).find_each do |source|
-        line = source.content_text.each_line.find { |text| text.downcase.include?(lead.name.downcase) }
-        return [ source, line.squish.first(500) ] if line.present?
+      sources = Source.where(source_kind: OFFICIAL).where(id: ids).or(Source.where(source_kind: OFFICIAL, url: urls)).where.not(content_text: [ nil, "" ])
+      # An award source not yet extracted is waiting for its night (the
+      # recipients cap); extraction will claim it itself.
+      sources = sources.where("sources.source_kind <> 'usaspending_doe_awards' OR sources.extracted_sha256 IS NOT NULL")
+      named = /(?<![[:alnum:]])#{Regexp.escape(lead.name)}(?![[:alnum:]])/i
+      sources.find_each do |source|
+        source.content_text.each_line do |text|
+          line = text.squish
+          match = line.match(named) or next
+          # A bounded passage around the name, so the quote always names it.
+          from = [ match.begin(0) - AROUND, 0 ].max
+          quote = line[from, match.end(0) - from + AROUND]
+          return [ source, quote ] if quote_in_source?(source, quote)
+        end
       end
       nil
     end
