@@ -340,4 +340,19 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_nil payloads.first["signed_on"]
     assert_equal 2, payloads.map { |p| p["external_id"] }.uniq.size
   end
+
+  test "companies that share one website each get their own findings; the domain's owner doesn't (#534)" do
+    @company.update_columns(domain: nil)
+    sister = Organization.create!(name: "Acme Sister Fission", website: HOME, verification_status: "verified", verified_by: "human:tosin")
+    owner = Organization.create!(name: "Acme Holdings", website: "https://www.acmefission.com/", domain: "acmefission.com", verification_status: "verified", verified_by: "human:tosin")
+    found = { "description" => { "value" => "Founded in 2019.", "quote" => "Founded in 2019." },
+      "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [] }
+
+    sister.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    home = Source.find_by!(url: HOME)
+    assert_equal sister.id, home.enrich_organization_id
+    assert_equal [ "Acme Sister Fission" ], DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(home, nil).map { |c| c[:payload]["name"] }.uniq
+    refute_equal owner.id, home.enrich_organization_id
+  end
 end

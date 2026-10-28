@@ -145,6 +145,8 @@ class Admin::RecordEnrichController < Admin::BaseController
       @finding_ids ||= begin
         domain = @company.domain.presence
         pages = domain ? Source.where(source_kind: SOURCE_KIND, domain: [ domain, "www.#{domain}" ]) : Source.none
+        # Pages read for it, also on a website it shares (#534).
+        pages = pages.or(Source.where(source_kind: SOURCE_KIND, enrich_organization_id: @company.id))
         # Its SEC record too (part 3), when it has a CIK.
         pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i))) if @company.sec_cik.present?
         # Only what this request found (since it was asked); older findings stay in Checks.

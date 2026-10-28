@@ -116,11 +116,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       # A home page that couldn't be read is answered as read (the Enrich page
       # shows why, from the page's own status), and a new request reads again.
-      if (home = page(website))
+      if (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         own_links(home).first(PAGES).each do |url|
-          DataQuality::Snapshot.take(page(url), fetcher: @fetcher)
+          DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
         end
       end
@@ -133,7 +133,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   def extract(source, run)
     return edgar_claims(source) if source.url.match?(EDGAR_URL)
 
-    company = @directory.organization(domain: source.domain) or return []
+    # The company the page was read for (#534), else the domain's owner.
+    company = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id) ||
+      @directory.organization(domain: source.domain)
+    return [] unless company
     text = visible_text(source)
     return [] if text.blank?
 
@@ -174,12 +177,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     # A page of this kind, made or taken over from a page cited by hand.
-    def page(url)
+    # for_id: the company the page is being read for (#534); a website two
+    # companies share is theirs in turn, the latest request's while it's read.
+    def page(url, for_id: nil)
       url = url.to_s.strip
       return unless url.match?(%r{\Ahttps?://}i)
 
       source = Source.find_or_create_by!(url:) { |new_page| new_page.source_kind = source_kind }
       source.update!(source_kind:) if source.source_kind == "web_page"
+      source.update!(enrich_organization_id: for_id) if for_id && source.enrich_organization_id != for_id
       source
     end
 
