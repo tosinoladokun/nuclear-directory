@@ -5,7 +5,7 @@ status: active
 roles:
 - key: waste_decommissioning
   source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/oc
-  quote: "to Oyster Creek Environmental Protection, LLC (OCEP), as the licensed owner and to Holtec Decommissioning International (HDI), as the licensed operator. The license transfer was approved by the NRC staff and became effective on July 1, 2019."
+  quote: "On August 31, 2018, Exelon and Holtec submitted a License Transfer Application (LTA) requesting NRC approval to transfer the Oyster Creek Renewed Facility Operating License and the General License for the Oyster Creek Independent Spent Fuel Storage Installation (ISFSI) to Oyster Creek Environmental Protection, LLC (OCEP), as the licensed owner and to Holtec Decommissioning International (HDI), as the licensed operator."
   confidence: 1.0
 technologies: []
 relationships: []
