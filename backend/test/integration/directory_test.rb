@@ -258,7 +258,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     [ companies_path(category: "plants"), search_path(q: "quiet old") ].each do |path|
       get path
-      ring = css_select("a[href='/plants/quiet-old-station'] .nd-line__mark, a[href='/plants/quiet-old-station'] .nd-ring").to_s
+      ring = css_select("a[href='/plants/quiet-old-station'] .nd-line__mark, a[href='/plants/quiet-old-station'] .nd-catsq").to_s
       assert_includes ring, "<svg", path
       assert_not_includes ring, waste, path
     end
@@ -271,8 +271,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     [ companies_path(category: "plants"), search_path(q: "station") ].each do |path|
       get path
-      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-line__mark, a[href='/plants/sourced-station'] .nd-ring").to_s
-      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-line__mark, a[href='/plants/quiet-station'] .nd-ring").to_s
+      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-line__mark, a[href='/plants/sourced-station'] .nd-catsq").to_s
+      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-line__mark, a[href='/plants/quiet-station'] .nd-catsq").to_s
 
       assert_includes sourced_ring, PWR_ICON, path
       assert_not_includes sourced_ring, BWR_ICON, "#{path}: an unsourced unit doesn't change it"

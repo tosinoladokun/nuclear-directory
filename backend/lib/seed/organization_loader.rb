@@ -257,12 +257,32 @@ module Seed
         # under it (it's in aliases), then is removed from the aliases in the
         # same write.
         quotes = backs.filter_map { |item, fields| evidence(item, sources)&.merge(fields: fields.uniq.presence) }
-        write(slug, :organization, attributes, quotes,
-          remove_aliases: legal ? [] : Array(doc["legal_name"]))
+        # pending: true leaves the company for Tosin's Create in Today: a new
+        # one is created pending, and an existing one keeps its decision (a
+        # write with no verification changes no status). Its roles and links
+        # are added all the same; none is public while the company isn't.
+        pending = doc["pending"].present?
+        if pending
+          # A person said no to it since (rejected or took it off): that stands,
+          # and the file writes nothing (write_facts skips it too).
+          return if closed_company?(slug)
+
+          # An unquoted legal name isn't kept as an alias. A pending write can't
+          # remove one (that's a person's decision), so it's never added.
+          unless legal
+            unquoted = OrganizationAlias.normalize(doc["legal_name"].to_s)
+            attributes[:aliases] = Array(attributes[:aliases]).reject { |name| OrganizationAlias.normalize(name.to_s) == unquoted }
+          end
+        end
+        write(slug, :organization, attributes, quotes, pending:,
+          remove_aliases: legal || pending ? [] : Array(doc["legal_name"]))
       end
+
+      def closed_company?(slug) = Directory::Lookup.organization(slug:)&.verification_status.in?(Verifiable::CLOSED_STATUSES)
 
       def write_facts(slug, doc, sources)
         organization = Directory::Lookup.organization(slug:) or return
+        return if doc["pending"].present? && closed_company?(slug)
 
         Array(doc["roles"]).each do |item|
           [ item["key"], item["subtype"] ].compact.each do |role|

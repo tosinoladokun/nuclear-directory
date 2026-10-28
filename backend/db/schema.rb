@@ -714,6 +714,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_130000) do
     t.string "link_status"
     t.integer "link_http_status"
     t.integer "link_failures", default: 0, null: false
+    t.string "final_url"
     t.bigint "enrich_organization_id"
     t.index ["domain"], name: "index_sources_on_domain"
     t.index ["enrich_organization_id"], name: "index_sources_on_enrich_organization_id"

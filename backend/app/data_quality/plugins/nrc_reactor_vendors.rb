@@ -84,7 +84,7 @@ class DataQuality::Plugins::NrcReactorVendors < DataQuality::Plugin
   # One unit per page: a vendor line gone is a real change for a person to see.
   # Pages never read before, at most 20 unit pages a night (about 40 claims: a vendor and its link each), so Data Quality reads
   # each night's batch claim by claim (#541); pages read before are never held back.
-  def new_sources_per_run = 20
+  def new_sources_per_run = 40
 
   def max_dropped_share(_source) = 1.0
 

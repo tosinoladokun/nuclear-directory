@@ -680,6 +680,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
       if result.success?
         @stats[existing ? "matched" : "proposed"] += 1
+        # New companies a person must create (DQ's daily report, 28 Oct).
+        @stats["new_companies_proposed"] = @stats.fetch("new_companies_proposed", 0) + 1 if result.created && result.ref.type == "Organization"
         # A fact that was already there (an existing link) may be one the source just restates.
         settle(candidate, directory.attached_record(candidate)) unless result.created
       else
