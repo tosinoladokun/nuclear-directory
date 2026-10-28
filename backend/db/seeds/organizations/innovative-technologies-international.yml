@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Innovative Technologies International
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.usaspending.gov/recipient/29e4efa8-d532-aa1b-b300-87c2303f60dd-C/latest
+  quote: "DESC0021763,\"INNOVATIVE TECHNOLOGIES INTERNATIONAL, INC.\",203224.41,2021-06-28,2022-06-30,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0021763_089,ASST_NON_DESC0021763_089,29e4efa8-d532-aa1b-b300-87c2303f60dd-C,SPENT FUEL DRY STORAGE CANISTER CISCC PREVENTION TECHNOLOGY DEVELOPMENT"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

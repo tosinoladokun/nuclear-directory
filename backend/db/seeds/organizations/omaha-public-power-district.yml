@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Omaha Public Power District
+status: active
+roles:
+- key: utility
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/fcs
+  quote: "Fort Calhoun Station (FCS), Unit 1 is a 1,500 Mwt, pressurized water reactor that began operation in 1973 and is owned by the Omaha Public Power District (OPPD)."
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
