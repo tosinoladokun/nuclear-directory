@@ -19,7 +19,7 @@ relationships: []
 facilities: []
 notes: 'No HQ or country stated in the quotes, so none is set. Added so the NASA nuclear news source (#585) has a record to attach to; NASA funds and buys nuclear work (Fission Surface Power, SR-1 Freedom).'
 description:
-  text: Space agency building SR-1 Freedom, its first fission-powered spacecraft.
+  text: Space agency building SR-1 Freedom, a fission-powered spacecraft.
   source_url: https://www.nasa.gov/centers-and-facilities/glenn/sr-1-freedom-advances-with-progress-on-nuclear-power-module/
   quote: NASA’s Space Reactor-1 (SR-1) Freedom will be humanity’s first fission-powered spacecraft to travel outside Earth’s orbit.
 short_description:
