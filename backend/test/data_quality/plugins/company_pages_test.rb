@@ -343,14 +343,17 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
 
   test "gap fill: a published company with empty basics is read without being asked; one without a website is listed" do
     role = Role.create!(key: "gap_fill_test", name: "Gap fill test")
-    OrganizationRole.create!(organization: @company, role:)
+    OrganizationRole.create!(organization: @company, role:).verify!(by: "human:tosin")
     siteless = Organization.create!(name: "Siteless Fission", verification_status: "verified", verified_by: "human:tosin")
-    OrganizationRole.create!(organization: siteless, role:)
-    stats = DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    OrganizationRole.create!(organization: siteless, role:).verify!(by: "human:tosin")
+    stats = DataQuality::Stages::Crawl.call(plugin: DataQuality::Plugins::CompanyPages.new).stats
 
-    assert_equal 1, stats["companies"]
+    assert_equal [ 1, 1 ], stats.values_at("gap_fill", "companies")
     assert_includes stats["gaps_without_website"], "Siteless Fission"
     assert @company.reload.enriched_at
+
+    @company.update_columns(enrich_requested_at: nil, enriched_at: nil)
+    assert_nil DataQuality::Stages::Crawl.call(plugin: DataQuality::Plugins::CompanyPages.new).stats["gap_fill"], "once a day, however the run starts"
   end
 
   test "a home page that redirects: its relative links are read from where it ended (#525)" do

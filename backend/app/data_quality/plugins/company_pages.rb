@@ -113,9 +113,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
-    if @gap_fill.positive?
-      no_website = @directory.request_gap_fill(limit: @gap_fill)
-      stats["gaps_without_website"] = no_website if no_website.any?
+    # Once a day, whatever starts the run (a manual Enrich runs this too):
+    # the night's quota is kept in its crawl run's stats.
+    if @gap_fill.positive? && !gap_filled_today?
+      gap = @directory.request_gap_fill(limit: @gap_fill)
+      stats["gap_fill"] = gap[:requested]
+      stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
     @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
       # Part 3: a public company's SEC record (EDGAR), the primary source for
@@ -154,6 +157,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   end
 
   private
+    def gap_filled_today?
+      CrawlRun.where(stage: "crawl", source_kind:, started_at: Time.current.all_day).where("stats ? 'gap_fill'").exists?
+    end
+
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
 
     # What a company's EDGAR record states, read as data (no model): its

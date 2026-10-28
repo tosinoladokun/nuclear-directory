@@ -8,7 +8,7 @@ class Directory::GapFillTest < ActiveSupport::TestCase
 
   def company(name, role: true, **attributes)
     Organization.create!(name:, verification_status: "verified", verified_by: "human:tosin", **attributes).tap do |org|
-      OrganizationRole.create!(organization: org, role: @role) if role
+      OrganizationRole.create!(organization: org, role: @role).verify!(by: "human:tosin") if role
     end
   end
 
@@ -20,7 +20,10 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     company("Siteless Fission")
     pending = Organization.create!(name: "Pending Fission", website: "https://pending.example")
 
-    assert_includes Directory::Lookup.request_gap_fill(limit: 1), "Siteless Fission"
+    company("Broken Site Fission", website: "https://bad host")
+    first = Directory::Lookup.request_gap_fill(limit: 1)
+    assert_equal 1, first[:requested]
+    assert_equal [ "Broken Site Fission", "Siteless Fission" ], first[:without_website], "missing or unreadable websites, for Data Quality"
     assert bare.reload.enrich_requested_at, "most gaps first"
     assert_nil half.reload.enrich_requested_at
 
@@ -32,5 +35,18 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     requested = bare.reload.enrich_requested_at
     Directory::Lookup.request_gap_fill(limit: 5)
     assert_equal requested, bare.reload.enrich_requested_at, "a waiting request isn't renewed"
+  end
+
+  test "only a published category counts, and the 90 days run from the read, not the request" do
+    unpublished = company("Draft Category Fission", role: false, website: "https://draft.example")
+    OrganizationRole.create!(organization: unpublished, role: @role)
+    recent = company("Recent Fission", website: "https://recent.example", enrich_requested_at: 100.days.ago, enriched_at: 80.days.ago)
+    old = company("Old Fission", website: "https://old.example", enrich_requested_at: 100.days.ago, enriched_at: 95.days.ago)
+
+    Directory::Lookup.request_gap_fill(limit: 10)
+    assert_nil unpublished.reload.enriched_at
+    assert_equal 100.days.ago.to_date, recent.reload.enrich_requested_at.to_date, "read 80 days ago: not yet"
+    assert_equal Date.current, old.reload.enrich_requested_at.to_date
+    refute unpublished.reload.enrich_requested_at&.today?
   end
 end

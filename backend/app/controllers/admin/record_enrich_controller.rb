@@ -52,10 +52,7 @@ class Admin::RecordEnrichController < Admin::BaseController
   end
 
   # The address's form only: its page may be a saved source already.
-  def self.usable_website?(url)
-    url = url.to_s.strip
-    url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && (URI.parse(url).host.present? rescue false)
-  end
+  def self.usable_website?(url) = Organization.readable_website?(url)
 
   def decide
     id = params[:candidate_id].to_i
