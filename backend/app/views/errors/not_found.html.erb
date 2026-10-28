@@ -17,9 +17,14 @@
   <% if s.matches.any? %>
     <section aria-labelledby="notfound-matches">
       <h2 id="notfound-matches" class="nd-sec-h">Did you mean</h2>
-      <ul class="nd-list">
+      <ul class="nd-lines">
         <% s.matches.each do |kind, record| %>
-          <%= kind == :company ? render("shared/company_row", organization: record) : render("shared/plant_row", facility: record) %>
+          <% if kind == :company %>
+            <%= render "shared/line", variant: :bare, href: company_url_for(record), name: record.name, short_name: record.short_name, place: location(record.hq_city, record.hq_state, country: record.country_code) %>
+          <% else %>
+            <%= render "shared/line", href: plant_url_for(record), name: record.name, mark: icon("site-plant", set: :nd, size: 20),
+                  what: (facility_type_label(record.facility_type) if record.verified?), place: (location(record.city, record.state) if record.verified?) %>
+          <% end %>
         <% end %>
       </ul>
     </section>

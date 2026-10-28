@@ -81,8 +81,9 @@
           <td class="nd-l nd-leads__statuscol"><span class="nd-tag"><%= Admin::LeadsController::STATUS_LABELS.fetch(lead.status) %></span></td>
           <td class="nd-l nd-leads__actions">
             <div class="nd-leads__buttons type-ui">
-              <% if lead.status_new? || lead.status_researching? %>
-                <% if lead.status_new? %>
+              <%# A lead in triage gets the same buttons as one To do. %>
+              <% if lead.status_new? || lead.status_triage? || lead.status_researching? %>
+                <% if lead.status_new? || lead.status_triage? %>
                   <%= button_to "Research", research_admin_lead_path(lead, **keep), class: "nd-btn nd-btn--outline type-ui",
                     title: lead.kind == "company" ? "Read its pages if we have it, or add it to the research list" : "Add it to the research list" %>
                 <% end %>

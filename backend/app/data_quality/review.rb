@@ -220,9 +220,15 @@ module DataQuality::Review
     # firsts: first_batches, passed in once for a whole list.
     def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new, firsts: first_batches)
       return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
-      return "dq" if candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
+      # A source's own hold and its first batch are Data Quality's to read;
+      # once it has approved the claim (still current), it's Tosin's to
+      # decide, and his Yes (Data Quality's Accept) lifts the hold.
+      # Data Quality's own new company or plant is its judgement too (#548).
+      checked = (candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)) ||
+        DqAction.live.exists?(candidate_id: candidate.id, action: %w[new subsidiary_of])
+      return "dq" if !checked && candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
       # Asked directly: a deal term's own hold would come first in held_reason.
-      return "dq" if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
+      return "dq" if !checked && candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
       # News is always a new fact about its company or plant.
       return "new_fact" if candidate.kind == "news_item"
 
@@ -385,12 +391,12 @@ module DataQuality::Review
     # (Recommendations.source_hold?), so the checker's verdict isn't needed;
     # every other bulk check, a person's decision first, still applies.
     def approve(candidate_ids, by:, reason: nil, only_recommended: false, data_quality_reviewed: false, safe_check: nil,
-      source_held: false, directory: DataQuality::DirectoryClient.new)
+      source_held: false, first_hand: false, directory: DataQuality::DirectoryClient.new)
       human!(by)
       firsts = first_batches if only_recommended # once per bulk approval
       Candidate.transaction do
         Candidate.where(id: candidate_ids).includes(:crawl_run, :verify_run).order(:id).map do |candidate|
-          approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:, data_quality_reviewed:, safe_check:, source_held:)
+          approve_one(candidate, by:, reason:, directory:, only_recommended:, firsts:, data_quality_reviewed:, safe_check:, source_held:, first_hand:)
         end
       end
     rescue ActiveRecord::Deadlocked, ActiveRecord::LockWaitTimeout
@@ -1003,13 +1009,20 @@ module DataQuality::Review
       # fact still waiting for approval.
       # only_recommended (bulk approval): checked under the lock, so a claim a
       # verify run moved to review a moment ago isn't published in bulk.
+      # first_hand: Data Quality's own approve stands in for the checker (PM,
+      # 27 Oct: Tosin's "Yes to all"); every other check stands.
+      # The checker named a different value than the claim's: a real conflict,
+      # never settled by Data Quality's first-hand approve (#608).
+      def contradicted?(candidate) = candidate.ai_reason.to_s.start_with?(DataQuality::Verifiers::Agent::CONTRADICTS)
+      public :contradicted?
+
       def approve_one(candidate, by:, reason:, directory:, edited: false, only_recommended: false, firsts: nil, data_quality_reviewed: false,
-        safe_check: nil, source_held: false)
+        safe_check: nil, source_held: false, first_hand: false)
         Candidate.transaction do
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
-          if only_recommended && !(source_held && data_quality_reviewed) &&
+          if only_recommended && !((source_held || (first_hand && !contradicted?(candidate))) && data_quality_reviewed) &&
               !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end

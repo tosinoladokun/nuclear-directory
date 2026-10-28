@@ -28,6 +28,7 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     funds = Relationship.create!(from_organization: @doe, to_organization: @kairos, relationship_type: "funds",
       verification_status: "verified", verified_by: BY)
     funds.evidence.create!(source: award, quote: "DOE awards Kairos Power.", found_by: "human", confidence: 1)
+    @funds = funds
     role = @kairos.organization_roles.create!(role: Role.find_or_create_by!(key: "reactor_vendor") { |r| r.name = "Reactor vendor" },
       verification_status: "verified", verified_by: BY)
     role.evidence.create!(source: @source, quote: "Kairos Power develops reactors.", found_by: "human", confidence: 1)
@@ -39,10 +40,10 @@ class Dataset::ExportTest < ActiveSupport::TestCase
   def read(name) = CSV.read(File.join(@dir, "#{name}.csv"), headers: true)
   def file(name) = File.read(File.join(@dir, name))
 
-  test "writes the five tables as CSV and JSON, published facts only, with every column documented" do
+  test "writes the seven tables as CSV and JSON, published facts only, with every column documented" do
     result = export
 
-    assert_equal %w[companies facilities relationships sources evidence], result[:counts].keys
+    assert_equal %w[companies facilities relationships deal_terms licensing_stages sources evidence], result[:counts].keys
     Export::TABLES.each do |table, columns|
       assert_equal columns.keys, read(table).headers, "#{table}.csv has exactly the documented columns"
       JSON.parse(file("#{table}.json")).each { |row| assert_equal columns.keys.sort, row.keys.sort }
@@ -196,7 +197,7 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     latest = JSON.parse(file("latest.json"))
 
     assert_equal [ "2026.12", "2026-12-07", nil ], latest.values_at("version", "released_on", "doi"), "no version DOI until Zenodo archives it"
-    assert_equal %w[companies facilities relationships sources evidence], latest["counts"].keys
+    assert_equal %w[companies facilities relationships deal_terms licensing_stages sources evidence], latest["counts"].keys
     assert_equal 2, latest.dig("counts", "companies")
     assert_equal "https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.12/companies.csv", latest.dig("files", "companies", "csv")
   end
@@ -236,4 +237,35 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     ensure
       old.each { |key, value| ENV[key] = value }
     end
+
+  test "a deal's terms and a plant's licensing stages come with their link or plant, sourced, and their evidence" do
+    nrc = Source.create!(url: "https://www.nrc.gov/reactors/non-power/hermes.html", source_kind: "web_page", domain: "nrc.gov", title: "Hermes")
+    award = DealTerm.create!(link: @funds, term_type: "award", amount_usd: 303_000_000, starts_on: "2020-10-13", external_id: "DE-NE0009051",
+      program: "ARDP", verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 10, 12))
+    award.evidence.create!(source: @source, quote: "DOE awards $303M.", found_by: "human", confidence: 1)
+    unsourced = DealTerm.create!(link: @funds, term_type: "award", amount_usd: 1, starts_on: "2021-01-01", external_id: "X",
+      verification_status: "verified", verified_by: BY)
+    hidden_link = Relationship.create!(from_organization: @doe, to_organization: @hidden, relationship_type: "funds")
+    behind = DealTerm.create!(link: hidden_link, term_type: "award", amount_usd: 2, starts_on: "2021-01-01", external_id: "Y",
+      verification_status: "verified", verified_by: BY)
+    behind.evidence.create!(source: @source, quote: "Hidden award.", found_by: "human", confidence: 1)
+    stage = LicensingStage.create!(facility: @site, stage: "construction_permit", nrc_docket: "50-7513", effective_on: "2023-12-14",
+      verification_status: "pending")
+    stage.evidence.create!(source: nrc, quote: "NRC issued a construction permit for Hermes.", found_by: "human", confidence: 1)
+    stage.verify!(by: BY)
+
+    export
+
+    terms = read("deal_terms")
+    assert_equal [ "term-#{award.id}" ], terms.map { |row| row["id"] }, "unsourced, or on a link that isn't public: left out"
+    assert_equal [ "relationships", "company-#{@funds.id}", "award", "303000000.0", "ARDP", nil ],
+      terms.first.fields("attached_to", "attached_key", "term_type", "amount_usd", "program", "counted")
+    stages = read("licensing_stages")
+    assert_equal [ [ "stage-#{stage.id}", @site.slug, "construction_permit", "05007513", "2023-12-14" ] ],
+      stages.map { |row| row.fields("id", "facility_slug", "stage", "nrc_docket", "effective_on") }
+    evidence = read("evidence").map { |row| row.fields("fact_table", "fact_key") }
+    assert_includes evidence, [ "deal_terms", "term-#{award.id}" ]
+    assert_includes evidence, [ "licensing_stages", "stage-#{stage.id}" ]
+    assert_match "| `deal_terms` | 1 |", file("README.md")
+  end
 end

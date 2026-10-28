@@ -37,12 +37,12 @@ class ErrorsTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
     assert_select "#notfound-matches", "Did you mean"
-    assert_select ".nd-list li:first-child a[href='/companies/kairos-power']", /Kairos Power/
+    assert_select ".nd-lines li:first-child a[href='/companies/kairos-power']", /Kairos Power/
     assert_select "body", text: /Pending Power/, count: 0
     assert_select "input#search-notfound[value='kairos powr']"
 
     get "/plants/vogtel"
-    assert_select ".nd-list a[href='/plants/plant-vogtle']", /Plant Vogtle/
+    assert_select ".nd-lines a[href='/plants/plant-vogtle']", /Plant Vogtle/
   end
 
   test "an unpublished company is never suggested" do

@@ -2,7 +2,8 @@
 # a stable key, so running it again only updates what changed:
 # - searches that found nothing (#483), as typed, counted per search;
 # - news (#137) about a company or plant the directory doesn't have;
-# - trade-press items (#127), leads to a primary source;
+# (Trade-press items are headlines, not names: they stay in Data Quality's
+# news queue, never Leads; Tosin, 27 Oct.)
 # - Enrich findings (#479) naming a company it couldn't find;
 # - DOE award recipients waiting for their night (#513's cap).
 # It only adds and updates leads; a lead's status is the admin's.
@@ -11,7 +12,7 @@ class LeadSync
 
   def run
     counts = Hash.new(0)
-    { "search" => searches, "news" => news, "trade_press" => trade_press, "enrich" => enrich, "awards" => awards }.each do |feed, sightings|
+    { "search" => searches, "news" => news, "enrich" => enrich, "awards" => awards }.each do |feed, sightings|
       sightings.each { |sighting| counts[feed] += 1 if Lead.sighted!(**sighting) }
     end
     counts
@@ -19,7 +20,8 @@ class LeadSync
 
   private
     def searches
-      SearchGap.waiting.map do |gap|
+      # Junk and names we already have never become leads.
+      SearchGap.waiting.reject { |gap| Lead.junk?(gap.query) || known?(gap.query) }.map do |gap|
         { name: gap.query, kind: "other", key: "search:#{gap.id}", label: "Search with no results", times: gap.searches_count,
           first: gap.first_searched_on, last: gap.last_searched_on }
       end
@@ -42,13 +44,6 @@ class LeadSync
       end
     end
 
-    def trade_press
-      open_claims.where(kind: "news_item").where("candidates.payload->>'lead' = 'true'").map do |claim|
-        { name: claim.payload["title"], kind: "other", key: "trade_press:#{claim.id}", label: "Trade press: #{claim.payload['publisher']}",
-          url: claim.payload["url"], first: claim.created_at.to_date }
-      end
-    end
-
     def enrich
       open_claims.joins(:source).where(sources: { source_kind: "company_pages" }).flat_map do |claim|
         DataQuality::Review.open_company_ends(claim).map do |key, name|
@@ -68,6 +63,8 @@ class LeadSync
         nil
       end
     end
+
+    def known?(name) = Directory::Lookup.organization(name:).present? || Directory::Lookup.facility(name:).present?
 
     def open_claims = Candidate.where(status: %w[new needs_review], subject_id: nil)
 end

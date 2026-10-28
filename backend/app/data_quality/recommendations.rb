@@ -111,7 +111,9 @@ module DataQuality::Recommendations
     # again under those locks against what the person saw (the same call,
     # reason and claim) and decided while they're held. One that no longer
     # qualifies is skipped with why. Returns a Review::Result per claim.
-    def accept(items, by:, directory: DataQuality::DirectoryClient.new)
+    # first_hand (Tosin's inbox, PM 27 Oct): Data Quality's approve counts even
+    # where the checker doubted; its quote must still be in the source.
+    def accept(items, by:, first_hand: false, directory: DataQuality::DirectoryClient.new)
       DataQuality::Review.human!(by)
       items.sort_by(&:candidate_id).map do |item|
         result = nil
@@ -127,14 +129,14 @@ module DataQuality::Recommendations
             result = skipped(item, "Data Quality's call on it changed after the page loaded")
             next
           end
-          why = why_left(candidate, directory:, **context_for([ candidate ], directory:))
+          why = why_left(candidate, directory:, first_hand:, **context_for([ candidate ], directory:))
           result = skipped(item, why) and next if why
 
           reason = "#{ACCEPTED}: #{candidate.dq_reason}"
           result =
             if candidate.dq_recommendation == "approve"
               DataQuality::Review.approve([ candidate.id ], by:, reason:, only_recommended: true, data_quality_reviewed: true,
-                source_held: source_hold?(candidate), directory:).first
+                source_held: source_hold?(candidate), first_hand:, directory:).first
             else
               DataQuality::Review.reject([ candidate.id ], by:, reason:, directory:).first
             end
@@ -228,7 +230,7 @@ module DataQuality::Recommendations
       end
 
       # nil when Accept may act on it; otherwise why a person decides it.
-      def why_left(candidate, directory:, firsts:, recommended:, decided:)
+      def why_left(candidate, directory:, firsts:, recommended:, decided:, first_hand: false)
         return "it's already #{candidate.status}" unless OPEN.include?(candidate.status)
         return "it changed after Data Quality looked at it" unless candidate.dq_payload_sha256 == digest(candidate)
         # Filling in another record's details (an "identify" claim) is a change
@@ -240,10 +242,12 @@ module DataQuality::Recommendations
         # read, a replacement): Data Quality's approve is that review, as it is
         # for the first batch, so the checker's verdict isn't needed. Every
         # other check stands, and a person's decision is never overwritten.
-        if source_hold?(candidate)
+        if source_hold?(candidate) || (first_hand && candidate.dq_recommendation == "approve" && !DataQuality::Review.contradicted?(candidate))
           # No checker verdict to say the source still holds it: its quote must.
-          plugin = DataQuality::Plugin.for(candidate.source.source_kind)
-          return "its quote isn't in the source any more" unless plugin.quote_in_source?(candidate.source, candidate.quote)
+          # The source's plug-in reads it; without one, the stored text must contain it.
+          in_source = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
+          return "it has no quote" if candidate.quote.blank?
+          return "its quote isn't in the source any more" unless in_source.call(candidate.quote)
         else
           return "the app's checker didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"
           return "it's waiting for a person's review" if candidate.status_needs_review?

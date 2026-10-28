@@ -13,6 +13,13 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     plant("Plant Vogtle", state: "GA", facility_type: "power_reactor", status: "operating")
   end
 
+  test "the list pages preload the serif their heading is set in (LCP), and the home page still preloads no font" do
+    get companies_path
+    assert_select "link[rel=preload][as=font][type='font/woff2'][crossorigin]", 1
+    get root_path
+    assert_select "link[rel=preload][as=font]", 0
+  end
+
   test "the old fusion category moves for good to the fusion tag page, keeping filters (#281)" do
     get companies_path(category: "fusion", state: "CA", sort: "connections")
 

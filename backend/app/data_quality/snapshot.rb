@@ -89,9 +89,10 @@ class DataQuality::Snapshot
   private_class_method :convert, :take_claimed
 
   # A successful fetch clears any block. Validators are only replaced when
-  # the server sends new ones (a 304 may omit them).
+  # the server sends new ones (a 304 may omit them). final_url: where the
+  # page ended after redirects (#525), nil when it didn't redirect.
   def self.fresh(source, response)
-    { crawl_status: "ok", status_reason: nil, blocked_streak: 0,
+    { crawl_status: "ok", status_reason: nil, blocked_streak: 0, final_url: (response.url if response.url.present? && response.url != source.url),
       etag: response.etag || source.etag, last_modified: response.last_modified || source.last_modified }
   end
   private_class_method :fresh

@@ -453,6 +453,13 @@ one labelled line, written only when new or changed. ARPA-E itself is proposed (
 "(ACRONYM)" keeps the acronym as an alias. Each project is an award term under one link per recipient.
 Cancelled projects propose nothing. At most 5 new project pages are read a night.
 
+## DOE loans
+
+`plugins/doe_loans.rb` reads DOE's loan project pages for nuclear projects (Palisades, Crane Restart; the
+Energy Dominance Financing site, formerly the Loan Programs Office) once a day and stores only their Project
+Statistics table. Each gives the borrower and a "U.S. Department of Energy funds <borrower>" link described as
+the page states the loan (amount, program, closing date).
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
