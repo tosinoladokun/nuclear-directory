@@ -10,7 +10,7 @@ import { Controller } from "@hotwired/stimulus"
 // then 45/55% ... out to 30/70%; level instead of along the line where the
 // line is steep; shortened ("sells power") only as a last resort. Each verb
 // cuts a 4px gap into its line at both ends.
-const OFFSETS = [ 0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7 ]
+const OFFSETS = [ 0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8 ]
 const SHORTER = { "sells power to": "sells power" }
 
 export default class extends Controller {
@@ -111,7 +111,7 @@ export default class extends Controller {
 
       const tryAt = (offset) => {
         const at = offset * length
-        const steep = isSteep(line, at, length)
+        const steep = true // verbs are always flat, never tilted along the curve (Design QA on #561)
         show(steep ? level : along, steep ? along : level)
         halo.style.visibility = steep ? "hidden" : ""
         if (steep) {
@@ -180,13 +180,6 @@ function show(on, off) {
 }
 
 // Steeper than 35° where the word sits: the word goes level instead.
-function isSteep(line, at, length) {
-  const a = line.getPointAtLength(Math.max(0, at - 6))
-  const b = line.getPointAtLength(Math.min(length, at + 6))
-  const angle = Math.abs(Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI)
-  return angle > 35 && angle < 145
-}
-
 // The line stops 4px before the word and starts again 4px after it.
 function cutGap(line, spot, length) {
   let from, to

@@ -4,7 +4,7 @@
 module ConnectionsMapHelper
   # "Georgia Power and MEAG Power own Plant Vogtle": the verb agrees with
   # several givers.
-  PLURAL_VERBS = { "owns" => "own", "operates" => "operate", "supplies" => "supply", "sells power to" => "sell power to", "funds" => "fund" }.freeze
+  PLURAL_VERBS = { "owns" => "own", "operates" => "operate", "supplies" => "supply", "sells power to" => "sell power to", "funds" => "fund", ConnectionsMap::BOTH => "own and operate" }.freeze
 
   # One of our line icons, drawn inside the map's SVG, centred on (x, y).
   def map_icon(name, x, y, size)
@@ -34,11 +34,11 @@ module ConnectionsMapHelper
 
   # What the group of connections says, built from the same data as the picture (#561):
   # "Connections. X-energy: funded by DOE; supplied by Centrus and Sargent & Lundy; sells power to Amazon; owns TRISO-X".
-  PASSIVE = { "owns" => "owned by", "operates" => "operated by", "supplies" => "supplied by", "sells power to" => "buys power from", "funds" => "funded by" }.freeze
+  PASSIVE = { "owns" => "owned by", "operates" => "operated by", "supplies" => "supplied by", "sells power to" => "buys power from", "funds" => "funded by", ConnectionsMap::BOTH => "owned and operated by" }.freeze
 
   def map_summary(map)
     phrases = map.folded.group_by { |edge| [ edge.receiver.key == map.centre.key, edge.verb ] }
-      .sort_by { |(inbound, verb), _| [ inbound ? 0 : 1, ConnectionsMap::VERBS.index(verb) ] }
+      .sort_by { |(inbound, verb), _| [ inbound ? 0 : 1, ConnectionsMap.verb_rank(verb) ] }
       .map do |(inbound, verb), edges|
         names = edges.map { |edge| map_partner_name(edge, inbound ? edge.giver : edge.receiver) }.to_sentence
         "#{inbound ? PASSIVE.fetch(verb) : verb} #{names}"
@@ -54,7 +54,7 @@ module ConnectionsMapHelper
   end
 
   # The phone tree's rows (#561): givers first, then receivers, by verb in the spec's order.
-  TREE_ORDER = { true => %w[funds supplies], false => [ "sells power to", "owns", "operates" ] }.freeze
+  TREE_ORDER = { true => %w[funds supplies], false => [ "sells power to", "owns", ConnectionsMap::BOTH, "operates" ] }.freeze
   TreeRow = Struct.new(:verb, :inbound, :node, :edge, keyword_init: true)
 
   def map_tree_rows(map, edges = map.folded)

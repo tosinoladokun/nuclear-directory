@@ -18,6 +18,12 @@ class ConnectionsMap
   # The five verbs, in the order the text version lists them.
   VERBS = [ "owns", "operates", "supplies", "sells power to", "funds" ].freeze
 
+  # One arrow for an owner that also operates the same plants (Design QA on #561): two curves to one box cross
+  # and stack their labels.
+  BOTH = "owns and operates"
+
+  def self.verb_rank(verb) = verb == BOTH ? 1.5 : VERBS.index(verb)
+
   # How a description that isn't a signed deal starts (PM and Data Quality, 17 Oct).
   NOT_SIGNED = [ "MOU", "Framework", "Term sheet", "Binding term sheet", "Letter of intent", "Non-binding", "Preorder",
     "Option", "Conditional", "Announced plan", "Agreement to explore", "Partnership", "Strategic agreement", "Prepayment" ].freeze
@@ -113,7 +119,7 @@ class ConnectionsMap
 
   # The map as first drawn: plants folded into one node when there are many.
   def folded
-    return edges unless folds?
+    return combine(edges) unless folds?
 
     plants = others.select(&:plant?)
     fold = Node.new(key: "fold-plants", name: "#{plants.size} plants", short_name: nil, kind: :fold, record: nil, members: plants)
@@ -125,10 +131,31 @@ class ConnectionsMap
         sources: group.flat_map(&:sources).uniq, checked_on: group.filter_map(&:checked_on).max, covers: names.size,
         members: group.map { |edge| from_plant ? edge.giver : edge.receiver })
     end
-    others_edges + merged
+    combine(others_edges + merged)
   end
 
+  # The opened plants stay as they are: merged, the few plants both owned and operated would be a second bundle over the same
+  # lines as the operates bundle, with no clear place for its label.
   def opened = edges
+
+  # Owns and operates the same node, or the same plants, become one "owns and operates" edge; when the sets
+  # differ they stay two.
+  def combine(list)
+    pairs = list.select { |edge| %w[owns operates].include?(edge.verb) }
+      .group_by { |edge| [ edge.giver.key, edge.receiver.key, edge.members&.map(&:key)&.sort ] }
+      .values.select { |group| group.map(&:verb).sort == %w[operates owns] }
+    return list if pairs.empty?
+
+    list.filter_map do |edge|
+      group = pairs.find { |g| g.include?(edge) }
+      next edge unless group
+      next unless group.first.equal?(edge)
+
+      Edge.new(id: "#{edge.id}-both", giver: edge.giver, receiver: edge.receiver, verb: BOTH, facts: group.flat_map(&:facts),
+        details: group.flat_map(&:details).uniq, sources: group.flat_map(&:sources).uniq, checked_on: group.filter_map(&:checked_on).max,
+        covers: group.map(&:covers).compact.max, members: edge.members)
+    end
+  end
 
   # An arrow from records already in hand (the /design example); profiles build their own.
   def link(giver, receiver, verb, facts, lead: nil) = add(giver, receiver, verb, facts, lead:)

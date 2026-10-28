@@ -60,6 +60,16 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert_equal [ 6, 13 ], [ map.companies, map.plants ], "Helion is in a note, not on the map"
   end
 
+  test "an owner that also operates the same node is one 'owns and operates' arrow; different sets stay two" do
+    build_vogtle
+    owner = cite!(company("Both Co"))
+    cite!(link(owner, "owns", @vogtle))
+    cite!(link(owner, "operates", @vogtle))
+    both = ConnectionsMap.for_plant(PlantProfile.new(@vogtle)).folded.select { |edge| edge.giver.name == "Both Co" }
+    assert_equal [ ConnectionsMap::BOTH ], both.map(&:verb)
+    assert_equal "Both Co owns and operates #{@vogtle.name}", both.first.sentence
+  end
+
   test "every arrow and note names a web source, or isn't shown" do
     build_vogtle
     unsourced = company("Unsourced Owner")

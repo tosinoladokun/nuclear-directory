@@ -76,12 +76,14 @@
     <div class="nd-tree">
       <p class="nd-tree__centre"><span class="nd-catsq <%= bucket_class(map.category(map.centre)) if map.category(map.centre) %>" aria-hidden="true"><%= icon(map_node_icon(map, map.centre) || "site-plant", set: :nd, size: 20) %></span><b><%= map.centre.name %></b></p>
       <ol class="nd-tree__rows">
+        <% previous = nil %>
         <% map_tree_rows(map).each do |row| %>
+          <% again = previous == [ row.verb, row.inbound ]; previous = [ row.verb, row.inbound ] %>
           <% node = row.node %>
           <% category = map.category(node) %>
           <% if node.fold? %>
-            <li class="nd-tree__row nd-tree__row--<%= row.inbound ? "in" : "out" %>">
-              <span class="nd-tree__verb"><%= row.verb %></span><span class="nd-tree__branch" aria-hidden="true"></span>
+            <li class="nd-tree__row nd-tree__row--<%= row.inbound ? "in" : "out" %><%= " nd-tree__row--again" if again %>">
+              <span class="nd-tree__verb<%= " sr-only" if again %>"><%= row.verb %></span><span class="nd-tree__branch" aria-hidden="true"></span>
               <details class="nd-tree__fold">
                 <summary><span class="nd-catsq" aria-hidden="true"><%= icon("site-plant", set: :nd, size: 16) %></span><span class="nd-tree__name"><%= map_partner_name(row.edge, node) %></span></summary>
                 <ul class="nd-tree__plants">
@@ -93,8 +95,8 @@
               </details>
             </li>
           <% else %>
-            <li class="nd-tree__row nd-tree__row--<%= row.inbound ? "in" : "out" %>">
-              <span class="nd-tree__verb"><%= row.verb %></span><span class="nd-tree__branch" aria-hidden="true"></span>
+            <li class="nd-tree__row nd-tree__row--<%= row.inbound ? "in" : "out" %><%= " nd-tree__row--again" if again %>">
+              <span class="nd-tree__verb<%= " sr-only" if again %>"><%= row.verb %></span><span class="nd-tree__branch" aria-hidden="true"></span>
               <%= link_to map_node_url(node), class: [ "nd-tree__node", (bucket_class(category) if category) ] do %><span class="nd-catsq" aria-hidden="true"><%= icon(map_node_icon(map, node) || "site-plant", set: :nd, size: 16) %></span><span class="nd-tree__name" title="<%= node.name %>"><%= node.name %></span><% end %>
             </li>
           <% end %>

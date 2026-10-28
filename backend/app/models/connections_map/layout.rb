@@ -18,7 +18,7 @@ class ConnectionsMap
     # are half the side of the boxes: a 36px square for the page's record, 28px
     # for the others (#561). The map is 696px wide, the page's middle column.
     Size = Data.define(:key, :width, :centre_r, :node_r, :font, :floor, :label_font, :slot, :short_names)
-    WIDE = Size.new(key: "wide", width: 696, centre_r: 18, node_r: 14, font: 13, floor: 13, label_font: 12, slot: 126, short_names: false)
+    WIDE = Size.new(key: "wide", width: 696, centre_r: 18, node_r: 14, font: 13, floor: 13, label_font: 12, slot: 148, short_names: false)
 
     PAD = 24
     PAD_X = 8        # the left and right edge of the map to the names: the page's column has no spare room
@@ -48,7 +48,7 @@ class ConnectionsMap
       @groups = []
       @links_to = edges.flat_map { |edge| [ edge.giver.key, edge.receiver.key ] }.tally
       groups = edges.group_by { |edge| [ edge.verb, edge.receiver.key == centre.key ] }
-        .sort_by { |(verb, inbound), list| [ VERBS.index(verb), inbound ? 0 : 1, -list.size ] }
+        .sort_by { |(verb, inbound), list| [ ConnectionsMap.verb_rank(verb), inbound ? 0 : 1, -list.size ] }
         .map { |(verb, inbound), list| [ verb, inbound, list.sort_by { |edge| other(edge, inbound).name.downcase } ] }
       lay_out_wide(groups)
     end
@@ -70,7 +70,7 @@ class ConnectionsMap
         sides = { left: [], right: [] }
         height_of = ->(list) { list.sum { |(_, inbound, edges)| fresh(edges, inbound, list).size * ROW + GROUP_GAP } }
         groups.each { |group| sides[group[1] ? :left : :right] << group }
-        sides.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ VERBS.index(verb), inbound ? 0 : 1 ] } }
+        sides.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ ConnectionsMap.verb_rank(verb), inbound ? 0 : 1 ] } }
 
         column = sides.values.map { |list| height_of.(list) - GROUP_GAP }.max.to_i
         @height = [ column, size.centre_r * 2 + 120 ].max + PAD * 2 + 20
@@ -160,9 +160,7 @@ class ConnectionsMap
         points = numbers(label_on)
         start, finish = points.first(2), points.last(2)
         mid = cubic_point(points, 0.5)
-        tangent = cubic_tangent(points, 0.5)
-        angle = Math.atan2(tangent[1], tangent[0]).abs * 180 / Math::PI
-        steep = angle > 35 && angle < 145
+        steep = true # every verb sits flat at the curve's midpoint, never tilted (Design QA on #561)
         Group.new(id: "#{prefix}-#{edges.first.id}", verb:, edges:, inbound:, members:, trunk:, label_path: label_on,
           label_reversed: (reverse(points) if finish[0] < start[0]), label_at: mid.map { |value| value.round(1) }, steep:)
       end
