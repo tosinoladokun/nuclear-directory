@@ -249,7 +249,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_equal [ "Project developer", "Reactor designer" ], css_select(".nd-tag").map { |el| el.text.strip }.sort, "both role labels, in the tag row under the name"
 
     get companies_path(category: "reactor-developers")
-    assert_select ".nd-listrow .nd-tag", 0
+    assert_select ".nd-line .nd-tag", 0
   end
 
   test "key facts: the value first, its label under it, no source marks or verified badge" do
