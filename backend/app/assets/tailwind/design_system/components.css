@@ -429,6 +429,7 @@
   .nd-instant__row { display: flex; align-items: center; gap: var(--nd-space-3); padding: var(--nd-space-2) var(--nd-space-4); color: var(--nd-ink); text-decoration: none; }
   .nd-instant__row:hover, .nd-instant__row:focus-visible { background: var(--nd-paper-sunken); }
   .nd-instant__row .nd-mono, .nd-instant__row .nd-ring { width: 32px; height: 32px; font-size: 11px; }
+  .nd-instant__row .nd-catsq { width: 32px; height: 32px; }
   .nd-instant__text { display: flex; flex-direction: column; min-width: 0; }
   .nd-instant__text span { color: var(--nd-ink-muted); }
   .nd-instant__all { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-space-2); padding: var(--nd-space-3) var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink-muted); text-decoration: none; }

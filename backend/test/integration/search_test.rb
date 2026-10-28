@@ -25,6 +25,14 @@ class SearchTest < ActionDispatch::IntegrationTest
     assert_select ".nd-instant__all[href=?]", "/companies?q=kairos", text: /All results for “kairos”/
   end
 
+  test "a company's result has its category square, not letter boxes" do
+    cite!(Organization.find_by!(slug: "kairos-power"))
+    get search_path(q: "kairos")
+
+    assert_select ".nd-instant__row[href='/companies/kairos-power'] .nd-catsq.nd-bucket--reactor-developers svg"
+    assert_select ".nd-instant .nd-mono", 0, "no initials boxes"
+  end
+
   test "an unpublished role doesn't show on a published company's result" do
     OrganizationRole.joins(:organization).find_by!(organizations: { name: "Kairos Power" }).unpublish!(by: "human:test")
 

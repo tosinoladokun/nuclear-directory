@@ -22,6 +22,8 @@ class SearchController < ApplicationController
         @plants = close.plants.limit(PLANT_LIMIT).to_a
         @fuzzy = @companies.any? || @plants.any?
       end
+      # Each company's first category, for its square: one pass for the whole list.
+      @categories = Bucket.firsts(@companies)
       @roles = OrganizationRole.published.where(organization_id: @companies.map(&:id)).includes(:role).group_by(&:organization_id)
     end
 
