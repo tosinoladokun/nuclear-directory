@@ -205,20 +205,7 @@
 
 
   .nd-list { list-style: none; margin: 0; padding: 0; }
-  .nd-listrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: var(--nd-space-1) var(--nd-space-4); align-items: center; padding: 14px var(--nd-space-1); border-bottom: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink); text-decoration: none; }
   .nd-fuzzy-note { margin: var(--nd-space-3) 0 0; }
-  .nd-listrow:hover { background: var(--nd-paper-raised); }
-  .nd-listrow:hover .nd-listrow__name { text-decoration: underline; text-underline-offset: 3px; }
-  .nd-listrow__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; container-type: inline-size; }
-  /* One line each (Tosin): the name and the line under it shrink to fit the
-     row, down to 13px, then end in an ellipsis; the full text is in the
-     title, and on the record's own page. */
-  .nd-listrow__name, .nd-listrow__desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nd-listrow__name { font: 600 clamp(13px, calc(100cqi / (var(--chars, 20) * 0.6)), 16px)/22px var(--font-text); }
-  .nd-listrow__desc { font-size: clamp(13px, calc(100cqi / (var(--chars, 40) * 0.56)), 14px); line-height: 20px; color: var(--nd-ink-muted); }
-  @container (max-width: 300px) { .nd-listrow__cap { display: none; } }
-  .nd-listrow__side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; font-size: 13px; line-height: 18px; color: var(--nd-ink-muted); }
-  .nd-listrow__side .nd-num { font-size: 11px; }
 
   .nd-ring { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--nd-ink); border-radius: 50%; color: var(--nd-ink); }
   .nd-ring--lg { width: 56px; height: 56px; border-width: 2px; }
@@ -263,8 +250,6 @@
   .nd-notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3) var(--nd-space-4); padding: var(--nd-space-6) 0; font-size: 15px; }
 
   @media (max-width: 560px) {
-    .nd-listrow { grid-template-columns: 40px minmax(0, 1fr); }
-    .nd-listrow__side { grid-column: 2; align-items: flex-start; text-align: left; flex-direction: row; gap: var(--nd-space-2); }
     .nd-factrow { grid-template-columns: minmax(0, 1fr); }
     .nd-factrow__side { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
     .nd-profile__name { font-size: 28px; line-height: 34px; }

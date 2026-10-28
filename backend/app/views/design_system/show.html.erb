@@ -158,16 +158,6 @@ Disallow: /</pre>
     </div>
 
     <div class="flex flex-col gap-2">
-      <span class="type-label">Company and power plant rows: full, then sparse</span>
-      <ul class="nd-list">
-        <%= render "shared/company_row", organization: m[:company], connections: 6 %>
-        <%= render "shared/company_row", organization: m[:company_sparse] %>
-        <%= render "shared/plant_row", facility: m[:plant], connections: 9 %>
-        <%= render "shared/plant_row", facility: m[:plant_sparse] %>
-      </ul>
-    </div>
-
-    <div class="flex flex-col gap-2">
       <span class="type-label">Profile header: company with description, plant without</span>
       <%= render "shared/profile_header", name: m[:company].name, kind: :company, description: m[:company].description,
             citations: [ [ 1, m[:sources][0] ] ], tags: [ "Reactor designer", "Molten salt coolant", "Fission" ], heading_id: "design-profile-company" %>

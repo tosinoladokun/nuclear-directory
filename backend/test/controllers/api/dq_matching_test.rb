@@ -381,4 +381,12 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert entry, "it's in Today"
     assert entry.checked, "Data Quality's first-hand approve counts (#608)"
   end
+
+  test "Data Quality's own new plant shows in Today even from a source's first batch" do
+    run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
+    c = Candidate.create!(source: @page, crawl_run: run, kind: "facility", status: "needs_review", quote: "PULSTAR, docket 05000297",
+      payload: { "name" => "PULSTAR First Batch", "nrc_docket" => "05000297" }, notes: "similar: North Anna")
+    act({ id: c.id, action: "new", reason: "A research reactor" })
+    assert_includes OwnerInbox.new.sections["new_record"].map { |e| e.item.candidate_id }, c.id
+  end
 end
