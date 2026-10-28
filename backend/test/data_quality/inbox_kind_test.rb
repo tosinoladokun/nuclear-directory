@@ -19,7 +19,7 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
   def kind(candidate) = DataQuality::Review.inbox_kind(candidate.reload)
 
   test "new records and facts, changes, and Data Quality's own" do
-    pending = Organization.create!(name: "Brand New Fission", verification_status: "pending")
+    pending = give_sourced_role(Organization.create!(name: "Brand New Fission", verification_status: "pending"))
     assert_equal "new_record", kind(claim({ "name" => "Brand New Fission" }, status: "matched", subject_type: "Organization", subject_id: pending.id, proposed_subject: true))
     role = OrganizationRole.create!(organization: @company, role: Role.first || Role.create!(key: "fuel", name: "Fuel"), verification_status: "pending")
     link = Candidate.create!(source: @page, crawl_run: @run, kind: "organization_role", quote: "q", status: "matched", subject_type: "OrganizationRole",
@@ -44,7 +44,7 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
   end
 
   test "a claim on a pending record is part of its first publication; news is a new fact; a first batch is Data Quality's" do
-    pending = Organization.create!(name: "Second Copy Fission", verification_status: "pending")
+    pending = give_sourced_role(Organization.create!(name: "Second Copy Fission", verification_status: "pending"))
     copy = claim({ "name" => "Second Copy Fission" }, status: "matched", subject_type: "Organization", subject_id: pending.id)
     assert_equal "new_record", kind(copy), "another page's copy of a proposal"
     news = Candidate.create!(source: @page, crawl_run: @run, kind: "news_item", quote: "q", status: "matched", subject_type: "Organization",
@@ -74,5 +74,13 @@ class DataQuality::InboxKindTest < ActiveSupport::TestCase
   test "only a new name for a published company is Data Quality's, not a Change" do
     variant = claim({ "name" => "Kind Fission Holdings" }, status: "matched", subject_type: "Organization", subject_id: @company.id)
     assert_equal "dq", kind(variant)
+  end
+
+  test "a new company without a sourced category stays Data Quality's" do
+    bare = Organization.create!(name: "No Role Co", verification_status: "pending")
+    c = claim({ "name" => "No Role Co" }, status: "matched", subject_type: "Organization", subject_id: bare.id, proposed_subject: true)
+    assert_equal "dq", kind(c)
+    give_sourced_role(bare)
+    assert_equal "new_record", kind(c)
   end
 end

@@ -237,6 +237,9 @@ module DataQuality::Review
       pending = directory.fact(type: candidate.subject_type, id: candidate.subject_id)&.verification_status == "pending"
       if candidate.proposed_subject || pending
         return "dq" if candidate.payload.to_h.key?(DataQuality::DirectoryClient::ENRICHMENT_KEY) && !candidate.proposed_subject
+        # A new company reaches him only with a sourced category (a role);
+        # until one is proposed it stays Data Quality's (PM, 28 Oct).
+        return "dq" if candidate.kind == "organization" && !directory.sourced_role?(candidate.subject_id)
         return %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
       end
       # A restatement, or only a new name for it, changes no value: Data
