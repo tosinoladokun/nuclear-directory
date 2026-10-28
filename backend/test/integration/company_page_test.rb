@@ -266,7 +266,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_equal "referral", params["utm_medium"]
     assert_equal "company-page", params["utm_campaign"]
     assert_select ".nd-glance dd", text: "Alameda, CA"
-    assert_select ".nd-glance dt + dd", minimum: 4
+    assert_select ".nd-glance dt + dd", minimum: 3 # headquarters, website, other names
     assert_select ".nd-glance dt", text: "Founded", count: 0
     assert_select ".nd-glance .nd-src, .nd-glance .nd-badge", 0
     assert_select ".nd-glance", text: /checked/, count: 0
@@ -344,17 +344,32 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crumbs a[href=?]", "/companies?category=investors", text: "Investors"
   end
 
-  test "every bucket the company is in is listed in its key facts, each linked (#281)" do
+  test "the key facts have no Type chips: the tags and the trail say what the company is" do
     westinghouse = cite!(company("Westinghouse", roles: [ Role.find_by(key: "reactor_vendor") || role("reactor_vendor"), role("reactor_services") ]))
     cite!(link(westinghouse, "invests_in", @kairos))
     get company_path(slug: westinghouse.slug)
 
-    assert_select ".nd-glance dt", "Type"
-    assert_equal [ "Developers", "Services and engineering", "Investors" ], css_select(".nd-glance a.nd-chip").map { |chip| chip.text.strip }
-    assert_select ".nd-glance a.nd-chip.nd-bucket--reactor-developers[href=?] svg", "/companies?category=reactor-developers"
-    assert_select ".nd-glance a.nd-chip.nd-bucket--services[href=?]", "/companies?category=services"
-    assert_select ".nd-glance a.nd-chip.nd-bucket--investors[href=?]", "/companies?category=investors"
+    assert_select ".nd-glance dt", text: "Type", count: 0
+    assert_select ".nd-glance .nd-chip", 0
+    assert_select ".nd-pagehead__tags .nd-tag", minimum: 2
+    # Every tag carries an icon; a role takes its category's icon and colour.
+    assert_select ".nd-pagehead__tags .nd-tag:not(.nd-tag--icon)", 0
+    assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--reactor-developers svg", minimum: 1
+    assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--services svg", minimum: 1
     assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+  end
+
+  test "the legal name isn't listed again under Also known as" do
+    # A legal name that doesn't normalise to the display name, so the builder keeps it as an alias.
+    acme = company("Acme Nuclear", aliases: [ "Acme Holdings Group LLC", "Acme" ], description: "Makes parts.")
+    acme.update!(legal_name: "Acme Holdings Group LLC")
+    cite!(acme)
+    get company_path(slug: acme.slug)
+
+    assert_select ".nd-glance dt", "Legal name"
+    assert_select ".nd-glance dd", text: "Acme Holdings Group LLC", count: 1
+    assert_select ".nd-glance .nd-glance__list > span", "Acme"
+    assert_select ".nd-glance .nd-glance__list > span", text: "Acme Holdings Group LLC", count: 0
   end
 
   test "a hidden invests-in deal doesn't make a company an investor" do

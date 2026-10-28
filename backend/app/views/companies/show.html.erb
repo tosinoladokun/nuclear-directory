@@ -1,7 +1,5 @@
 <%
   p = @profile
-  role_tags = p.shown_roles.map { |r| role_label(r.role) }
-  tech_tags = p.technologies.map { |t| t.technology.name }
   record_citations = p.citations_for(p.organization)
   # Title and description say what this page adds, from published facts (#292).
   content_for :title, company_title(p)
@@ -41,14 +39,15 @@
     plant_role = ("as #{facility_role_noun(plant_roles.first)}" if plant_roles.one?)
     cite_text = "Nuclear Directory. “#{p.name.chomp(".")}.” #{company_url(slug: p.slug)}. Accessed #{Date.current.strftime("%-d %B %Y")}."
     facts = [
-      { label: "Type", value: (tag.span(class: "nd-chips") { safe_join(p.buckets.map { |b| render("shared/chip", label: b.name, href: directory_url_for(category: b), icon: bucket_icon(b), bucket: b) }) } if p.buckets.any?) },
+      # No Type chips here: the tags under the summary and the trail above the name say what the company is (Tosin, 27 Oct).
       # Role and technology are the tags under the name; the key facts don't say them again (Design, 27 Oct).
       { label: "Headquarters", value: location(p.hq_city, p.hq_state, country: (p.organization.country_code if p.sourced?)) },
       { label: "Website", value: (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) },
       { label: p.parents.size > 1 ? "Parent companies" : "Parent company", wide: p.parents.size > 1,
         list: p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") } },
       { label: p.subsidiaries.size > 1 ? "Subsidiaries" : "Subsidiary", wide: true, list: p.subsidiaries.map { |l| link_to(l.from_organization.name, company_url_for(l.from_organization), class: "nd-link") } },
-      { label: "Also known as", list: p.aliases, wide: p.aliases.size > 1 },
+      # The legal name has its own fact; it isn't listed again as another name.
+      { label: "Also known as", list: p.aliases - [ p.legal_name ], wide: (p.aliases - [ p.legal_name ]).size > 1 },
       { label: "Legal name", value: p.legal_name, wide: true },
       { label: "Founded", value: p.founded_year }
     ]
@@ -57,7 +56,7 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, about: p.description, tags: role_tags + tech_tags %>
+      <%= render "shared/page_head", name: p.name, about: p.description, tags: company_tags(p) %>
     </div>
 
     <%# No key facts, no empty card. %>
