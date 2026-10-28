@@ -71,6 +71,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
         # rule from the start, so matching doesn't depend on candidate order.
         directory.owner_hints = candidates.status_new.where(kind: "organization").filter_map { |c| c.payload["name"] }
         rematch_settled_ends
+        rematch_waiting_news
         sweep_restatements
         ORDER.each do |kind|
           candidates.status_new.where(kind: kind).find_each { |candidate| match(candidate) }
@@ -173,6 +174,38 @@ class DataQuality::Stages::Match < DataQuality::Stage
       end
     end
 
+    NAMES_NOTHING = "it names no company or plant in the directory".freeze
+
+    # A waiting news item that named nothing in the directory is matched
+    # again once one of the companies or plants it names is there (#536),
+    # under the same locks and recheck as rematch_settled_ends.
+    def rematch_waiting_news
+      candidates.where(status: "needs_review", subject_id: nil, review_origin: nil, kind: "news_item").find_each do |candidate|
+        next unless candidate.notes.to_s.start_with?(NAMES_NOTHING) && !DataQuality::Review.lead?(candidate)
+
+        named = Array(candidate.payload.to_h["about"]).any? do |about|
+          next false unless about.is_a?(Hash)
+
+          hit = resolve(about["type"] == "facility" ? :facility : :organization, about.except("type"), closed: :found)
+          hit.is_a?(Found) && EXACT.include?(hit.by) && !hit.record.closed?
+        end
+        next unless named
+
+        notes = candidate.notes
+        reopened = Candidate.transaction do
+          ::Source.lock.find(candidate.source_id)
+          candidate.lock!
+          next false unless candidate.status_needs_review? && candidate.subject_id.nil? && candidate.review_origin.nil? && candidate.notes == notes
+
+          candidate.update!(status: "new", ai_recommendation: nil, ai_reason: nil, ai_confidence: nil)
+        end
+        next unless reopened
+
+        (@rematched ||= {})[candidate.id] = notes
+        @stats["rematched"] = @stats.fetch("rematched", 0) + 1
+      end
+    end
+
     # A news item (#137) is about the companies and plants it names: each
     # found exactly (name, alias or docket) is noted as a mention, and the
     # claim is attached to the first, so it's decided with that record. One
@@ -186,7 +219,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
         hit = resolve(type, about.except("type"), closed: :found)
         hit.record if hit.is_a?(Found) && EXACT.include?(hit.by) && !hit.record.closed?
       end.uniq { |record| [ record.type, record.id ] }
-      return review(candidate, "it names no company or plant in the directory") if found.empty?
+      return review(candidate, NAMES_NOTHING) if found.empty?
 
       candidate.update!(payload: payload.merge("mentions" => found.map { |record| [ record.type, record.id ] }))
       attach(candidate, found.first, "About #{found.map(&:name).to_sentence}")
