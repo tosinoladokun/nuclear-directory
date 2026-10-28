@@ -257,8 +257,13 @@ module Seed
         # under it (it's in aliases), then is removed from the aliases in the
         # same write.
         quotes = backs.filter_map { |item, fields| evidence(item, sources)&.merge(fields: fields.uniq.presence) }
-        write(slug, :organization, attributes, quotes,
-          remove_aliases: legal ? [] : Array(doc["legal_name"]))
+        # pending: true leaves the company for Tosin's Create in Today: a new
+        # one is created pending, and an existing one keeps its decision (a
+        # write with no verification changes no status). Its roles and links
+        # are added all the same; none is public while the company isn't.
+        pending = doc["pending"].present?
+        write(slug, :organization, attributes, quotes, pending:,
+          remove_aliases: legal || pending ? [] : Array(doc["legal_name"]))
       end
 
       def write_facts(slug, doc, sources)

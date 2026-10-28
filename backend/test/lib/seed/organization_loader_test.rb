@@ -151,6 +151,25 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
       "the description's quote also states the legal name; the HQ entry gives only the city; a re-seed changes nothing")
   end
 
+  test "a company file marked pending leaves the company for Tosin's Create; its roles are added, and a later decision holds" do
+    role = item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel supplies fuel.")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", pending: true, roles: [ role ]))
+    existing = Organization.create!(name: "Waiting Co", slug: "waiting-co", verification_status: "pending")
+    existing.aliases.create!(alias: "Waiting Co") # its name, as FactWriter stores it
+    write_file("waiting-co", org("Waiting Co", website: "https://waiting.example.com", pending: true, roles: [ role ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    acme = Organization.find_by!(slug: "acme-fuel")
+    assert acme.pending?, "created pending, not published"
+    assert existing.reload.pending?, "an existing pending company isn't verified by the seed"
+    assert_equal 1, acme.organization_roles.count, "its roles are still added"
+
+    existing.verify!(by: "human:tosin") # Tosin's Create
+    Seed::OrganizationLoader.new(@dir).load!
+    assert existing.reload.verified?, "a re-seed never undoes his decision"
+  end
+
   test "a legal name is cited by the quote that states it" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", legal_name: "Acme Fuel, Inc.",
       roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel, Inc. supplies fuel.") ]))
