@@ -407,4 +407,19 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_nil DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal "rejected", claim.reload.status
   end
+
+  test "propose_role: a retry is answered before the cap; Undo refuses after a reopen or when another source supports the role" do
+    Role.find_by(key: "reactor_vendor") || Role.create!(key: "reactor_vendor", name: "Reactor vendor")
+    row = { action: "propose_role", target: @holtec.id, role: "reactor_vendor", quote: "Holtec designs the SMR-300.",
+      source_url: "https://holtecinternational.com/smr", reason: "Holtec's own page", request_key: "role-1" }
+    act(row)
+    first = results.sole["id"]
+    DataQuality::Matching::DAILY_ROLES.times { |i| DqAction.create!(candidate: claim("Cap #{i}"), action: "propose_role", reason: "r", before: {}, by: DataQuality::Matching::BY) }
+    act(row)
+    assert_equal [ true, first ], results.sole.values_at("ok", "id"), "a retry, not a limit error"
+
+    claim = Candidate.find(first)
+    claim.update_columns(reopenings: [ { "by" => "human:tosin" } ])
+    assert_match "decided since", DataQuality::Matching.undo(DqAction.find_by!(request_key: "role-1").id)
+  end
 end

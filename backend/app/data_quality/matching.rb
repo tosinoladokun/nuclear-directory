@@ -200,13 +200,13 @@ module DataQuality::Matching
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
     return fail_with.call("give the quote that states the role") if quote.blank?
     return fail_with.call("#{role.inspect} isn't a role") unless directory.role_key?(role)
-    if DqAction.where(action: "propose_role", created_at: Time.current.all_day).count >= DAILY_ROLES
-      return fail_with.call("today's limit of #{DAILY_ROLES} roles is reached; ask Backend")
-    end
-
+    # A retry (same request_key) is answered first, whatever today's count.
     key = row["request_key"].presence&.to_s
     if key && (done = DqAction.find_by(request_key: key))
       return Row.new(id: done.candidate_id, ok: true, error: nil, created_ids: [ done.candidate_id ])
+    end
+    if DqAction.where(action: "propose_role", created_at: Time.current.all_day).count >= DAILY_ROLES
+      return fail_with.call("today's limit of #{DAILY_ROLES} roles is reached; ask Backend")
     end
 
     Candidate.transaction do
@@ -225,16 +225,27 @@ module DataQuality::Matching
     end
   rescue Abort => e
     Row.new(id: nil, ok: false, error: e.message, created_ids: [])
+  rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
+    # A concurrent retry with the same key won: its claim is the answer.
+    won = key && DqAction.find_by(request_key: key)
+    raise e unless won
+
+    Row.new(id: won.candidate_id, ok: true, error: nil, created_ids: [ won.candidate_id ])
   end
 
   # Undoing a proposed role: the claim closes, and a pending role it
   # proposed is taken off, while no person has decided either.
   def self.undo_role(action, claim, directory)
-    raise Abort, "the role was decided since, so it can't be undone here" unless %w[new matched needs_review].include?(claim.status) && claim.reviewed_by.nil?
+    # Never decided or reopened by a person since (reopenings only grow).
+    untouched = %w[new matched needs_review].include?(claim.status) && claim.reviewed_by.nil? &&
+      claim.reopenings.to_a == action.after.to_h.fetch("reopenings", [])
+    raise Abort, "the role was decided since, so it can't be undone here" unless untouched
 
     if claim.proposed_subject && claim.subject_id
       directory.lock_fact(type: claim.subject_type, id: claim.subject_id)
       raise Abort, "the role was decided since" unless directory.fact(type: claim.subject_type, id: claim.subject_id)&.verification_status == "pending"
+      others = Candidate.where(subject_type: claim.subject_type, subject_id: claim.subject_id).where.not(id: claim.id).where(status: %w[new matched needs_review merged]).exists?
+      raise Abort, "another source supports this role now, so it stays; close this claim instead" if others
 
       errors = directory.decide_fact("organization_role", id: claim.subject_id, status: "rejected", by: BY, reason: "Data Quality undid propose_role").errors
       raise Abort, errors.to_sentence if errors.any?
