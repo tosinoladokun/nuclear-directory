@@ -15,6 +15,9 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
   AWARDS_KIND = "usaspending_doe_awards"
   PER_NIGHT = 15
   REFRESH_DAYS = 90
+  # What the address is, shown with every claim (DQ, 29 Oct): for a large
+  # firm it may be a branch, not its headquarters.
+  ADDRESS_KIND = "Address: registered address (SAM registration)"
   BLOCKED = "USAspending blocked us".freeze
 
   def initialize(fetcher: DataQuality::Fetcher.new)
@@ -26,7 +29,7 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     due = recipient_ids.filter_map do |id|
       source = Source.find_or_create_by!(url: format(API_URL, id)) do |row|
         row.source_kind = source_kind
-        row.title = "USAspending.gov recipient record"
+        row.title = "USAspending.gov recipient record (registered address, SAM registration)"
       end
       source if source.fetched_at.nil? || source.fetched_at < REFRESH_DAYS.days.ago
     end
@@ -47,7 +50,7 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     return [] unless facts["Country"] == "USA" && facts["City"].present? && facts["State"].to_s.match?(/\A[A-Z]{2}\z/) && facts["Recipient"].present?
 
     name = awards.display_name(facts["Recipient"])
-    quote = lines.select { |line| line.start_with?("Recipient: ", "City: ", "State: ") }.join("\n")
+    quote = lines.select { |line| line.start_with?("Recipient: ", "Address: ", "City: ", "State: ") }.join("\n")
     [ { kind: "organization", quote:, payload: { "name" => name, "aliases" => ([ facts["Recipient"] ] if name != facts["Recipient"]),
       "hq_city" => facts["City"].titleize, "hq_state" => facts["State"] }.compact } ]
   end
@@ -63,7 +66,8 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
 
   def source_facts(_source)
     "This is a recipient's record at USAspending.gov, the U.S. government's federal spending site: the recipient's " \
-      "name and the city, state and country of the address it registered with the government."
+      "name and the city, state and country of its registered address (its SAM registration). For a large firm " \
+      "that address may be a branch rather than its headquarters."
   end
 
   private
@@ -81,7 +85,7 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     def address_lines(body)
       json = JSON.parse(body)
       location = json["location"] || {}
-      [ "Recipient: #{json['name'].to_s.squish}", "City: #{location['city_name'].to_s.squish}",
+      [ "Recipient: #{json['name'].to_s.squish}", ADDRESS_KIND, "City: #{location['city_name'].to_s.squish}",
         "State: #{location['state_code']}", "Country: #{location['country_code']}" ].join("\n")
     end
 end

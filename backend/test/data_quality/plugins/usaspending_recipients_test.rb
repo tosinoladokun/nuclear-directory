@@ -26,7 +26,7 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
     assert_equal({ "changed" => 1 }, crawl.stats)
     assert_equal({}, crawl.stats)
     assert_requested @record, times: 1
-    assert_equal "Recipient: SHINE TECHNOLOGIES, LLC\nCity: JANESVILLE\nState: WI\nCountry: USA", Source.find_by!(url: RECORD).content_text
+    assert_equal "Recipient: SHINE TECHNOLOGIES, LLC\nAddress: registered address (SAM registration)\nCity: JANESVILLE\nState: WI\nCountry: USA", Source.find_by!(url: RECORD).content_text
   end
 
   test "proposes the company's headquarters city and state" do
@@ -36,6 +36,7 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
 
     assert_equal({ "hq_city" => "Janesville", "hq_state" => "WI" }, claim[:payload].slice("hq_city", "hq_state"))
     assert plugin.quote_in_source?(source, claim[:quote])
+    assert_includes claim[:quote], "registered address (SAM registration)"
     assert_empty plugin.extract(Source.new(content_text: "Recipient: X\nCity: Paris\nState: \nCountry: FRA"), nil)
   end
 
