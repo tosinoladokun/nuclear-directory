@@ -235,7 +235,7 @@ class HomeCardsTest < ApplicationSystemTestCase
 
     toggle = find("section[data-key=fuel] .nd-catcard__toggle")
     assert_equal "true", toggle["aria-expanded"]
-    assert_equal "Fuel and Materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
+    assert_equal "Fuel and materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
     toggle.click
     assert_equal "false", toggle["aria-expanded"]
     assert_no_selector "section[data-key=fuel] a.nd-catcard__row", visible: true
