@@ -3,7 +3,7 @@ require "json"
 
 # The open dataset (#254): every published fact, with the public documents
 # it comes from, as one folder ready to commit to the nuclear-directory-data
-# repo. Five tables, each as CSV and JSON, and the files that describe them
+# repo. Seven tables, each as CSV and JSON, and the files that describe them
 # (README, DATA-DICTIONARY, CITATION.cff, .zenodo.json, LICENSE, CHANGELOG)
 # plus manifest.json, which the next release reads to say what changed.
 #
@@ -90,8 +90,43 @@ module Dataset
         "published_on" => "Date the document was published, when known",
         "accessed_on" => "Date Nuclear Directory last read it"
       },
+      "deal_terms" => {
+        "id" => "The term's key: term-<n>",
+        "attached_to" => "relationships (a deal between two parties) or companies (a company's own funding round)",
+        "attached_key" => "The relationship's id, or the company's slug",
+        "term_type" => "offtake (a power deal), award (a government award), funding_round or loan",
+        "agreement" => "For an offtake, the form of agreement: ppa, supply_agreement, tariff_subscription, development_agreement, prepayment, " \
+          "framework, mou, loi, option or preorder",
+        "status" => "announced, signed, active, completed or terminated, when stated",
+        "counted" => "For an offtake, true for a signed power deal with no open condition: the deals a headline count includes",
+        "capacity_mw" => "Headline capacity in MW, as stated",
+        "firm_mw" => "MW firmly contracted, when the source states it apart from the headline",
+        "amount_usd" => "Amount in US dollars, as stated (an award's obligation, a round's amount sold, a loan's amount)",
+        "amount_offered_usd" => "For a funding round, the amount offered, when stated",
+        "signed_on" => "Date signed, when stated",
+        "starts_on" => "Start date, when stated",
+        "ends_on" => "End date, when stated",
+        "term_years" => "Length in years, when a source gives it instead of dates",
+        "conditions" => "What a signed deal still waits for (e.g. a regulator's approval), when stated",
+        "program" => "The government program, for an award or loan",
+        "round" => "The round's name, for a funding round (e.g. Series C)",
+        "lead_investors" => "Slugs of the round's lead investors (in companies)",
+        "checked_on" => "Date a person or the verifier last checked it"
+      },
+      "licensing_stages" => {
+        "id" => "The stage's key: stage-<n>",
+        "facility_slug" => "The plant or unit that holds the docket (in facilities); blank for a design approval",
+        "company_slug" => "For a design approval, the developer (in companies)",
+        "design_name" => "For a design approval, the design",
+        "stage" => "pre_application, application_accepted, construction_permit, combined_licence, operating_licence, restart_review, " \
+          "restart_approved, design_approval, withdrawn or denied",
+        "nrc_docket" => "NRC docket number",
+        "effective_on" => "Date the NRC record gives for the stage",
+        "expires_on" => "Expiry date, when stated",
+        "checked_on" => "Date a person last checked it"
+      },
       "evidence" => {
-        "fact_table" => "Table of the fact: companies, facilities or relationships",
+        "fact_table" => "Table of the fact: companies, facilities, relationships, deal_terms or licensing_stages",
         "fact_key" => "The fact's slug or id in that table",
         "fact_part" => "For a company's category or technology, which one (role:<key> or technology:<key>); blank for the record or link itself",
         "source_id" => "The source that states it (in sources)"
@@ -178,14 +213,29 @@ module Dataset
           .select { |t| sourced?(t) }
         buckets = Category.buckets.map { |category| [ category.key, Organization.where(id: Bucket.organization_ids(category)).pluck(:id).to_set ] }
 
+        # A deal term shows with its link (or its company's round), a stage
+        # with its plant or developer, each only with a source of its own.
+        link_keys = company_links.to_h { |link| [ [ "Relationship", link.id ], "company-#{link.id}" ] }
+          .merge(plant_links.to_h { |link| [ [ "FacilityRelationship", link.id ], "facility-#{link.id}" ] })
+        company_slugs = companies.to_h { |company| [ company.id, company.slug ] }
+        terms = DealTerm.published.order(:id).select do |term|
+          sourced?(term) && (term.link_type == "Organization" ? company_slugs.key?(term.link_id) : link_keys.key?([ term.link_type, term.link_id ]))
+        end
+        facility_slugs = facilities.to_h { |facility| [ facility.id, facility.slug ] }
+        stages = LicensingStage.published.order(:id).select do |stage|
+          sourced?(stage) && (stage.facility_id ? facility_slugs.key?(stage.facility_id) : company_slugs.key?(stage.organization_id))
+        end
+
         evidence = evidence_rows(companies: companies.select { |c| sourced?(c) }, facilities: [ *shown_sites, *sourced_units ], company_links:,
-          plant_links:, roles:, technologies:)
+          plant_links:, roles:, technologies:, terms:, stages:)
         sources = Source.where(id: evidence.map { |row| row["source_id"] }.uniq).order(:id).to_a
 
         {
           "companies" => companies.map { |company| company_row(company, roles, technologies, buckets) },
           "facilities" => facilities.map { |facility| facility_row(facility) },
           "relationships" => company_links.map { |link| company_link_row(link) } + plant_links.map { |link| plant_link_row(link) },
+          "deal_terms" => terms.map { |term| term_row(term, link_keys, company_slugs) },
+          "licensing_stages" => stages.map { |stage| stage_row(stage, facility_slugs, company_slugs) },
           "sources" => source_rows(sources),
           "evidence" => evidence
         }
@@ -243,14 +293,30 @@ module Dataset
 
       # One row per fact and source: which document states each record, link,
       # category and technology. Quotes stay on the site.
-      def evidence_rows(companies:, facilities:, company_links:, plant_links:, roles:, technologies:)
+      def term_row(term, link_keys, company_slugs)
+        attached = term.link_type == "Organization" ? [ "companies", company_slugs.fetch(term.link_id) ] :
+          [ "relationships", link_keys.fetch([ term.link_type, term.link_id ]) ]
+        { "id" => "term-#{term.id}", "attached_to" => attached.first, "attached_key" => attached.last,
+          **row(term, %w[term_type agreement status]), "counted" => (term.counted? if term.offtake?),
+          **row(term, %w[capacity_mw firm_mw amount_usd amount_offered_usd signed_on starts_on ends_on term_years conditions program round]),
+          "lead_investors" => term.lead_investor_ids.filter_map { |id| company_slugs[id] }, "checked_on" => term.verified_at&.to_date }
+      end
+
+      def stage_row(stage, facility_slugs, company_slugs)
+        { "id" => "stage-#{stage.id}", "facility_slug" => facility_slugs[stage.facility_id], "company_slug" => company_slugs[stage.organization_id],
+          **row(stage, %w[design_name stage nrc_docket effective_on expires_on]), "checked_on" => stage.verified_at&.to_date }
+      end
+
+      def evidence_rows(companies:, facilities:, company_links:, plant_links:, roles:, technologies:, terms: [], stages: [])
         facts = [
           [ companies, "companies", ->(c) { c.slug }, ->(_) { nil } ],
           [ facilities, "facilities", ->(f) { f.slug }, ->(_) { nil } ],
           [ company_links, "relationships", ->(l) { "company-#{l.id}" }, ->(_) { nil } ],
           [ plant_links, "relationships", ->(l) { "facility-#{l.id}" }, ->(_) { nil } ],
           [ roles, "companies", ->(r) { r.organization.slug }, ->(r) { "role:#{r.role.key}" } ],
-          [ technologies, "companies", ->(t) { t.organization.slug }, ->(t) { "technology:#{t.technology.key}" } ]
+          [ technologies, "companies", ->(t) { t.organization.slug }, ->(t) { "technology:#{t.technology.key}" } ],
+          [ terms, "deal_terms", ->(t) { "term-#{t.id}" }, ->(_) { nil } ],
+          [ stages, "licensing_stages", ->(s) { "stage-#{s.id}" }, ->(_) { nil } ]
         ]
         facts.flat_map do |records, table, key, part|
           next [] if records.empty?
