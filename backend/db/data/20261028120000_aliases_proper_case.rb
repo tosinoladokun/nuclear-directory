@@ -36,7 +36,7 @@ class AliasesProperCase < DeployData::Migration
     177 => [ "PLASMA PROCESSES, LLC", "Plasma Processes, LLC" ], # Plasma Processes
     206 => [ "SOUTHERN COMPANY SERVICES, INC.", "Southern Company Services, Inc." ], # Southern Company
     176 => [ "SYDOR INSTRUMENTS, LLC", "Sydor Instruments, LLC" ], # Sydor Instruments
-    178 => [ "XUV LASERS, INC.", "XUV Lasers, Inc." ], # XUV Lasers
+    178 => [ "XUV LASERS, INC.", "XUV Lasers, Inc." ] # XUV Lasers
   }.freeze
 
   def up
