@@ -1432,15 +1432,16 @@
   .nd-sentence--narrow { display: none; }
   @media (max-width: 639px) { .nd-sentence--wide { display: none; } .nd-sentence--narrow { display: block; } }
   .nd-glance__note { display: block; }
-  .nd-partygroup { display: flex; flex-direction: column; gap: var(--nd-space-2); }
-  .nd-partygroup + .nd-partygroup { margin-top: var(--nd-space-6); }
-  .nd-partygroup > .nd-label { margin: 0; }
   /* The share bar: ink fill on a sunken track (112px; 72px on phones), the percentage in mono at the end. */
-  .nd-crow__share { flex: none; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
+  /* The bar sits in a fixed column at the end of the row, so every bar starts at the same x and can be compared; the percentage is mono, right-aligned, so the decimal points stack. */
+  .nd-crow__share { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
+  .nd-crow__share + .nd-crow__share { margin-left: 0; }
   .nd-share { width: 112px; height: 6px; border-radius: 3px; background: var(--nd-paper-sunken); overflow: hidden; display: inline-block; }
   .nd-crow--open .nd-share, .nd-crow__line:hover .nd-share { background: var(--nd-rule); }
   .nd-share__fill { display: block; height: 100%; background: var(--nd-ink); }
-  .nd-crow__pct { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+  .nd-crow__pct { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; width: 6ch; text-align: right; }
+  /* A plain source line in an opened row: the domain and date as muted text, no boxed number. */
+  .nd-src--plain { border: 0; padding: 0; margin: 0; background: none; font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); text-decoration: underline; text-underline-offset: 3px; }
   /* Rows stack below 640px, and at 1024 to 1143px, where the page's middle column is no wider than a phone's. */
   @media (max-width: 639px), (min-width: 1024px) and (max-width: 1143px) {
     .nd-share { width: 72px; }
@@ -1469,5 +1470,14 @@
     .nd-utable td[data-col="reactor"], .nd-utable td[data-col="capacity"], .nd-utable td[data-col="nrc-docket"] { order: 3; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); display: block; flex: 0 0 auto; }
     .nd-utable td[data-col="capacity"], .nd-utable td[data-col="nrc-docket"] { font: 400 13px/20px var(--font-mono); }
     .nd-utable__src { order: 4; margin-left: auto; }
+  }
+}
+
+/* Owner rows (#557, Design's review): the name has its own column that ends in an ellipsis, then the units, then the bar column. */
+@layer components {
+  @media (min-width: 640px) {
+    .nd-partygroup .nd-crow__who { display: flex; flex: 0 1 280px; max-width: none; }
+    .nd-partygroup .nd-crow__who .nd-crow__name { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nd-partygroup .nd-crow__what { flex: 0 0 auto; min-width: 0; }
   }
 }

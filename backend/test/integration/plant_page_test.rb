@@ -94,7 +94,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
 
     assert_select "#parties-heading .nd-sechead__count", "3"
     assert_select ".nd-partygroup .nd-label", text: /Owners/
-    assert_select ".nd-crow", text: /Georgia Power owns/ do
+    assert_select ".nd-crow", text: /Georgia Power/ do
       assert_select ".nd-crow__what", "unit 3"
       assert_select ".nd-crow__share[aria-label='45.7% share']" do
         assert_select ".nd-share__fill[style*='45.7%']"
@@ -107,11 +107,65 @@ class PlantPageTest < ActionDispatch::IntegrationTest
         assert_select "a[href='/companies/georgia-power']", "View Georgia Power"
       end
     end
-    assert_select ".nd-crow", text: /Southern Nuclear operates/ do
+    assert_select ".nd-crow", text: /Southern Nuclear/ do
       assert_select ".nd-share", 0, "no stated share: no bar and no percentage"
     end
-    assert_select ".nd-crow", text: /Westinghouse Nuclear is the reactor developer/
+    assert_select ".nd-crow", text: /Westinghouse Nuclear/
     assert_select "a", text: "Report a correction", count: 1
+  end
+
+  test "inside a labelled group a row has no verb; one decimal on every share when any has one" do
+    other = cite!(link(company("Oglethorpe Power Corporation"), "owns", @unit4))
+    other.update!(ownership_pct: 30)
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select ".nd-partygroup .nd-crow__rest", 0, "the group label says what they do"
+    assert_select ".nd-crow__pct", text: /45\.7%/
+    assert_select ".nd-crow__pct", text: /30\.0%/, count: 1
+  end
+
+  test "the deals group keeps its verb, which has no group label" do
+    buyer = cite!(link(company("Power Buyer Co"), "offtakes_from", @vogtle))
+    buyer.update!(description: "Signed: 100 MW.")
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select "#deals .nd-crow__rest", text: /buys power/
+  end
+
+  test "the section and its index entry are named after the groups it has" do
+    FacilityRelationship.find_by!(organization: @southern).unpublish!(by: "human:test")
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select "#parties-heading", /\AOwners/
+    assert_select "#parties-heading", text: /operator/i, count: 0
+    assert_select "nav.nd-idx a[href='#parties']", /Owners/
+    assert_select "nav.nd-idx a[href='#parties']", text: /Owners and ope/, count: 0
+
+    FacilityRelationship.find_by!(organization: @georgia).unpublish!(by: "human:test")
+    get plant_path(slug: "plant-vogtle")
+    assert_select "#parties-heading", /Reactor developer/
+  end
+
+  test "a link to the site that states its units shows them on the row, stated and never inferred" do
+    site_link = cite!(link(company("Site Level Co"), "owns", @vogtle))
+    site_link.update!(description: "Units 3 and 4: 22.7% share.", ownership_pct: 22.7)
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select ".nd-crow", text: /Site Level Co/ do
+      assert_select ".nd-crow__what", "units 3 and 4"
+    end
+    other = cite!(link(company("Silent Co"), "owns", @vogtle))
+    get plant_path(slug: "plant-vogtle")
+    assert_select ".nd-crow", text: /Silent Co/ do
+      assert_select ".nd-crow__what", 0
+    end
+  end
+
+  test "an opened row shows its source as plain text: no boxed number" do
+    get plant_path(slug: "plant-vogtle")
+
+    assert_select ".nd-crow__more a.nd-src--plain", /georgiapower\.com · checked/
+    assert_select ".nd-crow__more .nd-src sup", 0
   end
 
   test "a share shows only when every folded link states the same one" do
@@ -119,7 +173,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     cite!(link(@georgia, "owns", unit4)) # no stated share on Unit 4
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-crow", text: /Georgia Power owns/ do
+    assert_select ".nd-crow", text: /Georgia Power/ do
       assert_select ".nd-crow__what", "units 3 and 4"
       assert_select ".nd-share", 0, "a 45.7% bar would claim a share for Unit 4 that no source states"
     end
@@ -131,7 +185,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     later.update!(description: "Conditional on state approval.", started_on: 2.years.from_now.to_date)
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-crow", text: /Georgia Power owns/ do
+    assert_select ".nd-crow", text: /Georgia Power/ do
       assert_select ".nd-crow__more p", text: /Unit 3:.*Co-owned with Oglethorpe Power and MEAG Power\. Since January 2020/
       assert_select ".nd-crow__more p", text: /Unit 4:.*Conditional on state approval\. Starts /
     end
@@ -157,8 +211,8 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     FacilityRelationship.find_by!(organization: @southern, facility: @vogtle).unpublish!(by: "human:test")
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-crow", text: /Southern Nuclear operates/, count: 1
-    assert_select ".nd-crow", text: /Southern Nuclear operates/ do
+    assert_select ".nd-crow", text: /Southern Nuclear/, count: 1
+    assert_select ".nd-crow", text: /Southern Nuclear/ do
       assert_select ".nd-crow__what", "units 3 and 4"
     end
   end
@@ -170,7 +224,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
 
     get plant_path(slug: byron.slug)
 
-    assert_select ".nd-crow", text: /Constellation operates/ do
+    assert_select ".nd-crow", text: /Constellation/ do
       assert_select ".nd-crow__what", "unit 1"
     end
     assert_select "body", text: /Byron Generating Station, Byron 1/, count: 0
@@ -315,7 +369,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     get plant_path(slug: "clinch-river")
 
     assert_select "body", text: /Site Owner/, count: 0
-    assert_select ".nd-crow", text: /Unit Owner owns/ do
+    assert_select ".nd-crow", text: /Unit Owner/ do
       assert_select ".nd-crow__what", "unit 1"
     end
   end
@@ -359,7 +413,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     FacilityRelationship.find_by!(organization: @southern).update!(started_on: 1.year.from_now.to_date)
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-crow", text: /Southern Nuclear operates/ do
+    assert_select ".nd-crow", text: /Southern Nuclear/ do
       assert_select ".nd-crow__more p", /Starts /
     end
     # The one-line summary doesn't state a scheduled link as current (#246).

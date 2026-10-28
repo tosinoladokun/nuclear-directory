@@ -6,7 +6,9 @@
 <% type = link.relationship_type %>
 <% covers = profile.units_phrase(party) %>
 <% share = party.share %>
-<% share_text = "#{number_with_precision(share, precision: 2, strip_insignificant_zeros: true)}%" if share %>
+<%# One decimal on every row when any row has one, so the decimal points stack (display only). %>
+<% share_text = (local_assigns[:decimals] ? "#{number_with_precision(share, precision: 1)}%" : "#{number_with_precision(share, precision: 2, strip_insignificant_zeros: true)}%") if share %>
+<% show_verb = local_assigns.fetch(:verb, true) %>
 <% citations = profile.party_citations(party) %>
 <% evidence = party.links.flat_map(&:evidence).max_by { |e| e.confidence || 0 } %>
 <% detail_id = "party-#{type}-#{organization.id}" %>
@@ -15,8 +17,8 @@
   <div class="nd-crow__top">
   <button type="button" class="nd-crow__line" aria-expanded="false" aria-controls="<%= detail_id %>" data-action="row-open#toggle" data-row-open-target="button">
     <%= company_square(organization, category: profile.party_category(organization)) %>
-    <span class="nd-crow__who" title="<%= organization.name %> <%= plant_verb(type) %>">
-      <b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= name_text %></b><span class="nd-crow__rest"> <%= plant_verb(type) %></span>
+    <span class="nd-crow__who" title="<%= organization.name %><%= " #{plant_verb(type)}" if show_verb %>">
+      <b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= name_text %></b><% if show_verb %><span class="nd-crow__rest"> <%= plant_verb(type) %></span><% end %>
     </span>
     <% if covers %><span class="nd-crow__what"><%= covers %></span><% end %>
     <% if share %>
@@ -50,7 +52,7 @@
       <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= evidence.quote %>”</p>
     <% end %>
     <div class="nd-row">
-      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, checked: (link.verified_at if index.zero?) %><% end %>
+      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, plain: true, checked: (link.verified_at if index.zero?) %><% end %>
       <%= render "shared/confidence", value: link.confidence %>
     </div>
   </div>

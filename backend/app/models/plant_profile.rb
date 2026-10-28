@@ -67,8 +67,13 @@ class PlantProfile
 
   # "units 3 and 4", "units 1 to 4", "unit 2": what a party's links cover, from the unit names' numbers; nil when
   # a link names the site itself, or a name has no number.
+  STATED_UNITS = /\bunits?\s+\d+(?:\s*(?:,|and|&|to|–|-)\s*\d+)*/i
+
   def units_phrase(party)
-    return if party.units.empty? || party.links.any? { |link| link.facility == site }
+    # A link to the site itself names no unit; its own words may still state which units it covers (never inferred).
+    if party.units.empty? || party.links.any? { |link| link.facility == site }
+      return party.links.filter_map { |link| link.description.to_s[STATED_UNITS] }.first&.downcase&.squish
+    end
 
     numbers = party.units.map { |unit| unit.name[/(\d+)\s*\z/, 1]&.to_i }
     return if numbers.any?(&:nil?)

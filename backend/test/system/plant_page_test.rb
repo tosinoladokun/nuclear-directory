@@ -18,17 +18,29 @@ class PlantPageSystemTest < ApplicationSystemTestCase
     owner.update!(ownership_pct: 45.7, description: "Co-owned.")
     owner.evidence.create!(source: @source, quote: "the project's co-owners", found_by: "human", confidence: 1)
     cite!(link(company("Southern Nuclear Operating Company, Inc. of the Southeast"), "operates", @vogtle), source: @source)
-    cite!(link(company("Oglethorpe Power Corporation"), "owns", @vogtle), source: @source)
+    oglethorpe = link(company("Oglethorpe Power Corporation"), "owns", @vogtle)
+    oglethorpe.update!(ownership_pct: 30)
+    oglethorpe.evidence.create!(source: @source, found_by: "human", confidence: 1)
   end
 
   test "an owner row opens to its quote and source, with a link to the company" do
     visit plant_path(slug: @vogtle.slug)
     row = find(".nd-crow", text: "Georgia Power")
-    assert_selector ".nd-share", count: 1
+    assert_selector ".nd-share", count: 2
 
     row.find("button.nd-crow__line").click
     assert_text "the project's co-owners"
     assert_selector "a", text: "View Georgia Power"
+  end
+
+  test "the share bars share one column and the percentages stack their decimal points" do
+    resize_viewport(1440, 900)
+    visit plant_path(slug: @vogtle.slug)
+    rects = all(".nd-crow__share").map { |share| [ share.find(".nd-share").evaluate_script("this.getBoundingClientRect().left"), share.find(".nd-crow__pct").evaluate_script("this.getBoundingClientRect().right") ] }
+
+    assert_equal 2, rects.size
+    assert_in_delta rects[0][0], rects[1][0], 1, "the bars start at the same x"
+    assert_in_delta rects[0][1], rects[1][1], 1, "the percentages end at the same x"
   end
 
   test "an owner's source mark opens the sheet" do

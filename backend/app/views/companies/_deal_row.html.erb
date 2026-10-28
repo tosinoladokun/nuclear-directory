@@ -44,7 +44,7 @@
       <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= quote %>”</p>
     <% end %>
     <div class="nd-row">
-      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, checked: (deal.verified_at if index.zero?) %><% end %>
+      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, plain: true, checked: (deal.verified_at if index.zero?) %><% end %>
       <%= render "shared/confidence", value: deal.confidence %>
     </div>
   </div>
