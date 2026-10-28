@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Ares Security
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.usaspending.gov/recipient/20d72f65-c3dd-978a-7b45-2bdcb600c7ed-C/latest
+  quote: "DESC0020873,ARES SECURITY CORPORATION,1299985.0,2020-06-29,2023-08-22,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0020873_089,ASST_NON_DESC0020873_089,20d72f65-c3dd-978a-7b45-2bdcb600c7ed-C,\"ADVANCES IN NUCLEAR PLANT PHYSICAL SECURITY MODELING AND SIMULATION TO LINK EXISTING NUCLEAR POWER PLANT REACTOR SYSTEM RESPONSE, FORCE-ON-FORCE MODELING AND SITUATIONAL UNCERTAINTY\""
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

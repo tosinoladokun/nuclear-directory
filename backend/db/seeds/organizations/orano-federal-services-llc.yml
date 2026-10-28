@@ -1,0 +1,11 @@
+# Seed research for the no-category audit, batch 3 (PM, 28 Oct 2026). Quote copied from Orano's US site, fetched this session.
+name: Orano Federal Services, LLC
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.orano.group/usa/en
+  quote: "Orano Federal Services is a valued partner for environmental cleanup and advanced nuclear solutions with a relentless corporate focus on excellence and quality."
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

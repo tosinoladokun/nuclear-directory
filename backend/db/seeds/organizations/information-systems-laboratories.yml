@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Information Systems Laboratories
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.usaspending.gov/recipient/3ee030e2-99fa-39aa-6d6f-2763659e8205-C/latest
+  quote: "DESC0022607,\"INFORMATION SYSTEMS LABORATORIES, INC\",198746.0,2022-06-27,2023-07-26,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0022607_089,ASST_NON_DESC0022607_089,3ee030e2-99fa-39aa-6d6f-2763659e8205-C,AI DEEP LEARNING TOOL FOR HIGH-FIDELITY PHYSICS SIMULATIONS OF NUCLEAR REACTOR SYSTEMS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

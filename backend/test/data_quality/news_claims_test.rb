@@ -34,6 +34,21 @@ class DataQuality::NewsClaimsTest < ActiveSupport::TestCase
     assert_match "names no company or plant in the directory", lost.notes
   end
 
+  test "a waiting news item is matched again once a company it names is added (#536)" do
+    lost = news([ { "name" => "Nobody Fission", "type" => "organization" } ])
+    match!
+    assert_equal "needs_review", lost.reload.status
+    match!
+    assert_equal "needs_review", lost.reload.status, "still nothing to match"
+
+    Organization.create!(name: "Nobody Fission").tap { |c| c.verify!(by: BY); c.aliases.create!(alias: c.name) }
+    stats = DataQuality::Stages::Match.call(plugin: DummyPlugin.new).stats
+    lost.reload
+    assert_equal [ "matched", "Organization" ], [ lost.status, lost.subject_type ]
+    assert_match "Matched again", lost.notes
+    assert_equal 1, stats["rematched"]
+  end
+
   test "approving writes the item and its mentions; it shows in Latest only once approved, and the claim stays on its company" do
     claim = news([ { "name" => "Acme Fission", "type" => "organization" }, { "name" => "Latest Point", "type" => "facility" } ])
     match!

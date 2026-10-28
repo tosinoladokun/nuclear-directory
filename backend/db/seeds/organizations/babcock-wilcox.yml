@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Babcock & Wilcox
+status: active
+roles:
+- key: reactor_vendor
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/reactors/ano1
+  quote: "Arkansas Nuclear One, Unit 1 | Docket Number: 05000313 | Reactor Vendor/Type: Babcock & Wilcox Lowered Loop"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
