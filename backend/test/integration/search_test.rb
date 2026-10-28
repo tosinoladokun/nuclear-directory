@@ -6,7 +6,7 @@ class SearchTest < ActionDispatch::IntegrationTest
 
   setup do
     vendor = role("reactor_vendor")
-    company("Kairos Power", city: "Alameda", state: "CA", roles: [ vendor ])
+    cite!(company("Kairos Power", city: "Alameda", state: "CA", roles: [ vendor ]))
     company("Kairos Ghost", roles: [ vendor ], verified: false)
     plant("Kairos Hermes", facility_type: "research_reactor", city: "Oak Ridge", state: "TN")
   end
@@ -23,6 +23,14 @@ class SearchTest < ActionDispatch::IntegrationTest
     assert_select ".nd-instant__row[href='/plants/kairos-hermes']", /Test reactor · Oak Ridge, TN/
     assert_select ".nd-instant[data-instant-search-count='2']"
     assert_select ".nd-instant__all[href=?]", "/companies?q=kairos", text: /All results for “kairos”/
+  end
+
+  test "each result has its category square, never a letter box" do
+    get search_path(q: "kairos")
+
+    assert_select ".nd-instant__row[href='/companies/kairos-power'] .nd-catsq.nd-bucket--reactor-developers .nd-ic"
+    assert_select ".nd-instant__row[href='/plants/kairos-hermes'] .nd-catsq .nd-ic"
+    assert_select ".nd-instant .nd-mono, .nd-instant .nd-ring", count: 0
   end
 
   test "an unpublished role doesn't show on a published company's result" do
