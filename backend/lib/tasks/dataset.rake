@@ -4,7 +4,7 @@ namespace :dataset do
   task export: :environment do
     dir = ENV.fetch("DIR", Rails.root.join("tmp/dataset").to_s)
     result = Dataset::Export.new(dir, version: ENV.fetch("VERSION", Date.current.strftime("%Y.%m")), previous: ENV["PREVIOUS"].presence).write!
-    result[:counts].each { |name, count| puts "#{name.ljust(14)} #{count}" }
+    result[:counts].each { |name, count| puts "#{name.ljust(16)} #{count}" }
     if result[:unknown_publishers].any?
       puts "No publisher known for #{result[:unknown_publishers].size} domains (shown as the domain; add them to lib/dataset/publishers.yml):"
       result[:unknown_publishers].each { |host| puts "  #{host}" }
