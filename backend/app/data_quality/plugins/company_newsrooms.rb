@@ -30,7 +30,10 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   HOMEPAGE_KIND = "newsroom_homepage"
   DISCOVER_PER_NIGHT = 10
   REDISCOVER_DAYS = 30
-  NEW_FEEDS_PER_NIGHT = 10
+  NEW_FEEDS_PER_NIGHT = 5
+  # A found feed proposes only its newest items from before it was found
+  # (DQ, 28 Oct): its back catalogue is old news, each item Tosin's to approve.
+  FIRST_READ_ITEMS = 3
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
   NOT_A_FEED = "Not an RSS or Atom feed; the address may have moved"
@@ -79,7 +82,9 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     company = company_for(source) or return []
     since = @today.call - WINDOW_DAYS
     taken = decided_urls(source)
-    Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }.map do |item|
+    recent = Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
+    recent = since_found(source, recent) if found_feed?(company)
+    recent.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
         "summary" => item.summary, "about" => about(company, item) }.compact }
@@ -116,6 +121,17 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   PARTNER = /\b((?:#{WORD}\s+){0,5}#{WORD}),?\s+(?:#{LEGAL})\b\.?/
 
   private
+    def found_feed?(company) = @discover && !@feeds.key?(company)
+
+    # A found feed's items published since it was found, and only the newest
+    # FIRST_READ_ITEMS of those before: the same on every read, so its back
+    # catalogue never comes in later.
+    def since_found(source, items)
+      found_on = source.created_at.to_date
+      before, after = items.partition { |item| item.published_on < found_on }
+      (after + before.sort_by(&:published_on).last(FIRST_READ_ITEMS)).sort_by(&:published_on).reverse
+    end
+
     # Reads up to DISCOVER_PER_NIGHT homepages not read in REDISCOVER_DAYS,
     # never-read ones first, storing each as "Company: …" and "Feed: …" lines.
     def discover

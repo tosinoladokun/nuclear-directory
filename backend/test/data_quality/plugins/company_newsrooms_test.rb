@@ -179,10 +179,13 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert_equal "changed", stats["Acme Fission"]
     assert_requested acme, times: 1
     assert_not_requested nothing
-    assert_equal 10, plugin.new_sources_per_run
+    assert_equal 5, plugin.new_sources_per_run
 
     source = Source.find_by!(url: "https://acmefission.com/news/feed/")
-    assert plugin.extract(source, nil).all? { |claim| claim[:payload]["publisher"] == "Acme Fission" }
+    claims = plugin.extract(source, nil)
+    assert claims.all? { |claim| claim[:payload]["publisher"] == "Acme Fission" }
+    assert_operator claims.size, :<=, Plugin::FIRST_READ_ITEMS, "a found feed's back catalogue: only its newest items"
+    assert_equal claims.map { |c| c[:payload]["published_on"] }.sort.reverse, claims.map { |c| c[:payload]["published_on"] }
     assert_equal({ "homepages_read" => 0, "feeds_found" => 0 }, DataQuality::Stages::Crawl.call(plugin:).stats.slice("homepages_read", "feeds_found"))
   end
 
@@ -194,5 +197,12 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert_equal Plugin::DISCOVER_PER_NIGHT, DataQuality::Stages::Crawl.call(plugin: discovering(list)).stats["homepages_read"]
     assert_nil plugin.new_sources_per_run
     refute_includes DataQuality::Plugins::TradePress.new.feeds.keys, "Co 1"
+  end
+
+  test "a found feed: everything since it was found, and only the newest three from before" do
+    item = ->(day) { Plugin::Item.new(title: "Item #{day}", url: "https://x/#{day}", published_on: Date.new(2026, 10, day), summary: nil) }
+    source = Source.new(created_at: Time.zone.local(2026, 10, 20))
+    kept = discovering([]).send(:since_found, source, [ 1, 5, 10, 15, 18, 21, 22 ].map(&item))
+    assert_equal [ 22, 21, 18, 15, 10 ], kept.map { |each| each.published_on.day }
   end
 end
