@@ -104,7 +104,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # Gap fill (Tosin, 29 Oct): each night Enrich is also asked for the
   # GAP_FILL_PER_NIGHT published companies with the most empty basics; what
   # their pages say goes through the usual claims, checks and approval.
-  GAP_FILL_PER_NIGHT = 10
+  # 5 a night for the first week (DQ, 29 Oct); Data Quality raises it.
+  GAP_FILL_PER_NIGHT = 5
 
   def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
@@ -263,7 +264,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
+      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
 

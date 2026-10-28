@@ -53,7 +53,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = plugin.extract(Source.find_by!(url: HOME), nil)
 
     assert_equal [ [ "organization", "description" ], [ "organization", "hq_city" ], [ "organization", "founded_year" ],
-      [ "organization_role", "reactor_vendor" ], [ "organization_technology", "smr" ] ],
+      [ "organization_technology", "smr" ] ], # no categories: Data Quality's, by hand (28 Oct)
       claims.map { |c| [ c[:kind], c[:payload].except("name", "organization").first&.then { |k, v| c[:kind] == "organization" ? k : v } ] }
     assert(claims.all? { |c| c[:quote].present? })
   end
