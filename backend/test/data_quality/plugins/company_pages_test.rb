@@ -352,4 +352,15 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_includes stats["gaps_without_website"], "Siteless Fission"
     assert @company.reload.enriched_at
   end
+
+  test "a home page that redirects: its relative links are read from where it ended (#525)" do
+    stub_request(:get, HOME).to_return(status: 301, headers: { "Location" => "#{HOME}en/" })
+    stub_request(:get, "#{HOME}en/").to_return(body: '<a href="about">About us</a>', headers: { "Content-Type" => "text/html" })
+    en_about = stub_request(:get, "#{HOME}en/about").to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    assert_equal "#{HOME}en/", Source.find_by!(url: HOME).final_url
+    assert_requested en_about
+  end
 end
