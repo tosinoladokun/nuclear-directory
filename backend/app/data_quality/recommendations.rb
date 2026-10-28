@@ -246,6 +246,7 @@ module DataQuality::Recommendations
           # No checker verdict to say the source still holds it: its quote must.
           # The source's plug-in reads it; without one, the stored text must contain it.
           in_source = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
+          return "it has no quote" if candidate.quote.blank?
           return "its quote isn't in the source any more" unless in_source.call(candidate.quote)
         else
           return "the app's checker didn't recommend it" unless candidate.ai_recommendation == "recommend_publish"

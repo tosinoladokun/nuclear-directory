@@ -110,4 +110,16 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_not result.ok?
     assert_not @new_co.reload.verified?
   end
+
+  test "a claim with no quote never counts for Yes to all, even with Data Quality's approve" do
+    @page.update!(content_text: nil)
+    @create.update_columns(quote: "")
+    DataQuality::Recommendations.record("#{@create.id} approve: looks right", by: "human:dq")
+    entry = OwnerInbox.new.sections["new_record"].find { |e| e.item.candidate_id == @create.id }
+    assert_not entry.checked
+    item = DataQuality::Recommendations::Item.new(candidate_id: @create.id, call: "approve", reason: "looks right", snapshot: @create.reload.dq_payload_sha256,
+      claim: nil, subject_type: "Organization", subject_id: @new_co.id, why: nil, waiting: true)
+    assert_not DataQuality::Recommendations.accept([ item ], by: "human:tosin", first_hand: true).sole.ok?
+    assert_not @new_co.reload.verified?
+  end
 end

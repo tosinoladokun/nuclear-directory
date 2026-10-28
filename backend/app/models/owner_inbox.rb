@@ -87,6 +87,8 @@ class OwnerInbox
     end
 
     def quote_in_source?(candidate)
+      return false if candidate.quote.blank?
+
       check = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
       check.call(candidate.quote)
     end
