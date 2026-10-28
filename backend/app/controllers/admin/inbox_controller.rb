@@ -43,7 +43,7 @@ class Admin::InboxController < Admin::BaseController
       return redirect_to(admin_inbox_path, alert: "The list changed since you opened it, so nothing was done. Check it and try again.")
     end
 
-    results = DataQuality::Recommendations.accept(items, by: actor)
+    results = DataQuality::Recommendations.accept(items, by: actor, first_hand: true)
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Done: #{helpers.pluralize(done.size, 'item')} live." if done.any?
     flash[:alert] = "#{helpers.pluralize(stopped.size, 'item')} stayed: #{stopped.flat_map(&:errors).uniq.to_sentence}." if stopped.any?
