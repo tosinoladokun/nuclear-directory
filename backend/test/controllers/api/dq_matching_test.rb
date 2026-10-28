@@ -336,4 +336,49 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     require Rails.root.join("db/migrate/20261027120000_allow_recommend_dq_actions")
     assert_raises(ActiveRecord::IrreversibleMigration) { AllowRecommendDqActions.new.tap { |m| m.verbose = false }.migrate(:down) }
   end
+
+  test "a claim held by its source reaches Tosin once Data Quality approves it" do
+    pending = Organization.create!(name: "Held Ceramics Co", verification_status: "pending")
+    # An earlier, decided batch first, so this one isn't the source's first.
+    CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 2.days.ago)
+      .then { |first| Candidate.create!(source: @page, crawl_run: first, kind: "organization", payload: { "name" => "x" }, quote: "q", status: "rejected") }
+    run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
+    held = Candidate.create!(source: @page, crawl_run: run, kind: "organization", status: "needs_review", quote: "Licensee: Holtec.",
+      payload: { "name" => "Held Ceramics Co" }, subject_type: "Organization", subject_id: pending.id, proposed_subject: true,
+      ai_recommendation: "needs_review", notes: "Check they're nuclear energy work")
+    original = DataQuality::Recommendations.method(:source_hold?)
+    DataQuality::Recommendations.define_singleton_method(:source_hold?) { |_candidate| true }
+    assert_equal "dq", DataQuality::Review.inbox_kind(held)
+    act({ id: held.id, action: "recommend", verdict: "approve", reason: "The award is for advanced reactor systems" })
+    assert_equal "new_record", DataQuality::Review.inbox_kind(held.reload)
+  ensure
+    DataQuality::Recommendations.define_singleton_method(:source_hold?, original) if original
+  end
+
+  test "a first-batch claim reaches Tosin once Data Quality approves it" do
+    run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
+    pending = Organization.create!(name: "First Batch Reactor Co", verification_status: "pending")
+    first = Candidate.create!(source: @page, crawl_run: run, kind: "organization", status: "matched", quote: "Licensee: Holtec.",
+      payload: { "name" => "First Batch Reactor Co" }, subject_type: "Organization", subject_id: pending.id, proposed_subject: true,
+      ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    assert_equal "dq", DataQuality::Review.inbox_kind(first)
+    act({ id: first.id, action: "recommend", verdict: "approve", reason: "On the NRC list" })
+    assert_equal "new_record", DataQuality::Review.inbox_kind(first.reload)
+    inbox = OwnerInbox.new
+    assert_includes inbox.sections["new_record"].map { |entry| entry.item.candidate_id }, first.id
+    result = DataQuality::Recommendations.accept(inbox.checked_items, by: "human:tosin").sole
+    assert result.ok?, result.errors.inspect
+    assert_equal "verified", pending.reload.verification_status, "his Yes to all publishes it"
+  end
+
+  test "a first-batch claim with no checker verdict shows in Today once Data Quality approves it, with its own Create" do
+    run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
+    pending = Organization.create!(name: "No Verdict Reactor Co", verification_status: "pending")
+    c = Candidate.create!(source: @page, crawl_run: run, kind: "organization", status: "matched", quote: "Licensee: Holtec.",
+      payload: { "name" => "No Verdict Reactor Co" }, subject_type: "Organization", subject_id: pending.id, proposed_subject: true)
+    act({ id: c.id, action: "recommend", verdict: "approve", reason: "On the NRC list" })
+    entry = OwnerInbox.new.sections["new_record"].find { |e| e.item.candidate_id == c.id }
+    assert entry, "it's in Today"
+    assert_not entry.checked, "not in Yes to all without the checker's call (until #608)"
+  end
 end
