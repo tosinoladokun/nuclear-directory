@@ -31,7 +31,13 @@ class OwnerInbox
   end
 
   # How many facts wait for him, without building their rows (the nav badge).
-  def size = @sections ? sections.values.sum(&:size) : groups.size
+  def size = (@sections ? sections.values.sum(&:size) : groups.size) + records.size
+
+  # Pending companies and plants with no open claim (seeded, or a claim
+  # decided since): his too, decided on the record itself.
+  def records
+    @records ||= %w[organization facility].flat_map { |kind| DataQuality::Review.pending_facts(kind:, limit: 200, directory: @directory) }
+  end
 
   # { "new_record" => [Entry, …], … }, newest first.
   def sections
@@ -77,17 +83,18 @@ class OwnerInbox
       changes
     end
 
-    # Counted in "Yes to all N" only when Accept would take it: Data
-    # Quality's approve stands in for the checker only on a source's own hold.
+    # Data Quality's own approve, still current, counts for "Yes to all N"
+    # even where the checker doubted (PM, 27 Oct); the row shows both. Never
+    # a claim the checker contradicted with a different value, and only while
+    # its quote is still in the source, as Accept checks.
     def checked?(candidate)
-      return false unless candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
-
-      # A source hold also needs its quote still in the source, as Accept checks.
-      (DataQuality::Recommendations.source_hold?(candidate) && quote_in_source?(candidate)) ||
-        (candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
+      candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
+        !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate)
     end
 
     def quote_in_source?(candidate)
+      return false if candidate.quote.blank?
+
       check = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
       check.call(candidate.quote)
     end

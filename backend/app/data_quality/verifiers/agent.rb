@@ -13,6 +13,9 @@
 # only when the model names a different value the source gives; without one
 # (or naming the claim's own value) it's "couldn't confirm".
 class DataQuality::Verifiers::Agent
+  # How a real conflict reads (a different value named): Data Quality's
+  # approve never stands in for it (#608).
+  CONTRADICTS = "The verifier says the source contradicts this".freeze
   PROMPT_VERSION = "verify-v3"
   BATCH_SIZE = 15
   PUBLISH_AT = 0.8
@@ -129,7 +132,7 @@ class DataQuality::Verifiers::Agent
       when "contradicted"
         if differs_from_claim?(answer["source_value"], claim)
           DataQuality::Verdict.new(outcome: :review, confidence:,
-            reason: "The verifier says the source contradicts this (the source gives #{answer['source_value'].squish}): #{reason}")
+            reason: "#{CONTRADICTS} (the source gives #{answer['source_value'].squish}): #{reason}")
         else
           DataQuality::Verdict.new(outcome: :review, confidence:,
             reason: "The verifier couldn't confirm this from the source (it named no different value): #{reason}")

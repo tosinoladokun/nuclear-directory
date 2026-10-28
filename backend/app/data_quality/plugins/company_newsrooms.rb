@@ -22,20 +22,47 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     "Deep Isolation" => "https://www.deepisolation.com/feed/",
     "TAE Technologies" => "https://tae.com/feed/"
   }.freeze
+  # Every other published company's feed is found from its homepage: the
+  # RSS or Atom link the homepage itself advertises (<link rel="alternate">),
+  # on the company's own domain. At most DISCOVER_PER_NIGHT homepages are
+  # read a night, each again after REDISCOVER_DAYS; a found feed is read
+  # like the ones above from the next night on (Tosin, 28 Oct: crawl more).
+  HOMEPAGE_KIND = "newsroom_homepage"
+  DISCOVER_PER_NIGHT = 10
+  REDISCOVER_DAYS = 30
+  NEW_FEEDS_PER_NIGHT = 5
+  # A found feed proposes only its newest items from before it was found
+  # (DQ, 28 Oct): its back catalogue is old news, each item Tosin's to approve.
+  FIRST_READ_ITEMS = 3
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
   NOT_A_FEED = "Not an RSS or Atom feed; the address may have moved"
 
   Item = Data.define(:title, :url, :published_on, :summary)
 
-  def initialize(fetcher: DataQuality::Fetcher.new, feeds: FEEDS, today: -> { Date.current })
+  def initialize(fetcher: DataQuality::Fetcher.new, feeds: FEEDS, today: -> { Date.current }, discover: nil, directory: nil)
     @fetcher = fetcher
     @feeds = feeds
     @today = today
+    # Only the companies' own newsrooms, with the standard list, are found
+    # from homepages; trade press and agency news read their fixed feeds.
+    @discover = discover.nil? ? instance_of?(DataQuality::Plugins::CompanyNewsrooms) && feeds.equal?(FEEDS) : discover
+    @directory = directory || DataQuality::DirectoryClient.new
   end
 
+  # The fixed feeds, then every feed found from a homepage.
+  def feeds
+    return @feeds unless @discover
+
+    found = Source.where(source_kind: HOMEPAGE_KIND, crawl_status: "ok").filter_map { |page| discovered(page.content_text) }.to_h
+    found.reject { |company, url| @feeds.key?(company) || @feeds.value?(url) }.then { |extra| @feeds.merge(extra) }
+  end
+
+  def new_sources_per_run = (NEW_FEEDS_PER_NIGHT if @discover)
+
   def crawl(_run)
-    @feeds.each_with_object({}) do |(company, url), stats|
+    stats = @discover ? discover : {}
+    feeds.each_with_object(stats) do |(company, url), stats|
       feed = Source.find_or_create_by!(url:) do |source|
         source.source_kind = source_kind
         source.title = "#{company}: news feed"
@@ -55,10 +82,12 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     company = company_for(source) or return []
     since = @today.call - WINDOW_DAYS
     taken = decided_urls(source)
-    Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }.map do |item|
+    recent = Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
+    recent = since_found(source, recent) if found_feed?(company)
+    recent.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
-        "summary" => item.summary, "about" => about(company, item) }.compact }
+        "summary" => item.summary, "about" => about(company, item, directory_only: found_feed?(company)) }.compact }
     end
   end
 
@@ -92,15 +121,81 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   PARTNER = /\b((?:#{WORD}\s+){0,5}#{WORD}),?\s+(?:#{LEGAL})\b\.?/
 
   private
+    def found_feed?(company) = @discover && !@feeds.key?(company)
+
+    # A found feed's items published since it was found, and only the newest
+    # FIRST_READ_ITEMS of those before: the same on every read, so its back
+    # catalogue never comes in later.
+    def since_found(source, items)
+      found_on = source.created_at.to_date
+      before, after = items.partition { |item| item.published_on < found_on }
+      (after + before.sort_by(&:published_on).last(FIRST_READ_ITEMS)).sort_by(&:published_on).reverse
+    end
+
+    # Reads up to DISCOVER_PER_NIGHT homepages not read in REDISCOVER_DAYS,
+    # never-read ones first, storing each as "Company: …" and "Feed: …" lines.
+    def discover
+      pages = @directory.organizations_with_website.filter_map do |company, website|
+        next if @feeds.key?(company)
+
+        url = homepage(website) or next
+        # Its own row ("#newsroom"), apart from any homepage the directory
+        # cites as evidence: the fetch is the same page, the record isn't.
+        page = Source.find_or_create_by!(url: "#{url}#newsroom") do |row|
+          row.source_kind = HOMEPAGE_KIND
+          row.title = "#{company}: homepage (newsroom feed)"
+        end
+        [ company, page ] if page.fetched_at.nil? || page.fetched_at < REDISCOVER_DAYS.days.ago
+      rescue ActiveRecord::RecordInvalid
+        nil
+      end
+      read = pages.sort_by { |_, page| page.fetched_at || Time.at(0) }.first(DISCOVER_PER_NIGHT)
+      # The company's name from the directory, never the page's title.
+      found = read.count do |company, page|
+        DataQuality::Snapshot.take(page, fetcher: @fetcher) { |html| "Company: #{company}\nFeed: #{feed_link(html, page.url) || 'none'}" }
+        discovered(page.reload.content_text)
+      end
+      { "homepages_read" => read.size, "feeds_found" => found }
+    end
+
+    def homepage(website)
+      uri = URI.parse(website.to_s.strip.then { |text| text.match?(%r{\Ahttps?://}i) ? text : "https://#{text}" })
+      "#{uri.scheme}://#{uri.host}/" if uri.host.present?
+    rescue URI::InvalidURIError
+      nil
+    end
+
+    # The homepage's advertised RSS or Atom feed on the company's own domain,
+    # not a comments feed.
+    def feed_link(html, page_url)
+      host = URI.parse(page_url).host.sub(/\Awww\./, "")
+      Nokogiri::HTML(html.to_s).css('link[rel~="alternate"]').filter_map do |link|
+        next unless link["type"].to_s.match?(%r{application/(rss|atom)\+xml}i)
+
+        url = URI.join(page_url, link["href"].to_s.strip).to_s
+        url if URI.parse(url).host.to_s.sub(/\Awww\./, "").then { |own| own == host || own.end_with?(".#{host}") } && !url.match?(/comments/i)
+      rescue URI::Error
+        nil
+      end.first
+    end
+
+    def discovered(text)
+      lines = text.to_s.lines.map(&:chomp).to_h { |line| line.split(": ", 2) }
+      [ lines["Company"], lines["Feed"] ] if lines["Company"].present? && lines["Feed"].to_s.start_with?("http")
+    end
+
     # The company itself, then every other company the release names by its
     # legal form. Match keeps the ones the directory has; the others become
     # leads for Data Quality (LeadSync's news feed), never facts.
-    def about(company, item)
+    # A found feed names only partners the directory has (DQ, 28 Oct: a
+    # company blog's legal-suffix names are too noisy to become leads).
+    def about(company, item, directory_only: false)
       partners = [ item.title, item.summary ].compact.flat_map do |text|
         text.to_enum(:scan, PARTNER).map { partner_name(Regexp.last_match[0]) }
       end
       names = [ company, *partners ].uniq { |name| name.downcase.gsub(/[^a-z0-9]/, "") }
       names.reject! { |name| name != company && name.downcase.start_with?(company.downcase) }
+      names.select! { |name| name == company || @directory.organization(name:) } if directory_only
       names.map { |name| { "name" => name, "type" => "organization" } }
     end
 
@@ -115,7 +210,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
       (last ? name[last..] : name).sub(/\AThe\s+/, "")
     end
 
-    def company_for(source) = @feeds.key(source.url)
+    def company_for(source) = feeds.key(source.url)
 
     # Items from this feed a person or match already has: a claim that isn't
     # one extract replaces on every read. Re-reading the feed doesn't send

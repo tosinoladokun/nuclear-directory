@@ -4,7 +4,7 @@
     about:    a one-line description (optional)
     crumbs:   [[label, href], ...] (optional)
     square:   HTML for a 40px category square icon (optional); bucket: the Category that colours it
-    tags:     [text, ...] (optional) %>
+    tags:     [text, ...], or [{ text:, icon:, bucket: }, ...] for tags with an icon in their category's colour (optional) %>
 <header class="nd-pagehead <%= bucket_class(bucket) if local_assigns[:bucket] %>">
   <% if local_assigns[:crumbs].present? %>
     <nav class="nd-pagehead__crumbs" aria-label="Breadcrumb"><% crumbs.each_with_index do |(label, href), i| %><%= "›" if i.positive? %> <%= link_to label, href, class: "underline" %><% end %></nav>
@@ -15,5 +15,8 @@
     <% if local_assigns[:count] %><span class="nd-pagehead__count"><%= count %></span><% end %>
   </div>
   <% if local_assigns[:about].present? %><p class="nd-pagehead__about"><%= about %></p><% end %>
-  <% if local_assigns[:tags].present? %><div class="nd-pagehead__tags"><% tags.each do |tag_text| %><span class="nd-tag"><%= tag_text %></span><% end %></div><% end %>
+  <% if local_assigns[:tags].present? %><div class="nd-pagehead__tags"><% tags.each do |item| %>
+    <% if item.is_a?(Hash) %><span class="nd-tag nd-tag--icon <%= bucket_class(item[:bucket]) if item[:bucket] %>"><%= item[:icon] %><%= item[:text] %></span>
+    <% else %><span class="nd-tag"><%= item %></span><% end %>
+  <% end %></div><% end %>
 </header>
