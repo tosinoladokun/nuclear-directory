@@ -1140,7 +1140,7 @@
   /* Row (nd-line): every list. One line on desktop; stacked on phones. */
   .nd-lines { background: var(--nd-paper-raised); border-radius: var(--nd-radius-lg); padding: 0 20px; margin: 0; list-style: none; }
   .nd-lines__head { display: flex; gap: var(--nd-space-4); padding: var(--nd-space-3) 0 var(--nd-space-2); border-bottom: var(--nd-hairline) solid var(--nd-ink); }
-  .nd-lines__head > :nth-child(1) { flex: 0 0 300px; }
+  .nd-lines__head > :nth-child(1) { flex: 0 0 240px; }
   .nd-lines__head > :nth-child(2) { flex: 1 1 0; min-width: 0; }
   .nd-lines__head > :nth-child(3) { flex: 0 0 170px; text-align: right; }
   .nd-lines > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
@@ -1151,8 +1151,8 @@
   .nd-line__name { font: 600 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-line__what { flex: 1 1 0; min-width: 0; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-line__end { margin-left: auto; flex: none; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
-  /* Company rows: name 300px (names up to about 33 characters at 15px, so a list keeps one size), the middle takes the rest, location 170px right-aligned. */
-  .nd-line--bare .nd-line__name { flex: 0 0 300px; }
+  /* Company rows: name 240px, the middle takes the rest, location 170px right-aligned. */
+  .nd-line--bare .nd-line__name { flex: 0 0 240px; }
   .nd-line--bare .nd-line__end { margin-left: 0; font-size: 13px; flex: 0 0 170px; justify-content: flex-end; overflow: hidden; text-overflow: ellipsis; display: block; text-align: right; }
   .nd-line__name[data-fit="small"] { font-size: 13px; }
   /* Plant rows: the status right after the name; MW its own mono element before the location, never cut. */
