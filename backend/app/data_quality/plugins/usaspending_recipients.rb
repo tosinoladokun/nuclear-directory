@@ -13,6 +13,7 @@
 class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
   API_URL = "https://api.usaspending.gov/api/v2/recipient/%s/"
   AWARDS_KIND = "usaspending_doe_awards"
+  AWARDS_INDEX_KIND = "usaspending_api"
   PER_NIGHT = 15
   REFRESH_DAYS = 90
   # What the address is, shown with every claim (DQ, 29 Oct): for a large
@@ -25,15 +26,23 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
   end
 
   def crawl(_run)
+    # A block on USAspending today (the awards search or a record): stop before asking again.
+    today = Time.current.all_day
+    if Source.where(source_kind: [ AWARDS_INDEX_KIND, source_kind ], crawl_status: "blocked", fetched_at: today).exists?
+      return { "stopped" => BLOCKED }
+    end
+
     stats = Hash.new(0)
     due = recipient_ids.filter_map do |id|
       source = Source.find_or_create_by!(url: format(API_URL, id)) do |row|
         row.source_kind = source_kind
         row.title = "USAspending.gov recipient record (registered address, SAM registration)"
       end
-      source if source.fetched_at.nil? || source.fetched_at < REFRESH_DAYS.days.ago
+      source if due?(source)
     end
-    due.sort_by { |source| source.fetched_at || Time.at(0) }.first(PER_NIGHT).each do |source|
+    # PER_NIGHT a day in all, a same-day rerun included.
+    room = PER_NIGHT - Source.where(source_kind:, fetched_at: today).count
+    due.sort_by { |source| source.fetched_at || Time.at(0) }.first([ room, 0 ].max).each do |source|
       outcome = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |body| address_lines(body) }.to_s
       stats[outcome] += 1
       if outcome == "blocked"
@@ -71,6 +80,15 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
   end
 
   private
+    # Never read; or read well and REFRESH_DAYS old; or a failed read
+    # (nothing stored) from before today.
+    def due?(source)
+      return true if source.fetched_at.nil?
+      return source.fetched_at < REFRESH_DAYS.days.ago if source.crawl_ok? && source.content_text.present?
+
+      source.fetched_at < Time.current.beginning_of_day
+    end
+
     def awards = @awards ||= DataQuality::Plugins::UsaspendingDoeAwards.new
 
     # Every recipient the DOE awards plug-in stored (its CSV's recipient_id column).

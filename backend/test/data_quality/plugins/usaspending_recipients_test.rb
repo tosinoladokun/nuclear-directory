@@ -44,4 +44,30 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
     stub_request(:get, RECORD).to_return(status: 403, body: "Forbidden")
     assert_equal Plugin::BLOCKED, crawl.stats["stopped"]
   end
+
+  test "a block on USAspending today stops the run before asking" do
+    Source.create!(url: "https://api.usaspending.gov/api/v2/search/spending_by_award/", source_kind: "usaspending_api", crawl_status: "blocked", fetched_at: Time.current)
+    assert_equal({ "stopped" => Plugin::BLOCKED }, crawl.stats)
+    assert_not_requested @record
+  end
+
+  test "a failed read is tried again the next day, not in 90" do
+    stub_request(:get, RECORD).to_return(status: 503, body: "busy")
+    crawl
+    assert_nil Source.find_by!(url: RECORD).content_text
+    stub_request(:get, RECORD).to_return(body: file_fixture("usaspending/shine_recipient.json").read, headers: { "Content-Type" => "application/json" })
+    travel 1.day do
+      assert_equal 1, crawl.stats["changed"]
+    end
+  end
+
+  test "at most PER_NIGHT a day, a same-day rerun included" do
+    ids = (1..(Plugin::PER_NIGHT + 3)).map { |i| format("%08d-0000-0000-0000-000000000000-C", i) }
+    csv = CSV.generate { |rows| rows << DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS; ids.each { |id| rows << DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS.map { |c| c == "recipient_id" ? id : "x" } } }
+    Source.create!(url: "https://www.usaspending.gov/recipient/many/latest", source_kind: "usaspending_doe_awards", content_text: csv, crawl_status: "ok")
+    stub_request(:get, %r{/api/v2/recipient/}).to_return(body: file_fixture("usaspending/shine_recipient.json").read)
+
+    assert_equal Plugin::PER_NIGHT, crawl.stats["changed"] + crawl.stats.fetch("unchanged", 0)
+    assert_empty crawl.stats.except("stopped"), "the day's quota is used"
+  end
 end
