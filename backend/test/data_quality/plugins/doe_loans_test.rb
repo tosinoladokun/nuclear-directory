@@ -50,7 +50,7 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
   test "the borrower and DOE's funds link, described as the page states the loan" do
     crawl
     source = Source.find_by!(url: PALISADES)
-    company, link = plugin.extract(source, nil)
+    company, link, term = plugin.extract(source, nil)
 
     assert_equal({ "name" => "Holtec Palisades, LLC" }, company[:payload])
     assert_equal [ "U.S. Department of Energy", "Holtec Palisades, LLC", "funds" ],
@@ -59,5 +59,8 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
     assert [ company, link ].all? { |claim| plugin.quote_in_source?(source, claim[:quote]) }
     assert_equal "Owners: Holtec Palisades, LLC\nLoan Program: Energy Dominance Financing Program\nLoan Amount: $1.52 Billion\nIssuance Date: September 2024", link[:quote]
     refute plugin.quote_in_source?(source, "Owners: Holtec Palisades, LLC\nLoan Amount: $9 Billion")
+    assert_equal [ "loan", "1520000000", "Energy Dominance Financing Program", PALISADES, "Holtec Palisades, LLC" ],
+      [ *term[:payload].values_at("term_type", "amount_usd", "program", "external_id"), term[:payload].dig("to_organization", "name") ]
+    assert plugin.quote_in_source?(source, term[:quote])
   end
 end

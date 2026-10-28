@@ -49,11 +49,15 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
     quote = source.content_text.lines.map(&:chomp).select { |line| line.start_with?("Owners: ", "Loan Program: ", "Loan Amount: ", "Issuance Date: ") }.join("\n")
     description = [ "Loan of #{facts['Loan Amount']}", facts["Loan Program"] && "under the #{facts['Loan Program']}",
       facts["Issuance Date"] && "closed #{facts['Issuance Date']}" ].compact.join(", ")
+    link = { "from_organization" => { "name" => DOE }, "to_organization" => { "name" => borrower }, "relationship_type" => "funds" }
+    amount = amount_usd(facts["Loan Amount"])
     [
       { kind: "organization", quote: "Owners: #{borrower}", payload: { "name" => borrower } },
-      { kind: "relationship", quote:, payload: { "from_organization" => { "name" => DOE }, "to_organization" => { "name" => borrower },
-        "relationship_type" => "funds", "description" => description } }
-    ]
+      { kind: "relationship", quote:, payload: link.merge("description" => description) },
+      # The loan itself as a term on that link (#592); its page is its ID.
+      ({ kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "loan", "external_id" => source.url,
+        "amount_usd" => amount, "program" => facts["Loan Program"]).compact } if amount)
+    ].compact
   end
 
   # One loan per page: a change goes to a person.
@@ -74,6 +78,12 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   end
 
   private
+    # "$1.52 Billion" => "1520000000", "$1.0 billion", "$850 million"; nil when the page words it otherwise.
+    def amount_usd(text)
+      match = text.to_s.match(/\A\$\s*([\d,]+(?:\.\d+)?)\s*(billion|million)?\z/i) or return
+      (match[1].delete(",").to_d * { "billion" => 10**9, "million" => 10**6 }.fetch(match[2].to_s.downcase, 1)).to_i.to_s
+    end
+
     # A research page already stored at this URL becomes this kind's; its
     # fetch date stays (once a day holds) and its old HTML is cleared.
     def take_over(source)
