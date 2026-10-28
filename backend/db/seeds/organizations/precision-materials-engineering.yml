@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Precision Materials Engineering
+status: active
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/ef2f3341-b0e4-ee74-ceab-44231a42d92d-C/latest
+  quote: "DESC0025790,PRECISION MATERIALS ENGINEERING LLC,169830.0,2025-02-18,2026-12-31,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0025790_089,ASST_NON_DESC0025790_089,ef2f3341-b0e4-ee74-ceab-44231a42d92d-C,NEW REFRACTORY-MULTIPLE PRINCIPAL ELEMENT ALLOY (R-MPEA) COATINGS AND COMPONENTS FOR MOLTEN-SALT NUCLEAR REACTOR SYSTEM VALVES AND PUMPS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

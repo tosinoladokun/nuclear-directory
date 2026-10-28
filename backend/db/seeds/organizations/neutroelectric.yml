@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Neutroelectric
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.usaspending.gov/recipient/23e33259-9141-0349-804a-ed9348068a9e-R/latest
+  quote: "DESC0022587,\"NEUTROELECTRIC, LLC\",200000.0,2022-06-27,2023-07-30,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0022587_089,ASST_NON_DESC0022587_089,23e33259-9141-0349-804a-ed9348068a9e-R,FORMULATION AND EVALUATION OF CANDIDATE MATERIALS FOR ENCAPSULATING SPENT NUCLEAR FUEL IN A DRY STORAGE CANISTER FOR FINAL REPOSITORY"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

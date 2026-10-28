@@ -1,0 +1,15 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Name from the company's own site (fpolisolutions.com): "FPoliSolutions", footer "FPoliSolutions, LLC".
+name: FPoliSolutions
+aliases:
+- FPoliSolutions, LLC
+website: https://www.fpolisolutions.com
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.fpolisolutions.com/
+  quote: We serve the nuclear energy sector with agile engineering and software solutions that help our customers achieve their sustainability and energy security goals.
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'Production name was "Fpolisolutions" (USAspending recipient FPOLISOLUTIONS, LLC).'

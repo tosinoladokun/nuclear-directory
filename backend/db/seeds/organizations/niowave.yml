@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Niowave
+status: active
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/fd7d7629-4b32-48e4-4240-5e3ca358ee7e-C/latest
+  quote: "DESC0018691,\"NIOWAVE, INC.\",866148.0,2018-07-02,2023-08-17,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0018691_089,ASST_NON_DESC0018691_089,fd7d7629-4b32-48e4-4240-5e3ca358ee7e-C,A CORROSION TEST STATION FOR IMPROVED CHARACTERIZATION AND EXAMINATION CAPABILITIES OF ADVANCED NUCLEAR REACTOR FUELS AND MATERIALS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

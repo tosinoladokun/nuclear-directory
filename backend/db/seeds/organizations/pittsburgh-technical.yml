@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Pittsburgh Technical
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.usaspending.gov/recipient/6146f9b0-694a-5257-692d-948b89d907b5-R/latest
+  quote: "DESC0025087,PITTSBURGH TECHNICAL LLC,199913.0,2024-07-22,2025-08-31,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0025087_089,ASST_NON_DESC0025087_089,6146f9b0-694a-5257-692d-948b89d907b5-R,\"DEVELOPMENT OF A COST ESTIMATION TOOL FOR ADVANCED REACTOR PRODUCTION, DEPLOYMENT AND OPERATIONS\""
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
