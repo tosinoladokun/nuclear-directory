@@ -445,6 +445,14 @@ items a night). DOE is the primary source for its own announcements, so an item 
 directory becomes a `news_item` claim about DOE and those records (never a lead). Names are read as trade press
 reads them; an item naming nothing we have besides DOE isn't proposed. Every item waits for a person.
 
+## ARPA-E fission and fusion projects
+
+`plugins/arpa_e_projects.rb` reads ARPA-E's project index (the JSON its project search reads) once a day for its
+Nuclear Fission and Nuclear Fusion sub-areas. Each project is stored as its own source at its public page, as
+one labelled line, written only when new or changed. ARPA-E itself is proposed (alias ARPA-E); a name ending
+"(ACRONYM)" keeps the acronym as an alias. Each project is an award term under one link per recipient.
+Cancelled projects propose nothing. At most 5 new project pages are read a night.
+
 ## DOE loans
 
 `plugins/doe_loans.rb` reads DOE's loan project pages for nuclear projects (Palisades, Crane Restart; the

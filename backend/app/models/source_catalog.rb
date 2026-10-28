@@ -47,6 +47,8 @@ class SourceCatalog
     "nasa_nuclear_news" => { name: "NASA nuclear news", daily: true },
     "first_read_pages" => { name: "First reads (not read yet)", note: "pages stored for a reader being built; no claims", daily: true },
     "doe_nuclear_news" => { name: "DOE nuclear energy news", daily: true },
+    "arpa_e_projects" => { name: "ARPA-E nuclear projects", daily: true },
+    "arpa_e_index" => { name: "ARPA-E project index", note: "finds the fission and fusion projects", daily: true },
     "doe_loans" => { name: "DOE loans (project pages)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },

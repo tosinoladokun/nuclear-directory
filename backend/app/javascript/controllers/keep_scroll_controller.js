@@ -36,5 +36,5 @@ export default class extends Controller {
     this.element.removeEventListener("turbo:frame-render", this.restore)
   }
 
-  links() { return [...this.element.querySelectorAll("ul.nd-list a.nd-listrow")] }
+  links() { return [...this.element.querySelectorAll("ul.nd-lines a.nd-line")] }
 }

@@ -5,7 +5,7 @@
 <% list = local_assigns[:variant] == :list %>
 <nav class="nd-idx <%= "nd-idx--list nd-idx--icons" if list %>" aria-label="<%= local_assigns.fetch(:label, "On this page") %>">
   <% items.each do |item| %>
-    <%= tag.a href: item[:href], class: (bucket_class(item[:bucket]) if item[:bucket]), title: item[:title], aria: { current: (item[:current] ? "page" : nil) } do %>
+    <%= tag.a href: item[:href], class: (bucket_class(item[:bucket]) if item[:bucket]), title: (item[:title] || item[:label]), aria: { current: (item[:current] ? "page" : nil) } do %>
       <%= item[:icon] %><span class="nd-idx__label"><%= item[:label] %></span><% if item[:count] %><span class="nd-num"><%= item[:count] %></span><% end %>
     <% end %>
   <% end %>

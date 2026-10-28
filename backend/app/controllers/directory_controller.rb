@@ -4,7 +4,7 @@ class DirectoryController < ApplicationController
   # Categories that became tags (#281). Their old addresses move for good.
   CATEGORY_TAGS = { "fusion" => "fusion" }.freeze
 
-  PAGE = 50
+  PAGE = 24
 
   def index
     if (tag = CATEGORY_TAGS[params[:category]])
@@ -46,6 +46,9 @@ class DirectoryController < ApplicationController
     # A Show more request wants only the frame's rows (Turbo drops the rest), so the
     # category counts, the slowest part of the page, are skipped for it.
     @counts = DirectoryListing.category_counts unless turbo_frame_request?
+    @all_count = DirectoryListing.new.company_scope.count unless turbo_frame_request?
+    # The middle column of each company row, for the whole list in one go (#560).
+    @short = ShortDescription.for(@companies, category: @listing.category)
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
