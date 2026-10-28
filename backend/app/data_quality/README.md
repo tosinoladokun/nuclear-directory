@@ -453,6 +453,13 @@ one labelled line, written only when new or changed. ARPA-E itself is proposed (
 "(ACRONYM)" keeps the acronym as an alias. Each project is an award term under one link per recipient.
 Cancelled projects propose nothing. At most 5 new project pages are read a night.
 
+## NRC news releases
+
+`plugins/nrc_news.rb` reads NRC's news releases feed (`/public-involve/rss?feed=news`; the news releases page
+itself is drawn by script) once a day, exactly as DOE's news is read: an item naming a company or plant in the
+directory besides NRC becomes a `news_item` about NRC and those records, never a lead. Last 60 days, at most 15
+a night; every item waits for a person.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
