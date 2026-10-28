@@ -146,4 +146,84 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     rebuilt = xml.sub("<channel>", "<channel><lastBuildDate>Thu, 22 Oct 2026 00:00:00 +0000</lastBuildDate>")
     assert_equal plugin.rows_sha256(source), plugin.rows_sha256(Source.new(content_text: rebuilt))
   end
+
+  class Websites
+    def initialize(list) = @list = list
+    def organizations_with_website = @list
+  end
+
+  def discovering(list)
+    Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, discover: true, directory: Websites.new(list))
+  end
+
+  test "finds a published company's feed from its homepage's own link, and reads it from then on" do
+    stub_request(:get, "https://acmefission.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://acmefission.com/").to_return(body: <<~HTML)
+      <html><head>
+        <link rel="alternate" type="application/rss+xml" href="https://feeds.other.com/acme">
+        <link rel="alternate" type="application/rss+xml" href="/comments/feed/">
+        <link rel="alternate" type="application/rss+xml" href="/news/feed/">
+      </head></html>
+    HTML
+    acme = stub_request(:get, "https://acmefission.com/news/feed/").to_return(body: xml, headers: { "Content-Type" => "application/rss+xml" })
+    nothing = stub_request(:get, "https://plainco.com/").to_return(body: "<html><head></head></html>")
+    stub_request(:get, "https://plainco.com/robots.txt").to_return(status: 404)
+    plugin = discovering([ [ "Acme Fission", "acmefission.com" ], [ "Plain Co", "https://www.plainco.com/about" ] ])
+    stub_request(:get, "https://www.plainco.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://www.plainco.com/").to_return(body: "<html><head></head></html>")
+
+    stats = DataQuality::Stages::Crawl.call(plugin:).stats
+    assert_equal 2, stats["homepages_read"]
+    assert_equal 1, stats["feeds_found"]
+    assert_equal "https://acmefission.com/news/feed/", plugin.feeds["Acme Fission"]
+    assert_equal "changed", stats["Acme Fission"]
+    assert_requested acme, times: 1
+    assert_not_requested nothing
+    assert_equal 5, plugin.new_sources_per_run
+
+    source = Source.find_by!(url: "https://acmefission.com/news/feed/")
+    claims = plugin.extract(source, nil)
+    assert claims.all? { |claim| claim[:payload]["publisher"] == "Acme Fission" }
+    assert_operator claims.size, :<=, Plugin::FIRST_READ_ITEMS, "a found feed's back catalogue: only its newest items"
+    assert_equal claims.map { |c| c[:payload]["published_on"] }.sort.reverse, claims.map { |c| c[:payload]["published_on"] }
+    assert_equal "Company: Acme Fission", Source.find_by!(url: "https://acmefission.com/#newsroom").content_text.lines.first.chomp
+    assert_equal({ "homepages_read" => 0, "feeds_found" => 0 }, DataQuality::Stages::Crawl.call(plugin:).stats.slice("homepages_read", "feeds_found"))
+  end
+
+  test "at most DISCOVER_PER_NIGHT homepages a night; fixed-list and trade press plug-ins never discover" do
+    stub_request(:get, /robots\.txt/).to_return(status: 404)
+    stub_request(:get, %r{\Ahttps://co\d+\.com/\z}).to_return(body: "<html></html>")
+    list = (1..12).map { |i| [ "Co #{i}", "co#{i}.com" ] }
+
+    assert_equal Plugin::DISCOVER_PER_NIGHT, DataQuality::Stages::Crawl.call(plugin: discovering(list)).stats["homepages_read"]
+    assert_nil plugin.new_sources_per_run
+    refute_includes DataQuality::Plugins::TradePress.new.feeds.keys, "Co 1"
+  end
+
+  test "a found feed: everything since it was found, and only the newest three from before" do
+    item = ->(day) { Plugin::Item.new(title: "Item #{day}", url: "https://x/#{day}", published_on: Date.new(2026, 10, day), summary: nil) }
+    source = Source.new(created_at: Time.zone.local(2026, 10, 20))
+    kept = discovering([]).send(:since_found, source, [ 1, 5, 10, 15, 18, 21, 22 ].map(&item))
+    assert_equal [ 22, 21, 18, 15, 10 ], kept.map { |each| each.published_on.day }
+  end
+
+  test "a found feed names only partners the directory has; a listed feed names every legal-suffix partner" do
+    known = Class.new(Websites) { def organization(name:) = (Object.new if name == "Known Fission, Inc") }.new([])
+    found = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, discover: true, directory: known)
+    listed = plugin
+    item = Plugin::Item.new(title: "Acme Signs With Known Fission, Inc and Stray Parts, LLC", url: "https://x/1", published_on: TODAY, summary: nil)
+
+    assert_equal [ "Acme", "Known Fission, Inc" ], found.send(:about, "Acme", item, directory_only: true).map { |each| each["name"] }
+    assert_equal [ "Acme", "Known Fission, Inc", "Stray Parts, LLC" ], listed.send(:about, "Acme", item).map { |each| each["name"] }
+  end
+
+  test "a homepage the directory already cites is read for its feed on a row of its own" do
+    cited = Source.create!(url: "https://acmefission.com/", source_kind: "web_page", content_text: "evidence", crawl_status: "ok")
+    stub_request(:get, "https://acmefission.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://acmefission.com/").to_return(body: '<html><head><link rel="alternate" type="application/rss+xml" href="/feed/"></head></html>')
+    stub_request(:get, "https://acmefission.com/feed/").to_return(body: xml, headers: { "Content-Type" => "application/rss+xml" })
+
+    assert_equal 1, DataQuality::Stages::Crawl.call(plugin: discovering([ [ "Acme Fission", "acmefission.com" ] ])).stats["homepages_read"]
+    assert_equal [ "web_page", "evidence" ], cited.reload.values_at(:source_kind, :content_text)
+  end
 end
