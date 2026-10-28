@@ -103,6 +103,10 @@ services:
       # endpoint is off; a new digest rotates the token without a deploy.
       - key: DQ_AGENT_TOKEN_DIGEST
         sync: false
+      # NRC's ADAMS Public Search API subscription key (the nrc_adams
+      # crawler, #628), pasted by Tosin. Unset, that crawler does nothing.
+      - key: ADAMS_API_KEY
+        sync: false
       # Its backup before writing: the same script, key and repo as the
       # backup cron job below, tagged backup-<time>-predeploy.
       - key: BACKUP_AGE_RECIPIENT
