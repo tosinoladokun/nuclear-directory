@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Omega-P R&D, Inc.
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://arpa-e.energy.gov/programs-and-initiatives/search-all-projects/compact-deuteron-accelerator-produce-neutrons-transmutation-used-nuclear-fuel
+  quote: "Project: Compact Deuteron Accelerator to Produce Neutrons for Transmutation of Used Nuclear Fuel | Organization: Omega-P R&D, Inc. | Award: $768,800 | Program: NEWTON | Status: Selected | Location: New Haven, CT | Released: Jul 16 2024 | Area: nuclear fission | Funder: Advanced Research Projects Agency-Energy (ARPA-E)"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

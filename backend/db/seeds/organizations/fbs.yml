@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: FBS
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.usaspending.gov/recipient/c16b12c9-e746-054f-09a2-ba26cbd7b89e-C/latest
+  quote: "DESC0024960,FBS INC,199724.0,2024-07-22,2025-07-21,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0024960_089,ASST_NON_DESC0024960_089,c16b12c9-e746-054f-09a2-ba26cbd7b89e-C,GUIDED WAVE PHASED ARRAY FOR SPENT FUEL DRY STORAGE CANISTER EVALUATION"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

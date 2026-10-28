@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Crow Butte Resources, Inc.
+status: active
+roles:
+- key: mining
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/materials/uranium
+  quote: "Crow Butte | Crow Butte Resources, Inc. | Chadron, Nebraska | In Situ Recovery (ISR)"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

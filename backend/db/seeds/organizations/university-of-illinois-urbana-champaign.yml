@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: University of Illinois, Urbana-Champaign
+status: active
+roles:
+- key: university
+  source_url: https://arpa-e.energy.gov/programs-and-initiatives/search-all-projects/einstein-enhanced-integrated-nuclear-systems-transmutation-and-efficient-isolation-nuclides
+  quote: "Project: EINSTEIN: Enhanced Integrated Nuclear Systems for Transmutation and Efficient Isolation of Nuclides | Organization: University of Illinois, Urbana-Champaign | Award: $1,025,404 | Program: NEWTON | Status: Active | Location: Champaign, IL | Released: Jul 16 2024 | Area: nuclear fission | Funder: Advanced Research Projects Agency-Energy (ARPA-E)"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

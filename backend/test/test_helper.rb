@@ -13,6 +13,15 @@ DataQuality::Fetcher.resolver = ->(_host) { [ "93.184.215.14" ] }
 
 module ActiveSupport
   class TestCase
+    # A pending company reaches Today only with a sourced role (PM, 28 Oct).
+    def give_sourced_role(company, key: "reactor_vendor")
+      role = Role.find_by(key:) || Role.create!(key:, name: key.humanize)
+      link = OrganizationRole.create!(organization: company, role:, verification_status: "pending")
+      page = Source.find_or_create_by!(url: "https://example.com/role-source") { |s| s.source_kind = "web_page"; s.crawl_status = "ok"; s.content_sha256 = "r" }
+      Evidence.create!(subject: link, source: page, quote: "#{company.name} designs reactors.", found_by: "human")
+      company
+    end
+
     # Run tests in parallel with specified workers
     parallelize(workers: :number_of_processors)
 

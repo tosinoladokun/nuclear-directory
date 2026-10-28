@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Kitware
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.usaspending.gov/recipient/0a6f32c4-aa98-e7b4-22a9-7dbf4f664425-C/latest
+  quote: "DESC0018055,KITWARE INC,1119892.31,2017-06-12,2021-08-26,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0018055_089,ASST_NON_DESC0018055_089,0a6f32c4-aa98-e7b4-22a9-7dbf4f664425-C,SUPPORTING MULTI-PHYSICS WORKFLOWS FOR ADVANCED NUCLEAR REACTOR SIMULATIONS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
