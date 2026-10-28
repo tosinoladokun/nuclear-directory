@@ -98,7 +98,7 @@ class DataQuality::Plugins::NrcFuelCycle < DataQuality::Plugin
   # One facility per page: anything it stops stating goes to a person.
   # Pages never read before, at most 10 facility pages a night (about 40 claims), so Data Quality reads
   # each night's batch claim by claim (#541); pages read before are never held back.
-  def new_sources_per_run = 10
+  def new_sources_per_run = 20
 
   def max_dropped_share(_source) = 1.0
 

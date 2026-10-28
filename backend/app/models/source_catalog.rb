@@ -50,6 +50,7 @@ class SourceCatalog
     "arpa_e_projects" => { name: "ARPA-E nuclear projects", daily: true },
     "arpa_e_index" => { name: "ARPA-E project index", note: "finds the fission and fusion projects", daily: true },
     "doe_loans" => { name: "DOE loans (project pages)", daily: true },
+    "nrc_adams" => { name: "NRC ADAMS searches (first read)", note: "stored for the reader being built; no claims", daily: true },
     "newsroom_homepage" => { name: "Company homepages (newsroom feeds)", note: "finds each company's own news feed", daily: true },
     "usaspending_recipients" => { name: "USAspending recipient records (headquarters)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },

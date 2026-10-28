@@ -151,6 +151,54 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
       "the description's quote also states the legal name; the HQ entry gives only the city; a re-seed changes nothing")
   end
 
+  test "a company file marked pending leaves the company for Tosin's Create; its roles are added, and his Create publishes it" do
+    role = item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel supplies fuel.")
+    about = { "text" => "Makes fuel.", "source_url" => "https://example.com/about", "quote" => "Acme Fuel makes fuel." }
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", pending: true, description: about, roles: [ role ]))
+    existing = Organization.create!(name: "Waiting Co", slug: "waiting-co", verification_status: "pending")
+    existing.aliases.create!(alias: "Waiting Co") # its name, as FactWriter stores it
+    write_file("waiting-co", org("Waiting Co", website: "https://waiting.example.com", pending: true, roles: [ role ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    acme = Organization.find_by!(slug: "acme-fuel")
+    assert acme.pending?, "created pending, not published"
+    assert existing.reload.pending?, "an existing pending company isn't verified by the seed"
+    assert_equal 1, acme.organization_roles.count, "its roles are still added"
+
+    # Tosin's Create in Today: the company's own quote lets it publish.
+    result = DataQuality::Review.approve_fact(type: "Organization", id: acme.id, by: "human:tosin", reason: "Created in Today")
+    assert result.ok?, Array(result.errors).inspect
+    Seed::OrganizationLoader.new(@dir).load!
+    assert acme.reload.verified?, "a re-seed never undoes his decision"
+  end
+
+  test "a pending company a person rejected or took off since is left as decided; the seed still loads" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", pending: true,
+      roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel supplies fuel.") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+
+    acme.reject!(by: "human:tosin")
+    assert_nothing_raised { Seed::OrganizationLoader.new(@dir).load! }
+    assert acme.reload.rejected?
+
+    acme.update_columns(verification_status: "unpublished")
+    assert_nothing_raised { Seed::OrganizationLoader.new(@dir).load! }
+    assert acme.reload.unpublished?
+  end
+
+  test "a pending company file never adds an unquoted legal name as an alias" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", pending: true, legal_name: "Acme Fuel Holdings, Inc.",
+      aliases: [ "Acme Fuel Holdings, Inc.", "Acme" ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    acme = Organization.find_by!(slug: "acme-fuel")
+    assert_nil acme.legal_name
+    assert_equal [ "Acme", "Acme Fuel" ], acme.aliases.pluck(:alias).sort
+  end
+
   test "a legal name is cited by the quote that states it" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", legal_name: "Acme Fuel, Inc.",
       roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel, Inc. supplies fuel.") ]))

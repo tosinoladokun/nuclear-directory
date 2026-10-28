@@ -23,6 +23,8 @@ class SearchController < ApplicationController
         @fuzzy = @companies.any? || @plants.any?
       end
       @roles = OrganizationRole.published.where(organization_id: @companies.map(&:id)).includes(:role).group_by(&:organization_id)
+      # Each company's category square, as on the list pages and its own page.
+      @categories = Bucket.firsts(@companies)
     end
 
     @frame_id = frame_id
