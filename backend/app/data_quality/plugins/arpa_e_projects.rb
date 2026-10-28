@@ -72,7 +72,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     # two projects for one lab agree; each project is its own award term.
     [
       { kind: "organization", quote:, payload: { "name" => FUNDER, "aliases" => [ "ARPA-E" ] } },
-      { kind: "organization", quote:, payload: recipient },
+      { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])) },
       { kind: "relationship", quote:, payload: link.merge("description" => "Research funding from ARPA-E (nuclear fission and fusion)") },
       { kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "award",
         "external_id" => source.url, "amount_usd" => facts["Award"]&.delete("$,"), "program" => facts["Program"]).compact }
@@ -95,6 +95,13 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   end
 
   private
+    # ARPA-E's "City, ST" for the organization (gap fill, 29 Oct): its
+    # headquarters as ARPA-E records the awardee; anything else, nothing.
+    def location(text)
+      city, state = text.to_s.split(/,\s*/, 2)
+      state.to_s.match?(/\A[A-Z]{2}\z/) && city.present? ? { "hq_city" => city.squish, "hq_state" => state } : {}
+    end
+
     def organization(name)
       match = ACRONYM.match(name) or return { "name" => name }
       { "name" => match[:name], "aliases" => [ match[:acronym] ] }

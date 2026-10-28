@@ -101,13 +101,22 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
 
-  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new)
-    @fetcher, @llm, @directory = fetcher, llm, directory
+  # Gap fill (Tosin, 29 Oct): each night Enrich is also asked for the
+  # GAP_FILL_PER_NIGHT published companies with the most empty basics; what
+  # their pages say goes through the usual claims, checks and approval.
+  GAP_FILL_PER_NIGHT = 10
+
+  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
+    @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
   end
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
-    @directory.enrich_queue.each do |id, _name, website, requested_at, sec_cik|
+    if @gap_fill.positive?
+      no_website = @directory.request_gap_fill(limit: @gap_fill)
+      stats["gaps_without_website"] = no_website if no_website.any?
+    end
+    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
       # Part 3: a public company's SEC record (EDGAR), the primary source for
       # its legal name, listing and headquarters address (Data Quality).
       if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))

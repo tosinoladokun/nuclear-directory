@@ -73,6 +73,28 @@ module Directory
         .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik)
     end
 
+    # Gap fill (Tosin, 29 Oct): asks Enrich to read the own site of up to
+    # limit published companies with the most empty basics (category,
+    # headquarters, description, short description), not read in
+    # REFILL_DAYS and not already waiting. Returns the names of companies
+    # with gaps but no website (left for Data Quality), at most 20.
+    GAP_REFILL_DAYS = 90
+    def request_gap_fill(limit: 10)
+      gaps = Arel.sql(<<~SQL.squish)
+        (CASE WHEN organizations.description IS NULL OR organizations.description = '' THEN 1 ELSE 0 END) +
+        (CASE WHEN organizations.short_description IS NULL OR organizations.short_description = '' THEN 1 ELSE 0 END) +
+        (CASE WHEN organizations.hq_city IS NULL OR organizations.hq_city = '' THEN 1 ELSE 0 END) +
+        (CASE WHEN NOT EXISTS (SELECT 1 FROM organization_roles r WHERE r.organization_id = organizations.id) THEN 1 ELSE 0 END)
+      SQL
+      gapped = Organization.where(verification_status: "verified").where("#{gaps} > 0")
+      # Only a full https address can be read (Enrich's own rule).
+      sited = gapped.where("organizations.website ILIKE 'https://%'")
+      Organization.where(id: sited.where(enrich_requested_at: nil)
+        .or(sited.where(enrich_requested_at: ...GAP_REFILL_DAYS.days.ago).where("enriched_at >= enrich_requested_at"))
+        .order(Arel.sql("#{gaps} DESC"), :id).limit(limit).select(:id)).update_all(enrich_requested_at: Time.current)
+      gapped.where("COALESCE(organizations.website, '') NOT ILIKE 'https://%'").order(:name).limit(20).pluck(:name)
+    end
+
     # The roles and technologies a company can be given: { "role" => [[key, name]], "technology" => [[key, name]] }.
     def company_fact_choices
       { "role" => Role.order(:key).pluck(:key, :name), "technology" => Technology.order(:key).pluck(:key, :name) }

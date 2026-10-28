@@ -25,21 +25,21 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
   end
 
   test "crawl reads only requested companies: the home page and its own about page, then marks it read" do
-    stats = DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     assert_equal({ "companies" => 0, "pages" => 0 }, stats)
 
     @company.update_columns(enrich_requested_at: Time.current)
-    stats = DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     assert_equal({ "companies" => 1, "pages" => 2 }, stats)
     assert_equal %w[company_pages company_pages], Source.where(url: [ HOME, ABOUT ]).pluck(:source_kind)
     assert_not_requested :get, "https://other.com/about"
     assert @company.reload.enriched_at
-    assert_equal({ "companies" => 0, "pages" => 0 }, DataQuality::Plugins::CompanyPages.new.crawl(nil), "read once per request")
+    assert_equal({ "companies" => 0, "pages" => 0 }, DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil), "read once per request")
   end
 
   test "extract keeps only values in their quotes and quotes on the page; drops marketing, people and unknown keys" do
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = {
       "description" => { "value" => "Acme Fission Inc. designs small modular reactors.", "quote" => "Acme Fission Inc. designs small modular reactors." },
       "hq_city" => { "value" => "Austin", "quote" => "Headquartered in Austin, Texas." },
@@ -60,7 +60,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
 
   test "a description must be inside its own quote, not just somewhere on the page" do
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = { "description" => { "value" => "Acme Fission Inc. designs small modular reactors.", "quote" => "Founded in 2019." },
       "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [] }
     assert_empty DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
@@ -80,7 +80,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => { "exchange" => "NASDAQ", "ticker" => "ACME", "quote" => "Acme Fission trades on NASDAQ under the symbol ACME." },
       "links" => [
@@ -107,7 +107,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     stub_request(:get, edgar).to_return(body: record, headers: { "Content-Type" => "application/json" })
     @company.update_columns(enrich_requested_at: Time.current, sec_cik: "0001849056")
 
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     claims = DataQuality::Plugins::CompanyPages.new.extract(Source.find_by!(url: edgar), nil)
     assert_equal [ { "name" => "Acme Fission", "exchange" => "NYSE", "ticker" => "OKLO" },
       { "name" => "Acme Fission", "hq_city" => "Santa Clara", "hq_state" => "CA" } ], claims.map { |c| c[:payload] }
@@ -132,7 +132,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     queued = directory.enrich_queue
     @company.update_columns(enrich_requested_at: Time.current) # a newer request, mid-read
     DataQuality::Plugins::CompanyPages.new(directory: Struct.new(:queue, :real) do
-      def enrich_queue = queue
+      def enrich_queue(**) = queue
       def method_missing(name, ...) = real.public_send(name, ...)
       def respond_to_missing?(*) = true
     end.new(queued, directory)).crawl(nil)
@@ -152,7 +152,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     link = ->(other, other_is, verb, quote) { { "other" => other, "other_is" => other_is, "verb" => verb, "company_first" => true, "quote" => quote } }
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [
@@ -174,7 +174,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     round = ->(amount, name, date, quote) { { "amount" => amount, "round" => name, "date" => date, "quote" => quote } }
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [], "rounds" => [
@@ -205,7 +205,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => { "exchange" => "NASDAQ", "ticker" => "ACME", "quote" => "Acme Fission trades under the symbol ACME." },
       "links" => [ { "other" => "Bright Power", "other_is" => "company", "verb" => "supplies", "company_first" => true,
@@ -224,7 +224,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     round = ->(amount, name, date, quote) { { "amount" => amount, "round" => name, "date" => date, "quote" => quote } }
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [], "deals" => [], "rounds" => [
@@ -243,7 +243,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     page = "<html><body><p>We closed a Series B funding round of $37 million.</p><p>Acme Fission is listed on NYSE as BRK-B.</p></body></html>"
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => { "exchange" => "NYSE", "ticker" => "BRK-B", "quote" => "Acme Fission is listed on NYSE as BRK-B." }, "links" => [],
       "rounds" => [ { "amount" => "$37 million", "round" => "Series B", "date" => nil, "quote" => "We closed a Series B funding round of $37 million." } ] }
@@ -258,7 +258,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     rounds = [ [ "December 6, 2024", "On December 6, 2024, Acme Fission closed a $5 million round of funding." ],
       [ "March 1, 2026", "On March 1, 2026, Acme Fission closed a $5 million round of funding." ] ]
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
@@ -271,7 +271,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     page = "<html><body><p>We raised around $37 million in a Series B round.</p><p>We raised roughly $9 million in a seed round.</p></body></html>"
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [], "rounds" => [
         { "amount" => "$37 million", "round" => "Series B", "date" => nil, "quote" => "We raised around $37 million in a Series B round." },
@@ -299,7 +299,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     deal = ->(other, role, goods, capacity, date, quote) { { "other" => other, "role" => role, "goods" => goods, "amount" => nil, "capacity" => capacity, "date" => date, "quote" => quote } }
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [], "rounds" => [], "deals" => [
@@ -328,7 +328,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     HTML
     stub_request(:get, HOME).to_return(body: page, headers: { "Content-Type" => "text/html" })
     @company.update_columns(enrich_requested_at: Time.current)
-    DataQuality::Plugins::CompanyPages.new.crawl(nil)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     deal = ->(other, capacity, date, quote) { { "other" => other, "role" => "seller", "goods" => "power", "amount" => nil, "capacity" => capacity, "date" => date, "quote" => quote } }
     found = { "description" => nil, "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [],
       "listing" => nil, "links" => [], "rounds" => [], "deals" => [
@@ -339,5 +339,14 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal [ "Grid Co", "Grid Co" ], payloads.map { |p| p.dig("from_organization", "name") }, "500 MW from '1,500 MW' is dropped"
     assert_nil payloads.first["signed_on"]
     assert_equal 2, payloads.map { |p| p["external_id"] }.uniq.size
+  end
+
+  test "gap fill: a published company with empty basics is read without being asked; one without a website is listed" do
+    Organization.create!(name: "Siteless Fission", verification_status: "verified", verified_by: "human:tosin")
+    stats = DataQuality::Plugins::CompanyPages.new.crawl(nil)
+
+    assert_equal 1, stats["companies"]
+    assert_includes stats["gaps_without_website"], "Siteless Fission"
+    assert @company.reload.enriched_at
   end
 end
