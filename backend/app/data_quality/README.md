@@ -460,6 +460,12 @@ Energy Dominance Financing site, formerly the Loan Programs Office) once a day a
 Statistics table. Each gives the borrower and a "U.S. Department of Energy funds <borrower>" link described as
 the page states the loan (amount, program, closing date).
 
+## SEC current reports (8-K)
+
+`plugins/sec_current_reports.rb` reads the SEC filing list of each company with a CIK once a day (production only)
+and keeps its 8-Ks of the last 180 days that report a deal item (1.01, 1.02, 2.01, 3.02). Each becomes a
+`news_item` about the company linked to the filing; the deal itself is read and recorded by a person.
+
 ## DOE Isotope Program: production sites (#276)
 
 `plugins/doe_isotope_sites.rb` reads one page, isotopes.gov's "DOE IRP Production Sites", once a day.
