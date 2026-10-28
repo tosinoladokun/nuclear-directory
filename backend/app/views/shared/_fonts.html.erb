@@ -1,19 +1,25 @@
-<%# Self-hosted Latin subsets (#90; built by script/build_fonts.py, OFL). No
-    font is preloaded: a 51 KB preload shared the slow-4G bandwidth with the
-    render-blocking CSS and put LCP at 2.1 to 2.4 s on every page, a few
-    hundredths from the 2.5 s budget as /companies grew. Without the preload a
-    font-display: swap serif arrives after first paint and moves the page
-    (layout shift 0.25 on /companies in CI), so Roboto Serif and Roboto Mono
-    are font-display: optional: a font that is not ready within the first
-    moments waits for the next page, so nothing moves. The wordmark is an SVG,
-    so Anton loads only where a display heading uses it.
-    Admin passes display: "swap" (behind sign-in, no speed budget, and a serif
-    that sometimes doesn't load looks broken). On localhost the same: a dev
-    server answers slowly and misses the first moments, so the page kept the
-    fallback serif. Only production public pages use "optional". %>
-<% display = local_assigns[:display] || (Rails.env.production? ? "optional" : "swap") %>
+<%# Self-hosted Latin subsets (#90; built by script/build_fonts.py, OFL). The public site always shows its real
+    fonts: Roboto Serif and Roboto Mono are font-display: swap (Tosin, 27 Oct, reversing the 25 Oct "optional" that
+    left some visits on the fallback serif). Swapping would move the page (CLS 0.25 on /companies in CI), so each
+    has metric-matched fallbacks: local faces of the same widths and line heights (size-adjust and the
+    ascent, descent and line-gap overrides, measured from the font files against Georgia, Times New Roman /
+    Liberation Serif, DejaVu Serif, Menlo, Courier New / Liberation Mono and DejaVu Sans Mono), listed after the real font in the stacks in
+    tokens.css. The swap then changes the letters, not the layout. The wordmark is an SVG, so Anton loads only
+    where a display heading uses it. %>
+
 <style>
-  @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: <%= display %>; }
-  @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: <%= display %>; }
+  @font-face { font-family: "Roboto Serif"; src: url("<%= asset_path "roboto-serif-latin.woff2" %>") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
+  @font-face { font-family: "Roboto Mono"; src: url("<%= asset_path "roboto-mono-latin.woff2" %>") format("woff2"); font-weight: 400 500; font-style: normal; font-display: swap; }
   @font-face { font-family: "Anton"; src: url("<%= asset_path "anton-latin.woff2" %>") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+  /* Fallbacks sized to Roboto's metrics, so the swap doesn't move the page: a regular face (400 to 500) and a bold one
+     (600 to 700) per local font, since a bold system face is far wider than Roboto Serif's 600. */
+  @font-face { font-family: "Roboto Serif Georgia"; src: local("Georgia"); font-weight: 400 500; size-adjust: 116.91%; ascent-override: 79.29%; descent-override: 20.87%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif Georgia"; src: local("Georgia Bold"), local("Georgia-Bold"); font-weight: 600 700; size-adjust: 104.01%; ascent-override: 89.12%; descent-override: 23.46%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif Times"; src: local("Times New Roman"), local("TimesNewRomanPSMT"), local("Liberation Serif"), local("Times"); font-weight: 400 500; size-adjust: 128.33%; ascent-override: 72.24%; descent-override: 19.01%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif Times"; src: local("Times New Roman Bold"), local("TimesNewRomanPS-BoldMT"), local("Liberation Serif Bold"), local("Times Bold"); font-weight: 600 700; size-adjust: 124.98%; ascent-override: 74.17%; descent-override: 19.52%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif DejaVu"; src: local("DejaVu Serif"), local("DejaVuSerif"); font-weight: 400 500; size-adjust: 100.28%; ascent-override: 92.44%; descent-override: 24.33%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Serif DejaVu"; src: local("DejaVu Serif Bold"), local("DejaVuSerif-Bold"); font-weight: 600 700; size-adjust: 94.09%; ascent-override: 98.52%; descent-override: 25.93%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Mono Menlo"; src: local("Menlo"), local("Menlo-Regular"); font-weight: 400 500; size-adjust: 99.68%; ascent-override: 105.12%; descent-override: 27.19%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Mono Courier"; src: local("Courier New"), local("CourierNewPSMT"), local("Liberation Mono"), local("Courier"); font-weight: 400 500; size-adjust: 100%; ascent-override: 104.79%; descent-override: 27.1%; line-gap-override: 0%; }
+  @font-face { font-family: "Roboto Mono DejaVu"; src: local("DejaVu Sans Mono"), local("DejaVuSansMono"); font-weight: 400 500; size-adjust: 99.68%; ascent-override: 105.13%; descent-override: 27.19%; line-gap-override: 0%; }
 </style>
