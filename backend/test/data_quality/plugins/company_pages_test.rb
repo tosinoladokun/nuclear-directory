@@ -342,7 +342,10 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
   end
 
   test "gap fill: a published company with empty basics is read without being asked; one without a website is listed" do
-    Organization.create!(name: "Siteless Fission", verification_status: "verified", verified_by: "human:tosin")
+    role = Role.create!(key: "gap_fill_test", name: "Gap fill test")
+    OrganizationRole.create!(organization: @company, role:)
+    siteless = Organization.create!(name: "Siteless Fission", verification_status: "verified", verified_by: "human:tosin")
+    OrganizationRole.create!(organization: siteless, role:)
     stats = DataQuality::Plugins::CompanyPages.new.crawl(nil)
 
     assert_equal 1, stats["companies"]

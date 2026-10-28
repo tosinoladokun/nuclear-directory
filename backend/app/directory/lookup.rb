@@ -74,19 +74,20 @@ module Directory
     end
 
     # Gap fill (Tosin, 29 Oct): asks Enrich to read the own site of up to
-    # limit published companies with the most empty basics (category,
-    # headquarters, description, short description), not read in
-    # REFILL_DAYS and not already waiting. Returns the names of companies
-    # with gaps but no website (left for Data Quality), at most 20.
+    # limit published companies missing their headquarters city or
+    # description, most missing first, not read in GAP_REFILL_DAYS and not
+    # already waiting. Category, website and short description are Data
+    # Quality's by hand (28 Oct), so only companies that already have a
+    # category are read: Enrich's category findings then only confirm.
+    # Returns the names of such companies with no usable website, at most 20.
     GAP_REFILL_DAYS = 90
     def request_gap_fill(limit: 10)
       gaps = Arel.sql(<<~SQL.squish)
         (CASE WHEN organizations.description IS NULL OR organizations.description = '' THEN 1 ELSE 0 END) +
-        (CASE WHEN organizations.short_description IS NULL OR organizations.short_description = '' THEN 1 ELSE 0 END) +
-        (CASE WHEN organizations.hq_city IS NULL OR organizations.hq_city = '' THEN 1 ELSE 0 END) +
-        (CASE WHEN NOT EXISTS (SELECT 1 FROM organization_roles r WHERE r.organization_id = organizations.id) THEN 1 ELSE 0 END)
+        (CASE WHEN organizations.hq_city IS NULL OR organizations.hq_city = '' THEN 1 ELSE 0 END)
       SQL
       gapped = Organization.where(verification_status: "verified").where("#{gaps} > 0")
+        .where("EXISTS (SELECT 1 FROM organization_roles r WHERE r.organization_id = organizations.id)")
       # Only a full https address can be read (Enrich's own rule).
       sited = gapped.where("organizations.website ILIKE 'https://%'")
       Organization.where(id: sited.where(enrich_requested_at: nil)
