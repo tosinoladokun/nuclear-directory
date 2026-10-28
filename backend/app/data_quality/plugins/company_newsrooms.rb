@@ -87,7 +87,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     recent.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
-        "summary" => item.summary, "about" => about(company, item) }.compact }
+        "summary" => item.summary, "about" => about(company, item, directory_only: found_feed?(company)) }.compact }
     end
   end
 
@@ -185,12 +185,15 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     # The company itself, then every other company the release names by its
     # legal form. Match keeps the ones the directory has; the others become
     # leads for Data Quality (LeadSync's news feed), never facts.
-    def about(company, item)
+    # A found feed names only partners the directory has (DQ, 28 Oct: a
+    # company blog's legal-suffix names are too noisy to become leads).
+    def about(company, item, directory_only: false)
       partners = [ item.title, item.summary ].compact.flat_map do |text|
         text.to_enum(:scan, PARTNER).map { partner_name(Regexp.last_match[0]) }
       end
       names = [ company, *partners ].uniq { |name| name.downcase.gsub(/[^a-z0-9]/, "") }
       names.reject! { |name| name != company && name.downcase.start_with?(company.downcase) }
+      names.select! { |name| name == company || @directory.organization(name:) } if directory_only
       names.map { |name| { "name" => name, "type" => "organization" } }
     end
 

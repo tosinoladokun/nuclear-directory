@@ -205,4 +205,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     kept = discovering([]).send(:since_found, source, [ 1, 5, 10, 15, 18, 21, 22 ].map(&item))
     assert_equal [ 22, 21, 18, 15, 10 ], kept.map { |each| each.published_on.day }
   end
+
+  test "a found feed names only partners the directory has; a listed feed names every legal-suffix partner" do
+    known = Class.new(Websites) { def organization(name:) = (Object.new if name == "Known Fission, Inc") }.new([])
+    found = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, discover: true, directory: known)
+    listed = plugin
+    item = Plugin::Item.new(title: "Acme Signs With Known Fission, Inc and Stray Parts, LLC", url: "https://x/1", published_on: TODAY, summary: nil)
+
+    assert_equal [ "Acme", "Known Fission, Inc" ], found.send(:about, "Acme", item, directory_only: true).map { |each| each["name"] }
+    assert_equal [ "Acme", "Known Fission, Inc", "Stray Parts, LLC" ], listed.send(:about, "Acme", item).map { |each| each["name"] }
+  end
 end
