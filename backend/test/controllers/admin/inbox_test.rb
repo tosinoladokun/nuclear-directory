@@ -27,13 +27,15 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   test "Today shows what's new and changes to his decisions, never Data Quality's to settle" do
     get admin_inbox_path
     assert_response :success
-    assert_select "p", /2 to decide\. Nothing goes live until you say yes\./
+    # Its two claims, plus the fixtures' pending records with no open claim.
+    total = 2 + OwnerInbox.new.records.size
+    assert_select "p", /#{total} to decide\. Nothing goes live until you say yes\./
     assert_select "#inbox-item-#{@create.id}", /Bluefield Fission: a company in Austin, TX\./
     assert_select "#inbox-item-#{@create.id} button", "Create"
     assert_select "#inbox-item-#{@change.id}", /Rockville Nuclear · Headquarters city:\s*Bethesda\s*→\s*Rockville/
     assert_select "#inbox-item-#{@change.id} button", /Keep what I decided/
     assert_select "#inbox-item-#{@settle.id}", 0
-    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*2/
+    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*#{total}/
   end
 
   test "Create publishes; No says no and can be undone from Recently decided" do
@@ -121,5 +123,22 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
       claim: nil, subject_type: "Organization", subject_id: @new_co.id, why: nil, waiting: true)
     assert_not DataQuality::Recommendations.accept([ item ], by: "human:tosin", first_hand: true).sole.ok?
     assert_not @new_co.reload.verified?
+  end
+
+  test "a pending company or plant with no open claim is in Today; Create publishes it, No rejects it" do
+    src = Source.create!(url: "https://www.nrc.gov/test/seeded.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "s")
+    seeded = Organization.create!(name: "Seeded Pending Co", verification_status: "pending")
+    Evidence.create!(subject: seeded, source: src, quote: "Seeded Pending Co builds reactors.", found_by: "human")
+    plant = Facility.create!(name: "PULSTAR Reactor", verification_status: "pending")
+    Evidence.create!(subject: plant, source: src, quote: "NC State's PULSTAR reactor.", found_by: "human")
+    get admin_inbox_path
+    assert_select "#inbox-record-organization-#{seeded.id}", /Seeded Pending Co/
+    assert_select "#inbox-record-facility-#{plant.id}", /PULSTAR Reactor/
+    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*#{OwnerInbox.new.size}/
+
+    post admin_inbox_decide_record_path("Organization", seeded.id, "yes")
+    assert seeded.reload.verified?, flash[:alert].to_s
+    post admin_inbox_decide_record_path("Facility", plant.id, "no")
+    assert_equal "rejected", plant.reload.verification_status
   end
 end

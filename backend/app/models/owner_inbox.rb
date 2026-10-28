@@ -31,7 +31,13 @@ class OwnerInbox
   end
 
   # How many facts wait for him, without building their rows (the nav badge).
-  def size = @sections ? sections.values.sum(&:size) : groups.size
+  def size = (@sections ? sections.values.sum(&:size) : groups.size) + records.size
+
+  # Pending companies and plants with no open claim (seeded, or a claim
+  # decided since): his too, decided on the record itself.
+  def records
+    @records ||= %w[organization facility].flat_map { |kind| DataQuality::Review.pending_facts(kind:, limit: 200, directory: @directory) }
+  end
 
   # { "new_record" => [Entry, …], … }, newest first.
   def sections
