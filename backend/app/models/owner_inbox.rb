@@ -6,6 +6,7 @@
 class OwnerInbox
   # Everything he needs to do (Tosin, 26 Oct): what's new, and changes to
   # something already there.
+  RECORDS = 200
   SECTIONS = %w[new_record new_fact change].freeze
   # changes: { field => [stored, stated] } for a change, else {}.
   Entry = Data.define(:kind, :item, :copy_ids, :checked, :changes) do
@@ -36,9 +37,28 @@ class OwnerInbox
   # Pending companies and plants with no open claim (seeded, or a claim
   # decided since): his too, decided on the record itself.
   def records
-    # A company only with a sourced category (role), as for claims (PM, 28 Oct).
-    @records ||= %w[organization facility].flat_map { |kind| DataQuality::Review.pending_facts(kind:, limit: 200, directory: @directory) }
-      .select { |fact| fact.type != "Organization" || @directory.sourced_role?(fact.id) }
+    @records ||= pending_records("facility") + pending_records("organization")
+  end
+
+  # Up to `limit` pending records of a kind, paging past companies without a
+  # sourced category (role; PM, 28 Oct) so they never hide eligible ones.
+  # Roles are looked up per page, in one query.
+  def pending_records(kind, limit: RECORDS)
+    found = []
+    after_id = nil
+    loop do
+      page = DataQuality::Review.pending_facts(kind:, after_id:, limit:, directory: @directory)
+      if kind == "organization"
+        with_role = @directory.sourced_role_ids(page.map(&:id))
+        found.concat(page.select { |fact| with_role.include?(fact.id) })
+      else
+        found.concat(page)
+      end
+      break if found.size >= limit || page.size < limit
+
+      after_id = page.last.id
+    end
+    found.first(limit)
   end
 
   # { "new_record" => [Entry, …], … }, newest first.

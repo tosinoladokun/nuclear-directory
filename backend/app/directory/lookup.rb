@@ -191,9 +191,12 @@ module Directory
 
     # Whether a company has a role with a source (pending or published), so
     # a new company reaches the owner with its category (#548). Reads only.
-    def sourced_role?(organization_id)
-      OrganizationRole.where(organization_id:, verification_status: %w[pending verified])
-        .where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id)).exists?
+    def sourced_role?(organization_id) = sourced_role_ids([ organization_id ]).any?
+
+    # Of these companies, the ones with a sourced role, in one query.
+    def sourced_role_ids(organization_ids)
+      OrganizationRole.where(organization_id: organization_ids, verification_status: %w[pending verified])
+        .where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id)).distinct.pluck(:organization_id).to_set
     end
 
     # A fact's evidence rows as [id, source_id, quote], so a caller can name

@@ -145,4 +145,13 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     post admin_inbox_decide_record_path("Facility", plant.id, "no")
     assert_equal "rejected", plant.reload.verification_status
   end
+
+  test "companies without a category never hide an eligible one behind the page limit" do
+    src = Source.create!(url: "https://example.com/paging", source_kind: "web_page", crawl_status: "ok", content_sha256: "p")
+    3.times { |i| Organization.create!(name: "Roleless #{i}", verification_status: "pending").then { |o| Evidence.create!(subject: o, source: src, quote: "q", found_by: "human") } }
+    eligible = give_sourced_role(Organization.create!(name: "Eligible Late Co", verification_status: "pending"))
+    Evidence.create!(subject: eligible, source: src, quote: "q", found_by: "human")
+    ids = OwnerInbox.new.pending_records("organization", limit: 2).map(&:id)
+    assert_includes ids, eligible.id
+  end
 end
