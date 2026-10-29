@@ -194,7 +194,7 @@ module Directory
         .map { |event| VerificationEventRef.from(event) }
     end
 
-    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm].freeze
+    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm LicensingStage].freeze
     # FactWriter kinds, one per fact type.
     FACT_KINDS = FACT_TYPES.map(&:underscore).freeze
 
@@ -322,7 +322,7 @@ module Directory
       "organization" => [ :aliases ], "facility" => [ :parent, :technology ], "organization_role" => [ :organization, :role ],
       "organization_technology" => [ :organization, :technology ],
       "relationship" => [ :from_organization, :to_organization ], "facility_relationship" => [ :organization, :facility ],
-      "deal_term" => [ :link ]
+      "deal_term" => [ :link ], "licensing_stage" => [ :organization, :facility ]
     }.freeze
     private_constant :PENDING_INCLUDES
 
@@ -767,6 +767,10 @@ module Directory
           when FacilityRelationship then "#{record.organization.name} #{LINK_VERBS.fetch(record.relationship_type)} #{record.facility.name}"
           # Its id (an award ID, an accession number) or round, so two terms under one link read apart.
           when DealTerm then return deal_term_label(record)
+          # "Last Energy's pre-application on NRC docket 99902104" (#650).
+          when LicensingStage
+            owner = record.organization || record.facility
+            return "#{owner&.name}'s #{record.stage.tr('_', '-')} on NRC docket #{record.nrc_docket}"
           end
         "the fact “#{statement}”"
       end

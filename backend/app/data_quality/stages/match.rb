@@ -28,7 +28,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
   # in the same run must already be known. Records before links, and deal
   # terms after the links and companies they belong to (#397).
   ORDER = %w[facility organization organization_role organization_technology relationship facility_relationship
-    deal_term organization_alias news_item].freeze
+    deal_term organization_alias news_item licensing_stage].freeze
 
   # Payload keys that name another record, and what kind of record each is.
   LINK_ENDS = {
@@ -38,7 +38,10 @@ class DataQuality::Stages::Match < DataQuality::Stage
     "facility_relationship" => { "organization" => :organization, "facility" => :facility },
     # A funding round on the company itself (link_type "Organization", #396);
     # a term under a link names that link's ends instead (DEAL_LINKS).
-    "deal_term" => { "organization" => :organization }
+    "deal_term" => { "organization" => :organization },
+    # A developer's stage on an NRC project docket before any plant exists
+    # (#650): its company end; the docket and stage are the stage's own.
+    "licensing_stage" => { "organization" => :organization }
   }.freeze
   # A deal term under a link (#256): the link's kind, found by its ends and verb.
   DEAL_LINKS = { "Relationship" => "relationship", "FacilityRelationship" => "facility_relationship" }.freeze
@@ -50,7 +53,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
     "relationship" => %w[relationship_type],
     "facility_relationship" => %w[relationship_type],
     # What makes a term the same one (DATA.md): its link, its type and its external ID.
-    "deal_term" => %w[link_type term_type external_id]
+    "deal_term" => %w[link_type term_type external_id],
+    "licensing_stage" => %w[stage nrc_docket design_name effective_on expires_on]
   }.freeze
 
   Found = Data.define(:record, :by)

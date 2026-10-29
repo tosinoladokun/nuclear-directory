@@ -87,6 +87,12 @@ module DataQuality::Claim
       values = values.transform_keys { |key| ROUND_LABELS.fetch(key, key) } if payload["term_type"] == "funding_round"
       "#{name_of(payload['organization'])} has a #{humanize(payload['term_type'])}#{" (#{payload['round']})" if payload['round'].present?}" \
         "#{details(values)}."
+    # A developer's stage with the NRC before any plant exists (#650).
+    when "licensing_stage"
+      project = " for #{payload['design_name']}" if payload["design_name"].present?
+      since = (Date.iso8601(payload["effective_on"].to_s).strftime(" since %-d %b %Y") rescue nil)
+      "#{name_of(payload['organization'])} is at the NRC's #{payload['stage'].to_s.tr('_', '-')} stage#{project} " \
+        "(docket #{payload['nrc_docket']})#{since}."
     else
       "#{candidate.kind.humanize}: #{payload.to_json}"
     end
