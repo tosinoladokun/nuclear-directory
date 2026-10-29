@@ -297,15 +297,18 @@ module DirectoryHelper
   PLANT_VERBS = { "owns" => "owns", "operates" => "operates", "vendor_for" => "is the reactor developer", "offtakes_from" => "buys power" }.freeze
   def plant_verb(type) = PLANT_VERBS.fetch(type.to_s)
 
-  # How a company name fits the 240px name column of a Row (#558): 15px up to
-  # about 26 characters, then 13px, then its short name if it has one; an
-  # ellipsis (with the full name in title) is the last resort. [text, small?]
+  # How a company name fits its column (#558): 15px up to `full` characters, then 13px, then its
+  # short name if it has one; an ellipsis (with the full name in title) is the last resort.
+  # A deal row's name column is 240px; a list's is 300px, so every name in a list but the
+  # rare longest keeps one size (Tosin, 28 Oct). [text, small?]
   LINE_NAME_FULL = 26
   LINE_NAME_SMALL = 31
-  def line_name(name, short_name = nil)
-    return [ name, false ] if name.length <= LINE_NAME_FULL
-    return [ name, true ] if name.length <= LINE_NAME_SMALL
-    return [ short_name, true ] if short_name.present? && short_name.length <= LINE_NAME_SMALL
+  LIST_NAME_FULL = 33
+  LIST_NAME_SMALL = 38
+  def line_name(name, short_name = nil, full: LINE_NAME_FULL, small: LINE_NAME_SMALL)
+    return [ name, false ] if name.length <= full
+    return [ name, true ] if name.length <= small
+    return [ short_name, true ] if short_name.present? && short_name.length <= small
 
     [ name, true ]
   end

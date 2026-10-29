@@ -2,7 +2,11 @@
 name: Kewaunee Solutions, Inc.
 country_code: US
 status: active
-roles: []
+roles:
+- key: waste_decommissioning
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/kewa
+  quote: "approved the indirect transfer of Renewed Facility Operating License No. DPR-43 for the KPS and the general license for the KPS ISFSI, held by DEK, to Kewaunee Solutions, Inc."
+  confidence: 1.0
 technologies: []
 relationships: []
 facilities:

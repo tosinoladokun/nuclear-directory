@@ -1,0 +1,11 @@
+# Seed research for the no-category audit, batch 2 (PM, 28 Oct 2026). Role quote is on the page cited.
+name: Rhode Island Atomic Energy Commission
+status: active
+roles:
+- key: research_organization
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/riaec-ri-ge-pool
+  quote: "Rhode Island Atomic Energy Commission GE Pool reactor | Licensee: Rhode Island Atomic Energy Commission | Location: Narragansett, RI | Docket Number: 05000193 | Reactor Type: GE Pool"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

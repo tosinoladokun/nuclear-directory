@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>NRC News Releases</title>
+<link>https://www.nrc.gov/about-nrc/news-releases</link>
+<description>News releases from the U.S. Nuclear Regulatory Commission</description>
+<item>
+<title>NRC Issues Construction Permit for Kairos Power Hermes 2 Test Reactor</title>
+<link>https://www.nrc.gov/cdn/doc-collection-news/2026/26-071.pdf</link>
+<pubDate>Tue, 20 Oct 2026 10:00:00 -0400</pubDate>
+<description>The Nuclear Regulatory Commission has issued a construction permit to Kairos Power.</description>
+</item>
+<item>
+<title>Office of Nuclear Reactor Regulation Announces Public Meeting Schedule</title>
+<link>https://www.nrc.gov/cdn/doc-collection-news/2026/26-070.pdf</link>
+<pubDate>Mon, 19 Oct 2026 10:00:00 -0400</pubDate>
+<description>The U.S. Nuclear Regulatory Commission will hold public meetings.</description>
+</item>
+<item>
+<title>NRC Renews Operating Licenses for Old Plant</title>
+<link>https://www.nrc.gov/cdn/doc-collection-news/2026/25-010.pdf</link>
+<pubDate>Mon, 05 Jan 2026 10:00:00 -0500</pubDate>
+<description>Kairos Power, an older item outside the window.</description>
+</item>
+</channel>
+</rss>
