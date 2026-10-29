@@ -157,6 +157,14 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     assert_operator meta_description.length, :<=, 160
   end
 
+  test "a plant's meta never runs past 160 characters, and a framework offtake isn't a deal" do
+    long = cite!(plant("A Very Long Plant Name " * 6, facility_type: "power_reactor", status: "operating", city: "Somewhere", state: "TX"))
+    cite!(link(cite!(company("Owner Co")), "owns", long))
+
+    get plant_path(slug: long.slug)
+    assert_operator meta_description.length, :<=, 160
+  end
+
   test "a plant's title names its town and state, and owners and operator only when they're published (#291)" do
     owned = cite!(plant("Arkansas Nuclear One", facility_type: "power_reactor", status: "operating", city: "Russellville", state: "AR"))
     cite!(link(cite!(company("Entergy Arkansas")), "owns", owned))

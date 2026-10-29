@@ -228,8 +228,13 @@ module DirectoryHelper
   # deals | Nuclear Directory". Only the sections the page has.
   def plant_title(profile)
     sections = [ ("owners" if profile.current_companies_for("owns").any?), ("operator" if profile.current_companies_for("operates").any?),
-      ("deals" if profile.companies_for("offtakes_from").any?) ].compact
+      ("deals" if plant_deal_companies(profile).any?) ].compact
     seo_title(profile.name, sections)
+  end
+
+  # Power buyers with a signed deal: a framework or MOU isn't a deal (DealStage, DATA.md).
+  def plant_deal_companies(profile)
+    profile.links.select { |link| link.relationship_type == "offtakes_from" && link.stage.nil? }.map(&:organization).uniq
   end
 
   # "Name: a, b and c | Nuclear Directory" within SEO_TITLE_LIMIT: first the suffix goes, then the last section,
@@ -418,7 +423,7 @@ module DirectoryHelper
       place(profile.hq_city, profile.hq_state) ].compact.join(" in ").presence
     head = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
     head = head.truncate(PREVIEW_LIMIT, separator: " ") if head.length > PREVIEW_LIMIT
-    counts = counted([ profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq.size, company_places_noun(profile) ], [ profile.deals.count { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id) }, "deal" ], # investments are counted as investors
+    counts = counted([ profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq.size, company_places_noun(profile) ], [ profile.counted_deals.count { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id) }, "deal" ], # signed deals only (as the page counts them); investments are counted as investors
       [ investors_of(profile).size, "investor" ])
     fit_counts(head, counts)
   end
@@ -429,14 +434,14 @@ module DirectoryHelper
       text = n.zero? ? head : "#{head} #{counts.first(n).join(', ')}."
       return text if text.length <= PREVIEW_LIMIT
     end
-    head
+    head.truncate(PREVIEW_LIMIT, separator: " ")
   end
 
   # A plant's meta description: what it is and where, then "2 owners, 1 operator, 3 deals".
   def plant_meta_description(profile)
     base = plant_preview_lead(profile)
     counts = counted([ profile.current_companies_for("owns").size, "owner" ], [ profile.current_companies_for("operates").size, "operator" ],
-      [ profile.companies_for("offtakes_from").size, "deal" ])
+      [ plant_deal_companies(profile).size, "deal" ])
     fit_counts(base, counts)
   end
 
