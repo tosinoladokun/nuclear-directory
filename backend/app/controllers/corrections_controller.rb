@@ -56,10 +56,13 @@ class CorrectionsController < ApplicationController
     def back_label(path)
       return "Back to search" if path == "/"
 
-      type, id = record_on(path)
-      record = type&.constantize&.find_by(id:)
+      # The page itself, without its query string or fragment; a record is named only while it's published.
+      pathname = path.split(/[?#]/).first.to_s
+      slug = pathname[%r{\A/(?:companies|plants)/([\w-]+)\z}, 1]
+      model = pathname.start_with?("/companies/") ? Organization : Facility
+      record = model.published.find_by(slug:) if slug
       return "Back to #{record.name}" if record
-      return "Back to the list" if path.start_with?("/companies")
+      return "Back to the list" if pathname == "/companies"
 
       "Back to the page"
     end

@@ -75,6 +75,17 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     get correction_sent_path(page: "/companies?category=fuel")
     assert_select "a[href=?]", "/companies?category=fuel", "Back to the list"
 
+    get correction_sent_path(page: "/companies/kairos-power?ref=x#deals")
+    assert_select "a[href=?]", "/companies/kairos-power?ref=x#deals", "Back to Kairos Power", "the query and fragment are kept and don't hide the record"
+
+    company("Hidden Co", verified: false)
+    get correction_sent_path(page: "/companies/hidden-co")
+    assert_select "a[href='/companies/hidden-co']", "Back to the page", "an unpublished record's name isn't shown"
+    assert_select "body", text: /Hidden Co/, count: 0
+
+    get correction_sent_path(page: "/companies/missing")
+    assert_select "a[href='/companies/missing']", "Back to the page", "only the list itself is 'the list'"
+
     get correction_sent_path(page: "/about")
     assert_select "a[href='/about']", "Back to the page"
 
