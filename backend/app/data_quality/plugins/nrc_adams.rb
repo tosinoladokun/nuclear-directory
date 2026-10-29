@@ -1,8 +1,17 @@
 # NRC's document library (ADAMS), through its Public Search API: licensing
-# letters, applications and pre-application documents. A first read (PM,
-# 28 Oct): each search in SEARCHES is run at most once a day and its
-# documents' catalogue fields stored, one JSON line each, so the reader can
-# be written against real results. It proposes nothing yet.
+# letters, applications and pre-application documents. Each search in
+# SEARCHES is run at most once a day and its documents' catalogue fields
+# stored, one JSON line each.
+#
+# Extract (PM, 29 Oct) reads only documents on a reactor developer's docket:
+# a pre-application project (999...) or a new reactor (052...). Routine
+# documents about operating plants are left alone. No model is asked.
+# - A company in the directory named as the document's author or addressee
+#   gets the document as evidence (a company claim that matches it).
+# - A name the directory doesn't have becomes a lead for Data Quality
+#   (LeadSync's NRC ADAMS feed), never a claim.
+# - NRC's letter assigning a project number (a developer entering NRC
+#   pre-application) is one news item about that company, for a person.
 #
 # The API needs a subscription key (ADAMS_API_KEY, sent as NRC asks in the
 # Ocp-Apim-Subscription-Key header, never stored). Without one the crawl
@@ -18,10 +27,11 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   }.freeze
   NO_KEY = "no ADAMS_API_KEY set"
 
-  def initialize(fetcher: DataQuality::Fetcher.new, key: ENV["ADAMS_API_KEY"], today: -> { Date.current })
+  def initialize(fetcher: DataQuality::Fetcher.new, key: ENV["ADAMS_API_KEY"], today: -> { Date.current }, directory: DataQuality::DirectoryClient.new)
     @fetcher = fetcher
     @key = key.presence
     @today = today
+    @directory = directory
   end
 
   def crawl(_run)
@@ -30,18 +40,63 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     SEARCHES.to_h do |name, (query, filters)|
       source = Source.find_or_create_by!(url: "#{API_URL}##{name.parameterize}") do |row|
         row.source_kind = source_kind
-        row.title = "NRC ADAMS search: #{name} (first read)"
+        row.title = "NRC ADAMS search: #{name}"
       end
       [ name, DataQuality::Snapshot.claim(source) { search(source, query, filters) }.to_s ]
     end
   end
 
-  # A first read: nothing proposed until the reader is written from what's stored.
-  def extract(_source, _run) = []
+  NRC = "U.S. Nuclear Regulatory Commission"
+  # A pre-application project (999...) or a new reactor's docket (052...).
+  DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
+  PROJECT_NUMBER = /assignment of project number/i
+
+  def extract(source, _run)
+    self.class.developer_documents(source.content_text).flat_map do |line, doc|
+      known = self.class.organizations(doc).select { |name| @directory.organization(name:) }
+      claims = known.map { |name| { kind: "organization", quote: line, payload: { "name" => name } } }
+      claims << project_news(doc, known) if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any?
+      claims.map { |claim| claim.merge(quote: line) }
+    end
+  end
+
+  # [[stored line, document]] for documents on a developer's docket.
+  def self.developer_documents(text)
+    text.to_s.lines(chomp: true).filter_map do |line|
+      doc = JSON.parse(line)
+      [ line, doc ] if doc.is_a?(Hash) && Array(doc["DocketNumber"]).any? { |docket| docket.to_s.match?(DEVELOPER_DOCKET) }
+    rescue JSON::ParserError
+      nil
+    end
+  end
+
+  # The document's authors and addressees other than NRC's own offices.
+  def self.organizations(doc)
+    (Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
+      .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
+  end
+
+  def quote_in_source?(source, quote) = quote.present? && source.content_text.to_s.lines(chomp: true).include?(quote.to_s)
+
+  def verification_context(_source, quote) = quote
+
+  def source_facts(_source)
+    "This is a list of documents from the U.S. Nuclear Regulatory Commission's document library (ADAMS), one per " \
+      "line: accession number, title, date, document type, NRC docket numbers, and the organizations that wrote it " \
+      "(AuthorAffiliation) and received it (AddresseeAffiliation). A docket starting 999 is a reactor developer's " \
+      "pre-application project; one starting 052 is a new reactor's."
+  end
 
   def max_dropped_share(_source) = 0.0
 
   private
+    def project_news(doc, known)
+      { kind: "news_item", payload: {
+        "url" => doc["Url"], "title" => doc["DocumentTitle"].to_s.squish, "publisher" => NRC, "published_on" => doc["DocumentDate"],
+        "summary" => "NRC assigned a pre-application project number (docket #{Array(doc['DocketNumber']).join(', ')}).",
+        "about" => [ { "name" => NRC, "type" => "organization" }, *known.map { |name| { "name" => name, "type" => "organization" } } ] }.compact }
+    end
+
     def search(source, query, filters)
       return :skipped_recent if source.fetched_at&.to_date == Date.current
 

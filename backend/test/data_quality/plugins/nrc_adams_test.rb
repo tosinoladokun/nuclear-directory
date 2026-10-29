@@ -57,4 +57,41 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     crawl
     assert_equal({ "unexpected_fields" => [ "accessionNumber" ] }, JSON.parse(Source.find_by!(url: "#{Plugin::API_URL}#pre-application").content_text))
   end
+
+  # The fixture is four real lines from production's first read (29 Oct).
+  def stored = @stored ||= Source.create!(url: "#{Plugin::API_URL}#pre-application", source_kind: "nrc_adams", crawl_status: "ok",
+    content_text: file_fixture("nrc_adams/pre-application.txt").read)
+
+  def known(*names)
+    names.each do |name|
+      company = Organization.find_by(slug: name.parameterize) || Organization.create!(name:)
+      company.aliases.find_or_create_by!(alias: name)
+      company.verify!(by: "human:tosin") unless company.verified?
+    end
+  end
+
+  test "a developer the directory has gets each document on its docket as evidence; operating-plant documents are left alone" do
+    known("Radiant", "Arizona Public Service Co")
+    claims = plugin.extract(stored, nil)
+
+    assert_equal [ [ "organization", "Radiant" ], [ "organization", "Radiant" ] ], claims.map { |c| [ c[:kind], c[:payload]["name"] ] }
+    assert claims.all? { |c| plugin.quote_in_source?(stored, c[:quote]) }
+  end
+
+  test "NRC assigning a project number to a company we have is one news item about it" do
+    known("The Leapfrog Group")
+    news = plugin.extract(stored, nil).select { |c| c[:kind] == "news_item" }.sole[:payload]
+
+    assert_match "Assignment of Project Number", news["title"]
+    assert_equal [ "U.S. Nuclear Regulatory Commission", "The Leapfrog Group" ], news["about"].map { |a| a["name"] }
+    assert_equal "2026-10-19", news["published_on"]
+  end
+
+  test "a developer the directory doesn't have becomes a lead, not a claim" do
+    stored
+    assert_empty plugin.extract(stored, nil)
+    LeadSync.run
+    assert Lead.exists?(name: "The Leapfrog Group")
+    refute Lead.exists?(name: "Arizona Public Service Co"), "an operating plant's document isn't read"
+  end
 end

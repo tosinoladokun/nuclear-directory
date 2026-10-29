@@ -12,7 +12,7 @@ class LeadSync
 
   def run
     counts = Hash.new(0)
-    { "search" => searches, "news" => news, "enrich" => enrich, "awards" => awards }.each do |feed, sightings|
+    { "search" => searches, "news" => news, "enrich" => enrich, "awards" => awards, "adams" => adams }.each do |feed, sightings|
       sightings.each { |sighting| counts[feed] += 1 if Lead.sighted!(**sighting) }
     end
     counts
@@ -61,6 +61,21 @@ class LeadSync
           first: source.created_at.to_date }
       rescue CSV::MalformedCSVError
         nil
+      end
+    end
+
+    # A developer NRC's documents name that the directory doesn't have (NRC
+    # ADAMS, 29 Oct): keyed by the document and the name.
+    def adams
+      Source.where(source_kind: "nrc_adams").crawl_ok.where.not(content_text: [ nil, "" ]).flat_map do |source|
+        DataQuality::Plugins::NrcAdams.developer_documents(source.content_text).flat_map do |_line, doc|
+          DataQuality::Plugins::NrcAdams.organizations(doc).filter_map do |name|
+            next if Lead.junk?(name) || known?(name)
+
+            { name:, kind: "company", key: "adams:#{doc['AccessionNumber']}:#{Lead.normalize(name)}", label: "NRC: #{doc['DocumentTitle'].to_s.truncate(120)}",
+              url: doc["Url"], first: (Date.iso8601(doc["DocumentDate"].to_s) rescue source.created_at.to_date) }
+          end
+        end
       end
     end
 
