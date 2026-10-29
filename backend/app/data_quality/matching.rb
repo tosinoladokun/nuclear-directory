@@ -98,8 +98,12 @@ module DataQuality::Matching
         next fail_with.call("it isn't a company claim; only close applies to it (new also takes a plant claim; same_as takes an end)")
       end
       # No longer open (settled meanwhile): skipped, not an error (Infra).
+      # "new" may also take a company claim out of a wrong match (DQ, 29 Oct):
+      # attached to an existing record, still waiting, decided by no one.
+      rematch = action == "new" && candidate.kind == "organization" && %w[matched needs_review].include?(candidate.status) &&
+        candidate.subject_id && !candidate.proposed_subject && candidate.reviewed_by.nil?
       next Row.new(id:, ok: true, error: "skipped: it's already attached or decided (#{candidate.status})", created_ids: []) unless
-        OPEN.include?(candidate.status) && candidate.subject_id.nil?
+        (OPEN.include?(candidate.status) && candidate.subject_id.nil?) || rematch
 
       before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at, :payload).as_json
       created = []
