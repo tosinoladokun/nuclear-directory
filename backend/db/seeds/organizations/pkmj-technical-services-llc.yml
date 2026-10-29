@@ -14,6 +14,9 @@ notes: An existing record (DOE awardee). Only the role is added, from the compan
 description:
   source_url: https://www.pkmj.com/
   quote: we are a nuclear consulting organization providing software and engineering solutions.
+  also:
+  - source_url: https://www.pkmj.com/
+    quote: "PKMJ Technical Services LLC"
 short_description:
   text: 'Nuclear engineering and software'
   source_url: https://www.pkmj.com/

@@ -15,6 +15,9 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: D.C. Cook 1 | 05000315 | DPR-58 | PWR | 13 miles S of Benton Harbor, MI | Indiana/Michigan Power Co. | 3
+  also:
+  - source_url: https://www.indianamichiganpower.com/
+    quote: "Indiana Michigan Power"
 short_description:
   text: 'Nuclear plant operator in Michigan'
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units

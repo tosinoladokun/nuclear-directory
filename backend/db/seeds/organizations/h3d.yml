@@ -17,3 +17,6 @@ notes: An existing record (DOE small-business awardee) created as 'H3d' from USA
 description:
   source_url: https://www.h3dgamma.com/
   quote: H3D exists to serve customer needs
+  also:
+  - source_url: https://www.h3dgamma.com/
+    quote: "H3D, Inc."
