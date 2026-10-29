@@ -49,7 +49,7 @@ function start(key, host) {
       capture_pageview: "history_change", // counts Turbo navigations too
       capture_pageleave: true, // bounce rate and time on page; same sanitized properties
       disable_scroll_properties: true, // no scroll depth: page leaves carry time on page only
-      capture_performance: false, // no web vitals (a third-party script); set here so the dashboard can't turn it on
+      capture_performance: { web_vitals: true, network_timing: false }, // real-user LCP, CLS, INP (loaded through our /relay); no per-request timings, which carry URLs
       autocapture: false, // no clicks, form events or element text
       disable_session_recording: true,
       disable_surveys: true,

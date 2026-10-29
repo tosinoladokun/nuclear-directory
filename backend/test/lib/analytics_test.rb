@@ -55,7 +55,7 @@ class AnalyticsTest < ActiveSupport::TestCase
     assert_includes snippet, "autocapture: false"
     assert_includes snippet, "capture_pageleave: true" # bounce rate and time on page
     assert_includes snippet, "disable_scroll_properties: true", "no scroll depth, which the privacy page doesn't mention"
-    assert_includes snippet, "capture_performance: false", "web vitals stay off even if the PostHog dashboard enables them"
+    assert_includes snippet, "capture_performance: { web_vitals: true, network_timing: false }", "web vitals on (LCP, CLS, INP), per-request network timings off"
     assert_includes snippet, "before_send: sanitize"
     assert_includes snippet, 'cookieless_mode: "always"'
   end
