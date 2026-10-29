@@ -55,9 +55,28 @@ class AnalyticsTest < ActiveSupport::TestCase
     assert_includes snippet, "autocapture: false"
     assert_includes snippet, "capture_pageleave: true" # bounce rate and time on page
     assert_includes snippet, "disable_scroll_properties: true", "no scroll depth, which the privacy page doesn't mention"
-    assert_includes snippet, "capture_performance: { web_vitals: true, network_timing: false }", "web vitals on (LCP, CLS, INP), per-request network timings off"
+    assert_includes snippet, 'web_vitals_allowed_metrics: [ "LCP", "CLS", "INP" ]', "exactly three vitals, whatever the dashboard lists"
+    assert_includes snippet, "network_timing: false", "no per-request timings"
     assert_includes snippet, "before_send: sanitize"
     assert_includes snippet, 'cookieless_mode: "always"'
+  end
+
+  test "web vitals events keep their numbers but lose the nested detail objects and every query string" do
+    skip "node isn't installed" unless system("which node > /dev/null 2>&1")
+    script = <<~JS
+      import { sanitize } from "./app/javascript/analytics.js"
+      const event = sanitize({ event: "$web_vitals", properties: {
+        $web_vitals_LCP_value: 1900, $current_url: "https://x.org/companies?q=me@example.com#a",
+        $web_vitals_LCP_event: { $current_url: "https://x.org/companies?q=me@example.com", navigationURL: "https://x.org/c?q=1", name: "LCP" } } })
+      console.log(JSON.stringify(event.properties))
+    JS
+    out = IO.popen([ "node", "--input-type=module", "-e", script, chdir: Rails.root.to_s ], &:read)
+    props = JSON.parse(out)
+
+    assert_equal 1900, props["$web_vitals_LCP_value"]
+    assert_equal "https://x.org/companies", props["$current_url"]
+    assert_not_includes out, "example.com", "no query string anywhere"
+    assert_not props.key?("$web_vitals_LCP_event"), "the nested detail object is dropped"
   end
 
   test "without a client nothing is sent and no key is exposed" do

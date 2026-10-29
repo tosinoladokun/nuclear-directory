@@ -31,6 +31,8 @@ export function sanitize(event) {
   const properties = event.properties || {}
   if (properties.$pathname?.startsWith("/design")) return null
 
+  // Web vitals carry each metric's detail (nested events with their own URLs): the numbers stay, the objects go.
+  for (const name of Object.keys(properties)) if (/^\$web_vitals_.*_event$/.test(name)) delete properties[name]
   for (const [name, value] of Object.entries(properties)) properties[name] = withoutQuery(value)
   if (event.$set) for (const [name, value] of Object.entries(event.$set)) event.$set[name] = withoutQuery(value)
   if (event.$set_once) for (const [name, value] of Object.entries(event.$set_once)) event.$set_once[name] = withoutQuery(value)
@@ -49,7 +51,7 @@ function start(key, host) {
       capture_pageview: "history_change", // counts Turbo navigations too
       capture_pageleave: true, // bounce rate and time on page; same sanitized properties
       disable_scroll_properties: true, // no scroll depth: page leaves carry time on page only
-      capture_performance: { web_vitals: true, network_timing: false }, // real-user LCP, CLS, INP (loaded through our /relay); no per-request timings, which carry URLs
+      capture_performance: { web_vitals: true, web_vitals_allowed_metrics: [ "LCP", "CLS", "INP" ], network_timing: false }, // exactly these three (loaded through our /relay), whatever the dashboard lists; no per-request timings, which carry URLs
       autocapture: false, // no clicks, form events or element text
       disable_session_recording: true,
       disable_surveys: true,
