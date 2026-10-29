@@ -101,14 +101,27 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
 
-  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new)
-    @fetcher, @llm, @directory = fetcher, llm, directory
+  # Gap fill (Tosin, 29 Oct): each night Enrich is also asked for the
+  # GAP_FILL_PER_NIGHT published companies with the most empty basics; what
+  # their pages say goes through the usual claims, checks and approval.
+  # 5 a night for the first week (DQ, 29 Oct); Data Quality raises it.
+  GAP_FILL_PER_NIGHT = 5
+
+  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
+    @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
   end
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
+    # Once a day, whatever starts the run (a manual Enrich runs this too):
+    # the night's quota is kept in its crawl run's stats.
+    if @gap_fill.positive? && !gap_filled_today?
+      gap = @directory.request_gap_fill(limit: @gap_fill)
+      stats["gap_fill"] = gap[:requested]
+      stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
+    end
     read_for = {}
-    @directory.enrich_queue.each do |id, _name, website, requested_at, sec_cik|
+    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
       # A website another queued company shares was read for it tonight: this
       # request waits for tomorrow, once that one's findings are extracted (#534).
       if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
@@ -155,6 +168,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   end
 
   private
+    def gap_filled_today?
+      CrawlRun.where(stage: "crawl", source_kind:, started_at: Time.current.all_day).where("stats ? 'gap_fill'").exists?
+    end
+
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
 
     # What a company's EDGAR record states, read as data (no model): its
@@ -273,7 +290,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
+      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
 

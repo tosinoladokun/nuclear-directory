@@ -10,5 +10,5 @@
       <p class="type-body m-0">We'll review it against the source.</p>
     </div>
   </div>
-  <p class="type-body m-0"><%= link_to @page_path == "/" ? "Back to search" : "Back to the page", @page_path, class: "nd-link" %></p>
+  <p class="type-body m-0"><%= link_to @back, @page_path, class: "nd-link" %></p>
 </main>
