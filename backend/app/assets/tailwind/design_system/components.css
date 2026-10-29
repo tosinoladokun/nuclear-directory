@@ -205,20 +205,7 @@
 
 
   .nd-list { list-style: none; margin: 0; padding: 0; }
-  .nd-listrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: var(--nd-space-1) var(--nd-space-4); align-items: center; padding: 14px var(--nd-space-1); border-bottom: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink); text-decoration: none; }
   .nd-fuzzy-note { margin: var(--nd-space-3) 0 0; }
-  .nd-listrow:hover { background: var(--nd-paper-raised); }
-  .nd-listrow:hover .nd-listrow__name { text-decoration: underline; text-underline-offset: 3px; }
-  .nd-listrow__main { min-width: 0; display: flex; flex-direction: column; gap: 2px; container-type: inline-size; }
-  /* One line each (Tosin): the name and the line under it shrink to fit the
-     row, down to 13px, then end in an ellipsis; the full text is in the
-     title, and on the record's own page. */
-  .nd-listrow__name, .nd-listrow__desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nd-listrow__name { font: 600 clamp(13px, calc(100cqi / (var(--chars, 20) * 0.6)), 16px)/22px var(--font-text); }
-  .nd-listrow__desc { font-size: clamp(13px, calc(100cqi / (var(--chars, 40) * 0.56)), 14px); line-height: 20px; color: var(--nd-ink-muted); }
-  @container (max-width: 300px) { .nd-listrow__cap { display: none; } }
-  .nd-listrow__side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; font-size: 13px; line-height: 18px; color: var(--nd-ink-muted); }
-  .nd-listrow__side .nd-num { font-size: 11px; }
 
   .nd-ring { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--nd-ink); border-radius: 50%; color: var(--nd-ink); }
   .nd-ring--lg { width: 56px; height: 56px; border-width: 2px; }
@@ -263,8 +250,6 @@
   .nd-notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-3) var(--nd-space-4); padding: var(--nd-space-6) 0; font-size: 15px; }
 
   @media (max-width: 560px) {
-    .nd-listrow { grid-template-columns: 40px minmax(0, 1fr); }
-    .nd-listrow__side { grid-column: 2; align-items: flex-start; text-align: left; flex-direction: row; gap: var(--nd-space-2); }
     .nd-factrow { grid-template-columns: minmax(0, 1fr); }
     .nd-factrow__side { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
     .nd-profile__name { font-size: 28px; line-height: 34px; }
@@ -428,7 +413,6 @@
   .nd-instant__list { list-style: none; margin: 0; padding: 0 0 var(--nd-space-2); }
   .nd-instant__row { display: flex; align-items: center; gap: var(--nd-space-3); padding: var(--nd-space-2) var(--nd-space-4); color: var(--nd-ink); text-decoration: none; }
   .nd-instant__row:hover, .nd-instant__row:focus-visible { background: var(--nd-paper-sunken); }
-  .nd-instant__row .nd-mono, .nd-instant__row .nd-ring { width: 32px; height: 32px; font-size: 11px; }
   .nd-instant__text { display: flex; flex-direction: column; min-width: 0; }
   .nd-instant__text span { color: var(--nd-ink-muted); }
   .nd-instant__all { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-space-2); padding: var(--nd-space-3) var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink-muted); text-decoration: none; }
@@ -1141,7 +1125,7 @@
   /* Row (nd-line): every list. One line on desktop; stacked on phones. */
   .nd-lines { background: var(--nd-paper-raised); border-radius: var(--nd-radius-lg); padding: 0 20px; margin: 0; list-style: none; }
   .nd-lines__head { display: flex; gap: var(--nd-space-4); padding: var(--nd-space-3) 0 var(--nd-space-2); border-bottom: var(--nd-hairline) solid var(--nd-ink); }
-  .nd-lines__head > :nth-child(1) { flex: 0 0 240px; }
+  .nd-lines__head > :nth-child(1) { flex: 0 0 300px; }
   .nd-lines__head > :nth-child(2) { flex: 1 1 0; min-width: 0; }
   .nd-lines__head > :nth-child(3) { flex: 0 0 170px; text-align: right; }
   .nd-lines > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
@@ -1152,8 +1136,8 @@
   .nd-line__name { font: 600 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-line__what { flex: 1 1 0; min-width: 0; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-line__end { margin-left: auto; flex: none; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
-  /* Company rows: name 240px, the middle takes the rest, location 170px right-aligned. */
-  .nd-line--bare .nd-line__name { flex: 0 0 240px; }
+  /* Company rows: name 300px (names up to about 33 characters at 15px, so a list keeps one size), the middle takes the rest, location 170px right-aligned. */
+  .nd-line--bare .nd-line__name { flex: 0 0 300px; }
   .nd-line--bare .nd-line__end { margin-left: 0; font-size: 13px; flex: 0 0 170px; justify-content: flex-end; overflow: hidden; text-overflow: ellipsis; display: block; text-align: right; }
   .nd-line__name[data-fit="small"] { font-size: 13px; }
   /* Plant rows: the status right after the name; MW its own mono element before the location, never cut. */

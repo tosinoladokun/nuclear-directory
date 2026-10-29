@@ -223,7 +223,9 @@ module DataQuality::Review
       # A source's own hold and its first batch are Data Quality's to read;
       # once it has approved the claim (still current), it's Tosin's to
       # decide, and his Yes (Data Quality's Accept) lifts the hold.
-      checked = candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)
+      # Data Quality's own new company or plant is its judgement too (#548).
+      checked = (candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)) ||
+        DqAction.live.exists?(candidate_id: candidate.id, action: %w[new subsidiary_of])
       return "dq" if !checked && candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
       # Asked directly: a deal term's own hold would come first in held_reason.
       return "dq" if !checked && candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
@@ -235,6 +237,9 @@ module DataQuality::Review
       pending = directory.fact(type: candidate.subject_type, id: candidate.subject_id)&.verification_status == "pending"
       if candidate.proposed_subject || pending
         return "dq" if candidate.payload.to_h.key?(DataQuality::DirectoryClient::ENRICHMENT_KEY) && !candidate.proposed_subject
+        # A new company reaches him only with a sourced category (a role);
+        # until one is proposed it stays Data Quality's (PM, 28 Oct).
+        return "dq" if candidate.kind == "organization" && !directory.sourced_role?(candidate.subject_id)
         return %w[organization facility].include?(candidate.kind) ? "new_record" : "new_fact"
       end
       # A restatement, or only a new name for it, changes no value: Data

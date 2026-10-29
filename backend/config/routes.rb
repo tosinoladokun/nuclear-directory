@@ -57,6 +57,8 @@ Rails.application.routes.draw do
     # Tosin's inbox (#548): what he decides.
     get "inbox" => "inbox#show", as: :inbox
     post "inbox/yes_all" => "inbox#yes_all", as: :inbox_yes_all
+    post "inbox/records/:type/:id/:decision" => "inbox#decide_record", as: :inbox_decide_record,
+      constraints: { type: /Organization|Facility/, id: /\d+/, decision: /yes|no/ }
     post "inbox/undo" => "inbox#undo", as: :inbox_undo
     post "inbox/:candidate_id/:decision" => "inbox#decide", as: :inbox_decide, constraints: { decision: /yes|no/ }
     get "today" => "today#show", as: :today
