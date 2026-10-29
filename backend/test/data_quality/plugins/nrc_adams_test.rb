@@ -113,6 +113,7 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
   test "a developer the directory doesn't have becomes a lead, not a claim" do
     assert_empty documents.flat_map { |source| plugin.extract(source, nil) }
     LeadSync.run
+    assert Lead.exists?(name: "Leapfrog Nuclear Co"), "the company the title names"
     assert Lead.exists?(name: "The Leapfrog Group")
     refute Lead.exists?(name: "Radiant"), "no company form in its name: not a lead"
     refute Lead.exists?(name: "Arizona Public Service Co"), "an operating plant's document isn't read"
@@ -142,4 +143,3 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_equal [ "pre_application", Date.new(2026, 10, 19), "pending" ], stage.values_at(:stage, :effective_on, :verification_status)
   end
 end
-

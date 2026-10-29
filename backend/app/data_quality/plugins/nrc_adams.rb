@@ -126,9 +126,12 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     DataQuality::DirectoryClient.new.facility(nrc_docket: docket)&.status != "operating"
   end
 
-  # The document's authors and addressees other than NRC's own offices.
+  # The company a title opens with ("Leapfrog Nuclear Co. - Assignment of
+  # ..."), first, when it's in a company form; then the document's authors
+  # and addressees other than NRC's own offices (DQ, 29 Oct).
   def self.organizations(doc)
-    (Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
+    titled = doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).then { |head, rest| head.to_s.squish.delete_suffix(".") if rest && head.to_s.match?(COMPANY_FORM) }
+    ([ titled ] + Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
       .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
   end
 
