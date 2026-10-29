@@ -54,13 +54,13 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
     ran, error = run_daily
 
     assert_nil error
-    assert_equal [ [ "nrc_reactor_list", nil ], [ "eia_generators", nil ], [ "usaspending_doe_awards", nil ], [ "nrc_decommissioning", nil ], [ "doe_isotope_sites", nil ], [ "nrc_uranium_recovery", nil ], [ "company_newsrooms", nil ], [ "nrc_reactor_vendors", nil ], [ "nrc_fuel_cycle", nil ], [ "nrc_research_reactors", nil ], [ "doe_programs", nil ], [ "federal_register_nrc", nil ], [ "trade_press", nil ], [ "sec_form_d", nil ], [ "nasa_nuclear_news", nil ], [ "first_read_pages", nil ], [ "doe_nuclear_news", nil ], [ "arpa_e_projects", nil ], [ "doe_loans", nil ], [ "nrc_adams", nil ], [ "nrc_news", nil ], [ "company_pages", nil ] ], ran
+    assert_equal [ [ "nrc_reactor_list", nil ], [ "eia_generators", nil ], [ "usaspending_doe_awards", nil ], [ "usaspending_recipients", nil ], [ "nrc_decommissioning", nil ], [ "doe_isotope_sites", nil ], [ "nrc_uranium_recovery", nil ], [ "company_newsrooms", nil ], [ "nrc_reactor_vendors", nil ], [ "nrc_fuel_cycle", nil ], [ "nrc_research_reactors", nil ], [ "doe_programs", nil ], [ "federal_register_nrc", nil ], [ "trade_press", nil ], [ "sec_form_d", nil ], [ "nasa_nuclear_news", nil ], [ "first_read_pages", nil ], [ "doe_nuclear_news", nil ], [ "arpa_e_projects", nil ], [ "doe_loans", nil ], [ "nrc_adams", nil ], [ "nrc_news", nil ], [ "company_pages", nil ] ], ran
   end
 
   test "a failing source doesn't stop the next one, and the job still fails" do
     ran, error = run_daily(fail: { "nrc_reactor_list" => RuntimeError.new("NRC page changed") })
 
-    assert_equal %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], ran.map(&:first)
+    assert_equal %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], ran.map(&:first)
     assert_equal "NRC page changed", error.message
   end
 
@@ -71,20 +71,20 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
 
     assert_equal %w[nrc_reactor_list eia_generators], ran.map(&:first)
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
   end
 
   test "a busy source doesn't run the ones after it alongside, and earlier failures still fail the job" do
     ran, error = run_daily(fail: { "nrc_reactor_list" => DataQuality::Pipeline::AlreadyRunning.new })
     assert_equal %w[nrc_reactor_list], ran.map(&:first), "EIA waits for NRC"
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
 
     clear_enqueued_jobs
     _, error = run_daily(fail: { "nrc_reactor_list" => RuntimeError.new("NRC page changed"),
       "eia_generators" => DataQuality::Pipeline::AlreadyRunning.new })
     assert_equal "NRC page changed", error.message
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
   end
 
   test "after the last attempt a busy source fails the job" do
@@ -101,6 +101,6 @@ class DataQuality::DailyCrawlScheduleTest < ActiveSupport::TestCase
 
     assert_equal %w[nrc_reactor_list eia_generators], ran.map(&:first)
     assert_nil error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages], { attempt: 2 } ]
   end
 end

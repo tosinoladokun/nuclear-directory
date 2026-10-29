@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -178,7 +178,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
     t.index ["created_at"], name: "index_dq_actions_on_created_at", order: :desc
     t.index ["request_key"], name: "index_dq_actions_on_request_key", unique: true, where: "(request_key IS NOT NULL)"
     t.check_constraint "(target_type IS NULL) = (target_id IS NULL)", name: "dq_actions_target_check"
-    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying, 'subsidiary_of'::character varying, 'new'::character varying, 'close'::character varying, 'recommend'::character varying]::text[])", name: "dq_actions_action_check"
+    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying, 'subsidiary_of'::character varying, 'new'::character varying, 'close'::character varying, 'recommend'::character varying, 'propose_role'::character varying]::text[])", name: "dq_actions_action_check"
     t.check_constraint "by::text ~~ 'agent:%'::text OR by::text ~~ 'human:%'::text", name: "dq_actions_by_check"
     t.check_constraint "char_length(btrim(reason)) > 0", name: "dq_actions_reason_check"
   end
@@ -715,7 +715,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
     t.integer "link_http_status"
     t.integer "link_failures", default: 0, null: false
     t.string "final_url"
+    t.bigint "enrich_organization_id"
     t.index ["domain"], name: "index_sources_on_domain"
+    t.index ["enrich_organization_id"], name: "index_sources_on_enrich_organization_id"
     t.index ["link_checked_at"], name: "index_sources_on_link_checked_at"
     t.index ["source_kind"], name: "index_sources_on_source_kind"
     t.index ["url"], name: "index_sources_on_url", unique: true
@@ -802,5 +804,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
   add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "sources", "organizations", column: "enrich_organization_id", on_delete: :nullify
   add_foreign_key "technologies", "technologies", column: "parent_id"
 end

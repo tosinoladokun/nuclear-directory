@@ -356,6 +356,43 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_nil DataQuality::Stages::Crawl.call(plugin: DataQuality::Plugins::CompanyPages.new).stats["gap_fill"], "once a day, however the run starts"
   end
 
+  test "companies that share one website each get their own findings; the domain's owner doesn't (#534)" do
+    @company.update_columns(domain: nil)
+    sister = Organization.create!(name: "Acme Sister Fission", website: HOME, verification_status: "verified", verified_by: "human:tosin")
+    owner = Organization.create!(name: "Acme Holdings", website: "https://www.acmefission.com/", domain: "acmefission.com", verification_status: "verified", verified_by: "human:tosin")
+    found = { "description" => { "value" => "Founded in 2019.", "quote" => "Founded in 2019." },
+      "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [] }
+
+    sister.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    home = Source.find_by!(url: HOME)
+    assert_equal sister.id, home.enrich_organization_id
+    assert_equal [ "Acme Sister Fission" ], DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(home, nil).map { |c| c[:payload]["name"] }.uniq
+    refute_equal owner.id, home.enrich_organization_id
+  end
+
+  test "two queued companies on one website: the second waits a night, then its page is extracted again in its name (#534)" do
+    @company.update_columns(domain: nil)
+    sister = Organization.create!(name: "Acme Sister Fission", website: HOME, verification_status: "verified", verified_by: "human:tosin")
+    @company.update_columns(enrich_requested_at: 2.minutes.ago)
+    sister.update_columns(enrich_requested_at: 1.minute.ago)
+
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    assert_equal 1, stats["deferred_shared_website"]
+    home = Source.find_by!(url: HOME)
+    assert_equal @company.id, home.enrich_organization_id
+    assert_nil sister.reload.enriched_at, "still waiting"
+    home.update_columns(extracted_sha256: "x", extracted_rows_sha256: "y")
+
+    travel 1.day do
+      DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+      home.reload
+      assert_equal sister.id, home.enrich_organization_id
+      assert_nil home.extracted_sha256, "extracted again, for the sister"
+      assert sister.reload.enriched_at
+    end
+  end
+
   test "a home page that redirects: its relative links are read from where it ended (#525)" do
     stub_request(:get, HOME).to_return(status: 301, headers: { "Location" => "#{HOME}en/" })
     stub_request(:get, "#{HOME}en/").to_return(body: '<a href="about">About us</a>', headers: { "Content-Type" => "text/html" })

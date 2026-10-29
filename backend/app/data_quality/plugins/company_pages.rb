@@ -120,7 +120,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
+    read_for = {}
     @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+      # A website another queued company shares was read for it tonight: this
+      # request waits for tomorrow, once that one's findings are extracted (#534).
+      if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
+        stats["deferred_shared_website"] = stats.fetch("deferred_shared_website", 0) + 1
+        next
+      end
+      read_for[home_url] = id if home_url
       # Part 3: a public company's SEC record (EDGAR), the primary source for
       # its legal name, listing and headquarters address (Data Quality).
       if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))
@@ -129,11 +137,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       # A home page that couldn't be read is answered as read (the Enrich page
       # shows why, from the page's own status), and a new request reads again.
-      if (home = page(website))
+      if (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         own_links(home).first(PAGES).each do |url|
-          DataQuality::Snapshot.take(page(url), fetcher: @fetcher)
+          DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
         end
       end
@@ -146,7 +154,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   def extract(source, run)
     return edgar_claims(source) if source.url.match?(EDGAR_URL)
 
-    company = @directory.organization(domain: source.domain) or return []
+    # The company the page was read for (#534), else the domain's owner.
+    company = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id) ||
+      @directory.organization(domain: source.domain)
+    return [] unless company
     text = visible_text(source)
     return [] if text.blank?
 
@@ -191,12 +202,18 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     # A page of this kind, made or taken over from a page cited by hand.
-    def page(url)
+    # for_id: the company the page is being read for (#534); a website two
+    # companies share is theirs in turn, the latest request's while it's read.
+    def page(url, for_id: nil)
       url = url.to_s.strip
       return unless url.match?(%r{\Ahttps?://}i)
 
       source = Source.find_or_create_by!(url:) { |new_page| new_page.source_kind = source_kind }
       source.update!(source_kind:) if source.source_kind == "web_page"
+      # Read for another company now: extracted again, in this one's name.
+      if for_id && source.enrich_organization_id != for_id
+        source.update!(enrich_organization_id: for_id, extracted_sha256: nil, extracted_rows_sha256: nil)
+      end
       source
     end
 
