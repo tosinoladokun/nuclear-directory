@@ -27,6 +27,11 @@ Category = Data.define(:key, :name, :title, :about, :role_keys, :links, :plants,
   # approved by Tosin, 17 Oct. The full name stays in titles and aria-labels.
   def short_name = short || name
 
+  # The name the list pages' index and the home cards both show, so the same category reads the same
+  # everywhere (Design's 27 Oct audit): its name, or its short name where the name is long.
+  LIST_NAME_LIMIT = 22
+  def list_name = name.length > LIST_NAME_LIMIT ? short_name : name
+
   def to_param = key
 
   # One plain sentence with the count, for the meta and link-preview
