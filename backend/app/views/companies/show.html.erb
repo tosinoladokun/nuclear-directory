@@ -93,7 +93,7 @@
           <button type="button" aria-expanded="false" aria-controls="sources" data-action="quiet#toggle" data-quiet-target="button" data-panel="sources"><%= icon("link", size: 16) %><b class="nd-num"><%= p.citations.sources.size %></b> <%= "source".pluralize(p.citations.sources.size) %></button>
         <% end %>
         <button type="button" aria-expanded="false" aria-controls="cite" data-action="quiet#toggle" data-quiet-target="button" data-panel="cite"><%= icon("info", size: 16) %>Cite this page</button>
-        <%= link_to correction_url_for(p.name) do %><%= icon("flag", size: 16) %>Report a correction<% end %>
+        <%= link_to correction_url_for(p.name), rel: "nofollow" do %><%= icon("flag", size: 16) %>Report a correction<% end %>
       </nav>
       <% if p.citations.sources.any? %>
         <div class="nd-quietpanel"><%= render "shared/sources_list", sources: p.citations.sources, hidden: true %></div>
