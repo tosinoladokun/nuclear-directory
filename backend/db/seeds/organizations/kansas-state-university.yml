@@ -7,5 +7,12 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://www.k-state.edu
-  quote: "K-State | Kansas State University"
+  text: "Land-grant university that aims to lead the nation in learning, discovery and engagement."
+  source_url: https://www.k-state.edu/
+  quote: "Kansas State University will lead the nation as a next-generation land-grant university – setting the standard for inspiring learning, creativity, discovery and engagement that positively impacts society and transforms lives in Kansas and around the world."
+  also:
+  - quote: "K-State | Kansas State University"
+short_description:
+  text: "Land-grant university"
+  source_url: https://www.k-state.edu/
+  quote: "Kansas State University will lead the nation as a next-generation land-grant university – setting the standard for inspiring learning, creativity, discovery and engagement that positively impacts society and transforms lives in Kansas and around the world."

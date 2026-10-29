@@ -7,5 +7,12 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://www.psu.edu
-  quote: "The Pennsylvania State University | Penn State"
+  text: "Pennsylvania-based public university that educates students worldwide."
+  source_url: https://www.psu.edu/
+  quote: "Penn State is a Pennsylvania-based, top-ranked public university that educates students worldwide. Learn more about Penn State degree programs and research."
+  also:
+  - quote: "The Pennsylvania State University | Penn State"
+short_description:
+  text: "Pennsylvania public university"
+  source_url: https://www.psu.edu/
+  quote: "Penn State is a Pennsylvania-based, top-ranked public university that educates students worldwide. Learn more about Penn State degree programs and research."
