@@ -50,15 +50,28 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
   PROJECT_NUMBER = /assignment of project number/i
+  # Project-number letters are Tosin's to approve, each (DQ, 29 Oct).
+  NEWS_DAYS = 60
+  NEWS_PER_READ = 5
+  # A lead is a company by its own form (DQ): never a person or a placeholder.
+  COMPANY_FORM = /\b(?:Inc|LLC|L\.L\.C|Corp|Corporation|Co|Company|Ltd|Limited|PLC|plc|GmbH|S\.A|AG|LP|L\.P|Group|Holdings)\b\.?/
 
   def extract(source, _run)
+    since = (@today.call - NEWS_DAYS).iso8601
+    news = 0
     self.class.developer_documents(source.content_text).flat_map do |line, doc|
       known = self.class.organizations(doc).select { |name| @directory.organization(name:) }
-      claims = known.map { |name| { kind: "organization", quote: line, payload: { "name" => name } } }
-      claims << project_news(doc, known) if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any?
+      claims = known.map { |name| { kind: "organization", payload: { "name" => name } } }
+      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any? && doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ
+        news += 1
+        claims << project_news(doc, known)
+      end
       claims.map { |claim| claim.merge(quote: line) }
     end
   end
+
+  # A name worth a lead: a company by its own form, from a document's header (DQ, 29 Oct).
+  def self.lead_name?(name) = name.match?(COMPANY_FORM)
 
   # [[stored line, document]] for documents on a developer's docket.
   def self.developer_documents(text)

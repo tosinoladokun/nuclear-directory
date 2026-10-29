@@ -70,9 +70,10 @@ class LeadSync
       Source.where(source_kind: "nrc_adams").crawl_ok.where.not(content_text: [ nil, "" ]).flat_map do |source|
         DataQuality::Plugins::NrcAdams.developer_documents(source.content_text).flat_map do |_line, doc|
           DataQuality::Plugins::NrcAdams.organizations(doc).filter_map do |name|
-            next if Lead.junk?(name) || known?(name)
+            next if !DataQuality::Plugins::NrcAdams.lead_name?(name) || Lead.junk?(name) || known?(name)
 
-            { name:, kind: "company", key: "adams:#{doc['AccessionNumber']}:#{Lead.normalize(name)}", label: "NRC: #{doc['DocumentTitle'].to_s.truncate(120)}",
+            { name:, kind: "company", key: "adams:#{doc['AccessionNumber']}:#{Lead.normalize(name)}",
+              label: "NRC #{doc['AccessionNumber']}: #{doc['DocumentTitle'].to_s.truncate(110)}",
               url: doc["Url"], first: (Date.iso8601(doc["DocumentDate"].to_s) rescue source.created_at.to_date) }
           end
         end

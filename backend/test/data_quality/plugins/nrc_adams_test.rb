@@ -92,6 +92,14 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_empty plugin.extract(stored, nil)
     LeadSync.run
     assert Lead.exists?(name: "The Leapfrog Group")
+    refute Lead.exists?(name: "Radiant"), "no company form in its name: not a lead"
     refute Lead.exists?(name: "Arizona Public Service Co"), "an operating plant's document isn't read"
+  end
+
+  test "project-number news: only the last 60 days, at most 5 a read" do
+    known("The Leapfrog Group")
+    later = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), key: "k", today: -> { Date.new(2027, 1, 30) })
+    assert_empty later.extract(stored, nil).select { |c| c[:kind] == "news_item" }, "older than 60 days"
+    assert_equal 5, Plugin::NEWS_PER_READ
   end
 end
