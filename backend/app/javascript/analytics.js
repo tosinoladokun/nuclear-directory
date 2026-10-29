@@ -39,6 +39,35 @@ export function sanitize(event) {
   return event
 }
 
+// Outbound clicks (#492): which kind of link, to which domain, from which page. The destination is its domain only
+// (no path, no query string) and the page is its company or plant slug, so there is nothing personal in the event.
+// The link says what it is with data-outbound ("source"); a company's own website link carries our UTM source.
+export function outboundProperties(anchor, here = window.location) {
+  let url
+  try {
+    url = new URL(anchor.href, here.href)
+  } catch {
+    return null
+  }
+  if (!/^https?:$/.test(url.protocol) || url.host === here.host) return null
+
+  const kind = anchor.dataset?.outbound || (url.searchParams.get("utm_source") === "nuclear-directory" ? "company_website" : "other")
+  const from = here.pathname.match(/^\/(companies|plants)\/([\w-]+)\/?$/)
+  return {
+    kind,
+    target_domain: url.hostname.replace(/^www\./, ""),
+    from_slug: from ? from[2] : null,
+    from_type: from ? (from[1] === "companies" ? "company" : "plant") : "other"
+  }
+}
+
+let ready = null
+function trackOutbound(event) {
+  const anchor = event.target.closest?.("a[href]")
+  const properties = anchor && outboundProperties(anchor)
+  if (properties && ready) ready.capture("outbound_click", properties, { send_instantly: true })
+}
+
 function start(key, host) {
   import("posthog-js").then(({ default: posthog }) => {
     posthog.init(key, {
@@ -57,7 +86,10 @@ function start(key, host) {
       disable_surveys: true,
       before_send: sanitize,
     })
+    ready = posthog
   })
+  document.addEventListener("click", trackOutbound, true)
+  document.addEventListener("auxclick", trackOutbound, true) // a middle click opens a tab too
 }
 
 if (typeof document !== "undefined") {
