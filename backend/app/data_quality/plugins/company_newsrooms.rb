@@ -36,10 +36,10 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   FIRST_READ_ITEMS = 3
   # Only news about nuclear becomes a claim (Tosin, 29 Oct: an Amazon Alexa
   # release reached his inbox): see about_nuclear?.
-  NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|enrichment|spent fuel|decommissioning)\b/i
+  NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|radioactive|radiation|enrichment|spent fuel|decommissioning)\b/i
   # Companies whose news is mostly not nuclear: their items need a nuclear word.
   BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
-    "General Electric", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company" ].freeze
+    "General Electric", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company" ].freeze
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
   NOT_A_FEED = "Not an RSS or Atom feed; the address may have moved"
