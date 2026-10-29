@@ -48,7 +48,7 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert LicensingStage.new(facility_id: @unit.id, stage: "construction_permit", nrc_docket: "1",
       effective_on: Date.new(2023, 12, 14)).valid?, "a unit alone is enough"
     assert_not LicensingStage.new(organization_id: @developer.id, stage: "construction_permit", nrc_docket: "1",
-      effective_on: Date.new(2023, 12, 14)).valid?, "a developer alone is only for a design approval"
+      effective_on: Date.new(2023, 12, 14)).valid?, "a developer alone holds only a design approval or a project's early stage"
     assert_not LicensingStage.new(facility_id: @unit.id, organization_id: @developer.id, stage: "construction_permit",
       nrc_docket: "1", effective_on: Date.new(2023, 12, 14)).valid?, "not both"
   end
@@ -61,7 +61,7 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert_not LicensingStage.new(organization_id: @developer.id, stage: "design_approval", nrc_docket: "15-913",
       effective_on: Date.new(2025, 1, 1)).valid?, "a design approval needs its design"
     assert_not LicensingStage.new(facility_id: @unit.id, design_name: "US460", stage: "construction_permit",
-      nrc_docket: "1", effective_on: Date.new(2023, 12, 14)).valid?, "a design name is only for a design approval"
+      nrc_docket: "1", effective_on: Date.new(2023, 12, 14)).valid?, "a design or project name is only on a developer's stage"
   end
 
   test "the stage is one of the seven, and the dates are in order" do
@@ -354,5 +354,33 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
     assert stage.rejected?
     assert_equal BY, stage.verified_by
     assert_match "already has this", stage.verification_events.order(:id).last.reason
+  end
+
+  test "a developer holds a project's pre-application docket before its plant exists, once per docket (#650)" do
+    pre = stage(facility_id: nil, organization_id: @developer.id, stage: "pre_application", nrc_docket: "99902038", effective_on: "2024-05-01")
+    first = write(pre, quote: "Pre-application docket 99902038, Kairos Power")
+    assert first.ok?, first.errors.inspect
+    named = write(pre.merge(design_name: "KP-X"), quote: "Pre-application docket 99902038, Kairos Power")
+    assert_equal first.id, named.id, "the same docket and stage is the same row, named or not"
+    other = write(pre.merge(nrc_docket: "99902039"), quote: "Pre-application docket 99902039, Kairos Power")
+    assert_not_equal first.id, other.id, "another docket is another project"
+    assert write(stage(facility_id: nil, organization_id: @developer.id, stage: "withdrawn", nrc_docket: "99902038", effective_on: "2025-01-01"),
+      quote: "Kairos Power withdrew docket 99902038").ok?
+
+    assert_not LicensingStage.new(organization_id: @developer.id, stage: "construction_permit", nrc_docket: "99902038",
+      effective_on: Date.new(2025, 1, 1)).valid?, "a later stage goes on the plant"
+    error = assert_raises(ActiveRecord::RecordNotUnique) do
+      LicensingStage.insert_all!([ { organization_id: @developer.id, stage: "pre_application", nrc_docket: "99902038",
+        effective_on: Date.new(2024, 5, 1), verification_status: "pending", created_at: Time.current, updated_at: Time.current } ])
+    end
+    assert_match "index_licensing_stages_on_organization_docket", error.message
+  end
+
+  test "the database allows a licensing-stage claim (#650; the pipeline's handling is Backend's)" do
+    now = Time.current
+    assert_nothing_raised do
+      Candidate.insert_all!([ { source_id: @nrc.id, kind: "licensing_stage", status: "new", quote: "Pre-application docket 99902038",
+        payload: { "stage" => "pre_application", "nrc_docket" => "99902038" }, created_at: now, updated_at: now } ])
+    end
   end
 end

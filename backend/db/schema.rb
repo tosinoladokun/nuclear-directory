@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_160100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -52,7 +52,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_130000) do
     t.index ["subject_type", "subject_id"], name: "index_candidates_on_subject"
     t.check_constraint "ai_recommendation::text = ANY (ARRAY['recommend_publish'::character varying::text, 'needs_review'::character varying::text])", name: "candidates_ai_recommendation_check"
     t.check_constraint "dq_recommendation::text = ANY (ARRAY['approve'::character varying, 'reject'::character varying]::text[])", name: "candidates_dq_recommendation_check"
-    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text, 'news_item'::character varying::text])", name: "candidates_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['organization'::character varying::text, 'organization_alias'::character varying::text, 'organization_role'::character varying::text, 'organization_technology'::character varying::text, 'facility'::character varying::text, 'relationship'::character varying::text, 'facility_relationship'::character varying::text, 'deal_term'::character varying::text, 'news_item'::character varying::text, 'licensing_stage'::character varying::text])", name: "candidates_kind_check"
     t.check_constraint "status::text = ANY (ARRAY['new'::character varying::text, 'matched'::character varying::text, 'merged'::character varying::text, 'rejected'::character varying::text, 'needs_review'::character varying::text, 'confirmed'::character varying::text])", name: "candidates_status_check"
   end
 
@@ -327,12 +327,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_130000) do
     t.datetime "updated_at", null: false
     t.index ["facility_id", "nrc_docket", "stage"], name: "index_licensing_stages_on_facility", unique: true
     t.index ["organization_id", "design_name", "stage"], name: "index_licensing_stages_on_organization", unique: true
+    t.index ["organization_id", "nrc_docket", "stage"], name: "index_licensing_stages_on_organization_docket", unique: true, where: "(organization_id IS NOT NULL)"
     t.index ["verification_status"], name: "index_licensing_stages_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "licensing_stages_confidence_check"
     t.check_constraint "expires_on IS NULL OR expires_on >= effective_on", name: "licensing_stages_dates_check"
     t.check_constraint "stage::text <> 'design_approval'::text OR organization_id IS NOT NULL AND design_name IS NOT NULL", name: "licensing_stages_design_check"
-    t.check_constraint "design_name IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_design_name_check"
-    t.check_constraint "organization_id IS NULL OR stage::text = 'design_approval'::text", name: "licensing_stages_organization_stage_check"
+    t.check_constraint "design_name IS NULL OR organization_id IS NOT NULL", name: "licensing_stages_design_name_check"
+    t.check_constraint "organization_id IS NULL OR (stage::text = ANY (ARRAY['design_approval'::character varying, 'pre_application'::character varying, 'withdrawn'::character varying]::text[]))", name: "licensing_stages_organization_stage_check"
     t.check_constraint "(facility_id IS NULL) <> (organization_id IS NULL)", name: "licensing_stages_owner_check"
     t.check_constraint "stage::text = ANY (ARRAY['pre_application'::character varying::text, 'application_accepted'::character varying::text, 'construction_permit'::character varying::text, 'combined_licence'::character varying::text, 'operating_licence'::character varying::text, 'restart_review'::character varying::text, 'restart_approved'::character varying::text, 'design_approval'::character varying::text, 'withdrawn'::character varying::text, 'denied'::character varying::text])", name: "licensing_stages_stage_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "licensing_stages_verification_status_check"
