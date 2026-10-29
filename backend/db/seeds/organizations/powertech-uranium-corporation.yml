@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Powertech Uranium Corporation
+status: active
+roles:
+- key: mining
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/materials/uranium
+  quote: "Dewey Burdock | Powertech Uranium Corporation | Fall River & Custer Counties, South Dakota | In Situ Recovery (ISR)"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

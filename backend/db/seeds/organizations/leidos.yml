@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Leidos
+status: active
+roles:
+- key: regulatory_consultant
+  source_url: https://www.usaspending.gov/recipient/dd8d8d62-0f35-303f-f188-faacc4087b3a-C/latest
+  quote: "89243222FNE400082,\"LEIDOS, INC.\",4279800.25,2022-04-21,2025-09-27,contract,,haleu_fuel_contracts,https://www.usaspending.gov/award/CONT_AWD_89243222FNE400082_8900_GS00F022CA_4732,CONT_AWD_89243222FNE400082_8900_GS00F022CA_4732,dd8d8d62-0f35-303f-f188-faacc4087b3a-C,NEPA SUPPORT FOR THE HIGH-ASSAY LOW ENRICHED URANIUM (HALEU) PROGRAM THIS TASK SUPPORTS THE UNITED STATES DEPARTMENT OF ENERGY (DOE) IN THE DEVELOPMENT OF NATIONAL ENVIRONMENTAL POLICY ACT (NEPA) A..."
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

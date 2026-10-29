@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Advanced Ceramics Manufacturing
+status: active
+roles:
+- key: components
+  source_url: https://www.usaspending.gov/recipient/1c94cbb9-908a-bcb7-9d5e-3a469964aebf-C/latest
+  quote: "DESC0023657,\"ADVANCED CERAMICS MANUFACTURING, LLC\",250000.0,2023-02-21,2023-12-20,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0023657_089,ASST_NON_DESC0023657_089,1c94cbb9-908a-bcb7-9d5e-3a469964aebf-C,STRUCTURAL COMPONENTS WITH CORROSION RESISTANT SURFACE LAYERS FOR ADVANCED NUCLEAR REACTOR SYSTEMS"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

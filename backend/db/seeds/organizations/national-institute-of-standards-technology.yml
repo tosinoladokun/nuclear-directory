@@ -1,0 +1,11 @@
+# Seed research for the no-category audit, batch 2 (PM, 28 Oct 2026). Role quote is on the page cited.
+name: National Institute of Standards & Technology
+status: active
+roles:
+- key: research_organization
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/nist-md-nuclear-test
+  quote: "National Institute of Standards & Technology Nuclear Test reactor | Licensee: National Institute of Standards & Technology | Location: Gaithersburg, MD | Docket Number: 05000184 | Reactor Type: Nuclear Test"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

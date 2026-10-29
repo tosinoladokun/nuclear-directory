@@ -1,0 +1,14 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Name from WSC's own site (3keysoft.com): "WSC, Inc.", a business of Curtiss-Wright.
+name: WSC, Inc.
+aliases:
+- WSC
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.3keysoft.com/default.asp?PageID=51
+  quote: "WSC's state of the art 3KEYSOFTWARE® technology has its roots in the nuclear and thermal power plant Operator Training Simulators."
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
+notes: 'Production name was "WSC" (USAspending recipient WSC INC). The role: WSC''s site says it is an engineering simulation company whose 3KEYSOFTWARE technology has its roots in nuclear plant operator training simulators; the 2018 DOE award is for nuclear plant simulators.'
