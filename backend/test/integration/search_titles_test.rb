@@ -44,7 +44,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: utility.slug)
 
     assert_select "title", "Alabama Power: plants | Nuclear Directory"
-    assert_match(/\AAlabama Power: Utility in Birmingham, AL\. 3 plants, 1 source\.\z/, meta_description)
+    assert_match(/\AAlabama Power: Utility in Birmingham, AL\. 3 plants\.\z/, meta_description)
     assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
     assert_equal description, og_description
     assert_no_match(/Plants, sites and deals/, description)
@@ -71,7 +71,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: helion.slug)
 
     assert_select "title", "Helion Energy: investors | Nuclear Directory"
-    assert_match(/\AHelion Energy: Develops fusion power plants\. 1 investor, 1 source\.\z/, meta_description)
+    assert_match(/\AHelion Energy: Develops fusion power plants\. 1 investor\.\z/, meta_description)
     assert_equal "Helion Energy: Develops fusion power plants. Investors include Lightspeed.", description
   end
 
@@ -153,7 +153,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     assert_select "title", "Oklo: partners, customers, investors and plants", "too long with the suffix, so the suffix goes"
     assert_operator css_select("title").text.length, :<=, 60
-    assert_match(/\AOklo: Develops advanced fission power plants\. 1 plant, 1 deal, 1 investor, \d+ sources?\.\z/, meta_description)
+    assert_match(/\AOklo: Develops advanced fission power plants\. 1 plant, 1 deal, 1 investor\.\z/, meta_description)
     assert_operator meta_description.length, :<=, 160
   end
 
@@ -164,7 +164,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get plant_path(slug: owned.slug)
     assert_select "title", "Arkansas Nuclear One: owners | Nuclear Directory"
-    assert_match(/\AArkansas Nuclear One: .*Russellville, Arkansas\. 1 owner, 1 source\.\z/, meta_description)
+    assert_match(/\AArkansas Nuclear One: .*Russellville, Arkansas\. 1 owner\.\z/, meta_description)
     assert_match(/in Russellville, Arkansas\./, description)
 
     get plant_path(slug: bare.slug)

@@ -411,7 +411,7 @@ module DirectoryHelper
   end
 
   # The meta description of a company (Tosin, 29 Oct): its one-line description, then what the page counts:
-  # "Oklo: Develops advanced fission power plants. 3 plants, 2 deals, 12 sources." Link previews keep
+  # "Oklo: Develops advanced fission power plants. 3 plants, 2 deals." Link previews keep
   # company_description.
   def company_meta_description(profile)
     lead = profile.description.presence || [ profile.shown_roles.first && role_label(profile.shown_roles.first.role),
@@ -419,7 +419,7 @@ module DirectoryHelper
     head = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
     head = head.truncate(PREVIEW_LIMIT, separator: " ") if head.length > PREVIEW_LIMIT
     counts = counted([ profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq.size, company_places_noun(profile) ], [ profile.deals.count { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id) }, "deal" ], # investments are counted as investors
-      [ investors_of(profile).size, "investor" ], [ profile.citations.sources.size, "source" ])
+      [ investors_of(profile).size, "investor" ])
     fit_counts(head, counts)
   end
 
@@ -432,11 +432,11 @@ module DirectoryHelper
     head
   end
 
-  # A plant's meta description: what it is and where, then "2 owners, 1 operator, 3 deals, 12 sources".
+  # A plant's meta description: what it is and where, then "2 owners, 1 operator, 3 deals".
   def plant_meta_description(profile)
     base = plant_preview_lead(profile)
     counts = counted([ profile.current_companies_for("owns").size, "owner" ], [ profile.current_companies_for("operates").size, "operator" ],
-      [ profile.companies_for("offtakes_from").size, "deal" ], [ profile.citations.sources.size, "source" ])
+      [ profile.companies_for("offtakes_from").size, "deal" ])
     fit_counts(base, counts)
   end
 
