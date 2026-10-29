@@ -6,3 +6,6 @@ roles: []
 technologies: []
 relationships: []
 facilities: []
+description:
+  source_url: https://www.uml.edu
+  quote: "UMass Lowell"

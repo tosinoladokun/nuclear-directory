@@ -6,3 +6,6 @@ roles: []
 technologies: []
 relationships: []
 facilities: []
+description:
+  source_url: https://www.rpi.edu
+  quote: "Rensselaer Polytechnic Institute (RPI) :: Architecture, Business, Engineering, Humanities,"

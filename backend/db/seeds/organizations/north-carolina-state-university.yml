@@ -6,3 +6,6 @@ roles: []
 technologies: []
 relationships: []
 facilities: []
+description:
+  source_url: https://www.ncsu.edu
+  quote: "NC State University"
