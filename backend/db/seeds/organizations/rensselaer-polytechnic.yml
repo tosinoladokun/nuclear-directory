@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://www.rpi.edu
-  quote: "Rensselaer Polytechnic Institute (RPI) :: Architecture, Business, Engineering, Humanities,"
+  text: "Holds the NRC licence for a Critical Assembly research reactor in Troy, NY."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/rpi-ny-critical-assembly
+  quote: "Rensselaer Polytechnic Institute Critical Assembly reactor | Licensee: Rensselaer Polytechnic Institute | Location: Troy, NY | Docket Number: 05000225 | Reactor Type: Critical Assembly"
+  also:
+  - source_url: https://www.rpi.edu
+    quote: "Rensselaer Polytechnic Institute (RPI) :: Architecture, Business, Engineering, Humanities,"
+hq:
+  city: Troy
+  state: NY
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/rpi-ny-critical-assembly
+  quote: "Rensselaer Polytechnic Institute Critical Assembly reactor | Licensee: Rensselaer Polytechnic Institute | Location: Troy, NY | Docket Number: 05000225 | Reactor Type: Critical Assembly"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/rpi-ny-critical-assembly
+  quote: "Rensselaer Polytechnic Institute Critical Assembly reactor | Licensee: Rensselaer Polytechnic Institute | Location: Troy, NY | Docket Number: 05000225 | Reactor Type: Critical Assembly"

@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://umd.edu
-  quote: "Our Research Changes Lives | University of Maryland"
+  text: "Holds the NRC licence for a TRIGA research reactor in College Park, MD."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/umd-md-triga
+  quote: "University of Maryland TRIGA reactor | Licensee: University of Maryland | Location: College Park, MD | Docket Number: 05000166 | Reactor Type: TRIGA"
+  also:
+  - source_url: https://umd.edu
+    quote: "Our Research Changes Lives | University of Maryland"
+hq:
+  city: College Park
+  state: MD
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/umd-md-triga
+  quote: "University of Maryland TRIGA reactor | Licensee: University of Maryland | Location: College Park, MD | Docket Number: 05000166 | Reactor Type: TRIGA"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/umd-md-triga
+  quote: "University of Maryland TRIGA reactor | Licensee: University of Maryland | Location: College Park, MD | Docket Number: 05000166 | Reactor Type: TRIGA"
