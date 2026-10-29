@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_27_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -714,6 +714,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_180000) do
     t.string "link_status"
     t.integer "link_http_status"
     t.integer "link_failures", default: 0, null: false
+    t.string "final_url"
     t.index ["domain"], name: "index_sources_on_domain"
     t.index ["link_checked_at"], name: "index_sources_on_link_checked_at"
     t.index ["source_kind"], name: "index_sources_on_source_kind"

@@ -68,6 +68,9 @@ class DataQuality::DirectoryClient
   # Companies with an SEC CIK, live ones only (#129): [SecFilerRef].
   def organizations_with_sec_cik = lookup.organizations_with_sec_cik
 
+  # Published companies with a website: [[name, website]].
+  def organizations_with_website = lookup.organizations_with_website
+
   def facility(id: nil, name: nil, site_name: nil, nrc_docket: nil, eia_plant_id: nil)
     record("Facility", lookup.facility(id:, name:, site_name:, nrc_docket:, eia_plant_id:))
   end
@@ -323,6 +326,8 @@ class DataQuality::DirectoryClient
   def organization_by_slug(slug) = lookup.organization(slug:)
   def facility_by_slug(slug) = lookup.facility(slug:)
   def evidence_rows(type:, id:) = lookup.evidence_rows(type:, id:)
+  def sourced_role?(organization_id) = lookup.sourced_role?(organization_id)
+  def sourced_role_ids(organization_ids) = lookup.sourced_role_ids(organization_ids)
 
   # A company name kept as a lead, never thrown away (#548).
   def keep_lead(name:, key:, label:, url: nil) = Directory::Leads.keep(name:, key:, label:, url:)

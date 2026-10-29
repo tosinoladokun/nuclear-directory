@@ -189,6 +189,16 @@ module Directory
       end.sort_by { |row| -row[:checked_at].to_f }
     end
 
+    # Whether a company has a role with a source (pending or published), so
+    # a new company reaches the owner with its category (#548). Reads only.
+    def sourced_role?(organization_id) = sourced_role_ids([ organization_id ]).any?
+
+    # Of these companies, the ones with a sourced role, in one query.
+    def sourced_role_ids(organization_ids)
+      OrganizationRole.where(organization_id: organization_ids, verification_status: %w[pending verified])
+        .where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id)).distinct.pluck(:organization_id).to_set
+    end
+
     # A fact's evidence rows as [id, source_id, quote], so a caller can name
     # the one it added (#548's Undo). Reads only.
     def evidence_rows(type:, id:)
@@ -294,6 +304,12 @@ module Directory
     def organizations_with_sec_cik
       Organization.where.not(sec_cik: nil).where.not(verification_status: Verifiable::CLOSED_STATUSES).order(:id)
         .map { |organization| SecFilerRef.from(organization) }
+    end
+
+    # Published companies with a website (#newsroom discovery), oldest first:
+    # [[name, website]].
+    def organizations_with_website
+      Organization.where(verification_status: "verified").where.not(website: [ nil, "" ]).order(:id).pluck(:name, :website)
     end
 
     # Ids of companies or plants by slug, in one query: { "terrapower" => 12 }.

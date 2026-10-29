@@ -31,6 +31,7 @@ categories:
     name: Reactor developers
     sources:
       - { name: NRC advanced-reactor and licensing pages, status: planned, issue: 130 }
+      - { name: "NRC ADAMS: pre-application and licensing documents (first read)", kind: nrc_adams, status: built }
       - { name: NRC unit pages (reactor vendor per plant), kind: nrc_reactor_vendors, status: built, issue: 388 }
       - { name: "DOE program pages (ARDP, GAIN vouchers, Fusion Milestone)", status: planned, issue: 124 }
       - { name: DOE awards (USAspending), kind: usaspending_doe_awards, status: built, issue: 260 }
@@ -102,7 +103,8 @@ general:
   - { name: Companies' own pages (Enrich), kind: company_pages, status: built, issue: 479, note: "read on request, one company at a time" }
   - { name: Federal Register, status: planned, issue: 126 }
   - { name: DOE Office of Nuclear Energy news, kind: doe_nuclear_news, status: built, note: "DOE's own announcements" }
-  - { name: "First read: NRC news releases (stored, no claims yet)", kind: first_read_pages, status: built }
+  - { name: NRC news releases, kind: nrc_news, status: built, note: "NRC's own announcements" }
+  - { name: "First reads (none now)", kind: first_read_pages, status: built }
   - { name: NASA nuclear news (fission power), kind: nasa_nuclear_news, status: built, note: "NASA's own announcements" }
   - { name: Trade press feeds (WNN and ANS), kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
   - { name: Daily lead researcher, status: planned, issue: 278, note: "leads for Data Quality, not facts" }

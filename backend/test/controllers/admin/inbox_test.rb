@@ -10,7 +10,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     first = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 2.days.ago)
     Candidate.create!(source: @page, crawl_run: first, kind: "organization", payload: { "name" => "x" }, quote: "q", status: "rejected")
     @run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
-    @new_co = Organization.create!(name: "Bluefield Fission", verification_status: "pending")
+    @new_co = give_sourced_role(Organization.create!(name: "Bluefield Fission", verification_status: "pending"))
     @create = claim({ "name" => "Bluefield Fission", "hq_city" => "Austin", "hq_state" => "TX" }, subject: @new_co, proposed_subject: true)
     @decided = Organization.create!(name: "Rockville Nuclear", hq_city: "Bethesda", verification_status: "verified", verified_by: "human:tosin")
     @decided.aliases.create!(alias: "Rockville Nuclear")
@@ -27,13 +27,15 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   test "Today shows what's new and changes to his decisions, never Data Quality's to settle" do
     get admin_inbox_path
     assert_response :success
-    assert_select "p", /2 to decide\. Nothing goes live until you say yes\./
+    # Its two claims, plus the fixtures' pending records with no open claim.
+    total = 2 + OwnerInbox.new.records.size
+    assert_select "p", /#{total} to decide\. Nothing goes live until you say yes\./
     assert_select "#inbox-item-#{@create.id}", /Bluefield Fission: a company in Austin, TX\./
     assert_select "#inbox-item-#{@create.id} button", "Create"
     assert_select "#inbox-item-#{@change.id}", /Rockville Nuclear · Headquarters city:\s*Bethesda\s*→\s*Rockville/
     assert_select "#inbox-item-#{@change.id} button", /Keep what I decided/
     assert_select "#inbox-item-#{@settle.id}", 0
-    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*2/
+    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*#{total}/
   end
 
   test "Create publishes; No says no and can be undone from Recently decided" do
@@ -53,7 +55,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
     get admin_inbox_path
     assert_select ".nd-panel", 0, "one checked item needs no batch button"
-    other = Organization.create!(name: "Second Fission", verification_status: "pending")
+    other = give_sourced_role(Organization.create!(name: "Second Fission", verification_status: "pending"))
     second = claim({ "name" => "Second Fission" }, subject: other, proposed_subject: true)
     DataQuality::Recommendations.record("#{second.id} approve: named on the NRC page", by: "human:dq")
     get admin_inbox_path
@@ -85,7 +87,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     @page.update!(content_text: "Bluefield Fission, of Austin, Texas. q")
     @create.update!(status: "needs_review", ai_recommendation: "needs_review", ai_reason: "Not sure the company is nuclear", quote: "Bluefield Fission, of Austin, Texas.")
     DataQuality::Recommendations.record("#{@create.id} approve: Its NRC license names it", by: "human:dq")
-    other = Organization.create!(name: "Second Doubted Co", verification_status: "pending")
+    other = give_sourced_role(Organization.create!(name: "Second Doubted Co", verification_status: "pending"))
     second = claim({ "name" => "Second Doubted Co" }, subject: other, proposed_subject: true)
     DataQuality::Recommendations.record("#{second.id} approve: Named on the NRC page", by: "human:dq")
     get admin_inbox_path
@@ -121,5 +123,35 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
       claim: nil, subject_type: "Organization", subject_id: @new_co.id, why: nil, waiting: true)
     assert_not DataQuality::Recommendations.accept([ item ], by: "human:tosin", first_hand: true).sole.ok?
     assert_not @new_co.reload.verified?
+  end
+
+  test "a pending company or plant with no open claim is in Today; Create publishes it, No rejects it" do
+    src = Source.create!(url: "https://www.nrc.gov/test/seeded.html", source_kind: "web_page", crawl_status: "ok", content_sha256: "s")
+    seeded = give_sourced_role(Organization.create!(name: "Seeded Pending Co", verification_status: "pending"))
+    no_role = Organization.create!(name: "Roleless Pending Co", verification_status: "pending")
+    Evidence.create!(subject: no_role, source: Source.create!(url: "https://example.com/roleless", source_kind: "web_page", crawl_status: "ok", content_sha256: "x"),
+      quote: "Roleless Pending Co.", found_by: "human")
+    Evidence.create!(subject: seeded, source: src, quote: "Seeded Pending Co builds reactors.", found_by: "human")
+    plant = Facility.create!(name: "PULSTAR Reactor", verification_status: "pending")
+    Evidence.create!(subject: plant, source: src, quote: "NC State's PULSTAR reactor.", found_by: "human")
+    get admin_inbox_path
+    assert_select "#inbox-record-organization-#{seeded.id}", /Seeded Pending Co/
+    assert_select "#inbox-record-facility-#{plant.id}", /PULSTAR Reactor/
+    assert_select "#inbox-record-organization-#{no_role.id}", 0, "a company without a sourced category stays Data Quality's"
+    assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*#{OwnerInbox.new.size}/
+
+    post admin_inbox_decide_record_path("Organization", seeded.id, "yes")
+    assert seeded.reload.verified?, flash[:alert].to_s
+    post admin_inbox_decide_record_path("Facility", plant.id, "no")
+    assert_equal "rejected", plant.reload.verification_status
+  end
+
+  test "companies without a category never hide an eligible one behind the page limit" do
+    src = Source.create!(url: "https://example.com/paging", source_kind: "web_page", crawl_status: "ok", content_sha256: "p")
+    3.times { |i| Organization.create!(name: "Roleless #{i}", verification_status: "pending").then { |o| Evidence.create!(subject: o, source: src, quote: "q", found_by: "human") } }
+    eligible = give_sourced_role(Organization.create!(name: "Eligible Late Co", verification_status: "pending"))
+    Evidence.create!(subject: eligible, source: src, quote: "q", found_by: "human")
+    ids = OwnerInbox.new.pending_records("organization", limit: 2).map(&:id)
+    assert_includes ids, eligible.id
   end
 end

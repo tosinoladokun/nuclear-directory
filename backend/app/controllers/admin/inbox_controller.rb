@@ -34,6 +34,20 @@ class Admin::InboxController < Admin::BaseController
     redirect_to admin_inbox_path
   end
 
+  # Create or No on a pending company or plant that has no open claim.
+  def decide_record
+    type, id = params[:type], params[:id].to_i
+    result = if params[:decision] == "yes"
+      DataQuality::Review.approve_fact(type:, id:, by: actor, reason: "Created in Today")
+    else
+      DataQuality::Review.reject_fact(type:, id:, by: actor, reason: "Said no in Today")
+    end
+    if result.ok? then flash[:notice] = params[:decision] == "yes" ? "Done. It's live." : "Said no."
+    else flash[:alert] = "Not done: #{Array(result.errors).to_sentence}."
+    end
+    redirect_to admin_inbox_path
+  end
+
   # Yes to every item Data Quality checked that the page showed: the same
   # calls on the same claims (fingerprint), each accepted through Data
   # Quality's Accept, which checks it all again under the decision's locks.

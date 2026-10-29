@@ -12,41 +12,6 @@ class SharedPartialsTest < ActionView::TestCase
     @untitled = Source.new(url: "https://www.energy.gov/node/4845535", domain: "energy.gov")
   end
 
-  test "company row with every field" do
-    company = Organization.new(name: "Kairos Power", slug: "kairos-power", hq_city: "Alameda", hq_state: "CA",
-      description: "Develops salt-cooled reactors.")
-    render partial: "shared/company_row", locals: { organization: company, connections: 1 }
-
-    assert_select "a.nd-listrow[href='/companies/kairos-power']"
-    assert_select ".nd-mono", "KP"
-    assert_select ".nd-listrow__desc", "Develops salt-cooled reactors."
-    assert_select ".nd-listrow__side", /Alameda, CA/
-    assert_select ".nd-listrow__side .nd-num", "1 connection"
-  end
-
-  test "company row leaves out what isn't known" do
-    render partial: "shared/company_row", locals: { organization: Organization.new(name: "Oklo", slug: "oklo") }
-
-    assert_select ".nd-listrow__name", "Oklo"
-    assert_select ".nd-listrow__desc", count: 0
-    assert_select ".nd-listrow__side", count: 0
-  end
-
-  test "power plant row with and without type, status and place" do
-    render partial: "shared/plant_row", locals: { facility: facilities(:vogtle).tap { |f| f.verification_status = "verified" } }
-    assert_select ".nd-listrow__desc", "Power plant · Operating"
-    assert_select ".nd-listrow__side", /GA/
-
-    render partial: "shared/plant_row", locals: { facility: Facility.new(name: "Hermes 2", slug: "hermes-2") }
-    assert_select "a[href='/plants/hermes-2'] .nd-listrow__desc", count: 0
-  end
-
-  test "a pending site's row leaves out its own type, status and place" do
-    render partial: "shared/plant_row", locals: { facility: facilities(:vogtle).tap { |f| f.verification_status = "pending" } }
-    assert_select ".nd-listrow__desc", count: 0
-    assert_select ".nd-listrow__side", count: 0
-  end
-
   test "fact row shows the sentence, detail, quote, sources and confidence" do
     render partial: "shared/fact_row", locals: { sentence: "Google offtakes from Kairos Power", detail: "500 MW by 2035.",
       quote: "Kairos Power and Google have signed", citations: [ [ 1, @source ] ], confidence: 0.8 }

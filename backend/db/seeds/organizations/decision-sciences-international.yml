@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Decision Sciences International
+status: active
+roles:
+- key: waste_decommissioning
+  source_url: https://www.usaspending.gov/recipient/a1f43644-dd76-9aca-b670-b683bd4a7bd3-C/latest
+  quote: "DESC0024065,DECISION SCIENCES INTERNATIONAL CORPORATION,198147.0,2023-07-10,2024-04-09,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0024065_089,ASST_NON_DESC0024065_089,a1f43644-dd76-9aca-b670-b683bd4a7bd3-C,MONITORING OF SPENT NUCLEAR FUEL INTEGRITY WITH MUON IMAGING"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []
