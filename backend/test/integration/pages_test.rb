@@ -69,7 +69,7 @@ class PagesTest < ActionDispatch::IntegrationTest
 
     get privacy_path
     assert_equal [ "What we collect", "Analytics", "Cookies", "Corrections", "Error reports", "Hosting", "Questions" ], css_select("section h2").map(&:text)
-    assert_select "section[aria-labelledby=counts] > p + ul li", 5
+    assert_select "section[aria-labelledby=counts] > p + ul li", 6
     get disclaimer_path
     assert_equal %w[Sources Accuracy Advice Endorsement Corrections], css_select("section h2").map(&:text)
   end

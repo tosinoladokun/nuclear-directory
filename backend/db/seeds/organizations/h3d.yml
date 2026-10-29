@@ -1,5 +1,6 @@
 # Seed research - 24 Oct 2026 (odd all-caps name from USAspending). The company's own site writes its name H3D.
 name: H3D
+website: https://www.h3dgamma.com
 aliases:
 - H3d
 - H3D INC
@@ -16,3 +17,6 @@ notes: An existing record (DOE small-business awardee) created as 'H3d' from USA
 description:
   source_url: https://www.h3dgamma.com/
   quote: H3D exists to serve customer needs
+  also:
+  - source_url: https://www.h3dgamma.com/
+    quote: "H3D, Inc."

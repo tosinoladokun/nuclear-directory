@@ -136,14 +136,12 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     assert_select ".nd-quiet a[href=?]", new_correction_path(subject: "Kairos Power", page: "/companies/kairos-power"), text: "Report a correction"
   end
 
-  test "plant pages link their facts, key facts and gaps to a prefilled correction" do
+  test "a plant page has one Report a correction, in the quiet line, with the plant as its subject" do
     vogtle = cite!(plant("Plant Vogtle", facility_type: "power_reactor"))
     cite!(link(company("Georgia Power"), "owns", vogtle))
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-factrow a.nd-factrow__fix[href=?]",
-      new_correction_path(subject: "Georgia Power owns Plant Vogtle", page: "/plants/plant-vogtle")
-    assert_select ".nd-overview a[href=?]", new_correction_path(subject: "Plant Vogtle", page: "/plants/plant-vogtle"), text: "Report a correction"
-    assert_select ".nd-gaps a[href=?]", new_correction_path(subject: "Plant Vogtle: Status, Location, NRC docket, Operator", page: "/plants/plant-vogtle"), text: "Suggest a source"
+    assert_select "a[href^='/corrections/new']", 1
+    assert_select ".nd-quiet a[href=?]", new_correction_path(subject: "Plant Vogtle", page: "/plants/plant-vogtle"), text: "Report a correction"
   end
 end

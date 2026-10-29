@@ -1,0 +1,59 @@
+<%# One company on a plant page, on one line (#557): its category square, its name and what it does here, the units
+    it covers, its share when a source states one (a bar and the percentage, never an estimate), a source mark and a
+    chevron. The row opens to the description, the quote and the source. Locals: party, profile. %>
+<% organization = party.organization %>
+<% link = party.links.first %>
+<% type = link.relationship_type %>
+<% covers = profile.units_phrase(party) %>
+<% share = party.share %>
+<%# One decimal on every row when any row has one, so the decimal points stack (display only). %>
+<% share_text = (local_assigns[:decimals] ? "#{number_with_precision(share, precision: 1)}%" : "#{number_with_precision(share, precision: 2, strip_insignificant_zeros: true)}%") if share %>
+<% show_verb = local_assigns.fetch(:verb, true) %>
+<% citations = profile.party_citations(party) %>
+<% evidence = party.links.flat_map(&:evidence).max_by { |e| e.confidence || 0 } %>
+<% detail_id = "party-#{type}-#{organization.id}" %>
+<% name_text, small = line_name(organization.name, organization.short_name) %>
+<li class="nd-crow" data-controller="row-open">
+  <div class="nd-crow__top">
+  <button type="button" class="nd-crow__line" aria-expanded="false" aria-controls="<%= detail_id %>" data-action="row-open#toggle" data-row-open-target="button">
+    <%= company_square(organization, category: profile.party_category(organization)) %>
+    <span class="nd-crow__who" title="<%= organization.name %><%= " #{plant_verb(type)}" if show_verb %>">
+      <b class="nd-crow__name" <%= 'data-fit=small'.html_safe if small %>><%= name_text %></b><% if show_verb %><span class="nd-crow__rest"> <%= plant_verb(type) %></span><% end %>
+    </span>
+    <% if covers %><span class="nd-crow__what"><%= covers %></span><% end %>
+    <% if share %>
+      <span class="nd-crow__share" aria-label="<%= share_text %> share">
+        <span class="nd-share" aria-hidden="true"><span class="nd-share__fill" style="width: <%= share.to_f.clamp(0, 100) %>%"></span></span>
+        <span class="nd-crow__pct"><%= share_text %><span class="sr-only"> share</span></span>
+      </span>
+    <% end %>
+  </button>
+  <%= render "shared/source_mark", citations:, checked: link.verified_at %>
+  <span class="nd-crow__chev" aria-hidden="true"><span class="nd-crow__chev-down"><%= icon("caret-down", size: 16) %></span><span class="nd-crow__chev-up"><%= icon("caret-down", size: 16) %></span></span>
+  </div>
+  <div class="nd-crow__more" id="<%= detail_id %>" hidden data-row-open-target="panel">
+    <%# Each link's own description and start date, with its unit when the row folds several. %>
+    <% party.links.each do |each| %>
+      <% own_since = each.started_on ? "#{each.started_on.future? ? "Starts" : "Since"} #{prose_month(each.started_on)}" : nil %>
+      <% text = [ each.description.presence, own_since ].compact.join(" ").presence %>
+      <% if text %><p class="type-body"><% if party.links.size > 1 && each.facility != profile.site %><b><%= each.facility.name %>:</b> <% end %><%= text %></p><% end %>
+    <% end %>
+    <p class="type-ui"><%= link_to "View #{organization.name}", company_url_for(organization), class: "nd-link" %></p>
+    <% fields = data_quote_fields(evidence) %>
+    <% if fields %>
+      <div class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>">
+        <p><%= fields.join(" · ") %></p>
+        <details class="nd-quote__row">
+          <summary class="nd-link nd-link--muted type-small">Show source row</summary>
+          <code class="type-data-sm"><%= evidence.quote %></code>
+        </details>
+      </div>
+    <% elsif evidence&.quote.present? %>
+      <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= evidence.quote %>”</p>
+    <% end %>
+    <div class="nd-row">
+      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, plain: true, checked: (link.verified_at if index.zero?) %><% end %>
+      <%= render "shared/confidence", value: link.confidence %>
+    </div>
+  </div>
+</li>

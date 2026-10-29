@@ -1,5 +1,6 @@
 # Seed research - 20 Oct 2026 (data-quality check: companies that operate NRC-listed plants had no operator role). Quote: the NRC list of power reactor units row (column Owner/Operator). A bare record the crawler made; no website, HQ or description is stated here, none is invented.
 name: DTE Electric Company
+website: https://www.dteenergy.com
 country_code: US
 status: active
 roles:
@@ -14,6 +15,9 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Fermi 2 | 05000341 | NPF-43 | BWR | 25 miles NE of Toledo, OH | DTE Electric Company | 3
+  also:
+  - source_url: https://www.dteenergy.com/
+    quote: "DTE Energy Home | DTE Energy"
 short_description:
   text: 'Fermi 2 nuclear plant licensee'
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
