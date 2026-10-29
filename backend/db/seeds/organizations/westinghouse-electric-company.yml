@@ -20,11 +20,11 @@ roles:
   published: '2024-04-29'
   confidence: 1.0
 - key: reactor_services
-  source_url: https://westinghousenuclear.com/
+  source_url: https://westinghousenuclear.com
   quote: Westinghouse technology powers 57% of the world's nuclear power plants, maintains nearly two-thirds of the world's nuclear fleet and fuels 40% of that fleet.
   confidence: 1.0
 - key: fuel
-  source_url: https://westinghousenuclear.com/
+  source_url: https://westinghousenuclear.com
   quote: Westinghouse technology powers 57% of the world's nuclear power plants, maintains nearly two-thirds of the world's nuclear fleet and fuels 40% of that fleet.
   confidence: 1.0
 - key: reactor_vendor
