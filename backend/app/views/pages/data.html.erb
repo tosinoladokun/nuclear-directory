@@ -1,0 +1,57 @@
+<%
+  description = "Every published fact in Nuclear Directory as open data: US nuclear companies and facilities, the links between them and the public documents each fact comes from. Free to download as CSV or JSON, licensed CC BY 4.0."
+  repo = "https://github.com/#{Dataset::Export::DATA_REPO}"
+  raw = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/main"
+%>
+<% content_for :title, "Open data: the US nuclear supply chain dataset | Nuclear Directory" %>
+<% content_for :head do %>
+  <link rel="canonical" href="<%= data_url %>">
+  <meta name="description" content="<%= description %>">
+<% end %>
+<%= render "shared/site_header" %>
+
+<main class="nd-page nd-page--narrow nd-prose">
+  <%= json_ld_tag(dataset_json_ld(page_url: data_url, description:)) %>
+  <h1 class="type-title-md">Open data</h1>
+  <p class="type-body"><strong>In short:</strong> every fact in the directory is free to download as CSV or JSON, with the documents it comes from. Reuse it with credit.</p>
+
+  <section aria-labelledby="what">
+    <h2 id="what" class="type-body-strong">What it is</h2>
+    <p class="type-body">The dataset holds every published fact: companies, facilities and the links between them, with the public source of each fact. It covers the US nuclear industry. A new release comes out each month.</p>
+    <p class="type-body">It leaves out our internal review notes and other publishers' quote text. Each fact points to its source document instead.</p>
+  </section>
+
+  <section aria-labelledby="download">
+    <h2 id="download" class="type-body-strong">Download</h2>
+    <ul class="type-body">
+      <% Dataset::Export::TABLES.each_key do |table| %>
+        <li><%= table.tr("_", " ").upcase_first %>: <%= link_to "CSV", "#{raw}/#{table}.csv", class: "nd-link", rel: "noopener noreferrer" %> · <%= link_to "JSON", "#{raw}/#{table}.json", class: "nd-link", rel: "noopener noreferrer" %></li>
+      <% end %>
+      <li>Every release, with its README, data dictionary and changelog: <%= link_to "the data repository", repo, class: "nd-link", rel: "noopener noreferrer" %>.</li>
+      <li>Archived with a DOI on <%= link_to "Zenodo", "https://doi.org/#{StructuredDataHelper::DATASET_DOI}", class: "nd-link", rel: "noopener noreferrer" %>.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="schema">
+    <h2 id="schema" class="type-body-strong">Schema</h2>
+    <p class="type-body">Seven tables, linked by each company's and facility's slug, which is also the end of its page address here.</p>
+    <ul class="type-body">
+      <% Dataset::Export::TABLES.each do |table, columns| %>
+        <li><strong><%= table.tr("_", " ").upcase_first %>:</strong> <%= columns.keys.join(", ") %></li>
+      <% end %>
+    </ul>
+    <p class="type-body">Each column is described in the release's <%= link_to "data dictionary", "#{repo}/blob/main/DATA-DICTIONARY.md", class: "nd-link", rel: "noopener noreferrer" %>.</p>
+  </section>
+
+  <section aria-labelledby="licence">
+    <h2 id="licence" class="type-body-strong">Licence</h2>
+    <p class="type-body">The data is open under <%= link_to "CC BY 4.0", Dataset::Export::LICENSE[:url], class: "nd-link", rel: "noopener noreferrer" %>. Use it for any purpose, including commercial work, if you credit Nuclear Directory, link the licence and say whether you changed it. The licence covers the data, not the website's code.</p>
+  </section>
+
+  <section aria-labelledby="cite">
+    <h2 id="cite" class="type-body-strong">How to cite</h2>
+    <p class="type-body">Say which release you used and the day you downloaded it:</p>
+    <p class="type-data">Nuclear Directory (2026). <%= link_to "doi:#{StructuredDataHelper::DATASET_DOI}", "https://doi.org/#{StructuredDataHelper::DATASET_DOI}", class: "nd-link", rel: "noopener noreferrer" %></p>
+    <p class="type-body">That DOI covers every release. Each release has its own version DOI, and its README gives the full citation.</p>
+  </section>
+</main>

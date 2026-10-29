@@ -9,6 +9,25 @@ module StructuredDataHelper
     tag.script(raw(ERB::Util.json_escape(JSON.generate(data))), type: "application/ld+json") # rubocop:disable Rails/OutputSafety
   end
 
+  # The open dataset as schema.org Dataset (#185), so Google Dataset Search can index the /data page. Name, description,
+  # licence, creator and downloads, from what the release files themselves say (Dataset::Export).
+  DATASET_DOI = "10.5281/zenodo.23703377".freeze
+  def dataset_json_ld(page_url:, description:)
+    base = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/main"
+    {
+      "@context" => "https://schema.org", "@type" => "Dataset", "@id" => "#{page_url}#dataset", "name" => Dataset::Export::TITLE,
+      "description" => description, "url" => page_url, "identifier" => "https://doi.org/#{DATASET_DOI}", "sameAs" => "https://doi.org/#{DATASET_DOI}",
+      "license" => Dataset::Export::LICENSE[:url], "isAccessibleForFree" => true, "keywords" => Dataset::Docs::KEYWORDS,
+      "spatialCoverage" => "United States",
+      "creator" => { "@type" => "Person", "name" => "#{Dataset::Export::AUTHOR[:given]} #{Dataset::Export::AUTHOR[:family]}" },
+      "publisher" => { "@type" => "Organization", "name" => Dataset::Export::PUBLISHER, "url" => Dataset::Export::SITE },
+      "distribution" => Dataset::Export::TABLES.keys.flat_map do |table|
+        [ { "@type" => "DataDownload", "encodingFormat" => "text/csv", "name" => "#{table}.csv", "contentUrl" => "#{base}/#{table}.csv" },
+          { "@type" => "DataDownload", "encodingFormat" => "application/json", "name" => "#{table}.json", "contentUrl" => "#{base}/#{table}.json" } ]
+      end
+    }
+  end
+
   def company_json_ld(profile, page_url:)
     org = {
       "@type" => "Organization", "@id" => "#{page_url}#organization", "name" => profile.name,
