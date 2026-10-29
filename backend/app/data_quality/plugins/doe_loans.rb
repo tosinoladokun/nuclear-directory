@@ -36,6 +36,10 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
       end
       take_over(source)
       stats[project] = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_text(html) }.to_s
+      # A page read before this version proposed loan terms is read again.
+      if source.extracted_sha256.present? && source.extracted_rows_sha256 != rows_sha256(source)
+        source.update!(extracted_sha256: nil)
+      end
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: NO_TABLE)
       stats[project] = "needs_human"
@@ -49,12 +53,20 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
     quote = source.content_text.lines.map(&:chomp).select { |line| line.start_with?("Owners: ", "Loan Program: ", "Loan Amount: ", "Issuance Date: ") }.join("\n")
     description = [ "Loan of #{facts['Loan Amount']}", facts["Loan Program"] && "under the #{facts['Loan Program']}",
       facts["Issuance Date"] && "closed #{facts['Issuance Date']}" ].compact.join(", ")
+    link = { "from_organization" => { "name" => DOE }, "to_organization" => { "name" => borrower }, "relationship_type" => "funds" }
+    amount = amount_usd(facts["Loan Amount"])
     [
       { kind: "organization", quote: "Owners: #{borrower}", payload: { "name" => borrower } },
-      { kind: "relationship", quote:, payload: { "from_organization" => { "name" => DOE }, "to_organization" => { "name" => borrower },
-        "relationship_type" => "funds", "description" => description } }
-    ]
+      { kind: "relationship", quote:, payload: link.merge("description" => description) },
+      # The loan itself as a term on that link (#592); its page is its ID.
+      ({ kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "loan", "external_id" => source.url,
+        "amount_usd" => amount, "program" => facts["Loan Program"]).compact } if amount)
+    ].compact
   end
+
+  # The table, with what extract proposes from it: a new version reads every page again.
+  EXTRACT_VERSION = "loan-terms-1"
+  def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   # One loan per page: a change goes to a person.
   def max_dropped_share(_source) = 1.0
@@ -74,6 +86,12 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   end
 
   private
+    # "$1.52 Billion" => "1520000000", "$1.0 billion", "$850 million"; nil when the page words it otherwise.
+    def amount_usd(text)
+      match = text.to_s.match(/\A\$\s*([\d,]+(?:\.\d+)?)\s*(billion|million)\z/i) or return
+      (match[1].delete(",").to_d * { "billion" => 10**9, "million" => 10**6 }.fetch(match[2].downcase)).to_i.to_s
+    end
+
     # A research page already stored at this URL becomes this kind's; its
     # fetch date stays (once a day holds) and its old HTML is cleared.
     def take_over(source)
