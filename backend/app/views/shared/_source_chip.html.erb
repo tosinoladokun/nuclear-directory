@@ -2,9 +2,10 @@
     number:  the source's number on the page
     source:  a Source
     compact: true shows the number only (inside the overview panel)
-    checked: a date to show after the domain, e.g. the fact's last check (optional) %>
+    checked: a date to show after the domain, e.g. the fact's last check (optional)
+    plain:   true shows the domain and date as plain muted text, with no boxed number (opened rows, #557) %>
 <% checked = local_assigns[:checked] unless local_assigns[:compact] %>
 <% label = [ "Source #{number}: #{source_domain(source)}", ("checked #{data_date(checked)}" if checked) ].compact.join(", ") %>
-<%= link_to "#source-#{number}", class: "nd-src", aria: { label: } do %>
-  <sup><%= number %></sup><% unless local_assigns[:compact] %><%= source_domain(source) %><% if checked %> <span class="nd-src__checked">· checked <%= data_date(checked) %></span><% end %><% end %>
+<%= link_to "#source-#{number}", class: [ "nd-src", ("nd-src--plain" if local_assigns[:plain]) ], aria: { label: } do %>
+  <% unless local_assigns[:plain] %><sup><%= number %></sup><% end %><% unless local_assigns[:compact] %><%= source_domain(source) %><% if checked %> <span class="nd-src__checked">· checked <%= data_date(checked) %></span><% end %><% end %>
 <% end %>
