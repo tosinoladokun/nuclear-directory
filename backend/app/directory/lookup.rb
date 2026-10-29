@@ -189,6 +189,8 @@ module Directory
       end.sort_by { |row| -row[:checked_at].to_f }
     end
 
+    def role_key?(key) = key.present? && Role.exists?(key:)
+
     # Whether a company has a role with a source (pending or published), so
     # a new company reaches the owner with its category (#548). Reads only.
     def sourced_role?(organization_id) = sourced_role_ids([ organization_id ]).any?
