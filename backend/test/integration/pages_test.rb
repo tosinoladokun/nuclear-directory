@@ -119,6 +119,16 @@ class PagesTest < ActionDispatch::IntegrationTest
     url = xml.xpath("//url").find { |node| node.at("loc").text.end_with?("/companies/#{company.slug}") }
     assert url, "the company is listed"
     assert_operator Date.parse(url.at("lastmod").text), :>=, Date.new(2026, 10, 20), "its link's change counts"
+
+    # A pending link (not shown) changed later doesn't move it.
+    shown = url.at("lastmod").text
+    pending = Organization.create!(name: "Pending Partner", verification_status: "verified", verified_by: "human:tosin")
+    Relationship.create!(from_organization: company, to_organization: pending, relationship_type: "funds", verification_status: "pending")
+      .update_columns(updated_at: 1.day.from_now)
+    Rails.cache.clear
+    get "/sitemap.xml"
+    again = Nokogiri::XML(response.body).remove_namespaces!.xpath("//url").find { |node| node.at("loc").text.end_with?("/companies/#{company.slug}") }
+    assert_equal shown, again.at("lastmod").text
   end
 
   test "the sitemap lists public companies and plants, not hidden ones" do
