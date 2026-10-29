@@ -7,7 +7,7 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  text: "Holds the NRC licence for a Critical Assembly research reactor in Troy, NY."
+  text: "Holds the NRC licence for a Critical Assembly research reactor."
   source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/rpi-ny-critical-assembly
   quote: "Rensselaer Polytechnic Institute Critical Assembly reactor | Licensee: Rensselaer Polytechnic Institute | Location: Troy, NY | Docket Number: 05000225 | Reactor Type: Critical Assembly"
   also:
@@ -16,8 +16,8 @@ description:
 hq:
   city: Troy
   state: NY
-  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/rpi-ny-critical-assembly
-  quote: "Rensselaer Polytechnic Institute Critical Assembly reactor | Licensee: Rensselaer Polytechnic Institute | Location: Troy, NY | Docket Number: 05000225 | Reactor Type: Critical Assembly"
+  source_url: https://www.rpi.edu
+  quote: "110 Eighth Street Troy, NY USA 12180"
   confidence: 1.0
 short_description:
   text: "Research reactor licensee"

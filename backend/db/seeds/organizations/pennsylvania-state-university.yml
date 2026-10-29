@@ -17,8 +17,8 @@ short_description:
   source_url: https://www.psu.edu
   quote: "Penn State is a Pennsylvania-based, top-ranked public university that educates students worldwide. Learn more about Penn State degree programs and research."
 hq:
-  city: State College
+  city: University Park
   state: PA
-  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/psu-pa-triga
-  quote: "Pennsylvania State University TRIGA reactor | Licensee: Pennsylvania State University | Location: State College, PA | Docket Number: 05000005 | Reactor Type: TRIGA"
+  source_url: https://www.psu.edu/contact-us
+  quote: "The Pennsylvania State University 201 Old Main University Park, PA 16802"
   confidence: 1.0
