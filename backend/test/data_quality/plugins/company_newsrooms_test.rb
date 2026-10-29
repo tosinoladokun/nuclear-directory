@@ -53,12 +53,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert candidates.any?
     assert candidates.all? { |c| c[:kind] == "news_item" && plugin.quote_in_source?(source, c[:quote]) }
     assert candidates.all? { |c| Date.parse(c[:payload]["published_on"]) >= TODAY - Plugin::WINDOW_DAYS }, "only the last #{Plugin::WINDOW_DAYS} days"
-    first = candidates.find { |c| c[:quote] == "Cameco Provides Date for 2026 Q3 Results, Conference Call and Webcast" }
-    assert_equal({ "url" => "https://www.cameco.com/media/news/cameco-provides-date-for-2026-q3-results-conference-call-and-webcast",
-      "title" => "Cameco Provides Date for 2026 Q3 Results, Conference Call and Webcast", "publisher" => "Cameco", "published_on" => "2026-10-20",
-      "about" => [ { "name" => "Cameco", "type" => "organization" } ] }, first[:payload].except("summary"))
+    first = candidates.find { |c| c[:payload]["published_on"] == "2026-09-22" }
+    assert_equal({ "url" => "https://www.cameco.com/media/news/cameco-acknowledges-united-states-and-republic-of-korea-announcement-of-framework-for",
+      "publisher" => "Cameco", "published_on" => "2026-09-22", "about" => [ { "name" => "Cameco", "type" => "organization" } ] },
+      first[:payload].except("summary", "title"))
+    assert_match "Framework for the Deployment of Nuclear Power", first[:payload]["title"]
+    refute candidates.any? { |c| c[:quote].start_with?("Cameco Provides Date") }, "a results date isn't nuclear news (DQ, 29 Oct)"
     assert candidates.none? { |c| c[:payload].key?("summary") }, "Cameco repeats one release's text under every item: no summaries"
-    assert_match "Cameco Provides Date", plugin.verification_context(source, first[:quote])
+    assert_match "Republic of Korea", plugin.verification_context(source, first[:quote])
     assert_match "Cameco's own news feed", plugin.source_facts(source)
   end
 
@@ -238,7 +240,8 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     end.new
     listed = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, directory: names)
 
-    assert listed.send(:about_nuclear?, "Cameco", item.("Cameco Names New Board Chair")), "a listed nuclear company's own news"
+    refute listed.send(:about_nuclear?, "Cameco", item.("Cameco Provides Date for 2026 Q3 Results")), "listed feeds too: a date isn't news"
+    assert listed.send(:about_nuclear?, "Cameco", item.("Cameco Signs Uranium Supply Agreement in Korea"))
     assert listed.send(:about_nuclear?, "Acme Fission", item.("Acme Signs Uranium Supply Deal"))
     assert listed.send(:about_nuclear?, "Acme Fission", item.("Acme Partners With Kairos Power")), "names a company we have"
     refute listed.send(:about_nuclear?, "Acme Fission", item.("Acme Names New Board Chair"))

@@ -36,7 +36,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   FIRST_READ_ITEMS = 3
   # Only news about nuclear becomes a claim (Tosin, 29 Oct: an Amazon Alexa
   # release reached his inbox): see about_nuclear?.
-  NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|radioactive|radiation|enrichment|spent fuel|decommissioning)\b/i
+  NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|radioactive|radiation|enrichment|spent fuel|decommissioning|borehole|repository|tritium|deuterium|plasma|FRC)\b/i
   # Companies whose news is mostly not nuclear: their items need a nuclear word.
   BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
     "General Electric", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company",
@@ -130,12 +130,10 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   PARTNER = /\b((?:#{WORD}\s+){0,5}#{WORD}),?\s+(?:#{LEGAL})\b\.?/
 
   private
-    # The listed feeds are nuclear companies' own: all their news counts. A
-    # found feed's item must name nuclear work or another record we have; a
-    # broad company's must name nuclear work.
+    # Every item must name nuclear work, or (for a publisher that isn't broad
+    # or only a data-center buyer or investor) another record we have. The
+    # listed feeds too (DQ, 29 Oct: dates and investor conferences got through).
     def about_nuclear?(company, item)
-      return true if FEEDS.key?(company) && !broad?(company)
-
       text = "#{item.title} #{item.summary}"
       return true if text.match?(NUCLEAR)
       return false if broad?(company) || non_nuclear_publisher?(company)
