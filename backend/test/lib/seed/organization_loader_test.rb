@@ -199,6 +199,17 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ "Acme", "Acme Fuel" ], acme.aliases.pluck(:alias).sort
   end
 
+  test "a description with no text cites the company itself, not a description field" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
+      description: { "source_url" => "https://acmefuel.com", "quote" => "Acme Fuel - Home" }))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    acme = Organization.find_by!(slug: "acme-fuel")
+    assert_nil acme.description
+    assert_equal [ [ "Acme Fuel - Home", nil ] ], acme.evidence.map { |row| [ row.quote, row.fields ] }
+  end
+
   test "a legal name is cited by the quote that states it" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", legal_name: "Acme Fuel, Inc.",
       roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel, Inc. supplies fuel.") ]))
