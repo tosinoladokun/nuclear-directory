@@ -22,6 +22,7 @@ class CorrectionsController < ApplicationController
 
     @report = CorrectionReport.new(report_params)
     if @report.save
+      ListingSubmission.call(@report)
       # Its path only: a query string or fragment can hold anything (the report keeps it).
       path = @report.page_path.split(/[?#]/).first
       record_type, record_id = record_on(path)
@@ -39,7 +40,8 @@ class CorrectionsController < ApplicationController
 
   private
     def report_params
-      params.permit(:message, :contact).merge(subject:, page_path: safe_path(params[:page_path]))
+      params.permit(:message, :contact, :kind, :source_url, :claimant_name, :claimant_role, :claimant_email, :record_type, :record_id,
+        proposed_changes: %i[field value quote]).merge(subject:, page_path: safe_path(params[:page_path]), kind: params[:kind].presence || "correction")
     end
 
     # What the correction is about: the fact or page it came from.

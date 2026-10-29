@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -44,6 +44,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
     t.string "dq_by"
     t.datetime "dq_at"
     t.string "dq_payload_sha256"
+    t.string "origin"
     t.index ["ai_recommendation", "verify_run_id"], name: "index_candidates_on_ai_recommendation_and_verify_run_id"
     t.index ["crawl_run_id"], name: "index_candidates_on_crawl_run_id"
     t.index ["dq_recommendation"], name: "index_candidates_on_dq_recommendation", where: "(dq_recommendation IS NOT NULL)"
@@ -67,7 +68,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
     t.string "resolution"
     t.string "decided_by"
     t.datetime "decided_at"
+    t.string "kind", default: "correction", null: false
+    t.string "source_url"
+    t.string "claimant_name"
+    t.string "claimant_role"
+    t.string "claimant_email"
+    t.boolean "email_domain_match", default: false, null: false
+    t.string "record_type"
+    t.bigint "record_id"
+    t.jsonb "proposed_changes", default: [], null: false
+    t.jsonb "candidate_ids", default: [], null: false
     t.index ["status"], name: "index_correction_reports_on_status"
+    t.check_constraint "record_id IS NULL OR record_type IS NOT NULL", name: "correction_reports_record_check"
+    t.check_constraint "kind::text = ANY (ARRAY['correction'::character varying, 'listing'::character varying, 'new_record'::character varying, 'new_fact'::character varying, 'source'::character varying]::text[])", name: "correction_reports_kind_check"
     t.check_constraint "resolution::text = ANY (ARRAY['fixed'::character varying::text, 'dismissed'::character varying::text])", name: "correction_reports_resolution_check"
     t.check_constraint "status::text = ANY (ARRAY['open'::character varying::text, 'reviewed'::character varying::text, 'closed'::character varying::text])", name: "correction_reports_status_check"
   end

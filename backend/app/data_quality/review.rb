@@ -220,6 +220,8 @@ module DataQuality::Review
     # firsts: first_batches, passed in once for a whole list.
     def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new, firsts: first_batches)
       return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
+      # A visitor's suggestion (#591) is Data Quality's to pre-check first.
+      return "dq" if candidate.origin == "visitor" && !(candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate))
       # A source's own hold and its first batch are Data Quality's to read;
       # once it has approved the claim (still current), it's Tosin's to
       # decide, and his Yes (Data Quality's Accept) lifts the hold.
