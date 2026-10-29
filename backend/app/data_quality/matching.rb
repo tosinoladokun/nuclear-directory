@@ -145,6 +145,13 @@ module DataQuality::Matching
         next nil
       end
       raise Abort, "the claim was changed since (decided, reopened or moved by a merge), so it can't be undone here" unless left_as?(action, candidate)
+      # The record it goes back to must still be open (merged away or taken off: no).
+      if (type, id = action.before.values_at("subject_type", "subject_id")).all?
+        directory.lock_fact(type:, id:)
+        unless %w[verified pending].include?(directory.fact(type:, id:)&.verification_status)
+          raise Abort, "the record it was on (#{type} ##{id}) was merged or taken off since, so it can't go back there"
+        end
+      end
 
       # What it created goes too, but only while it's still pending.
       action.created.each do |ref|

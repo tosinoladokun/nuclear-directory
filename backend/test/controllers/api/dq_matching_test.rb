@@ -438,4 +438,16 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal power.id, wrong.reload.subject_id
     assert_equal "rejected", made.reload.verification_status
   end
+
+  test "Undo of new on a wrong match refuses when the original company was merged away since" do
+    power = Organization.create!(name: "Standard Power", verification_status: "verified", verified_by: "human:tosin")
+    wrong = Candidate.create!(source: @page, kind: "organization", status: "matched", quote: "Licensee: Fresh Fission LLC.",
+      payload: { "name" => "Standard Nuclear, Inc." }, subject_type: "Organization", subject_id: power.id)
+    act({ id: wrong.id, action: "new", reason: "A fuel maker" })
+    made = Organization.find(results.sole["created_ids"].sole)
+    power.update_columns(verification_status: "unpublished")
+    assert_match "merged or taken off", DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal made.id, wrong.reload.subject_id
+    assert_equal "pending", made.reload.verification_status
+  end
 end
