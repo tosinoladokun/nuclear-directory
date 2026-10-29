@@ -424,4 +424,30 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     claim.update_columns(reopenings: [ { "by" => "human:tosin" } ])
     assert_match "decided since", DataQuality::Matching.undo(DqAction.find_by!(request_key: "role-1").id)
   end
+
+  test "new takes a company claim out of a wrong match into its own new company; Undo puts it back" do
+    power = Organization.create!(name: "Standard Power", verification_status: "verified", verified_by: "human:tosin")
+    wrong = Candidate.create!(source: @page, kind: "organization", status: "matched", quote: "Licensee: Fresh Fission LLC.",
+      payload: { "name" => "Standard Nuclear, Inc." }, subject_type: "Organization", subject_id: power.id, notes: "Matched by brand")
+    act({ id: wrong.id, action: "new", reason: "A TRISO fuel maker, not the data center developer" })
+    assert results.sole["ok"], results.inspect
+    made = Organization.find(results.sole["created_ids"].sole)
+    assert_equal [ "Standard Nuclear, Inc.", "pending" ], made.values_at(:name, :verification_status)
+    assert_equal made.id, wrong.reload.subject_id
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal power.id, wrong.reload.subject_id
+    assert_equal "rejected", made.reload.verification_status
+  end
+
+  test "Undo of new on a wrong match refuses when the original company was merged away since" do
+    power = Organization.create!(name: "Standard Power", verification_status: "verified", verified_by: "human:tosin")
+    wrong = Candidate.create!(source: @page, kind: "organization", status: "matched", quote: "Licensee: Fresh Fission LLC.",
+      payload: { "name" => "Standard Nuclear, Inc." }, subject_type: "Organization", subject_id: power.id)
+    act({ id: wrong.id, action: "new", reason: "A fuel maker" })
+    made = Organization.find(results.sole["created_ids"].sole)
+    power.update_columns(verification_status: "unpublished")
+    assert_match "merged or taken off", DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal made.id, wrong.reload.subject_id
+    assert_equal "pending", made.reload.verification_status
+  end
 end
