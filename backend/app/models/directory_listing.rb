@@ -10,7 +10,9 @@
 #   listing.companies  # => Organizations, each with #connections_count
 #   listing.plants     # => Facilities (sites, not units)
 class DirectoryListing
-  SORTS = { "name" => "A to Z", "connections" => "Most connected" }.freeze
+  # Most connected is the default on every list (Tosin, 28 Oct, reversing 26 Oct); A to Z is ?sort=name.
+  SORTS = { "connections" => "Most connected", "name" => "A to Z" }.freeze
+  DEFAULT_SORT = "connections"
 
   attr_reader :category, :tag, :query, :technology, :state, :sort, :role
 
@@ -32,7 +34,7 @@ class DirectoryListing
     # mistyped URL can't silently narrow the list behind an "Any" control.
     @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last))
     @state = state.to_s.strip.upcase.presence&.presence_in(state_options)
-    @sort = SORTS.key?(sort.to_s) ? sort.to_s : "name"
+    @sort = SORTS.key?(sort.to_s) ? sort.to_s : DEFAULT_SORT
     # A bucket made of several roles narrows to one of them (Developers:
     # reactor designers or project developers). Any other value is dropped.
     @role = role.to_s.presence&.presence_in(@category.role_keys) if @category && @category.role_keys.size > 1
@@ -255,7 +257,7 @@ class DirectoryListing
       return scope.order(fuzzy_position_sql(name_column)) if fuzzy? && query
 
       scope = scope.order(relevance_sql(name_column, aliases: name_column == "organizations.name")) if query
-      sort == "connections" ? scope.order(Arel.sql("connections_count DESC"), name_column) : scope.order(name_column)
+      sort == "name" ? scope.order(name_column) : scope.order(Arel.sql("connections_count DESC"), name_column)
     end
 
     def relevance_sql(name_column, aliases: false)
