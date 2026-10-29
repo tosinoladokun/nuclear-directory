@@ -3,7 +3,7 @@ name: SHINE Technologies, LLC
 status: active
 roles:
 - key: isotopes
-  source_url: https://shinefusion.com/
+  source_url: https://shinefusion.com
   quote: "Each year, thousands of patients are treated using medical isotopes provided by SHINE."
   confidence: 1.0
 technologies: []

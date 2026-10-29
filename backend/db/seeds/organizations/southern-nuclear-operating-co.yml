@@ -16,7 +16,7 @@ description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Farley 1 | 05000348 | NPF-2 | PWR | 18 miles E of Dothan, AL | Southern Nuclear Operating Co. | 2
   also:
-  - source_url: https://www.southernnuclear.com/
+  - source_url: https://www.southernnuclear.com
     quote: "Southern Nuclear: A Leader in Nuclear Energy Production"
 short_description:
   text: 'Nuclear plant operator in the Southeast'
