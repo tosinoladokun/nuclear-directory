@@ -4,7 +4,11 @@ aliases:
 - H3d
 - H3D INC
 status: active
-roles: []
+roles:
+- key: components
+  source_url: https://www.h3dgamma.com/
+  quote: "With our instruments used by over 75% of US nuclear power plants, our customers find them useful."
+  confidence: 1.0
 technologies: []
 relationships: []
 facilities: []

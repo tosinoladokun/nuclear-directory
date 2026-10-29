@@ -2,7 +2,11 @@
 name: Duke Energy Florida
 country_code: US
 status: active
-roles: []
+roles:
+- key: waste_decommissioning
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/decommissioning/power-reactor/cr3
+  quote: "Per the agreement, Duke remains the NRC-licensed owner of the plant, property, and decommissioning trust fund but not the spent fuel."
+  confidence: 1.0
 technologies: []
 relationships:
 - type: subsidiary_of

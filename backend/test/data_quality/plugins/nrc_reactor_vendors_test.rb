@@ -39,11 +39,11 @@ class DataQuality::Plugins::NrcReactorVendorsTest < ActiveSupport::TestCase
     refute_match(/Operator|Public Affairs/, page("ano1").content_text)
   end
 
-  test "night one reads at most 20 new unit pages; the rest the next nights" do
+  test "night one reads at most 40 new unit pages; the rest the next nights" do
     crawl
     first = DataQuality::Stages::Extract.call(plugin:)
-    assert_equal 93 - 20, first.stats["deferred"]
-    assert_equal 20, Source.where(source_kind: "nrc_reactor_vendors").where.not(extracted_sha256: nil).count
+    assert_equal 93 - 40, first.stats["deferred"]
+    assert_equal 40, Source.where(source_kind: "nrc_reactor_vendors").where.not(extracted_sha256: nil).count
   end
 
   test "no reactor list yet: nothing is read" do

@@ -1,0 +1,11 @@
+# Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
+name: Sawtooth Simulation
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.usaspending.gov/recipient/9e203846-7d13-04f2-7018-b23febe59d1a-R/latest
+  quote: "DESC0025110,\"SAWTOOTH SIMULATION, LLC\",199977.0,2024-07-22,2025-08-31,assistance,81.049,small_business,https://www.usaspending.gov/award/ASST_NON_DESC0025110_089,ASST_NON_DESC0025110_089,9e203846-7d13-04f2-7018-b23febe59d1a-R,DEVELOPING A SCIENCE-BASED PREDICTIVE SIMULATION CAPABILITY FOR THE DESIGN AND ANALYSIS OF ADVANCED NUCLEAR FUEL CONCEPTS OPERATING IN A VIRTUAL REACTOR ENVIRONMENT"
+  confidence: 1.0
+technologies: []
+relationships: []
+facilities: []

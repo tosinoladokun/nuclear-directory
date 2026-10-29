@@ -143,7 +143,7 @@ class DataQuality::Plugins::DoePrograms < DataQuality::Plugin
 
   # One new page a night (#541): each names at most 11 companies, under the
   # cap of 15 new companies a night; pages read before are never held back.
-  def new_sources_per_run = 1
+  def new_sources_per_run = 5
 
   # A few lists per page: a company leaving one is a real change for a person to see.
   def max_dropped_share(_source) = 1.0
