@@ -13,7 +13,7 @@ roles:
   confidence: 1.0
 technologies:
 - key: smr
-  source_url: https://www.lastenergy.com/
+  source_url: https://www.lastenergy.com
   quote: Last Energy | 20 MWe SMR | Fully modular, factory made
   confidence: 0.9
 relationships: []
@@ -21,7 +21,7 @@ facilities: []
 notes: 'smr quote is the homepage title. Last Energy says it builds, owns and operates plants for customers (no plant operating yet, so no operator category). Its press page lists DOE approval of the Documented Safety Analysis for its pilot reactor at Texas A&M–RELLIS (Oct 2026), not researched further. The New Era partnership is recorded in new-era-energy-digital.yml (#253). HQ not verified.'
 description:
   text: Developer of small modular nuclear power plants that it builds, owns and runs for customers.
-  source_url: https://www.lastenergy.com/
+  source_url: https://www.lastenergy.com
   quote: Last Energy radically simplifies nuclear deployment by building, owning, and operating power plants for customers.
 short_description:
   text: 'Micro modular PWR plant developer'

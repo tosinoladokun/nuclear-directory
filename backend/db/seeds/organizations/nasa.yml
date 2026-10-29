@@ -6,7 +6,7 @@ website: https://www.nasa.gov
 status: active
 roles:
 - key: government_agency
-  source_url: https://www.nasa.gov/
+  source_url: https://www.nasa.gov
   quote: National Aeronautics and Space Administration NASA explores the unknown in air and space, innovates for the benefit of humanity, and inspires the world through discovery.
   confidence: 1.0
 technologies:

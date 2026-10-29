@@ -16,7 +16,7 @@ description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Diablo Canyon 1 | 05000275 | DPR-80 | PWR | 12 miles WSW of San Luis Obispo, CA | Pacific Gas & Electric Co. | 4
   also:
-  - source_url: https://www.pge.com/
+  - source_url: https://www.pge.com
     quote: "Pacific Gas & Electric Company | PG&E"
 short_description:
   text: 'Nuclear plant operator in California'
