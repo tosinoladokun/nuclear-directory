@@ -57,7 +57,10 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
     amount = amount_usd(facts["Loan Amount"])
     [
       { kind: "organization", quote: "Owners: #{borrower}", payload: { "name" => borrower } },
-      { kind: "relationship", quote:, payload: link.merge("description" => description) },
+      # The loan is stated by its term, never by rewording the link: an existing
+      # DOE link (a grant, described by a person) keeps its description (DQ,
+      # 29 Oct). Only a loan whose amount can't be read is described in words.
+      { kind: "relationship", quote:, payload: amount ? link : link.merge("description" => description) },
       # The loan itself as a term on that link (#592); its page is its ID.
       ({ kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "loan", "external_id" => source.url,
         "amount_usd" => amount, "program" => facts["Loan Program"]).compact } if amount)
@@ -65,7 +68,7 @@ class DataQuality::Plugins::DoeLoans < DataQuality::Plugin
   end
 
   # The table, with what extract proposes from it: a new version reads every page again.
-  EXTRACT_VERSION = "loan-terms-1"
+  EXTRACT_VERSION = "loan-terms-2"
   def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   # One loan per page: a change goes to a person.
