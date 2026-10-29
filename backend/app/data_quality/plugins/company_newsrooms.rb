@@ -39,7 +39,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|radioactive|radiation|enrichment|spent fuel|decommissioning|borehole|repository|tritium|deuterium|plasma|FRC)\b/i
   # Companies whose news is mostly not nuclear: their items need a nuclear word.
   BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
-    "General Electric", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company",
+    "General Electric", "GE Vernova", "GE Aerospace", "GE HealthCare", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company",
     "Leidos", "Eni", "Entergy", "Samsung", "Equinix", "Crusoe", "Switch", "Curtiss-Wright", "Kiewit", "Hyundai" ].freeze
   # A publisher only in these roles isn't a nuclear company: its items need a nuclear word too (DQ).
   NON_NUCLEAR_ROLES = %w[data_center_offtaker venture_capital].freeze
@@ -155,7 +155,13 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
       @named_patterns ||= @directory.published_names.flat_map do |_type, names|
         names.select { |name| name.length >= 4 }.map { |name| [ name, /(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/i ] }
       end
-      @named_patterns.any? { |name, pattern| !name.casecmp?(company) && !company.downcase.start_with?(name.downcase) && text.match?(pattern) }
+      publisher = @directory.organization(name: company)&.id
+      @named_patterns.any? do |name, pattern|
+        next false if name.casecmp?(company) || company.downcase.start_with?(name.downcase) || !text.match?(pattern)
+
+        # Any of the publisher's own names (a longer legal-name alias) isn't another record.
+        publisher.nil? || @directory.organization(name:)&.id != publisher
+      end
     end
 
     def found_feed?(company) = @discover && !@feeds.key?(company)

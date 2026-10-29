@@ -234,8 +234,8 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   test "only news about nuclear becomes a claim; a broad company's needs a nuclear word (29 Oct: Amazon Alexa)" do
     item = ->(title) { Plugin::Item.new(title:, url: "https://x/#{title.parameterize}", published_on: TODAY, summary: nil) }
     names = Class.new do
-      def published_names = { "Organization" => [ "Kairos Power" ] }
-      def organization(name:) = (Struct.new(:id).new(name == "Cloud Hall" ? 1 : 2) if name.end_with?("Hall", "Fission"))
+      def published_names = { "Organization" => [ "Kairos Power", "Constellation Energy Corporation" ] }
+      def organization(name:) = { "Cloud Hall" => 1, "Acme Fission" => 2, "Constellation" => 3, "Constellation Energy Corporation" => 3, "Kairos Power" => 4 }[name]&.then { |id| Struct.new(:id).new(id) }
       def role_keys(id) = id == 1 ? %w[data_center_offtaker] : %w[reactor_vendor]
     end.new
     listed = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, directory: names)
@@ -249,5 +249,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert listed.send(:about_nuclear?, "Amazon", item.("Amazon Invests In Small Modular Reactors And SMR Developer"))
     refute listed.send(:about_nuclear?, "Cloud Hall", item.("Cloud Hall Opens Campus With Kairos Power Fans")), "a data-center offtaker only: nuclear word needed"
     refute listed.send(:about_nuclear?, "Equinix", item.("Equinix Adds Kairos Power Hall")), "broad"
+    refute listed.send(:about_nuclear?, "GE Vernova", item.("GE Vernova Wins Wind Order With Kairos Power")), "GE Vernova is broad"
+    refute listed.send(:about_nuclear?, "Constellation", item.("Constellation Energy Corporation Names New Board Chair")), "its own legal-name alias isn't another record"
   end
 end
