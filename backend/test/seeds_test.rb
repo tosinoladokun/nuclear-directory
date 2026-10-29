@@ -280,7 +280,7 @@ class SeedsTest < ActiveSupport::TestCase
 
   test "a role-only company seed leaves the company's other fields as they are, now and on a re-seed" do
     load_seeds
-    slugs = %w[general-atomics global-laser-enrichment good-energy-collective-incorporated pkmj-technical-services-llc advanced-conductor-technologies]
+    slugs = %w[radiation-monitoring-devices faraday-technology x-wave-innovations ares-security operant-networks]
     slugs.each do |slug|
       Organization.find_by!(slug:).update_columns(country_code: "US", website: "https://example.org/#{slug}", legal_name: "#{slug} Inc.",
         hq_city: "Springfield", hq_state: "IL", description: "Added later by hand")
