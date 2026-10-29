@@ -151,6 +151,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     def initialize(list) = @list = list
     def organizations_with_website = @list
     def published_names = {}
+    def organization(name:) = nil
   end
 
   def discovering(list)
@@ -230,7 +231,11 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
   test "only news about nuclear becomes a claim; a broad company's needs a nuclear word (29 Oct: Amazon Alexa)" do
     item = ->(title) { Plugin::Item.new(title:, url: "https://x/#{title.parameterize}", published_on: TODAY, summary: nil) }
-    names = Class.new { def published_names = { "Organization" => [ "Kairos Power" ] } }.new
+    names = Class.new do
+      def published_names = { "Organization" => [ "Kairos Power" ] }
+      def organization(name:) = (Struct.new(:id).new(name == "Cloud Hall" ? 1 : 2) if name.end_with?("Hall", "Fission"))
+      def role_keys(id) = id == 1 ? %w[data_center_offtaker] : %w[reactor_vendor]
+    end.new
     listed = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, directory: names)
 
     assert listed.send(:about_nuclear?, "Cameco", item.("Cameco Names New Board Chair")), "a listed nuclear company's own news"
@@ -239,5 +244,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     refute listed.send(:about_nuclear?, "Acme Fission", item.("Acme Names New Board Chair"))
     refute listed.send(:about_nuclear?, "Amazon", item.("Alexa Gets New Voices With Kairos Power Fans")), "broad: a nuclear word is required"
     assert listed.send(:about_nuclear?, "Amazon", item.("Amazon Invests In Small Modular Reactors And SMR Developer"))
+    refute listed.send(:about_nuclear?, "Cloud Hall", item.("Cloud Hall Opens Campus With Kairos Power Fans")), "a data-center offtaker only: nuclear word needed"
+    refute listed.send(:about_nuclear?, "Equinix", item.("Equinix Adds Kairos Power Hall")), "broad"
   end
 end

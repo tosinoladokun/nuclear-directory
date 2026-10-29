@@ -39,7 +39,10 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|radioactive|radiation|enrichment|spent fuel|decommissioning)\b/i
   # Companies whose news is mostly not nuclear: their items need a nuclear word.
   BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
-    "General Electric", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company" ].freeze
+    "General Electric", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company",
+    "Leidos", "Eni", "Entergy", "Samsung", "Equinix", "Crusoe", "Switch", "Curtiss-Wright", "Kiewit", "Hyundai" ].freeze
+  # A publisher only in these roles isn't a nuclear company: its items need a nuclear word too (DQ).
+  NON_NUCLEAR_ROLES = %w[data_center_offtaker venture_capital].freeze
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
   NOT_A_FEED = "Not an RSS or Atom feed; the address may have moved"
@@ -131,13 +134,22 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     # found feed's item must name nuclear work or another record we have; a
     # broad company's must name nuclear work.
     def about_nuclear?(company, item)
-      return true if FEEDS.key?(company) && !BROAD.any? { |broad| company.to_s.downcase.start_with?(broad.downcase) }
+      return true if FEEDS.key?(company) && !broad?(company)
 
       text = "#{item.title} #{item.summary}"
       return true if text.match?(NUCLEAR)
-      return false if BROAD.any? { |broad| company.to_s.downcase.start_with?(broad.downcase) }
+      return false if broad?(company) || non_nuclear_publisher?(company)
 
       names_another_record?(company, text)
+    end
+
+    # A name starting with a broad company's as a whole word ("Eni", not "Enigma").
+    def broad?(company) = BROAD.any? { |broad| company.to_s.match?(/\A#{Regexp.escape(broad)}(?![[:alnum:]])/i) }
+
+    def non_nuclear_publisher?(company)
+      record = @directory.organization(name: company) or return false
+      roles = @directory.role_keys(record.id)
+      roles.any? && (roles - NON_NUCLEAR_ROLES).empty?
     end
 
     # A company or plant we have, other than the publisher, named as a whole phrase.
