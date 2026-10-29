@@ -55,7 +55,7 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
     assert_equal({ "name" => "Holtec Palisades, LLC" }, company[:payload])
     assert_equal [ "U.S. Department of Energy", "Holtec Palisades, LLC", "funds" ],
       [ link[:payload].dig("from_organization", "name"), link[:payload].dig("to_organization", "name"), link[:payload]["relationship_type"] ]
-    assert_equal "Loan of $1.52 Billion, under the Energy Dominance Financing Program, closed September 2024", link[:payload]["description"]
+    refute link[:payload].key?("description"), "the loan is its term; an existing link's description stays (DQ, 29 Oct)"
     assert [ company, link ].all? { |claim| plugin.quote_in_source?(source, claim[:quote]) }
     assert_equal "Owners: Holtec Palisades, LLC\nLoan Program: Energy Dominance Financing Program\nLoan Amount: $1.52 Billion\nIssuance Date: September 2024", link[:quote]
     refute plugin.quote_in_source?(source, "Owners: Holtec Palisades, LLC\nLoan Amount: $9 Billion")
@@ -68,7 +68,9 @@ class DataQuality::Plugins::DoeLoansTest < ActiveSupport::TestCase
     crawl
     source = Source.find_by!(url: PALISADES)
     source.update_columns(content_text: source.content_text.sub("$1.52 Billion", "$1.52"))
-    assert_equal %w[organization relationship], plugin.extract(source, nil).map { |c| c[:kind] }
+    claims = plugin.extract(source, nil)
+    assert_equal %w[organization relationship], claims.map { |c| c[:kind] }
+    assert_equal "Loan of $1.52, under the Energy Dominance Financing Program, closed September 2024", claims.last[:payload]["description"]
   end
 
   test "a page extracted before loan terms is extracted again" do

@@ -53,12 +53,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     assert candidates.any?
     assert candidates.all? { |c| c[:kind] == "news_item" && plugin.quote_in_source?(source, c[:quote]) }
     assert candidates.all? { |c| Date.parse(c[:payload]["published_on"]) >= TODAY - Plugin::WINDOW_DAYS }, "only the last #{Plugin::WINDOW_DAYS} days"
-    first = candidates.find { |c| c[:quote] == "Cameco Provides Date for 2026 Q3 Results, Conference Call and Webcast" }
-    assert_equal({ "url" => "https://www.cameco.com/media/news/cameco-provides-date-for-2026-q3-results-conference-call-and-webcast",
-      "title" => "Cameco Provides Date for 2026 Q3 Results, Conference Call and Webcast", "publisher" => "Cameco", "published_on" => "2026-10-20",
-      "about" => [ { "name" => "Cameco", "type" => "organization" } ] }, first[:payload].except("summary"))
+    first = candidates.find { |c| c[:payload]["published_on"] == "2026-09-22" }
+    assert_equal({ "url" => "https://www.cameco.com/media/news/cameco-acknowledges-united-states-and-republic-of-korea-announcement-of-framework-for",
+      "publisher" => "Cameco", "published_on" => "2026-09-22", "about" => [ { "name" => "Cameco", "type" => "organization" } ] },
+      first[:payload].except("summary", "title"))
+    assert_match "Framework for the Deployment of Nuclear Power", first[:payload]["title"]
+    refute candidates.any? { |c| c[:quote].start_with?("Cameco Provides Date") }, "a results date isn't nuclear news (DQ, 29 Oct)"
     assert candidates.none? { |c| c[:payload].key?("summary") }, "Cameco repeats one release's text under every item: no summaries"
-    assert_match "Cameco Provides Date", plugin.verification_context(source, first[:quote])
+    assert_match "Republic of Korea", plugin.verification_context(source, first[:quote])
     assert_match "Cameco's own news feed", plugin.source_facts(source)
   end
 
@@ -78,14 +80,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   test "a Title Case headline: the partner's name starts after the last joining word" do
     atom = <<~XML
       <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
-        <entry><title>Acme Signs Agreement With Bright Fuel Holdings, Inc.</title><link href="https://acme.example/a"/><published>2026-10-01T00:00:00Z</published></entry>
+        <entry><title>Acme Signs Uranium Agreement With Bright Fuel Holdings, Inc.</title><link href="https://acme.example/a"/><published>2026-10-01T00:00:00Z</published></entry>
         <entry><title>Signs Deal With Grid Power LLC And Selects Nova Reactors Corp</title><link href="https://acme.example/b"/><published>2026-10-02T00:00:00Z</published></entry></feed>
     XML
     source = Source.create!(url: "https://acme.example/feed", source_kind: "company_newsrooms", crawl_status: "ok", content_text: atom, content_sha256: "x")
 
     abouts = plugin(feeds: { "Acme" => source.url }).extract(source, nil).to_h { |c| [ c[:quote], c[:payload]["about"].map { |a| a["name"] } ] }
 
-    assert_equal [ "Acme", "Bright Fuel Holdings, Inc" ], abouts["Acme Signs Agreement With Bright Fuel Holdings, Inc."]
+    assert_equal [ "Acme", "Bright Fuel Holdings, Inc" ], abouts["Acme Signs Uranium Agreement With Bright Fuel Holdings, Inc."]
     assert_equal [ "Acme", "Grid Power LLC", "Nova Reactors Corp" ], abouts["Signs Deal With Grid Power LLC And Selects Nova Reactors Corp"]
   end
 
@@ -93,7 +95,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     atom = <<~XML
       <?xml version="1.0" encoding="utf-8"?>
       <feed xmlns="http://www.w3.org/2005/Atom"><title>News</title>
-        <entry><title>Acme signs a fuel deal</title><link rel="alternate" href="https://acme.example/news/fuel"/>
+        <entry><title>Acme signs a nuclear fuel deal</title><link rel="alternate" href="https://acme.example/news/fuel"/>
           <published>2026-10-01T12:00:00Z</published><summary>&lt;p&gt;Acme &amp; a utility agreed.&lt;/p&gt;</summary></entry>
         <entry><title>Old news</title><link href="https://acme.example/news/old"/><updated>2025-01-01T00:00:00Z</updated></entry>
       </feed>
@@ -102,7 +104,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
     candidates = plugin(feeds: { "Acme" => source.url }).extract(source, nil)
 
-    assert_equal [ { kind: "news_item", quote: "Acme signs a fuel deal", payload: { "url" => "https://acme.example/news/fuel", "title" => "Acme signs a fuel deal",
+    assert_equal [ { kind: "news_item", quote: "Acme signs a nuclear fuel deal", payload: { "url" => "https://acme.example/news/fuel", "title" => "Acme signs a nuclear fuel deal",
       "publisher" => "Acme", "published_on" => "2026-10-01", "summary" => "Acme & a utility agreed.", "about" => [ { "name" => "Acme", "type" => "organization" } ] } } ], candidates
   end
 
@@ -128,7 +130,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   test "a summary changing is a change; a summary is plain text, cut at a word" do
     atom = ->(summary) { <<~XML }
       <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
-        <entry><title>Acme news</title><link href="https://acme.example/n"/><published>2026-10-01T00:00:00Z</published><summary>#{summary}</summary></entry></feed>
+        <entry><title>Acme reactor news</title><link href="https://acme.example/n"/><published>2026-10-01T00:00:00Z</published><summary>#{summary}</summary></entry></feed>
     XML
     before = Source.new(content_text: atom.("&lt;b&gt;First&lt;/b&gt; text"))
     after = Source.new(content_text: atom.("Corrected text"))
@@ -150,6 +152,8 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   class Websites
     def initialize(list) = @list = list
     def organizations_with_website = @list
+    def published_names = {}
+    def organization(name:) = nil
   end
 
   def discovering(list)
@@ -225,5 +229,27 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
     assert_equal 1, DataQuality::Stages::Crawl.call(plugin: discovering([ [ "Acme Fission", "acmefission.com" ] ])).stats["homepages_read"]
     assert_equal [ "web_page", "evidence" ], cited.reload.values_at(:source_kind, :content_text)
+  end
+
+  test "only news about nuclear becomes a claim; a broad company's needs a nuclear word (29 Oct: Amazon Alexa)" do
+    item = ->(title) { Plugin::Item.new(title:, url: "https://x/#{title.parameterize}", published_on: TODAY, summary: nil) }
+    names = Class.new do
+      def published_names = { "Organization" => [ "Kairos Power", "Constellation Energy Corporation" ] }
+      def organization(name:) = { "Cloud Hall" => 1, "Acme Fission" => 2, "Constellation" => 3, "Constellation Energy Corporation" => 3, "Kairos Power" => 4 }[name]&.then { |id| Struct.new(:id).new(id) }
+      def role_keys(id) = id == 1 ? %w[data_center_offtaker] : %w[reactor_vendor]
+    end.new
+    listed = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, directory: names)
+
+    refute listed.send(:about_nuclear?, "Cameco", item.("Cameco Provides Date for 2026 Q3 Results")), "listed feeds too: a date isn't news"
+    assert listed.send(:about_nuclear?, "Cameco", item.("Cameco Signs Uranium Supply Agreement in Korea"))
+    assert listed.send(:about_nuclear?, "Acme Fission", item.("Acme Signs Uranium Supply Deal"))
+    assert listed.send(:about_nuclear?, "Acme Fission", item.("Acme Partners With Kairos Power")), "names a company we have"
+    refute listed.send(:about_nuclear?, "Acme Fission", item.("Acme Names New Board Chair"))
+    refute listed.send(:about_nuclear?, "Amazon", item.("Alexa Gets New Voices With Kairos Power Fans")), "broad: a nuclear word is required"
+    assert listed.send(:about_nuclear?, "Amazon", item.("Amazon Invests In Small Modular Reactors And SMR Developer"))
+    refute listed.send(:about_nuclear?, "Cloud Hall", item.("Cloud Hall Opens Campus With Kairos Power Fans")), "a data-center offtaker only: nuclear word needed"
+    refute listed.send(:about_nuclear?, "Equinix", item.("Equinix Adds Kairos Power Hall")), "broad"
+    refute listed.send(:about_nuclear?, "GE Vernova", item.("GE Vernova Wins Wind Order With Kairos Power")), "GE Vernova is broad"
+    refute listed.send(:about_nuclear?, "Constellation", item.("Constellation Energy Corporation Names New Board Chair")), "its own legal-name alias isn't another record"
   end
 end

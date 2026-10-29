@@ -34,6 +34,15 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   # A found feed proposes only its newest items from before it was found
   # (DQ, 28 Oct): its back catalogue is old news, each item Tosin's to approve.
   FIRST_READ_ITEMS = 3
+  # Only news about nuclear becomes a claim (Tosin, 29 Oct: an Amazon Alexa
+  # release reached his inbox): see about_nuclear?.
+  NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|radioactive|radiation|enrichment|spent fuel|decommissioning|borehole|repository|tritium|deuterium|plasma|FRC)\b/i
+  # Companies whose news is mostly not nuclear: their items need a nuclear word.
+  BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
+    "General Electric", "GE Vernova", "GE Aerospace", "GE HealthCare", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company",
+    "Leidos", "Eni", "Entergy", "Samsung", "Equinix", "Crusoe", "Switch", "Curtiss-Wright", "Kiewit", "Hyundai" ].freeze
+  # A publisher only in these roles isn't a nuclear company: its items need a nuclear word too (DQ).
+  NON_NUCLEAR_ROLES = %w[data_center_offtaker venture_capital].freeze
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
   NOT_A_FEED = "Not an RSS or Atom feed; the address may have moved"
@@ -84,7 +93,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     taken = decided_urls(source)
     recent = Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
     recent = since_found(source, recent) if found_feed?(company)
-    recent.map do |item|
+    recent.select { |item| about_nuclear?(company, item) }.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
         "summary" => item.summary, "about" => about(company, item, directory_only: found_feed?(company)) }.compact }
@@ -121,6 +130,40 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   PARTNER = /\b((?:#{WORD}\s+){0,5}#{WORD}),?\s+(?:#{LEGAL})\b\.?/
 
   private
+    # Every item must name nuclear work, or (for a publisher that isn't broad
+    # or only a data-center buyer or investor) another record we have. The
+    # listed feeds too (DQ, 29 Oct: dates and investor conferences got through).
+    def about_nuclear?(company, item)
+      text = "#{item.title} #{item.summary}"
+      return true if text.match?(NUCLEAR)
+      return false if broad?(company) || non_nuclear_publisher?(company)
+
+      names_another_record?(company, text)
+    end
+
+    # A name starting with a broad company's as a whole word ("Eni", not "Enigma").
+    def broad?(company) = BROAD.any? { |broad| company.to_s.match?(/\A#{Regexp.escape(broad)}(?![[:alnum:]])/i) }
+
+    def non_nuclear_publisher?(company)
+      record = @directory.organization(name: company) or return false
+      roles = @directory.role_keys(record.id)
+      roles.any? && (roles - NON_NUCLEAR_ROLES).empty?
+    end
+
+    # A company or plant we have, other than the publisher, named as a whole phrase.
+    def names_another_record?(company, text)
+      @named_patterns ||= @directory.published_names.flat_map do |_type, names|
+        names.select { |name| name.length >= 4 }.map { |name| [ name, /(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/i ] }
+      end
+      publisher = @directory.organization(name: company)&.id
+      @named_patterns.any? do |name, pattern|
+        next false if name.casecmp?(company) || company.downcase.start_with?(name.downcase) || !text.match?(pattern)
+
+        # Any of the publisher's own names (a longer legal-name alias) isn't another record.
+        publisher.nil? || @directory.organization(name:)&.id != publisher
+      end
+    end
+
     def found_feed?(company) = @discover && !@feeds.key?(company)
 
     # A found feed's items published since it was found, and only the newest

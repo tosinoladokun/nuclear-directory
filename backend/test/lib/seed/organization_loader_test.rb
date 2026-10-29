@@ -210,6 +210,17 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ [ "Acme Fuel - Home", nil ] ], acme.evidence.map { |row| [ row.quote, row.fields ] }
   end
 
+  test "website_quote cites the company's website" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
+      website_quote: { "source_url" => "https://acmefuel.com", "quote" => "Acme Fuel | Home" }))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    acme = Organization.find_by!(slug: "acme-fuel")
+    assert_equal "https://acmefuel.com", acme.website
+    assert_equal [ [ "Acme Fuel | Home", [ "website" ] ] ], acme.evidence.map { |row| [ row.quote, row.fields ] }
+  end
+
   test "a legal name is cited by the quote that states it" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", legal_name: "Acme Fuel, Inc.",
       roles: [ item(key: "fuel", source_url: "https://example.com/role", quote: "Acme Fuel, Inc. supplies fuel.") ]))
