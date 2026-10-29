@@ -34,6 +34,12 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   # A found feed proposes only its newest items from before it was found
   # (DQ, 28 Oct): its back catalogue is old news, each item Tosin's to approve.
   FIRST_READ_ITEMS = 3
+  # Only news about nuclear becomes a claim (Tosin, 29 Oct: an Amazon Alexa
+  # release reached his inbox): see about_nuclear?.
+  NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|isotopes?|enrichment|spent fuel|decommissioning)\b/i
+  # Companies whose news is mostly not nuclear: their items need a nuclear word.
+  BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
+    "General Electric", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company" ].freeze
   WINDOW_DAYS = 60
   SUMMARY_LENGTH = 400
   NOT_A_FEED = "Not an RSS or Atom feed; the address may have moved"
@@ -84,7 +90,7 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     taken = decided_urls(source)
     recent = Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
     recent = since_found(source, recent) if found_feed?(company)
-    recent.map do |item|
+    recent.select { |item| about_nuclear?(company, item) }.map do |item|
       { kind: "news_item", quote: item.title, payload: {
         "url" => item.url, "title" => item.title, "publisher" => company, "published_on" => item.published_on.iso8601,
         "summary" => item.summary, "about" => about(company, item, directory_only: found_feed?(company)) }.compact }
@@ -121,6 +127,27 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   PARTNER = /\b((?:#{WORD}\s+){0,5}#{WORD}),?\s+(?:#{LEGAL})\b\.?/
 
   private
+    # The listed feeds are nuclear companies' own: all their news counts. A
+    # found feed's item must name nuclear work or another record we have; a
+    # broad company's must name nuclear work.
+    def about_nuclear?(company, item)
+      return true if FEEDS.key?(company) && !BROAD.any? { |broad| company.to_s.downcase.start_with?(broad.downcase) }
+
+      text = "#{item.title} #{item.summary}"
+      return true if text.match?(NUCLEAR)
+      return false if BROAD.any? { |broad| company.to_s.downcase.start_with?(broad.downcase) }
+
+      names_another_record?(company, text)
+    end
+
+    # A company or plant we have, other than the publisher, named as a whole phrase.
+    def names_another_record?(company, text)
+      @named_patterns ||= @directory.published_names.flat_map do |_type, names|
+        names.select { |name| name.length >= 4 }.map { |name| [ name, /(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/i ] }
+      end
+      @named_patterns.any? { |name, pattern| !name.casecmp?(company) && !company.downcase.start_with?(name.downcase) && text.match?(pattern) }
+    end
+
     def found_feed?(company) = @discover && !@feeds.key?(company)
 
     # A found feed's items published since it was found, and only the newest

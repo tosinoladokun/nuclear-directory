@@ -78,14 +78,14 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   test "a Title Case headline: the partner's name starts after the last joining word" do
     atom = <<~XML
       <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
-        <entry><title>Acme Signs Agreement With Bright Fuel Holdings, Inc.</title><link href="https://acme.example/a"/><published>2026-10-01T00:00:00Z</published></entry>
+        <entry><title>Acme Signs Uranium Agreement With Bright Fuel Holdings, Inc.</title><link href="https://acme.example/a"/><published>2026-10-01T00:00:00Z</published></entry>
         <entry><title>Signs Deal With Grid Power LLC And Selects Nova Reactors Corp</title><link href="https://acme.example/b"/><published>2026-10-02T00:00:00Z</published></entry></feed>
     XML
     source = Source.create!(url: "https://acme.example/feed", source_kind: "company_newsrooms", crawl_status: "ok", content_text: atom, content_sha256: "x")
 
     abouts = plugin(feeds: { "Acme" => source.url }).extract(source, nil).to_h { |c| [ c[:quote], c[:payload]["about"].map { |a| a["name"] } ] }
 
-    assert_equal [ "Acme", "Bright Fuel Holdings, Inc" ], abouts["Acme Signs Agreement With Bright Fuel Holdings, Inc."]
+    assert_equal [ "Acme", "Bright Fuel Holdings, Inc" ], abouts["Acme Signs Uranium Agreement With Bright Fuel Holdings, Inc."]
     assert_equal [ "Acme", "Grid Power LLC", "Nova Reactors Corp" ], abouts["Signs Deal With Grid Power LLC And Selects Nova Reactors Corp"]
   end
 
@@ -93,7 +93,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     atom = <<~XML
       <?xml version="1.0" encoding="utf-8"?>
       <feed xmlns="http://www.w3.org/2005/Atom"><title>News</title>
-        <entry><title>Acme signs a fuel deal</title><link rel="alternate" href="https://acme.example/news/fuel"/>
+        <entry><title>Acme signs a nuclear fuel deal</title><link rel="alternate" href="https://acme.example/news/fuel"/>
           <published>2026-10-01T12:00:00Z</published><summary>&lt;p&gt;Acme &amp; a utility agreed.&lt;/p&gt;</summary></entry>
         <entry><title>Old news</title><link href="https://acme.example/news/old"/><updated>2025-01-01T00:00:00Z</updated></entry>
       </feed>
@@ -102,7 +102,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
     candidates = plugin(feeds: { "Acme" => source.url }).extract(source, nil)
 
-    assert_equal [ { kind: "news_item", quote: "Acme signs a fuel deal", payload: { "url" => "https://acme.example/news/fuel", "title" => "Acme signs a fuel deal",
+    assert_equal [ { kind: "news_item", quote: "Acme signs a nuclear fuel deal", payload: { "url" => "https://acme.example/news/fuel", "title" => "Acme signs a nuclear fuel deal",
       "publisher" => "Acme", "published_on" => "2026-10-01", "summary" => "Acme & a utility agreed.", "about" => [ { "name" => "Acme", "type" => "organization" } ] } } ], candidates
   end
 
@@ -128,7 +128,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   test "a summary changing is a change; a summary is plain text, cut at a word" do
     atom = ->(summary) { <<~XML }
       <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
-        <entry><title>Acme news</title><link href="https://acme.example/n"/><published>2026-10-01T00:00:00Z</published><summary>#{summary}</summary></entry></feed>
+        <entry><title>Acme reactor news</title><link href="https://acme.example/n"/><published>2026-10-01T00:00:00Z</published><summary>#{summary}</summary></entry></feed>
     XML
     before = Source.new(content_text: atom.("&lt;b&gt;First&lt;/b&gt; text"))
     after = Source.new(content_text: atom.("Corrected text"))
@@ -150,6 +150,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   class Websites
     def initialize(list) = @list = list
     def organizations_with_website = @list
+    def published_names = {}
   end
 
   def discovering(list)
@@ -225,5 +226,18 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
 
     assert_equal 1, DataQuality::Stages::Crawl.call(plugin: discovering([ [ "Acme Fission", "acmefission.com" ] ])).stats["homepages_read"]
     assert_equal [ "web_page", "evidence" ], cited.reload.values_at(:source_kind, :content_text)
+  end
+
+  test "only news about nuclear becomes a claim; a broad company's needs a nuclear word (29 Oct: Amazon Alexa)" do
+    item = ->(title) { Plugin::Item.new(title:, url: "https://x/#{title.parameterize}", published_on: TODAY, summary: nil) }
+    names = Class.new { def published_names = { "Organization" => [ "Kairos Power" ] } }.new
+    listed = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: FEEDS, today: -> { TODAY }, directory: names)
+
+    assert listed.send(:about_nuclear?, "Cameco", item.("Cameco Names New Board Chair")), "a listed nuclear company's own news"
+    assert listed.send(:about_nuclear?, "Acme Fission", item.("Acme Signs Uranium Supply Deal"))
+    assert listed.send(:about_nuclear?, "Acme Fission", item.("Acme Partners With Kairos Power")), "names a company we have"
+    refute listed.send(:about_nuclear?, "Acme Fission", item.("Acme Names New Board Chair"))
+    refute listed.send(:about_nuclear?, "Amazon", item.("Alexa Gets New Voices With Kairos Power Fans")), "broad: a nuclear word is required"
+    assert listed.send(:about_nuclear?, "Amazon", item.("Amazon Invests In Small Modular Reactors And SMR Developer"))
   end
 end
