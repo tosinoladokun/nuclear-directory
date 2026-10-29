@@ -1,25 +1,25 @@
 <% content_for :title, "About · Nuclear Directory" %>
 <% content_for :head do %>
   <link rel="canonical" href="<%= about_url %>">
-  <meta name="description" content="Nuclear Directory is a free, sourced reference to the companies and plants of the nuclear industry. How it is checked, how it is licensed and how to cite it.">
+  <meta name="description" content="Nuclear Directory is a free, sourced reference to the companies and plants of the US nuclear industry. How it is checked, how it is licensed and how to cite it.">
 <% end %>
 <%= render "shared/site_header" %>
 
 <main class="nd-page nd-page--narrow nd-prose">
   <h1 class="type-title-md">About</h1>
-  <p class="type-body"><strong>In short:</strong> Nuclear Directory is a free reference to the companies and plants of the nuclear industry. Every fact links to its source.</p>
+  <p class="type-body"><strong>In short:</strong> Nuclear Directory is a free reference to the companies and plants of the US nuclear industry. Every fact comes from a public source, listed on its page.</p>
 
   <section aria-labelledby="what">
     <h2 id="what" class="type-body-strong">What it is</h2>
-    <p class="type-body">The directory lists companies, power plants and sites across the whole industry, from fuel and reactor developers to waste, research and investors. It also shows how they are connected: who owns, operates, supplies or buys from whom.</p>
+    <p class="type-body">The directory lists US companies, power plants and sites across the whole industry, from fuel and reactor developers to waste, research and investors. It also shows how they are connected: who owns, operates, supplies or buys from whom.</p>
   </section>
 
   <section aria-labelledby="checked">
     <h2 id="checked" class="type-body-strong">How it is checked</h2>
     <ul class="type-body">
-      <li>A fact is published only with a public source: a regulator or agency record, a filing, or the party's own announcement.</li>
+      <li>A fact is published only with a public source: a regulator or agency record, a filing, the party's own announcement, or named news or trade reporting. A power deal, investment or award needs a regulator, filing or party source.</li>
       <li>Directories and aggregators are leads, never sources.</li>
-      <li>Each fact shows the source and the date we last checked it.</li>
+      <li>Sources are listed on each page, and each page shows when it was last checked.</li>
       <li>Corrections are checked against the source before anything changes.</li>
     </ul>
     <p class="type-body">See also the <%= link_to "disclaimer", disclaimer_path, class: "nd-link" %>.</p>
@@ -36,9 +36,9 @@
 
   <section aria-labelledby="cite">
     <h2 id="cite" class="type-body-strong">How to cite</h2>
-    <p class="type-body">Cite the dataset:</p>
+    <p class="type-body">Cite the dataset, and say which release you used and the day you downloaded it:</p>
     <p class="type-data">Nuclear Directory (2026). <%= link_to "doi:10.5281/zenodo.23703377", "https://doi.org/10.5281/zenodo.23703377", class: "nd-link", rel: "noopener noreferrer" %></p>
-    <p class="type-body">That DOI always points to the latest release. Each release also has its own DOI on Zenodo.</p>
+    <p class="type-body">That DOI covers every release. Each release has its own version DOI on Zenodo, and its README gives the full citation.</p>
   </section>
 
   <section aria-labelledby="thanks">

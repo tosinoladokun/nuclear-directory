@@ -42,6 +42,14 @@ class PagesTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "the about page is in the sitemap and says it covers the US industry" do
+    get sitemap_path
+    assert_includes response.body, about_url
+    get about_path
+    assert_select "main", text: /US nuclear industry/
+    assert_select "meta[name=description][content*='US nuclear industry']"
+  end
+
   test "the about page has the licences and the dataset DOI" do
     get about_path
     assert_select "a[href='https://doi.org/10.5281/zenodo.23703377']", "doi:10.5281/zenodo.23703377"
