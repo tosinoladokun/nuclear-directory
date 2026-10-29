@@ -56,6 +56,11 @@ class LicensingStage < ApplicationRecord
   validates :nrc_docket, :effective_on, presence: true
   validates :design_name, presence: true, if: :design_approval?
   validate :one_owner
+  # A developer holds a design approval, and a project's early stages before
+  # its plant exists (#650): a pre-application docket, or its withdrawal.
+  # Every later stage is on the plant.
+  ON_COMPANY = %w[design_approval pre_application withdrawn].freeze
+
   validate :organization_only_for_a_design
   validate :design_name_only_for_a_design
   validate :expires_after_effective
@@ -130,18 +135,17 @@ class LicensingStage < ApplicationRecord
       errors.add(:base, "needs a facility or an organization, not both and not neither")
     end
 
-    # A design approval belongs to a design, and only to a developer: a
-    # company, never a plant.
     def organization_only_for_a_design
-      return if organization_id.blank? || design_approval?
+      return if organization_id.blank? || ON_COMPANY.include?(stage)
 
-      errors.add(:organization_id, "is only for a design approval")
+      errors.add(:organization_id, "is only for a design approval, or a project's pre-application or withdrawal")
     end
 
+    # The design's name, or the project's on a developer's early stage.
     def design_name_only_for_a_design
-      return if design_name.blank? || design_approval?
+      return if design_name.blank? || organization_id.present?
 
-      errors.add(:design_name, "is only for a design approval")
+      errors.add(:design_name, "is only for a developer's stage")
     end
 
     def expires_after_effective
