@@ -383,4 +383,18 @@ class Directory::LicensingStagesTest < ActiveSupport::TestCase
         payload: { "stage" => "pre_application", "nrc_docket" => "99902038" }, created_at: now, updated_at: now } ])
     end
   end
+
+  test "two pre-application dockets of one developer may share a project name; a design approval stays one per design" do
+    pre = stage(facility_id: nil, organization_id: @developer.id, stage: "pre_application", design_name: "KP-X", effective_on: "2024-05-01")
+    assert write(pre.merge(nrc_docket: "99902038"), quote: "Docket 99902038, KP-X").ok?
+    second = write(pre.merge(nrc_docket: "99902039"), quote: "Docket 99902039, KP-X")
+    assert second.ok?, second.errors.inspect
+    assert_equal 2, LicensingStage.where(organization_id: @developer.id, design_name: "KP-X").count
+
+    now = Time.current
+    row = { organization_id: @developer.id, design_name: "US460", stage: "design_approval", effective_on: Date.new(2025, 1, 1),
+      verification_status: "pending", created_at: now, updated_at: now }
+    LicensingStage.insert_all!([ row.merge(nrc_docket: "05200048") ])
+    assert_raises(ActiveRecord::RecordNotUnique) { LicensingStage.insert_all!([ row.merge(nrc_docket: "05200049") ]) }
+  end
 end

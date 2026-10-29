@@ -326,7 +326,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160100) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["facility_id", "nrc_docket", "stage"], name: "index_licensing_stages_on_facility", unique: true
-    t.index ["organization_id", "design_name", "stage"], name: "index_licensing_stages_on_organization", unique: true
+    t.index ["organization_id", "design_name", "stage"], name: "index_licensing_stages_on_organization", unique: true, where: "((stage)::text = 'design_approval'::text)"
     t.index ["organization_id", "nrc_docket", "stage"], name: "index_licensing_stages_on_organization_docket", unique: true, where: "(organization_id IS NOT NULL)"
     t.index ["verification_status"], name: "index_licensing_stages_on_verification_status"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "licensing_stages_confidence_check"

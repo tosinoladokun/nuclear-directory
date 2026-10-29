@@ -15,6 +15,11 @@ class DeveloperLicensingStages < ActiveRecord::Migration[8.1]
     add_check_constraint :licensing_stages, "design_name IS NULL OR organization_id IS NOT NULL", name: "licensing_stages_design_name_check"
     add_index :licensing_stages, %i[organization_id nrc_docket stage], unique: true, where: "organization_id IS NOT NULL",
       name: "index_licensing_stages_on_organization_docket"
+    # A design approval is still one per design; two project dockets may
+    # share a project's name.
+    remove_index :licensing_stages, name: "index_licensing_stages_on_organization"
+    add_index :licensing_stages, %i[organization_id design_name stage], unique: true, where: "stage = 'design_approval'",
+      name: "index_licensing_stages_on_organization"
   end
 
   def down
@@ -22,6 +27,8 @@ class DeveloperLicensingStages < ActiveRecord::Migration[8.1]
       raise ActiveRecord::IrreversibleMigration, "a developer holds a pre-application or withdrawn stage; keep this migration in"
     end
 
+    remove_index :licensing_stages, name: "index_licensing_stages_on_organization"
+    add_index :licensing_stages, %i[organization_id design_name stage], unique: true, name: "index_licensing_stages_on_organization"
     remove_index :licensing_stages, name: "index_licensing_stages_on_organization_docket"
     remove_check_constraint :licensing_stages, name: "licensing_stages_design_name_check"
     add_check_constraint :licensing_stages, "design_name IS NULL OR stage = 'design_approval'", name: "licensing_stages_design_name_check"
