@@ -1,5 +1,6 @@
 # Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
 name: Leidos
+website: https://www.leidos.com
 status: active
 roles:
 - key: regulatory_consultant

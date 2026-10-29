@@ -1,5 +1,6 @@
 # Seed research - 24 Oct 2026. NRC fuel cycle page for the Oak Ridge enrichment project.
 name: Orano Enrichment USA, LLC
+website: https://www.orano.group/usa/en
 status: active
 roles:
 - key: enrichment
