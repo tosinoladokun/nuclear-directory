@@ -1433,6 +1433,11 @@
   @media (max-width: 639px), (min-width: 1024px) and (max-width: 1143px) {
     .nd-share { width: 72px; }
     .nd-crow__share { grid-column: 2 / -1; grid-row: 3; }
+    /* An owner row: the units, the bar and the percentage share line 2 ("Units 3 and 4 · bar · 1.6%"). */
+    .nd-partygroup .nd-crow__line .nd-crow__share { grid-column: 2 / -1; grid-row: 2; margin-left: 0; }
+    .nd-partygroup .nd-crow__line:has(.nd-crow__what) .nd-crow__share { grid-column: 3 / -1; justify-self: start; }
+    .nd-partygroup .nd-crow__line:has(.nd-crow__what) .nd-crow__what { grid-column: 2; }
+    .nd-partygroup .nd-share { width: 56px; }
   }
 
   /* Units: a table on desktop; two-line rows on phones (the unit and its status; then reactor, capacity, docket). */

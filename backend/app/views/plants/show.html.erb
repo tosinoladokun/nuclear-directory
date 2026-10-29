@@ -32,10 +32,9 @@
     buyer_parties = p.parties_for("offtakes_from")
     parties_count = (owner_parties + operator_parties + vendor_parties).size
     # The section is named after the groups it has (an "operator" only when there is one); the index uses the short word.
-    parties_title = if owner_parties.any? && operator_parties.any? then "Owners and operator"
-                    elsif owner_parties.any? then "Owners"
-                    elsif operator_parties.any? then "Operator"
-                    else "Reactor developer"
+    group_names = [ ("owners" if owner_parties.any?), ("operator" if operator_parties.any?), ("developer" if vendor_parties.any?) ].compact
+    parties_title = if group_names == [ "developer" ] then "Reactor developer"
+                    else group_names.to_sentence(two_words_connector: " and ", last_word_connector: " and ", words_connector: ", ").upcase_first
                     end
     parties_index = owner_parties.any? ? "Owners" : parties_title
     share_decimals = (owner_parties + operator_parties + vendor_parties).any? { |party| party.share && (party.share % 1).nonzero? }

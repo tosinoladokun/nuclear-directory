@@ -136,7 +136,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     FacilityRelationship.find_by!(organization: @southern).unpublish!(by: "human:test")
     get plant_path(slug: "plant-vogtle")
 
-    assert_select "#parties-heading", /\AOwners/
+    assert_select "#parties-heading", /\AOwners and developer/, "named after every group it holds, the reactor developer too"
     assert_select "#parties-heading", text: /operator/i, count: 0
     assert_select "nav.nd-idx a[href='#parties']", /Owners/
     assert_select "nav.nd-idx a[href='#parties']", text: /Owners and ope/, count: 0
