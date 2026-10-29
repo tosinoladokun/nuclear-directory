@@ -61,8 +61,8 @@ class DataQuality::DirectoryClient
   def mark_enriched(id, requested_at) = lookup.mark_enriched(id, requested_at)
   def company_fact_choices = lookup.company_fact_choices
 
-  def organization(name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
-    record("Organization", lookup.organization(name:, domain:, sec_cik:, eia_utility_id:))
+  def organization(id: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
+    record("Organization", lookup.organization(id:, name:, domain:, sec_cik:, eia_utility_id:))
   end
 
   # Companies with an SEC CIK, live ones only (#129): [SecFilerRef].
