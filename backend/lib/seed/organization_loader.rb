@@ -250,7 +250,10 @@ module Seed
         # Which fields each quote backs (#398), by where it sits in the file.
         backs = Hash.new { |hash, item| hash[item] = [] }
         hq.each { |item| backs[item].concat({ "city" => "hq_city", "state" => "hq_state" }.select { |key, _| item[key].present? }.values) }
-        description_items(doc).each { |item| backs[item] << "description" }
+        # A description: with no text only cites the company (its name, its
+        # site): about the record, not a description it doesn't give.
+        about = description["text"].present? ? "description" : nil
+        description_items(doc).each { |item| about ? backs[item] << about : backs[item] }
         backs[short_description_item(doc)] << "short_description" if short_description_item(doc)&.dig("source_url")
         backs[legal] << "legal_name" if legal
         # An unquoted legal name still finds a record an earlier seed loaded

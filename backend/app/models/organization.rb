@@ -1,4 +1,10 @@
 class Organization < ApplicationRecord
+  # A website Enrich can read (#479): a full https:// address with a host.
+  def self.readable_website?(url)
+    url = url.to_s.strip
+    url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && (URI.parse(url).host.present? rescue false)
+  end
+
   include Verifiable
   include Sluggable
 

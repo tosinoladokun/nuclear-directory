@@ -72,7 +72,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     # two projects for one lab agree; each project is its own award term.
     [
       { kind: "organization", quote:, payload: { "name" => FUNDER, "aliases" => [ "ARPA-E" ] } },
-      { kind: "organization", quote:, payload: recipient },
+      { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])) },
       { kind: "relationship", quote:, payload: link.merge("description" => "Research funding from ARPA-E (nuclear fission and fusion)") },
       # An award needs its amount and a start: ARPA-E's release date of the
       # project is the date it states; without both, no term is proposed.
@@ -108,6 +108,13 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
       Date.strptime(text.to_s.squish, "%b %d %Y").iso8601
     rescue Date::Error
       nil
+    end
+
+    # ARPA-E's "City, ST" for the organization (gap fill, 29 Oct): its
+    # headquarters as ARPA-E records the awardee; anything else, nothing.
+    def location(text)
+      city, state = text.to_s.split(/,\s*/, 2)
+      state.to_s.match?(/\A[A-Z]{2}\z/) && city.present? ? { "hq_city" => city.squish, "hq_state" => state } : {}
     end
 
     def organization(name)

@@ -4,7 +4,7 @@
 # two never disagree.
 class PublicPages
   # Home, the company list, Privacy, Disclaimer and /bot.
-  FIXED = 5
+  FIXED = 6
 
   def companies = Organization.published.select(:slug).order(:slug)
   def plants = Facility.published.where(parent_id: nil).select(:slug).order(:slug)

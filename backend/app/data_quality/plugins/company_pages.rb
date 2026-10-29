@@ -101,13 +101,34 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     you computed, or anything about another company. A subsidiary's work isn't its parent's.
   TEXT
 
-  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new)
-    @fetcher, @llm, @directory = fetcher, llm, directory
+  # Gap fill (Tosin, 29 Oct): each night Enrich is also asked for the
+  # GAP_FILL_PER_NIGHT published companies with the most empty basics; what
+  # their pages say goes through the usual claims, checks and approval.
+  # 5 a night for the first week (DQ, 29 Oct); Data Quality raises it.
+  GAP_FILL_PER_NIGHT = 5
+
+  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
+    @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
   end
 
   def crawl(_run)
     stats = { "companies" => 0, "pages" => 0 }
-    @directory.enrich_queue.each do |id, _name, website, requested_at, sec_cik|
+    # Once a day, whatever starts the run (a manual Enrich runs this too):
+    # the night's quota is kept in its crawl run's stats.
+    if @gap_fill.positive? && !gap_filled_today?
+      gap = @directory.request_gap_fill(limit: @gap_fill)
+      stats["gap_fill"] = gap[:requested]
+      stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
+    end
+    read_for = {}
+    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+      # A website another queued company shares was read for it tonight: this
+      # request waits for tomorrow, once that one's findings are extracted (#534).
+      if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
+        stats["deferred_shared_website"] = stats.fetch("deferred_shared_website", 0) + 1
+        next
+      end
+      read_for[home_url] = id if home_url
       # Part 3: a public company's SEC record (EDGAR), the primary source for
       # its legal name, listing and headquarters address (Data Quality).
       if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))
@@ -116,11 +137,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       # A home page that couldn't be read is answered as read (the Enrich page
       # shows why, from the page's own status), and a new request reads again.
-      if (home = page(website))
+      if (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         own_links(home).first(PAGES).each do |url|
-          DataQuality::Snapshot.take(page(url), fetcher: @fetcher)
+          DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
         end
       end
@@ -133,7 +154,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   def extract(source, run)
     return edgar_claims(source) if source.url.match?(EDGAR_URL)
 
-    company = @directory.organization(domain: source.domain) or return []
+    # The company the page was read for (#534), else the domain's owner.
+    company = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id) ||
+      @directory.organization(domain: source.domain)
+    return [] unless company
     text = visible_text(source)
     return [] if text.blank?
 
@@ -144,6 +168,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   end
 
   private
+    def gap_filled_today?
+      CrawlRun.where(stage: "crawl", source_kind:, started_at: Time.current.all_day).where("stats ? 'gap_fill'").exists?
+    end
+
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
 
     # What a company's EDGAR record states, read as data (no model): its
@@ -174,12 +202,18 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     # A page of this kind, made or taken over from a page cited by hand.
-    def page(url)
+    # for_id: the company the page is being read for (#534); a website two
+    # companies share is theirs in turn, the latest request's while it's read.
+    def page(url, for_id: nil)
       url = url.to_s.strip
       return unless url.match?(%r{\Ahttps?://}i)
 
       source = Source.find_or_create_by!(url:) { |new_page| new_page.source_kind = source_kind }
       source.update!(source_kind:) if source.source_kind == "web_page"
+      # Read for another company now: extracted again, in this one's name.
+      if for_id && source.enrich_organization_id != for_id
+        source.update!(enrich_organization_id: for_id, extracted_sha256: nil, extracted_rows_sha256: nil)
+      end
       source
     end
 
@@ -256,7 +290,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
+      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
 

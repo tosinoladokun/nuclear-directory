@@ -73,6 +73,31 @@ module Directory
         .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik)
     end
 
+    # Gap fill (Tosin, 29 Oct): asks Enrich to read the own site of up to
+    # limit published companies missing their headquarters city or
+    # description, most missing first, whose pages weren't read in
+    # GAP_REFILL_DAYS and that aren't already waiting. Category, website and
+    # short description are Data Quality's by hand (28 Oct), so only companies
+    # with a published category are read. Returns { requested:, without_website: }:
+    # how many were asked for, and (at most 20) names of such companies
+    # whose website is missing or can't be read, for Data Quality.
+    GAP_REFILL_DAYS = 90
+    def request_gap_fill(limit: 10)
+      gaps = Arel.sql(<<~SQL.squish)
+        (CASE WHEN organizations.description IS NULL OR organizations.description = '' THEN 1 ELSE 0 END) +
+        (CASE WHEN organizations.hq_city IS NULL OR organizations.hq_city = '' THEN 1 ELSE 0 END)
+      SQL
+      gapped = Organization.where(verification_status: "verified").where("#{gaps} > 0")
+        .where("EXISTS (SELECT 1 FROM organization_roles r WHERE r.organization_id = organizations.id AND r.verification_status = 'verified')")
+      due = gapped.where(enrich_requested_at: nil)
+        .or(gapped.where(enriched_at: ...GAP_REFILL_DAYS.days.ago).where("enriched_at >= enrich_requested_at"))
+      readable, unreadable = due.order(Arel.sql("#{gaps} DESC"), :id).pluck(:id, :name, :website)
+        .partition { |_, _, website| Organization.readable_website?(website) }
+      ids = readable.first(limit).map(&:first)
+      Organization.where(id: ids).update_all(enrich_requested_at: Time.current) if ids.any?
+      { requested: ids.size, without_website: unreadable.map { |_, name, _| name }.sort.first(20) }
+    end
+
     # The roles and technologies a company can be given: { "role" => [[key, name]], "technology" => [[key, name]] }.
     def company_fact_choices
       { "role" => Role.order(:key).pluck(:key, :name), "technology" => Technology.order(:key).pluck(:key, :name) }
@@ -188,6 +213,8 @@ module Directory
           checked_at: rows.map { |row| row.last_confirmed_at || row.created_at }.max }
       end.sort_by { |row| -row[:checked_at].to_f }
     end
+
+    def role_key?(key) = key.present? && Role.exists?(key:)
 
     # Whether a company has a role with a source (pending or published), so
     # a new company reaches the owner with its category (#548). Reads only.
