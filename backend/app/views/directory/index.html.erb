@@ -44,7 +44,7 @@
     break unless @counts
     count = @counts[category.key]
     next if !category.plants && count&.zero? && listing.category != category
-    index_items << { label: (category.name.length > 22 ? category.short_name : category.name), title: category.name, href: directory_url_for(category:), icon: bucket_icon(category),
+    index_items << { label: category.list_name, title: category.name, href: directory_url_for(category:), icon: bucket_icon(category),
                      count:, bucket: (category unless category.plants), current: listing.category == category }
   end
   page_noun = noun

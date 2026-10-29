@@ -18,6 +18,12 @@ production:
   daily_crawl:
     class: DataQuality::DailyCrawlJob
     schedule: every day at 3am America/New_York
+  # Leads an official source names become proposals (#572), ahead of the
+  # daily crawl's match, which proposes them as pending records.
+  lead_proposals:
+    class: LeadProposalsJob
+    schedule: every day at 2am America/New_York
+
   # Marks runs cut off by a restart as failed, and queues the daily crawl
   # again (once a day per source) for a source whose run was cut off (#188).
   data_quality_catch_up:

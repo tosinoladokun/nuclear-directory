@@ -49,7 +49,7 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
     funder, company, link, term = plugin.extract(projects.find_by!(url: SHINE), nil)
 
     assert_equal({ "name" => "Advanced Research Projects Agency-Energy", "aliases" => [ "ARPA-E" ] }, funder[:payload])
-    assert_equal({ "name" => "SHINE Technologies, LLC" }, company[:payload])
+    assert_equal({ "name" => "SHINE Technologies, LLC", "hq_city" => "Janesville", "hq_state" => "WI" }, company[:payload])
     assert_equal "Advanced Research Projects Agency-Energy", link[:payload].dig("from_organization", "name")
     assert_equal [ "award", "4030306", "NEWTON", SHINE ], term[:payload].values_at("term_type", "amount_usd", "program", "external_id")
   end

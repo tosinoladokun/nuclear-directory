@@ -52,10 +52,7 @@ class Admin::RecordEnrichController < Admin::BaseController
   end
 
   # The address's form only: its page may be a saved source already.
-  def self.usable_website?(url)
-    url = url.to_s.strip
-    url.match?(%r{\Ahttps://[^\s/]+(/\S*)?\z}i) && (URI.parse(url).host.present? rescue false)
-  end
+  def self.usable_website?(url) = Organization.readable_website?(url)
 
   def decide
     id = params[:candidate_id].to_i
@@ -144,7 +141,9 @@ class Admin::RecordEnrichController < Admin::BaseController
     def finding_ids
       @finding_ids ||= begin
         domain = @company.domain.presence
-        pages = domain ? Source.where(source_kind: SOURCE_KIND, domain: [ domain, "www.#{domain}" ]) : Source.none
+        # Pages read for it (#534), and older pages on its domain read for no one in particular.
+        pages = Source.where(source_kind: SOURCE_KIND, enrich_organization_id: @company.id)
+        pages = pages.or(Source.where(source_kind: SOURCE_KIND, enrich_organization_id: nil, domain: [ domain, "www.#{domain}" ])) if domain
         # Its SEC record too (part 3), when it has a CIK.
         pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i))) if @company.sec_cik.present?
         # Only what this request found (since it was asked); older findings stay in Checks.
@@ -153,6 +152,11 @@ class Admin::RecordEnrichController < Admin::BaseController
         scope = Candidate.where(source: pages, status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
           .where("candidates.review_origin IS DISTINCT FROM 'dropped'")
         scope = scope.where(created_at: @company.enrich_requested_at..) if @company.enrich_requested_at
+        # Only findings about it: a shared page may still hold another company's.
+        scope = scope.where(<<~SQL.squish, name: @company.name)
+          :name IN (candidates.payload->>'name', candidates.payload->'organization'->>'name',
+            candidates.payload->'from_organization'->>'name', candidates.payload->'to_organization'->>'name')
+        SQL
         scope.order(:id).ids
       end
     end

@@ -391,4 +391,37 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     act({ id: c.id, action: "new", reason: "A research reactor" })
     assert_includes OwnerInbox.new.sections["new_record"].map { |e| e.item.candidate_id }, c.id
   end
+
+  test "propose_role: a sourced role claim for a company, matched and verified like any claim; Undo takes it back" do
+    Role.find_by(key: "reactor_vendor") || Role.create!(key: "reactor_vendor", name: "Reactor vendor")
+    act({ action: "propose_role", target: @holtec.id, role: "reactor_vendor", quote: "Holtec designs the SMR-300.",
+      source_url: "https://holtecinternational.com/smr", reason: "Holtec's own page" },
+      { action: "propose_role", target: @holtec.id, role: "nonsense", quote: "q", source_url: "https://example.com", reason: "r" },
+      { action: "propose_role", target: @holtec.id, role: "reactor_vendor", quote: "", source_url: "https://example.com", reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "isn't a role", results.second["error"]
+    assert_match "give the quote", results.third["error"]
+    claim = Candidate.find(results.first["id"])
+    assert_equal [ "organization_role", "new", "reactor_vendor", "Holtec International" ],
+      [ claim.kind, claim.status, claim.payload["role"], claim.payload.dig("organization", "name") ]
+    assert_equal "https://holtecinternational.com/smr", claim.source.url
+
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "rejected", claim.reload.status
+  end
+
+  test "propose_role: a retry is answered before the cap; Undo refuses after a reopen or when another source supports the role" do
+    Role.find_by(key: "reactor_vendor") || Role.create!(key: "reactor_vendor", name: "Reactor vendor")
+    row = { action: "propose_role", target: @holtec.id, role: "reactor_vendor", quote: "Holtec designs the SMR-300.",
+      source_url: "https://holtecinternational.com/smr", reason: "Holtec's own page", request_key: "role-1" }
+    act(row)
+    first = results.sole["id"]
+    DataQuality::Matching::DAILY_ROLES.times { |i| DqAction.create!(candidate: claim("Cap #{i}"), action: "propose_role", reason: "r", before: {}, by: DataQuality::Matching::BY) }
+    act(row)
+    assert_equal [ true, first ], results.sole.values_at("ok", "id"), "a retry, not a limit error"
+
+    claim = Candidate.find(first)
+    claim.update_columns(reopenings: [ { "by" => "human:tosin" } ])
+    assert_match "decided since", DataQuality::Matching.undo(DqAction.find_by!(request_key: "role-1").id)
+  end
 end

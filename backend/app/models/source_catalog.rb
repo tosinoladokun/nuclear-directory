@@ -53,6 +53,7 @@ class SourceCatalog
     "nrc_adams" => { name: "NRC ADAMS searches (first read)", note: "stored for the reader being built; no claims", daily: true },
     "newsroom_homepage" => { name: "Company homepages (newsroom feeds)", note: "finds each company's own news feed", daily: true },
     "nrc_news" => { name: "NRC news releases", daily: true },
+    "usaspending_recipients" => { name: "USAspending recipient records (headquarters)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },
@@ -65,7 +66,7 @@ class SourceCatalog
     "eia_owners" => { name: "EIA-860 owners" },
     "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" },
     # Enrich (#479): read only when the admin asks, one company at a time.
-    "company_pages" => { name: "Companies' own pages", note: "read on request (Enrich)" }
+    "company_pages" => { name: "Companies' own pages", note: "read on request (Enrich) and nightly gap fill", daily: true }
   }.freeze
   RESEARCH_KIND = "web_page"
   LIVE_TYPES = %w[Organization Facility Relationship FacilityRelationship].freeze
