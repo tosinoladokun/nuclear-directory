@@ -7,5 +7,12 @@ technologies: []
 relationships: []
 facilities: []
 description:
+  text: "Oregon's largest and statewide public research university."
   source_url: https://oregonstate.edu
-  quote: "Oregon State University"
+  quote: "Oregon State University delivers exceptional, accessible education and problem-solving innovation as Oregon's largest and statewide public research university."
+  also:
+  - quote: "Oregon State University"
+short_description:
+  text: "Oregon public research university"
+  source_url: https://oregonstate.edu
+  quote: "Oregon State University delivers exceptional, accessible education and problem-solving innovation as Oregon's largest and statewide public research university."

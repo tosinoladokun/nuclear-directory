@@ -7,5 +7,12 @@ technologies: []
 relationships: []
 facilities: []
 description:
+  text: "Public research university that advances discoveries in science, technology, engineering and math."
   source_url: https://www.purdue.edu
-  quote: "Purdue University"
+  quote: "Purdue University is a world-renowned, public research university that advances discoveries in science, technology, engineering and math."
+  also:
+  - quote: "Purdue University"
+short_description:
+  text: "Public research university"
+  source_url: https://www.purdue.edu
+  quote: "Purdue University is a world-renowned, public research university that advances discoveries in science, technology, engineering and math."

@@ -7,5 +7,18 @@ technologies: []
 relationships: []
 facilities: []
 description:
+  text: "Liberal arts college in Portland, Oregon."
   source_url: https://www.reed.edu
-  quote: "Reed College"
+  quote: "Reed College is a leading liberal arts college known for encouraging intellectual curiosity. Learn about our vibrant, inclusive community in Portland, Oregon."
+  also:
+  - quote: "Reed College"
+short_description:
+  text: "Liberal arts college"
+  source_url: https://www.reed.edu
+  quote: "Reed College is a leading liberal arts college known for encouraging intellectual curiosity. Learn about our vibrant, inclusive community in Portland, Oregon."
+hq:
+  city: Portland
+  state: OR
+  source_url: https://www.reed.edu
+  quote: "Reed College is a leading liberal arts college known for encouraging intellectual curiosity. Learn about our vibrant, inclusive community in Portland, Oregon."
+  confidence: 1.0
