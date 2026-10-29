@@ -37,15 +37,39 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   def crawl(_run)
     return { "skipped" => NO_KEY } unless @key
 
-    SEARCHES.to_h do |name, (query, filters)|
+    stats = SEARCHES.to_h do |name, (query, filters)|
       source = Source.find_or_create_by!(url: "#{API_URL}##{name.parameterize}") do |row|
-        row.source_kind = source_kind
+        row.source_kind = INDEX_SOURCE_KIND
         row.title = "NRC ADAMS search: #{name}"
       end
+      # A search stored before searches had their own kind (first read, 28 Oct).
+      source.update!(source_kind: INDEX_SOURCE_KIND) unless source.source_kind == INDEX_SOURCE_KIND
       [ name, DataQuality::Snapshot.claim(source) { search(source, query, filters) }.to_s ]
+    end
+    stats.merge("documents" => store_documents)
+  end
+
+  # Each developer document as its own source, at its public address (the
+  # PDF): what a claim cites. Its line is written once; it doesn't change.
+  def store_documents
+    texts = Source.where(source_kind: INDEX_SOURCE_KIND).crawl_ok.pluck(:content_text)
+    texts.sum do |text|
+      self.class.developer_documents(text).count do |line, doc|
+        url = doc["Url"].to_s
+        next false unless url.start_with?("https://")
+
+        source = Source.find_or_initialize_by(url:)
+        next false unless source.new_record?
+
+        source.update!(source_kind:, title: "NRC #{doc['AccessionNumber']}: #{doc['DocumentTitle'].to_s.squish.truncate(200)}",
+          content_text: line, content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", fetched_at: Time.current,
+          published_on: (Date.iso8601(doc["DocumentDate"].to_s) rescue nil))
+        true
+      end
     end
   end
 
+  INDEX_SOURCE_KIND = "nrc_adams_index"
   NRC = "U.S. Nuclear Regulatory Commission"
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
@@ -56,13 +80,16 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # A lead is a company by its own form (DQ): never a person or a placeholder.
   COMPANY_FORM = /\b(?:Inc|LLC|L\.L\.C|Corp|Corporation|Co|Company|Ltd|Limited|PLC|plc|GmbH|S\.A|AG|LP|L\.P|Group|Holdings)\b\.?/
 
+  # One document's source: its developer's evidence, or its news.
   def extract(source, _run)
     since = (@today.call - NEWS_DAYS).iso8601
     news = 0
+    taken = decided_urls
     self.class.developer_documents(source.content_text).flat_map do |line, doc|
       known = self.class.organizations(doc).select { |name| @directory.organization(name:) }
       claims = known.map { |name| { kind: "organization", payload: { "name" => name } } }
-      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any? && doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ
+      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any? && doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ &&
+          !taken.include?(doc["Url"])
         news += 1
         claims << project_news(doc, known)
       end
@@ -73,14 +100,25 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # A name worth a lead: a company by its own form, from a document's header (DQ, 29 Oct).
   def self.lead_name?(name) = name.match?(COMPANY_FORM)
 
-  # [[stored line, document]] for documents on a developer's docket.
+  # [[stored line, document]] for documents on a developer's docket: a
+  # pre-application project, or a new reactor's that isn't an operating
+  # plant in the directory (Vogtle 3 and 4 kept their 052 dockets).
   def self.developer_documents(text)
     text.to_s.lines(chomp: true).filter_map do |line|
       doc = JSON.parse(line)
-      [ line, doc ] if doc.is_a?(Hash) && Array(doc["DocketNumber"]).any? { |docket| docket.to_s.match?(DEVELOPER_DOCKET) }
+      next unless doc.is_a?(Hash)
+
+      [ line, doc ] if Array(doc["DocketNumber"]).any? { |docket| developer_docket?(docket.to_s) }
     rescue JSON::ParserError
       nil
     end
+  end
+
+  def self.developer_docket?(docket)
+    return false unless docket.match?(DEVELOPER_DOCKET)
+    return true if docket.start_with?("999")
+
+    DataQuality::DirectoryClient.new.facility(nrc_docket: docket)&.status != "operating"
   end
 
   # The document's authors and addressees other than NRC's own offices.
@@ -103,6 +141,12 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   def max_dropped_share(_source) = 0.0
 
   private
+    # News items a person or match already has: an announcement isn't proposed twice.
+    def decided_urls
+      Candidate.joins(:source).where(sources: { source_kind: }, kind: "news_item").where.not(status: "new")
+        .pluck(Arel.sql("candidates.payload->>'url'")).compact.to_set
+    end
+
     def project_news(doc, known)
       { kind: "news_item", payload: {
         "url" => doc["Url"], "title" => doc["DocumentTitle"].to_s.squish, "publisher" => NRC, "published_on" => doc["DocumentDate"],

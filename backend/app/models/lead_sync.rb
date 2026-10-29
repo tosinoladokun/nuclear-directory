@@ -67,7 +67,7 @@ class LeadSync
     # A developer NRC's documents name that the directory doesn't have (NRC
     # ADAMS, 29 Oct): keyed by the document and the name.
     def adams
-      Source.where(source_kind: "nrc_adams").crawl_ok.where.not(content_text: [ nil, "" ]).flat_map do |source|
+      Source.where(source_kind: "nrc_adams_index").crawl_ok.where.not(content_text: [ nil, "" ]).flat_map do |source|
         DataQuality::Plugins::NrcAdams.developer_documents(source.content_text).flat_map do |_line, doc|
           DataQuality::Plugins::NrcAdams.organizations(doc).filter_map do |name|
             next if !DataQuality::Plugins::NrcAdams.lead_name?(name) || Lead.junk?(name) || known?(name)

@@ -59,8 +59,16 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
   end
 
   # The fixture is four real lines from production's first read (29 Oct).
-  def stored = @stored ||= Source.create!(url: "#{Plugin::API_URL}#pre-application", source_kind: "nrc_adams", crawl_status: "ok",
+  def stored = @stored ||= Source.create!(url: "#{Plugin::API_URL}#pre-application", source_kind: "nrc_adams_index", crawl_status: "ok",
     content_text: file_fixture("nrc_adams/pre-application.txt").read)
+
+  def documents
+    stored
+    plugin.store_documents
+    Source.where(source_kind: "nrc_adams").order(:id)
+  end
+
+  def document(text) = documents.find { |source| source.content_text.include?(text) }
 
   def known(*names)
     names.each do |name|
@@ -70,36 +78,54 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     end
   end
 
-  test "a developer the directory has gets each document on its docket as evidence; operating-plant documents are left alone" do
-    known("Radiant", "Arizona Public Service Co")
-    claims = plugin.extract(stored, nil)
-
-    assert_equal [ [ "organization", "Radiant" ], [ "organization", "Radiant" ] ], claims.map { |c| [ c[:kind], c[:payload]["name"] ] }
-    assert claims.all? { |c| plugin.quote_in_source?(stored, c[:quote]) }
+  test "each developer document is its own source at its public PDF; operating-plant documents aren't stored" do
+    assert_equal 3, documents.size
+    assert documents.all? { |source| source.url.start_with?("https://www.nrc.gov/docs/") }
+    assert_nil document("Palo Verde")
+    assert_equal 0, plugin.store_documents, "written once"
   end
 
-  test "NRC assigning a project number to a company we have is one news item about it" do
+  test "a developer the directory has gets each document as separate evidence" do
+    known("Radiant", "Arizona Public Service Co")
+    claims = documents.flat_map { |source| plugin.extract(source, nil).map { |c| [ source.url, c ] } }
+
+    radiant = claims.select { |_, c| c[:payload]["name"] == "Radiant" }
+    assert_equal 2, radiant.map(&:first).uniq.size, "two accessions, two cited PDFs"
+    assert claims.all? { |url, c| plugin.quote_in_source?(Source.find_by!(url:), c[:quote]) }
+  end
+
+  test "NRC assigning a project number to a company we have is one news item, never proposed twice" do
     known("The Leapfrog Group")
-    news = plugin.extract(stored, nil).select { |c| c[:kind] == "news_item" }.sole[:payload]
+    letter = document("Assignment of Project Number")
+    news = plugin.extract(letter, nil).select { |c| c[:kind] == "news_item" }.sole[:payload]
 
     assert_match "Assignment of Project Number", news["title"]
     assert_equal [ "U.S. Nuclear Regulatory Commission", "The Leapfrog Group" ], news["about"].map { |a| a["name"] }
     assert_equal "2026-10-19", news["published_on"]
+
+    Candidate.create!(source: letter, kind: "news_item", status: "rejected", quote: "x", payload: news)
+    assert_empty plugin.extract(letter, nil).select { |c| c[:kind] == "news_item" }
   end
 
   test "a developer the directory doesn't have becomes a lead, not a claim" do
-    stored
-    assert_empty plugin.extract(stored, nil)
+    assert_empty documents.flat_map { |source| plugin.extract(source, nil) }
     LeadSync.run
     assert Lead.exists?(name: "The Leapfrog Group")
     refute Lead.exists?(name: "Radiant"), "no company form in its name: not a lead"
     refute Lead.exists?(name: "Arizona Public Service Co"), "an operating plant's document isn't read"
   end
 
+  test "an operating plant's 052 docket isn't a developer's" do
+    assert Plugin.developer_docket?("05200025")
+    Facility.create!(name: "Vogtle 3", nrc_docket: "05200025", status: "operating")
+    refute Plugin.developer_docket?("05200025")
+    assert Plugin.developer_docket?("99902187")
+  end
+
   test "project-number news: only the last 60 days, at most 5 a read" do
     known("The Leapfrog Group")
     later = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), key: "k", today: -> { Date.new(2027, 1, 30) })
-    assert_empty later.extract(stored, nil).select { |c| c[:kind] == "news_item" }, "older than 60 days"
+    assert_empty later.extract(document("Assignment of Project Number"), nil).select { |c| c[:kind] == "news_item" }, "older than 60 days"
     assert_equal 5, Plugin::NEWS_PER_READ
   end
 end
