@@ -11,7 +11,9 @@
 # - A name the directory doesn't have becomes a lead for Data Quality
 #   (LeadSync's NRC ADAMS feed), never a claim.
 # - NRC's letter assigning a project number (a developer entering NRC
-#   pre-application) is one news item about that company, for a person.
+#   pre-application) is one news item about that company, for a person,
+#   and its licensing stage: pre-application on that docket from the
+#   letter's date (#650).
 #
 # The API needs a subscription key (ADAMS_API_KEY, sent as NRC asks in the
 # Ocp-Apim-Subscription-Key header, never stored). Without one the crawl
@@ -88,10 +90,13 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     self.class.developer_documents(source.content_text).flat_map do |line, doc|
       known = self.class.organizations(doc).select { |name| @directory.organization(name:) }
       claims = known.map { |name| { kind: "organization", payload: { "name" => name } } }
-      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any? && doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ &&
-          !taken.include?(doc["Url"])
-        news += 1
-        claims << project_news(doc, known)
+      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any?
+        # The letter opens the developer's pre-application project: its stage, from that date (#650).
+        claims.concat(project_stages(doc, known))
+        if doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ && !taken.include?(doc["Url"])
+          news += 1
+          claims << project_news(doc, known)
+        end
       end
       claims.map { |claim| claim.merge(quote: line) }
     end
@@ -145,6 +150,15 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     def decided_urls
       Candidate.joins(:source).where(sources: { source_kind: }, kind: "news_item").where.not(status: "new")
         .pluck(Arel.sql("candidates.payload->>'url'")).compact.to_set
+    end
+
+    def project_stages(doc, known)
+      date = (Date.iso8601(doc["DocumentDate"].to_s).iso8601 rescue nil) or return []
+      dockets = Array(doc["DocketNumber"]).map(&:to_s).select { |docket| docket.start_with?("999") }
+      known.product(dockets).map do |name, docket|
+        { kind: "licensing_stage", payload: { "organization" => { "name" => name }, "stage" => "pre_application", "nrc_docket" => docket,
+          "effective_on" => date } }
+      end
     end
 
     def project_news(doc, known)

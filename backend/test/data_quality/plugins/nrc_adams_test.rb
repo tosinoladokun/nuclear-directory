@@ -102,6 +102,9 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_match "Assignment of Project Number", news["title"]
     assert_equal [ "U.S. Nuclear Regulatory Commission", "The Leapfrog Group" ], news["about"].map { |a| a["name"] }
     assert_equal "2026-10-19", news["published_on"]
+    stage = plugin.extract(letter, nil).find { |c| c[:kind] == "licensing_stage" }[:payload]
+    assert_equal({ "organization" => { "name" => "The Leapfrog Group" }, "stage" => "pre_application", "nrc_docket" => "99902187",
+      "effective_on" => "2026-10-19" }, stage)
 
     Candidate.create!(source: letter, kind: "news_item", status: "rejected", quote: "x", payload: news)
     assert_empty plugin.extract(letter, nil).select { |c| c[:kind] == "news_item" }
@@ -128,4 +131,15 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_empty later.extract(document("Assignment of Project Number"), nil).select { |c| c[:kind] == "news_item" }, "older than 60 days"
     assert_equal 5, Plugin::NEWS_PER_READ
   end
+
+  test "the project-number letter's stage reaches the directory as a pending pre-application stage (#650)" do
+    known("The Leapfrog Group")
+    documents
+    DataQuality::Stages::Extract.call(plugin:)
+    run = DataQuality::Stages::Match.call(plugin:)
+    assert_equal 0, run.stats["write_errors"]
+    stage = LicensingStage.find_by!(nrc_docket: "99902187")
+    assert_equal [ "pre_application", Date.new(2026, 10, 19), "pending" ], stage.values_at(:stage, :effective_on, :verification_status)
+  end
 end
+
