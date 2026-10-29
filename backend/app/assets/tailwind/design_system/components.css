@@ -1194,6 +1194,9 @@
   /* A square tag with an icon: a role in its category's colour, a technology in ink. */
   .nd-tag--icon { display: inline-flex; align-items: center; gap: 5px; }
   .nd-tag--icon .nd-ic { flex: none; color: var(--nd-cat, var(--nd-ink-muted)); }
+  /* A tag that opens its list (#606): the same box; the label underlines on hover and focus. */
+  .nd-tag--link { text-decoration: none; }
+  .nd-tag--link:hover, .nd-tag--link:focus-visible { color: var(--nd-ink); text-decoration: underline; text-underline-offset: 2px; }
 
   /* Index (nd-idx): the left column on desktop, sticky. */
   .nd-idx { position: sticky; top: var(--nd-space-6); width: var(--nd-index-width); display: flex; flex-direction: column; gap: 2px; align-self: flex-start; }

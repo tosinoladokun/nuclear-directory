@@ -16,7 +16,10 @@
   </div>
   <% if local_assigns[:about].present? %><p class="nd-pagehead__about"><%= about %></p><% end %>
   <% if local_assigns[:tags].present? %><div class="nd-pagehead__tags"><% tags.each do |item| %>
-    <% if item.is_a?(Hash) %><span class="nd-tag nd-tag--icon <%= bucket_class(item[:bucket]) if item[:bucket] %>"><%= item[:icon] %><%= item[:text] %></span>
+    <% if item.is_a?(Hash) %>
+      <% tag_class = "nd-tag nd-tag--icon #{bucket_class(item[:bucket]) if item[:bucket]}" %>
+      <% if item[:href] %><%= link_to item[:href], class: "#{tag_class} nd-tag--link" do %><%= item[:icon] %><%= item[:text] %><% end %>
+      <% else %><span class="<%= tag_class %>"><%= item[:icon] %><%= item[:text] %></span><% end %>
     <% else %><span class="nd-tag"><%= item %></span><% end %>
   <% end %></div><% end %>
 </header>
