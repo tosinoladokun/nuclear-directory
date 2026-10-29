@@ -101,7 +101,7 @@ general:
   - { name: Talkwalker news alerts, status: hand, leads: true, note: "feeds in the private ops repo" }
   - { name: Reddit (r/nuclear and others), status: hand, leads: true, note: "read by a person; no bot access" }
   - { name: Company newsrooms, status: hand, group: company-sites, issue: 128, crawler: true }
-  - { name: Companies' own pages (Enrich), kind: company_pages, status: built, issue: 479, note: "read on request, one company at a time" }
+  - { name: Companies' own pages (Enrich), kind: company_pages, status: built, issue: 479, note: "read on request, and nightly for the 10 published companies with the most gaps" }
   - { name: Federal Register, status: planned, issue: 126 }
   - { name: DOE Office of Nuclear Energy news, kind: doe_nuclear_news, status: built, note: "DOE's own announcements" }
   - { name: NRC news releases, kind: nrc_news, status: built, note: "NRC's own announcements" }
