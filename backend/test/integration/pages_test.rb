@@ -103,6 +103,24 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "<loc>http://www.example.com/companies?category=plants</loc>"
   end
 
+  test "company and plant pages carry lastmod: the latest change to them or anything their page shows" do
+    company = organizations(:terrapower)
+    company.verify!(by: "human:tosin") unless company.verified?
+    company.update_columns(updated_at: Time.zone.parse("2026-01-02"))
+    page = Source.create!(url: "https://example.com/lastmod", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: company, source: page, quote: "q", found_by: "human")
+    other = Organization.create!(name: "Lastmod Partner", verification_status: "verified", verified_by: "human:tosin")
+    link = Relationship.create!(from_organization: company, to_organization: other, relationship_type: "supplies", verification_status: "verified", verified_by: "human:tosin")
+    link.update_columns(updated_at: Time.zone.parse("2026-10-20"))
+    Rails.cache.clear
+
+    get "/sitemap.xml"
+    xml = Nokogiri::XML(response.body).remove_namespaces!
+    url = xml.xpath("//url").find { |node| node.at("loc").text.end_with?("/companies/#{company.slug}") }
+    assert url, "the company is listed"
+    assert_operator Date.parse(url.at("lastmod").text), :>=, Date.new(2026, 10, 20), "its link's change counts"
+  end
+
   test "the sitemap lists public companies and plants, not hidden ones" do
     cite!(company("Kairos Power", roles: [ role("reactor_vendor") ]))
     cite!(company("CFS", techs: [ technology("fusion") ]))
@@ -122,7 +140,7 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "category=components", "an empty bucket isn't listed"
     assert_not_includes response.body, "tag=uranium"
     assert_includes response.body, "<loc>http://www.example.com/companies?category=plants</loc>"
-    assert_not_includes response.body, "<lastmod>"
+    assert_includes response.body, "<lastmod>", "company and plant pages carry one"
     assert_not_includes response.body, "hidden"
     assert_not_includes response.body, "unpublished-co"
   end
