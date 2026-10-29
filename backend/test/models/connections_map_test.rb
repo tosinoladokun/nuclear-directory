@@ -70,6 +70,17 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert_equal "Both Co owns and operates #{@vogtle.name}", both.first.sentence
   end
 
+  test "the record moves toward the side with short names, so the other side's longer names get the room (Design QA on #561)" do
+    build_vogtle
+    map = ConnectionsMap.for_plant(PlantProfile.new(@vogtle))
+    layout = ConnectionsMap::Layout.new(map.folded, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t")
+    left, right = layout.nodes.reject { |placed| placed.node.key == map.centre.key }.partition { |placed| placed.x < layout.centre.x }
+    assert left.any?
+    assert_equal left.map(&:slot).uniq.size, 1
+    assert_operator left.first.slot, :>=, ConnectionsMap::Layout::WIDE.slot, "the long owner names keep at least the standard slot"
+    assert_not_equal layout.width / 2.0, layout.centre.x, "the record sits off the middle when the sides differ" if right.empty? || left.first.slot != right.first&.slot
+  end
+
   test "every arrow and note names a web source, or isn't shown" do
     build_vogtle
     unsourced = company("Unsourced Owner")

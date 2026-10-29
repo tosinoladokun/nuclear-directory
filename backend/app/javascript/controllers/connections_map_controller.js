@@ -105,7 +105,7 @@ export default class extends Controller {
       const length = line.getTotalLength()
       const others = [ ...points.entries() ].filter(([ key ]) => key !== id).flatMap(([ , list ]) => list)
       const clear = (box) => !circles.some((circle) => hitsCircle(box, circle)) &&
-        !names.some((name) => overlaps(box, name, 0)) &&
+        !names.some((name) => overlaps(box, name, 8)) && // 8px of air around every name, the record's too
         !placed.some((other) => overlaps(box, other, 4)) &&
         !others.some((point) => inside(point, box))
 

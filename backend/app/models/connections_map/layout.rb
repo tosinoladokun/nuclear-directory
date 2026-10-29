@@ -72,25 +72,26 @@ class ConnectionsMap
         groups.each { |group| sides[group[1] ? :left : :right] << group }
         sides.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ ConnectionsMap.verb_rank(verb), inbound ? 0 : 1 ] } }
 
+        r = size.node_r
+        @slots = side_slots(sides, r)
         column = sides.values.map { |list| height_of.(list) - GROUP_GAP }.max.to_i
         @height = [ column, size.centre_r * 2 + 120 ].max + PAD * 2 + 20
-        cx = width / 2.0
+        @left_x = PAD_X + @slots[:left] + 10 + r
+        @right_x = width - (PAD_X + @slots[:right] + 10 + r)
+        cx = (@left_x + @right_x) / 2.0 # the record sits between the two columns: spare width on one side goes to the other
         cy = @height / 2.0 - 10
         @centre = place(@centre_node, cx, cy, size.centre_r, name_x: cx, name_y: cy + size.centre_r + 30, anchor: "middle", slot: 240)
 
-        r = size.node_r
-        left_x = PAD_X + size.slot + 10 + r
-        right_x = width - left_x
         sides.each do |side, list|
           y = (@height - (height_of.(list) - GROUP_GAP)) / 2.0 + ROW / 2.0 - 10
-          x = side == :left ? left_x : right_x
+          x = side == :left ? @left_x : @right_x
           list.each do |verb, inbound, edges|
             nodes = edges.map do |edge|
               node = other(edge, inbound)
               next @placed[side_key(node, side)] if @placed[side_key(node, side)] # linked by another verb on this side too: drawn once
 
               placed = place(node, x, y, r, side:, name_x: side == :left ? x - r - 10 : x + r + 10, name_y: y + 4.5,
-                anchor: side == :left ? "end" : "start", slot: size.slot)
+                anchor: side == :left ? "end" : "start", slot: @slots[side])
               y += ROW
               placed
             end
@@ -108,14 +109,14 @@ class ConnectionsMap
           return group(verb, inbound, edges, [ Member.new(edge: edges.first, path:, arrow: true) ], nil, path)
         end
 
-        space = (cx - big) - (PAD_X + size.slot + 10 + size.node_r * 2)
+        space = side == :left ? (cx - big) - (@left_x + size.node_r) : (@right_x - size.node_r) - (cx + big)
         trunk_length = [ [ Layout.label_width(verb, size.label_font) + 28, 88 ].max, space - 40 ].min
         mean = nodes.sum(&:y) / nodes.size
         # A second bundle to the same nodes (owns and operates the same plants)
         # meets at its own junction, lower down, so neither hides the other.
         again = reuse(nodes)
         junction = [ cx + sign * (big + trunk_length), mean + again * 40 ]
-        centre_edge = box_edge([ cx, cy ], junction, big)
+        centre_edge = [ cx + sign * big, cy ] # leaves the square's side, clear of the name under it
         trunk = inbound ? s_curve(junction, shorten(centre_edge, junction), push: 7) : s_curve(centre_edge, junction, push: 7)
         members = edges.zip(nodes).map do |edge, node|
           start = [ node.x - sign * node.r, node.y ]
@@ -140,7 +141,31 @@ class ConnectionsMap
         @bows[node.node.key] += 1
         from, to = inbound ? [ node, @centre ] : [ @centre, node ]
         bow = -bow if bow && !inbound # the same side of the line whichever way it runs
-        s_curve(edge_point(from, to), edge_point(to, from, tip: true), push: bow)
+        s_curve(from.equal?(@centre) ? side_point(@centre, node) : edge_point(from, to), to.equal?(@centre) ? side_point(@centre, node, tip: true) : edge_point(to, from, tip: true), push: bow)
+      end
+
+      # The middle of the record's side that faces the node: arrows meet its square there, never at a corner near its name.
+      def side_point(centre, node, tip: false)
+        sign = node.x > centre.x ? 1 : -1
+        [ centre.x + sign * (centre.r + (tip ? 2 : 0)), centre.y ]
+      end
+
+      # The widest a name on each side is likely to be, so the side with short names gives its spare width to the other
+      # (the controller measures the real width; this only shares out the room).
+      NAME_CHAR = 8
+      def side_slots(sides, _r)
+        need = sides.transform_values do |list|
+          list.flat_map { |(_, inbound, edges)| edges.map { |edge| other(edge, inbound).name.length * NAME_CHAR } }.max.to_i
+        end
+        total = size.slot * 2
+        low = 90
+        left = size.slot
+        if need[:left] > size.slot && need[:right] < size.slot
+          left = [ need[:left], total - [ need[:right], low ].max ].min
+        elsif need[:right] > size.slot && need[:left] < size.slot
+          left = total - [ need[:right], total - [ need[:left], low ].max ].min
+        end
+        { left: left, right: total - left }
       end
 
       # How many bundles already met these same nodes.
