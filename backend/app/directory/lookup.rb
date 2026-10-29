@@ -216,6 +216,11 @@ module Directory
 
     def role_key?(key) = key.present? && Role.exists?(key:)
 
+    # A company's published role keys (["data_center_offtaker"]).
+    def role_keys(organization_id)
+      OrganizationRole.joins(:role).where(organization_id:, verification_status: "verified").pluck("roles.key")
+    end
+
     # Whether a company has a role with a source (pending or published), so
     # a new company reaches the owner with its category (#548). Reads only.
     def sourced_role?(organization_id) = sourced_role_ids([ organization_id ]).any?
