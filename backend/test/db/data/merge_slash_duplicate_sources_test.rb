@@ -9,7 +9,8 @@ class MergeSlashDuplicateSourcesTest < ActiveSupport::TestCase
     @company = Organization.create!(name: "ConverDyn", verification_status: "verified", verified_by: BY)
     @other = Organization.create!(name: "Honeywell", verification_status: "verified", verified_by: BY)
     @kept = Source.create!(url: "https://www.converdyn.com", source_kind: "web_page")
-    @extra = Source.create!(url: "https://www.converdyn.com/", source_kind: "web_page", title: "ConverDyn - Global Provider of UF6")
+    @extra = Source.create!(url: "https://www.converdyn.com/", source_kind: "web_page", title: "ConverDyn - Global Provider of UF6",
+      crawl_status: "ok", content_text: "ConverDyn converts uranium.", content_sha256: "abc", fetched_at: Time.utc(2026, 10, 20))
     @alone = Source.create!(url: "https://example.com/only/", source_kind: "web_page")
     @moving = Evidence.create!(subject: @other, source: @extra, quote: "Honeywell and ConverDyn.", found_by: "human", confidence: 1)
     Evidence.create!(subject: @company, source: @kept, quote: "ConverDyn converts uranium.", found_by: "human", confidence: 1, fields: [ "description" ])
@@ -30,6 +31,8 @@ class MergeSlashDuplicateSourcesTest < ActiveSupport::TestCase
     assert_equal 1, same.count, "the same quote for the same fact is kept once"
     assert_equal %w[description website], same.sole.fields
     assert_equal "ConverDyn - Global Provider of UF6", @kept.reload.title, "a title the kept row lacked"
+    assert_equal [ "ConverDyn converts uranium.", "abc", "ok" ], @kept.values_at(:content_text, :content_sha256, :crawl_status),
+      "and its stored copy of the page, so quotes can still be checked"
     assert_match "1 quotes moved, 1 duplicates dropped, 1 claims moved", migration.output.first
 
     assert_no_difference -> { Source.count } do

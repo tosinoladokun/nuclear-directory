@@ -8,6 +8,8 @@
 # same page's quotes hang on. Merging this PR is Tosin's approval.
 class MergeSlashDuplicateSources < DeployData::Migration
   BY = "human:tosin"
+  SNAPSHOT = %w[crawl_status status_reason http_status fetched_at content_sha256 content_text etag last_modified
+    extracted_sha256 extracted_rows_sha256 final_url].freeze
 
   def up
     merged = 0
@@ -17,8 +19,13 @@ class MergeSlashDuplicateSources < DeployData::Migration
 
       moved, dropped = move_evidence(extra, kept)
       claims = Candidate.where(source_id: extra.id).update_all(source_id: kept.id, updated_at: Time.current)
-      # The kept row takes a title it lacks; its own snapshot stays.
-      kept.update_columns(title: extra.title, updated_at: Time.current) if kept.title.blank? && extra.title.present?
+      # The kept row takes what it lacks: a title, and the stored copy of the
+      # page (so a claim's quote can still be checked against it). Its own
+      # snapshot, when it has one, stays.
+      taken = {}
+      taken[:title] = extra.title if kept.title.blank? && extra.title.present?
+      taken.merge!(extra.slice(*SNAPSHOT).symbolize_keys) if kept.content_sha256.blank? && extra.content_sha256.present?
+      kept.update_columns(**taken, updated_at: Time.current) if taken.any?
       extra.destroy!
       merged += 1
       say "#{extra.url} -> #{kept.url}: #{moved} quotes moved, #{dropped} duplicates dropped, #{claims} claims moved"
