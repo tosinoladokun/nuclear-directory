@@ -8,17 +8,17 @@ relationships: []
 facilities: []
 description:
   text: "Public research university in Raleigh, North Carolina."
-  source_url: https://www.ncsu.edu/
+  source_url: https://www.ncsu.edu
   quote: "Discover North Carolina State University, a leading public research university located in Raleigh, North Carolina."
   also:
   - quote: "NC State University"
 short_description:
   text: "Public research university"
-  source_url: https://www.ncsu.edu/
+  source_url: https://www.ncsu.edu
   quote: "Discover North Carolina State University, a leading public research university located in Raleigh, North Carolina."
 hq:
   city: Raleigh
   state: NC
-  source_url: https://www.ncsu.edu/
+  source_url: https://www.ncsu.edu
   quote: "Discover North Carolina State University, a leading public research university located in Raleigh, North Carolina."
   confidence: 1.0

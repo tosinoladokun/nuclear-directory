@@ -8,11 +8,11 @@ relationships: []
 facilities: []
 description:
   text: "University offering over 100 degree programs in 40 areas of study."
-  source_url: https://www.mst.edu/
+  source_url: https://www.mst.edu
   quote: "Solving For Tomorrow: We have over 100 degree programs in 40 areas of study such as computer science, business, engineering, humanities, and liberal arts. Find your passion at S&T."
   also:
   - quote: "Missouri S&T"
 short_description:
   text: "University with 100+ degree programs"
-  source_url: https://www.mst.edu/
+  source_url: https://www.mst.edu
   quote: "Solving For Tomorrow: We have over 100 degree programs in 40 areas of study such as computer science, business, engineering, humanities, and liberal arts. Find your passion at S&T."

@@ -8,11 +8,11 @@ relationships: []
 facilities: []
 description:
   text: "University whose mission is to advance knowledge and educate students in science and technology."
-  source_url: https://www.mit.edu/
+  source_url: https://www.mit.edu
   quote: "The mission of MIT is to advance knowledge and educate students in science, technology and other areas of scholarship that will best serve the nation and the world in the 21st century."
   also:
   - quote: "MIT - Massachusetts Institute of Technology"
 short_description:
   text: "Science and technology university"
-  source_url: https://www.mit.edu/
+  source_url: https://www.mit.edu
   quote: "The mission of MIT is to advance knowledge and educate students in science, technology and other areas of scholarship that will best serve the nation and the world in the 21st century."

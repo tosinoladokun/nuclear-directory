@@ -8,17 +8,17 @@ relationships: []
 facilities: []
 description:
   text: "Public research university in Austin, Texas."
-  source_url: https://www.utexas.edu/
+  source_url: https://www.utexas.edu
   quote: "The University of Texas at Austin is a leading public research university where Longhorns learn, create and lead — changing Texas and the world."
   also:
   - quote: "The University of Texas at Austin"
 short_description:
   text: "Public research university"
-  source_url: https://www.utexas.edu/
+  source_url: https://www.utexas.edu
   quote: "The University of Texas at Austin is a leading public research university where Longhorns learn, create and lead — changing Texas and the world."
 hq:
   city: Austin
   state: TX
-  source_url: https://www.utexas.edu/
+  source_url: https://www.utexas.edu
   quote: "The University of Texas at Austin is a leading public research university where Longhorns learn, create and lead — changing Texas and the world."
   confidence: 1.0
