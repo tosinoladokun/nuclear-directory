@@ -224,15 +224,28 @@ module DirectoryHelper
     place(city, LinkCard::US_STATES[state.to_s] || state)
   end
 
-  # A plant's <title>, in the words of plant-and-place searches (#291):
-  #   "Plant Vogtle, Waynesboro, GA: owners and operator"
-  # The place and each of owners and operator only when published.
+  # A plant's <title> (Tosin, 29 Oct), in the words of ownership searches: "Plant Vogtle: owners, operator and
+  # deals | Nuclear Directory". Only the sections the page has.
   def plant_title(profile)
-    owners = profile.current_companies_for("owns").any?
-    operators = profile.current_companies_for("operates").any?
-    who = [ ("owners" if owners), ("operator" if operators) ].compact.join(" and ").presence
-    [ [ profile.name, place(profile.city, profile.state) ].compact.join(", "), who ].compact.join(": ")
+    sections = [ ("owners" if profile.current_companies_for("owns").any?), ("operator" if profile.current_companies_for("operates").any?),
+      ("deals" if profile.companies_for("offtakes_from").any?) ].compact
+    seo_title(profile.name, sections)
   end
+
+  # "Name: a, b and c | Nuclear Directory" within SEO_TITLE_LIMIT: first the suffix goes, then the last section,
+  # until it fits; a name too long even alone is kept whole.
+  SEO_TITLE_LIMIT = 60
+  SEO_SUFFIX = " | Nuclear Directory"
+  def seo_title(name, sections)
+    candidates = sections.size.downto(0).flat_map do |n|
+      body = [ name, sections.first(n).to_sentence(last_word_connector: " and ", two_words_connector: " and ").presence ].compact.join(": ")
+      [ "#{body}#{SEO_SUFFIX}", body ]
+    end
+    candidates.find { |title| title.length <= SEO_TITLE_LIMIT } || candidates.last
+  end
+
+  # "3 owners, 1 operator, 2 deals" for a meta description: a count only when it is above zero.
+  def counted(*pairs) = pairs.filter_map { |count, noun| pluralize(count, noun) if count.to_i.positive? }
 
   # A list value ("A, B, C", names possibly links) split before its last
   # item, so that item can stay on a line with its source numbers. Only a
@@ -329,7 +342,8 @@ module DirectoryHelper
   # and <n> others", then the units and capacity go, then owners.
   PREVIEW_LIMIT = 160
 
-  def plant_preview(profile)
+  # What a plant is and how big: ["Operating power plant in Waynesboro, GA", "4 units, 4,468 MW"] (either may be nil).
+  def plant_what_and_size(profile)
     # "Not operating" reads after the place, not before the type: "Power plant in Covert, MI, not operating".
     idle = profile.status == "not_operating"
     status = facility_status_label(profile.status) unless idle
@@ -339,7 +353,17 @@ module DirectoryHelper
     what = kind ? [ kind, (where && "in #{where}") ].compact.join(" ") : (where && "In #{where}")
     what = what ? "#{what}, not operating" : "Not operating" if idle
     capacity = "#{number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if profile.capacity_mw
-    size = [ units_summary(profile.units.map(&:status), shown_status: profile.status), capacity ].compact.join(", ").presence
+    [ what, [ units_summary(profile.units.map(&:status), shown_status: profile.status), capacity ].compact.join(", ").presence ]
+  end
+
+  def plant_preview_lead(profile)
+    what, size = plant_what_and_size(profile)
+    body = [ what, size ].compact.map { |part| part.end_with?(".") ? part : "#{part}." }.join(" ")
+    body.present? ? "#{profile.name}: #{body}" : profile.name
+  end
+
+  def plant_preview(profile)
+    what, size = plant_what_and_size(profile)
     owners = profile.current_companies_for("owns").map(&:name)
     operators = profile.current_companies_for("operates").map(&:name)
     # Lists as the site writes them, without a serial comma ("A, B and C").
@@ -369,31 +393,51 @@ module DirectoryHelper
     "utility" => "utility", "operator" => "plant operator", "data_center_offtaker" => "power buyer",
     "venture_capital" => "investor"
   }.freeze
-  # The whole <title>, " · Nuclear Directory" included, about what search
-  # results show before cutting it off.
-  TITLE_LIMIT = 70
-  SITE_SUFFIX = " · Nuclear Directory"
-
-  # "Helion Energy: fusion developer, investors · Nuclear Directory", from the
-  # roles shown and the sections the page has. What the page holds is dropped
-  # from the end, then the role, until the whole title fits TITLE_LIMIT; a name
-  # too long even alone is kept whole rather than cut.
+  # A company's <title> (Tosin, 29 Oct): "Oklo: partners, customers, investors and plants | Nuclear Directory",
+  # naming only the sections the page has (see seo_title for how it is cut to fit).
   def company_title(profile)
-    keys = profile.shown_roles.map { |r| r.role.key }
-    fusion = profile.technologies.any? { |t| [ t.technology.key, t.technology.parent&.key ].include?("fusion") }
-    # The role its category is for, as on its card (LinkCard.for_company), so
-    # Kairos Power is a "reactor developer", not "molten salt coolant".
-    category_keys = profile.category&.role_keys.to_a
-    key = profile.shown_roles.map(&:role).find { |r| ([ r.key, r.parent&.key ] & category_keys).any? }&.key || keys.first
-    role = if fusion && keys.include?("reactor_vendor")
-      "fusion developer"
-    elsif key
-      TITLE_ROLES[key] || role_label(key).downcase
+    me = profile.organization.id
+    customers = profile.deals.any? { |d| (d.relationship_type == "supplies" && d.from_organization_id == me) || (d.relationship_type == "offtake_with" && d.to_organization_id == me) }
+    partners = profile.deals.any? { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == me) }
+    seo_title(profile.name, [ ("partners" if partners), ("customers" if customers), ("investors" if investors_of(profile).any?),
+      (company_places_noun(profile).pluralize if profile.plant_links.any?) ].compact)
+  end
+
+  # "plant" only when every site the company is linked to is a published power plant; a mine or a fuel plant makes
+  # them "sites" (VOICE.md), as in company_description.
+  def company_places_noun(profile)
+    sites = profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq
+    sites.all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site"
+  end
+
+  # The meta description of a company (Tosin, 29 Oct): its one-line description, then what the page counts:
+  # "Oklo: Develops advanced fission power plants. 3 plants, 2 deals, 12 sources." Link previews keep
+  # company_description.
+  def company_meta_description(profile)
+    lead = profile.description.presence || [ profile.shown_roles.first && role_label(profile.shown_roles.first.role),
+      place(profile.hq_city, profile.hq_state) ].compact.join(" in ").presence
+    head = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
+    head = head.truncate(PREVIEW_LIMIT, separator: " ") if head.length > PREVIEW_LIMIT
+    counts = counted([ profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq.size, company_places_noun(profile) ], [ profile.deals.count { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id) }, "deal" ], # investments are counted as investors
+      [ investors_of(profile).size, "investor" ], [ profile.citations.sources.size, "source" ])
+    fit_counts(head, counts)
+  end
+
+  # The description with as many counts as fit PREVIEW_LIMIT, in order, dropping from the end.
+  def fit_counts(head, counts)
+    counts.size.downto(0).each do |n|
+      text = n.zero? ? head : "#{head} #{counts.first(n).join(', ')}."
+      return text if text.length <= PREVIEW_LIMIT
     end
-    holds = [ ("plants" if profile.plant_links.any?), ("investors" if investors_of(profile).any?), ("deals" if profile.deals.any?) ].compact
-    candidates = holds.size.downto(0).map { |n| [ role, holds.first(n).to_sentence(last_word_connector: " and ").presence ].compact.join(", ").presence }
-    titles = [ *candidates.map { |about| [ profile.name, about ].compact.join(": ") }, profile.name ].map { |title| "#{title}#{SITE_SUFFIX}" }
-    titles.find { |title| title.length <= TITLE_LIMIT } || titles.last
+    head
+  end
+
+  # A plant's meta description: what it is and where, then "2 owners, 1 operator, 3 deals, 12 sources".
+  def plant_meta_description(profile)
+    base = plant_preview_lead(profile)
+    counts = counted([ profile.current_companies_for("owns").size, "owner" ], [ profile.current_companies_for("operates").size, "operator" ],
+      [ profile.companies_for("offtakes_from").size, "deal" ], [ profile.citations.sources.size, "source" ])
+    fit_counts(base, counts)
   end
 
   # A company's meta and link-preview description (#292, #247), within

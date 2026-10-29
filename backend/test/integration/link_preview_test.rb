@@ -71,7 +71,9 @@ class LinkPreviewTest < ActionDispatch::IntegrationTest
     assert_select "meta[property='og:description'][content=?]", "All companies in the US nuclear industry."
   end
 
-  test "preview and search descriptions say what's on the page, not how it's sourced (Tosin, #249)" do
+  # Tosin, 29 Oct (SEO): a company's and a plant's meta description now ends in counts, sources included
+  # ("3 plants, 2 deals, 12 sources"); link previews (og:description) and every other page still never talk about sourcing.
+  test "preview descriptions say what's on the page, not how it's sourced (Tosin, #249)" do
     company("Kairos Power")
     cite!(plant("Zephyr Point", facility_type: "power_reactor", status: "operating", city: "Somewhere", state: "TX"))
     [ root_path, companies_path, companies_path(category: "reactor-developers"), company_path(slug: "kairos-power"),
@@ -81,9 +83,10 @@ class LinkPreviewTest < ActionDispatch::IntegrationTest
       assert_response :success, path
       assert_select "meta[property='og:description']", 1
       assert_select "meta[name='description']", 1
-      css_select("meta[property='og:description'], meta[name='description']").each do |tag|
-        assert_no_match(/source/i, tag["content"], path)
-      end
+      assert_no_match(/source/i, css_select("meta[property='og:description']").first["content"], path)
+      next if path.start_with?("/companies/", "/plants/")
+
+      assert_no_match(/source/i, css_select("meta[name='description']").first["content"], path)
     end
   end
 

@@ -8,7 +8,7 @@
   # Technology, reactor type and capacity come from the site and its units.
   details_cited = (p.site_citations + p.units.flat_map { |u| p.citations_for(u) }).uniq(&:first)
   capacity = "#{number_with_precision(p.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if p.capacity_mw
-  content_for :title, "#{plant_title(p)} · Nuclear Directory"
+  content_for :title, plant_title(p)
   content_for :og_title, p.name
   @link_card = [ LinkCard.for_plant(p), "plants", p.slug ] # its preview image (#245)
   # One line for link previews and search results (#246).
@@ -16,7 +16,7 @@
   content_for :og_description, preview
 %>
 <% content_for :head do %>
-  <meta name="description" content="<%= preview %>">
+  <meta name="description" content="<%= plant_meta_description(p) %>">
   <link rel="canonical" href="<%= plant_url(slug: p.slug) %>">
 <% end %>
 <%= render "shared/site_header" %>
