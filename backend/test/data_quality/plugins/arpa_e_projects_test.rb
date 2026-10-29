@@ -52,6 +52,7 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
     assert_equal({ "name" => "SHINE Technologies, LLC" }, company[:payload])
     assert_equal "Advanced Research Projects Agency-Energy", link[:payload].dig("from_organization", "name")
     assert_equal [ "award", "4030306", "NEWTON", SHINE ], term[:payload].values_at("term_type", "amount_usd", "program", "external_id")
+    assert_match(/\A\d{4}-\d{2}-\d{2}\z/, term[:payload]["starts_on"], "an award needs a start (DealTerm)")
   end
 
   test "two projects for one lab give the same link wording, each its own award" do
@@ -98,5 +99,26 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
   test "a cancelled project proposes nothing" do
     source = Source.new(content_text: "Project: X | Organization: Y Inc | Status: Cancelled | Area: nuclear fission")
     assert_empty plugin.extract(source, nil)
+  end
+
+  test "a project without an award amount or a readable release date proposes no award term" do
+    source = Source.new(url: "https://x", content_text: "Project: X | Organization: Y Inc | Status: Active | Released: soon | Award: $5 | Area: nuclear fission")
+    refute_includes plugin.extract(source, nil).map { |c| c[:kind] }, "deal_term"
+  end
+
+  test "the night's claims match without write errors (29 Oct: awards lacked a start)" do
+    crawl
+    DataQuality::Stages::Extract.call(plugin:)
+    run = DataQuality::Stages::Match.call(plugin:)
+    assert_equal 0, run.stats["write_errors"], Candidate.where(status: "needs_review").pluck(:notes).join("\n")
+  end
+
+  test "a project extracted before this version is extracted again on its next read" do
+    crawl
+    source = projects.find_by!(url: SHINE)
+    source.update_columns(extracted_sha256: source.content_sha256, extracted_rows_sha256: source.content_sha256)
+    Source.find_by!(url: Plugin::API_URL).update_columns(fetched_at: 1.day.ago)
+    crawl
+    assert_nil source.reload.extracted_sha256
   end
 end
