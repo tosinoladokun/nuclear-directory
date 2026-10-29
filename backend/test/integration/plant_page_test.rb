@@ -104,7 +104,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
       assert_select ".nd-crow__more[hidden]" do
         assert_select "p", /Co-owned with Oglethorpe Power and MEAG Power\./
         assert_select ".nd-quote", "“the project's co-owners”"
-        assert_select "a[href='/companies/georgia-power']", "View Georgia Power"
+        assert_select "a[href='/companies/georgia-power']", "Open Georgia Power"
       end
     end
     assert_select ".nd-crow", text: /Southern Nuclear/ do
@@ -164,8 +164,10 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "an opened row shows its source as plain text: no boxed number" do
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-crow__more a.nd-src--plain", /georgiapower\.com · checked/
+    assert_select ".nd-crow__more a.nd-src--plain", "georgiapower.com", "the domain only: no date, no number, no confidence"
     assert_select ".nd-crow__more .nd-src sup", 0
+    assert_select ".nd-crow__more .nd-conf", 0
+    assert_select ".nd-crow__more", text: /checked/, count: 0
   end
 
   test "a share shows only when every folded link states the same one" do

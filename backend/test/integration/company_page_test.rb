@@ -54,8 +54,10 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
       assert_select ".nd-crow__more[hidden]" do
         assert_select "p", "500 MW by 2035."
         assert_select ".nd-quote", "“Kairos Power and Google have signed”"
-        assert_select "a.nd-src[href='#source-1']", /kairospower.com · checked 2026-10-09/
-        assert_select ".nd-conf", /High/
+        assert_select "a.nd-src--plain[href='https://kairospower.com/news/google'][rel~=noopener]", "kairospower.com", "the source as its domain only, linking to the page"
+        assert_select ".nd-crow__more", text: /checked/, count: 0
+        assert_select ".nd-conf", 0
+        assert_select ".nd-quote ~ .nd-row a.nd-src ~ p.type-ui a, .nd-quote + .nd-row + p a", 1, "order: the quote, the source, then Open <company>"
       end
       assert_select "a.nd-mark[href='#source-1'][aria-label='1 source']"
       assert_select "a", text: "Report a correction", count: 0
@@ -77,7 +79,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
       assert_select ".nd-crow__what", "5 GW framework by 2039"
       assert_select "time.nd-crow__date[datetime='2026-03-01']", "Mar 2026"
       assert_select "a.nd-mark[data-sources='1,2'][data-checked='2026-10-09']", 1, "the term's own source counts too, and the mark carries the checked date"
-      assert_select ".nd-crow__more a[href='/companies/google']", "View Google", "the toggle is a button; the company is one click inside"
+      assert_select ".nd-crow__more a[href='/companies/google']", "Open Google", "the toggle is a button; the company is one click inside"
     end
     assert_select "li#source-2 small", "energy.gov", "a term's source is in the page's numbered list"
     assert_select ".nd-crow", text: /US Department of Energy supplies/ do
