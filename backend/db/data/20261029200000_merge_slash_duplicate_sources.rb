@@ -39,8 +39,11 @@ class MergeSlashDuplicateSources < DeployData::Migration
       Evidence.where(source_id: extra.id).find_each do |row|
         same = Evidence.find_by(source_id: kept.id, subject_type: row.subject_type, subject_id: row.subject_id, quote: row.quote)
         if same
-          # The fields a quote backs (#398) gather on the row kept.
-          same.update!(fields: [ *same.fields, *row.fields ]) if row.fields.present?
+          # The fields a quote backs (#398) gather on the row kept, and it keeps
+          # the higher confidence of the two, so the fact's score never drops.
+          keep = { fields: [ *same.fields, *row.fields ].presence,
+                   confidence: [ same.confidence, row.confidence ].compact.max }.compact
+          same.update!(keep) if keep.any?
           row.destroy!
           dropped += 1
         else

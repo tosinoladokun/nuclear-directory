@@ -13,8 +13,8 @@ class MergeSlashDuplicateSourcesTest < ActiveSupport::TestCase
       crawl_status: "ok", content_text: "ConverDyn converts uranium.", content_sha256: "abc", fetched_at: Time.utc(2026, 10, 20))
     @alone = Source.create!(url: "https://example.com/only/", source_kind: "web_page")
     @moving = Evidence.create!(subject: @other, source: @extra, quote: "Honeywell and ConverDyn.", found_by: "human", confidence: 1)
-    Evidence.create!(subject: @company, source: @kept, quote: "ConverDyn converts uranium.", found_by: "human", confidence: 1, fields: [ "description" ])
-    Evidence.create!(subject: @company, source: @extra, quote: "ConverDyn converts uranium.", found_by: "human", confidence: 1, fields: [ "website" ])
+    Evidence.create!(subject: @company, source: @kept, quote: "ConverDyn converts uranium.", found_by: "crawler", confidence: 0.6, fields: [ "description" ])
+    Evidence.create!(subject: @company, source: @extra, quote: "ConverDyn converts uranium.", found_by: "human", confidence: 0.9, fields: [ "website" ])
     @claim = Candidate.create!(source: @extra, kind: "organization", payload: { "name" => "ConverDyn" }, quote: "q")
   end
 
@@ -30,6 +30,7 @@ class MergeSlashDuplicateSourcesTest < ActiveSupport::TestCase
     same = Evidence.where(subject: @company, source: @kept)
     assert_equal 1, same.count, "the same quote for the same fact is kept once"
     assert_equal %w[description website], same.sole.fields
+    assert_equal 0.9, same.sole.confidence.to_f, "the higher confidence of the two"
     assert_equal "ConverDyn - Global Provider of UF6", @kept.reload.title, "a title the kept row lacked"
     assert_equal [ "ConverDyn converts uranium.", "abc", "ok" ], @kept.values_at(:content_text, :content_sha256, :crawl_status),
       "and its stored copy of the page, so quotes can still be checked"
