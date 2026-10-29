@@ -175,7 +175,7 @@ module Seed
         links = [ *doc["relationships"], *doc["facilities"] ].compact
         # A term's citation as it'll be written (its own quote, on its own page
         # or its link's), so its confidence is checked and consolidated too.
-        [ *hq_entries(doc), *description_items(doc), short_description_item(doc), *doc["roles"], *doc["technologies"], *links, *doc["licensing"],
+        [ *hq_entries(doc), *description_items(doc), short_description_item(doc), website_item(doc), *doc["roles"], *doc["technologies"], *links, *doc["licensing"],
           *links.flat_map { |link| Array(link["terms"]).map { |term| citation(term, link) } } ].compact.select { |item| item["source_url"] }
       end
 
@@ -188,6 +188,13 @@ module Seed
 
       # short_description: { text, source_url, quote } (#559): the list row's
       # label, 40 characters at most, sourced like the description.
+      # website_quote: { source_url, quote }: the page that shows the company's
+      # website is its own (its title, say), cited as the website's source.
+      def website_item(doc)
+        item = doc["website_quote"]
+        item if item.respond_to?(:key?)
+      end
+
       def short_description_item(doc)
         item = doc["short_description"]
         item if item.respond_to?(:key?)
@@ -256,6 +263,7 @@ module Seed
         description_items(doc).each { |item| about ? backs[item] << about : backs[item] }
         backs[short_description_item(doc)] << "short_description" if short_description_item(doc)&.dig("source_url")
         backs[legal] << "legal_name" if legal
+        backs[website_item(doc)] << "website" if website_item(doc)&.dig("source_url")
         # An unquoted legal name still finds a record an earlier seed loaded
         # under it (it's in aliases), then is removed from the aliases in the
         # same write.

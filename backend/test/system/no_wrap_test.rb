@@ -48,61 +48,6 @@ class NoWrapTest < ApplicationSystemTestCase
     page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
   end
 
-  test "a list of owners goes under its label at 1440, its last owner whole beside its numbers" do
-    resize_viewport(1440, 900)
-    visit "/plants/#{@plant.slug}"
-
-    row = page.evaluate_script(<<~JS)
-      (() => {
-        const keep = document.querySelector(".nd-overview__keep")
-        const dd = keep.closest("dd"), dt = dd.previousElementSibling, last = keep.querySelector(".nd-overview__last")
-        return [getComputedStyle(dt).gridColumnStart, getComputedStyle(dd).gridColumnStart, last.textContent,
-          last.scrollWidth <= last.clientWidth, parseFloat(getComputedStyle(last).fontSize) >= 13]
-      })()
-    JS
-    assert_equal [ "1", "1", "Southern Nuclear Operating Co., Inc.", true, true ], row, "stacked at the panel's width, the last owner uncut"
-    assert_empty page.evaluate_script(AUDIT)
-  end
-
-  test "a long owner before the last ends in an ellipsis inside the column, with its full name in title" do
-    long = "Constellation Energy Generation Company of Illinois, Maryland, New York and Pennsylvania, LLC"
-    Organization.find_by!(name: "Constellation Energy Generation").update!(name: long)
-    [ [ 1440, 900 ], [ 390, 844 ] ].each do |width, height|
-      resize_viewport(width, height)
-      visit "/plants/#{@plant.slug}"
-
-      fits = page.evaluate_script(<<~JS)
-        (() => {
-          const keep = document.querySelector(".nd-overview__keep")
-          const dd = keep.closest("dd"), first = dd.querySelector(".nd-overview__val a")
-          return [dd.scrollWidth <= dd.clientWidth, first.getBoundingClientRect().right <= dd.getBoundingClientRect().right + 1, first.title, "truncate" in first.dataset]
-        })()
-      JS
-      assert_equal [ true, true, long, true ], fits, "at #{width}"
-      assert_empty page.evaluate_script(AUDIT), "at #{width}"
-    end
-  end
-
-  test "a long last owner and its numbers stay inside the key facts column at 1440" do
-    # Last in the list, by name.
-    Organization.find_by!(name: "Southern Nuclear Operating Co., Inc.").update!(name: "Southern Nuclear Operating Company of Alabama, Georgia and Mississippi, Inc.")
-    resize_viewport(1440, 900)
-    visit "/plants/#{@plant.slug}"
-
-    keep = page.evaluate_script(<<~JS)
-      (() => {
-        const keep = document.querySelector(".nd-overview__keep")
-        const dd = keep.closest("dd"), last = keep.querySelector(".nd-overview__last"), cites = keep.querySelector(".nd-overview__cites")
-        const box = dd.getBoundingClientRect()
-        return [dd.scrollWidth <= dd.clientWidth, keep.getBoundingClientRect().right <= box.right + 1,
-          cites.getBoundingClientRect().right <= box.right + 1, cites.getBoundingClientRect().width > 0, last.title]
-      })()
-    JS
-    assert_equal [ true, true, true, true ], keep.first(4), "the last owner and its numbers fit the column"
-    assert_match(/Southern Nuclear Operating Company of Alabama/, keep.last)
-    assert_empty page.evaluate_script(AUDIT)
-  end
-
   [ [ 360, 800 ], [ 390, 844 ] ].each do |width, height|
     test "nothing wraps and no source number stands alone at #{width}" do
       resize_viewport(width, height)

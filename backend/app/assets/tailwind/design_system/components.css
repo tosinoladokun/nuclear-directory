@@ -1384,6 +1384,8 @@
   /* One row on the page (a deal, a plant): held apart by space, no lines. */
   .nd-crows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .nd-crow { position: relative; display: flex; flex-direction: column; }
+  /* The row's own line with its mark and chevron, apart from the opened details below it. */
+  .nd-crow__top { position: relative; }
   .nd-crow__line { display: flex; align-items: center; gap: var(--nd-space-3); width: 100%; min-height: 56px; padding: var(--nd-space-3) 96px var(--nd-space-3) 0; border: 0; background: transparent; color: var(--nd-ink); text-align: left; font: inherit; cursor: pointer; }
   .nd-crow__line:hover, .nd-crow--open { background: var(--nd-paper-sunken); }
   .nd-crow__who { flex: 0 1 auto; min-width: 0; max-width: 300px; font: 400 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1413,7 +1415,8 @@
   .nd-mark { position: absolute; right: 40px; top: 0; height: 56px; min-width: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; color: var(--nd-ink-muted); text-decoration: none; font: 400 11px/16px var(--font-mono); }
   .nd-mark:hover { color: var(--nd-ink); }
   .nd-crow--plant .nd-mark { right: 0; }
-  @media (max-width: 639px) {
+  /* Rows stack below 640px, and at 1024 to 1143px, where the page's middle column is no wider than a phone's. */
+  @media (max-width: 639px), (min-width: 1024px) and (max-width: 1143px) {
     /* Two lines: the other company's name alone; then the verb, the short "what" and the date, with the
        source mark and chevron at the end of line 2 (the "what" gets the ellipsis). */
     .nd-crow__line { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; column-gap: var(--nd-space-3); row-gap: 2px; align-items: center; padding-right: 88px; }
@@ -1475,4 +1478,65 @@
 
 @layer components {
   .nd-tree .nd-tree__node .nd-catsq, .nd-tree__fold > summary .nd-catsq, .nd-tree__plants .nd-catsq { width: 28px; height: 28px; }
+}
+
+/* The plant page (#557): the company page's layout plus the status line, the owner sentence, share bars and the units table. */
+@layer components {
+  .nd-plantstatus { margin: 0; font: 400 15px/24px var(--font-text); }
+  .nd-sentence--narrow { display: none; }
+  @media (max-width: 639px) { .nd-sentence--wide { display: none; } .nd-sentence--narrow { display: block; } }
+  .nd-glance__note { display: block; }
+  /* The share bar: ink fill on a sunken track (112px; 72px on phones), the percentage in mono at the end. */
+  /* The bar sits in a fixed column at the end of the row, so every bar starts at the same x and can be compared; the percentage is mono, right-aligned, so the decimal points stack. */
+  .nd-crow__share { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: var(--nd-space-2); }
+  .nd-crow__share + .nd-crow__share { margin-left: 0; }
+  .nd-share { width: 112px; height: 6px; border-radius: 3px; background: var(--nd-paper-sunken); overflow: hidden; display: inline-block; }
+  .nd-crow--open .nd-share, .nd-crow__line:hover .nd-share { background: var(--nd-rule); }
+  .nd-share__fill { display: block; height: 100%; background: var(--nd-ink); }
+  .nd-crow__pct { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; width: 6ch; text-align: right; }
+  /* A plain source line in an opened row: the domain and date as muted text, no boxed number. */
+  .nd-src--plain { border: 0; padding: 0; margin: 0; background: none; font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); text-decoration: underline; text-underline-offset: 3px; }
+  /* Rows stack below 640px, and at 1024 to 1143px, where the page's middle column is no wider than a phone's. */
+  @media (max-width: 639px), (min-width: 1024px) and (max-width: 1143px) {
+    .nd-share { width: 72px; }
+    .nd-crow__share { grid-column: 2 / -1; grid-row: 3; }
+    /* An owner row: the units, the bar and the percentage share line 2 ("Units 3 and 4 · bar · 1.6%"). */
+    .nd-partygroup .nd-crow__line .nd-crow__share { grid-column: 2 / -1; grid-row: 2; margin-left: 0; }
+    .nd-partygroup .nd-crow__line:has(.nd-crow__what) .nd-crow__share { grid-column: 3 / -1; justify-self: start; }
+    .nd-partygroup .nd-crow__line:has(.nd-crow__what) .nd-crow__what { grid-column: 2; }
+    .nd-partygroup .nd-share { width: 56px; }
+  }
+
+  /* Units: a table on desktop; two-line rows on phones (the unit and its status; then reactor, capacity, docket). */
+  .nd-utable-wrap { max-width: 100%; }
+  .nd-utable { width: 100%; border-collapse: collapse; }
+  .nd-utable th { text-align: left; font: 700 11px/16px var(--font-text); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); padding: 0 var(--nd-space-3) var(--nd-space-2) 0; white-space: nowrap; }
+  .nd-utable td, .nd-utable tbody th { padding: var(--nd-space-3) var(--nd-space-3) var(--nd-space-3) 0; font: 400 15px/22px var(--font-text); text-transform: none; letter-spacing: normal; color: var(--nd-ink); vertical-align: middle; white-space: nowrap; }
+  .nd-utable tbody th { font-weight: 600; }
+  .nd-utable td.type-data { font: 400 13px/20px var(--font-mono); }
+  .nd-utable tr:target th, .nd-utable tr:target td { background: var(--nd-paper-sunken); }
+  .nd-utable__src { text-align: right; padding-right: 0; }
+  .nd-utable__src .nd-mark { position: static; height: auto; min-width: 0; }
+  /* The small glyph stays; on touch screens its link keeps a 44px box. */
+  @media (pointer: coarse) { .nd-utable__src .nd-mark { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; } }
+  @media (max-width: 639px) {
+    .nd-utable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .nd-utable, .nd-utable tbody { display: block; }
+    .nd-utable tr { display: flex; flex-wrap: wrap; column-gap: var(--nd-space-3); row-gap: 2px; padding: var(--nd-space-3) 0; align-items: center; }
+    .nd-utable td, .nd-utable tbody th { padding: 0; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nd-utable__unit { order: 1; flex: 1 0 calc(100% - 150px); min-width: 0; }
+    .nd-utable__status { order: 2; flex: 0 0 auto; }
+    .nd-utable td[data-col="reactor"], .nd-utable td[data-col="capacity"], .nd-utable td[data-col="nrc-docket"] { order: 3; font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); display: block; flex: 0 0 auto; }
+    .nd-utable td[data-col="capacity"], .nd-utable td[data-col="nrc-docket"] { font: 400 13px/20px var(--font-mono); }
+    .nd-utable__src { order: 4; margin-left: auto; }
+  }
+}
+
+/* Owner rows (#557, Design's review): the name has its own column that ends in an ellipsis, then the units, then the bar column. */
+@layer components {
+  @media (min-width: 640px) {
+    .nd-partygroup .nd-crow__who { display: flex; flex: 0 1 280px; max-width: none; }
+    .nd-partygroup .nd-crow__who .nd-crow__name { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nd-partygroup .nd-crow__what { flex: 0 0 auto; min-width: 0; }
+  }
 }

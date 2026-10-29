@@ -1,5 +1,6 @@
 # Seed research - 22 Oct 2026 (awardee companies with no role). Quote from the company's own page, checked live.
 name: Good Energy Collective
+website: https://www.goodenergycollective.org
 status: active
 roles:
 - key: research_organization
@@ -13,6 +14,9 @@ notes: An existing record (DOE awardee). Only the role is added, from the compan
 description:
   source_url: https://www.goodenergycollective.org/
   quote: We develop community-informed policy through research and direct engagement to accelerate responsible deployment of clean nuclear power.
+  also:
+  - source_url: https://www.goodenergycollective.org/
+    quote: "Good Energy Collective | Nuclear Energy Policy Research"
 short_description:
   text: 'Nuclear policy research'
   source_url: https://www.goodenergycollective.org/

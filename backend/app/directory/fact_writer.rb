@@ -1134,7 +1134,7 @@ module Directory
       end
 
       def kept_licensing_stage?(stage, owner, into)
-        same = owner == :organization_id ? { design_name: stage.design_name } : { nrc_docket: stage.nrc_docket }
+        same = owner == :organization_id && stage.design_approval? ? { design_name: stage.design_name } : { nrc_docket: stage.nrc_docket }
         LicensingStage.exists?(owner => into.id, stage: stage.stage, **same)
       end
 
@@ -1191,9 +1191,12 @@ module Directory
           # stage: the same unit reaching the same stage on the same docket.
           if attrs[:facility_id].present?
             model.find_by(facility_id: attrs[:facility_id], nrc_docket: LicensingStage.normalize_docket(attrs[:nrc_docket]), stage: attrs[:stage])
-          elsif attrs[:organization_id].present?
+          elsif attrs[:organization_id].present? && attrs[:stage].to_s == "design_approval"
             model.find_by(organization_id: attrs[:organization_id], design_name: LicensingStage.normalize_design_name(attrs[:design_name]),
               stage: attrs[:stage])
+          elsif attrs[:organization_id].present?
+            # A developer's project stage (#650) is its docket's, named or not.
+            model.find_by(organization_id: attrs[:organization_id], nrc_docket: LicensingStage.normalize_docket(attrs[:nrc_docket]), stage: attrs[:stage])
           end
         end
       end

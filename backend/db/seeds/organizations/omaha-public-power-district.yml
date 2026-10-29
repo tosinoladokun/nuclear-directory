@@ -1,5 +1,6 @@
 # Seed research for the no-category audit (PM, 28 Oct 2026). Role quote is the line already recorded as this company's evidence.
 name: Omaha Public Power District
+website: https://www.oppd.com
 status: active
 roles:
 - key: utility
@@ -9,3 +10,6 @@ roles:
 technologies: []
 relationships: []
 facilities: []
+description:
+  source_url: https://www.oppd.com/
+  quote: "OPPD Homepage"

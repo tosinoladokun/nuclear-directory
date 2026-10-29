@@ -216,6 +216,11 @@ module Directory
 
     def role_key?(key) = key.present? && Role.exists?(key:)
 
+    # A company's published role keys (["data_center_offtaker"]).
+    def role_keys(organization_id)
+      OrganizationRole.joins(:role).where(organization_id:, verification_status: "verified").pluck("roles.key")
+    end
+
     # Whether a company has a role with a source (pending or published), so
     # a new company reaches the owner with its category (#548). Reads only.
     def sourced_role?(organization_id) = sourced_role_ids([ organization_id ]).any?
@@ -549,6 +554,11 @@ module Directory
       holdings holding group international global services company co corp corporation inc incorporated
       llc lp llp ltd limited plc
     ].to_set.freeze
+    # What a company does, as its name says, by trade: two names of one brand
+    # never say different trades ("Standard Nuclear" isn't "Standard Power";
+    # DQ, 29 Oct), while energy, power and generation are one ("Dominion
+    # Generation" is Dominion Energy).
+    TRADES = { "nuclear" => :nuclear, "energy" => :power, "power" => :power, "generation" => :power }.freeze
     # Shorter brand keys ("x" from "X-energy") match too much to trust.
     MIN_BRAND_KEY_LENGTH = 4
     # Brands that are their own company even though they look like an arm of
@@ -576,7 +586,7 @@ module Directory
       prefix = ActiveRecord::Base.sanitize_sql_like(key)
       OrganizationAlias.where("organization_aliases.normalized_alias LIKE ? OR organization_aliases.normalized_alias LIKE ?",
         "#{prefix}%", "the #{prefix}%")
-        .includes(:organization).select { |a| brand_key(a.alias, plants:) == key }
+        .includes(:organization).select { |a| brand_key(a.alias, plants:) == key && same_trade?(name, a.alias) }
         .map(&:organization).uniq.first(10).map { |org| OrganizationRef.from(org) }
     end
 
@@ -733,6 +743,12 @@ module Directory
         place = place_words_at_end(words, plants)
         words = strip_entities(words.first(words.size - place)) if place
         words
+      end
+
+      # Both names say what the company does, and they don't share a word of it.
+      def same_trade?(one, other)
+        said = [ one, other ].map { |text| OrganizationAlias.normalize(text.to_s).split.filter_map { |word| TRADES[word] }.to_set }
+        said.any?(&:empty?) || said.first.intersect?(said.last)
       end
 
       def strip_entities(words)

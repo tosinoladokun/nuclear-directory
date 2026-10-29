@@ -74,10 +74,18 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
       { kind: "organization", quote:, payload: { "name" => FUNDER, "aliases" => [ "ARPA-E" ] } },
       { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])) },
       { kind: "relationship", quote:, payload: link.merge("description" => "Research funding from ARPA-E (nuclear fission and fusion)") },
-      { kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "award",
-        "external_id" => source.url, "amount_usd" => facts["Award"]&.delete("$,"), "program" => facts["Program"]).compact }
-    ]
+      # An award needs its amount and a start: ARPA-E's release date of the
+      # project is the date it states; without both, no term is proposed.
+      (if (amount = facts["Award"]&.delete("$,")) && (released = release_date(facts["Released"]))
+         { kind: "deal_term", quote:, payload: link.merge("link_type" => "Relationship", "term_type" => "award",
+           "external_id" => source.url, "amount_usd" => amount, "starts_on" => released, "program" => facts["Program"]).compact }
+       end)
+    ].compact
   end
+
+  # The line, with what extract proposes from it: a new version reads every project again.
+  EXTRACT_VERSION = "award-start-1"
+  def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   def new_sources_per_run = NEW_PER_NIGHT
 
@@ -95,6 +103,13 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   end
 
   private
+    # "Jun 18 2026" => "2026-06-18"; nil when ARPA-E words it otherwise.
+    def release_date(text)
+      Date.strptime(text.to_s.squish, "%b %d %Y").iso8601
+    rescue Date::Error
+      nil
+    end
+
     # ARPA-E's "City, ST" for the organization (gap fill, 29 Oct): its
     # headquarters as ARPA-E records the awardee; anything else, nothing.
     def location(text)
@@ -175,6 +190,8 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
       read = { fetched_at: Time.current, crawl_status: "ok", status_reason: nil, http_status: 200 }
       # Unchanged: today's index still confirms it, so only the read is recorded.
       if !fresh && source.content_text == line
+        # Read before this version of extract (29 Oct: awards without a start): extracted again.
+        read = read.merge(extracted_sha256: nil) if source.extracted_sha256.present? && source.extracted_rows_sha256 != rows_sha256(source)
         source.update!(read)
         return false
       end
