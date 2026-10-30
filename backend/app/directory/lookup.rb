@@ -215,6 +215,7 @@ module Directory
     end
 
     def role_key?(key) = key.present? && Role.exists?(key:)
+    def readable_website?(url) = Organization.readable_website?(url)
 
     # A company's published role keys (["data_center_offtaker"]).
     def role_keys(organization_id)

@@ -469,5 +469,9 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_nil @holtec.reload.hq_city, "nothing written until Tosin's Yes"
     assert_nil DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal "rejected", claim.reload.status
+    act({ action: "propose_fields", target: @holtec.id, fields: { website: "javascript:alert(1)" }, quote: "q", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { description: "x" * 2001 }, quote: "q", source_url: @page.url, reason: "r" })
+    assert_match "full https:// address", results.first["error"]
+    assert_match "2000 characters at most", results.second["error"]
   end
 end

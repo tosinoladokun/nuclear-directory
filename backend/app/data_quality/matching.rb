@@ -29,6 +29,7 @@ module DataQuality::Matching
   DAILY_ROLES = 200
   # What Data Quality may fill on a published company (PM, 30 Oct: complete companies).
   FIELDS = %w[website description short_description hq_city hq_state].freeze
+  MAX_DESCRIPTION = 2_000
   VERDICTS = %w[approve reject].freeze
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
@@ -225,6 +226,9 @@ module DataQuality::Matching
       return fail_with.call("only #{FIELDS.join(', ')} can be proposed") unless (fields.keys - FIELDS).empty?
       return fail_with.call("give a value for every field") if fields.values.any?(&:blank?)
       return fail_with.call("a short description is #{ShortDescription::MAX} characters at most") if fields["short_description"].to_s.length > ShortDescription::MAX
+      return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if fields["description"].to_s.length > MAX_DESCRIPTION
+      # Only a website people can open (https with a host): never a javascript: or broken link (Infra).
+      return fail_with.call("the website must be a full https:// address") if fields.key?("website") && !directory.readable_website?(fields["website"])
     end
     # A retry (same request_key) is answered first, whatever today's count.
     key = row["request_key"].presence&.to_s
