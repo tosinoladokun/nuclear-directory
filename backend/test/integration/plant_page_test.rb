@@ -161,6 +161,14 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "every correction link on a plant page is nofollow: overview panel, missing details and the quiet line" do
+    get plant_path(slug: "plant-vogtle")
+
+    links = css_select("a[href^='/corrections']")
+    assert links.any?
+    assert links.all? { |link| link["rel"].to_s.split.include?("nofollow") }, links.map { |link| [ link["href"], link["rel"] ] }.inspect
+  end
+
   test "an opened row shows its source as plain text: no boxed number" do
     get plant_path(slug: "plant-vogtle")
 

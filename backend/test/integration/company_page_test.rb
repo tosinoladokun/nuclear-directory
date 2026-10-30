@@ -196,6 +196,24 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crow__more .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
   end
 
+  test "every link into /corrections is nofollow, so crawlers don't discover the form's URLs" do
+    [ company_path(slug: "kairos-power"), companies_path, companies_path(category: "plants") ].each do |path|
+      get path
+      links = css_select("a[href^='/corrections']")
+      assert links.any?, path
+      assert links.all? { |a| a["rel"].to_s.split.include?("nofollow") }, "#{path}: #{links.map { |a| a['href'] }}"
+    end
+  end
+
+  test "a plant page's correction links are nofollow too: the overview panel, 'Suggest a source' and the quiet line" do
+    get plant_path(slug: @hermes.slug)
+
+    links = css_select("a[href^='/corrections']")
+    assert links.any?
+    assert links.all? { |link| link["rel"].to_s.split.include?("nofollow") }, links.map { |link| [ link["href"], link["rel"] ] }.inspect
+    assert_select "nav.nd-quiet a[href^='/corrections'][rel~=nofollow]", 1
+  end
+
   test "the quiet line is the page's last line: sources, cite this page, one Report a correction" do
     get company_path(slug: "kairos-power")
 
