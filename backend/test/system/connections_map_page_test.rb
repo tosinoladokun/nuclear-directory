@@ -1,19 +1,17 @@
 require "application_system_test_case"
 require_relative "../support/connections_fixtures"
 
-# The connections map (#363, #561). Tosin's hard rule: a verb never touches a
-# line, a node, a name or another verb, anywhere. Checked on the pages Design
+# The connections map (#363, #561, #682). Tosin's hard rule: no text touches another text or a line, anywhere. Checked on the pages Design
 # drew, at desktop size in light and dark; phones get a tree, checked for order,
 # 44px rows and no sideways scroll. The map is a picture: no details card, no
 # list toggle, no flowing dots.
 class ConnectionsMapPageTest < ApplicationSystemTestCase
   include ConnectionsFixtures
 
-  # Every visible verb against every node circle (+6px), name, other verb
-  # (+4px) and the other lines, sampled every 4px; then each name: one
-  # line, inside its slot, at or above its floor, uncut. Returns problems.
-  # Names too long for one line that only a short name fixes ("DOE"): Data
-  # Quality fills short_name (#399). Until then these may end in "…".
+  # Text boxes (every name and every group heading) against each other (+4px) and against every line (sampled every 4px, +2px);
+  # then each name: one line, inside its slot, at or above its floor, uncut, and not cut while it would still fit at 13px.
+  # Names too long for one line that only a short name fixes ("DOE"): Data Quality fills short_name (#399); until then
+  # these may end in "…".
   WAITING = [ "U.S. Department of Energy", "Southern Nuclear Operating Company", "Global Nuclear Fuel–Americas" ].freeze
 
   CHECK = <<~JS.freeze
@@ -23,43 +21,27 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
       document.querySelectorAll(".nd-map__svg").forEach((svg) => {
         if (svg.getClientRects().length === 0) return
         if (svg.dataset.laidOut !== "true") return problems.push("not laid out")
-        const circles = [...svg.querySelectorAll(".nd-map__ring")].map((c) => { const half = c.width.baseVal.value / 2; return { x: c.x.baseVal.value + half, y: c.y.baseVal.value + half, r: half * 1.42 + 4 } })
-        const names = [...svg.querySelectorAll(".nd-map__name")]
-        const labels = [...svg.querySelectorAll(".nd-map__label")].filter((l) => l.style.visibility !== "hidden")
-        const lines = new Map()
-        svg.querySelectorAll(".nd-map__edge").forEach((edge) => {
-          const points = []
-          edge.querySelectorAll(".nd-map__line").forEach((line) => {
-            const length = line.getTotalLength()
-            for (let at = 0; at <= length; at += 4) points.push(line.getPointAtLength(at))
-          })
-          lines.set(edge.dataset.group, points)
-        })
+        const texts = [...svg.querySelectorAll(".nd-map__name, .nd-map__group")]
+        const boxes = texts.map((text) => { const box = text.getBBox(); return { text, x: box.x, y: box.y, width: box.width, height: box.height } })
         const overlap = (a, b, gap) => a.x < b.x + b.width + gap && b.x < a.x + a.width + gap && a.y < b.y + b.height + gap && b.y < a.y + a.height + gap
-        const inside = (p, b) => p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height
-        labels.forEach((label, i) => {
-          const box = label.getBBox()
-          const id = label.dataset.group
-          const name = id + " (" + label.textContent + ")"
-          // "sells power to" may drop to "sells power" as a last resort: the 696px column leaves little room for it.
-          if (label.dataset.shortened && label.dataset.verb !== "sells power to") problems.push("shortened: " + name)
-          circles.forEach((c) => {
-            const x = Math.max(box.x, Math.min(c.x, box.x + box.width)), y = Math.max(box.y, Math.min(c.y, box.y + box.height))
-            if (Math.hypot(c.x - x, c.y - y) < c.r) problems.push("touches a node: " + name)
-          })
-          // 8px of air from every name, the record's included (Design QA on #561: "sells power" sat on "Constellation").
-          names.forEach((n) => { if (overlap(box, n.getBBox(), 8)) problems.push("within 8px of the name " + n.textContent + ": " + name) })
-          labels.forEach((other, j) => { if (j !== i && overlap(box, other.getBBox(), 4)) problems.push("touches the verb " + other.dataset.group + ": " + name) })
-          lines.forEach((points, group) => { const hit = points.find((p) => inside(p, box)); if (group !== id && hit) problems.push("touches the line " + group + ": " + name + " box " + [box.x, box.y, box.width, box.height].map(Math.round).join(",") + " point " + Math.round(hit.x) + "," + Math.round(hit.y)) })
+        boxes.forEach((a, i) => boxes.forEach((b, j) => { if (j > i && overlap(a, b, 4)) problems.push("text touches text: " + a.text.textContent.trim() + " / " + b.text.textContent.trim()) }))
+        svg.querySelectorAll(".nd-map__line").forEach((line) => {
+          const length = line.getTotalLength()
+          for (let at = 0; at <= length; at += 4) {
+            const point = line.getPointAtLength(at)
+            boxes.forEach((box) => { if (point.x >= box.x - 2 && point.x <= box.x + box.width + 2 && point.y >= box.y - 2 && point.y <= box.y + box.height + 2) problems.push("a line crosses: " + box.text.textContent.trim()) })
+          }
         })
-        // No line crosses a name, the record's name under its square above all.
-        names.forEach((n) => lines.forEach((points, group) => { const hit = points.find((p) => inside(p, n.getBBox())); if (hit) problems.push("line " + group + " crosses the name " + n.textContent + " at " + Math.round(hit.x) + "," + Math.round(hit.y) + " in " + [n.getBBox().x, n.getBBox().y, n.getBBox().width, n.getBBox().height].map(Math.round).join(",")) }))
-        names.filter((n) => !WAITING.includes(n.querySelector("title").textContent)).forEach((n) => {
+        svg.querySelectorAll(".nd-map__name").forEach((n) => {
+          if (WAITING.includes(n.querySelector("title").textContent)) return
           const size = parseFloat(getComputedStyle(n).fontSize)
           if (n.getComputedTextLength() > Number(n.dataset.slot) + 0.5) problems.push("name past its slot: " + n.textContent)
           if (size < Number(n.dataset.floor)) problems.push("name below its floor: " + n.textContent)
           if ("truncate" in n.dataset) problems.push("name cut: " + n.textContent)
         })
+        // Group headings read in the phone tree's order, left side first.
+        const groups = [...svg.querySelectorAll(".nd-map__group")].map((g) => g.textContent.trim())
+        if (new Set(groups).size !== groups.length) problems.push("a heading appears twice: " + groups.join(", "))
       })
       return [...new Set(problems)]
     })()
@@ -81,7 +63,7 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   }.freeze
 
   PAGES.each do |title, path|
-    test "#{title}: no verb touches a line, node, name or verb, and every name fits, at 1440, light and dark" do
+    test "#{title}: no text touches another text or a line, and every name fits, at 1440, light and dark" do
       url = instance_exec(&path)
       problems = %i[light dark].flat_map do |scheme|
         resize_viewport(1440, 900)

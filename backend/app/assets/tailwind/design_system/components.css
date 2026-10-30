@@ -1134,15 +1134,13 @@
   .nd-map__node--fold { cursor: pointer; }
   .nd-map__node--fold .nd-map__ring { stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 4 3; }
   .nd-map__node:focus-visible .nd-map__ring { stroke: var(--nd-focus); stroke-width: 2; stroke-dasharray: none; }
+  /* A group's heading over its rows (#682): mono, uppercase, muted; never on a line. */
+  .nd-map__group { font: 500 11px var(--font-mono); letter-spacing: .08em; fill: var(--nd-ink-muted); }
   .nd-map__name { font-family: var(--font-text); font-weight: 500; fill: var(--nd-ink); }
   .nd-map__node--centre .nd-map__name { font-weight: 600; }
   a.nd-map__node:hover .nd-map__name, a.nd-map__node:focus-visible .nd-map__name { text-decoration: underline; }
 
   /* The verb sits on its line in 12px muted text on a paper backing (the halo). */
-  .nd-map__label { font: 500 12px var(--font-text); fill: var(--nd-ink-muted); }
-  .nd-map__label--path { stroke: none; }
-  .nd-map__halo { font: 500 12px var(--font-text); fill: var(--nd-paper); stroke: var(--nd-paper); stroke-width: 6; stroke-linejoin: round; }
-  .nd-map__label--flat { stroke: var(--nd-paper); stroke-width: 6; stroke-linejoin: round; paint-order: stroke; }
 
   .nd-map__note { margin: var(--nd-space-3) 0 0; }
 

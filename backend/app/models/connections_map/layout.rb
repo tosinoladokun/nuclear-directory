@@ -1,310 +1,153 @@
-# Where everything on a connections map sits (#363, #561): the page's own
-# record in the centre, the others grouped by verb and direction, givers in
-# a column on the left and receivers on the right. Arrows that share a verb
-# and a direction (two or more) merge into a bundle: each member curves into
-# a junction and one trunk carries the single label. Phones don't use this:
-# they get a tree (shared/_connections_tree), which needs no layout.
+# Where everything on a connections map sits on desktop (#363, #561, #682): the page's own record in the middle with its
+# name under it; what it does to others on the right, what others do to it on the left, as straight lines at right angles.
+# Each side has one trunk from the record's square to a vertical bus; from the bus a straight branch runs to each
+# company's square (an arrowhead on the right side's branches; on the left side the trunk's arrowhead points into the
+# record). Each group has its heading (mono, muted) above its rows, so no word ever sits on a line. Group order is the
+# phone tree's, so both widths read the same. Phones don't use this: they get a tree (shared/_connections_tree).
 #
-# The server works out every position, so the map reads without
-# JavaScript; connections_map_controller.js then fits the names and moves
-# any label that collides.
+# The server works out every position; connections_map_controller.js then fits the names to their slots.
 #
 #   layout = ConnectionsMap::Layout.new(map.folded, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "cm-f-w")
-#   layout.groups.first.label_path # => "M ..."
+#   layout.headings.map(&:text) # => ["SUPPLIED BY", "FUNDED BY", ...]
 class ConnectionsMap
   class Layout
-    # font and floor: a name's size and the smallest it shrinks to (DESIGN.md
-    # one-line law: 13px); slot: the widest a name may be. centre_r and node_r
-    # are half the side of the boxes: a 36px square for the page's record, 28px
-    # for the others (#561). The map is 696px wide, the page's middle column.
-    Size = Data.define(:key, :width, :centre_r, :node_r, :font, :floor, :label_font, :slot, :short_names)
-    WIDE = Size.new(key: "wide", width: 696, centre_r: 18, node_r: 14, font: 13, floor: 13, label_font: 12, slot: 148, short_names: false)
+    # font and floor: a name's size and the smallest it shrinks to (the one-line law, DESIGN.md: 13px); slot: the widest a
+    # name may be. centre_r and node_r are half the side of the boxes: a 36px square for the page's record, 28px for the
+    # others. The map is 696px wide, the page's middle column.
+    Size = Data.define(:key, :width, :centre_r, :node_r, :font, :floor, :slot)
+    WIDE = Size.new(key: "wide", width: 696, centre_r: 18, node_r: 14, font: 15, floor: 13, slot: 148)
 
-    PAD = 24
-    PAD_X = 8        # the left and right edge of the map to the names: the page's column has no spare room
-    ROW = 48         # one node to the next in a column
-    GROUP_GAP = 28   # wide: between groups in a column
+    PAD_X = 4
+    NAME_GAP = 8      # a square to its name
+    PAD_Y = 16
+    ROW = 40          # one company to the next
+    HEAD = 26         # a group's heading
+    BRANCH = 16       # bus to a company's square
+    TRUNK_MIN = 64    # the record's square to its bus
+    SLOT_MIN = 70
+    NAME_CHAR = 7.4   # a name's width per character at 13px (the floor); the controller measures the real one
+    CENTRE_CHAR = 8.3 # the record's name, semibold
+    CENTRE_FONT = 16
 
-    # A node where it's drawn. anchor: the name's text-anchor.
-    Placed = Data.define(:node, :x, :y, :r, :name, :name_x, :name_y, :anchor, :slot)
+    # A node where it's drawn. anchor: the name's text-anchor. font: its size before it shrinks.
+    Placed = Data.define(:node, :x, :y, :r, :name, :name_x, :name_y, :anchor, :slot, :font)
+    # One straight line (a move and horizontal or vertical runs). arrow: it ends in an arrowhead.
+    Line = Data.define(:path, :arrow)
+    # A group's heading above its rows.
+    Heading = Data.define(:text, :x, :y, :anchor)
 
-    # One arrow of a group: its curve.
-    Member = Data.define(:edge, :path, :arrow)
-
-    # A focusable line: one edge, or a bundle. label_path: the trunk (or the
-    # edge) the verb sits on; label_reversed: the same, drawn the other way,
-    # so the word never reads upside down.
-    Group = Data.define(:id, :verb, :edges, :inbound, :members, :trunk, :label_path, :label_reversed, :label_at, :steep) do
-      def bundle? = edges.size > 1
-    end
-
-    attr_reader :size, :prefix, :height, :centre, :placed, :groups
+    attr_reader :size, :prefix, :height, :centre, :placed, :lines, :headings, :bus_x
 
     def initialize(edges, centre:, size:, prefix:)
       @size = size
       @prefix = prefix
       @centre_node = centre
       @placed = {}
-      @groups = []
-      @links_to = edges.flat_map { |edge| [ edge.giver.key, edge.receiver.key ] }.tally
+      @lines = []
+      @headings = []
       groups = edges.group_by { |edge| [ edge.verb, edge.receiver.key == centre.key ] }
-        .sort_by { |(verb, inbound), list| [ ConnectionsMap.verb_rank(verb), inbound ? 0 : 1, -list.size ] }
-        .map { |(verb, inbound), list| [ verb, inbound, list.sort_by { |edge| other(edge, inbound).name.downcase } ] }
-      lay_out_wide(groups)
+      sides = { left: [], right: [] }
+      groups.each { |(verb, inbound), list| sides[inbound ? :left : :right] << [ verb, inbound, list.sort_by { |edge| other(edge, inbound).name.downcase } ] }
+      sides.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ ConnectionsMapHelper::TREE_ORDER[inbound].index(verb) || 9, ConnectionsMap.verb_rank(verb) ] } }
+      lay_out(sides)
     end
 
     def width = size.width
     def nodes = placed.values
 
-    # The estimated width of a word in the label font (small caps, .06em
-    # tracking); the controller measures the real one.
-    def self.label_width(text, font) = (text.length * font * 0.6).ceil
-
     private
       def other(edge, inbound) = inbound ? edge.giver : edge.receiver
-      def side_key(node, side) = "#{node.key}@#{side}"
 
-      # Columns: givers to the centre on the left, receivers on the right, always (#561). A partner that is both
-      # (funds the centre and buys its power) is drawn once on each side.
-      def lay_out_wide(groups)
-        sides = { left: [], right: [] }
-        height_of = ->(list) { list.sum { |(_, inbound, edges)| fresh(edges, inbound, list).size * ROW + GROUP_GAP } }
-        groups.each { |group| sides[group[1] ? :left : :right] << group }
-        sides.each_value { |list| list.sort_by! { |(verb, inbound, _)| [ ConnectionsMap.verb_rank(verb), inbound ? 0 : 1 ] } }
-
+      def lay_out(sides)
         r = size.node_r
-        @slots = side_slots(sides, r)
-        column = sides.values.map { |list| height_of.(list) - GROUP_GAP }.max.to_i
-        @height = [ column, size.centre_r * 2 + 120 ].max + PAD * 2 + 20
-        @left_x = PAD_X + @slots[:left] + 10 + r
-        @right_x = width - (PAD_X + @slots[:right] + 10 + r)
-        cx = (@left_x + @right_x) / 2.0 # the record sits between the two columns: spare width on one side goes to the other
-        cy = @height / 2.0 - 10
-        @centre = place(@centre_node, cx, cy, size.centre_r, name_x: cx, name_y: cy + size.centre_r + 42, anchor: "middle", slot: 240)
+        big = size.centre_r
+        slots = side_slots(sides)
+        node_x = { left: PAD_X + slots[:left] + NAME_GAP + r, right: width - (PAD_X + slots[:right] + NAME_GAP + r) }
+        @bus_x = { left: node_x[:left] + r + BRANCH, right: node_x[:right] - r - BRANCH }
+        bus_x = @bus_x
+        cx = (bus_x[:left] + bus_x[:right]) / 2.0
+
+        side_height = sides.transform_values { |list| list.sum { |(_, _, edges)| HEAD + ROW * edges.size } }
+        tallest = [ side_height.values.max, 96 ].max
+        cy = PAD_Y + HEAD / 2.0 + tallest / 2.0
+        @height = [ cy + big + 62, cy + tallest / 2.0 + HEAD / 2.0 + PAD_Y ].max.ceil
+        middle = bus_x[:right] - bus_x[:left] - 8
+        @centre = place(@centre_node, cx, cy, big, name: @centre_node.name, name_x: cx, name_y: cy + big + 30, anchor: "middle", slot: middle, font: CENTRE_FONT)
 
         sides.each do |side, list|
-          y = (@height - (height_of.(list) - GROUP_GAP)) / 2.0 + ROW / 2.0 - 10
-          x = side == :left ? @left_x : @right_x
+          next if list.empty?
+
+          sign = side == :left ? -1 : 1
+          # The rows' middle sits level with the record, so a lone company is straight across from it.
+          y = cy - side_height[side] / 2.0
+          first_row = y + HEAD + ROW / 2.0
+          last_row = y + side_height[side] - ROW / 2.0
+          y += cy - (first_row + last_row) / 2.0
+          rows = []
           list.each do |verb, inbound, edges|
-            nodes = edges.map do |edge|
+            @headings << Heading.new(text: heading_text(verb, inbound), x: (node_x[side] - sign * r).round(1), y: (y + HEAD - 9).round(1), anchor: side == :left ? "end" : "start")
+            y += HEAD
+            edges.each do |edge|
               node = other(edge, inbound)
-              next @placed[side_key(node, side)] if @placed[side_key(node, side)] # linked by another verb on this side too: drawn once
-
-              placed = place(node, x, y, r, side:, name_x: side == :left ? x - r - 10 : x + r + 10, name_y: y + 4.5,
-                anchor: side == :left ? "end" : "start", slot: @slots[side])
+              place(node, node_x[side], y + ROW / 2.0, r, name: row_name(edge, node), side:, name_x: node_x[side] + sign * (r + NAME_GAP), name_y: y + ROW / 2.0 + 5,
+                anchor: side == :left ? "end" : "start", slot: slots[side], font: size.font)
+              rows << (y + ROW / 2.0)
               y += ROW
-              placed
             end
-            y += GROUP_GAP
-            @groups << wide_group(verb, inbound, edges, nodes, side)
           end
+          draw_side(side, sign, bus_x[side], node_x[side], rows, cx, cy, big, r)
         end
-        anchor_centre_name
       end
 
-      # The record's name sits under its square, pulled to the side that has fewer lines running down past it: lines that
-      # leave the square's side and head down never cross a name that stops at the square's edge.
-      def anchor_centre_name
-        down = ->(side) { @placed.values.count { |placed| placed.node.key != @centre_node.key && (side == :left ? placed.x < @centre.x : placed.x > @centre.x) && placed.y > @centre.y + 10 } }
-        heavier = down.(:right) <=> down.(:left)
-        anchor, x = case heavier
-        when 1 then [ "end", @centre.x + size.centre_r ]    # more going down on the right: the name stops at the square's right edge
-        when -1 then [ "start", @centre.x - size.centre_r ]
-        else [ "middle", @centre.x ]
+      # The trunk, the bus and a branch to each row.
+      def draw_side(side, sign, bus, node_x, rows, cx, cy, big, r)
+        top, bottom = [ rows.min, cy ].min, [ rows.max, cy ].max
+        record_edge = cx + sign * big
+        # right: out of the record, no arrowhead; left: into the record, with one.
+        @lines << (side == :right ? Line.new(path: "M#{f(record_edge)} #{f(cy)}H#{f(bus)}", arrow: false) : Line.new(path: "M#{f(bus)} #{f(cy)}H#{f(record_edge - 2)}", arrow: true))
+        @lines << Line.new(path: "M#{f(bus)} #{f(top)}V#{f(bottom)}", arrow: false)
+        rows.each do |y|
+          @lines << (side == :right ? Line.new(path: "M#{f(bus)} #{f(y)}H#{f(node_x - r - 2)}", arrow: true) : Line.new(path: "M#{f(node_x + r)} #{f(y)}H#{f(bus)}", arrow: false))
         end
-        @centre = place(@centre_node, @centre.x, @centre.y, size.centre_r, name_x: x, name_y: @centre.y + size.centre_r + 42, anchor:, slot: 240)
       end
 
-      def wide_group(verb, inbound, edges, nodes, side)
-        sign = side == :left ? -1 : 1
-        cx, cy, big = @centre.x, @centre.y, size.centre_r
-        if edges.size == 1
-          path = single(nodes.first, inbound)
-          return group(verb, inbound, edges, [ Member.new(edge: edges.first, path:, arrow: true) ], nil, path)
-        end
+      def f(value) = value.round(1).to_s.delete_suffix(".0")
 
-        space = side == :left ? (cx - big) - (@left_x + size.node_r) : (@right_x - size.node_r) - (cx + big)
-        trunk_length = [ [ Layout.label_width(verb, size.label_font) + 28, 88 ].max, space - 40 ].min
-        mean = nodes.sum(&:y) / nodes.size
-        # A second bundle to the same nodes (owns and operates the same plants)
-        # meets at its own junction, lower down, so neither hides the other.
-        again = reuse(nodes)
-        junction = [ cx + sign * (big + trunk_length), mean + again * 40 ]
-        shift = side_shift(junction[1])
-        centre_edge = [ cx + sign * big, cy + shift ] # leaves the square's side, clear of the name under it
-        # Heading down past the name under the square, a trunk leaves level; up, or level, the gentle S is enough.
-        trunk = if junction[1] > cy + 20
-          trunk_curve(inbound ? [ cx + sign * (big + 2), cy + shift ] : centre_edge, junction, inbound:)
-        else
-          inbound ? s_curve(junction, shorten(centre_edge, junction), push: 7) : s_curve(centre_edge, junction, push: 7)
-        end
-        members = edges.zip(nodes).map do |edge, node|
-          start = [ node.x - sign * node.r, node.y ]
-          if inbound
-            branch = elbow(start, junction)
-            Member.new(edge:, path: branch, arrow: false)
-          else
-            branch = elbow(junction, shorten(start, junction))
-            Member.new(edge:, path: branch, arrow: true)
-          end
-        end
-        group(verb, inbound, edges, members, trunk, trunk)
+      # The words over a group: what the record does ("SUPPLIES") or what is done to it ("SUPPLIED BY").
+      def heading_text(verb, inbound) = (inbound ? ConnectionsMapHelper::PASSIVE.fetch(verb) : verb).upcase
+
+      def name_estimate(edge, node)
+        text = node.fold? ? row_name(edge, node) : (node.short_name.presence || node.name)
+        text.length * NAME_CHAR + 12
       end
 
-      # One arrow between the centre and a node. A node linked by two verbs
-      # (owns and operates) gets two arrows bowed apart, so neither hides the other.
-      def single(node, inbound)
-        @bows ||= Hash.new(0)
-        step = 30
-        bows = @links_to[node.node.key].even? ? [ -step, step, -step * 1.5, step * 1.5 ] : [ nil, -step, step, -step * 1.5, step * 1.5 ]
-        bow = bows[@bows[node.node.key]]
-        @bows[node.node.key] += 1
-        from, to = inbound ? [ node, @centre ] : [ @centre, node ]
-        # One arrow to a node below leaves (or reaches) the record's side level, so it never crosses the name under the square.
-        return level_curve(inbound, node) if !bow && node.y > @centre.y + 20
+      # A fold's row says how many of its plants this verb covers ("2 of 13 plants").
+      def row_name(edge, node)
+        return node.name unless node.fold? && edge.covers && edge.covers < node.members.size
 
-        bow = -bow if bow && !inbound # the same side of the line whichever way it runs
-        s_curve(from.equal?(@centre) ? side_point(@centre, node) : edge_point(from, to), to.equal?(@centre) ? side_point(@centre, node, tip: true) : edge_point(to, from, tip: true), push: bow)
+        "#{edge.covers} of #{node.name}"
       end
 
-      # An S that is level at both ends: out of the record's side, into the node's side.
-      def level_curve(inbound, node)
-        sign = node.x > @centre.x ? 1 : -1
-        at_centre = side_point(@centre, node, tip: inbound)
-        at_node = [ node.x - sign * (node.r + (inbound ? 0 : 2)), node.y ]
-        a, b = inbound ? [ at_node, at_centre ] : [ at_centre, at_node ]
-        half = (b[0] - a[0]) / 2.0
-        path(a, [ a[0] + half, a[1] ], [ b[0] - half, b[1] ], b)
-      end
-
-      # A bundle's trunk leaves (or arrives at) the record's side level and turns toward its junction 60% of the way
-      # there, so it never crosses the name under the square (Design QA on #561, Constellation).
-      def trunk_curve(centre_end, junction, inbound:)
-        turn = centre_end[0] + (junction[0] - centre_end[0]) * 0.6
-        inbound ? path(junction, [ turn, junction[1] ], [ turn, centre_end[1] ], centre_end) : path(centre_end, [ turn, centre_end[1] ], [ turn, junction[1] ], junction)
-      end
-
-      # The middle of the record's side that faces the node: arrows meet its square there, never at a corner near its name.
-      def side_point(centre, node, tip: false)
-        sign = node.x > centre.x ? 1 : -1
-        [ centre.x + sign * (centre.r + (tip ? 2 : 0)), centre.y + side_shift(node.y) ]
-      end
-
-      # Lines that head up leave the square's side a little above its middle, lines that head down a little below, so
-      # a trunk going each way doesn't start on the same level (and a verb on one never sits on the other).
-      def side_shift(y) = y > @centre.y + 20 ? 8 : (y < @centre.y - 20 ? -8 : 0)
-
-      # How wide each side's names are likely to be, so each column reserves only that and the rest goes to the middle,
-      # where the verbs and trunks need it (the controller measures the real width; this only shares out the room).
-      NAME_CHAR = 7.2
-      SLOT_MIN = 70
-      def side_slots(sides, _r)
+      # How wide each side's names are likely to be, so each column reserves what its names need and the rest stays in
+      # the middle for the trunks and the record's name (the controller measures the real width).
+      def side_slots(sides)
         needs = sides.transform_values do |list|
-          list.flat_map { |(_, inbound, edges)| edges.map { |edge| other(edge, inbound).name.length * NAME_CHAR + 12 } }.max.to_i.clamp(SLOT_MIN, size.slot + 56)
+          # A company with a short name is given room for that (the controller still shows the full name where it fits).
+          list.flat_map { |(_, inbound, edges)| edges.map { |edge| name_estimate(edge, other(edge, inbound)) } }.max.to_i.clamp(SLOT_MIN, size.slot + 90)
         end
-        # Each side first gets what it needs up to the standard slot; what is left of the two standard slots' total
-        # plus 44px (the middle keeps the rest for verbs and trunks) goes to a side with longer names.
-        slots = needs.transform_values { |need| [ need, size.slot ].min }
-        pool = size.slot * 2 + 44 - slots.values.sum
-        needs.sort_by { |_, need| -need }.each do |side, need|
-          more = [ need - slots[side], pool ].min
-          slots[side] += more if more.positive?
-          pool -= [ more, 0 ].max
-        end
-        slots
+        # The middle keeps room for the record's name at 13px (and the trunks at least TRUNK_MIN each side); the two
+        # slots share what is left.
+        middle = [ @centre_node.name.length * CENTRE_CHAR + 8, size.centre_r * 2 + 2 * TRUNK_MIN ].max
+        room = width - 2 * (PAD_X + NAME_GAP + 2 * size.node_r + BRANCH) - middle
+        total = needs.values.sum
+        return needs.transform_values(&:round) if total <= room
+
+        needs.transform_values { |need| [ (need * room / total.to_f).round, SLOT_MIN ].max }
       end
 
-      # How many bundles already met these same nodes.
-      def reuse(nodes)
-        @junctions ||= Hash.new(0)
-        key = nodes.map { |node| node.node.key }.sort
-        (@junctions[key] += 1) - 1
-      end
-
-      # The nodes of a group not already placed by an earlier group in the list.
-      def fresh(edges, inbound, list)
-        earlier = list.take_while { |(_, _, other)| !other.equal?(edges) }.flat_map { |(_, was_inbound, other)| other.map { |edge| other(edge, was_inbound).key } }
-        edges.map { |edge| other(edge, inbound).key }.uniq - earlier
-      end
-
-      def group(verb, inbound, edges, members, trunk, label_on)
-        points = numbers(label_on)
-        start, finish = points.first(2), points.last(2)
-        mid = cubic_point(points, 0.5)
-        steep = true # every verb sits flat at the curve's midpoint, never tilted (Design QA on #561)
-        Group.new(id: "#{prefix}-#{edges.first.id}", verb:, edges:, inbound:, members:, trunk:, label_path: label_on,
-          label_reversed: (reverse(points) if finish[0] < start[0]), label_at: mid.map { |value| value.round(1) }, steep:)
-      end
-
-      def place(node, x, y, r, name_x:, name_y:, anchor:, slot:, side: nil)
-        name = size.short_names && node.short_name ? node.short_name : node.name
-        @placed[side ? side_key(node, side) : node.key] = Placed.new(node:, x: x.round(1), y: y.round(1), r:, name:, name_x: name_x.round(1), name_y: name_y.round(1), anchor:, slot: slot.round)
-      end
-
-      # Geometry. Points are [x, y]; paths are one move and one cubic.
-
-      # Where a line from one node toward another leaves the first's square (r is
-      # half its side); tip: 2px short, so the arrowhead's point touches the edge.
-      def edge_point(from, to, tip: false) = box_edge([ from.x, from.y ], [ to.x, to.y ], from.r + (tip ? 2 : 0))
-
-      # The point on the square of half-side `half` around `from`, on the line toward `to`.
-      def box_edge(from, to, half)
-        dx, dy = to[0] - from[0], to[1] - from[1]
-        reach = [ dx.abs, dy.abs ].max.nonzero? || 1
-        [ from[0] + dx / reach * half, from[1] + dy / reach * half ]
-      end
-
-      def towards(from, to, distance)
-        dx, dy = to[0] - from[0], to[1] - from[1]
-        length = Math.hypot(dx, dy).nonzero? || 1
-        [ from[0] + dx / length * distance, from[1] + dy / length * distance ]
-      end
-
-      def shorten(point, from) = towards(point, from, 2)
-
-      # A gentle S (spec section 3): control points at a third and two thirds,
-      # pushed to opposite sides by min(12% of the length, 22px).
-      def s_curve(from, to, push: nil)
-        dx, dy = to[0] - from[0], to[1] - from[1]
-        length = Math.hypot(dx, dy).nonzero? || 1
-        return arc(from, to, push, dx, dy, length) if push && push.abs >= 30
-        push ||= [ length * 0.12, 22 ].min
-        nx, ny = -dy / length * push, dx / length * push
-        c1 = [ from[0] + dx / 3 + nx, from[1] + dy / 3 + ny ]
-        c2 = [ from[0] + dx * 2 / 3 - nx, from[1] + dy * 2 / 3 - ny ]
-        path(from, c1, c2, to)
-      end
-
-      # A bowed arc, for a second arrow to the same node: both control points
-      # on one side.
-      def arc(from, to, push, dx, dy, length)
-        nx, ny = -dy / length * push, dx / length * push
-        path(from, [ from[0] + dx / 3 + nx, from[1] + dy / 3 + ny ], [ from[0] + dx * 2 / 3 + nx, from[1] + dy * 2 / 3 + ny ], to)
-      end
-
-      # A bundle branch: leaves its node level and turns into the junction.
-      def elbow(from, to)
-        mx = (from[0] + to[0]) / 2.0
-        path(from, [ mx, from[1] ], [ mx, to[1] ], to)
-      end
-
-      def path(*points) = "M#{fmt(points[0])} C#{points[1..].map { |point| fmt(point) }.join(' ')}"
-      def fmt(point) = point.map { |value| value.round(1).to_s.delete_suffix(".0") }.join(" ")
-      def numbers(d) = d.scan(/-?\d+(?:\.\d+)?/).map(&:to_f)
-
-      def reverse(points)
-        pairs = points.each_slice(2).to_a.reverse
-        path(*pairs)
-      end
-
-      def cubic_point(points, t)
-        p0, p1, p2, p3 = points.each_slice(2).to_a
-        2.times.map { |i| (1 - t)**3 * p0[i] + 3 * (1 - t)**2 * t * p1[i] + 3 * (1 - t) * t**2 * p2[i] + t**3 * p3[i] }
-      end
-
-      def cubic_tangent(points, t)
-        p0, p1, p2, p3 = points.each_slice(2).to_a
-        2.times.map { |i| 3 * (1 - t)**2 * (p1[i] - p0[i]) + 6 * (1 - t) * t * (p2[i] - p1[i]) + 3 * t**2 * (p3[i] - p2[i]) }
+      def place(node, x, y, r, name:, name_x:, name_y:, anchor:, slot:, font:, side: nil)
+        @placed[side ? "#{node.key}@#{side}" : node.key] = Placed.new(node:, x: x.round(1), y: y.round(1), r:, name:, name_x: name_x.round(1), name_y: name_y.round(1),
+          anchor:, slot: slot.round, font:)
       end
   end
 end

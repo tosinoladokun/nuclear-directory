@@ -15,26 +15,21 @@
 
         <% prefix = "cm-#{view[0]}" %>
         <% layout = ConnectionsMap::Layout.new(edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix:) %>
-        <svg class="nd-map__svg" viewBox="0 0 <%= layout.width %> <%= layout.height.ceil %>" width="<%= layout.width %>" height="<%= layout.height.ceil %>"
+        <svg class="nd-map__svg" viewBox="0 0 <%= layout.width %> <%= layout.height %>" width="<%= layout.width %>" height="<%= layout.height %>"
              aria-hidden="false" data-connections-map-target="svg">
           <defs>
-            <marker id="<%= prefix %>-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <marker id="<%= prefix %>-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
               <path class="nd-map__head" d="M0 0L10 5L0 10z"></path>
             </marker>
-            <% layout.groups.each do |group| %>
-              <% if group.label_reversed %><path id="<%= group.id %>-rev" d="<%= group.label_reversed %>"></path><% end %>
-            <% end %>
           </defs>
           <g class="nd-map__lines" aria-hidden="true">
-            <% layout.groups.each do |group| %>
-              <g class="nd-map__edge" data-group="<%= group.id %>">
-                <% group.members.each do |member| %>
-                  <path class="nd-map__line" d="<%= member.path %>"<% if member.arrow %> marker-end="url(#<%= prefix %>-arrow)"<% end %><% if !group.trunk %> id="<%= group.id %>-path"<% end %>></path>
-                <% end %>
-                <% if group.trunk %>
-                  <path class="nd-map__line" id="<%= group.id %>-path" d="<%= group.trunk %>"<% if group.inbound %> marker-end="url(#<%= prefix %>-arrow)"<% end %>></path>
-                <% end %>
-              </g>
+            <% layout.lines.each do |line| %>
+              <path class="nd-map__line" d="<%= line.path %>"<% if line.arrow %> marker-end="url(#<%= prefix %>-arrow)"<% end %>></path>
+            <% end %>
+          </g>
+          <g class="nd-map__groups" aria-hidden="true">
+            <% layout.headings.each do |heading| %>
+              <text class="nd-map__group" x="<%= heading.x %>" y="<%= heading.y %>" text-anchor="<%= heading.anchor %>"><%= heading.text %></text>
             <% end %>
           </g>
           <g class="nd-map__nodes">
@@ -47,8 +42,8 @@
                 <rect class="nd-map__ring" x="<%= (placed.x - placed.r).round(1) %>" y="<%= (placed.y - placed.r).round(1) %>" width="<%= placed.r * 2 %>" height="<%= placed.r * 2 %>" rx="<%= centre ? 8 : 6 %>"></rect>
                 <% if (icon_name = map_node_icon(map, node)) %><%= map_icon(icon_name, placed.x, placed.y, centre ? 20 : 16) %><% end %>
                 <text class="nd-map__name" x="<%= placed.name_x %>" y="<%= placed.name_y %>" text-anchor="<%= placed.anchor %>"
-                      data-slot="<%= placed.slot %>" data-font="<%= centre ? 16 : layout.size.font %>" data-floor="<%= centre ? 16 : layout.size.floor %>"
-                      data-short="<%= node.short_name if placed.name == node.name %>" style="font-size: <%= centre ? 16 : layout.size.font %>px"><%= placed.name %><title><%= node.name %></title></text>
+                      data-slot="<%= placed.slot %>" data-font="<%= placed.font %>" data-floor="<%= layout.size.floor %>"
+                      data-short="<%= node.short_name if placed.name == node.name %>" style="font-size: <%= placed.font %>px"><%= placed.name %><title><%= node.name %></title></text>
               <% end %>
               <% if centre %>
                 <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>"><%= inner %></g>
@@ -58,14 +53,6 @@
               <% else %>
                 <a href="<%= map_node_url(node) %>" class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" aria-label="<%= node.name %>"><%= inner %></a>
               <% end %>
-            <% end %>
-          </g>
-          <g class="nd-map__labels" aria-hidden="true">
-            <% layout.groups.each do |group| %>
-              <%# The halo is its own copy behind the word: Chrome won't apply paint-order to a textPath. %>
-              <text class="nd-map__halo" data-group="<%= group.id %>" dy="4"<%= raw(%( style="visibility: hidden")) if group.steep %>><textPath href="#<%= group.id %>-<%= group.label_reversed ? "rev" : "path" %>" startOffset="50%" text-anchor="middle"><%= group.verb %></textPath></text>
-              <text class="nd-map__label nd-map__label--path" data-group="<%= group.id %>" data-verb="<%= group.verb %>" dy="4"<%= raw(%( style="visibility: hidden")) if group.steep %>><textPath href="#<%= group.id %>-<%= group.label_reversed ? "rev" : "path" %>" startOffset="50%" text-anchor="middle"><%= group.verb %></textPath></text>
-              <text class="nd-map__label nd-map__label--flat" data-group="<%= group.id %>" data-verb="<%= group.verb %>" x="<%= group.label_at[0] %>" y="<%= group.label_at[1] + 4 %>" text-anchor="middle"<%= raw(%( style="visibility: hidden")) unless group.steep %>><%= group.verb %></text>
             <% end %>
           </g>
         </svg>

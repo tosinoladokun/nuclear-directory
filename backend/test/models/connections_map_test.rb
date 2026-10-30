@@ -70,19 +70,6 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert_equal "Both Co owns and operates #{@vogtle.name}", both.first.sentence
   end
 
-  test "each side reserves only what its names need, so the middle keeps the room for verbs (Design QA on #561)" do
-    build_vogtle
-    map = ConnectionsMap.for_plant(PlantProfile.new(@vogtle))
-    layout = ConnectionsMap::Layout.new(map.folded, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t")
-    left = layout.nodes.reject { |placed| placed.node.key == map.centre.key }.select { |placed| placed.x < layout.centre.x }
-
-    assert left.any?
-    assert_equal 1, left.map(&:slot).uniq.size
-    assert_operator left.first.slot, :>=, ConnectionsMap::Layout::SLOT_MIN
-    assert_operator left.first.slot, :<=, ConnectionsMap::Layout::WIDE.slot + 56
-    assert_operator layout.centre.x - left.first.x, :>=, 120, "at least 120px between the record and a column for the verb"
-  end
-
   test "every arrow and note names a web source, or isn't shown" do
     build_vogtle
     unsourced = company("Unsourced Owner")
@@ -132,60 +119,53 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert_equal "Subscription for 100 MW, pending state PSC approval.", map.notes.sole.text
   end
 
-  test "two bundles to the same plants meet at different junctions" do
-    company = cite!(company("Two Plant Utility", roles: [ role("utility") ]))
-    %w[North South].each do |name|
-      site = cite!(plant("#{name} Station", facility_type: "power_reactor", status: "operating"))
-      cite!(link(company, "owns", site))
-      cite!(link(company, "operates", site))
-    end
-    map = ConnectionsMap.for_company(CompanyProfile.new(company))
-    trunks = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t").groups.map(&:trunk)
-
-    assert_equal 2, trunks.compact.uniq.size
-  end
-
   test "short names drop the legal ending; a name without one has none" do
     assert_equal "Oglethorpe Power", ConnectionsMap.short_name("Oglethorpe Power Corporation")
     assert_equal "Southern Nuclear Operating", ConnectionsMap.short_name("Southern Nuclear Operating Co., Inc.")
     assert_nil ConnectionsMap.short_name("Georgia Power")
   end
 
-  test "the layout bundles arrows that share a verb and puts one label on the trunk" do
-    map = ConnectionsMap.for_plant(PlantProfile.new(build_vogtle))
-    size = ConnectionsMap::Layout::WIDE
-    layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size:, prefix: "t")
-    owns = layout.groups.find { |group| group.verb == "owns" }
+  def layout_for(map, prefix: "t") = ConnectionsMap::Layout.new(map.folded, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix:)
 
-    assert owns.bundle?
-    assert_equal 4, owns.members.size
-    assert owns.members.none?(&:arrow), "fan-in: the arrowhead is on the trunk"
-    assert_equal owns.trunk, owns.label_path
-    assert_equal 7, layout.nodes.size
-    assert_equal 696, size.width, "the page's middle column"
-    assert layout.nodes.all? { |node| node.x.between?(0, size.width) && node.y.between?(0, layout.height) }
+  test "straight lines at right angles: a trunk, a bus and a branch per company, arrowheads into the receivers (#682)" do
+    map = ConnectionsMap.for_plant(PlantProfile.new(build_vogtle))
+    layout = layout_for(map)
+
+    assert layout.lines.all? { |line| line.path.match?(/\AM-?[\d.]+ -?[\d.]+[HV]-?[\d.]+\z/) }, "a move and one horizontal or vertical run: no curve"
+    received = map.folded.count { |edge| edge.receiver.key == map.centre.key }.positive? ? 1 : 0 # the left trunk's arrowhead, into the record
+    given = map.folded.count { |edge| edge.giver.key == map.centre.key } # one branch arrowhead per company on the right
+    assert_equal received + given, layout.lines.count(&:arrow)
+    assert_equal 696, layout.width, "the page's middle column"
+    assert layout.nodes.all? { |node| node.x.between?(0, layout.width) && node.y.between?(0, layout.height) }
   end
 
-  # Every arrow runs box edge to box edge (#561): a single arrow starts on the giver's square and its tip ends
-  # within 2px of the receiver's square. The centre is a 36px square, the others 28px.
-  test "an arrow meets the edge of both boxes" do
+  test "each group has its heading from the record's side, in the phone tree's order (#682)" do
+    centre = cite!(company("Record Co", roles: [ role("utility") ]))
+    cite!(link(cite!(company("Alpha Fund")), "invests_in", centre)).update!(description: "Series A.")
+    cite!(link(cite!(company("Gamma Supply")), "supplies", centre))
+    cite!(link(centre, "supplies", cite!(company("Delta Buyer"))))
+    cite!(link(cite!(company("Epsilon Power")), "offtake_with", centre)).update!(description: "Signed: 10 MW.")
+    map = ConnectionsMap.for_company(CompanyProfile.new(centre))
+    layout = layout_for(map)
+
+    left, right = layout.headings.partition { |heading| heading.anchor == "end" }
+    assert_equal [ "FUNDED BY", "SUPPLIED BY" ], left.map(&:text), "what is done to the record, funds before supplies, as on a phone"
+    assert_equal [ "SELLS POWER TO", "SUPPLIES" ], right.map(&:text)
+    tree = Class.new { include ConnectionsMapHelper }.new.map_tree_rows(map).map { |row| [ row.inbound, row.verb ] }.uniq
+    assert_equal tree.map { |inbound, verb| (inbound ? ConnectionsMapHelper::PASSIVE.fetch(verb) : verb).upcase }, left.map(&:text) + right.map(&:text), "both widths read in the same order"
+  end
+
+  test "no heading sits on a line, and the record's name is clear of both buses (#682)" do
     map = ConnectionsMap.for_plant(PlantProfile.new(build_vogtle))
-    layout = ConnectionsMap::Layout.new(map.edges, centre: map.centre, size: ConnectionsMap::Layout::WIDE, prefix: "t")
-    placed = layout.nodes.index_by { |node| node.node.key }
-    assert_equal 18, layout.centre.r
-    assert_equal [ 14 ], layout.nodes.reject { |node| node.node.key == map.centre.key }.map(&:r).uniq
+    layout = layout_for(map)
+    buses = layout.bus_x.values
 
-    layout.groups.reject(&:bundle?).each do |group|
-      edge = group.edges.first
-      points = group.members.first.path.scan(/-?\d+(?:\.\d+)?/).map(&:to_f).each_slice(2).to_a
-      giver, receiver = placed.fetch(edge.giver.key), placed.fetch(edge.receiver.key)
-      gap = lambda do |point, box|
-        [ (point[0] - box.x).abs - box.r, (point[1] - box.y).abs - box.r ].max.abs
-      end
-
-      assert_operator gap.(points.first, giver), :<=, 2, "#{edge.sentence}: leaves the giver's edge"
-      assert_operator gap.(points.last, receiver), :<=, 2.5, "#{edge.sentence}: the tip meets the receiver's edge"
+    layout.headings.each do |heading|
+      assert buses.none? { |x| (heading.x - x).abs < 4 }, "#{heading.text} is not on a bus"
     end
+    gap = buses.max - buses.min
+    assert_operator layout.centre.slot, :<=, gap, "the record's name fits between the buses"
+    assert_operator layout.centre.slot, :>=, 100
   end
 
   test "givers are always on the left and receivers on the right, whatever the heights" do
