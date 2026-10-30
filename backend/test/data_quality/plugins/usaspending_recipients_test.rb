@@ -91,4 +91,20 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
     crawl
     assert_includes source.reload.content_text, "Parent: SHINE TECHNOLOGIES, LLC"
   end
+
+  test "a record without its parent line proposes nothing until it's read again" do
+    old = Source.new(content_text: "Recipient: SHINE TECHNOLOGIES, LLC\nAddress: registered address (SAM registration)\nCity: JANESVILLE\nState: WI\nCountry: USA")
+    assert_empty plugin.extract(old, nil)
+  end
+
+  test "a company found by its brand alone, with a headquarters, gets no HQ claim" do
+    brand = Struct.new(:id)
+    directory = Class.new do
+      define_method(:organization) { |name:| nil }
+      define_method(:same_brand_organizations) { |_name| [ brand.new(7) ] }
+      define_method(:organization_hq_city) { |id| id == 7 ? "Richmond" : nil }
+    end.new
+    record = Source.new(content_text: "Recipient: DOMINION GENERATION LLC\nParent: DOMINION GENERATION LLC\nAddress: registered address (SAM registration)\nCity: GLEN ALLEN\nState: VA\nCountry: USA")
+    assert_empty Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory:).extract(record, nil)
+  end
 end

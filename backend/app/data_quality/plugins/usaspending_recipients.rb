@@ -62,11 +62,15 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     return [] unless facts["Country"] == "USA" && facts["City"].present? && facts["State"].to_s.match?(/\A[A-Z]{2}\z/) && facts["Recipient"].present?
     # A recipient under another parent registers a subsidiary's or branch's
     # address, not the company's headquarters (DQ, 30 Oct).
-    return [] if facts.key?("Parent") && facts["Parent"].present? && !same_name?(facts["Parent"], facts["Recipient"])
+    # A record stored before the parent was kept waits for its re-read.
+    return [] unless facts.key?("Parent")
+    return [] if facts["Parent"].present? && !same_name?(facts["Parent"], facts["Recipient"])
 
     name = awards.display_name(facts["Recipient"])
     # Only a missing headquarters is filled: a registered address never replaces one (DQ, 30 Oct).
-    company = @directory.organization(name:) || @directory.organization(name: facts["Recipient"])
+    # As match finds it: by name or alias, else a unique brand match.
+    company = @directory.organization(name:) || @directory.organization(name: facts["Recipient"]) ||
+      @directory.same_brand_organizations(name).then { |brand| brand.first if brand.one? }
     return [] if company && @directory.organization_hq_city(company.id)
     quote = lines.select { |line| line.start_with?("Recipient: ", "Address: ", "City: ", "State: ") }.join("\n")
     [ { kind: "organization", quote:, payload: { "name" => name, "aliases" => ([ facts["Recipient"] ] if name != facts["Recipient"]),
