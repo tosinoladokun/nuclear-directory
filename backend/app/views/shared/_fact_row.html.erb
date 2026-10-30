@@ -35,7 +35,7 @@
     <% if local_assigns[:correctable] %>
       <%# Plain text of the fact, entities decoded ("Sargent & Lundy", not "&amp;"). %>
       <% fact = CGI.unescapeHTML(strip_tags(sentence.to_s)).squish %>
-      <%= link_to correction_url_for(fact), class: "nd-link nd-link--muted nd-factrow__fix type-small" do %>Report a correction<span class="sr-only">: <%= fact %></span><% end %>
+      <%= link_to correction_url_for(fact), class: "nd-link nd-link--muted nd-factrow__fix type-small", rel: "nofollow" do %>Report a correction<span class="sr-only">: <%= fact %></span><% end %>
     <% end %>
   </div>
 </li>
