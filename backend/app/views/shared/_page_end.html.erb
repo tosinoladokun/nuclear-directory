@@ -1,0 +1,19 @@
+<%# The last thing on a company or plant page (#556, #557): one quiet line with the numbered sources, how to
+    cite the page and the page's one Report a correction. Sources and the citation open in place; they are in the
+    page open, so links to them land without JavaScript, and the script folds them. Locals:
+    sources:    [[number, source], ...] (may be empty)
+    cite_text:  the citation
+    subject:    what the correction is about (the page's name) %>
+<div class="nd-company__end" data-controller="quiet">
+  <nav class="nd-quiet" aria-label="About this page">
+    <% if sources.any? %>
+      <button type="button" aria-expanded="false" aria-controls="sources" data-action="quiet#toggle" data-quiet-target="button" data-panel="sources"><%= icon("link", size: 16) %><b class="nd-num"><%= sources.size %></b> <%= "source".pluralize(sources.size) %></button>
+    <% end %>
+    <button type="button" aria-expanded="false" aria-controls="cite" data-action="quiet#toggle" data-quiet-target="button" data-panel="cite"><%= icon("info", size: 16) %>Cite this page</button>
+    <%= link_to correction_url_for(subject), rel: "nofollow" do %><%= icon("flag", size: 16) %>Report a correction<% end %>
+  </nav>
+  <% if sources.any? %>
+    <div class="nd-quietpanel"><%= render "shared/sources_list", sources:, hidden: true %></div>
+  <% end %>
+  <div class="nd-quietpanel" id="cite"><%= render "shared/cite_panel", text: cite_text %></div>
+</div>

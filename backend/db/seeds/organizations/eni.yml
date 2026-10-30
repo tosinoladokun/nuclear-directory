@@ -1,5 +1,6 @@
 # Seed research for #253 (CFS), 22 Oct 2026. Quotes copied from CFS's release of 22 Sep 2025, read this session (cfs.energy).
 name: Eni
+website: https://www.eni.com
 aliases: []
 hq: null
 country_code: null
@@ -23,3 +24,6 @@ notes: 'Country and HQ left blank: the release datelines San Donato Milanese, It
 description:
   source_url: https://cfs.energy/news-and-media/eni-and-commonwealth-fusion-systems-sign-1-billion/
   quote: Eni has been a CFS shareholder since 2018.
+  also:
+  - source_url: https://www.eni.com
+    quote: "Eni, una società integrata dell’energia"

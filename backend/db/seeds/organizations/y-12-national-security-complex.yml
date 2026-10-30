@@ -1,0 +1,11 @@
+# Seed research for the website gap (PM, 29 Oct 2026). The site's title names the organization (fetched this session).
+name: Y-12 National Security Complex
+website: https://www.y12.doe.gov
+status: active
+roles: []
+technologies: []
+relationships: []
+facilities: []
+description:
+  source_url: https://www.y12.doe.gov
+  quote: "Home | Y-12 National Security Complex"

@@ -1,0 +1,11 @@
+# Seed research for the website gap (PM, 29 Oct 2026). The site's title names the organization (fetched this session).
+name: Los Alamos National Laboratory
+website: https://www.lanl.gov
+status: active
+roles: []
+technologies: []
+relationships: []
+facilities: []
+description:
+  source_url: https://www.lanl.gov
+  quote: "Los Alamos National Laboratory"

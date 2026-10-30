@@ -1,9 +1,10 @@
 # Seed research - 22 Oct 2026 (awardee companies with no role). Quote from the company's own page, checked live.
 name: Advanced Conductor Technologies
+website: https://www.advancedconductor.com
 status: active
 roles:
 - key: components
-  source_url: https://www.advancedconductor.com/
+  source_url: https://www.advancedconductor.com
   quote: We provide the cable technology that enables compact power cables needed in for instance future electric aircraft and superconducting magnets for particle accelerators and fusion reactors.
   confidence: 1.0
 technologies: []
@@ -11,9 +12,12 @@ relationships: []
 facilities: []
 notes: An existing record (DOE awardee). Only the role is added, from the company's own page; the file states no country, HQ or website, so the record's own values are left as they are.
 description:
-  source_url: https://www.advancedconductor.com/
+  source_url: https://www.advancedconductor.com
   quote: We provide the cable technology that enables compact power cables needed in for instance future electric aircraft and superconducting magnets for particle accelerators and fusion reactors.
+  also:
+  - source_url: https://www.advancedconductor.com
+    quote: "Advanced Conductor Technologies LLC"
 short_description:
   text: 'Cable technology for magnets'
-  source_url: https://www.advancedconductor.com/
+  source_url: https://www.advancedconductor.com
   quote: 'We provide the cable technology that enables compact power cables needed in for instance future electric aircraft and superconducting magnets for particle accelerators and fusion reactors.'

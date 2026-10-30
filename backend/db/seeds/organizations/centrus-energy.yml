@@ -17,7 +17,7 @@ status: active
 roles:
 - key: fuel
   subtype: enrichment
-  source_url: https://www.centrusenergy.com/
+  source_url: https://www.centrusenergy.com
   quote: Centrus Energy is a trusted supplier of enriched uranium fuel for our utility customers in the United States and around the world.
   confidence: 1.0
 technologies:

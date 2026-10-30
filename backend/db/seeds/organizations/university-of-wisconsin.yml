@@ -7,5 +7,18 @@ technologies: []
 relationships: []
 facilities: []
 description:
+  text: "Research university in Madison, Wisconsin."
   source_url: https://www.wisc.edu
-  quote: "University of Wisconsin–Madison"
+  quote: "The University of Wisconsin is a top-ranked research institution located in Madison, Wisconsin, providing exceptional education opportunities to undergraduates, graduate and professional students."
+  also:
+  - quote: "University of Wisconsin–Madison"
+short_description:
+  text: "Research university in Madison"
+  source_url: https://www.wisc.edu
+  quote: "The University of Wisconsin is a top-ranked research institution located in Madison, Wisconsin, providing exceptional education opportunities to undergraduates, graduate and professional students."
+hq:
+  city: Madison
+  state: WI
+  source_url: https://www.wisc.edu
+  quote: "The University of Wisconsin is a top-ranked research institution located in Madison, Wisconsin, providing exceptional education opportunities to undergraduates, graduate and professional students."
+  confidence: 1.0

@@ -1,5 +1,5 @@
 <%# The Glance panel (nd-glance): the key facts (#558). Locals:
-    facts: [{ label: "Headquarters", value: "Bethesda, MD", wide: (true for a long value on phones) }]. Facts with no value are left out.
+    facts: [{ label: "Headquarters", value: "Bethesda, MD", note: "a line under the label (optional)", wide: (true for a long value on phones) }]. Facts with no value are left out.
     A fact with list: [name, ...] instead of value puts each name on its own line, so none is hidden behind another. %>
 <dl class="nd-glance">
   <% facts.select { |fact| fact[:value].present? || fact[:list].present? }.each do |fact| %>
@@ -10,7 +10,7 @@
     <% else %>
       <%# A long value spans both columns on phones, and drops to 13px before any ellipsis (one line, #556). %>
       <% size = strip_tags(fact[:value].to_s).length %>
-      <div class="nd-glance__fact <%= "nd-glance__fact--wide" if fact[:wide] || size > 16 %> <%= "nd-glance__fact--long" if size > 24 %>"><dt><%= fact[:label] %></dt><%= content_tag :dd, fact[:value], title: strip_tags(fact[:value].to_s) %></div>
+      <div class="nd-glance__fact <%= "nd-glance__fact--wide" if fact[:wide] || size > 16 %> <%= "nd-glance__fact--long" if size > 24 %>"><dt><%= fact[:label] %><% if fact[:note] %><span class="nd-glance__note"><%= fact[:note] %></span><% end %></dt><%= content_tag :dd, fact[:value], title: strip_tags(fact[:value].to_s) %></div>
     <% end %>
   <% end %>
 </dl>

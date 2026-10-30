@@ -1,5 +1,6 @@
 # Seed research - 22 Oct 2026 (awardee companies with no role). Quote from the company's own page, checked live.
 name: General Atomics
+website: https://www.ga.com
 status: active
 roles:
 - key: reactor_vendor
@@ -13,6 +14,9 @@ notes: An existing record (DOE awardee). Only the role is added, from the compan
 description:
   source_url: https://www.ga.com/triga
   quote: TRIGA ® reactors have been designed and supported by General Atomics for more than 70 years, establishing a long‑standing record of safe, reliable operation.
+  also:
+  - source_url: https://www.ga.com
+    quote: "Welcome to General Atomics | General Atomics"
 short_description:
   text: 'TRIGA research reactor designer'
   source_url: https://www.ga.com/triga

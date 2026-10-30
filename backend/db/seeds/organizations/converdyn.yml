@@ -14,7 +14,7 @@ status: active
 roles:
 - key: fuel
   subtype: conversion
-  source_url: https://www.converdyn.com/
+  source_url: https://www.converdyn.com
   quote: ConverDyn supplies uranium hexafluoride conversion services to the global nuclear industry for clean energy worldwide.
   confidence: 1.0
 technologies:
@@ -33,7 +33,7 @@ relationships:
 - type: subsidiary_of
   to: Solstice Advanced Materials
   description: "ConverDyn is a partnership of General Atomics and Solstice Advanced Materials."
-  source_url: https://www.converdyn.com/
+  source_url: https://www.converdyn.com
   quote: Our company, through a strategic partnership between industry giants General Atomics and Solstice Advanced Materials, operates at the forefront of the nuclear fuel cycle, ensuring the highest quality UF6.
   confidence: 1.0
 facilities: []

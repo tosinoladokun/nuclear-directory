@@ -1,5 +1,6 @@
 # Seed research - 20 Oct 2026 (data-quality check: companies that operate NRC-listed plants had no operator role). Quote: the NRC list of power reactor units row (column Owner/Operator). A bare record the crawler made; no website, HQ or description is stated here, none is invented.
 name: Southern Nuclear Operating Co., Inc.
+website: https://www.southernnuclear.com
 country_code: US
 status: active
 roles:
@@ -14,6 +15,9 @@ notes: Operator role from the NRC list row for one of its units (the column is O
 description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Farley 1 | 05000348 | NPF-2 | PWR | 18 miles E of Dothan, AL | Southern Nuclear Operating Co. | 2
+  also:
+  - source_url: https://www.southernnuclear.com
+    quote: "Southern Nuclear: A Leader in Nuclear Energy Production"
 short_description:
   text: 'Nuclear plant operator in the Southeast'
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units

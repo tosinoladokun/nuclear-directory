@@ -1,9 +1,10 @@
 # Seed research - 22 Oct 2026 (awardee companies with no role). Quote from the company's own page, checked live.
 name: PKMJ Technical Services
+website: https://www.pkmj.com
 status: active
 roles:
 - key: reactor_services
-  source_url: https://www.pkmj.com/
+  source_url: https://www.pkmj.com
   quote: we are a nuclear consulting organization providing software and engineering solutions.
   confidence: 1.0
 technologies: []
@@ -11,9 +12,12 @@ relationships: []
 facilities: []
 notes: An existing record (DOE awardee). Only the role is added, from the company's own page; the file states no country, HQ or website, so the record's own values are left as they are.
 description:
-  source_url: https://www.pkmj.com/
+  source_url: https://www.pkmj.com
   quote: we are a nuclear consulting organization providing software and engineering solutions.
+  also:
+  - source_url: https://www.pkmj.com
+    quote: "PKMJ Technical Services LLC"
 short_description:
   text: 'Nuclear engineering and software'
-  source_url: https://www.pkmj.com/
+  source_url: https://www.pkmj.com
   quote: 'we are a nuclear consulting organization providing software and engineering solutions.'
