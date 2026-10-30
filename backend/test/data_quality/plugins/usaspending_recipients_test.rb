@@ -26,7 +26,7 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
     assert_equal({ "changed" => 1 }, crawl.stats)
     assert_equal({}, crawl.stats)
     assert_requested @record, times: 1
-    assert_equal "Recipient: SHINE TECHNOLOGIES, LLC\nAddress: registered address (SAM registration)\nCity: JANESVILLE\nState: WI\nCountry: USA", Source.find_by!(url: RECORD).content_text
+    assert_equal "Recipient: SHINE TECHNOLOGIES, LLC\nParent: SHINE TECHNOLOGIES, LLC\nAddress: registered address (SAM registration)\nCity: JANESVILLE\nState: WI\nCountry: USA", Source.find_by!(url: RECORD).content_text
   end
 
   test "proposes the company's headquarters city and state" do
@@ -69,5 +69,26 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
 
     assert_equal Plugin::PER_NIGHT, crawl.stats["changed"] + crawl.stats.fetch("unchanged", 0)
     assert_empty crawl.stats.except("stopped"), "the day's quota is used"
+  end
+
+  test "no HQ when the company already has one, or when the recipient is under another parent (DQ, 30 Oct)" do
+    crawl
+    source = Source.find_by!(url: RECORD)
+    shine = Organization.create!(name: "SHINE Technologies", hq_city: "Janesville", hq_state: "WI")
+    shine.aliases.find_or_create_by!(alias: "SHINE Technologies")
+    assert_empty plugin.extract(source, nil), "it has a headquarters already"
+    shine.update_columns(hq_city: nil, hq_state: nil)
+    assert_equal 1, plugin.extract(source, nil).size
+
+    branch = Source.new(content_text: "Recipient: GE VERNOVA OPERATIONS LLC\nParent: GE VERNOVA INC\nAddress: registered address (SAM registration)\nCity: NISKAYUNA\nState: NY\nCountry: USA")
+    assert_empty plugin.extract(branch, nil), "a subsidiary's or branch's address"
+  end
+
+  test "a record stored before the parent was kept is read again, in full" do
+    crawl
+    source = Source.find_by!(url: RECORD)
+    source.update_columns(content_text: "Recipient: SHINE TECHNOLOGIES, LLC\nCity: JANESVILLE\nState: WI\nCountry: USA", fetched_at: 2.days.ago, etag: "x")
+    crawl
+    assert_includes source.reload.content_text, "Parent: SHINE TECHNOLOGIES, LLC"
   end
 end
