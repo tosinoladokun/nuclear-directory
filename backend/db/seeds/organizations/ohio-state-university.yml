@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://www.osu.edu
-  quote: "Home | The Ohio State University"
+  text: "Holds the NRC licence for a Pool research reactor in Columbus, OH."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/osu-oh-pool
+  quote: "Ohio State University Pool reactor | Licensee: Ohio State University | Location: Columbus, OH | Docket Number: 05000150 | Reactor Type: Pool"
+  also:
+  - source_url: https://www.osu.edu
+    quote: "Home | The Ohio State University"
+hq:
+  city: Columbus
+  state: OH
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/osu-oh-pool
+  quote: "Ohio State University Pool reactor | Licensee: Ohio State University | Location: Columbus, OH | Docket Number: 05000150 | Reactor Type: Pool"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/osu-oh-pool
+  quote: "Ohio State University Pool reactor | Licensee: Ohio State University | Location: Columbus, OH | Docket Number: 05000150 | Reactor Type: Pool"

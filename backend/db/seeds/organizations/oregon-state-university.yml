@@ -16,3 +16,9 @@ short_description:
   text: "Oregon public research university"
   source_url: https://oregonstate.edu
   quote: "Oregon State University delivers exceptional, accessible education and problem-solving innovation as Oregon's largest and statewide public research university."
+hq:
+  city: Corvallis
+  state: OR
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/osu-or-triga
+  quote: "Oregon State University TRIGA Mark II reactor | Licensee: Oregon State University | Location: Corvallis, OR | Docket Number: 05000243 | Reactor Type: TRIGA Mark II"
+  confidence: 1.0
