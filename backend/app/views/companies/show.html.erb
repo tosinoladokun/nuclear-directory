@@ -43,7 +43,7 @@
       # No Type chips here: the tags under the summary and the trail above the name say what the company is (Tosin, 27 Oct).
       # Role and technology are the tags under the name; the key facts don't say them again (Design, 27 Oct).
       { label: "Headquarters", value: location(p.hq_city, p.hq_state, country: (p.organization.country_code if p.sourced?)) },
-      { label: "Website", value: (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank") if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) },
+      { label: "Website", value: (link_to(p.website.sub(%r{\Ahttps?://(www\.)?}, "").chomp("/"), with_referral_utm(p.website, campaign: "company-page"), class: "nd-link", rel: "noopener noreferrer", target: "_blank", data: { outbound: "company_website" }) if p.website.present? && p.website.match?(%r{\Ahttps?://}i)) },
       { label: p.parents.size > 1 ? "Parent companies" : "Parent company", wide: p.parents.size > 1,
         list: p.parents.map { |l| link_to(l.to_organization.name, company_url_for(l.to_organization), class: "nd-link") } },
       { label: p.subsidiaries.size > 1 ? "Subsidiaries" : "Subsidiary", wide: true, list: p.subsidiaries.map { |l| link_to(l.from_organization.name, company_url_for(l.from_organization), class: "nd-link") } },
