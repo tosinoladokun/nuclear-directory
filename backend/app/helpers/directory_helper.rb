@@ -549,6 +549,10 @@ module DirectoryHelper
   # "kairospower.com" for a source, from its domain or URL.
   # A URL with no host (a bad import such as "javascript:...") reads
   # "unlinked source", so chips and their labels are never blank.
+  # A news item's headline for "Latest" (#137): its plain headline when it has one, else its title (an agency notice's
+  # title can run long). try: the column comes with Data Quality's headline work.
+  def news_headline(item) = item.try(:headline).presence || item.title
+
   def source_domain(source)
     source.domain.presence || URI.parse(source.url.to_s).host.to_s.delete_prefix("www.").presence || "unlinked source"
   rescue URI::InvalidURIError
