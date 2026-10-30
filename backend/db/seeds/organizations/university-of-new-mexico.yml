@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://www.unm.edu
-  quote: "New Mexico's Flagship University | The University of New Mexico"
+  text: "Holds the NRC licence for a AGN-201M #112 research reactor in Albuquerque, NM."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/unm-nm-agn
+  quote: "University of New Mexico AGN-201M #112 reactor | Licensee: University of New Mexico | Location: Albuquerque, NM | Docket Number: 05000252 | Reactor Type: AGN-201M #112"
+  also:
+  - source_url: https://www.unm.edu
+    quote: "New Mexico's Flagship University | The University of New Mexico"
+hq:
+  city: Albuquerque
+  state: NM
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/unm-nm-agn
+  quote: "University of New Mexico AGN-201M #112 reactor | Licensee: University of New Mexico | Location: Albuquerque, NM | Docket Number: 05000252 | Reactor Type: AGN-201M #112"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/unm-nm-agn
+  quote: "University of New Mexico AGN-201M #112 reactor | Licensee: University of New Mexico | Location: Albuquerque, NM | Docket Number: 05000252 | Reactor Type: AGN-201M #112"
