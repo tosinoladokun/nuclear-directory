@@ -7,19 +7,19 @@ website: https://entra1.com
 hq:
   city: Houston
   state: TX
-  source_url: https://entra1.com/
+  source_url: https://entra1.com
   quote: '"addressLocality": "Houston", "addressRegion": "TX"'
   confidence: 1.0
 country_code: US
 status: active
 roles:
 - key: project_developer
-  source_url: https://entra1.com/
+  source_url: https://entra1.com
   quote: ENTRA1 Energy is an independent energy production company and asset architect specializing in the deployment, financing, and operation of baseload power infrastructure across nuclear, natural gas, and other advanced energy sources.
   confidence: 1.0
 technologies:
 - key: smr
-  source_url: https://www.nuscalepower.com/
+  source_url: https://www.nuscalepower.com
   quote: ENTRA1 Energy is our exclusive global partner for the commercialization, distribution, and deployment of our groundbreaking SMR technology.
   confidence: 1.0
 relationships: []
@@ -27,9 +27,9 @@ facilities: []
 notes: Roles, technology and HQ now cite ENTRA1's own site (its structured data; the page renders with JavaScript) and NuScale's own page; the 2023 SEC filing about Standard Power is no longer a source. Owners are not named by any page read, so none is stated. The ENTRA1 NuScale LLC joint venture on Wikipedia is unconfirmed.
 description:
   text: Energy production company deploying, financing and operating baseload power infrastructure across nuclear, natural gas and other sources.
-  source_url: https://entra1.com/
+  source_url: https://entra1.com
   quote: ENTRA1 Energy is an independent energy production company and asset architect specializing in the deployment, financing, and operation of baseload power infrastructure across nuclear, natural gas, and other advanced energy sources.
 short_description:
   text: 'Baseload power infrastructure developer'
-  source_url: https://entra1.com/
+  source_url: https://entra1.com
   quote: 'ENTRA1 Energy is an independent energy production company and asset architect specializing in the deployment, financing, and operation of baseload power infrastructure across nuclear, natural gas, and other advanced energy sources.'

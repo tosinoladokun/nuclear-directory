@@ -19,7 +19,7 @@ roles:
   published: '2025-09-19'
   confidence: 1.0
 - key: reactor_vendor
-  source_url: https://typeoneenergy.com/
+  source_url: https://typeoneenergy.com
   quote: Type One Energy is the technology provider and original equipment manufacturer to the Tennessee Valley Authority’s Infinity Two project, the world’s first grid-scale, commercial fusion power plant.
   confidence: 1.0
 technologies:

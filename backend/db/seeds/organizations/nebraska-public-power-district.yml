@@ -16,7 +16,7 @@ description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Cooper | 05000298 | DPR-46 | BWR | 23 miles S of Nebraska City, NE | Nebraska Public Power District | 4
   also:
-  - source_url: https://www.nppd.com/
+  - source_url: https://www.nppd.com
     quote: "Nebraska Public Power District"
 short_description:
   text: 'Nuclear plant operator in Nebraska'

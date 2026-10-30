@@ -4,13 +4,13 @@ name: Blue Wave Capital and Consulting
 aliases:
 - BLUE WAVE CAPITAL AND CONSULTING LLC
 - Blue Wave AI Labs
-website: https://bluewaveailabs.com/
+website: https://bluewaveailabs.com
 hq: null
 country_code: US
 status: active
 roles:
 - key: reactor_services
-  source_url: https://bluewaveailabs.com/
+  source_url: https://bluewaveailabs.com
   quote: Turn your data into unprecedented insights and elevate plant operations with the BWNuclear.ai™ Core Optimization software suite.
   confidence: 0.9
 technologies: []

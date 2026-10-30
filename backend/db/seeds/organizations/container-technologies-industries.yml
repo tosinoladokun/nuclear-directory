@@ -4,13 +4,13 @@ name: Container Technologies Industries
 aliases:
 - CONTAINER TECHNOLOGIES INDUSTRIES, LLC
 - CTI Fab
-website: https://containertechnologies.com/
+website: https://containertechnologies.com
 hq: null
 country_code: US
 status: active
 roles:
 - key: components
-  source_url: https://containertechnologies.com/
+  source_url: https://containertechnologies.com
   quote: CTI Fab has delivered ASME Nuclear Quality Assurance-1 containers to the U.S. Department of Energy and their prime contractors, U.S. Department of Defense, U.S. Department of War, commercial nuclear industry, and chemical industry for over 25 years.
   confidence: 1.0
 technologies: []
@@ -19,11 +19,11 @@ facilities: []
 notes: Brands itself CTI Fab. Makes container hardware, not a waste handler.
 description:
   text: Metal fabricator making nuclear-quality containers for DOE and the nuclear industry.
-  source_url: https://containertechnologies.com/
+  source_url: https://containertechnologies.com
   quote: Container Technologies Industries, LLC (CTI Fab) is your trusted partner for superior quality metal fabrication services.
   also:
   - quote: CTI Fab has delivered ASME Nuclear Quality Assurance-1 containers to the U.S. Department of Energy and their prime contractors, U.S. Department of Defense, U.S. Department of War, commercial nuclear industry, and chemical industry for over 25 years.
 short_description:
   text: 'ASME NQA-1 containers'
-  source_url: https://containertechnologies.com/
+  source_url: https://containertechnologies.com
   quote: 'CTI Fab has delivered ASME Nuclear Quality Assurance-1 containers to the U.S. Department of Energy and their prime contractors, U.S. Department of Defense, U.S. Department of War, commercial nuclear industry, and chemical industry for over 25 years.'
