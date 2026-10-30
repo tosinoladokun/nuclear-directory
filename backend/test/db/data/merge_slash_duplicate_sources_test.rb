@@ -9,8 +9,13 @@ class MergeSlashDuplicateSourcesTest < ActiveSupport::TestCase
     @company = Organization.create!(name: "ConverDyn", verification_status: "verified", verified_by: BY)
     @other = Organization.create!(name: "Honeywell", verification_status: "verified", verified_by: BY)
     @kept = Source.create!(url: "https://www.converdyn.com", source_kind: "web_page")
-    @extra = Source.create!(url: "https://www.converdyn.com/", source_kind: "web_page", title: "ConverDyn - Global Provider of UF6",
-      crawl_status: "ok", content_text: "ConverDyn converts uranium.", content_sha256: "abc", fetched_at: Time.utc(2026, 10, 20))
+    # Written in SQL, as rows saved before the model normalised bare
+    # homepages were (#670 makes the slash form the same address).
+    @extra = Source.find(Source.connection.select_value(<<~SQL))
+      INSERT INTO sources (url, source_kind, title, crawl_status, content_text, content_sha256, fetched_at, created_at, updated_at)
+      VALUES ('https://www.converdyn.com/', 'web_page', 'ConverDyn - Global Provider of UF6', 'ok', 'ConverDyn converts uranium.',
+        'abc', '2026-10-20 00:00:00', NOW(), NOW()) RETURNING id
+    SQL
     @alone = Source.create!(url: "https://example.com/only/", source_kind: "web_page")
     @moving = Evidence.create!(subject: @other, source: @extra, quote: "Honeywell and ConverDyn.", found_by: "human", confidence: 1)
     Evidence.create!(subject: @company, source: @kept, quote: "ConverDyn converts uranium.", found_by: "crawler", confidence: 0.6, fields: [ "description" ])
