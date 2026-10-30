@@ -131,6 +131,31 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_equal shown, again.at("lastmod").text
   end
 
+  test "lastmod follows a partner's rename, a term on a link and a new citation" do
+    company = organizations(:terrapower)
+    company.verify!(by: "human:tosin") unless company.verified?
+    page = Source.create!(url: "https://example.com/lastmod2", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: company, source: page, quote: "q", found_by: "human")
+    company.update_columns(updated_at: Time.zone.parse("2026-01-02"))
+    partner = Organization.create!(name: "Renamed Partner", verification_status: "verified", verified_by: "human:tosin")
+    link = Relationship.create!(from_organization: company, to_organization: partner, relationship_type: "supplies", verification_status: "verified", verified_by: "human:tosin")
+    [ link, partner ].each { |row| row.update_columns(updated_at: Time.zone.parse("2026-01-02")) }
+    Evidence.where(subject: company).update_all(created_at: Time.zone.parse("2026-01-02"))
+    date = lambda do
+      Rails.cache.clear
+      get "/sitemap.xml"
+      Nokogiri::XML(response.body).remove_namespaces!.xpath("//url").find { |n| n.at("loc").text.end_with?("/companies/#{company.slug}") }.at("lastmod").text
+    end
+    base = date.call
+    partner.update_columns(updated_at: Time.zone.parse("2026-02-01"))
+    assert_equal "2026-02-01", date.call, "a partner's change shows on the page"
+    DealTerm.create!(link:, term_type: "offtake", capacity_mw: 5, verification_status: "verified", verified_by: "human:tosin").update_columns(updated_at: Time.zone.parse("2026-03-01"))
+    assert_equal "2026-03-01", date.call, "a term on its link"
+    Evidence.create!(subject: company, source: page, quote: "q2", found_by: "human").update_columns(created_at: Time.zone.parse("2026-04-01"))
+    assert_equal "2026-04-01", date.call, "a new citation"
+    assert_operator base, :<, "2026-02-01"
+  end
+
   test "the sitemap lists public companies and plants, not hidden ones" do
     cite!(company("Kairos Power", roles: [ role("reactor_vendor") ]))
     cite!(company("CFS", techs: [ technology("fusion") ]))

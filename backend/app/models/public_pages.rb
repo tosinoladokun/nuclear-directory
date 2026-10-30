@@ -22,13 +22,25 @@ class PublicPages
           (SELECT MAX(x.updated_at) FROM organization_technologies x WHERE x.organization_id = organizations.id AND x.verification_status IN ('verified', 'unpublished')),
           (SELECT MAX(x.updated_at) FROM facility_relationships x WHERE x.organization_id = organizations.id AND x.verification_status IN ('verified', 'unpublished')),
           (SELECT MAX(d.updated_at) FROM deal_terms d WHERE d.link_type = 'Organization' AND d.link_id = organizations.id AND d.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(d.updated_at) FROM deal_terms d JOIN relationships r ON d.link_type = 'Relationship' AND d.link_id = r.id
+            WHERE (r.from_organization_id = organizations.id OR r.to_organization_id = organizations.id) AND d.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(d.updated_at) FROM deal_terms d JOIN facility_relationships x ON d.link_type = 'FacilityRelationship' AND d.link_id = x.id
+            WHERE x.organization_id = organizations.id AND d.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(o.updated_at) FROM relationships r JOIN organizations o ON o.id IN (r.from_organization_id, r.to_organization_id)
+            WHERE (r.from_organization_id = organizations.id OR r.to_organization_id = organizations.id) AND o.id <> organizations.id
+              AND r.verification_status IN ('verified', 'unpublished') AND o.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(GREATEST(f.updated_at, s.updated_at)) FROM facility_relationships x JOIN facilities f ON f.id = x.facility_id
+            LEFT JOIN facilities s ON s.id = f.parent_id
+            WHERE x.organization_id = organizations.id AND x.verification_status IN ('verified', 'unpublished') AND f.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(e.created_at) FROM evidence e WHERE e.subject_type = 'Organization' AND e.subject_id = organizations.id),
           (SELECT MAX(n.updated_at) FROM news_mentions m JOIN news_items n ON n.id = m.news_item_id
             WHERE m.subject_type = 'Organization' AND m.subject_id = organizations.id AND n.verification_status IN ('verified', 'unpublished')))
       SQL
     end
   end
 
-  # The same for plant and site pages: the site, its units, their links and news.
+  # The same for plant and site pages: the site, its units, their links, the
+  # companies they name, their citations and news.
   def plant_lastmods
     Rails.cache.fetch([ "sitemap-plant-lastmod", Date.current ], expires_in: 1.day) do
       Facility.published.where(parent_id: nil).pluck(:slug, Arel.sql(<<~SQL.squish)).to_h { |slug, at| [ slug, at&.to_date ] }
@@ -37,7 +49,12 @@ class PublicPages
           (SELECT MAX(x.updated_at) FROM facility_relationships x
             WHERE (x.facility_id = facilities.id OR x.facility_id IN (SELECT u.id FROM facilities u WHERE u.parent_id = facilities.id)) AND x.verification_status IN ('verified', 'unpublished')),
           (SELECT MAX(n.updated_at) FROM news_mentions m JOIN news_items n ON n.id = m.news_item_id
-            WHERE m.subject_type = 'Facility' AND m.subject_id = facilities.id AND n.verification_status IN ('verified', 'unpublished')))
+            WHERE m.subject_type = 'Facility' AND m.subject_id = facilities.id AND n.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(o.updated_at) FROM facility_relationships x JOIN organizations o ON o.id = x.organization_id
+            WHERE (x.facility_id = facilities.id OR x.facility_id IN (SELECT u.id FROM facilities u WHERE u.parent_id = facilities.id))
+              AND x.verification_status IN ('verified', 'unpublished') AND o.verification_status IN ('verified', 'unpublished')),
+          (SELECT MAX(e.created_at) FROM evidence e WHERE e.subject_type = 'Facility'
+            AND (e.subject_id = facilities.id OR e.subject_id IN (SELECT u.id FROM facilities u WHERE u.parent_id = facilities.id))))
       SQL
     end
   end
