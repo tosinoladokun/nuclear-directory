@@ -88,5 +88,20 @@
     </div><% end %>
 
     <%= render "shared/page_end", sources: p.citations.sources, cite_text:, subject: p.name %>
+    <%# Other companies like this one (#606), after the record's own actions (sources, cite, report) on every width. %>
+    <% similar = SimilarCompanies.for(p) %>
+    <% if similar.any? %>
+      <section aria-labelledby="similar-heading" id="similar" class="nd-similar">
+        <%= render "shared/section_head", title: "Similar companies", count: similar.size, id: "similar-heading" %>
+        <ul class="nd-lines">
+          <% short = ShortDescription.for(similar, category: p.category) %>
+          <% squares = Bucket.firsts(similar) %>
+          <% similar.each do |company| %>
+            <%= render "shared/line", href: company_url_for(company), name: company.name, short_name: company.short_name, mark: company_square(company, category: squares[company.id]),
+                  what: short[company.id], place: location(company.hq_city, company.hq_state, country: company.country_code) %>
+          <% end %>
+        </ul>
+      </section>
+    <% end %>
   </div>
 </main>

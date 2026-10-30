@@ -1481,3 +1481,13 @@
     .nd-partygroup .nd-crow__what { flex: 0 0 auto; min-width: 0; }
   }
 }
+
+/* Internal links for indexing (#606): the home page's topic chips and a company's similar companies. */
+@layer components {
+  /* Topics: labelled, left-aligned with the cards; wrapping, never a scrolling row (no fade over a count). */
+  .nd-home__topics { width: 100%; max-width: 960px; margin-top: var(--nd-space-6); display: flex; flex-direction: column; gap: var(--nd-space-2); }
+  .nd-home__topics .nd-chips { flex-wrap: wrap; overflow: visible; mask-image: none; margin: 0; padding: 0; }
+  .nd-footer__topics-label { white-space: nowrap; }
+  .nd-similar { display: flex; flex-direction: column; gap: var(--nd-space-3); }
+  @media (min-width: 1024px) { .nd-similar { grid-column: 2; } }
+}
