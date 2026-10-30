@@ -16,3 +16,9 @@ short_description:
   text: "Utah's flagship university"
   source_url: https://www.utah.edu
   quote: "Founded in 1850, The University of Utah is the flagship institution of higher learning in Utah, and offers over 100 undergraduate and more than 90 graduate degree programs to over 30,000 students. As a preeminent research and teaching institution, the University cultivates an academic environment in which the highest standards of intellectual integrity and scholarship are practiced."
+hq:
+  city: Salt Lake City
+  state: UT
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/uut-ut-triga
+  quote: "University of Utah TRIGA Mark I reactor | Licensee: University of Utah | Location: Salt Lake City, UT | Docket Number: 05000407 | Reactor Type: TRIGA Mark I"
+  confidence: 1.0

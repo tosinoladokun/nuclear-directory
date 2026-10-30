@@ -94,6 +94,20 @@ class SharedPartialsTest < ActionView::TestCase
     assert_select "section[aria-labelledby=plant-name] h1#plant-name", "Hermes 2"
   end
 
+  test "every partial that links into /corrections says nofollow, so a page needn't be crawled for them (#653)" do
+    render partial: "shared/missing_fields", locals: { fields: [ "Location" ], suggest_url: "/corrections/new?subject=x" }
+    assert_select ".nd-gaps a[href^='/corrections'][rel~=nofollow]", "Suggest a source"
+
+    render partial: "shared/overview_panel", locals: { verified_at: Time.zone.parse("2026-10-09"), rows: [], correction_url: "/corrections/new?subject=x" }
+    assert_select "a.nd-overview__fix[rel~=nofollow]", "Report a correction"
+
+    render partial: "shared/fact_row", locals: { sentence: "Google offtakes from Kairos Power", citations: [], correctable: true }
+    assert_select "a.nd-factrow__fix[href^='/corrections'][rel~=nofollow]"
+
+    render partial: "shared/page_end", locals: { sources: [], cite_text: "x", subject: "Kairos Power" }
+    assert_select "nav.nd-quiet a[href^='/corrections'][rel~=nofollow]"
+  end
+
   test "missing fields box lists gaps, and disappears when there are none" do
     render partial: "shared/missing_fields", locals: { fields: [ "Location", "Status" ], suggest_url: "/suggest" }
     assert_select ".nd-gaps li", count: 2

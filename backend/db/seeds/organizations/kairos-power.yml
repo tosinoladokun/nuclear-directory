@@ -24,7 +24,7 @@ roles:
   confidence: 1.0
 technologies:
 - key: smr
-  source_url: https://kairospower.com/
+  source_url: https://kairospower.com
   quote: How Kairos Power is Putting “Modular” into its Small Modular Reactors
   confidence: 1.0
 - key: fission

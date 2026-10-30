@@ -16,7 +16,7 @@ description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Fermi 2 | 05000341 | NPF-43 | BWR | 25 miles NE of Toledo, OH | DTE Electric Company | 3
   also:
-  - source_url: https://www.dteenergy.com/
+  - source_url: https://www.dteenergy.com
     quote: "DTE Energy Home | DTE Energy"
 short_description:
   text: 'Fermi 2 nuclear plant licensee'

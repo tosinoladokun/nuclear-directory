@@ -3,7 +3,7 @@
 name: Brookhaven Technology Group
 aliases:
 - BROOKHAVEN TECHNOLOGY GROUP INC
-website: https://brookhaventech.com/
+website: https://brookhaventech.com
 hq: null
 country_code: US
 status: active
@@ -18,7 +18,7 @@ facilities: []
 notes: Also styled BTG. Not Brookhaven National Laboratory (a partner).
 description:
   text: Develops superconducting cables, including for compact fusion reactors.
-  source_url: https://brookhaventech.com/
+  source_url: https://brookhaventech.com
   quote: We develop superconducting cables that combine high quench stability with low magnetization loss and high mechanical strength.
   also:
   - source_url: https://brookhaventech.com/customers/

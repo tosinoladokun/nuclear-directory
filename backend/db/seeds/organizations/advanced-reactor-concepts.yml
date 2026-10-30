@@ -4,7 +4,7 @@ name: Advanced Reactor Concepts
 aliases:
 - ADVANCED REACTOR CONCEPTS, LLC
 - ARC Clean Technology
-website: https://www.arc-cleantech.com/
+website: https://www.arc-cleantech.com
 hq:
   city: Washington
   state: DC
@@ -15,7 +15,7 @@ country_code: US
 status: active
 roles:
 - key: reactor_vendor
-  source_url: https://www.arc-cleantech.com/
+  source_url: https://www.arc-cleantech.com
   quote: The ARC-100 is a sodium-cooled fast reactor using metallic fuel, leveraging proven technology and ongoing licensing engagement in the US and Canada.
   confidence: 1.0
 technologies: []
@@ -27,9 +27,9 @@ description:
   source_url: https://www.arc-cleantech.com/about
   quote: ARC Clean Technology builds advanced small modular reactors that deliver uninterruptible, clean power for the industries that cannot afford downtime.
   also:
-  - source_url: https://www.arc-cleantech.com/
+  - source_url: https://www.arc-cleantech.com
     quote: The ARC-100 is a sodium-cooled fast reactor using metallic fuel, leveraging proven technology and ongoing licensing engagement in the US and Canada.
 short_description:
   text: 'Sodium-cooled fast reactor developer'
-  source_url: https://www.arc-cleantech.com/
+  source_url: https://www.arc-cleantech.com
   quote: 'The ARC-100 is a sodium-cooled fast reactor using metallic fuel, leveraging proven technology and ongoing licensing engagement in the US and Canada.'

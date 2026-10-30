@@ -10,7 +10,7 @@ country_code: US
 status: active
 roles:
 - key: utility
-  source_url: https://opc.com/
+  source_url: https://opc.com
   quote: Oglethorpe Power is one of the largest energy producers in Georgia, generating much of the electric power that electric membership corporations (EMCs) deliver to the millions of Georgians they serve.
   confidence: 1.0
 technologies:
@@ -32,9 +32,9 @@ facilities:
 notes: Generation cooperative owned by Georgia EMCs. HQ not verified this session (opc.com/about-us returned 404). Stake % from 2018 WNN; not re-confirmed by a post-2023 fetched page.
 description:
   text: Georgia electric power producer that generates power for the state's electric membership corporations (EMCs)
-  source_url: https://opc.com/
+  source_url: https://opc.com
   quote: Oglethorpe Power is one of the largest energy producers in Georgia, generating much of the electric power that electric membership corporations (EMCs) deliver to the millions of Georgians they serve.
 short_description:
   text: 'Power supplier to Georgia cooperatives'
-  source_url: https://opc.com/
+  source_url: https://opc.com
   quote: 'Oglethorpe Power is one of the largest energy producers in Georgia, generating much of the electric power that electric membership corporations (EMCs) deliver to the millions of Georgians they serve.'

@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://www.tamu.edu
-  quote: "Texas A&M University | Texas A&M University"
+  text: "Holds the NRC licence for a TRIGA research reactor in College Station, TX."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/tamu-tx-triga
+  quote: "Texas A&M University TRIGA reactor | Licensee: Texas A&M University | Location: College Station, TX | Docket Number: 05000128 | Reactor Type: TRIGA"
+  also:
+  - source_url: https://www.tamu.edu
+    quote: "Texas A&M University | Texas A&M University"
+hq:
+  city: College Station
+  state: TX
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/tamu-tx-triga
+  quote: "Texas A&M University TRIGA reactor | Licensee: Texas A&M University | Location: College Station, TX | Docket Number: 05000128 | Reactor Type: TRIGA"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/tamu-tx-triga
+  quote: "Texas A&M University TRIGA reactor | Licensee: Texas A&M University | Location: College Station, TX | Docket Number: 05000128 | Reactor Type: TRIGA"

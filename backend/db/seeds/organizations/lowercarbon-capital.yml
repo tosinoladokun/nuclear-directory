@@ -7,7 +7,7 @@ country_code: US
 status: active
 roles:
 - key: venture_capital
-  source_url: https://lowercarboncapital.com/
+  source_url: https://lowercarboncapital.com
   quote: Until new emissions hit zero, temperatures will keep going up. So we are funding technologies that reduce sources of carbon dioxide, methane, and other greenhouse gases.
   confidence: 1.0
 technologies:

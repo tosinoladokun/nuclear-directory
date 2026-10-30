@@ -3,13 +3,13 @@
 name: Bridge12
 aliases:
 - BRIDGE 12 TECHNOLOGIES, INC.
-website: https://www.bridge12.com/
+website: https://www.bridge12.com
 hq: null
 country_code: US
 status: active
 roles:
 - key: components
-  source_url: https://www.bridge12.com/
+  source_url: https://www.bridge12.com
   quote: Bridge12 develops high power microwave, millimeter wave and terahertz systems for Electron Cyclotron (EC) heating in nuclear fusion reactors, Dynamic Nuclear Polarization (DNP) enhanced NMR spectroscopy, EPR spectroscopy and other scientific and industrial applications.
   confidence: 1.0
 technologies: []
@@ -18,9 +18,9 @@ facilities: []
 notes: Brand written Bridge12 (no space); legal name Bridge12 Technologies, Inc. per its footer.
 description:
   text: Develops high-power microwave, millimeter-wave and terahertz systems for fusion and spectroscopy.
-  source_url: https://www.bridge12.com/
+  source_url: https://www.bridge12.com
   quote: Bridge12 develops high power microwave, millimeter wave and terahertz systems for nuclear fusion, DNP, NMR, and EPR spectroscopy.
 short_description:
   text: 'Microwave systems for fusion research'
-  source_url: https://www.bridge12.com/
+  source_url: https://www.bridge12.com
   quote: 'Bridge12 develops high power microwave, millimeter wave and terahertz systems for nuclear fusion, DNP, NMR, and EPR spectroscopy.'
