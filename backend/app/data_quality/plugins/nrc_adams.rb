@@ -61,7 +61,11 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
         next false unless url.start_with?("https://")
 
         source = Source.find_or_initialize_by(url:)
-        next false unless source.new_record?
+        unless source.new_record?
+          # Read before this version of extract (stages, #650): extracted again.
+          source.update!(extracted_sha256: nil) if source.extracted_sha256.present? && source.extracted_rows_sha256 != rows_sha256(source)
+          next false
+        end
 
         source.update!(source_kind:, title: "NRC #{doc['AccessionNumber']}: #{doc['DocumentTitle'].to_s.squish.truncate(200)}",
           content_text: line, content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", fetched_at: Time.current,
@@ -72,6 +76,8 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   end
 
   INDEX_SOURCE_KIND = "nrc_adams_index"
+  # What extract proposes from a document: a new version reads every document again.
+  EXTRACT_VERSION = "stages-1"
   NRC = "U.S. Nuclear Regulatory Commission"
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
@@ -134,6 +140,8 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     ([ titled ] + Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
       .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
   end
+
+  def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   def quote_in_source?(source, quote) = quote.present? && source.content_text.to_s.lines(chomp: true).include?(quote.to_s)
 

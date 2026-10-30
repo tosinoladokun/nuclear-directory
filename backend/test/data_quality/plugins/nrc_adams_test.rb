@@ -142,4 +142,14 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     stage = LicensingStage.find_by!(nrc_docket: "99902187")
     assert_equal [ "pre_application", Date.new(2026, 10, 19), "pending" ], stage.values_at(:stage, :effective_on, :verification_status)
   end
+
+  test "a letter extracted before stages existed is extracted again" do
+    letter = document("Assignment of Project Number")
+    letter.update_columns(extracted_sha256: letter.content_sha256, extracted_rows_sha256: letter.content_sha256)
+    plugin.store_documents
+    assert_nil letter.reload.extracted_sha256
+    known("The Leapfrog Group")
+    DataQuality::Stages::Extract.call(plugin:)
+    assert Candidate.exists?(source: letter, kind: "licensing_stage")
+  end
 end
