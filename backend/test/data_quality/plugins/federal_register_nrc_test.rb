@@ -76,9 +76,9 @@ class DataQuality::Plugins::FederalRegisterNrcTest < ActiveSupport::TestCase
   test "each notice gets a headline from its title's parts: what NRC did, then the site (DQ, 30 Oct)" do
     notice = ->(title) { Plugin::Notice.new(number: "1", published_on: "2026-10-28", title:, url: "https://www.federalregister.gov/d/1", abstract: nil) }
     p = Plugin.new
-    assert_equal "Final Environmental Impact Statement: Paducah Laser Enrichment Facility",
+    assert_equal "Final environmental impact statement: Paducah Laser Enrichment Facility",
       p.headline(notice.("Global Laser Enrichment, LLC; Paducah Laser Enrichment Facility; Final Environmental Impact Statement"))
-    assert_equal "License Amendment Application: Vistra Operations Company LLC",
+    assert_equal "License amendment application: Vistra Operations Company LLC",
       p.headline(notice.("Vistra Operations Company LLC; License Amendment Application"))
     assert_equal "Environmental assessment: Christopher M. Crane Clean Energy Center",
       p.headline(notice.("Constellation Energy Generation, LLC; Christopher M. Crane Clean Energy Center; Environmental Assessment and Finding of No Significant Impact"))

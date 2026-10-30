@@ -88,9 +88,20 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
     return if subject.blank? || names.empty?
 
     short = SHORT_SUBJECTS.fetch(subject, subject)
+    subject = sentence_case(subject)
     site = names.find { |name| !name.match?(COMPANY_WORDS) } || names.first
     choices = names.size > MAX_NAMES ? [] : [ "#{subject}: #{site}", "#{short}: #{site}" ]
     (choices + [ short, subject ]).find { |text| text.length <= HEADLINE_LENGTH }
+  end
+
+  # "License Amendment Application" => "License amendment application"; an
+  # acronym or a word with a digit keeps its case (DQ: one casing throughout).
+  def sentence_case(text)
+    text.split(" ").each_with_index.map do |word, i|
+      next word if word.match?(/\A[A-Z0-9&.\-]{2,}\z/) || word.match?(/\d/)
+
+      i.zero? ? word[0].upcase + word[1..].downcase : word.downcase
+    end.join(" ")
   end
 
   # One notice per source; notices aging out of the window drop nothing.
