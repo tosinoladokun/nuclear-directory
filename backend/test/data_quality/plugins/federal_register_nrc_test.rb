@@ -80,9 +80,13 @@ class DataQuality::Plugins::FederalRegisterNrcTest < ActiveSupport::TestCase
       p.headline(notice.("Global Laser Enrichment, LLC; Paducah Laser Enrichment Facility; Final Environmental Impact Statement"))
     assert_equal "License Amendment Application: Vistra Operations Company LLC",
       p.headline(notice.("Vistra Operations Company LLC; License Amendment Application"))
-    long = p.headline(notice.("Duke Energy Carolinas, LLC; Catawba Nuclear Station, Units 1 and 2, and McGuire Nuclear Station, Units 1 and 2; Exemption"))
-    assert_operator long.length, :<=, Plugin::HEADLINE_LENGTH
-    assert long.start_with?("Exemption: Catawba Nuclear Station")
+    assert_equal "Environmental assessment: Christopher M. Crane Clean Energy Center",
+      p.headline(notice.("Constellation Energy Generation, LLC; Christopher M. Crane Clean Energy Center; Environmental Assessment and Finding of No Significant Impact"))
+    assert_equal "Phased construction permit application: Pioneer Units 1 and 2",
+      p.headline(notice.("Pioneer Energy, LLC; Pioneer Units 1 and 2; Phased Construction Permit Application-Limited Work Authorization"))
+    many = "Dominion Energy Nuclear Connecticut, Inc.; Millstone Power Station; North Anna Power Station; Surry Power Station; V.C. Summer; Consideration of Approval of Transfer of Licenses"
+    assert_equal "License transfer application", p.headline(notice.(many)), "many sites: subject only"
+    refute_match(/\.\.\.|…/, p.headline(notice.("Duke Energy Carolinas, LLC; Catawba Nuclear Station, Units 1 and 2, and McGuire Nuclear Station, Units 1 and 2; Exemption")).to_s)
     assert_nil p.headline(notice.("Sunshine Act Meetings"))
   end
 end

@@ -70,19 +70,27 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
   end
 
   HEADLINE_LENGTH = 80
+  # Long subjects NRC repeats, in plain words, used when the full one doesn't fit (DQ, 30 Oct).
+  SHORT_SUBJECTS = {
+    "Environmental Assessment and Finding of No Significant Impact" => "Environmental assessment",
+    "Phased Construction Permit Application-Limited Work Authorization" => "Phased construction permit application",
+    "Consideration of Approval of Transfer of Licenses" => "License transfer application"
+  }.freeze
+  # A title naming more parties or sites than this gets no site part.
+  MAX_NAMES = 3
 
   # "<what NRC did>: <site or unit>", from the title's own parts, at most
-  # HEADLINE_LENGTH (DQ, 30 Oct): "Final Environmental Impact Statement:
-  # Paducah Laser Enrichment Facility". No model; nil when the title has one part.
+  # HEADLINE_LENGTH, never cut (DQ, 30 Oct): "Final Environmental Impact
+  # Statement: Paducah Laser Enrichment Facility". When it doesn't fit, the
+  # subject's short form; then the subject alone; else none (the title shows).
   def headline(notice)
     *names, subject = notice.segments
     return if subject.blank? || names.empty?
 
+    short = SHORT_SUBJECTS.fetch(subject, subject)
     site = names.find { |name| !name.match?(COMPANY_WORDS) } || names.first
-    room = HEADLINE_LENGTH - subject.length - 2
-    return subject.truncate(HEADLINE_LENGTH, separator: " ") if room < 12
-
-    "#{subject}: #{site.truncate(room, separator: ' ')}"
+    choices = names.size > MAX_NAMES ? [] : [ "#{subject}: #{site}", "#{short}: #{site}" ]
+    (choices + [ short, subject ]).find { |text| text.length <= HEADLINE_LENGTH }
   end
 
   # One notice per source; notices aging out of the window drop nothing.
