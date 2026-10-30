@@ -30,7 +30,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get companies_path(tag: "fusion")
 
-    assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
+    assert_select "head > title", "Fusion energy companies in the US · Nuclear Directory"
     assert_select "h1", /Fusion/
     assert_equal "2 fusion energy companies in the US.", description
     assert_equal description, og_description
@@ -43,7 +43,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: utility.slug)
 
-    assert_select "title", "Alabama Power: plants | Nuclear Directory"
+    assert_select "head > title", "Alabama Power: plants | Nuclear Directory"
     assert_match(/\AAlabama Power: Utility in Birmingham, AL\. 3 plants\.\z/, meta_description)
     assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
     assert_equal description, og_description
@@ -70,7 +70,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: helion.slug)
 
-    assert_select "title", "Helion Energy: investors | Nuclear Directory"
+    assert_select "head > title", "Helion Energy: investors | Nuclear Directory"
     assert_match(/\AHelion Energy: Develops fusion power plants\. 1 investor\.\z/, meta_description)
     assert_equal "Helion Energy: Develops fusion power plants. Investors include Lightspeed.", description
   end
@@ -104,7 +104,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: kairos.slug)
 
-    assert_select "title", "Kairos Power | Nuclear Directory", "no section the page has, none claimed"
+    assert_select "head > title", "Kairos Power | Nuclear Directory", "no section the page has, none claimed"
   end
 
   test "a grant or award isn't an investment, and an ended or future link isn't present tense" do
@@ -117,7 +117,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: helion.slug)
     assert_no_match(/Investors/, description)
-    assert_no_match(/investors/, css_select("title").text)
+    assert_no_match(/investors/, css_select("head > title").text)
 
     get company_path(slug: utility.slug)
     assert_no_match(/Operates|Owns/, description)
@@ -139,8 +139,8 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: Organization.find_by!(name:).slug)
 
-    assert_select "title", "#{name}: sites", "a plant with no published facts is a site, as in the description"
-    assert_operator css_select("title").text.length, :<=, 60
+    assert_select "head > title", "#{name}: sites", "a plant with no published facts is a site, as in the description"
+    assert_operator css_select("head > title").text.length, :<=, 60
   end
 
   test "a company's title and meta name only the sections the page has: partners, customers, investors, plants" do
@@ -151,8 +151,8 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: oklo.slug)
 
-    assert_select "title", "Oklo: partners, customers, investors and plants", "too long with the suffix, so the suffix goes"
-    assert_operator css_select("title").text.length, :<=, 60
+    assert_select "head > title", "Oklo: partners, customers, investors and plants", "too long with the suffix, so the suffix goes"
+    assert_operator css_select("head > title").text.length, :<=, 60
     assert_match(/\AOklo: Develops advanced fission power plants\. 1 plant, 1 deal, 1 investor\.\z/, meta_description)
     assert_operator meta_description.length, :<=, 160
   end
@@ -171,11 +171,11 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     bare = cite!(plant("Lone Site", facility_type: "uranium_mine", city: "Crownpoint", state: "NM"))
 
     get plant_path(slug: owned.slug)
-    assert_select "title", "Arkansas Nuclear One: owners | Nuclear Directory"
+    assert_select "head > title", "Arkansas Nuclear One: owners | Nuclear Directory"
     assert_match(/\AArkansas Nuclear One: .*Russellville, Arkansas\. 1 owner\.\z/, meta_description)
     assert_match(/in Russellville, Arkansas\./, description)
 
     get plant_path(slug: bare.slug)
-    assert_select "title", "Lone Site | Nuclear Directory"
+    assert_select "head > title", "Lone Site | Nuclear Directory"
   end
 end
