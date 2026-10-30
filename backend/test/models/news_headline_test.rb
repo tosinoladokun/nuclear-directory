@@ -21,6 +21,7 @@ class NewsHeadlineTest < ActiveSupport::TestCase
     claim = Candidate.create!(source: page, kind: "news_item", status: "matched", quote: "Headline Co licence notice.", subject_type: "Organization", subject_id: company.id,
       payload: { "url" => page.url, "title" => "Notice of licence, Docket No. 52-001", "headline" => "Headline Co licence notice", "published_on" => "2026-10-20",
         "summary" => "s", "about" => [ { "name" => "Headline Co", "type" => "organization" } ], "mentions" => [ [ "Organization", company.id ] ] })
+    assert_match "Headline: “Headline Co licence notice”", DataQuality::Claim.describe(claim), "the checker reads it"
     assert DataQuality::Review.approve([ claim.id ], by: "human:tosin").sole.ok?
     assert_equal "Headline Co licence notice", NewsItem.find_by!(url: page.url).headline
   end
