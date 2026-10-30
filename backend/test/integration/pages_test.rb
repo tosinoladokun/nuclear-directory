@@ -24,6 +24,7 @@ class PagesTest < ActionDispatch::IntegrationTest
     get root_path
     assert_select "footer.nd-footer nav[aria-label='About this site']" do
       assert_select "a[href='/about']", "About"
+      assert_select "a[href='/data']", "Data"
       assert_select "a[href='/privacy']", "Privacy"
       assert_select "a[href='/disclaimer']", "Disclaimer"
       assert_select "a[href='/bot']", "Our crawler"
@@ -33,7 +34,7 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select "a[href='https://render.com'][rel~=noopener]", "Render"
     end
 
-    { about_path => "About", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
+    { about_path => "About", data_path => "Open data", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
       get path
       assert_response :success
       assert_select "main", 1
@@ -50,6 +51,31 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "meta[name=description][content*='US nuclear industry']"
   end
 
+  test "the data page describes the dataset and carries schema.org Dataset data for Dataset Search (#185)" do
+    get data_path
+    assert_response :success
+    assert_select "link[rel=canonical][href=?]", data_url
+    assert_select "main a[href='https://doi.org/10.5281/zenodo.23703377']", minimum: 1
+    assert_select "main", text: /CC BY 4\.0/
+    assert_select "main", text: /Companies: .*slug.*name/, minimum: 1
+
+    ld = JSON.parse(css_select("script[type='application/ld+json']").first.text)
+    assert_equal "Dataset", ld["@type"]
+    assert_equal "https://doi.org/10.5281/zenodo.23703377", ld["identifier"]
+    assert_equal "https://creativecommons.org/licenses/by/4.0/", ld["license"]
+    assert_operator ld["description"].length, :>=, 50
+    assert_equal StructuredDataHelper::PUBLISHED_TABLES.size * 2, ld["distribution"].size, "each published table as CSV and JSON"
+    assert_empty StructuredDataHelper::PUBLISHED_TABLES - Dataset::Export::TABLES.keys, "only tables the export knows, so the schema list has their columns"
+    assert_select "main a[href*=?]", "deal_terms", count: 0
+    assert_select "main a[href*=?]", "licensing_stages", count: 0
+    assert ld["distribution"].all? { |file| file["contentUrl"].start_with?("https://raw.githubusercontent.com/") }
+
+    get sitemap_path
+    assert_includes response.body, data_url
+    get about_path
+    assert_select "a[href=?]", data_path
+  end
+
   test "the about page has the licences and the dataset DOI" do
     get about_path
     assert_select "a[href='https://doi.org/10.5281/zenodo.23703377']", "doi:10.5281/zenodo.23703377"
@@ -59,6 +85,7 @@ class PagesTest < ActionDispatch::IntegrationTest
 
   test "text pages have a skeleton: a summary, topic headings, a short lead, details as a list (#215)" do
     { about_path => %w[what checked licences cite thanks contact],
+      data_path => %w[what download schema licence cite],
       privacy_path => %w[collect counts cookie corrections errors hosting contact],
       bot_path => %w[identity behaviour blocking contact],
       disclaimer_path => %w[sources currency advice endorsement mistakes] }.each do |path, sections|
