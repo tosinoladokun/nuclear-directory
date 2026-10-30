@@ -3,7 +3,7 @@ name: Transmutex U.S.A., Inc.
 status: active
 roles:
 - key: isotopes
-  source_url: https://transmutex.com/
+  source_url: https://transmutex.com
   quote: "HI-BEAM will produce actinium-225 at industrial scale."
   confidence: 1.0
 technologies: []

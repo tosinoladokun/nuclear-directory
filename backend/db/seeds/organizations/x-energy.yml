@@ -15,11 +15,11 @@ country_code: US
 status: active
 roles:
 - key: reactor_vendor
-  source_url: https://x-energy.com/
+  source_url: https://x-energy.com
   quote: X-energy is a leading developer of advanced nuclear energy technology.
   confidence: 1.0
 - key: reactor_vendor
-  source_url: https://x-energy.com/
+  source_url: https://x-energy.com
   quote: We design and deploy safe, efficient advanced small modular reactors for an unmatched range of global markets & applications.
   confidence: 1.0
 technologies:

@@ -28,7 +28,9 @@ class DirectoryListingTest < ActiveSupport::TestCase
     cite!(@centrus, @kairos, @cfs, @khosla, @amazon, @pending)
   end
 
-  def names(listing) = listing.companies.map(&:name)
+  # A to Z, whatever the listing's sort: these tests are about who is listed, not the order.
+  def names(listing) = listing.companies.map(&:name).sort
+  def ranked(listing) = listing.companies.map(&:name)
 
   test "a bucket includes child roles and only verified companies" do
     # Centrus through enrichment (under fuel); Kairos through its molten salt coolant (under coolant).
@@ -244,7 +246,7 @@ class DirectoryListingTest < ActiveSupport::TestCase
     Relationship.find_by!(from_organization: @amazon).update!(description: "Backs Kairos with equity.")
     company("Akairos Labs")
 
-    assert_equal [ "Kairos Power", "Akairos Labs", "Amazon" ], names(DirectoryListing.new(q: "kairos"))
+    assert_equal [ "Kairos Power", "Akairos Labs", "Amazon" ], ranked(DirectoryListing.new(q: "kairos"))
   end
 
   test "an alias that starts with the query ranks with name matches" do
@@ -252,7 +254,7 @@ class DirectoryListingTest < ActiveSupport::TestCase
     company("Akairos Labs")
     company("Zephyr Energy", aliases: [ "Kairos Fuel Co" ])
 
-    assert_equal [ "Kairos Power", "Zephyr Energy", "Akairos Labs", "Amazon" ], names(DirectoryListing.new(q: "kairos"))
+    assert_equal [ "Kairos Power", "Zephyr Energy", "Akairos Labs", "Amazon" ], ranked(DirectoryListing.new(q: "kairos"))
   end
 
   test "search within a category" do
@@ -278,15 +280,18 @@ class DirectoryListingTest < ActiveSupport::TestCase
     assert_equal 1, DirectoryListing.new(category: "plants").plants.first.connections_count
   end
 
-  test "sort by most connected" do
+  test "lists are Most connected by default; A to Z is ?sort=name" do
+    assert_equal "Kairos Power", DirectoryListing.new.companies.first.name
     assert_equal "Kairos Power", DirectoryListing.new(sort: "connections").companies.first.name
+    assert_equal "Amazon", DirectoryListing.new(sort: "name").companies.first.name
+    assert_equal %w[connections name], DirectoryListing::SORTS.keys
   end
 
   test "unknown values from the URL are ignored" do
     listing = DirectoryListing.new(category: "nope", sort: "nope", q: "  ", technology: "nope", state: "ZZ")
 
     assert_nil listing.category
-    assert_equal "name", listing.sort
+    assert_equal "connections", listing.sort, "Most connected is the default (Tosin, 28 Oct)"
     assert_not listing.searching?
     assert_nil listing.technology
     assert_nil listing.state
