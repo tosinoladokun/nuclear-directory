@@ -7,8 +7,11 @@ require_relative "../support/directory_builders"
 class SearchTitlesTest < ActionDispatch::IntegrationTest
   include DirectoryBuilders
 
-  def description = css_select("meta[name='description']").first["content"]
+  def meta_description = css_select("meta[name='description']").first["content"]
   def og_description = css_select("meta[property='og:description']").first["content"]
+  # The link-preview description: what company and plant pages said in their meta tag before Tosin's 29 Oct SEO
+  # change (their meta now carries counts; see the SEO tests below).
+  def description = og_description
 
   test "every category and tag page has a search title and a counted description that doesn't talk about sourcing" do
     (Category.all + Tag.all).each do |category|
@@ -40,7 +43,8 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: utility.slug)
 
-    assert_select "title", "Alabama Power: utility, plants · Nuclear Directory"
+    assert_select "title", "Alabama Power: plants | Nuclear Directory"
+    assert_match(/\AAlabama Power: Utility in Birmingham, AL\. 3 plants\.\z/, meta_description)
     assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
     assert_equal description, og_description
     assert_no_match(/Plants, sites and deals/, description)
@@ -66,8 +70,8 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: helion.slug)
 
-    # "…, investors and deals" would run past 70 characters, so "deals" goes.
-    assert_select "title", "Helion Energy: fusion developer, investors · Nuclear Directory"
+    assert_select "title", "Helion Energy: investors | Nuclear Directory"
+    assert_match(/\AHelion Energy: Develops fusion power plants\. 1 investor\.\z/, meta_description)
     assert_equal "Helion Energy: Develops fusion power plants. Investors include Lightspeed.", description
   end
 
@@ -100,7 +104,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: kairos.slug)
 
-    assert_select "title", "Kairos Power: reactor developer · Nuclear Directory"
+    assert_select "title", "Kairos Power | Nuclear Directory", "no section the page has, none claimed"
   end
 
   test "a grant or award isn't an investment, and an ended or future link isn't present tense" do
@@ -129,14 +133,36 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     assert_equal "2 fusion energy companies in the US.", description
   end
 
-  test "a long company name drops what the page holds, then its role, to keep the title within 70 characters" do
+  test "a long company name drops the suffix first, then sections, to keep the title within 60 characters" do
     name = "Northern States Power Company Minnesota Generation"
     cite!(company(name, roles: [ role("utility") ])).then { |org| cite!(link(org, "owns", cite!(plant("Prairie Island")))) }
 
     get company_path(slug: Organization.find_by!(name:).slug)
 
-    assert_select "title", "#{name} · Nuclear Directory"
-    assert_operator css_select("title").text.length, :<=, 70
+    assert_select "title", "#{name}: sites", "a plant with no published facts is a site, as in the description"
+    assert_operator css_select("title").text.length, :<=, 60
+  end
+
+  test "a company's title and meta name only the sections the page has: partners, customers, investors, plants" do
+    oklo = cite!(company("Oklo", description: "Develops advanced fission power plants."))
+    cite!(link(cite!(company("Lightspeed")), "invests_in", oklo))
+    cite!(link(oklo, "supplies", cite!(company("Buyer Co"))))
+    cite!(link(oklo, "owns", cite!(plant("Aurora", facility_type: "power_reactor"))))
+
+    get company_path(slug: oklo.slug)
+
+    assert_select "title", "Oklo: partners, customers, investors and plants", "too long with the suffix, so the suffix goes"
+    assert_operator css_select("title").text.length, :<=, 60
+    assert_match(/\AOklo: Develops advanced fission power plants\. 1 plant, 1 deal, 1 investor\.\z/, meta_description)
+    assert_operator meta_description.length, :<=, 160
+  end
+
+  test "a plant's meta never runs past 160 characters, and a framework offtake isn't a deal" do
+    long = cite!(plant("A Very Long Plant Name " * 6, facility_type: "power_reactor", status: "operating", city: "Somewhere", state: "TX"))
+    cite!(link(cite!(company("Owner Co")), "owns", long))
+
+    get plant_path(slug: long.slug)
+    assert_operator meta_description.length, :<=, 160
   end
 
   test "a plant's title names its town and state, and owners and operator only when they're published (#291)" do
@@ -145,10 +171,11 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     bare = cite!(plant("Lone Site", facility_type: "uranium_mine", city: "Crownpoint", state: "NM"))
 
     get plant_path(slug: owned.slug)
-    assert_select "title", "Arkansas Nuclear One, Russellville, AR: owners · Nuclear Directory"
+    assert_select "title", "Arkansas Nuclear One: owners | Nuclear Directory"
+    assert_match(/\AArkansas Nuclear One: .*Russellville, Arkansas\. 1 owner\.\z/, meta_description)
     assert_match(/in Russellville, Arkansas\./, description)
 
     get plant_path(slug: bare.slug)
-    assert_select "title", "Lone Site, Crownpoint, NM · Nuclear Directory"
+    assert_select "title", "Lone Site | Nuclear Directory"
   end
 end

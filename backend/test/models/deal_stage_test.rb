@@ -31,8 +31,11 @@ class DealStageTest < ActionDispatch::IntegrationTest
     get company_path(slug: @buyer.slug)
     assert_select "#deals-heading .nd-sechead__count", "1 · 1 framework"
     assert_select "span.nd-tag", "Framework"
-    assert_select "meta[name=description][content*=?]", "Framework offtake with Oklo Stage Co"
-    assert_select "meta[name=description][content*=?]", "Offtakes from Signed Seller Co"
+    # The link preview keeps the sentences; the search meta description now carries the signed-deal count only.
+    assert_select "meta[property='og:description'][content*=?]", "Framework offtake with Oklo Stage Co"
+    assert_select "meta[property='og:description'][content*=?]", "Offtakes from Signed Seller Co"
+    assert_select "meta[name=description][content*=?]", "1 deal"
+    assert_select "meta[name=description][content*=?]", "2 deals", count: 0
   end
 
   test "a framework alone doesn't make a power buyer" do

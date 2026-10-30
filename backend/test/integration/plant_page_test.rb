@@ -48,7 +48,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     get plant_path(slug: "plant-vogtle")
 
     assert_response :success
-    assert_select "title", "Plant Vogtle, Waynesboro, GA: owners and operator · Nuclear Directory"
+    assert_select "title", "Plant Vogtle: owners and operator | Nuclear Directory"
     assert_select "main", 1
     assert_select "h1.nd-pagehead__name", "Plant Vogtle"
     assert_select ".nd-pagehead__tags .nd-tag", "Power plant"
@@ -419,7 +419,8 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     # The one-line summary doesn't state a scheduled link as current (#246).
     line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MW. Owned by Georgia Power."
     assert_select "meta[property='og:description'][content=?]", line
-    assert_select "meta[name='description'][content=?]", line
+    assert_select "meta[property='og:description'][content=?]", line
+    assert_select "meta[name='description'][content^=?]", "Plant Vogtle: Operating power plant in Waynesboro, Georgia."
   end
 
   test "an unpublished unit or link disappears from the plant page" do
@@ -447,7 +448,8 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select "meta[property='og:title'][content='Plant Vogtle']"
     line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MW. Owned by Georgia Power; operated by Southern Nuclear."
     assert_select "meta[property='og:description'][content=?]", line
-    assert_select "meta[name='description'][content=?]", line # the same line for search results (#246)
+    assert_select "meta[property='og:description'][content=?]", line
+    assert_select "meta[name='description'][content^=?]", "Plant Vogtle: Operating power plant in Waynesboro, Georgia." # search results: the lead, then counts
     assert_select "link[rel=canonical][href=?]", "http://www.example.com/plants/plant-vogtle"
   end
 
