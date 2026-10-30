@@ -82,6 +82,7 @@ class AnalyticsTest < ActiveSupport::TestCase
   test "outbound clicks send the kind, the destination's domain and the page's slug, never a URL or a query string (#492)" do
     snippet = Rails.root.join("app/javascript/analytics.js").read
     assert_includes snippet, 'ready.capture("outbound_click", properties, { send_instantly: true })'
+    assert_includes snippet, 'event.type === "auxclick" && event.button !== 1', "the right button's context menu isn't a click-through"
 
     skip "node isn't installed" unless system("which node > /dev/null 2>&1")
     script = <<~JS
@@ -91,15 +92,17 @@ class AnalyticsTest < ActiveSupport::TestCase
       console.log(JSON.stringify([
         outboundProperties(link("https://www.oklo.com/news?utm_source=nuclear-directory&utm_campaign=company-page&q=me@x.com"), here),
         outboundProperties(link("https://www.nrc.gov/docs/ML1.pdf?email=a@b.c", "source"), here),
+        outboundProperties(link("https://www.oklo.com/?utm_source=newsletter", "company_website"), here),
         outboundProperties(link("https://nuclear-directory.org/companies/kairos-power"), here),
         outboundProperties(link("mailto:hello@nuclear-directory.org"), here),
         outboundProperties(link("https://example.org/x"), { href: "https://nuclear-directory.org/search?q=me@x.com", host: "nuclear-directory.org", pathname: "/search" })
       ]))
     JS
-    company, source, internal, mail, from_search = JSON.parse(IO.popen([ "node", "--input-type=module", "-e", script, chdir: Rails.root.to_s ], &:read))
+    company, source, existing_utm, internal, mail, from_search = JSON.parse(IO.popen([ "node", "--input-type=module", "-e", script, chdir: Rails.root.to_s ], &:read))
 
     assert_equal({ "kind" => "company_website", "target_domain" => "oklo.com", "from_slug" => "oklo", "from_type" => "company" }, company)
     assert_equal({ "kind" => "source", "target_domain" => "nrc.gov", "from_slug" => "oklo", "from_type" => "company" }, source)
+    assert_equal "company_website", existing_utm["kind"], "the Website link says what it is, even when the company's URL already has a utm_source"
     assert_nil internal, "a link inside the site isn't outbound"
     assert_nil mail
     assert_equal({ "kind" => "other", "target_domain" => "example.org", "from_slug" => nil, "from_type" => "other" }, from_search)

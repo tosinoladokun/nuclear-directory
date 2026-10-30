@@ -196,6 +196,11 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-crow__more .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
   end
 
+  test "the Website link says it is a company website for outbound tracking, whatever its own UTM (#492)" do
+    get company_path(slug: "kairos-power")
+    assert_select "a[href*='kairospower.com'][data-outbound=company_website]", minimum: 1
+  end
+
   test "the quiet line is the page's last line: sources, cite this page, one Report a correction" do
     get company_path(slug: "kairos-power")
 

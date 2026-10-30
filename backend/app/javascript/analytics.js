@@ -63,6 +63,8 @@ export function outboundProperties(anchor, here = window.location) {
 
 let ready = null
 function trackOutbound(event) {
+  // auxclick also fires for the right button (the context menu): only the middle button opens the link.
+  if (event.type === "auxclick" && event.button !== 1) return
   const anchor = event.target.closest?.("a[href]")
   const properties = anchor && outboundProperties(anchor)
   if (properties && ready) ready.capture("outbound_click", properties, { send_instantly: true })
