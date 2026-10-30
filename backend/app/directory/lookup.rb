@@ -194,7 +194,7 @@ module Directory
         .map { |event| VerificationEventRef.from(event) }
     end
 
-    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm].freeze
+    FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm LicensingStage].freeze
     # FactWriter kinds, one per fact type.
     FACT_KINDS = FACT_TYPES.map(&:underscore).freeze
 
@@ -327,7 +327,7 @@ module Directory
       "organization" => [ :aliases ], "facility" => [ :parent, :technology ], "organization_role" => [ :organization, :role ],
       "organization_technology" => [ :organization, :technology ],
       "relationship" => [ :from_organization, :to_organization ], "facility_relationship" => [ :organization, :facility ],
-      "deal_term" => [ :link ]
+      "deal_term" => [ :link ], "licensing_stage" => [ :organization, :facility ]
     }.freeze
     private_constant :PENDING_INCLUDES
 
@@ -709,8 +709,9 @@ module Directory
         values[:role] = record.role.key if kind == "organization_role"
         values[:aliases] = record.aliases.map(&:alias).sort if kind == "organization"
         values[:technology] = record.technology&.key if record.respond_to?(:technology)
-        values[:organization_name] = record.organization.name if record.respond_to?(:organization)
-        values[:facility_name] = record.facility.name if kind == "facility_relationship"
+        # A plant's licensing stage has no company, and a developer's no plant.
+        values[:organization_name] = record.organization&.name if record.respond_to?(:organization)
+        values[:facility_name] = record.facility&.name if %w[facility_relationship licensing_stage].include?(kind)
         if kind == "relationship"
           values[:from_organization_name] = record.from_organization.name
           values[:to_organization_name] = record.to_organization.name
@@ -783,6 +784,10 @@ module Directory
           when FacilityRelationship then "#{record.organization.name} #{LINK_VERBS.fetch(record.relationship_type)} #{record.facility.name}"
           # Its id (an award ID, an accession number) or round, so two terms under one link read apart.
           when DealTerm then return deal_term_label(record)
+          # "Last Energy's pre-application on NRC docket 99902104" (#650).
+          when LicensingStage
+            owner = record.organization || record.facility
+            return "#{owner&.name}'s #{record.stage.tr('_', '-')} on NRC docket #{record.nrc_docket}"
           end
         "the fact “#{statement}”"
       end

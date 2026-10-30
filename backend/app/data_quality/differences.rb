@@ -19,7 +19,9 @@ module DataQuality::Differences
     "relationship" => %w[description started_on ended_on],
     "facility_relationship" => %w[ownership_pct description started_on ended_on],
     # Its link, type and external ID say which term it is; these are its values.
-    "deal_term" => %w[amount_usd amount_offered_usd capacity_mw firm_mw term_years signed_on starts_on ends_on agreement conditions round status]
+    "deal_term" => %w[amount_usd amount_offered_usd capacity_mw firm_mw term_years signed_on starts_on ends_on agreement conditions round status],
+    # Its owner, docket and stage say which stage it is; these are its details (#650).
+    "licensing_stage" => %w[design_name effective_on expires_on]
   }.freeze
 
   # Values stored by key whose history is recorded under their column
