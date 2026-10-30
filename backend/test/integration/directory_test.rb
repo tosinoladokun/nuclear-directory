@@ -118,10 +118,11 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     Facility.create!(name: "Quiet Unit 1", parent: site, verification_status: "verified", verified_by: "human:test", capacity_mw: 300, status: "operating")
     get companies_path(category: "plants")
 
-    assert_select ".nd-line", text: /Quiet Station/ do
-      assert_select ".nd-line__what", /1 operating unit/, "the pending site's own status isn't shown, so the unit's is"
-      assert_select ".nd-line__cap", "300 MW"
-      assert_select ".nd-st", count: 0
+    assert_select "a.nd-prow", text: /Quiet Station/ do
+      assert_select ".nd-prow__units", /1/, "its verified unit counts"
+      assert_select ".nd-prow__cap", "300 MW"
+      assert_select ".nd-prow__status .nd-st", count: 0
+      assert_select ".nd-prow__type", text: "", count: 1, message: "the pending site's own type isn't shown"
     end
     assert_select "body", text: /Nowhere|Planned/, count: 0
   end
@@ -234,9 +235,9 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   test "plants and sites show a technology filter without coolant types" do
     get companies_path(category: "plants")
 
-    assert_select "select[name=technology]"
-    assert_select "select[name=technology] option", text: /coolant/, count: 0
+    assert_select "select[name=type]"
     assert_select "select[name=state]"
+    assert_select "select[name=technology]", 0, "the plants list has its own filters (#614)"
     assert_select ".nd-pagehead__count", "1 plant or site"
   end
 
@@ -259,7 +260,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     cite!(plant("Quiet Research Site Reactor", parent: site, reactor_type: "TRIGA"))
     get companies_path(category: "plants")
 
-    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-line__mark").to_s, PLANT_ICON, "site-plant"
+    assert_includes css_select("a[href='/plants/quiet-research-site'] .nd-line__mark, a[href='/plants/quiet-research-site'] .nd-prow__mark").to_s, PLANT_ICON, "site-plant"
   end
 
   test "an unsourced site's own status doesn't pick its icon, in the directory or instant search" do
@@ -268,7 +269,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     [ companies_path(category: "plants"), search_path(q: "quiet old") ].each do |path|
       get path
-      ring = css_select("a[href='/plants/quiet-old-station'] .nd-line__mark, a[href='/plants/quiet-old-station'] .nd-catsq").to_s
+      ring = css_select("a[href='/plants/quiet-old-station'] .nd-line__mark, a[href='/plants/quiet-old-station'] .nd-prow__mark, a[href='/plants/quiet-old-station'] .nd-catsq").to_s
       assert_includes ring, "<svg", path
       assert_not_includes ring, waste, path
     end
@@ -281,8 +282,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     [ companies_path(category: "plants"), search_path(q: "station") ].each do |path|
       get path
-      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-line__mark, a[href='/plants/sourced-station'] .nd-catsq").to_s
-      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-line__mark, a[href='/plants/quiet-station'] .nd-catsq").to_s
+      sourced_ring = css_select("a[href='/plants/sourced-station'] .nd-line__mark, a[href='/plants/sourced-station'] .nd-prow__mark, a[href='/plants/sourced-station'] .nd-catsq").to_s
+      quiet_ring = css_select("a[href='/plants/quiet-station'] .nd-line__mark, a[href='/plants/quiet-station'] .nd-prow__mark, a[href='/plants/quiet-station'] .nd-catsq").to_s
 
       assert_includes sourced_ring, PWR_ICON, path
       assert_not_includes sourced_ring, BWR_ICON, "#{path}: an unsourced unit doesn't change it"
@@ -298,14 +299,15 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     plant("Vogtle Unit 5", parent: vogtle, capacity_mw: 999, status: "operating", verified: false)
     get companies_path(category: "plants")
 
-    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__what", /Power plant · 2 units/
-    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__cap", "2,234.5 MW"
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__units", /\A2/
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__type", "Power plant"
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5 MW"
 
     plant("Vogtle Unit 1", parent: vogtle, capacity_mw: 500, status: "decommissioning")
     get companies_path(category: "plants")
 
-    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__what", /Power plant · 2 operating units, 1 being decommissioned/
-    assert_select "a.nd-line[href='/plants/plant-vogtle'] .nd-line__cap", "2,234.5 MW", "capacity counts operating units only"
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__units", /\A3/
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5 MW", "capacity counts operating units only"
   end
 
   test "an unknown filter value is ignored, not applied behind an Any control" do

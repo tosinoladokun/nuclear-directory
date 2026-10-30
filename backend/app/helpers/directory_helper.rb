@@ -35,8 +35,14 @@ module DirectoryHelper
     "not_operating" => "Not operating",
     "under_construction" => "Under construction",
     "planned" => "Planned",
+    "restart_under_review" => "Restart under review",
     "shut_down" => "Shut down",
     "decommissioning" => "Being decommissioned"
+  }.freeze
+
+  REACTOR_TYPE_LABELS = {
+    "PWR" => "Pressurized water", "BWR" => "Boiling water", "AP1000" => "Pressurized water (AP1000)",
+    "SMR" => "Small modular", "HTGR" => "High-temperature gas", "FUSION" => "Fusion"
   }.freeze
 
   ROLE_LABELS = {

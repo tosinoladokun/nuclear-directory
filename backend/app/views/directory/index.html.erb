@@ -67,13 +67,30 @@
   <%= render "shared/page_head", name: heading, count: pluralize(total, noun, plural:), about: (list_page.description(1) if category_page),
         square: (bucket_icon(listing.category, size: 24) if listing.category), bucket: (listing.category unless listing.category&.plants) %>
 
+  <% if listing.plants_list? %>
+    <%# Status chips with their counts and the status mark (#614): one at a time, All is the default; one line, scrolling on phones. %>
+    <% base = { type: listing.type, reactor: listing.reactor, state: listing.state, sort: (listing.sort unless listing.sort == listing.default_sort) } %>
+    <div class="nd-chips nd-statuschips" role="navigation" aria-label="Status">
+      <%= render "shared/chip", label: "All", href: directory_url_for(category: listing.category, **base), count: listing.status_counts["all"], current: listing.status.nil? %>
+      <% DirectoryListing::STATUS_CHIPS.each_key do |key| %>
+        <% next if listing.status_counts[key].zero? && listing.status != key %>
+        <%= render "shared/chip", label: facility_status_label(key), href: directory_url_for(category: listing.category, status: key, **base), count: listing.status_counts[key], current: listing.status == key,
+              icon: tag.span(class: "nd-st nd-st--#{status_mark_kind(key)}", aria: { hidden: true }) { tag.span(class: "nd-st__mark") } %>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if listing.plants_list? && listing.filtered? %>
+    <p class="type-small m-0 mt-2"><%= link_to "Clear filters", directory_url_for(category: listing.category), class: "nd-link nd-link--muted" %></p>
+  <% end %>
+
   <div class="nd-listhead nd-listhead--bare">
     <%# On phones the filters open in a full-screen sheet behind "Filters (N)"
         (#90). Without JavaScript the sheet is a native popover the button
         opens and closes on its own; with it, the same contents open in a
         modal <dialog> (page behind inert) with a live "Show N results". On
         wide screens, and without popover support, the form shows inline. %>
-    <% active = [ listing.technology, listing.state ].compact.size %>
+    <% active = listing.plants_list? ? [ listing.type, listing.reactor, listing.state ].compact.size : [ listing.technology, listing.state ].compact.size %>
     <div class="nd-filterwrap" data-controller="filter-sheet" data-filter-sheet-count-url-value="<%= companies_path(format: :json) %>"
          data-action="turbo:before-cache@document->filter-sheet#close">
       <%# On phones Sort sits beside Filters, outside the sheet; it applies as it changes. %>
@@ -84,8 +101,11 @@
         <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
         <%= hidden_field_tag :technology, listing.technology, id: nil if listing.technology %>
         <%= hidden_field_tag :state, listing.state, id: nil if listing.state %>
+        <%= hidden_field_tag :status, listing.status, id: nil if listing.status %>
+        <%= hidden_field_tag :type, listing.type, id: nil if listing.type %>
+        <%= hidden_field_tag :reactor, listing.reactor, id: nil if listing.reactor %>
         <label class="nd-select"><b>Sort</b>
-          <%= select_tag :sort, options_for_select(DirectoryListing::SORTS.invert, listing.sort), id: "sort-phone", class: "type-input", data: { action: "change->auto-submit#submit" } %>
+          <%= select_tag :sort, options_for_select(listing.sorts.invert, listing.sort), id: "sort-phone", class: "type-input", data: { action: "change->auto-submit#submit" } %>
         </label>
         <noscript><button type="submit" class="nd-btn nd-btn--sm">Apply</button></noscript>
       <% end %>
@@ -106,14 +126,26 @@
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
           <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
           <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
-          <label class="nd-select"><b>Technology</b>
-            <%= select_tag :technology, options_for_select(listing.technology_options, listing.technology), include_blank: "Any", class: "type-input" %>
-          </label>
+          <%= hidden_field_tag :status, listing.status, id: nil if listing.status %>
+          <% if listing.plants_list? %>
+            <label class="nd-select"><b>Type</b>
+              <%= select_tag :type, options_for_select(listing.type_options, listing.type), include_blank: "Any", class: "type-input" %>
+            </label>
+            <% if listing.reactor_options.any? %>
+              <label class="nd-select"><b>Reactor</b>
+                <%= select_tag :reactor, options_for_select(listing.reactor_options, listing.reactor), include_blank: "Any", class: "type-input" %>
+              </label>
+            <% end %>
+          <% else %>
+            <label class="nd-select"><b>Technology</b>
+              <%= select_tag :technology, options_for_select(listing.technology_options, listing.technology), include_blank: "Any", class: "type-input" %>
+            </label>
+          <% end %>
           <label class="nd-select"><b>State</b>
             <%= select_tag :state, options_for_select(listing.state_options, listing.state), include_blank: "Any", class: "type-input" %>
           </label>
           <label class="nd-select nd-select--sort"><b>Sort</b>
-            <%= select_tag :sort, options_for_select(DirectoryListing::SORTS.invert, listing.sort), class: "type-input" %>
+            <%= select_tag :sort, options_for_select(listing.sorts.invert, listing.sort), class: "type-input" %>
           </label>
           <button type="submit" class="nd-btn nd-btn--sm" data-filter-sheet-target="submit">Apply filters</button>
         <% end %>
@@ -136,7 +168,7 @@
       <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{list_page.name}" if list_page}.",
             action_label: "Clear search",
             action_url: directory_url_for(category: listing.category, tag: listing.tag&.key, technology: listing.technology, state: listing.state,
-                                          role: listing.role, sort: (listing.sort unless listing.sort == DirectoryListing::DEFAULT_SORT)) %>
+                                          role: listing.role, sort: (listing.sort unless listing.sort == listing.default_sort)) %>
     <% elsif listing.filtered? %>
       <%= render "shared/empty_state", message: "Nothing matches these filters.", action_label: "Clear filters", action_url: directory_url_for(category: listing.category, tag: listing.tag&.key) %>
     <% else %>
@@ -158,11 +190,11 @@
     <% end %>
   <% else %>
     <% if @companies.any? %><%= render "directory/company_lines", companies: @companies, short: @short %><% end %>
-    <% if @plants.any? %><%= render "directory/plant_lines", plants: @plants %><% end %>
+    <% if @plants.any? %><%= render "directory/plant_lines", plants: @plants, columns: listing.plants_list? %><% end %>
   <% end %>
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
-      state: listing.state, role: listing.role, sort: (listing.sort unless listing.sort == DirectoryListing::DEFAULT_SORT), shown: @shown / DirectoryController::PAGE + 1,
+      state: listing.state, role: listing.role, status: listing.status, type: listing.type, reactor: listing.reactor, sort: (listing.sort unless listing.sort == listing.default_sort), shown: @shown / DirectoryController::PAGE + 1,
       from: ("suggestion" if listing.searching? && params[:from] == "suggestion")),
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>

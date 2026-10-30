@@ -1473,3 +1473,43 @@
     .nd-partygroup .nd-crow__what { flex: 0 0 auto; min-width: 0; }
   }
 }
+
+/* The Plants and sites list (#614): status chips, then rows in columns under a header: plant or site, status, type,
+   units, capacity, location. Units and capacity are mono and right-aligned; a row with no sourced facts keeps its empty
+   cells. On phones: the mark and name; the status, type and units on line 2; the MW and location on line 3. */
+@layer components {
+  .nd-statuschips { margin: var(--nd-space-4) 0 var(--nd-space-2); }
+  .nd-statuschips .nd-st { flex: none; }
+  .nd-lines--plants { padding-top: 0; }
+  .nd-prow, .nd-lines__head.nd-prow { display: grid; grid-template-columns: var(--nd-row-mark) minmax(0, 2.2fr) 152px minmax(0, 1.2fr) 72px 96px 150px; column-gap: var(--nd-space-4); align-items: center; }
+  .nd-prow { min-height: 56px; padding: var(--nd-space-3) 0; color: var(--nd-ink); text-decoration: none; }
+  a.nd-prow:hover { background: var(--nd-paper-sunken); }
+  .nd-lines__head.nd-prow > * { flex: none; min-width: 0; text-align: left; }
+  .nd-lines__head.nd-prow > .nd-prow__num, .nd-lines__head.nd-prow > .nd-prow__place { text-align: right; }
+  .nd-prow__meta, .nd-prow__foot { display: contents; }
+  .nd-prow__mark { width: var(--nd-row-mark); height: var(--nd-row-mark); display: grid; place-items: center; }
+  .nd-prow__name { font: 600 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-prow__name[data-fit="small"] { font-size: 13px; }
+  .nd-prow__status, .nd-prow__type { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-prow__num { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink); text-align: right; white-space: nowrap; }
+  .nd-prow__unit-word { display: none; }
+  .nd-prow__place { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-lines--plants > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-lines--plants > .nd-lines__head + li { border-top: 0; }
+  @media (max-width: 1023px) {
+    .nd-prow, .nd-lines__head.nd-prow { grid-template-columns: var(--nd-row-mark) minmax(0, 1.6fr) 140px minmax(0, 1fr) 64px 90px 120px; column-gap: var(--nd-space-3); }
+  }
+  @media (max-width: 759px) {
+    .nd-lines--plants > .nd-lines__head { display: none; }
+    .nd-prow { grid-template-columns: var(--nd-row-mark) minmax(0, 1fr); row-gap: 2px; align-items: start; }
+    .nd-prow__mark { grid-row: 1 / span 3; align-self: center; }
+    .nd-prow__name { grid-column: 2; }
+    .nd-prow__meta, .nd-prow__foot { display: flex; grid-column: 2; align-items: baseline; gap: var(--nd-space-3); min-width: 0; overflow: hidden; }
+    .nd-prow__meta > *, .nd-prow__foot > * { flex: 0 1 auto; text-align: left; }
+    .nd-prow__meta > :empty, .nd-prow__foot > :empty { display: none; }
+    .nd-prow__units .nd-prow__unit-word { display: inline; }
+    .nd-prow__units { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); }
+    .nd-prow__foot .nd-prow__place { font-size: 13px; }
+    .nd-prow__foot .nd-prow__cap + .nd-prow__place::before { content: "· "; }
+  }
+}
