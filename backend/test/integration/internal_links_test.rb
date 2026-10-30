@@ -37,7 +37,8 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
     assert_includes links.join, "aardvark"
 
     get company_path(slug: Organization.find_by!(name: "Helion").slug)
-    assert_select "#similar a.nd-line[href=?]", company_path(slug: @oklo.slug), minimum: 1
+    assert_select "#similar a.nd-line", 5, "Helion shares only the category: the five most connected of it, not itself"
+    assert_select "#similar a.nd-line[href=?]", company_path(slug: Organization.find_by!(name: "Helion").slug), count: 0
   end
 
   test "a company with nobody similar has no block" do
