@@ -186,6 +186,6 @@ class CompanyProfile
     def sourced_only(records) = records.select { |record| record.evidence.any? }
 
     def cite(fact, also: [])
-      @cited[fact] = citations.cite(fact.evidence.to_a + also)
+      @cited[fact] = citations.cite(fact.evidence.to_a + also, checked: fact.try(:verified_at))
     end
 end

@@ -161,6 +161,11 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a source's latest check date is in the page's Sources list, not the opened row (#655)" do
+    get plant_path(slug: "plant-vogtle")
+    assert_select "ol.nd-sources li small", /nrc\.gov.*checked \d{4}-\d{2}-\d{2}/
+  end
+
   test "an opened row shows its source as plain text: no boxed number" do
     get plant_path(slug: "plant-vogtle")
 
@@ -339,7 +344,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "sources are numbered once, in reading order" do
     get plant_path(slug: "plant-vogtle")
 
-    assert_select "li#source-1 small", "nrc.gov"
+    assert_select "li#source-1 small", /\Anrc\.gov/
     assert_select "li#source-2 a[href='https://www.georgiapower.com/vogtle-4']", "Vogtle Unit 4 enters commercial operation"
   end
 

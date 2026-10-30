@@ -81,7 +81,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
       assert_select "a.nd-mark[data-sources='1,2'][data-checked='2026-10-09']", 1, "the term's own source counts too, and the mark carries the checked date"
       assert_select ".nd-crow__more a[href='/companies/google']", "Open Google", "the toggle is a button; the company is one click inside"
     end
-    assert_select "li#source-2 small", "energy.gov", "a term's source is in the page's numbered list"
+    assert_select "li#source-2 small", /\Aenergy\.gov/, "a term's source is in the page's numbered list"
     assert_select ".nd-crow", text: /US Department of Energy supplies/ do
       assert_select ".nd-crow__what", "LEU and HALEU enrichment"
     end
@@ -181,7 +181,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "kairos-power")
 
     assert_select "li#source-1 a[href='https://kairospower.com/news/google']", "Google and Kairos Power partner"
-    assert_select "li#source-2 small", "energy.gov"
+    assert_select "li#source-2 small", /\Aenergy\.gov/
   end
 
   test "a source mark opens its sources in the sheet; the list sits behind the quiet line" do
@@ -196,6 +196,11 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     end
     assert_select ".nd-crow a.nd-mark[href='#source-1'][data-sources='1']"
     assert_select ".nd-crow__more .nd-quote[data-source-number='1']", "“Kairos Power and Google have signed”"
+  end
+
+  test "the check date moved out of the opened rows into the page's Sources list (#655)" do
+    get company_path(slug: "kairos-power")
+    assert_select "ol.nd-sources li small", /kairospower\.com.*checked \d{4}-\d{2}-\d{2}/
   end
 
   test "the quiet line is the page's last line: sources, cite this page, one Report a correction" do
