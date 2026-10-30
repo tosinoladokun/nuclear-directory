@@ -480,7 +480,7 @@ class DataQuality::DirectoryClient
         return WriteResult.new(ref: nil, errors: [ "it isn't about a company or plant in the directory yet" ])
       end
 
-      attributes = payload.slice("url", "title", "publisher", "published_on", "summary").symbolize_keys
+      attributes = payload.slice("url", "title", "headline", "publisher", "published_on", "summary").symbolize_keys
       result = nil
       begin
         ActiveRecord::Base.transaction(requires_new: true) do
