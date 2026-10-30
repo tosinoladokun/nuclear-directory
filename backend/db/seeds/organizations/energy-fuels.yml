@@ -18,7 +18,7 @@ status: active
 roles:
 - key: fuel
   subtype: mining
-  source_url: https://www.energyfuels.com/
+  source_url: https://www.energyfuels.com
   quote: We are currently the largest U.S. uranium provider, supplying American nuclear energy utilities with the first step in the zero-emissions nuclear energy fuel cycle.
   confidence: 1.0
 technologies: []
@@ -46,7 +46,7 @@ facilities:
   facility_type: mill
   state: UT
   type: operates
-  source_url: https://www.energyfuels.com/
+  source_url: https://www.energyfuels.com
   quote: We take great pride in our uranium mining, as well as owning and operating a mill, and conventional mines that can produce up to 8 million pounds of uranium per year.
   confidence: 1.0
 - name: Pinyon Plain Mine

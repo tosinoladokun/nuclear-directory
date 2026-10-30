@@ -6,7 +6,7 @@ website: https://www.fpolisolutions.com
 status: active
 roles:
 - key: reactor_services
-  source_url: https://www.fpolisolutions.com/
+  source_url: https://www.fpolisolutions.com
   quote: We serve the nuclear energy sector with agile engineering and software solutions that help our customers achieve their sustainability and energy security goals.
   confidence: 1.0
 technologies: []

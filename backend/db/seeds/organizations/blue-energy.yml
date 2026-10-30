@@ -7,7 +7,7 @@ country_code: null
 status: active
 roles:
 - key: project_developer
-  source_url: https://www.blueenergy.co/
+  source_url: https://www.blueenergy.co
   quote: We are energy experts and experienced nuclear developers on a mission to scale nuclear power this decade.
   confidence: 1.0
 - key: project_developer
@@ -20,9 +20,9 @@ facilities: []
 notes: 'Category project_developer (Tosin, 16 Oct: Developers bucket covers nuclear project developers). Not reactor_vendor: Blue Energy designs and builds whole nuclear plants, but the Crusoe release says "The company’s plant design is reactor agnostic", so it does not design its own reactor. Its site lists a Sept 2026 NRC construction permit application, an Aug 2026 agreement with GE Vernova Hitachi and a July 2026 strategic investment from Constellation (not researched). Release dateline is North Bethesda, MD; HQ not verified. The Crusoe partnership is recorded in crusoe.yml (#253).'
 description:
   text: Company that designs nuclear plants to be prefabricated in factories and assembled on site.
-  source_url: https://www.blueenergy.co/
+  source_url: https://www.blueenergy.co
   quote: We’ve designed a blueprint for manufacturing nuclear plants in controlled factory settings.
 short_description:
   text: 'Factory-built nuclear plant developer'
-  source_url: https://www.blueenergy.co/
+  source_url: https://www.blueenergy.co
   quote: 'We’ve designed a blueprint for manufacturing nuclear plants in controlled factory settings.'

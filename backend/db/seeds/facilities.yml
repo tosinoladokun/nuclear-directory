@@ -565,12 +565,12 @@ facilities:
     confidence: 1.0
   city:
     value: Metropolis
-    source_url: https://www.converdyn.com/
+    source_url: https://www.converdyn.com
     quote: Located in Metropolis, Illinois, this cutting-edge plant, owned and operated by Solstice Advanced Materials’ Specialty Materials division, produces a variety of fluorine products, including uranium hexafluoride (UF 6 ) for nuclear fuel.
     confidence: 1.0
   state:
     value: IL
-    source_url: https://www.converdyn.com/
+    source_url: https://www.converdyn.com
     quote: Located in Metropolis, Illinois
     confidence: 1.0
 - name: Cascade Advanced Energy Facility
