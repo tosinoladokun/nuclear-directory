@@ -54,7 +54,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
     "facility_relationship" => %w[relationship_type],
     # What makes a term the same one (DATA.md): its link, its type and its external ID.
     "deal_term" => %w[link_type term_type external_id],
-    "licensing_stage" => %w[stage nrc_docket design_name effective_on expires_on]
+    # Its owner, stage and docket say which stage it is (#661's key); its
+    # dates are values, compared against a decided stage, never identity.
+    "licensing_stage" => %w[stage nrc_docket]
   }.freeze
 
   Found = Data.define(:record, :by)
@@ -279,6 +281,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
       end
 
       attributes = payload.slice(*LINK_KEYS.fetch(candidate.kind)).symbolize_keys
+      # A design approval is also known by its design's name (#661).
+      attributes[:design_name] = payload["design_name"] if candidate.kind == "licensing_stage" && payload["stage"] == "design_approval"
       closed_end = nil
 
       link_ends(candidate.kind, payload).each do |key, type|
@@ -343,7 +347,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # A new term is written with its values (a round needs its amount or
       # round to exist), pending until a person approves it.
       # What match resolved wins: a payload never names the record, its company or its id.
-      if candidate.kind == "deal_term"
+      if %w[deal_term licensing_stage].include?(candidate.kind)
         values = payload.except(*link_ends(candidate.kind, payload).keys, "relationship_type", *DataQuality::DirectoryClient::WRITE_SKIPPED).symbolize_keys
         return write(candidate, values.merge(attributes))
       end

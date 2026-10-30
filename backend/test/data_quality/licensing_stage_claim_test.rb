@@ -48,4 +48,14 @@ class DataQuality::LicensingStageClaimTest < ActiveSupport::TestCase
     assert_includes names, [ nil, "Stage Site" ]
     assert_includes names, [ "Last Energy", nil ]
   end
+
+  test "a corrected date on an existing stage matches that stage (by docket and stage) instead of making another" do
+    stage = LicensingStage.create!(organization: @company, stage: "pre_application", nrc_docket: "99902104", effective_on: Date.new(2026, 9, 14),
+      verification_status: "verified", verified_by: "human:tosin")
+    c = claim({ "effective_on" => "2026-10-01" })
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_equal [ "LicensingStage", stage.id ], c.reload.values_at(:subject_type, :subject_id), c.notes
+    assert_equal 1, LicensingStage.count
+    assert_equal Date.new(2026, 9, 14), stage.reload.effective_on, "nothing overwritten at match"
+  end
 end
