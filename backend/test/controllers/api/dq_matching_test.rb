@@ -474,4 +474,26 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "full https:// address", results.first["error"]
     assert_match "2000 characters at most", results.second["error"]
   end
+
+  test "propose_fields: a blank filled with Data Quality's approve goes through Yes to all; a changed value stays Tosin's own; a list of fields is refused" do
+    @holtec.update!(verified_by: "human:tosin", description: "Spent fuel storage.")
+    Evidence.create!(subject: @holtec, source: @page, quote: "Licensee: Holtec.", found_by: "human")
+    @page.update!(content_text: "Holtec International is headquartered in Camden, New Jersey. Holtec builds reactors.")
+    act({ action: "propose_fields", target: @holtec.id, fields: [ "hq_city" ], quote: "q", source_url: @page.url, reason: "r" })
+    assert_match "give fields", results.sole["error"]
+
+    act({ action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote: "Holtec International is headquartered in Camden, New Jersey.",
+      source_url: @page.url, reason: "Their page" },
+      { action: "propose_fields", target: @holtec.id, fields: { description: "Holtec builds reactors." }, quote: "Holtec builds reactors.",
+        source_url: @page.url, reason: "Their page" })
+    fill, change = results.map { |r| Candidate.find(r["id"]) }
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    [ fill, change ].each { |c| act({ id: c.id, action: "recommend", verdict: "approve", reason: "On their page" }) }
+
+    inbox = OwnerInbox.new
+    assert_equal [ fill.id ], inbox.checked.map { |entry| entry.item.candidate_id }, "only the blank fill joins the one button"
+    result = DataQuality::Recommendations.accept(inbox.checked_items, by: "human:tosin", first_hand: true).sole
+    assert result.ok?, result.errors.inspect
+    assert_equal [ "Camden", "Spent fuel storage." ], @holtec.reload.values_at(:hq_city, :description)
+  end
 end

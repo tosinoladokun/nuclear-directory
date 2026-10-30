@@ -214,7 +214,8 @@ module DataQuality::Matching
   def self.propose_role(row, directory, requeue)
     action = row["action"].to_s
     reason, quote, role = row["reason"].to_s.squish, row["quote"].to_s.squish, row["role"].to_s
-    fields = row["fields"].respond_to?(:to_h) ? row["fields"].to_h.transform_keys(&:to_s).transform_values { |value| value.to_s.squish } : {}
+    # Only an object of fields; a list or a string is refused below, never raised.
+    fields = row["fields"].is_a?(Hash) ? row["fields"].transform_keys(&:to_s).transform_values { |value| value.to_s.squish } : {}
     fail_with = ->(why) { Row.new(id: nil, ok: false, error: why, created_ids: []) }
     return fail_with.call("give a reason") if reason.blank?
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
