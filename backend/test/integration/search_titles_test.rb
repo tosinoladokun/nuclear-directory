@@ -22,6 +22,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
       assert_operator category.description(11).length, :<=, 160, category.key
     end
     assert_equal "Fusion energy companies in the US.", Tag.find("fusion").description(1)
+    Tag.all.each { |tag| assert_operator "#{tag.title} | Nuclear Directory".length, :<=, 60, "#{tag.key}: the whole title" }
   end
 
   test "a tag page uses its search title and its count; the heading stays short" do
@@ -30,10 +31,30 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get companies_path(tag: "fusion")
 
-    assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
+    assert_select "title", "Fusion energy companies in the US | Nuclear Directory"
     assert_select "h1", /Fusion/
     assert_equal "2 fusion energy companies in the US.", description
     assert_equal description, og_description
+  end
+
+  test "an SMR tag page is titled like the search and opens from the tag under a company's name (#606)" do
+    smr = technology("smr", "Small modular reactor")
+    kairos = cite!(company("Kairos Power", techs: [ smr ], roles: [ role("enrichment") ]))
+    cite!(company("NuScale", techs: [ smr ]))
+
+    get companies_path(tag: "smr")
+    assert_select "title", "SMR companies in the US | Nuclear Directory"
+    assert_equal "2 small modular reactor (SMR) companies in the US.", description
+
+    get company_path(slug: kairos.slug)
+    assert_select ".nd-pagehead__tags a.nd-tag--link[href=?]", companies_path(tag: "smr"), /Small modular reactor/
+    assert_select ".nd-pagehead__tags a.nd-tag--link[href=?]", companies_path(tag: "enrichment")
+    assert_select ".nd-pagehead__tags a.nd-tag--link .nd-tag__go svg", minimum: 1, message: "a linked tag shows its chevron at rest"
+    assert_select ".nd-pagehead__tags span.nd-tag .nd-tag__go", 0
+
+    get sitemap_path
+    assert_includes response.body, companies_url(tag: "smr")
+    assert_not_includes response.body, companies_url(tag: "conversion"), "a tag with no company isn't in the sitemap"
   end
 
   test "a company with no one-line description is described by its plants, never the generic line (#247)" do

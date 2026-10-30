@@ -87,7 +87,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(tag: "fusion")
 
     assert_response :success
-    assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
+    assert_select "title", "Fusion energy companies in the US | Nuclear Directory"
     assert_select "h1", /Fusion/
     assert_select ".nd-pagehead__count", "1 company"
     assert_select "a.nd-line[href='/companies/helion']"
@@ -353,8 +353,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   end
 
   test "a tag we don't have searches its words instead of listing every company" do
-    get companies_path(tag: "smr", state: "TX")
-    assert_redirected_to companies_url(q: "SMR", state: "TX")
+    get companies_path(tag: "pwr", state: "TX")
+    assert_redirected_to companies_url(q: "PWR", state: "TX")
     assert_equal 301, response.status
     get companies_path(tag: "molten-salt")
     assert_redirected_to companies_url(q: "molten salt")
