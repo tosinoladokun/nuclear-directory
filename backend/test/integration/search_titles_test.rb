@@ -46,6 +46,8 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: kairos.slug)
     assert_select ".nd-pagehead__tags a.nd-tag--link[href=?]", companies_path(tag: "smr"), /Small modular reactor/
     assert_select ".nd-pagehead__tags a.nd-tag--link[href=?]", companies_path(tag: "enrichment")
+    assert_select ".nd-pagehead__tags a.nd-tag--link .nd-tag__go svg", minimum: 1, message: "a linked tag shows its chevron at rest"
+    assert_select ".nd-pagehead__tags span.nd-tag .nd-tag__go", 0
 
     get sitemap_path
     assert_includes response.body, companies_url(tag: "smr")
