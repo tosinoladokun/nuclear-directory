@@ -9,7 +9,7 @@
   content_for :og_description, description
 %>
 <% content_for :head do %>
-  <meta name="description" content="<%= description %>">
+  <meta name="description" content="<%= company_meta_description(p) %>">
   <link rel="canonical" href="<%= company_url(slug: p.slug) %>">
 <% end %>
 <%= render "shared/site_header" %>
