@@ -32,7 +32,7 @@ class ListPageSystemTest < ApplicationSystemTestCase
     end
   end
 
-  [ [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+  [ [ 390, 844 ], [ 1100, 900 ], [ 1440, 900 ] ].each do |width, height|
     test "the plants list's status chips, columns and rows are audited at #{width} (#614)" do
       sites = [ [ "Big Generating Station with a Very Long Official Name", "operating", "power_reactor" ], [ "Test Rig", "under_construction", "research_reactor" ],
                 [ "Future Plant", "planned", "power_reactor" ], [ "Closed Site", "shut_down", "power_reactor" ] ]
@@ -46,7 +46,7 @@ class ListPageSystemTest < ApplicationSystemTestCase
       assert_selector ".nd-prow__name", minimum: 5
       assert_selector ".nd-statuschips .nd-chip", minimum: 4
       assert_empty page.evaluate_script(AUDIT)
-      assert_equal width <= 759, page.evaluate_script("getComputedStyle(document.querySelector('.nd-lines__head')).display === 'none'"), "the header row is desktop only"
+      assert_equal width <= 1143, page.evaluate_script("getComputedStyle(document.querySelector('.nd-lines__head')).display === 'none'"), "the header row is desktop only"
       assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, width, "nothing scrolls sideways"
     end
   end
