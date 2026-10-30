@@ -41,7 +41,8 @@ class DirectoryListing
     @query = q.to_s.strip.first(100).presence
     # A filter value that isn't one of the options is dropped, so a stale or
     # mistyped URL can't silently narrow the list behind an "Any" control.
-    @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last))
+    # The plants list has no Technology control (it filters by type and reactor), so a stale technology in the URL is ignored.
+    @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last)) unless plants_list?
     @state = state.to_s.strip.upcase.presence&.presence_in(state_options)
     @sort = sorts.key?(sort.to_s) ? sort.to_s : default_sort
     # Status, type and reactor filter the plants list only; a value that isn't an option is dropped.
@@ -161,7 +162,7 @@ class DirectoryListing
   # chips). { "operating" => 19, ... }, plus "all".
   def status_counts
     @status_counts ||= begin
-      base = self.class.new(**@args, status: nil)
+      base = self.class.new(**@args, status: nil, fuzzy: fuzzy?)
       scope = base.plant_scope.verified
       counts = scope.group(:status).count
       STATUS_CHIPS.transform_values { |statuses| statuses.sum { |s| counts[s].to_i } }.merge("all" => base.plant_scope.count)
@@ -176,7 +177,7 @@ class DirectoryListing
 
   # The reactor types that have rows (a verified site's or a published unit's), as [label, key].
   def reactor_options
-    @reactor_options ||= plant_technology_sources.where.not(reactor_type: [ nil, "" ]).distinct.pluck(:reactor_type)
+    @reactor_options ||= plant_technology_sources.where(id: Evidence.where(subject_type: "Facility").select(:subject_id)).where.not(reactor_type: [ nil, "" ]).distinct.pluck(:reactor_type)
       .map { |key| [ DirectoryHelper::REACTOR_TYPE_LABELS.fetch(key.upcase, key), key ] }.sort_by(&:first)
   end
 
@@ -250,8 +251,10 @@ class DirectoryListing
 
     # Verified sites with the reactor type, or any public site with a published unit of it.
     def with_reactor(scope)
-      units = Facility.published.where.not(parent_id: nil).where(reactor_type: reactor).select(:parent_id)
-      scope.verified.where(reactor_type: reactor).or(scope.where(id: units))
+      # Only sourced facts, as the profile and the row icon use them.
+      sourced = Evidence.where(subject_type: "Facility").select(:subject_id)
+      units = Facility.published.where.not(parent_id: nil).where(reactor_type: reactor).where(id: sourced).select(:parent_id)
+      scope.verified.where(reactor_type: reactor).where(id: sourced).or(scope.where(id: units))
     end
 
     # A technology key (fission, smr) or a coolant sub-role key (molten_salt).

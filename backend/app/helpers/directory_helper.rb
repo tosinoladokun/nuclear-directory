@@ -35,10 +35,13 @@ module DirectoryHelper
     "not_operating" => "Not operating",
     "under_construction" => "Under construction",
     "planned" => "Planned",
-    "restart_under_review" => "Restart under review",
     "shut_down" => "Shut down",
     "decommissioning" => "Being decommissioned"
   }.freeze
+
+  # The chip words on the plants list; "Restart under review" waits for a status of that name in the data.
+  STATUS_CHIP_LABELS = FACILITY_STATUS_LABELS.merge("restart_under_review" => "Restart under review", "shut_down" => "Shut down").freeze
+  def status_chip_label(key) = STATUS_CHIP_LABELS[key.to_s]
 
   REACTOR_TYPE_LABELS = {
     "PWR" => "Pressurized water", "BWR" => "Boiling water", "AP1000" => "Pressurized water (AP1000)",

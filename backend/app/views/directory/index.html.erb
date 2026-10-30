@@ -69,19 +69,19 @@
 
   <% if listing.plants_list? %>
     <%# Status chips with their counts and the status mark (#614): one at a time, All is the default; one line, scrolling on phones. %>
-    <% base = { type: listing.type, reactor: listing.reactor, state: listing.state, sort: (listing.sort unless listing.sort == listing.default_sort) } %>
+    <% base = { q: listing.query, from: ("suggestion" if listing.searching? && params[:from] == "suggestion"), type: listing.type, reactor: listing.reactor, state: listing.state, sort: (listing.sort unless listing.sort == listing.default_sort) } %>
     <div class="nd-chips nd-statuschips" role="navigation" aria-label="Status">
       <%= render "shared/chip", label: "All", href: directory_url_for(category: listing.category, **base), count: listing.status_counts["all"], current: listing.status.nil? %>
       <% DirectoryListing::STATUS_CHIPS.each_key do |key| %>
         <% next if listing.status_counts[key].zero? && listing.status != key %>
-        <%= render "shared/chip", label: facility_status_label(key), href: directory_url_for(category: listing.category, status: key, **base), count: listing.status_counts[key], current: listing.status == key,
+        <%= render "shared/chip", label: status_chip_label(key), href: directory_url_for(category: listing.category, status: key, **base), count: listing.status_counts[key], current: listing.status == key,
               icon: tag.span(class: "nd-st nd-st--#{status_mark_kind(key)}", aria: { hidden: true }) { tag.span(class: "nd-st__mark") } %>
       <% end %>
     </div>
   <% end %>
 
   <% if listing.plants_list? && listing.filtered? %>
-    <p class="type-small m-0 mt-2"><%= link_to "Clear filters", directory_url_for(category: listing.category), class: "nd-link nd-link--muted" %></p>
+    <p class="type-small m-0 mt-2"><%= link_to "Clear filters", directory_url_for(category: listing.category, q: listing.query, from: ("suggestion" if listing.searching? && params[:from] == "suggestion")), class: "nd-link nd-link--muted" %></p>
   <% end %>
 
   <div class="nd-listhead nd-listhead--bare">
@@ -168,7 +168,8 @@
       <%= render "shared/empty_state", message: "No results for “#{listing.query}”#{" in #{list_page.name}" if list_page}.",
             action_label: "Clear search",
             action_url: directory_url_for(category: listing.category, tag: listing.tag&.key, technology: listing.technology, state: listing.state,
-                                          role: listing.role, sort: (listing.sort unless listing.sort == listing.default_sort)) %>
+                                          role: listing.role, status: listing.status, type: listing.type, reactor: listing.reactor,
+                                          sort: (listing.sort unless listing.sort == listing.default_sort)) %>
     <% elsif listing.filtered? %>
       <%= render "shared/empty_state", message: "Nothing matches these filters.", action_label: "Clear filters", action_url: directory_url_for(category: listing.category, tag: listing.tag&.key) %>
     <% else %>

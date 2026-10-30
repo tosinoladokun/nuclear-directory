@@ -1492,12 +1492,13 @@
   .nd-prow__name[data-fit="small"] { font-size: 13px; }
   .nd-prow__status, .nd-prow__type { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-prow__num { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink); text-align: right; white-space: nowrap; }
-  .nd-prow__unit-word { display: none; }
+  /* The unit word is always there for screen readers; sighted desktop users read the number under the Units header. */
+  .nd-prow__unit-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .nd-prow__place { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-lines--plants > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
   .nd-lines--plants > .nd-lines__head + li { border-top: 0; }
-  /* Stacked rows on phones and while the page's list column is no wider than a phone's (up to 1143px). */
-  @media (max-width: 1143px) {
+  /* Stacked rows on phones and until the list column can hold the columns (826px): up to 1279px. */
+  @media (max-width: 1279px) {
     .nd-lines--plants > .nd-lines__head { display: none; }
     .nd-prow { grid-template-columns: var(--nd-row-mark) minmax(0, 1fr); row-gap: 2px; align-items: start; }
     .nd-prow__mark { grid-row: 1 / span 3; align-self: center; }
@@ -1505,7 +1506,7 @@
     .nd-prow__meta, .nd-prow__foot { display: flex; grid-column: 2; align-items: baseline; gap: var(--nd-space-3); min-width: 0; overflow: hidden; }
     .nd-prow__meta > *, .nd-prow__foot > * { flex: 0 1 auto; text-align: left; }
     .nd-prow__meta > :empty, .nd-prow__foot > :empty { display: none; }
-    .nd-prow__units .nd-prow__unit-word { display: inline; }
+    .nd-prow__units .nd-prow__unit-word { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
     .nd-prow__units { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); }
     .nd-prow__foot .nd-prow__place { font-size: 13px; }
     .nd-prow__foot .nd-prow__cap + .nd-prow__place::before { content: "· "; }

@@ -89,6 +89,36 @@ class PlantsListTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "chips, Clear filters and Clear search keep the search and the other filters" do
+    get companies_path(category: "plants", q: "station", type: "power_reactor")
+
+    assert_select ".nd-statuschips a.nd-chip[href*='q=station']", minimum: 2
+    assert_select "a", text: "Clear filters" do |links|
+      assert_includes links.first["href"], "q=station"
+      assert_not_includes links.first["href"], "type="
+    end
+
+    get companies_path(category: "plants", q: "zzzz-none", status: "operating", type: "power_reactor", reactor: "PWR")
+    assert_select ".nd-notice a", "Clear search" do |links|
+      %w[status=operating type=power_reactor reactor=PWR].each { |part| assert_includes links.first["href"], part }
+    end
+  end
+
+  test "a stale technology is ignored on the plants list, and an unsourced reactor type is neither offered nor matched" do
+    plant("Unsourced Reactor Site", facility_type: "power_reactor", status: "operating", reactor_type: "HTGR") # verified, no source
+    get companies_path(category: "plants", technology: "fusion")
+    assert_equal 5 + 1, names.size
+    assert_select "select[name=reactor] option", text: "High-temperature gas", count: 0
+
+    get companies_path(category: "plants", reactor: "HTGR")
+    assert_equal 6, names.size, "an unsourced reactor type isn't a valid option, so it isn't applied"
+  end
+
+  test "the unit word is there for screen readers on every row, whatever the layout" do
+    get companies_path(category: "plants")
+    assert_select "a.nd-prow[href='/plants/big-station'] .nd-prow__unit-word", /units/
+  end
+
   test "the company lists keep their own filters, and the tag list is untouched" do
     get companies_path
     assert_select "select[name=technology]"
