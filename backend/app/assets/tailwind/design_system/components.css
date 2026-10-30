@@ -1200,7 +1200,7 @@
   /* A resting cue that doesn't need hover (phones have none): the ink label, a 12px chevron, the control border; the
      tap area is 44px tall without changing the box. */
   .nd-tag__go { display: inline-flex; flex: none; margin-left: -1px; transform: rotate(-90deg); color: var(--nd-ink-muted); }
-  .nd-tag--link::after { content: ""; position: absolute; left: -4px; right: -4px; top: 50%; height: 44px; transform: translateY(-50%); }
+  .nd-tag--link::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
 
   /* Index (nd-idx): the left column on desktop, sticky. */
   .nd-idx { position: sticky; top: var(--nd-space-6); width: var(--nd-index-width); display: flex; flex-direction: column; gap: 2px; align-self: flex-start; }
