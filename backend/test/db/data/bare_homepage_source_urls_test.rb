@@ -38,6 +38,33 @@ class BareHomepageSourceUrlsTest < ActiveSupport::TestCase
 
     assert_equal "page:https://www.acme.com#series b 1.0", term.reload.external_id
     assert_equal "page:https://www.acme.com#seed 2.0", claim.reload.payload["external_id"]
-    assert_match "Re-keyed 1 deal terms and 1 open claims", migration.output.last
+    assert_match "Re-keyed 1 deal terms and 1 claims", migration.output.last
+  end
+
+  test "an upper-case scheme counts too; a fragment page's key stays; a rejected claim is re-keyed; a skipped term keeps its claims' keys" do
+    upper = stored("HTTPS://Example.org/")
+    company = Organization.create!(name: "Acme", verification_status: "verified", verified_by: "human:tosin")
+    page = Source.create!(url: "https://www.acme.com", source_kind: "web_page")
+    fragment = DealTerm.create!(link: company, term_type: "funding_round", round: "A", amount_usd: 1,
+      external_id: "page:https://www.acme.com/#investors#series a 1.0", verification_status: "verified", verified_by: "human:tosin")
+    rejected = Candidate.create!(source: page, kind: "deal_term", quote: "q", status: "rejected",
+      payload: { "external_id" => "page:https://www.acme.com/#seed 2.0" })
+    taken = DealTerm.create!(link: company, term_type: "funding_round", round: "B", amount_usd: 3,
+      external_id: "page:https://www.acme.com#series b 3.0", verification_status: "verified", verified_by: "human:tosin")
+    stuck = DealTerm.create!(link: company, term_type: "funding_round", round: "B", amount_usd: 3,
+      external_id: "page:https://www.acme.com/#series b 3.0", verification_status: "verified", verified_by: "human:tosin")
+    on_stuck = Candidate.create!(source: page, kind: "deal_term", quote: "q", status: "matched", subject: stuck,
+      payload: { "external_id" => "page:https://www.acme.com/#series b 3.0" })
+
+    migration = run_it
+
+    assert_equal "HTTPS://Example.org", Source.find(upper).url
+    assert_equal "page:https://www.acme.com/#investors#series a 1.0", fragment.reload.external_id, "a fragment page keeps its key"
+    assert_equal "page:https://www.acme.com#seed 2.0", rejected.reload.payload["external_id"]
+    assert rejected.status_rejected?, "its decision doesn't change"
+    assert_equal "page:https://www.acme.com/#series b 3.0", stuck.reload.external_id
+    assert_equal "page:https://www.acme.com/#series b 3.0", on_stuck.reload.payload["external_id"], "its claims keep the key with it"
+    assert_equal "page:https://www.acme.com#series b 3.0", taken.reload.external_id
+    assert(migration.output.any? { |line| line.include?("Claim #{on_stuck.id}: key left as it is") })
   end
 end
