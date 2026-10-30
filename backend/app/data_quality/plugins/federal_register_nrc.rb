@@ -65,8 +65,24 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
     notice = parse(source.content_text) or return []
     about = notice.segments[0...-1].map { |name| { "name" => name, "type" => name.match?(COMPANY_WORDS) ? "organization" : "facility" } }
     [ { kind: "news_item", quote: notice.title, payload: {
-      "url" => notice.url, "title" => notice.title, "publisher" => PUBLISHER, "published_on" => notice.published_on,
+      "url" => notice.url, "title" => notice.title, "headline" => headline(notice), "publisher" => PUBLISHER, "published_on" => notice.published_on,
       "summary" => notice.abstract.presence&.truncate(SUMMARY_LENGTH, separator: " "), "about" => about }.compact } ]
+  end
+
+  HEADLINE_LENGTH = 80
+
+  # "<what NRC did>: <site or unit>", from the title's own parts, at most
+  # HEADLINE_LENGTH (DQ, 30 Oct): "Final Environmental Impact Statement:
+  # Paducah Laser Enrichment Facility". No model; nil when the title has one part.
+  def headline(notice)
+    *names, subject = notice.segments
+    return if subject.blank? || names.empty?
+
+    site = names.find { |name| !name.match?(COMPANY_WORDS) } || names.first
+    room = HEADLINE_LENGTH - subject.length - 2
+    return subject.truncate(HEADLINE_LENGTH, separator: " ") if room < 12
+
+    "#{subject}: #{site.truncate(room, separator: ' ')}"
   end
 
   # One notice per source; notices aging out of the window drop nothing.
