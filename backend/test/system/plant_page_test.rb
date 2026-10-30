@@ -30,7 +30,7 @@ class PlantPageSystemTest < ApplicationSystemTestCase
 
     row.find("button.nd-crow__line").click
     assert_text "the project's co-owners"
-    assert_selector "a", text: "View Georgia Power"
+    assert_selector "a", text: "Open Georgia Power"
   end
 
   test "the share bars share one column and the percentages stack their decimal points" do
