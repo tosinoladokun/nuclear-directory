@@ -12,6 +12,10 @@ module StructuredDataHelper
   # The open dataset as schema.org Dataset (#185), so Google Dataset Search can index the /data page. Name, description,
   # licence, creator and downloads, from what the release files themselves say (Dataset::Export).
   DATASET_DOI = "10.5281/zenodo.23703377".freeze
+  # The tables the published release has (the data repo's latest.json, 2026.11). The export knows seven; the page
+  # lists, links and describes only what is downloadable today, so no link is broken. Add a table here when a release
+  # publishes it.
+  PUBLISHED_TABLES = %w[companies facilities relationships sources evidence].freeze
   def dataset_json_ld(page_url:, description:)
     base = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/main"
     {
@@ -21,7 +25,7 @@ module StructuredDataHelper
       "spatialCoverage" => "United States",
       "creator" => { "@type" => "Person", "name" => "#{Dataset::Export::AUTHOR[:given]} #{Dataset::Export::AUTHOR[:family]}" },
       "publisher" => { "@type" => "Organization", "name" => Dataset::Export::PUBLISHER, "url" => Dataset::Export::SITE },
-      "distribution" => Dataset::Export::TABLES.keys.flat_map do |table|
+      "distribution" => PUBLISHED_TABLES.flat_map do |table|
         [ { "@type" => "DataDownload", "encodingFormat" => "text/csv", "name" => "#{table}.csv", "contentUrl" => "#{base}/#{table}.csv" },
           { "@type" => "DataDownload", "encodingFormat" => "application/json", "name" => "#{table}.json", "contentUrl" => "#{base}/#{table}.json" } ]
       end

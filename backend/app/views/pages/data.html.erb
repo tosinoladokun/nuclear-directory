@@ -24,7 +24,7 @@
   <section aria-labelledby="download">
     <h2 id="download" class="type-body-strong">Download</h2>
     <ul class="type-body">
-      <% Dataset::Export::TABLES.each_key do |table| %>
+      <% StructuredDataHelper::PUBLISHED_TABLES.each do |table| %>
         <li><%= table.tr("_", " ").upcase_first %>: <%= link_to "CSV", "#{raw}/#{table}.csv", class: "nd-link", rel: "noopener noreferrer" %> · <%= link_to "JSON", "#{raw}/#{table}.json", class: "nd-link", rel: "noopener noreferrer" %></li>
       <% end %>
       <li>Every release, with its README, data dictionary and changelog: <%= link_to "the data repository", repo, class: "nd-link", rel: "noopener noreferrer" %>.</li>
@@ -34,10 +34,10 @@
 
   <section aria-labelledby="schema">
     <h2 id="schema" class="type-body-strong">Schema</h2>
-    <p class="type-body">Seven tables, linked by each company's and facility's slug, which is also the end of its page address here.</p>
+    <p class="type-body">Five tables, linked by each company's and facility's slug, which is also the end of its page address here.</p>
     <ul class="type-body">
-      <% Dataset::Export::TABLES.each do |table, columns| %>
-        <li><strong><%= table.tr("_", " ").upcase_first %>:</strong> <%= columns.keys.join(", ") %></li>
+      <% StructuredDataHelper::PUBLISHED_TABLES.each do |table| %>
+        <li><strong><%= table.tr("_", " ").upcase_first %>:</strong> <%= Dataset::Export::TABLES.fetch(table).keys.join(", ") %></li>
       <% end %>
     </ul>
     <p class="type-body">Each column is described in the release's <%= link_to "data dictionary", "#{repo}/blob/main/DATA-DICTIONARY.md", class: "nd-link", rel: "noopener noreferrer" %>.</p>

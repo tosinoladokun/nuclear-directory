@@ -64,7 +64,10 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_equal "https://doi.org/10.5281/zenodo.23703377", ld["identifier"]
     assert_equal "https://creativecommons.org/licenses/by/4.0/", ld["license"]
     assert_operator ld["description"].length, :>=, 50
-    assert_equal Dataset::Export::TABLES.size * 2, ld["distribution"].size, "each table as CSV and JSON"
+    assert_equal StructuredDataHelper::PUBLISHED_TABLES.size * 2, ld["distribution"].size, "each published table as CSV and JSON"
+    assert_empty StructuredDataHelper::PUBLISHED_TABLES - Dataset::Export::TABLES.keys, "only tables the export knows, so the schema list has their columns"
+    assert_select "main a[href*=?]", "deal_terms", count: 0
+    assert_select "main a[href*=?]", "licensing_stages", count: 0
     assert ld["distribution"].all? { |file| file["contentUrl"].start_with?("https://raw.githubusercontent.com/") }
 
     get sitemap_path
