@@ -16,3 +16,9 @@ short_description:
   text: "Public research university"
   source_url: https://www.purdue.edu
   quote: "Purdue University is a world-renowned, public research university that advances discoveries in science, technology, engineering and math."
+hq:
+  city: West Lafayette
+  state: IN
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/pu-in-lockheed
+  quote: "Purdue University Lockheed reactor | Licensee: Purdue University | Location: West Lafayette, IN | Docket Number: 05000182 | Reactor Type: Lockheed"
+  confidence: 1.0

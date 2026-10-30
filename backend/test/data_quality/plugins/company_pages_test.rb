@@ -4,6 +4,8 @@ require "test_helper"
 # list; only values in their quotes, quotes on the page, keys from the lists.
 class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
   HOME = "https://www.acmefission.com/".freeze
+  # How the page is stored, and so keyed: a bare homepage without its slash (#670).
+  HOME_KEY = HOME.chomp("/").freeze
   ABOUT = "https://www.acmefission.com/about".freeze
   PAGE = <<~HTML.freeze
     <html><body><nav><a href="/about">About us</a><a href="/careers">Careers</a><a href="https://other.com/about">Elsewhere</a></nav>
@@ -190,11 +192,11 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claims = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: HOME), nil)
     assert_equal [
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#series b 37000000.0 2024-12-06", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
+        "external_id" => "page:#{HOME_KEY}#series b 37000000.0 2024-12-06", "amount_usd" => "37000000.0", "round" => "Series B", "starts_on" => "2024-12-06" },
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#seed 12500000.0", "amount_usd" => "12500000.0", "round" => "seed" },
+        "external_id" => "page:#{HOME_KEY}#seed 12500000.0", "amount_usd" => "12500000.0", "round" => "seed" },
       { "organization" => { "name" => "Acme Fission" }, "link_type" => "Organization", "term_type" => "funding_round", "status" => "announced",
-        "external_id" => "page:#{HOME}#seed 3000000.0", "amount_usd" => "3000000.0", "round" => "seed" } ], claims.map { |c| c[:payload] }
+        "external_id" => "page:#{HOME_KEY}#seed 3000000.0", "amount_usd" => "3000000.0", "round" => "seed" } ], claims.map { |c| c[:payload] }
     assert(claims.all? { |c| c[:kind] == "deal_term" })
   end
 
@@ -317,7 +319,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
       [ "Acme Fission", "offtake_with", "Grid Co", "mou" ],       # Acme buys Grid Co's power
       [ "Fuel Co", "supplies", "Acme Fission", "mou" ] ], claims.map(&ends)
     first = claims.first[:payload]
-    assert_equal [ "announced", "500.0", "2026-03-03", "page:#{HOME}#big data co ppa 500.0 mw 2026-03-03" ], first.values_at("status", "capacity_mw", "signed_on", "external_id")
+    assert_equal [ "announced", "500.0", "2026-03-03", "page:#{HOME_KEY}#big data co ppa 500.0 mw 2026-03-03" ], first.values_at("status", "capacity_mw", "signed_on", "external_id")
   end
 
   test "a capacity stands whole; an announcement's date isn't a signing date; two same-size deals with one company stay two" do

@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://missouri.edu
-  quote: "Homepage | Mizzou"
+  text: "Holds the NRC licence for a Tank research reactor in Columbia, MO."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/umo-columbia-mo-tank
+  quote: "University of Missouri/Columbia Tank reactor | Licensee: University of Missouri/Columbia | Location: Columbia, MO | Docket Number: 05000186 | Reactor Type: Tank"
+  also:
+  - source_url: https://missouri.edu
+    quote: "Homepage | Mizzou"
+hq:
+  city: Columbia
+  state: MO
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/umo-columbia-mo-tank
+  quote: "University of Missouri/Columbia Tank reactor | Licensee: University of Missouri/Columbia | Location: Columbia, MO | Docket Number: 05000186 | Reactor Type: Tank"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/umo-columbia-mo-tank
+  quote: "University of Missouri/Columbia Tank reactor | Licensee: University of Missouri/Columbia | Location: Columbia, MO | Docket Number: 05000186 | Reactor Type: Tank"

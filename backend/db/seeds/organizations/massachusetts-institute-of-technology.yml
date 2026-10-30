@@ -16,3 +16,9 @@ short_description:
   text: "Science and technology university"
   source_url: https://www.mit.edu
   quote: "The mission of MIT is to advance knowledge and educate students in science, technology and other areas of scholarship that will best serve the nation and the world in the 21st century."
+hq:
+  city: Cambridge
+  state: MA
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/mit-ma-hwr-reflected
+  quote: "Massachusetts Institute of Technology HWR Reflected reactor | Licensee: Massachusetts Institute of Technology | Location: Cambridge, MA | Docket Number: 05000020 | Reactor Type: HWR Reflected"
+  confidence: 1.0
