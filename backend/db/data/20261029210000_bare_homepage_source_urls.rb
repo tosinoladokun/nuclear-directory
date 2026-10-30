@@ -30,7 +30,6 @@ class BareHomepageSourceUrls < DeployData::Migration
     # re-read keys them "page:https://acme.com#…", so the stored keys follow,
     # or the next read would add each term again. A key the slash-less form
     # already holds is left and named.
-    OLD_KEY = %r{\Apage:(https?://[^/?#\s]+)/#}
 
     def rekey_page_terms
       rekeyed = 0
