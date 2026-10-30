@@ -147,9 +147,9 @@ class DataQuality::DirectoryClient
   # evidence: false writes only the record (a link that may already exist
   # gets its evidence on publish, so nothing unverified lands on it early).
   # verification: a pending decision to record (Data Quality's agent, #548).
-  def write_pending(kind, attributes, candidate:, crawl_run:, evidence: true, verification: nil)
+  def write_pending(kind, attributes, candidate:, crawl_run:, evidence: true, verification: nil, create_only: false)
     items = evidence ? [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", crawl_run_id: crawl_run.id } ] : []
-    result = fact_writer.write(kind, attributes, protect_human_verified: true, evidence: items, verification:)
+    result = fact_writer.write(kind, attributes, protect_human_verified: true, evidence: items, verification:, create_only:)
     write_result(result)
   end
 
@@ -356,6 +356,13 @@ class DataQuality::DirectoryClient
   def human_decided_ids(type:, ids:) = lookup.human_decided_ids(type:, ids:)
 
   # Whether a company or plant already goes by this name (normalized).
+  # A person's Same as… (#533): the spelling is the company's other name, in
+  # its history on a published company.
+  def add_alias(id:, name:, by:, published:)
+    verification = ({ status: "verified", by:, reason: "Same as…: another name it goes by" } if published)
+    write_result(fact_writer.write("organization", { id:, aliases: [ name ] }, verification:, protect_human_verified: false))
+  end
+
   def known_name?(type:, id:, name:) = lookup.known_name?(type:, id:, name:)
 
   # Holds a fact's row lock until the surrounding transaction ends.
