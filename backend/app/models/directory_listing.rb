@@ -317,7 +317,8 @@ class DirectoryListing
       scope = scope.order(relevance_sql(name_column, aliases: name_column == "organizations.name")) if query
       return scope.order(name_column) if sort == "name"
       # The Plants and sites list: largest first (rows with no capacity last) or most units.
-      return scope.order(Arel.sql(sort == "units" ? "units_count DESC NULLS LAST" : "capacity_total DESC NULLS LAST"), name_column) if plants_list?
+      # Ties (no capacity, no units): rows with sourced facts before the bare names.
+      return scope.order(Arel.sql(sort == "units" ? "units_count DESC NULLS LAST" : "capacity_total DESC NULLS LAST"), Arel.sql("site_sourced DESC"), name_column) if plants_list?
 
       scope.order(Arel.sql("connections_count DESC"), name_column)
     end

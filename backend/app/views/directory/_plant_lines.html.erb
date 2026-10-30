@@ -15,16 +15,16 @@
       <% capacity = facility.try(:capacity_total) %>
       <% name_text, small = line_name(facility.name, nil, full: DirectoryHelper::LIST_NAME_FULL, small: DirectoryHelper::LIST_NAME_SMALL) %>
       <li><%= link_to plant_url_for(facility), class: "nd-prow" do %>
-        <span class="nd-prow__mark" aria-hidden="true"><%= mark %></span>
-        <span class="nd-prow__name" title="<%= facility.name %>" <%= 'data-fit=small'.html_safe if small %>><%= name_text %></span>
+        <span class="nd-prow__mark nd-catsq" aria-hidden="true"><%= mark %></span>
+        <span class="nd-prow__name" title="<%= facility.name %>" data-truncate <%= 'data-fit=small'.html_safe if small %>><%= name_text %></span>
         <span class="nd-prow__meta">
           <span class="nd-prow__status"><%= render "shared/status_mark", status: facility.status if own && facility.status.present? %></span>
-          <span class="nd-prow__type"><%= facility_type_label(facility.facility_type) if own %></span>
+          <span class="nd-prow__type" title="<%= facility_type_label(facility.facility_type) if own %>" data-truncate><%= facility_type_label(facility.facility_type) if own %></span>
           <span class="nd-prow__num nd-prow__units"><%= unit_count if unit_count.positive? %><span class="nd-prow__unit-word"><%= " #{'unit'.pluralize(unit_count)}" if unit_count.positive? %></span></span>
         </span>
         <span class="nd-prow__foot">
           <span class="nd-prow__num nd-prow__cap"><%= number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present? %></span>
-          <span class="nd-prow__place" title="<%= location(facility.city, facility.state) if own %>"><%= location(facility.city, facility.state) if own %></span>
+          <span class="nd-prow__place" title="<%= location(facility.city, facility.state) if own %>" data-truncate><%= location(facility.city, facility.state) if own %></span>
         </span>
       <% end %></li>
     <% else %>

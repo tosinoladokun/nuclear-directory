@@ -1481,11 +1481,12 @@
   .nd-statuschips { margin: var(--nd-space-4) 0 var(--nd-space-2); }
   .nd-statuschips .nd-st { flex: none; }
   .nd-lines--plants { padding-top: 0; }
-  .nd-prow, .nd-lines__head.nd-prow { display: grid; grid-template-columns: var(--nd-row-mark) minmax(180px, 1fr) 164px 116px 52px 88px 122px; column-gap: var(--nd-space-3); align-items: center; }
+  .nd-prow, .nd-lines__head.nd-prow { display: grid; grid-template-columns: var(--nd-row-mark) minmax(172px, 1fr) 178px 112px 52px 88px 122px; column-gap: var(--nd-space-3); align-items: center; }
   .nd-prow { min-height: 56px; padding: var(--nd-space-3) 0; color: var(--nd-ink); text-decoration: none; }
   a.nd-prow:hover { background: var(--nd-paper-sunken); }
   .nd-lines__head.nd-prow > * { flex: none; min-width: 0; text-align: left; }
-  .nd-lines__head.nd-prow > .nd-prow__num, .nd-lines__head.nd-prow > .nd-prow__place { text-align: right; font: inherit; color: inherit; }
+  .nd-lines__head.nd-prow > .nd-prow__num { text-align: right; font: inherit; color: inherit; }
+  .nd-lines__head.nd-prow > .nd-prow__place { text-align: left; font: inherit; color: inherit; }
   .nd-prow__meta, .nd-prow__foot { display: contents; }
   .nd-prow__mark { width: var(--nd-row-mark); height: var(--nd-row-mark); display: grid; place-items: center; }
   .nd-prow__name { font: 600 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -1494,7 +1495,7 @@
   .nd-prow__num { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink); text-align: right; white-space: nowrap; }
   /* The unit word is always there for screen readers; sighted desktop users read the number under the Units header. */
   .nd-prow__unit-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .nd-prow__place { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-prow__place { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .nd-lines--plants > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
   .nd-lines--plants > .nd-lines__head + li { border-top: 0; }
   /* Stacked rows on phones and until the list column can hold the columns (826px): up to 1279px. */
@@ -1506,6 +1507,7 @@
     .nd-prow__meta, .nd-prow__foot { display: flex; grid-column: 2; align-items: baseline; gap: var(--nd-space-3); min-width: 0; overflow: hidden; }
     .nd-prow__meta > *, .nd-prow__foot > * { flex: 0 1 auto; text-align: left; }
     .nd-prow__meta > :empty, .nd-prow__foot > :empty { display: none; }
+    .nd-prow__meta > .nd-prow__status { flex: none; overflow: visible; }
     .nd-prow__units .nd-prow__unit-word { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
     .nd-prow__units { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); }
     .nd-prow__foot .nd-prow__place { font-size: 13px; }

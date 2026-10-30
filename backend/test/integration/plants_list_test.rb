@@ -40,8 +40,8 @@ class PlantsListTest < ActionDispatch::IntegrationTest
     assert_select "select[name=type] option", text: "Power plant"
     assert_select "select[name=type] option", text: "Test reactor"
     assert_select "select[name=type] option", text: "Mine", count: 0
-    assert_select "select[name=reactor] option", text: "Pressurized water"
-    assert_select "select[name=reactor] option", text: "Boiling water"
+    assert_select "select[name=reactor] option", text: "Pressurized water (PWR)"
+    assert_select "select[name=reactor] option", text: "Boiling water (BWR)"
     assert_select "select[name=state]"
     assert_select "a", text: "Clear filters", count: 0
 
@@ -112,6 +112,14 @@ class PlantsListTest < ActionDispatch::IntegrationTest
 
     get companies_path(category: "plants", reactor: "HTGR")
     assert_equal 6, names.size, "an unsourced reactor type isn't a valid option, so it isn't applied"
+  end
+
+  test "under Largest first, rows with sourced facts come before the bare names (the ties)" do
+    get companies_path(category: "plants")
+    assert_equal "Bare Name", names.last, "the bare name is last among the rows with no capacity"
+    assert_operator names.index("Test Rig"), :<, names.index("Bare Name")
+    assert_select "a.nd-prow .nd-prow__mark.nd-catsq svg", minimum: 5, message: "the row mark is the icon square"
+    assert_select ".nd-lines__head .nd-prow__place", "Location"
   end
 
   test "the unit word is there for screen readers on every row, whatever the layout" do

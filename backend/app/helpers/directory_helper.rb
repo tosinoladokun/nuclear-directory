@@ -44,8 +44,8 @@ module DirectoryHelper
   def status_chip_label(key) = STATUS_CHIP_LABELS[key.to_s]
 
   REACTOR_TYPE_LABELS = {
-    "PWR" => "Pressurized water", "BWR" => "Boiling water", "AP1000" => "Pressurized water (AP1000)",
-    "SMR" => "Small modular", "HTGR" => "High-temperature gas", "FUSION" => "Fusion"
+    "PWR" => "Pressurized water (PWR)", "BWR" => "Boiling water (BWR)", "AP1000" => "Pressurized water (AP1000)",
+    "SMR" => "Small modular (SMR)", "HTGR" => "High-temperature gas (HTGR)", "FUSION" => "Fusion"
   }.freeze
 
   ROLE_LABELS = {
