@@ -168,7 +168,7 @@
   <% end %>
   </turbo-frame>
   <nav class="nd-quiet" aria-label="About this list">
-    <%= link_to correction_url_for(listing.category&.plants ? "A missing plant" : "A missing company") do %><%= icon("flag", size: 16) %><%= listing.category&.plants ? "Missing a plant?" : "Missing a company?" %> Report a correction<% end %>
+    <%= link_to correction_url_for(listing.category&.plants ? "A missing plant" : "A missing company"), rel: "nofollow" do %><%= icon("flag", size: 16) %><%= listing.category&.plants ? "Missing a plant?" : "Missing a company?" %> Report a correction<% end %>
   </nav>
   </div>
   </div>

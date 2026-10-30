@@ -4,6 +4,7 @@ class SitemapsController < ApplicationController
   def show
     pages = PublicPages.new
     @companies, @plants, @categories, @tags = pages.companies, pages.plants, pages.categories, pages.tags
+    @company_lastmods, @plant_lastmods = pages.company_lastmods, pages.plant_lastmods
     expires_in 1.hour, public: true
   end
 
