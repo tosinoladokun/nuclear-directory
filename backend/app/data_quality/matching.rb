@@ -27,6 +27,8 @@ module DataQuality::Matching
   # And for verdicts recorded through recommend.
   DAILY_RECOMMENDS = 500
   DAILY_ROLES = 200
+  # What Data Quality may fill on a published company (PM, 30 Oct: complete companies).
+  FIELDS = %w[website description short_description hq_city hq_state].freeze
   VERDICTS = %w[approve reject].freeze
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
   class Abort < StandardError; end
@@ -44,11 +46,11 @@ module DataQuality::Matching
   end
 
   def self.apply_one(row, directory, requeue = Set.new)
-    return propose_role(row, directory, requeue) if row["action"].to_s == "propose_role"
+    return propose_role(row, directory, requeue) if %w[propose_role propose_fields].include?(row["action"].to_s)
 
     id, action, reason = row["id"].to_i, row["action"].to_s, row["reason"].to_s.squish
     fail_with = ->(why) { Row.new(id:, ok: false, error: why, created_ids: []) }
-    return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless (DqAction::ACTIONS - %w[propose_role]).include?(action)
+    return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless (DqAction::ACTIONS - %w[propose_role propose_fields]).include?(action)
     return fail_with.call("give a reason") if reason.blank?
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
     if %w[new subsidiary_of].include?(action) && DqAction.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
@@ -140,7 +142,7 @@ module DataQuality::Matching
       raise Abort, "it was undone already" if action.undone_at
 
       candidate = Candidate.lock.find(action.candidate_id)
-      if action.action == "propose_role"
+      if %w[propose_role propose_fields].include?(action.action)
         undo_role(action, candidate, directory)
         next nil
       end
@@ -204,20 +206,33 @@ module DataQuality::Matching
   # other and decided by Tosin. Nothing publishes here.
   #   { action: "propose_role", target: company id or slug, role: "reactor_vendor",
   #     quote: "…", source_url: "https://…", reason: "…" }
+  # propose_fields (PM, 30 Oct): sourced values for a published company's
+  # website, description, short description or HQ, as one company claim:
+  #   { action: "propose_fields", target:, fields: { "hq_city" => "Austin", … }, quote:, source_url:, reason: }
+  # It's matched to the company and shows as a Change (old → new) for Tosin.
   def self.propose_role(row, directory, requeue)
+    action = row["action"].to_s
     reason, quote, role = row["reason"].to_s.squish, row["quote"].to_s.squish, row["role"].to_s
+    fields = row["fields"].respond_to?(:to_h) ? row["fields"].to_h.transform_keys(&:to_s).transform_values { |value| value.to_s.squish } : {}
     fail_with = ->(why) { Row.new(id: nil, ok: false, error: why, created_ids: []) }
     return fail_with.call("give a reason") if reason.blank?
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
-    return fail_with.call("give the quote that states the role") if quote.blank?
-    return fail_with.call("#{role.inspect} isn't a role") unless directory.role_key?(role)
+    return fail_with.call("give the quote that states it") if quote.blank?
+    if action == "propose_role"
+      return fail_with.call("#{role.inspect} isn't a role") unless directory.role_key?(role)
+    else
+      return fail_with.call("give fields: one or more of #{FIELDS.join(', ')}") if fields.empty?
+      return fail_with.call("only #{FIELDS.join(', ')} can be proposed") unless (fields.keys - FIELDS).empty?
+      return fail_with.call("give a value for every field") if fields.values.any?(&:blank?)
+      return fail_with.call("a short description is #{ShortDescription::MAX} characters at most") if fields["short_description"].to_s.length > ShortDescription::MAX
+    end
     # A retry (same request_key) is answered first, whatever today's count.
     key = row["request_key"].presence&.to_s
     if key && (done = DqAction.find_by(request_key: key))
       return Row.new(id: done.candidate_id, ok: true, error: nil, created_ids: [ done.candidate_id ])
     end
-    if DqAction.where(action: "propose_role", created_at: Time.current.all_day).count >= DAILY_ROLES
-      return fail_with.call("today's limit of #{DAILY_ROLES} roles is reached; ask Backend")
+    if DqAction.where(action:, created_at: Time.current.all_day).count >= DAILY_ROLES
+      return fail_with.call("today's limit of #{DAILY_ROLES} is reached for #{action}; ask Backend")
     end
 
     Candidate.transaction do
@@ -227,9 +242,13 @@ module DataQuality::Matching
       source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
       raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
 
-      claim = Candidate.create!(source_id: source.ref.id, kind: "organization_role", status: "new", quote:,
-        payload: { "organization" => { "name" => record.name }, "role" => role }, notes: "Data Quality proposed it: #{reason}")
-      DqAction.create!(candidate: claim, action: "propose_role", target_type: "Organization", target_id: record.id, reason:,
+      kind, payload = if action == "propose_role"
+        [ "organization_role", { "organization" => { "name" => record.name }, "role" => role } ]
+      else
+        [ "organization", { "name" => record.name }.merge(fields) ]
+      end
+      claim = Candidate.create!(source_id: source.ref.id, kind:, status: "new", quote:, payload:, notes: "Data Quality proposed it: #{reason}")
+      DqAction.create!(candidate: claim, action:, target_type: "Organization", target_id: record.id, reason:,
         before: {}, created: [], by: BY, request_key: key, after: stamp_of(claim))
       requeue << source.ref.source_kind
       Row.new(id: claim.id, ok: true, error: nil, created_ids: [ claim.id ])
