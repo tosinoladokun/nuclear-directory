@@ -7,7 +7,10 @@
       <% headline = news_headline(item) %>
       <li class="nd-news">
         <time class="nd-news__date" datetime="<%= data_date(item.published_on) %>"><%= data_date(item.published_on) %></time>
-        <span class="nd-news__title" title="<%= headline %>" data-truncate><%= headline %></span>
+        <span class="nd-news__what">
+          <span class="nd-news__title" title="<%= headline %>" data-truncate><%= headline %></span>
+          <% if (summary = item.summary.to_s.squish.truncate(160, separator: " ").presence) %><span class="nd-news__summary" title="<%= item.summary.to_s.squish %>" data-truncate><%= summary %></span><% end %>
+        </span>
         <%= link_to item.url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "news" },
               aria: { label: "#{headline}: read on #{URI.parse(item.url).host.to_s.delete_prefix("www.")} (opens the source)" } do %><%= URI.parse(item.url).host.to_s.delete_prefix("www.") %><span aria-hidden="true"> ↗</span><% end %>
       </li>

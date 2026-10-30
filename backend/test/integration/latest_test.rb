@@ -30,6 +30,22 @@ class LatestTest < ActionDispatch::IntegrationTest
     assert_select "nav a[href='#latest']", /Latest/
   end
 
+  test "each item says what it means in one plain line, 160 characters at most" do
+    holtec = cite!(company("Holtec International"))
+    long = "Holtec asks the NRC to let it start Palisades again. " * 6
+    item = news(holtec, "Holtec exemption request", Date.new(2026, 10, 15))
+    item.update!(summary: long)
+    other = news(holtec, "No summary yet", Date.new(2026, 10, 1))
+
+    get company_path(slug: holtec.slug)
+
+    summary = css_select("#latest .nd-news__summary").map { |node| node.text.strip }
+    assert_equal 1, summary.size, "an item with no summary shows none, never a guess"
+    assert_operator summary.first.length, :<=, 160
+    assert_match(/\AHoltec asks the NRC/, summary.first)
+    assert other
+  end
+
   test "a plant shows its site's news; a page with none has no Latest section" do
     vogtle = cite!(plant("Plant Vogtle", facility_type: "power_reactor", status: "operating"))
     news(vogtle, "Unit 4 reaches full power", Date.new(2026, 7, 29))
