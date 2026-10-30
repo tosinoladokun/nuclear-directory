@@ -16,3 +16,9 @@ short_description:
   text: "Public research university"
   source_url: https://www.uml.edu
   quote: "UMass Lowell, a midsized public research university located north of Boston, offers full- and part-time students bachelor’s, master’s and doctoral degree programs online and on campus."
+hq:
+  city: Lowell
+  state: MA
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/uma-lowell-ma-ge-pool
+  quote: "University of Massachusetts/Lowell GE Pool reactor | Licensee: University of Massachusetts/Lowell | Location: Lowell, MA | Docket Number: 05000223 | Reactor Type: GE Pool"
+  confidence: 1.0

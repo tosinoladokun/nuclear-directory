@@ -2,7 +2,7 @@
 # a fact. Once matched, subject points at the fact it became.
 class Candidate < ApplicationRecord
   KINDS = %w[organization organization_alias organization_role organization_technology
-    facility relationship facility_relationship deal_term news_item].freeze
+    facility relationship facility_relationship deal_term news_item licensing_stage].freeze
 
   enum :kind, KINDS.index_by(&:itself), validate: true, prefix: true
   # Prefixed because "new" would clash with Candidate.new.

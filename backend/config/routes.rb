@@ -19,6 +19,7 @@ Rails.application.routes.draw do
     constraints: { kind: /plants|companies|categories/ }
 
   get "about" => "pages#about", as: :about
+  get "data" => "pages#data", as: :data
   get "privacy" => "pages#privacy", as: :privacy
   get "disclaimer" => "pages#disclaimer", as: :disclaimer
   get "bot" => "pages#bot", as: :bot

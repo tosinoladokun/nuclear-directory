@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://wsu.edu
-  quote: "Washington State University | Washington State University"
+  text: "Holds the NRC licence for a TRIGA research reactor in Pullman, WA."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/wsu-wa-triga
+  quote: "Washington State University TRIGA reactor | Licensee: Washington State University | Location: Pullman, WA | Docket Number: 05000027 | Reactor Type: TRIGA"
+  also:
+  - source_url: https://wsu.edu
+    quote: "Washington State University | Washington State University"
+hq:
+  city: Pullman
+  state: WA
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/wsu-wa-triga
+  quote: "Washington State University TRIGA reactor | Licensee: Washington State University | Location: Pullman, WA | Docket Number: 05000027 | Reactor Type: TRIGA"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/wsu-wa-triga
+  quote: "Washington State University TRIGA reactor | Licensee: Washington State University | Location: Pullman, WA | Docket Number: 05000027 | Reactor Type: TRIGA"
