@@ -551,7 +551,8 @@ module DirectoryHelper
   # "unlinked source", so chips and their labels are never blank.
   # A news item's headline for "Latest" (#137): its plain headline when it has one, else its title (an agency notice's
   # title can run long). try: the column comes with Data Quality's headline work.
-  def news_headline(item) = item.try(:headline).presence || item.title
+  # NewsItem#display_title (#683) is the plain headline, at most 80 characters, else the title.
+  def news_headline(item) = item.try(:display_title).presence || item.try(:headline).presence || item.title
 
   def source_domain(source)
     source.domain.presence || URI.parse(source.url.to_s).host.to_s.delete_prefix("www.").presence || "unlinked source"
