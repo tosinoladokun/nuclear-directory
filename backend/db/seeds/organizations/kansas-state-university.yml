@@ -16,3 +16,9 @@ short_description:
   text: "Land-grant university"
   source_url: https://www.k-state.edu
   quote: "Kansas State University will lead the nation as a next-generation land-grant university – setting the standard for inspiring learning, creativity, discovery and engagement that positively impacts society and transforms lives in Kansas and around the world."
+hq:
+  city: Manhattan
+  state: KS
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/ksu-ks-triga
+  quote: "Kansas State University TRIGA reactor | Licensee: Kansas State University | Location: Manhattan, KS | Docket Number: 05000188 | Reactor Type: TRIGA"
+  confidence: 1.0

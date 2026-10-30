@@ -11,3 +11,17 @@ roles:
 technologies: []
 relationships: []
 facilities: []
+description:
+  text: "Holds the NRC licence for a TRIGA research reactor in Bethesda, MD."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/affri-md-triga
+  quote: "Armed Forces Radiobiology Research Institute TRIGA reactor | Licensee: Armed Forces Radiobiology Research Institute | Location: Bethesda, MD | Docket Number: 05000170 | Reactor Type: TRIGA"
+hq:
+  city: Bethesda
+  state: MD
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/affri-md-triga
+  quote: "Armed Forces Radiobiology Research Institute TRIGA reactor | Licensee: Armed Forces Radiobiology Research Institute | Location: Bethesda, MD | Docket Number: 05000170 | Reactor Type: TRIGA"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/affri-md-triga
+  quote: "Armed Forces Radiobiology Research Institute TRIGA reactor | Licensee: Armed Forces Radiobiology Research Institute | Location: Bethesda, MD | Docket Number: 05000170 | Reactor Type: TRIGA"
