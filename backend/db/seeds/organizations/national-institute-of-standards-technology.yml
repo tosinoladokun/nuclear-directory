@@ -9,3 +9,17 @@ roles:
 technologies: []
 relationships: []
 facilities: []
+description:
+  text: "Holds the NRC licence for a Nuclear Test research reactor in Gaithersburg, MD."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/nist-md-nuclear-test
+  quote: "National Institute of Standards & Technology Nuclear Test reactor | Licensee: National Institute of Standards & Technology | Location: Gaithersburg, MD | Docket Number: 05000184 | Reactor Type: Nuclear Test"
+hq:
+  city: Gaithersburg
+  state: MD
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/nist-md-nuclear-test
+  quote: "National Institute of Standards & Technology Nuclear Test reactor | Licensee: National Institute of Standards & Technology | Location: Gaithersburg, MD | Docket Number: 05000184 | Reactor Type: Nuclear Test"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/nist-md-nuclear-test
+  quote: "National Institute of Standards & Technology Nuclear Test reactor | Licensee: National Institute of Standards & Technology | Location: Gaithersburg, MD | Docket Number: 05000184 | Reactor Type: Nuclear Test"

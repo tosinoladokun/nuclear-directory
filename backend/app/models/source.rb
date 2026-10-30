@@ -7,7 +7,14 @@ class Source < ApplicationRecord
   has_many :evidence, dependent: :restrict_with_error
   has_many :candidates, dependent: :restrict_with_error
 
-  normalizes :url, with: ->(url) { url.strip }
+  # A bare homepage has one address, without the trailing slash
+  # ("https://www.mit.edu/" is "https://www.mit.edu"), so a crawler, Enrich
+  # and the seed land on one row (#670). Lookups are normalised too.
+  normalizes :url, with: ->(url) { bare_homepage(url.strip) }
+
+  def self.bare_homepage(url)
+    url.match?(%r{\Ahttps?://[^/?#\s]+/\z}i) ? url.chomp("/") : url
+  end
 
   before_validation { self.domain ||= domain_from_url }
 

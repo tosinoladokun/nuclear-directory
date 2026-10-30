@@ -13,7 +13,7 @@
         <span class="nd-num"><%= number %></span>
         <span>
           <% if href %>
-            <%= link_to source.title.presence || href, href, class: "nd-link", rel: "noopener noreferrer", target: "_blank" %>
+            <%= link_to source.title.presence || href, href, class: "nd-link", rel: "noopener noreferrer", target: "_blank", data: { outbound: "source" } %>
           <% else %>
             <span><%= source.title.presence || source.url %></span>
           <% end %>
