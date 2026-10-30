@@ -443,11 +443,31 @@ module DirectoryHelper
   # The meta description of a company (Tosin, 29 Oct): its one-line description, then what the page counts:
   # "Oklo: Develops advanced fission power plants. 3 plants, 2 deals." Link previews keep
   # company_description.
+  # One factual sentence for a company page with no written description, built only from published facts (Outcome 30 Nov,
+  # thin pages): "Oklo is a reactor designer in Santa Clara, CA, with 3 deals and 2 sites." No adjectives; nil when the page
+  # has nothing to say yet (no role, place, deal or site), so a bare page stays bare.
+  def company_summary(profile)
+    return if profile.description.present?
+
+    first = profile.shown_roles.first&.role
+    role = (TITLE_ROLES[first.key] || role_label(first)&.downcase) if first
+    where = place(profile.hq_city, profile.hq_state)
+    sites = profile.plant_links.map { |link| link.facility.parent || link.facility }.uniq.size
+    deals = profile.counted_deals.size
+    with = [ (pluralize(deals, "deal") if deals.positive?), (pluralize(sites, company_places_noun(profile)) if sites.positive?) ].compact.to_sentence(two_words_connector: " and ", last_word_connector: " and ")
+    return if role.nil? && where.blank? && with.blank?
+
+    kind = role ? "#{role.match?(/\A(?:[aeio]|un(?!i))/i) ? "an" : "a"} #{role}" : "a company"
+    "#{profile.name} is #{kind}#{" in #{where}" if where}#{", with #{with}" if with.present? && where}#{" with #{with}" if with.present? && !where}."
+  end
+
   def company_meta_description(profile)
-    lead = profile.description.presence || [ profile.shown_roles.first && role_label(profile.shown_roles.first.role),
-      place(profile.hq_city, profile.hq_state) ].compact.join(" in ").presence
-    head = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
+    lead = profile.description.presence
+    head = if lead then "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}"
+    else company_summary(profile) || "#{profile.name}, a company in the US nuclear industry."
+    end
     head = head.truncate(PREVIEW_LIMIT, separator: " ") if head.length > PREVIEW_LIMIT
+    return head if lead.nil? && company_summary(profile) # the sentence already says the counts
     counts = counted([ profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq.size, company_places_noun(profile) ], [ profile.counted_deals.count { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id) }, "deal" ], # signed deals only (as the page counts them); investments are counted as investors
       [ investors_of(profile).size, "investor" ])
     fit_counts(head, counts)

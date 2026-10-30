@@ -56,7 +56,7 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, about: p.description, tags: company_tags(p) %>
+      <%= render "shared/page_head", name: p.name, about: (p.description.presence || company_summary(p)), tags: company_tags(p) %>
     </div>
 
     <%# No key facts, no empty card. %>

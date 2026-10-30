@@ -402,7 +402,8 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "google")
 
     assert_select ".nd-gaps", 0
-    assert_select ".nd-pagehead__about", 0
+    # No written description: the one factual sentence from its published facts (Outcome 30 Nov), never a guess.
+    assert_select ".nd-pagehead__about", /\AGoogle is a power buyer with 1 deal\.\z/
     assert_select ".nd-glance dt", text: "Headquarters", count: 0
   end
 
