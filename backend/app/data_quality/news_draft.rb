@@ -55,8 +55,8 @@ class DataQuality::NewsDraft
       text = plugin.verification_context(source, attrs[:quote]).presence || attrs[:quote].to_s
       draft = draft_for(text, run) || {}
       headline = payload["headline"].presence || fit(draft["headline"], HEADLINE_LENGTH)
-      summary = fit(draft["summary"], SUMMARY_LENGTH) || payload["summary"]&.squish&.truncate(SUMMARY_LENGTH, separator: " ")
-      payload.merge("headline" => headline, "summary" => summary).compact
+      summary = fit(draft["summary"], SUMMARY_LENGTH) || feed_summary(payload["summary"])
+      payload.merge("headline" => headline, "summary" => summary).except(*([ "summary" ] unless summary))
     end
 
     def draft_for(text, run)
@@ -67,6 +67,23 @@ class DataQuality::NewsDraft
     rescue DataQuality::OpenRouter::Client::Error, DataQuality::Budget::Exceeded => error
       Rails.logger.warn("News draft skipped: #{error.class}: #{error.message}")
       nil
+    end
+
+    # The feed's own summary without a blog's "The post … appeared first on …"
+    # tail, whole sentences up to SUMMARY_LENGTH; else none, never a clipped
+    # half sentence (DQ, 30 Oct).
+    APPEARED_FIRST = /\s*The post .+? appeared first on .+?\.?\s*\z/m
+    def feed_summary(text)
+      text = text.to_s.sub(APPEARED_FIRST, "").squish
+      return if text.empty?
+      return text if text.length <= SUMMARY_LENGTH && text.match?(/[.!?]["'”’)]?\z/)
+
+      kept = text.scan(/[^.!?]+[.!?]["'”’)]?(?=\s|\z)/).map(&:strip).each_with_object([]) do |sentence, sentences|
+        break sentences if (sentences + [ sentence ]).join(" ").length > SUMMARY_LENGTH
+
+        sentences << sentence
+      end
+      kept.join(" ").presence
     end
 
     # The model's text, when it keeps to the limit; never cut.

@@ -29,8 +29,7 @@ class DataQuality::NewsDraftTest < ActiveSupport::TestCase
     payload = apply(llm, [ news("headline" => "Exemption: Pioneer Units 1 and 2") ]).sole[:payload]
 
     assert_equal "Exemption: Pioneer Units 1 and 2", payload["headline"]
-    assert_operator payload["summary"].length, :<=, DataQuality::NewsDraft::SUMMARY_LENGTH
-    assert payload["summary"].start_with?("x x")
+    refute payload.key?("summary"), "no sentence end within 160: no clipped half sentence"
   end
 
   test "no model: the feed's summary cut to 160, no headline made up; other claims and leads untouched" do
@@ -39,8 +38,18 @@ class DataQuality::NewsDraftTest < ActiveSupport::TestCase
     drafted, untouched, lead_out = apply(nil, [ news, company, lead ])
 
     assert_nil drafted[:payload]["headline"]
-    assert_operator drafted[:payload]["summary"].length, :<=, 160
+    refute drafted[:payload].key?("summary")
     assert_equal company, untouched
     assert_equal lead, lead_out
+  end
+
+  test "a feed summary: the blog's 'appeared first' tail dropped, whole sentences only" do
+    holtec = "Holtec completed the dry storage campaign at Palisades. The work moved 12 casks to the pad, ahead of plan, " \
+      "and the team thanked the community for its support over many months. The post Holtec Finishes Campaign appeared first on Holtec International."
+    payload = apply(nil, [ news("summary" => holtec) ]).sole[:payload]
+    assert_equal "Holtec completed the dry storage campaign at Palisades.", payload["summary"]
+
+    short = apply(nil, [ news("summary" => "Holtec signed a fuel deal. The post X appeared first on Holtec International.") ]).sole[:payload]
+    assert_equal "Holtec signed a fuel deal.", short["summary"]
   end
 end
