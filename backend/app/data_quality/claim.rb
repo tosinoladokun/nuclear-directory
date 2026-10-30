@@ -91,8 +91,10 @@ module DataQuality::Claim
     when "licensing_stage"
       project = " for #{payload['design_name']}" if payload["design_name"].present?
       since = (Date.iso8601(payload["effective_on"].to_s).strftime(" since %-d %b %Y") rescue nil)
+      # The expiry too, so the checker sees every value approval would write.
+      til = (Date.iso8601(payload["expires_on"].to_s).strftime(", until %-d %b %Y") rescue nil) if payload["expires_on"].present?
       "#{name_of(payload['organization'])} is at the NRC's #{payload['stage'].to_s.tr('_', '-')} stage#{project} " \
-        "(docket #{payload['nrc_docket']})#{since}."
+        "(docket #{payload['nrc_docket']})#{since}#{til}."
     else
       "#{candidate.kind.humanize}: #{payload.to_json}"
     end

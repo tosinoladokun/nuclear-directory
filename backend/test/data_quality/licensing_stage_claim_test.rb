@@ -31,4 +31,31 @@ class DataQuality::LicensingStageClaimTest < ActiveSupport::TestCase
     DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
     assert_equal "needs_review", c.reload.status
   end
+
+  test "a changed date on a human-verified stage is a difference; an expiry is worded; both owner kinds list as pending facts" do
+    stage = LicensingStage.create!(organization: @company, stage: "pre_application", nrc_docket: "99902104", effective_on: Date.new(2026, 9, 14),
+      verification_status: "verified", verified_by: "human:tosin")
+    c = claim({ "effective_on" => "2026-10-01", "expires_on" => "2027-10-01" })
+    c.update!(status: "matched", subject_type: "LicensingStage", subject_id: stage.id)
+    record = DataQuality::DirectoryClient.new.fact(type: "LicensingStage", id: stage.id)
+    assert_includes DataQuality::Differences.changes(c, record, directory: DataQuality::DirectoryClient.new).to_h.keys, "effective_on"
+    assert_match "until 1 Oct 2027", DataQuality::Claim.describe(c)
+
+    site = Facility.create!(name: "Stage Site", verification_status: "verified", verified_by: "human:tosin")
+    LicensingStage.create!(facility: site, stage: "construction_permit", nrc_docket: "05000999", effective_on: Date.current, verification_status: "pending")
+    LicensingStage.create!(organization: @company, stage: "withdrawn", nrc_docket: "99902105", effective_on: Date.current, verification_status: "pending")
+    names = DataQuality::Review.pending_facts(kind: "licensing_stage").map { |fact| fact.attributes.to_h.values_at(:organization_name, :facility_name) }
+    assert_includes names, [ nil, "Stage Site" ]
+    assert_includes names, [ "Last Energy", nil ]
+  end
+
+  test "a corrected date on an existing stage matches that stage (by docket and stage) instead of making another" do
+    stage = LicensingStage.create!(organization: @company, stage: "pre_application", nrc_docket: "99902104", effective_on: Date.new(2026, 9, 14),
+      verification_status: "verified", verified_by: "human:tosin")
+    c = claim({ "effective_on" => "2026-10-01" })
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_equal [ "LicensingStage", stage.id ], c.reload.values_at(:subject_type, :subject_id), c.notes
+    assert_equal 1, LicensingStage.count
+    assert_equal Date.new(2026, 9, 14), stage.reload.effective_on, "nothing overwritten at match"
+  end
 end

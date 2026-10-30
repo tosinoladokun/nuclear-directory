@@ -709,8 +709,9 @@ module Directory
         values[:role] = record.role.key if kind == "organization_role"
         values[:aliases] = record.aliases.map(&:alias).sort if kind == "organization"
         values[:technology] = record.technology&.key if record.respond_to?(:technology)
-        values[:organization_name] = record.organization.name if record.respond_to?(:organization)
-        values[:facility_name] = record.facility.name if kind == "facility_relationship"
+        # A plant's licensing stage has no company, and a developer's no plant.
+        values[:organization_name] = record.organization&.name if record.respond_to?(:organization)
+        values[:facility_name] = record.facility&.name if %w[facility_relationship licensing_stage].include?(kind)
         if kind == "relationship"
           values[:from_organization_name] = record.from_organization.name
           values[:to_organization_name] = record.to_organization.name
