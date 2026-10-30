@@ -1,0 +1,15 @@
+<%# "Latest" on a company or plant page (#137): up to three approved news items, newest first; the date in mono, the
+    headline, and the source's domain as the link out. No news page. Locals: items (NewsItems). %>
+<section aria-labelledby="latest-heading" id="latest" class="nd-latest">
+  <%= render "shared/section_head", title: "Latest", count: items.size, id: "latest-heading" %>
+  <ul class="nd-lines nd-lines--news">
+    <% items.each do |item| %>
+      <li class="nd-news">
+        <time class="nd-news__date" datetime="<%= data_date(item.published_on) %>"><%= data_date(item.published_on) %></time>
+        <span class="nd-news__title" title="<%= item.title %>" data-truncate><%= item.title %></span>
+        <%= link_to item.url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "news" },
+              aria: { label: "#{item.title}: read on #{URI.parse(item.url).host.to_s.delete_prefix("www.")} (opens the source)" } do %><%= URI.parse(item.url).host.to_s.delete_prefix("www.") %><span aria-hidden="true"> ↗</span><% end %>
+      </li>
+    <% end %>
+  </ul>
+</section>
