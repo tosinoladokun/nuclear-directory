@@ -12,7 +12,7 @@ country_code: US
 status: active
 roles:
 - key: data_center_offtaker
-  source_url: https://newerainfra.ai/
+  source_url: https://newerainfra.ai
   quote: Multi-source energy architecture powers workloads with lower carbon intensity across natural gas, nuclear, and battery storage.
   confidence: 0.8
 technologies:
@@ -32,11 +32,11 @@ facilities: []
 notes: 'Deal quotes are from New Era''s Q4 FY2025 investor presentation (8-K Exhibit 99.1, March 17, 2026; SEC, not char-verified live; matched against a copy fetched earlier this session). It is a slide, so the quote runs across bullets. No primary press release for the partnership was found on lastenergy.com''s press page or New Era''s site; the slide gives no terms beyond "1+ GW". Judgement: offtake_with fits loosely (power for New Era''s campus). Role quote is from the homepage, which says New Era delivers data centers on multi-source power including nuclear; nuclear is planned, not yet buying. country_code US: site footer gives "200 N. Loraine Street, Suite 1324, Midland, TX 79701" (an address, not a stated HQ, so hq left null); the presentation calls it "a Nevada corporation".'
 description:
   text: Developer of modular data centers backed by several energy sources.
-  source_url: https://newerainfra.ai/
+  source_url: https://newerainfra.ai
   quote: New Era's modular platform delivers enterprise-grade data centers — backed by multi-source energy, built for tomorrow, and invested in the communities we call home.
   also:
   - quote: 200 N. Loraine Street, Suite 1324, Midland, TX 79701
 short_description:
   text: 'Modular data center developer'
-  source_url: https://newerainfra.ai/
+  source_url: https://newerainfra.ai
   quote: 'New Era''s modular platform delivers enterprise-grade data centers — backed by multi-source energy, built for tomorrow, and invested in the communities we call home.'

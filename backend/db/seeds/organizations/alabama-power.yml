@@ -9,7 +9,7 @@ country_code: US
 status: active
 roles:
 - key: utility
-  source_url: https://www.alabamapower.com/
+  source_url: https://www.alabamapower.com
   quote: With a variety of fuel sources, we’re able to meet our customers’ energy needs today and tomorrow.
   confidence: 0.9
 technologies: []

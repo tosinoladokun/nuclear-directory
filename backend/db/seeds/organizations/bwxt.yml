@@ -4,7 +4,7 @@ name: BWXT
 aliases:
 - BWXT NUCLEAR ENERGY, INC.
 - BWXT NUCLEAR OPERATIONS GROUP, INC.
-website: https://www.bwxt.com/
+website: https://www.bwxt.com
 hq: null
 country_code: US
 status: active
@@ -29,12 +29,12 @@ facilities:
 notes: BWX Technologies; legal entities from DOE awards are aliases (D1). BWXT Medical (isotopes) not added without a quote.
 description:
   text: Makes naval nuclear reactors and components, as it has since the 1950s, and nuclear fuel.
-  source_url: https://www.bwxt.com/
+  source_url: https://www.bwxt.com
   quote: We have proudly manufactured naval nuclear components and reactors since the 1950s – we designed and fabricated components for the USS Nautilus, the world’s first nuclear-powered submarine.
   also:
   - source_url: https://www.bwxt.com/sectors/nuclear-fuel/
     quote: We possess decades of experience downblending highly enriched uranium (HEU) to produce low enriched uranium (LEU) and high assay low-enriched uranium (HALEU) nuclear fuels for both government and commercial applications.
 short_description:
   text: 'Naval reactors and components'
-  source_url: https://www.bwxt.com/
+  source_url: https://www.bwxt.com
   quote: 'We have proudly manufactured naval nuclear components and reactors since the 1950s – we designed and fabricated components for the USS Nautilus, the world’s first nuclear-powered submarine.'

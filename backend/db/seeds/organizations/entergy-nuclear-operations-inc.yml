@@ -16,5 +16,5 @@ relationships: []
 facilities: []
 notes: Operator role from the NRC list row for one of its units (the column is Owner/Operator, the licensee). Name unchanged here; the D1 brand renames are a separate PR.
 description:
-  source_url: https://www.entergy.com/
+  source_url: https://www.entergy.com
   quote: "Entergy - We power life."
