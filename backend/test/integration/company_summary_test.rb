@@ -24,6 +24,27 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__about", "Centrus Energy is an enrichment company."
   end
 
+  test "only what is in effect and signed is counted: an ended site link, an investment and an unsigned deal are not" do
+    seller = cite!(company("Seller Co", roles: [ role("utility") ], city: "London", state: nil))
+    seller.update!(country_code: "GB") if seller.respond_to?(:country_code=)
+    old = cite!(plant("Old Plant", facility_type: "power_reactor"))
+    cite!(link(seller, "owns", old)).update!(ended_on: 1.year.ago.to_date)
+    cite!(link(cite!(company("Fund Co")), "invests_in", seller))
+    cite!(link(cite!(company("Buyer Co")), "offtake_with", seller)).update!(description: "Conditional on approval.")
+
+    get company_path(slug: seller.slug)
+
+    assert_select ".nd-pagehead__about", /\ASeller Co is a utility in London.*\.\z/
+    assert_select ".nd-pagehead__about", text: /site|plant|deal/, count: 0
+    assert_match(/1 investor/, css_select("meta[name='description']").first["content"], "the meta still counts investors the sentence doesn't say")
+  end
+
+  test "a role with no plain company noun is skipped, not inserted" do
+    odd = cite!(company("Salt Co", roles: [ role("molten_salt", parent: role("coolant")) ], city: "Reston", state: "VA"))
+    get company_path(slug: odd.slug)
+    assert_select ".nd-pagehead__about", "Salt Co is a company in Reston, VA."
+  end
+
   test "a written description is shown as it is, and a company with nothing published says nothing" do
     written = cite!(company("Written Co", description: "Makes valves.", city: "Reston", state: "VA"))
     get company_path(slug: written.slug)
