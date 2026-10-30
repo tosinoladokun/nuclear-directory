@@ -15,6 +15,14 @@ Tag = Data.define(:key, :name, :title, :about, :technology_key, :role_key) do
 
   def to_param = key
 
+  # The tags that have at least one company, with their counts, biggest first: for the footer and the home page's topic
+  # links, so a link never leads to an empty list. Cached for an hour (one query per tag otherwise, on every page).
+  def self.listed
+    Rails.cache.fetch("tags/listed", expires_in: 1.hour) do
+      all.filter_map { |tag| [ tag.key, Organization.where(id: tag.organization_ids).count ] }.select { |_, count| count.positive? }.sort_by { |key, count| [ -count, key ] }
+    end.filter_map { |key, count| [ find(key), count ] if find(key) }
+  end
+
   def description(count)
     "#{count.to_i > 1 ? "#{count} #{about}" : about.upcase_first}."
   end

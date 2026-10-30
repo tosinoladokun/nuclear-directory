@@ -1,0 +1,48 @@
+require "test_helper"
+require_relative "../support/directory_builders"
+
+# Internal links for indexing (#606, Outcome 30 Nov): the biggest tag lists in every footer, every non-empty tag on the
+# home page, and up to five similar companies on a company page. A link never leads to an empty list.
+class InternalLinksTest < ActionDispatch::IntegrationTest
+  include DirectoryBuilders
+
+  setup do
+    smr = technology("smr", "Small modular reactor")
+    fusion = technology("fusion", "Fusion")
+    vendor = role("reactor_vendor")
+    @oklo = cite!(company("Oklo", roles: [ vendor ], techs: [ smr ], description: "Develops advanced fission."))
+    %w[Aardvark Badger Cheetah Dingo Eagle Ferret].each { |name| cite!(company(name, roles: [ vendor ], techs: [ smr ])) }
+    cite!(company("Helion", roles: [ vendor ], techs: [ fusion ]))
+  end
+
+  test "the footer and the home page link the tag lists that have companies, and no empty one" do
+    get companies_path
+    assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "smr"), "Small modular reactors"
+    assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "fusion")
+    assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "conversion"), count: 0
+
+    get root_path
+    assert_select "nav.nd-home__topics a.nd-chip[href=?]", companies_path(tag: "smr"), /Small modular reactors\s+7/
+    assert_select "nav.nd-home__topics a.nd-chip[href=?]", companies_path(tag: "conversion"), count: 0
+  end
+
+  test "a company page lists up to five similar companies: its tag first, then its category, never itself" do
+    get company_path(slug: @oklo.slug)
+
+    assert_select "#similar-heading", "Similar companies"
+    links = css_select("#similar a.nd-line").map { |a| a["href"] }
+    assert_equal 5, links.size
+    assert_not_includes links, company_path(slug: @oklo.slug)
+    assert_equal links.uniq, links
+    assert_includes links.join, "aardvark"
+
+    get company_path(slug: Organization.find_by!(name: "Helion").slug)
+    assert_select "#similar a.nd-line[href=?]", company_path(slug: @oklo.slug), minimum: 1
+  end
+
+  test "a company with nobody similar has no block" do
+    lone = cite!(company("Lone Utility", roles: [ role("utility") ]))
+    get company_path(slug: lone.slug)
+    assert_select "#similar", 0
+  end
+end

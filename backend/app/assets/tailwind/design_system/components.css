@@ -1473,3 +1473,9 @@
     .nd-partygroup .nd-crow__what { flex: 0 0 auto; min-width: 0; }
   }
 }
+
+/* Internal links for indexing (#606): the home page's topic chips and a company's similar companies. */
+@layer components {
+  .nd-home__topics { margin: var(--nd-space-6) auto 0; max-width: 720px; justify-content: center; }
+  .nd-similar { margin-top: var(--nd-space-8); }
+}

@@ -1,5 +1,12 @@
 <%# The footer on every public page (#56). %>
 <footer class="nd-footer">
+  <%# Topics: the biggest tag lists, so every page links to them (#606). %>
+  <% topics = Tag.listed.first(8) %>
+  <% if topics.any? %>
+    <nav class="nd-footer__links type-small" aria-label="Topics">
+      <% topics.each do |tag, _| %><%= link_to tag.name, companies_path(tag: tag.to_param), class: "nd-link nd-link--muted" %><% end %>
+    </nav>
+  <% end %>
   <nav class="nd-footer__links type-small" aria-label="About this site">
     <%= link_to "About", about_path, class: "nd-link nd-link--muted" %>
     <%= link_to "Data", data_path, class: "nd-link nd-link--muted" %>

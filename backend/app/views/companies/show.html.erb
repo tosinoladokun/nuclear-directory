@@ -87,6 +87,21 @@
       <% end %>
     </div><% end %>
 
+    <%# Other companies like this one: links for readers, and for crawlers to find the rest of the directory (#606). %>
+    <% similar = SimilarCompanies.for(p) %>
+    <% if similar.any? %>
+      <section aria-labelledby="similar-heading" id="similar" class="nd-similar">
+        <h2 id="similar-heading" class="nd-sechead type-section-title">Similar companies</h2>
+        <ul class="nd-lines">
+          <% short = ShortDescription.for(similar, category: p.category) %>
+          <% similar.each do |company| %>
+            <%= render "shared/line", variant: :bare, href: company_url_for(company), name: company.name, short_name: company.short_name, what: short[company.id],
+                  place: location(company.hq_city, company.hq_state, country: company.country_code) %>
+          <% end %>
+        </ul>
+      </section>
+    <% end %>
+
     <%= render "shared/page_end", sources: p.citations.sources, cite_text:, subject: p.name %>
   </div>
 </main>
