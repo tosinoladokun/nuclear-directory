@@ -80,7 +80,7 @@ class ConnectionsMap
         @right_x = width - (PAD_X + @slots[:right] + 10 + r)
         cx = (@left_x + @right_x) / 2.0 # the record sits between the two columns: spare width on one side goes to the other
         cy = @height / 2.0 - 10
-        @centre = place(@centre_node, cx, cy, size.centre_r, name_x: cx, name_y: cy + size.centre_r + 30, anchor: "middle", slot: 240)
+        @centre = place(@centre_node, cx, cy, size.centre_r, name_x: cx, name_y: cy + size.centre_r + 42, anchor: "middle", slot: 240)
 
         sides.each do |side, list|
           y = (@height - (height_of.(list) - GROUP_GAP)) / 2.0 + ROW / 2.0 - 10
@@ -99,6 +99,20 @@ class ConnectionsMap
             @groups << wide_group(verb, inbound, edges, nodes, side)
           end
         end
+        anchor_centre_name
+      end
+
+      # The record's name sits under its square, pulled to the side that has fewer lines running down past it: lines that
+      # leave the square's side and head down never cross a name that stops at the square's edge.
+      def anchor_centre_name
+        down = ->(side) { @placed.values.count { |placed| placed.node.key != @centre_node.key && (side == :left ? placed.x < @centre.x : placed.x > @centre.x) && placed.y > @centre.y + 10 } }
+        heavier = down.(:right) <=> down.(:left)
+        anchor, x = case heavier
+        when 1 then [ "end", @centre.x + size.centre_r ]    # more going down on the right: the name stops at the square's right edge
+        when -1 then [ "start", @centre.x - size.centre_r ]
+        else [ "middle", @centre.x ]
+        end
+        @centre = place(@centre_node, @centre.x, @centre.y, size.centre_r, name_x: x, name_y: @centre.y + size.centre_r + 42, anchor:, slot: 240)
       end
 
       def wide_group(verb, inbound, edges, nodes, side)
@@ -116,8 +130,14 @@ class ConnectionsMap
         # meets at its own junction, lower down, so neither hides the other.
         again = reuse(nodes)
         junction = [ cx + sign * (big + trunk_length), mean + again * 40 ]
-        centre_edge = [ cx + sign * big, cy ] # leaves the square's side, clear of the name under it
-        trunk = inbound ? s_curve(junction, shorten(centre_edge, junction), push: 7) : s_curve(centre_edge, junction, push: 7)
+        shift = side_shift(junction[1])
+        centre_edge = [ cx + sign * big, cy + shift ] # leaves the square's side, clear of the name under it
+        # Heading down past the name under the square, a trunk leaves level; up, or level, the gentle S is enough.
+        trunk = if junction[1] > cy + 20
+          trunk_curve(inbound ? [ cx + sign * (big + 2), cy + shift ] : centre_edge, junction, inbound:)
+        else
+          inbound ? s_curve(junction, shorten(centre_edge, junction), push: 7) : s_curve(centre_edge, junction, push: 7)
+        end
         members = edges.zip(nodes).map do |edge, node|
           start = [ node.x - sign * node.r, node.y ]
           if inbound
@@ -140,32 +160,58 @@ class ConnectionsMap
         bow = bows[@bows[node.node.key]]
         @bows[node.node.key] += 1
         from, to = inbound ? [ node, @centre ] : [ @centre, node ]
+        # One arrow to a node below leaves (or reaches) the record's side level, so it never crosses the name under the square.
+        return level_curve(inbound, node) if !bow && node.y > @centre.y + 20
+
         bow = -bow if bow && !inbound # the same side of the line whichever way it runs
         s_curve(from.equal?(@centre) ? side_point(@centre, node) : edge_point(from, to), to.equal?(@centre) ? side_point(@centre, node, tip: true) : edge_point(to, from, tip: true), push: bow)
+      end
+
+      # An S that is level at both ends: out of the record's side, into the node's side.
+      def level_curve(inbound, node)
+        sign = node.x > @centre.x ? 1 : -1
+        at_centre = side_point(@centre, node, tip: inbound)
+        at_node = [ node.x - sign * (node.r + (inbound ? 0 : 2)), node.y ]
+        a, b = inbound ? [ at_node, at_centre ] : [ at_centre, at_node ]
+        half = (b[0] - a[0]) / 2.0
+        path(a, [ a[0] + half, a[1] ], [ b[0] - half, b[1] ], b)
+      end
+
+      # A bundle's trunk leaves (or arrives at) the record's side level and turns toward its junction 60% of the way
+      # there, so it never crosses the name under the square (Design QA on #561, Constellation).
+      def trunk_curve(centre_end, junction, inbound:)
+        turn = centre_end[0] + (junction[0] - centre_end[0]) * 0.6
+        inbound ? path(junction, [ turn, junction[1] ], [ turn, centre_end[1] ], centre_end) : path(centre_end, [ turn, centre_end[1] ], [ turn, junction[1] ], junction)
       end
 
       # The middle of the record's side that faces the node: arrows meet its square there, never at a corner near its name.
       def side_point(centre, node, tip: false)
         sign = node.x > centre.x ? 1 : -1
-        [ centre.x + sign * (centre.r + (tip ? 2 : 0)), centre.y ]
+        [ centre.x + sign * (centre.r + (tip ? 2 : 0)), centre.y + side_shift(node.y) ]
       end
 
-      # The widest a name on each side is likely to be, so the side with short names gives its spare width to the other
-      # (the controller measures the real width; this only shares out the room).
-      NAME_CHAR = 8
+      # Lines that head up leave the square's side a little above its middle, lines that head down a little below, so
+      # a trunk going each way doesn't start on the same level (and a verb on one never sits on the other).
+      def side_shift(y) = y > @centre.y + 20 ? 8 : (y < @centre.y - 20 ? -8 : 0)
+
+      # How wide each side's names are likely to be, so each column reserves only that and the rest goes to the middle,
+      # where the verbs and trunks need it (the controller measures the real width; this only shares out the room).
+      NAME_CHAR = 7.2
+      SLOT_MIN = 70
       def side_slots(sides, _r)
-        need = sides.transform_values do |list|
-          list.flat_map { |(_, inbound, edges)| edges.map { |edge| other(edge, inbound).name.length * NAME_CHAR } }.max.to_i
+        needs = sides.transform_values do |list|
+          list.flat_map { |(_, inbound, edges)| edges.map { |edge| other(edge, inbound).name.length * NAME_CHAR + 12 } }.max.to_i.clamp(SLOT_MIN, size.slot + 56)
         end
-        total = size.slot * 2
-        low = 90
-        left = size.slot
-        if need[:left] > size.slot && need[:right] < size.slot
-          left = [ need[:left], total - [ need[:right], low ].max ].min
-        elsif need[:right] > size.slot && need[:left] < size.slot
-          left = total - [ need[:right], total - [ need[:left], low ].max ].min
+        # Each side first gets what it needs up to the standard slot; what is left of the two standard slots' total
+        # plus 44px (the middle keeps the rest for verbs and trunks) goes to a side with longer names.
+        slots = needs.transform_values { |need| [ need, size.slot ].min }
+        pool = size.slot * 2 + 44 - slots.values.sum
+        needs.sort_by { |_, need| -need }.each do |side, need|
+          more = [ need - slots[side], pool ].min
+          slots[side] += more if more.positive?
+          pool -= [ more, 0 ].max
         end
-        { left: left, right: total - left }
+        slots
       end
 
       # How many bundles already met these same nodes.

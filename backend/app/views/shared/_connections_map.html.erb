@@ -5,7 +5,7 @@
   connections_map_controller.js fits the names and moves a colliding verb), phones get a tree. More than six plants
   fold into one node that opens in place.
 %>
-<% views = if map.folds? then { "folded" => map.folded, "opened" => map.opened } else { "folded" => map.edges } end %>
+<% views = if map.folds? then { "folded" => map.folded, "opened" => map.opened } else { "folded" => map.folded } end %>
 <section class="nd-map" aria-labelledby="connections-heading" data-controller="connections-map">
   <%= render "shared/section_head", title: "Connections", count: map.others.size, id: "connections-heading" %>
   <div class="nd-map__figure" role="group" aria-label="<%= map_summary(map) %>" data-connections-map-target="figure">

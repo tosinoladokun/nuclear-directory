@@ -47,10 +47,13 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
             const x = Math.max(box.x, Math.min(c.x, box.x + box.width)), y = Math.max(box.y, Math.min(c.y, box.y + box.height))
             if (Math.hypot(c.x - x, c.y - y) < c.r) problems.push("touches a node: " + name)
           })
-          names.forEach((n) => { if (overlap(box, n.getBBox(), 0)) problems.push("touches the name " + n.textContent + ": " + name) })
+          // 8px of air from every name, the record's included (Design QA on #561: "sells power" sat on "Constellation").
+          names.forEach((n) => { if (overlap(box, n.getBBox(), 8)) problems.push("within 8px of the name " + n.textContent + ": " + name) })
           labels.forEach((other, j) => { if (j !== i && overlap(box, other.getBBox(), 4)) problems.push("touches the verb " + other.dataset.group + ": " + name) })
-          lines.forEach((points, group) => { if (group !== id && points.some((p) => inside(p, box))) problems.push("touches the line " + group + ": " + name) })
+          lines.forEach((points, group) => { const hit = points.find((p) => inside(p, box)); if (group !== id && hit) problems.push("touches the line " + group + ": " + name + " box " + [box.x, box.y, box.width, box.height].map(Math.round).join(",") + " point " + Math.round(hit.x) + "," + Math.round(hit.y)) })
         })
+        // No line crosses a name, the record's name under its square above all.
+        names.forEach((n) => lines.forEach((points, group) => { const hit = points.find((p) => inside(p, n.getBBox())); if (hit) problems.push("line " + group + " crosses the name " + n.textContent + " at " + Math.round(hit.x) + "," + Math.round(hit.y) + " in " + [n.getBBox().x, n.getBBox().y, n.getBBox().width, n.getBBox().height].map(Math.round).join(",")) }))
         names.filter((n) => !WAITING.includes(n.querySelector("title").textContent)).forEach((n) => {
           const size = parseFloat(getComputedStyle(n).fontSize)
           if (n.getComputedTextLength() > Number(n.dataset.slot) + 0.5) problems.push("name past its slot: " + n.textContent)

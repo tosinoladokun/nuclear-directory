@@ -10,7 +10,9 @@ import { Controller } from "@hotwired/stimulus"
 // then 45/55% ... out to 30/70%; level instead of along the line where the
 // line is steep; shortened ("sells power") only as a last resort. Each verb
 // cuts a 4px gap into its line at both ends.
-const OFFSETS = [ 0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8 ]
+const OFFSETS = [ 0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.75, 0.2, 0.8, 0.15, 0.1, 0.85 ]
+// A bundle's trunk runs level out of the record, then turns; its verb looks for a clear spot along it.
+const TRUNK_OFFSETS = [ 0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7, 0.25, 0.2, 0.15 ]
 const SHORTER = { "sells power to": "sells power" }
 
 export default class extends Controller {
@@ -109,7 +111,7 @@ export default class extends Controller {
         !placed.some((other) => overlaps(box, other, 4)) &&
         !others.some((point) => inside(point, box))
 
-      const tryAt = (offset) => {
+      const tryAt = (offset, lift = 0) => {
         const at = offset * length
         const steep = true // verbs are always flat, never tilted along the curve (Design QA on #561)
         show(steep ? level : along, steep ? along : level)
@@ -117,7 +119,7 @@ export default class extends Controller {
         if (steep) {
           const point = line.getPointAtLength(at)
           level.setAttribute("x", point.x.toFixed(1))
-          level.setAttribute("y", (point.y + 4).toFixed(1))
+          level.setAttribute("y", (point.y + 4 + lift).toFixed(1))
         } else {
           const startOffset = `${((reversed ? 1 - offset : offset) * 100).toFixed(1)}%`
           along.querySelector("textPath").setAttribute("startOffset", startOffset)
@@ -129,9 +131,13 @@ export default class extends Controller {
 
       // The first clear spot, leaving the word there.
       const firstClear = () => {
-        for (const offset of OFFSETS) {
-          const candidate = tryAt(offset)
-          if (clear(candidate.box)) return candidate
+        const bundle = along.closest("svg").querySelectorAll(`.nd-map__edge[data-group="${id}"] .nd-map__line`).length > 1
+        // On its line first; failing that, just above or below it, still beside its own line.
+        for (const lift of [ 0, -11, 11, -22, 22 ]) {
+          for (const offset of (bundle ? TRUNK_OFFSETS : OFFSETS)) {
+            const candidate = tryAt(offset, lift)
+            if (clear(candidate.box)) return candidate
+          }
         }
       }
       let spot = firstClear()
