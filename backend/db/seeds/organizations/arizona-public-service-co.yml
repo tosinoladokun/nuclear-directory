@@ -16,7 +16,7 @@ description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Palo Verde 1 | 05000528 | NPF-41 | PWR | 50 miles W of Phoenix, AZ | Arizona Public Service Co. | 4
   also:
-  - source_url: https://www.aps.com/
+  - source_url: https://www.aps.com
     quote: "Arizona Public Service"
 short_description:
   text: 'Nuclear plant operator in Arizona'

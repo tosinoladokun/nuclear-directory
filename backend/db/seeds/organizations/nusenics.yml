@@ -3,13 +3,13 @@
 name: Nusenics
 aliases:
 - NUSENICS, LLC
-website: https://nusenics.com/
+website: https://nusenics.com
 hq: null
 country_code: US
 status: active
 roles:
 - key: components
-  source_url: https://nusenics.com/
+  source_url: https://nusenics.com
   quote: Fiber-optic bolometer technology for fusion plasma radiation measurement, supporting compact, optically interrogated diagnostics in environments where EMI and sensor packaging constraints limit conventional electronic systems.
   confidence: 1.0
 technologies: []
@@ -18,11 +18,11 @@ facilities: []
 notes: East Lansing, MI (not set as HQ).
 description:
   text: Develops fiber-optic sensors for harsh environments, including fusion plasma diagnostics.
-  source_url: https://nusenics.com/
+  source_url: https://nusenics.com
   quote: Nusenics develops advanced fiber-optic sensing technologies for demanding environments where conventional electronic sensors face limits from electromagnetic interference, high temperature, or difficult access.
   also:
   - quote: Fiber-optic bolometer technology for fusion plasma radiation measurement, supporting compact, optically interrogated diagnostics in environments where EMI and sensor packaging constraints limit conventional electronic systems.
 short_description:
   text: 'Fiber-optic sensors for harsh settings'
-  source_url: https://nusenics.com/
+  source_url: https://nusenics.com
   quote: 'Nusenics develops advanced fiber-optic sensing technologies for demanding environments where conventional electronic sensors face limits from electromagnetic interference, high temperature, or difficult access.'

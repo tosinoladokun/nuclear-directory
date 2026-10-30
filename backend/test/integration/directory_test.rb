@@ -20,6 +20,16 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "link[rel=preload][as=font]", 0
   end
 
+  test "a list opens Most connected, with A to Z as an option, and its canonical URL stays the bare page" do
+    get companies_path(category: "reactor-developers")
+    assert_select "select[name=sort] option[selected][value=connections]"
+    assert_select "link[rel=canonical][href=?]", companies_url(category: "reactor-developers")
+
+    get companies_path(category: "reactor-developers", sort: "name")
+    assert_select "select[name=sort] option[selected][value=name]"
+    assert_select "link[rel=canonical][href=?]", companies_url(category: "reactor-developers")
+  end
+
   test "the old fusion category moves for good to the fusion tag page, keeping filters (#281)" do
     get companies_path(category: "fusion", state: "CA", sort: "connections")
 
@@ -192,9 +202,9 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   end
 
   test "clearing the search keeps the other filters" do
-    get companies_path(category: "reactor-developers", q: "nothing like this", state: "CA", sort: "connections")
+    get companies_path(category: "reactor-developers", q: "nothing like this", state: "CA", sort: "name")
 
-    assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&sort=connections&state=CA", text: "Clear search"
+    assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&sort=name&state=CA", text: "Clear search"
 
     get companies_path(category: "reactor-developers", q: "nothing like this", role: "project_developer")
     assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers&role=project_developer", text: "Clear search"

@@ -28,14 +28,14 @@ facilities:
   county: Massac County
   status: operating
   type: owns
-  source_url: https://www.converdyn.com/
+  source_url: https://www.converdyn.com
   quote: Located in Metropolis, Illinois, this cutting-edge plant, owned and operated by Solstice Advanced Materials’ Specialty Materials division, produces a variety of fluorine products, including uranium hexafluoride (UF6) for nuclear fuel.
   confidence: 0.8
 - name: Metropolis Works Uranium Conversion Facility
   facility_type: fuel_facility
   state: IL
   type: operates
-  source_url: https://www.converdyn.com/
+  source_url: https://www.converdyn.com
   quote: Located in Metropolis, Illinois, this cutting-edge plant, owned and operated by Solstice Advanced Materials’ Specialty Materials division, produces a variety of fluorine products, including uranium hexafluoride (UF6) for nuclear fuel.
   confidence: 0.8
 notes: 'Fuel sub-type: conversion. Spun off from Honeywell in October 2025 (WNN: ''spun-off from Honeywell in October last year'', Feb 2026); Honeywell is not a seed org, so no edge. WNN reports a backlog of more than USD 2B ''driven by orders from long-term customers, many of which are domestic utility companies'' - customers not named, so no link to seed utilities. Website domain taken from the investor-relations host (investor.solstice.com); homepage not fetched. HQ not verified. #63: Metropolis plant named on same page ("the Metropolis Works Facility in Metropolis, Illinois"). HQ not added: Morris Plains, NJ appears only as a press-release dateline and contact address (investor.solstice.com), not stated as headquarters. Fission tag inferred from fuel for (fission) power reactors.'
@@ -47,5 +47,5 @@ description:
   - quote: 'the Metropolis Works Facility in Metropolis, Illinois'
 short_description:
   text: 'UF6 maker in Metropolis, Illinois'
-  source_url: https://www.converdyn.com/
+  source_url: https://www.converdyn.com
   quote: 'Located in Metropolis, Illinois, this cutting-edge plant, owned and operated by Solstice Advanced Materials’ Specialty Materials division, produces a variety of fluorine products, including uranium hexafluoride (UF6) for nuclear fuel.'

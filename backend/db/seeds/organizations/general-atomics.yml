@@ -15,7 +15,7 @@ description:
   source_url: https://www.ga.com/triga
   quote: TRIGA ® reactors have been designed and supported by General Atomics for more than 70 years, establishing a long‑standing record of safe, reliable operation.
   also:
-  - source_url: https://www.ga.com/
+  - source_url: https://www.ga.com
     quote: "Welcome to General Atomics | General Atomics"
 short_description:
   text: 'TRIGA research reactor designer'

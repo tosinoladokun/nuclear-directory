@@ -8,7 +8,7 @@ country_code: US
 status: active
 roles:
 - key: utility
-  source_url: https://www.odec.com/
+  source_url: https://www.odec.com
   quote: ODEC buys, makes, and moves power for 11 member distributions cooperatives across Virginia, Maryland, and Delaware, powering opportunity for the 1.5 million people at the end of the line.
   confidence: 1.0
 technologies:
@@ -27,11 +27,11 @@ facilities:
 notes: Generation and transmission cooperative. HQ not verified (odec.com/about-odec returned 404).
 description:
   text: Not-for-profit cooperative that buys, makes and moves power for 11 member distribution cooperatives across Virginia, Maryland and Delaware
-  source_url: https://www.odec.com/
+  source_url: https://www.odec.com
   quote: ODEC buys, makes, and moves power for 11 member distributions cooperatives across Virginia, Maryland, and Delaware
   also:
   - quote: A mission-driven, member-centered, not-for-profit organization
 short_description:
   text: 'Power cooperative in Mid-Atlantic states'
-  source_url: https://www.odec.com/
+  source_url: https://www.odec.com
   quote: 'ODEC buys, makes, and moves power for 11 member distributions cooperatives across Virginia, Maryland, and Delaware'

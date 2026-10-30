@@ -11,7 +11,7 @@ country_code: null
 status: active
 roles:
 - key: isotopes
-  source_url: https://www.aspisotopes.com/
+  source_url: https://www.aspisotopes.com
   quote: ASPI’s advanced technology leverages 20+ years of R&D history to enrich isotopes in varying levels of atomic mass.
   confidence: 1.0
 - key: enrichment
@@ -38,12 +38,12 @@ facilities: []
 notes: 'Quantum Leap Energy (QLE) is ASP Isotopes'' nuclear fuel business (its page is on aspisotopes.com; qleapenergy.com is linked from it), so it is an alias here, not its own company, until a source shows it as a separate US company (PM, 17 Oct). Stage is the Oct 2024 term sheet only: a later definitive supply agreement (reported as up to 150 t of HALEU) needs ASP''s SEC filing read by a person; SEC''s robots.txt returned 403 to our bot, so it wasn''t fetched. Not recorded: QLE''s contracts with Necsa in South Africa (Feb 2026 services contract; the "binding heads of agreement" for a HALEU joint venture listed on the QLE page), since neither party is a US company. Country and HQ not set: no fetched page states them.'
 description:
   text: Isotope enrichment company developing nuclear fuel enrichment through Quantum Leap Energy.
-  source_url: https://www.aspisotopes.com/
+  source_url: https://www.aspisotopes.com
   quote: ASPI’s advanced technology leverages 20+ years of R&D history to enrich isotopes in varying levels of atomic mass.
   also:
   - source_url: https://www.aspisotopes.com/quantum-leap-energy
     quote: Quantum Leap Energy (QLE) plans to deliver secure, reliable nuclear materials through proprietary enrichment technologies and a robust supply chain.
 short_description:
   text: 'Isotope enrichment company'
-  source_url: https://www.aspisotopes.com/
+  source_url: https://www.aspisotopes.com
   quote: 'ASPI’s advanced technology leverages 20+ years of R&D history to enrich isotopes in varying levels of atomic mass.'

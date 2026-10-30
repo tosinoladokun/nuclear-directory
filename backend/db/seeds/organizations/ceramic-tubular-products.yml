@@ -4,13 +4,13 @@ name: Ceramic Tubular Products
 aliases:
 - CERAMIC TUBULAR PRODUCTS LLC
 - CTP
-website: https://ctp-usa.com/
+website: https://ctp-usa.com
 hq: null
 country_code: US
 status: active
 roles:
 - key: components
-  source_url: https://ctp-usa.com/
+  source_url: https://ctp-usa.com
   quote: Advanced Silicon Carbide accident tolerant nuclear fuel rod cladding.
   confidence: 1.0
 technologies: []
@@ -22,9 +22,9 @@ description:
   source_url: https://ctp-usa.com/about/
   quote: CTP is a small business engineering and manufacturing company headquartered in Lynchburg, VA.
   also:
-  - source_url: https://ctp-usa.com/
+  - source_url: https://ctp-usa.com
     quote: Advanced Silicon Carbide accident tolerant nuclear fuel rod cladding.
 short_description:
   text: 'Silicon carbide fuel rod cladding'
-  source_url: https://ctp-usa.com/
+  source_url: https://ctp-usa.com
   quote: 'Advanced Silicon Carbide accident tolerant nuclear fuel rod cladding.'
