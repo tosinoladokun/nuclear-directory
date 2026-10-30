@@ -102,6 +102,9 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_match "Assignment of Project Number", news["title"]
     assert_equal [ "U.S. Nuclear Regulatory Commission", "The Leapfrog Group" ], news["about"].map { |a| a["name"] }
     assert_equal "2026-10-19", news["published_on"]
+    stage = plugin.extract(letter, nil).find { |c| c[:kind] == "licensing_stage" }[:payload]
+    assert_equal({ "organization" => { "name" => "The Leapfrog Group" }, "stage" => "pre_application", "nrc_docket" => "99902187",
+      "effective_on" => "2026-10-19" }, stage)
 
     Candidate.create!(source: letter, kind: "news_item", status: "rejected", quote: "x", payload: news)
     assert_empty plugin.extract(letter, nil).select { |c| c[:kind] == "news_item" }
@@ -110,6 +113,7 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
   test "a developer the directory doesn't have becomes a lead, not a claim" do
     assert_empty documents.flat_map { |source| plugin.extract(source, nil) }
     LeadSync.run
+    assert Lead.exists?(name: "Leapfrog Nuclear Co"), "the company the title names"
     assert Lead.exists?(name: "The Leapfrog Group")
     refute Lead.exists?(name: "Radiant"), "no company form in its name: not a lead"
     refute Lead.exists?(name: "Arizona Public Service Co"), "an operating plant's document isn't read"
@@ -127,5 +131,25 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     later = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), key: "k", today: -> { Date.new(2027, 1, 30) })
     assert_empty later.extract(document("Assignment of Project Number"), nil).select { |c| c[:kind] == "news_item" }, "older than 60 days"
     assert_equal 5, Plugin::NEWS_PER_READ
+  end
+
+  test "the project-number letter's stage reaches the directory as a pending pre-application stage (#650)" do
+    known("The Leapfrog Group")
+    documents
+    DataQuality::Stages::Extract.call(plugin:)
+    run = DataQuality::Stages::Match.call(plugin:)
+    assert_equal 0, run.stats["write_errors"]
+    stage = LicensingStage.find_by!(nrc_docket: "99902187")
+    assert_equal [ "pre_application", Date.new(2026, 10, 19), "pending" ], stage.values_at(:stage, :effective_on, :verification_status)
+  end
+
+  test "a letter extracted before stages existed is extracted again" do
+    letter = document("Assignment of Project Number")
+    letter.update_columns(extracted_sha256: letter.content_sha256, extracted_rows_sha256: letter.content_sha256)
+    plugin.store_documents
+    assert_nil letter.reload.extracted_sha256
+    known("The Leapfrog Group")
+    DataQuality::Stages::Extract.call(plugin:)
+    assert Candidate.exists?(source: letter, kind: "licensing_stage")
   end
 end
