@@ -4,6 +4,7 @@
   <% topics = Tag.listed.first(8) %>
   <% if topics.any? %>
     <nav class="nd-footer__links type-small" aria-label="Topics">
+      <span class="nd-footer__topics-label text-ink-muted">Topics:</span>
       <% topics.each do |tag, _| %><%= link_to tag.name, companies_path(tag: tag.to_param), class: "nd-link nd-link--muted" %><% end %>
     </nav>
   <% end %>

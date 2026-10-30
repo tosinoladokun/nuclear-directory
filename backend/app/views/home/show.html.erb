@@ -22,8 +22,11 @@
   <%# Browse by topic: the tag lists (#606), each with its count. %>
   <% topics = Tag.listed %>
   <% if topics.any? %>
-    <nav class="nd-chips nd-home__topics" aria-label="Topics">
-      <% topics.each do |tag, count| %><%= render "shared/chip", label: tag.name, href: companies_path(tag: tag.to_param), count: count %><% end %>
-    </nav>
+    <div class="nd-home__topics">
+      <p class="nd-label" id="home-topics">Topics</p>
+      <nav class="nd-chips" aria-labelledby="home-topics">
+        <% topics.each do |tag, count| %><%= render "shared/chip", label: tag.name, href: companies_path(tag: tag.to_param), count: count %><% end %>
+      </nav>
+    </div>
   <% end %>
 </main>

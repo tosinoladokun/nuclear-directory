@@ -17,19 +17,24 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
 
   test "the footer and the home page link the tag lists that have companies, and no empty one" do
     get companies_path
+    assert_select "footer nav[aria-label=Topics] .nd-footer__topics-label", "Topics:"
     assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "smr"), "Small modular reactors"
     assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "fusion")
     assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "conversion"), count: 0
 
     get root_path
-    assert_select "nav.nd-home__topics a.nd-chip[href=?]", companies_path(tag: "smr"), /Small modular reactors\s+7/
-    assert_select "nav.nd-home__topics a.nd-chip[href=?]", companies_path(tag: "conversion"), count: 0
+    assert_select ".nd-home__topics > p.nd-label", "Topics"
+    assert_select ".nd-home__topics nav[aria-labelledby=home-topics] a.nd-chip[href=?]", companies_path(tag: "smr"), /Small modular reactors\s+7/
+    assert_select ".nd-home__topics a.nd-chip[href=?]", companies_path(tag: "conversion"), count: 0
   end
 
   test "a company page lists up to five similar companies: its tag first, then its category, never itself" do
     get company_path(slug: @oklo.slug)
 
-    assert_select "#similar-heading", "Similar companies"
+    assert_select "#similar-heading", /Similar companies\s*5/, "the shared section head with its count"
+    assert_select "#similar a.nd-line .nd-line__mark .nd-catsq", minimum: 5, message: "the shared row with the category square"
+    body = response.body
+    assert_operator body.index('id="similar"'), :>, body.index("nd-company__end"), "after the record's own actions (sources, cite, report), on every width"
     links = css_select("#similar a.nd-line").map { |a| a["href"] }
     assert_equal 5, links.size
     assert_not_includes links, company_path(slug: @oklo.slug)
