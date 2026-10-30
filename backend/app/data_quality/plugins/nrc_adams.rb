@@ -11,7 +11,9 @@
 # - A name the directory doesn't have becomes a lead for Data Quality
 #   (LeadSync's NRC ADAMS feed), never a claim.
 # - NRC's letter assigning a project number (a developer entering NRC
-#   pre-application) is one news item about that company, for a person.
+#   pre-application) is one news item about that company, for a person,
+#   and its licensing stage: pre-application on that docket from the
+#   letter's date (#650).
 #
 # The API needs a subscription key (ADAMS_API_KEY, sent as NRC asks in the
 # Ocp-Apim-Subscription-Key header, never stored). Without one the crawl
@@ -59,7 +61,11 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
         next false unless url.start_with?("https://")
 
         source = Source.find_or_initialize_by(url:)
-        next false unless source.new_record?
+        unless source.new_record?
+          # Read before this version of extract (stages, #650): extracted again.
+          source.update!(extracted_sha256: nil) if source.extracted_sha256.present? && source.extracted_rows_sha256 != rows_sha256(source)
+          next false
+        end
 
         source.update!(source_kind:, title: "NRC #{doc['AccessionNumber']}: #{doc['DocumentTitle'].to_s.squish.truncate(200)}",
           content_text: line, content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", fetched_at: Time.current,
@@ -70,6 +76,8 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   end
 
   INDEX_SOURCE_KIND = "nrc_adams_index"
+  # What extract proposes from a document: a new version reads every document again.
+  EXTRACT_VERSION = "stages-1"
   NRC = "U.S. Nuclear Regulatory Commission"
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
@@ -88,10 +96,13 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     self.class.developer_documents(source.content_text).flat_map do |line, doc|
       known = self.class.organizations(doc).select { |name| @directory.organization(name:) }
       claims = known.map { |name| { kind: "organization", payload: { "name" => name } } }
-      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any? && doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ &&
-          !taken.include?(doc["Url"])
-        news += 1
-        claims << project_news(doc, known)
+      if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any?
+        # The letter opens the developer's pre-application project: its stage, from that date (#650).
+        claims.concat(project_stages(doc, known))
+        if doc["DocumentDate"].to_s >= since && news < NEWS_PER_READ && !taken.include?(doc["Url"])
+          news += 1
+          claims << project_news(doc, known)
+        end
       end
       claims.map { |claim| claim.merge(quote: line) }
     end
@@ -121,11 +132,16 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     DataQuality::DirectoryClient.new.facility(nrc_docket: docket)&.status != "operating"
   end
 
-  # The document's authors and addressees other than NRC's own offices.
+  # The company a title opens with ("Leapfrog Nuclear Co. - Assignment of
+  # ..."), first, when it's in a company form; then the document's authors
+  # and addressees other than NRC's own offices (DQ, 29 Oct).
   def self.organizations(doc)
-    (Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
+    titled = doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).then { |head, rest| head.to_s.squish.delete_suffix(".") if rest && head.to_s.match?(COMPANY_FORM) }
+    ([ titled ] + Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
       .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
   end
+
+  def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   def quote_in_source?(source, quote) = quote.present? && source.content_text.to_s.lines(chomp: true).include?(quote.to_s)
 
@@ -145,6 +161,15 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     def decided_urls
       Candidate.joins(:source).where(sources: { source_kind: }, kind: "news_item").where.not(status: "new")
         .pluck(Arel.sql("candidates.payload->>'url'")).compact.to_set
+    end
+
+    def project_stages(doc, known)
+      date = (Date.iso8601(doc["DocumentDate"].to_s).iso8601 rescue nil) or return []
+      dockets = Array(doc["DocketNumber"]).map(&:to_s).select { |docket| docket.start_with?("999") }
+      known.product(dockets).map do |name, docket|
+        { kind: "licensing_stage", payload: { "organization" => { "name" => name }, "stage" => "pre_application", "nrc_docket" => docket,
+          "effective_on" => date } }
+      end
     end
 
     def project_news(doc, known)
