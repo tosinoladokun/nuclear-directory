@@ -7,7 +7,7 @@ country_code: US
 status: active
 roles:
 - key: utility
-  source_url: https://www.dutil.com/
+  source_url: https://www.dutil.com
   quote: Dalton Utilities has operated as a public utility since 1889. Dalton Utilities provides potable water, electric, natural gas, and wastewater treatment services to the City of Dalton and portions of Whitfield, Murray, Gordon, Catoosa and Floyd counties.
   confidence: 1.0
 technologies:
@@ -29,11 +29,11 @@ facilities:
 notes: Municipal utility of the City of Dalton, Georgia. WNN names the co-owner 'Dalton city'; Georgia Power's 2024 release (already in seed) names 'Dalton Utilities'. HQ (Dalton, GA) implied by the homepage but not formally captured.
 description:
   text: Public utility, operating since 1889, providing water, electric, natural gas and wastewater services to the City of Dalton and nearby counties
-  source_url: https://www.dutil.com/
+  source_url: https://www.dutil.com
   quote: Dalton Utilities has operated as a public utility since 1889.
   also:
   - quote: Dalton Utilities provides potable water, electric, natural gas, and wastewater treatment services to the City of Dalton and portions of Whitfield, Murray, Gordon, Catoosa and Floyd counties.
 short_description:
   text: 'Water, electric and gas utility'
-  source_url: https://www.dutil.com/
+  source_url: https://www.dutil.com
   quote: 'Dalton Utilities provides potable water, electric, natural gas, and wastewater treatment services to the City of Dalton and portions of Whitfield, Murray, Gordon, Catoosa and Floyd counties.'

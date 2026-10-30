@@ -48,7 +48,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     get plant_path(slug: "plant-vogtle")
 
     assert_response :success
-    assert_select "title", "Plant Vogtle, Waynesboro, GA: owners and operator · Nuclear Directory"
+    assert_select "title", "Plant Vogtle: owners and operator | Nuclear Directory"
     assert_select "main", 1
     assert_select "h1.nd-pagehead__name", "Plant Vogtle"
     assert_select ".nd-pagehead__tags .nd-tag", "Power plant"
@@ -164,6 +164,14 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "a source's latest check date is in the page's Sources list, not the opened row (#655)" do
     get plant_path(slug: "plant-vogtle")
     assert_select "ol.nd-sources li small", /nrc\.gov.*checked \d{4}-\d{2}-\d{2}/
+  end
+
+  test "every correction link on a plant page is nofollow: overview panel, missing details and the quiet line" do
+    get plant_path(slug: "plant-vogtle")
+
+    links = css_select("a[href^='/corrections']")
+    assert links.any?
+    assert links.all? { |link| link["rel"].to_s.split.include?("nofollow") }, links.map { |link| [ link["href"], link["rel"] ] }.inspect
   end
 
   test "an opened row shows its source as plain text: no boxed number" do
@@ -426,7 +434,8 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     # The one-line summary doesn't state a scheduled link as current (#246).
     line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MW. Owned by Georgia Power."
     assert_select "meta[property='og:description'][content=?]", line
-    assert_select "meta[name='description'][content=?]", line
+    assert_select "meta[property='og:description'][content=?]", line
+    assert_select "meta[name='description'][content^=?]", "Plant Vogtle: Operating power plant in Waynesboro, Georgia."
   end
 
   test "an unpublished unit or link disappears from the plant page" do
@@ -454,7 +463,8 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select "meta[property='og:title'][content='Plant Vogtle']"
     line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MW. Owned by Georgia Power; operated by Southern Nuclear."
     assert_select "meta[property='og:description'][content=?]", line
-    assert_select "meta[name='description'][content=?]", line # the same line for search results (#246)
+    assert_select "meta[property='og:description'][content=?]", line
+    assert_select "meta[name='description'][content^=?]", "Plant Vogtle: Operating power plant in Waynesboro, Georgia." # search results: the lead, then counts
     assert_select "link[rel=canonical][href=?]", "http://www.example.com/plants/plant-vogtle"
   end
 

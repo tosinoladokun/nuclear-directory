@@ -235,7 +235,7 @@ Everyone in one part of the industry (e.g. fuel and materials), most connected f
 - **Above the fold:** at 390, header, chips, title, the definition line, Filters, the first 3 rows. At 1440, header through about 8 rows.
 - **Key facts and sources:** Category name and definition (Category model). Developers' line keeps the model's scope: companies designing reactors or developing new nuclear plants (reactor vendors and project developers); engineering contractors sit in Services and engineering; Count; For Plants and sites: type, status, units, operating MW.
 - **Links in:** Homepage cards; Type chips on profiles; Crumbs on profiles; Search engines (title: e.g. "Uranium, nuclear fuel and materials suppliers in the US"). **Links out:** Profiles; Other categories (pills).
-- **Keep:** every category, the counts, every filter and both sorts (Most connected is the default, counting published, sourced links only; A to Z stays); the one-line definition. **Removed (approved 25 Oct):** the desktop pills (the index replaces them); on rows, the initials mark, the description sentence (the short description, #559, replaces it) and the connection count.
+- **Keep:** every category, the counts, every filter and both sorts (Most connected is the default on every list, counting published, sourced links only; A to Z stays as `?sort=name`; Tosin, 28 Oct, reversing the 26 Oct A-to-Z default; canonical URLs stay the bare page); the one-line definition. **Removed (approved 25 Oct):** the desktop pills (the index replaces them); on rows, the initials mark, the description sentence (the short description, #559, replaces it) and the connection count.
 - **Spec:** #263, #560
 
 ### Company profile (`/companies/terrapower`)

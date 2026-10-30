@@ -8,7 +8,7 @@ country_code: US
 status: active
 roles:
 - key: venture_capital
-  source_url: https://lsvp.com/
+  source_url: https://lsvp.com
   quote: For over twenty years Lightspeed has been the first investor and an early backer of some of the most innovative companies in the world.
   confidence: 1.0
 technologies: []

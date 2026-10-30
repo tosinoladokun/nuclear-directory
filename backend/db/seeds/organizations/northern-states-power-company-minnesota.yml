@@ -18,7 +18,7 @@ description:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Monticello | 05000263 | DPR-22 | BWR | 35 miles NW of Minneapolis, MN | Northern States Power Company – Minnesota | 3
   also:
-  - source_url: https://www.xcelenergy.com/
+  - source_url: https://www.xcelenergy.com
     quote: "Xcel Energy"
 short_description:
   text: 'Nuclear plant operator in Minnesota'
