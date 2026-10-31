@@ -405,4 +405,13 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal "#{HOME}en/", Source.find_by!(url: HOME).final_url
     assert_requested en_about
   end
+
+  test "a CIK company with a malformed website: EDGAR is read, the website skipped, the request finished" do
+    @company.update_columns(website: "https://bad host", sec_cik: "0001018724", enrich_requested_at: Time.current)
+    stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{data\.sec\.gov/submissions/CIK0001018724\.json}).to_return(body: { name: "ACME", addresses: { business: {} } }.to_json)
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    assert_equal 1, stats["companies"]
+    assert @company.reload.enriched_at
+  end
 end

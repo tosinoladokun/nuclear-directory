@@ -58,6 +58,8 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     Directory::Lookup.request_gap_fill(limit: 1)
     assert listed.reload.enrich_requested_at, "EDGAR states its address"
     assert_nil bare.reload.enrich_requested_at
-    assert_nil with_hq.reload.enrich_requested_at
+    Directory::Lookup.request_gap_fill(limit: 10)
+    assert bare.reload.enrich_requested_at
+    assert_nil with_hq.reload.enrich_requested_at, "has an HQ: not read for EDGAR"
   end
 end

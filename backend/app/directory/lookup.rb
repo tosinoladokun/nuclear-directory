@@ -223,6 +223,9 @@ module Directory
     def role_key?(key) = key.present? && Role.exists?(key:)
     def readable_website?(url) = Organization.readable_website?(url)
 
+    # A website Enrich can read (a full https address).
+    def readable_website?(url) = Organization.readable_website?(url)
+
     # A company's headquarters city, or nil (gap fill only adds a missing one).
     def organization_hq_city(id) = Organization.where(id:).pick(:hq_city).presence
 
