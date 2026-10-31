@@ -11,7 +11,8 @@ export function normalise(text) {
 // Backend's index is { companies: [{ s, n, sn, a, d, c: category key, m }], plants: [{ s, n, a, t, i: icon name, m }] }; the extras
 // ({ icons: { name: svg }, tags }) come from /search/extras.json. Both become items { k, s, n, sn, a, d, x, m, i, b }.
 export function prepare(payload) {
-  const listed = [
+  // Backend's #698 sends items already shaped ({ k, s, n, sn, a, d, x, m, i, b, c }) with their icons; the older companies/plants split still reads.
+  const listed = payload.items || [
     ...(payload.companies || []).map((c) => ({ ...c, k: "c", i: c.c ? `bucket-${c.c}` : "buildings", b: c.c ? `nd-bucket--${c.c}` : null })),
     ...(payload.plants || []).map((p) => ({ ...p, k: "p" }))
   ]

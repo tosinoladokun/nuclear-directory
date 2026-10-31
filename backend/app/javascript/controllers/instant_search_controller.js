@@ -53,7 +53,7 @@ export default class extends Controller {
     const get = (url) => fetch(url, { headers: { Accept: "application/json" } }).then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
     // The index is what search needs; the extras (icons, topic pages) only dress it, so without them rows still work.
     indexes[this.indexUrlValue] ||= Promise.all([get(this.indexUrlValue), this.extrasUrlValue ? get(this.extrasUrlValue).catch(() => ({})) : {}])
-      .then(([index, extras]) => prepare({ ...index, ...extras }))
+      .then(([index, extras]) => prepare({ ...index, ...extras, icons: { ...index.icons, ...extras.icons } }))
     indexes[this.indexUrlValue].then((index) => {
       this.index = index
       if (this.inputTarget.value.trim().length >= this.minimumValue && this.inputTarget === document.activeElement) this.renderLocal()

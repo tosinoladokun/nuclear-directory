@@ -2,17 +2,17 @@ require "application_system_test_case"
 
 # Instant search in the browser (#696): filtering the compact index on every keystroke, no /search request.
 class InstantIndexTest < ApplicationSystemTestCase
-  # Backend's index (SearchIndex) and the extras (SearchExtrasController), as the browser gets them.
+  # Backend's index (SearchIndex, #698) and the extras (SearchExtrasController), as the browser gets them.
   INDEX = {
-    companies: [
-      { s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", c: "reactor-developers", m: "Reactor developer · Camden, NJ" },
-      { s: "oklo", n: "Oklo", a: [ "Oklo Inc" ], d: "Develops advanced fission power plants.", c: "reactor-developers", m: "Reactor developer · Santa Clara, CA" },
-      { s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", c: "fuel", m: "Enrichment · Bethesda, MD" },
-      { s: "nuscale-power", n: "NuScale Power", sn: "NuScale", x: [ "SMR" ], d: "Small modular reactor designer.", c: "reactor-developers", m: "Reactor developer · Portland, OR" }
-    ],
-    plants: [
-      { s: "davis-besse", n: "Davis-Besse Nuclear Power Station", x: [ "05000346", "EIA 6149" ], t: "Power plant", i: "site-plant", m: "Power plant · Oak Harbor, OH" },
-      { s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", t: "Power plant", i: "site-plant", m: "Power reactor · Athens, AL" }
+    v: "abc",
+    icons: { "bucket-reactor-developers" => "<svg viewBox='0 0 1 1'></svg>", "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
+    items: [
+      { k: "c", s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", m: "Reactor developer · Camden, NJ", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 9 },
+      { k: "c", s: "oklo", n: "Oklo", a: [ "Oklo Inc" ], d: "Develops advanced fission power plants.", m: "Reactor developer · Santa Clara, CA", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 4 },
+      { k: "c", s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", m: "Enrichment · Bethesda, MD", i: "bucket-fuel", b: "nd-bucket--fuel", c: 3 },
+      { k: "c", s: "nuscale-power", n: "NuScale Power", sn: "NuScale", x: [ "SMR" ], d: "Small modular reactor designer.", m: "Reactor developer · Portland, OR", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 2 },
+      { k: "p", s: "davis-besse", n: "Davis-Besse Nuclear Power Station", x: [ "05000346", "EIA 6149" ], m: "Power plant · Oak Harbor, OH", i: "site-plant", c: 1 },
+      { k: "p", s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", m: "Power reactor · Athens, AL", i: "site-plant", c: 1 }
     ]
   }.freeze
   EXTRAS = {
@@ -119,8 +119,8 @@ class InstantIndexTest < ApplicationSystemTestCase
     ms = page.evaluate_async_script(<<~JS)
       const done = arguments[arguments.length - 1]
       import("search_index").then(({ prepare, search }) => {
-        const make = (n) => ({ s: `slug-${n}`, n: `Company ${n} Energy Partners`, a: [`Alias ${n}`], d: "Develops nuclear things for the industry.", m: "x", c: "fuel" })
-        const index = prepare({ companies: Array.from({ length: 2250 }, (_, n) => make(n)), plants: Array.from({ length: 750 }, (_, n) => make(n + 3000)) })
+        const make = (n) => ({ k: n % 4 ? "c" : "p", s: `slug-${n}`, n: `Company ${n} Energy Partners`, a: [`Alias ${n}`], d: "Develops nuclear things for the industry.", m: "x", i: "k" })
+        const index = prepare({ icons: {}, items: Array.from({ length: 3000 }, (_, n) => make(n)) })
         const started = performance.now()
         ;["ene", "energy part", "compny 12", "zzzz"].forEach((query) => search(index, query))
         done((performance.now() - started) / 4)
