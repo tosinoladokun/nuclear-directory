@@ -535,7 +535,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # without writing; its aliases are added only when it's approved.
       by_name ||= Array(payload["aliases"]).compact_blank.lazy.filter_map { |other| by.call(other) }.first
 
-      if by_docket && by_name && by_docket.id != by_name.id
+      # The unit made under a same-named site (#554) is found by its docket, while the name still finds the site.
+      if by_docket && by_name && by_docket.id != by_name.id && by_docket.parent_id != by_name.id
         return Review.new("docket matches #{by_docket.name} but name matches #{by_name.name}")
       end
       return Found.new(by_docket, "NRC docket") if by_docket

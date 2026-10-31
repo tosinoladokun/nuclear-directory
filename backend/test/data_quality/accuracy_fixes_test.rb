@@ -14,9 +14,10 @@ class DataQuality::AccuracyFixesTest < ActiveSupport::TestCase
     ga = Organization.create!(name: "General Atomics", verification_status: "verified", verified_by: BY)
     ga.aliases.create!(alias: "General Atomics")
     c = Candidate.create!(source: @page, kind: "organization", status: "needs_review", quote: "q",
-      payload: { "name" => "GENERAL ATOMICS INC" }, notes: %(no exact match for "GENERAL ATOMICS INC"))
+      payload: { "name" => "GA Aeronautical Systems" }, notes: %(no exact match for "GA Aeronautical Systems"))
+    assert_nil Directory::Lookup.organization(name: "GA Aeronautical Systems"), "it matches nothing before"
     assert DataQuality::Review.settle_company(c.id, end_key: nil, choice: "same", by: BY, record_id: ga.id).ok?
-    assert_equal ga.id, Directory::Lookup.organization(name: "GENERAL ATOMICS INC")&.id
+    assert_equal ga.id, Directory::Lookup.organization(name: "GA Aeronautical Systems")&.id
   end
 
   test "#554: an NRC unit named like an EIA site becomes a unit under it, keeping its docket" do
@@ -28,6 +29,12 @@ class DataQuality::AccuracyFixesTest < ActiveSupport::TestCase
     assert_equal site.id, unit.parent_id
     assert_nil site.reload.nrc_docket, "the site keeps no docket"
     assert_equal unit.id, c.reload.subject_id
+
+    again = Candidate.create!(source: @page, kind: "facility", status: "new", quote: "q",
+      payload: { "name" => "Columbia", "nrc_docket" => "05000397", "facility_type" => "power_reactor" })
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_equal unit.id, again.reload.subject_id, "the next claim finds the unit by its docket"
+    assert_equal 1, Facility.where(nrc_docket: "05000397").count
   end
 
   test "#535: approving a news claim keeps its news item, so a reread reconfirms the item's evidence" do
@@ -41,5 +48,14 @@ class DataQuality::AccuracyFixesTest < ActiveSupport::TestCase
     item_id = c.reload.payload["news_item_id"]
     assert NewsItem.exists?(item_id)
     assert_equal [ "Organization", company.id ], c.values_at(:subject_type, :subject_id), "it stays on its company"
+
+    run = CrawlRun.create!(stage: "extract", source_kind: "dummy")
+    c.update_columns(crawl_run_id: run.id)
+    read_at = 1.hour.ago
+    @page.update!(fetched_at: read_at)
+    DataQuality::Stages::Extract.new(plugin: DummyPlugin.new).send(:reconfirm, @page, "rows")
+    evidence = Evidence.find_by!(subject_type: "NewsItem", subject_id: item_id, source: @page)
+    assert_in_delta read_at, evidence.last_confirmed_at, 1.second
+    assert_equal "rows", evidence.confirmed_sha256
   end
 end
