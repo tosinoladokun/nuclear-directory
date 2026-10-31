@@ -48,6 +48,7 @@ module DataQuality::Claim
       about = Array(payload["about"]).map { |entry| entry["name"] }.compact
       "News: “#{payload['title']}”#{" (#{payload['publisher']}, #{payload['published_on']})" if payload['publisher'] || payload['published_on']}" \
         "#{", about #{about.to_sentence}" if about.any?}." \
+        "#{" Headline: “#{payload['headline']}”" if payload['headline'].present?}" \
         "#{" Summary: “#{payload['summary']}”" if payload['summary'].present?}"
     when "organization_alias"
       "#{name_of(payload['organization'])} is also known as “#{payload['alias']}”."
@@ -87,6 +88,14 @@ module DataQuality::Claim
       values = values.transform_keys { |key| ROUND_LABELS.fetch(key, key) } if payload["term_type"] == "funding_round"
       "#{name_of(payload['organization'])} has a #{humanize(payload['term_type'])}#{" (#{payload['round']})" if payload['round'].present?}" \
         "#{details(values)}."
+    # A developer's stage with the NRC before any plant exists (#650).
+    when "licensing_stage"
+      project = " for #{payload['design_name']}" if payload["design_name"].present?
+      since = (Date.iso8601(payload["effective_on"].to_s).strftime(" since %-d %b %Y") rescue nil)
+      # The expiry too, so the checker sees every value approval would write.
+      til = (Date.iso8601(payload["expires_on"].to_s).strftime(", until %-d %b %Y") rescue nil) if payload["expires_on"].present?
+      "#{name_of(payload['organization'])} is at the NRC's #{payload['stage'].to_s.tr('_', '-')} stage#{project} " \
+        "(docket #{payload['nrc_docket']})#{since}#{til}."
     else
       "#{candidate.kind.humanize}: #{payload.to_json}"
     end

@@ -16,3 +16,9 @@ short_description:
   text: "Land-grant research university"
   source_url: https://www.ufl.edu
   quote: "A top five public land-grant research university, the University of Florida creates a collaborative environment and accelerates future solutions."
+hq:
+  city: Gainesville
+  state: FL
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/ufl-fl-argonaut
+  quote: "University of Florida Argonaut reactor | Licensee: University of Florida | Location: Gainesville, FL | Docket Number: 05000083 | Reactor Type: Argonaut"
+  confidence: 1.0

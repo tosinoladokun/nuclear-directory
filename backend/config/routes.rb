@@ -19,6 +19,7 @@ Rails.application.routes.draw do
     constraints: { kind: /plants|companies|categories/ }
 
   get "about" => "pages#about", as: :about
+  get "data" => "pages#data", as: :data
   get "privacy" => "pages#privacy", as: :privacy
   get "disclaimer" => "pages#disclaimer", as: :disclaimer
   get "bot" => "pages#bot", as: :bot
@@ -32,6 +33,7 @@ Rails.application.routes.draw do
     get "matching" => "matching#index", as: :api_dq_matching
     post "matching" => "matching#create"
     post "matching/undo" => "matching#undo", as: :api_dq_matching_undo
+    get "completeness" => "completeness#show", as: :api_dq_completeness
   end
   # The browser's PostHog traffic, through our site with the visitor's country (#205).
   match "relay/*path" => "relay#forward", via: %i[get post], format: false

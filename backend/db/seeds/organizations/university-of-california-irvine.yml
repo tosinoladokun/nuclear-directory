@@ -7,5 +7,19 @@ technologies: []
 relationships: []
 facilities: []
 description:
-  source_url: https://uci.edu
-  quote: "UC Irvine"
+  text: "Holds the NRC licence for a TRIGA Mark I research reactor in Irvine, CA."
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/uca-irvine-ca-triga
+  quote: "University of California/Irvine TRIGA Mark I reactor | Licensee: University of California/Irvine | Location: Irvine, CA | Docket Number: 05000326 | Reactor Type: TRIGA Mark I"
+  also:
+  - source_url: https://uci.edu
+    quote: "UC Irvine"
+hq:
+  city: Irvine
+  state: CA
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/uca-irvine-ca-triga
+  quote: "University of California/Irvine TRIGA Mark I reactor | Licensee: University of California/Irvine | Location: Irvine, CA | Docket Number: 05000326 | Reactor Type: TRIGA Mark I"
+  confidence: 1.0
+short_description:
+  text: "Research reactor licensee"
+  source_url: https://www.nrc.gov/facilities-safety/facility-finder/nonpower/uca-irvine-ca-triga
+  quote: "University of California/Irvine TRIGA Mark I reactor | Licensee: University of California/Irvine | Location: Irvine, CA | Docket Number: 05000326 | Reactor Type: TRIGA Mark I"

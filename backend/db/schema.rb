@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -342,6 +342,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
   create_table "news_items", force: :cascade do |t|
     t.string "url", null: false
     t.string "title", null: false
+    t.string "headline"
     t.string "publisher"
     t.date "published_on", null: false
     t.text "summary"
@@ -354,6 +355,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
     t.index ["published_on"], name: "index_news_items_on_published_on"
     t.index ["url"], name: "index_news_items_on_url", unique: true
     t.index ["verification_status"], name: "index_news_items_on_verification_status"
+    t.check_constraint "char_length(headline::text) <= 80", name: "news_items_headline_length"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "news_items_confidence_check"
     t.check_constraint "url::text ~ '^https?://'::text", name: "news_items_url_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "news_items_verification_status_check"

@@ -331,6 +331,7 @@ class DataQuality::DirectoryClient
   def readable_website?(url) = lookup.readable_website?(url)
   def sourced_role?(organization_id) = lookup.sourced_role?(organization_id)
   def role_keys(organization_id) = lookup.role_keys(organization_id)
+  def organization_hq_city(id) = lookup.organization_hq_city(id)
   def sourced_role_ids(organization_ids) = lookup.sourced_role_ids(organization_ids)
 
   # A company name kept as a lead, never thrown away (#548).
@@ -481,7 +482,7 @@ class DataQuality::DirectoryClient
         return WriteResult.new(ref: nil, errors: [ "it isn't about a company or plant in the directory yet" ])
       end
 
-      attributes = payload.slice("url", "title", "publisher", "published_on", "summary").symbolize_keys
+      attributes = payload.slice("url", "title", "headline", "publisher", "published_on", "summary").symbolize_keys
       result = nil
       begin
         ActiveRecord::Base.transaction(requires_new: true) do
