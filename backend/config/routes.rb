@@ -41,6 +41,7 @@ Rails.application.routes.draw do
   # The home page and its instant search (#41). /search returns a Turbo Frame
   # of grouped results for the home and header search fields.
   root "home#show"
+  get "search/index.json" => "search_indexes#show", as: :search_index, format: false, defaults: { format: :json }
   get "search" => "search#index", as: :search
 
   # The admin (#86): one account, signed in at /admin/session/sign-in. Every
