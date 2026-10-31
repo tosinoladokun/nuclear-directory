@@ -21,8 +21,9 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
   ADDRESS_KIND = "Address: registered address (SAM registration)"
   BLOCKED = "USAspending blocked us".freeze
 
-  def initialize(fetcher: DataQuality::Fetcher.new)
+  def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new)
     @fetcher = fetcher
+    @directory = directory
   end
 
   def crawl(_run)
@@ -43,6 +44,8 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     # PER_NIGHT a day in all, a same-day rerun included.
     room = PER_NIGHT - Source.where(source_kind:, fetched_at: today).count
     due.sort_by { |source| source.fetched_at || Time.at(0) }.first([ room, 0 ].max).each do |source|
+      # A full read, not "not modified", when the stored lines lack the parent.
+      source.update!(etag: nil, last_modified: nil) if source.content_text.present? && !source.content_text.include?("\nParent: ")
       outcome = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |body| address_lines(body) }.to_s
       stats[outcome] += 1
       if outcome == "blocked"
@@ -57,8 +60,18 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     lines = source.content_text.to_s.lines(chomp: true)
     facts = lines.to_h { |line| line.split(": ", 2) }
     return [] unless facts["Country"] == "USA" && facts["City"].present? && facts["State"].to_s.match?(/\A[A-Z]{2}\z/) && facts["Recipient"].present?
+    # A recipient under another parent registers a subsidiary's or branch's
+    # address, not the company's headquarters (DQ, 30 Oct).
+    # A record stored before the parent was kept waits for its re-read.
+    return [] unless facts.key?("Parent")
+    return [] if facts["Parent"].present? && !same_name?(facts["Parent"], facts["Recipient"])
 
     name = awards.display_name(facts["Recipient"])
+    # Only a missing headquarters is filled: a registered address never replaces one (DQ, 30 Oct).
+    # As match finds it: by name or alias, else a unique brand match.
+    company = @directory.organization(name:) || @directory.organization(name: facts["Recipient"]) ||
+      @directory.same_brand_organizations(name).then { |brand| brand.first if brand.one? }
+    return [] if company && @directory.organization_hq_city(company.id)
     quote = lines.select { |line| line.start_with?("Recipient: ", "Address: ", "City: ", "State: ") }.join("\n")
     [ { kind: "organization", quote:, payload: { "name" => name, "aliases" => ([ facts["Recipient"] ] if name != facts["Recipient"]),
       "hq_city" => facts["City"].titleize, "hq_state" => facts["State"] }.compact } ]
@@ -84,12 +97,16 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     # (nothing stored) from before today.
     def due?(source)
       return true if source.fetched_at.nil?
+      # Stored before the parent was kept (30 Oct): read again.
+      return true if source.content_text.present? && !source.content_text.include?("\nParent: ")
       return source.fetched_at < REFRESH_DAYS.days.ago if source.crawl_ok? && source.content_text.present?
 
       source.fetched_at < Time.current.beginning_of_day
     end
 
     def awards = @awards ||= DataQuality::Plugins::UsaspendingDoeAwards.new
+
+    def same_name?(one, other) = awards.display_name(one).casecmp?(awards.display_name(other))
 
     # Every recipient the DOE awards plug-in stored (its CSV's recipient_id column).
     def recipient_ids
@@ -103,7 +120,7 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
     def address_lines(body)
       json = JSON.parse(body)
       location = json["location"] || {}
-      [ "Recipient: #{json['name'].to_s.squish}", ADDRESS_KIND, "City: #{location['city_name'].to_s.squish}",
+      [ "Recipient: #{json['name'].to_s.squish}", "Parent: #{json['parent_name'].to_s.squish}", ADDRESS_KIND, "City: #{location['city_name'].to_s.squish}",
         "State: #{location['state_code']}", "Country: #{location['country_code']}" ].join("\n")
     end
 end
