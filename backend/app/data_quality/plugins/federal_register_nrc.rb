@@ -65,8 +65,45 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
     notice = parse(source.content_text) or return []
     about = notice.segments[0...-1].map { |name| { "name" => name, "type" => name.match?(COMPANY_WORDS) ? "organization" : "facility" } }
     [ { kind: "news_item", quote: notice.title, payload: {
-      "url" => notice.url, "title" => notice.title, "publisher" => PUBLISHER, "published_on" => notice.published_on,
+      "url" => notice.url, "title" => notice.title, "headline" => headline(notice), "publisher" => PUBLISHER, "published_on" => notice.published_on,
       "summary" => notice.abstract.presence&.truncate(SUMMARY_LENGTH, separator: " "), "about" => about }.compact } ]
+  end
+
+  HEADLINE_LENGTH = 80
+  # Long subjects NRC repeats, in plain words, used when the full one doesn't fit (DQ, 30 Oct).
+  SHORT_SUBJECTS = {
+    "Environmental Assessment and Finding of No Significant Impact" => "Environmental assessment",
+    "Phased Construction Permit Application-Limited Work Authorization" => "Phased construction permit application",
+    "Consideration of Approval of Transfer of Licenses" => "License transfer application"
+  }.freeze
+  # A part naming a site or unit, chosen before any other.
+  SITE_WORDS = /\b(?:Station|Plant|Units?|Reactors?|Facility|Center|Project|Installation|Site)\b/i
+  # A title naming more parties or sites than this gets no site part.
+  MAX_NAMES = 3
+
+  # "<what NRC did>: <site or unit>", from the title's own parts, at most
+  # HEADLINE_LENGTH, never cut (DQ, 30 Oct): "Final Environmental Impact
+  # Statement: Paducah Laser Enrichment Facility". When it doesn't fit, the
+  # subject's short form; then the subject alone; else none (the title shows).
+  def headline(notice)
+    *names, subject = notice.segments
+    return if subject.blank? || names.empty?
+
+    short = SHORT_SUBJECTS.fetch(subject, subject)
+    subject = sentence_case(subject)
+    site = names.find { |name| name.match?(SITE_WORDS) } || names.find { |name| !name.match?(COMPANY_WORDS) } || names.first
+    choices = names.size > MAX_NAMES ? [] : [ "#{subject}: #{site}", "#{short}: #{site}" ]
+    (choices + [ short, subject ]).find { |text| text.length <= HEADLINE_LENGTH }
+  end
+
+  # "License Amendment Application" => "License amendment application"; an
+  # acronym or a word with a digit keeps its case (DQ: one casing throughout).
+  def sentence_case(text)
+    text.split(" ").each_with_index.map do |word, i|
+      next word if word.match?(/\A[A-Z0-9&.\-]{2,}\z/) || word.match?(/\d/)
+
+      i.zero? ? word[0].upcase + word[1..].downcase : word.downcase
+    end.join(" ")
   end
 
   # One notice per source; notices aging out of the window drop nothing.

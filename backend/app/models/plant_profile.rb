@@ -25,6 +25,10 @@ class PlantProfile
     number_sources
   end
 
+  # "Latest" (#137): up to three approved news items about it, newest first. No news page: each links out.
+  LATEST = 3
+  def latest = @latest ||= NewsItem.latest_for(site).limit(LATEST).to_a
+
   delegate :name, :slug, to: :site
 
   # [[number, source], ...] for a fact on this page.

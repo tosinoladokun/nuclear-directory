@@ -13,12 +13,7 @@
 class Api::Dq::MatchingController < ActionController::API
   MAX_ROWS = 50
   MAX_BODY = 256.kilobytes
-  RATE_LIMIT_STORE = Rails.env.test? ? ActiveSupport::Cache::MemoryStore.new : Rails.cache
-
-  # Before auth, so guessing a token is never free (Infra).
-  rate_limit to: 60, within: 1.minute, store: RATE_LIMIT_STORE, by: -> { "dq-agent" },
-    with: -> { head :too_many_requests, "Retry-After" => "60" }
-  before_action :require_agent
+  include Api::DqAgent
 
   def create
     return head(:content_too_large) if request.content_length.to_i > MAX_BODY
@@ -41,16 +36,4 @@ class Api::Dq::MatchingController < ActionController::API
     render json: { actions: DqAction.order(id: :desc).limit(100)
       .as_json(only: %i[id candidate_id action target_type target_id reason created request_key undone_at created_at]) }
   end
-
-  private
-    # Bearer only: no session or cookie is ever read. The presented token's
-    # SHA-256 is always compared (even with no header), in constant time.
-    def require_agent
-      digest = ENV["DQ_AGENT_TOKEN_DIGEST"].to_s.strip.downcase
-      return head(:not_found) unless digest.match?(/\A\h{64}\z/)
-
-      presented = request.authorization.to_s[/\ABearer (\S+)\z/, 1].to_s
-      ok = ActiveSupport::SecurityUtils.secure_compare(Digest::SHA256.hexdigest(presented), digest)
-      render(json: { error: "unauthorized" }, status: :unauthorized) unless ok && presented.present?
-    end
 end
