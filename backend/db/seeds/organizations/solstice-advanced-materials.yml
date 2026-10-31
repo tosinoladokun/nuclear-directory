@@ -4,7 +4,12 @@ aliases:
 - Solstice Advanced Materials US, Inc.
 - Solstice
 website: https://solstice.com
-hq: null
+hq:
+  city: Morris Plains
+  state: NJ
+  source_url: https://solstice.com
+  quote: Solstice Advanced Materials Inc. 115 Tabor Rd. Morris Plains, NJ 07950
+  confidence: 0.8
 country_code: US
 status: active
 roles:
