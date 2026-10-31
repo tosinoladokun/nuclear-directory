@@ -10,13 +10,14 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "meta[name=description][content*=?]", "dead clicks, the country you're visiting from"
     assert_select "h2#counts", "Analytics"
     assert_select "section[aria-labelledby=counts]", /how the site is used.*No cookies, and one visit isn't linked to the next.*no session recordings/m
+    assert_select ".nd-glance__fact", text: /Cookies.*One, to protect forms/m
     # #205: we look up the country and send only that; PostHog uses the IP to count visitors and drops it.
-    assert_select "#counts ~ p", /which country you're in from your IP address, and adds only the country to the analytics/
-    assert_select "#counts ~ p", /PostHog receives your IP address and browser with each request so it can count unique visitors without cookies. It doesn't store the IP address/
-    assert_select "#counts ~ p a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
-    assert_select "#counts ~ p a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
-    assert_select "#counts ~ p", /go through this site rather than straight to PostHog/
-    assert_select "p", /Last updated\s+2026-10-12/
+    assert_select "section[aria-labelledby=counts] p", /which country you're in from your IP address, and adds only the country to the analytics/
+    assert_select "section[aria-labelledby=counts] p", /PostHog receives your IP address and browser with each request so it can count unique visitors without cookies. It doesn't store the IP address/
+    assert_select "section[aria-labelledby=counts] p a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
+    assert_select "section[aria-labelledby=counts] p a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
+    assert_select "section[aria-labelledby=counts] p", /go through this site rather than straight to PostHog/
+    assert_select ".nd-info__updated", /Last updated October 2026/
     assert_no_match(/set to discard IP addresses/, response.body)
   end
 
@@ -24,17 +25,22 @@ class PagesTest < ActionDispatch::IntegrationTest
     get root_path
     assert_select "footer.nd-footer nav[aria-label='About this site']" do
       assert_select "a[href='/about']", "About"
-      assert_select "a[href='/data']", "Data"
+      assert_select "a[href='/data']", "Our data"
       assert_select "a[href='/privacy']", "Privacy"
       assert_select "a[href='/disclaimer']", "Disclaimer"
       assert_select "a[href='/bot']", "Our crawler"
       assert_select "a[href='mailto:hello@nuclear-directory.org']", "Contact us"
     end
-    assert_select "footer.nd-footer p", count: 1, text: /\AHosting supported by Render\.\z/ do
-      assert_select "a[href='https://render.com'][rel~=noopener]", "Render"
+    # Desktop: three columns and the live counts (#660); Render is credited on the About page, not in the footer.
+    assert_select "footer.nd-footer .nd-footer__desk" do
+      assert_select ".nd-footer__brand", /The US nuclear industry, from public sources\./
+      assert_equal [ "All companies", "Plants and sites", "Our data" ], css_select("nav[aria-label=Directory] a").map(&:text)
+      assert_equal [ "About", "Our crawler", "Privacy", "Disclaimer", "Contact us" ], css_select("nav[aria-label=About] a").map(&:text)
+      assert_select ".nd-footer__count", /companies · .* plants? (and sites|or site)/
     end
+    assert_select "footer.nd-footer a[href='https://render.com']", 0
 
-    { about_path => "About", data_path => "Open data", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
+    { about_path => "About", data_path => "Our data", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
       get path
       assert_response :success
       assert_select "main", 1
@@ -83,35 +89,43 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "main", text: /CC BY 4\.0/
   end
 
-  test "text pages have a skeleton: a summary, topic headings, a short lead, details as a list (#215)" do
-    { about_path => %w[what checked licences cite thanks contact],
-      data_path => %w[what download schema licence cite],
-      privacy_path => %w[collect counts cookie corrections errors hosting contact],
-      bot_path => %w[identity behaviour blocking contact],
+  test "the info pages are one About set: a menu, a plain summary, glance facts, short sections and a last-updated line (#660)" do
+    { about_path => %w[what built data who contact], data_path => %w[what download schema licence cite],
+      privacy_path => %w[collect counts cookie corrections errors hosting contact], bot_path => %w[identity behaviour blocking contact],
       disclaimer_path => %w[sources currency advice endorsement mistakes] }.each do |path, sections|
       get path
-      assert_select "h1 + p strong", "In short:"
-      assert_equal sections, css_select("section h2").map { |h| h["id"] }
+      assert_select "nav.nd-idx[aria-label='About this site'] a", 5
+      assert_select "nav.nd-idx a[aria-current=page]", 1
+      assert_select "h1.nd-info__title + p.nd-info__summary"
+      assert_select "strong", text: "In short:", count: 0
+      assert_select ".nd-glance dt", minimum: 3
+      assert_equal sections, css_select("section h2").map { |h| h["id"] }, path
+      assert_select ".nd-info__updated", /Last updated October 2026/
     end
 
     get privacy_path
     assert_equal [ "What we collect", "Analytics", "Cookies", "Corrections", "Error reports", "Hosting", "Questions" ], css_select("section h2").map(&:text)
-    assert_select "section[aria-labelledby=counts] > p + ul li", 7
     get disclaimer_path
     assert_equal %w[Sources Accuracy Advice Endorsement Corrections], css_select("section h2").map(&:text)
   end
 
-  test "text pages number what they cover and any steps, and link the companies they name" do
+  test "the about page: the facts, who runs it with a link to Tosin, and no profit line" do
+    get about_path
+    %w[Covers Sources Data\ licence Code\ licence Dataset Price].each { |label| assert_select ".nd-glance dt", text: /#{label}/ }
+    assert_select ".nd-glance", text: /v2026\.11/
+    assert_select "#who ~ p, #who + p", /builds and runs Nuclear Directory\. Hosting is supported by Render\./
+    assert_select "a[href='https://tosinoladokun.com']", "Tosin Oladokun"
+    assert_select "main", text: /not for profit|money only covers/i, count: 0
+    assert_select "#built + p, #built ~ p", /A person checks each fact against its source/
+  end
+
+  test "text pages link the companies they name" do
     get privacy_path
-    assert_select "section[aria-labelledby=collect] ol li", 3
     { "PostHog" => "https://posthog.com/privacy", "Sentry" => "https://sentry.io/privacy/",
       "Render" => "https://render.com/privacy", "IP Geolocation by DB-IP" => "https://db-ip.com" }.each do |name, url|
       assert_select "main a[href=?][rel=noopener]", url, text: name
     end
     assert_no_match(/utm_/, response.body)
-
-    get bot_path
-    assert_select "section[aria-labelledby=blocking] ol li", 2
   end
 
   test "the crawler page shows the user agent the crawler actually sends" do
@@ -119,6 +133,7 @@ class PagesTest < ActionDispatch::IntegrationTest
 
     assert_select "pre", DataQuality::Fetcher::USER_AGENT
     assert_select "pre", /User-agent: NuclearDirectoryBot\s+Disallow: \//
+    assert_select ".nd-codebox button[data-action='copy#copy']", 2, "each code block has a Copy button"
     assert_equal [ "https://nuclear-directory.org/bot", DataQuality::Fetcher::CONTACT_EMAIL ],
       DataQuality::Fetcher::USER_AGENT[/\((.+)\)/, 1].delete_prefix("+").split("; ")
     assert_select "#contact + p a[href=?]", "mailto:#{DataQuality::Fetcher::CONTACT_EMAIL}"
