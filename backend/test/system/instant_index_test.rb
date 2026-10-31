@@ -2,9 +2,10 @@ require "application_system_test_case"
 
 # Instant search in the browser (#696): filtering the compact index on every keystroke, no /search request.
 class InstantIndexTest < ApplicationSystemTestCase
-  # Backend's index (SearchIndex, #698) and the extras (SearchExtrasController), as the browser gets them.
+  # Backend's index (SearchIndex, #698), as the browser gets it.
   INDEX = {
     v: "abc",
+    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ],
     icons: { "bucket-reactor-developers" => "<svg viewBox='0 0 1 1'></svg>", "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
     items: [
       { k: "c", s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", m: "Reactor developer · Camden, NJ", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 9 },
@@ -12,22 +13,15 @@ class InstantIndexTest < ApplicationSystemTestCase
       { k: "c", s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", m: "Enrichment · Bethesda, MD", i: "bucket-fuel", b: "nd-bucket--fuel", c: 3 },
       { k: "c", s: "nuscale-power", n: "NuScale Power", sn: "NuScale", x: [ "SMR" ], d: "Small modular reactor designer.", m: "Reactor developer · Portland, OR", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 2 },
       { k: "p", s: "davis-besse", n: "Davis-Besse Nuclear Power Station", x: [ "05000346", "EIA 6149" ], m: "Power plant · Oak Harbor, OH", i: "site-plant", c: 1 },
-      { k: "t", s: "smr", n: "Small modular reactors" },
       { k: "p", s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", m: "Power reactor · Athens, AL", i: "site-plant", c: 1 }
     ]
   }.freeze
-  EXTRAS = {
-    icons: { "bucket-reactor-developers" => "<svg viewBox='0 0 1 1'></svg>", "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
-    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ]
-  }.freeze
-
   def stub_index(delay: 0)
     page.execute_script(<<~JS)
       window.__requests = []
       const real = window.fetch
       window.fetch = (url, options) => {
         window.__requests.push(String(url))
-        if (String(url).includes("/search/extras.json")) return Promise.resolve(new Response(#{EXTRAS.to_json.to_json}, { headers: { "Content-Type": "application/json" } }))
         if (String(url).includes("/search/index.json")) return new Promise((resolve) => setTimeout(() => resolve(new Response(#{INDEX.to_json.to_json}, { headers: { "Content-Type": "application/json" } })), #{delay}))
         return real(url, options)
       }

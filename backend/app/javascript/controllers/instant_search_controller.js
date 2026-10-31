@@ -13,7 +13,7 @@ const indexes = {}
 // there is no wait per keystroke. Until the index is there, or if it can't be fetched, typing loads /search as before.
 export default class extends Controller {
   static targets = ["input", "results", "frame", "status"]
-  static values = { url: String, indexUrl: String, extrasUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, longPlaceholder: String }
+  static values = { url: String, indexUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, longPlaceholder: String }
 
   // Below 380px the full placeholder doesn't fit at 16px (iOS zooms below
   // 16px), so a shorter one takes its place (one-line law, #365). Both come
@@ -51,10 +51,9 @@ export default class extends Controller {
   fetchIndex() {
     if (!this.indexUrlValue || this.index || this.fetching) return
     this.fetching = true
-    const get = (url) => fetch(url, { headers: { Accept: "application/json" } }).then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
-    // The index is what search needs; the extras (icons, topic pages) only dress it, so without them rows still work.
-    indexes[this.indexUrlValue] ||= Promise.all([get(this.indexUrlValue), this.extrasUrlValue ? get(this.extrasUrlValue).catch(() => ({})) : {}])
-      .then(([index, extras]) => prepare({ ...index, ...extras, icons: { ...index.icons, ...extras.icons } }))
+    indexes[this.indexUrlValue] ||= fetch(this.indexUrlValue, { headers: { Accept: "application/json" } })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
+      .then(prepare)
     // A failed index stays cached (the promise is shared), so an unavailable index is tried once per page, not on every keystroke.
     indexes[this.indexUrlValue].then((index) => {
       this.index = index
@@ -110,7 +109,9 @@ export default class extends Controller {
         link.href = `${path}/${encodeURIComponent(item.s)}`
         const square = make("span", `nd-catsq${item.b ? ` ${item.b}` : ""}`)
         square.setAttribute("aria-hidden", "true")
-        square.innerHTML = (item.k === "p" && this.index.icons[`${item.i}@20`]) || this.index.icons[item.i] || ""
+        square.innerHTML = this.index.icons[item.i] || ""
+        // Plant squares draw their icon at 20px, company squares at 16px (as the server's rows do).
+        if (item.k === "p") square.querySelector("svg")?.classList.add("nd-ic--20")
         const label = make("span", "nd-instant__text")
         label.append(make("b", "type-body-strong", item.n))
         if (item.m) label.append(make("span", "type-small", item.m))

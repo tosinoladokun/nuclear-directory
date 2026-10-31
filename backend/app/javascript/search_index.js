@@ -8,24 +8,19 @@ export function normalise(text) {
   return String(text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim()
 }
 
-// Backend's index is { companies: [{ s, n, sn, a, d, c: category key, m }], plants: [{ s, n, a, t, i: icon name, m }] }; the extras
-// ({ icons: { name: svg }, tags }) come from /search/extras.json. Both become items { k, s, n, sn, a, d, x, m, i, b }.
+// Backend's index (#698): { v, icons: { key: svg }, items: [...], tags: [...] }. The older companies/plants split still reads.
 export function prepare(payload) {
-  // Backend's #698 sends items already shaped ({ k, s, n, sn, a, d, x, m, i, b, c }) with their icons; the older companies/plants split still reads.
   const all = payload.items || [
     ...(payload.companies || []).map((c) => ({ ...c, k: "c", i: c.c ? `bucket-${c.c}` : "buildings", b: c.c ? `nd-bucket--${c.c}` : null })),
     ...(payload.plants || []).map((p) => ({ ...p, k: "p" }))
   ]
-  // Topics ({ k: "t", s: tag key, n: name }) in the index are enriched by the extras' tags (synonyms, counts, icons).
-  const extra = new Map((payload.tags || []).map((tag) => [tag.s, tag]))
-  const topicItems = all.filter((item) => item.k === "t").map((item) => ({ ...extra.get(item.s), ...item }))
-  const listed = all.filter((item) => item.k !== "t")
+  const listed = all
   const items = listed.map((item, position) => {
     const names = [item.n, item.sn].filter(Boolean).map(normalise)
     const aliases = [ ...(item.a || []), ...(item.x || []) ].map(normalise).filter(Boolean)
     return { item, position, names, aliases, name: names[0], nameWords: unique(names.flatMap((n) => n.split(" "))), aliasWords: unique(aliases.flatMap((a) => a.split(" "))), descWords: normalise(item.d).split(" ").filter(Boolean) }
   })
-  const tags = (topicItems.length ? topicItems : payload.tags || []).map((tag) => ({ tag, names: [tag.n, tag.s, ...(tag.a || [])].map(normalise).filter(Boolean) }))
+  const tags = (payload.tags || []).map((tag) => ({ tag, names: [tag.n, tag.s, ...(tag.a || [])].map(normalise).filter(Boolean) }))
   return { icons: payload.icons || {}, items, tags }
 }
 
