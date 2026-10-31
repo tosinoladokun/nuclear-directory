@@ -18,7 +18,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   # Every test starts on a 1440x900 viewport in light mode: the browser is
   # reused between tests and keeps whatever size and scheme the last one set.
+  # The reused browser also keeps its HTTP cache: the search index is cached for ten minutes, and a test's records
+  # aren't the last test's (#696).
   setup do
+    page.driver.browser.execute_cdp("Network.clearBrowserCache")
     resize_viewport(1440, 900)
     emulate_color_scheme(:light)
   end
