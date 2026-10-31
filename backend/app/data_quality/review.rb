@@ -490,7 +490,14 @@ module DataQuality::Review
           next result = fail_with.("“#{name}” is already #{owner.name}'s name or another name; pick #{owner.name}, or ask Data Quality")
         end
 
-        company = if choice == "same" then other
+        company = if choice == "same"
+          # Its spelling becomes the company's other name now, so the next claim
+          # spelled that way matches (#533). Audited; a name it already has is skipped.
+          unless directory.known_name?(type: "Organization", id: other.id, name:)
+            added = directory.add_alias(id: other.id, name:, by:, published: other.verification_status == "verified")
+            next result = fail_with.(added.errors.to_sentence) unless added.success?
+          end
+          other
         elsif %w[new subsidiary].include?(choice)
           made = directory.add_fact(:organization, { name: }, source_id: candidate.source_id, quote: candidate.quote, by:, reason: ADDED_REASON)
           unless made.success?
@@ -1082,7 +1089,12 @@ module DataQuality::Review
           next Result.new(candidate_id: candidate.id, ref: nil, errors: result.errors) unless result.success?
 
           # A news item stays attached to the company or plant it's about (#137): its page is where it shows.
-          attached = candidate.kind == "news_item" ? {} : { subject_type: result.ref.type, subject_id: result.ref.id }
+          # Its written item is kept on the claim, so a reread reconfirms that item's evidence (#535).
+          attached = if candidate.kind == "news_item"
+            { payload: candidate.payload.merge("news_item_id" => result.ref.id) }
+          else
+            { subject_type: result.ref.type, subject_id: result.ref.id }
+          end
           candidate.update!(status: "merged", **attached, reviewed_by: by, reviewed_at: Time.current)
           fill_site(candidate, result.ref.id, run, directory) if candidate.kind_facility?
           Result.new(candidate_id: candidate.id, ref: result.ref, errors: [])

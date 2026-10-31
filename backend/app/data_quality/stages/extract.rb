@@ -63,6 +63,8 @@ class DataQuality::Stages::Extract < DataQuality::Stage
           attrs[:review_origin] = "extract" if attrs[:status].to_s == "needs_review"
           attrs.merge(crawl_run: run)
         end
+        # Every news claim's headline and summary, from the source's own text.
+        extracted = DataQuality::NewsDraft.new.apply(extracted, plugin:, source:, run:)
 
         # Results belong to the snapshot they were read from, from a source
         # that's still usable. If a crawl stored new content or flagged the
@@ -109,8 +111,10 @@ class DataQuality::Stages::Extract < DataQuality::Stage
       return if rows.blank? || source.status_reason.present?
 
       from_rows = source.candidates.where(crawl_run_id: last_read(source), status: %w[merged confirmed]).where.not(subject_id: nil)
-      still = from_rows.select(:subject_type, :subject_id, :quote).distinct.select { |row| plugin.quote_in_source?(source, row.quote) }
-      directory.reconfirm_source(source_id: source.id, facts: still.map { |row| [ row.subject_type, row.subject_id ] }.uniq,
+      still = from_rows.select(:kind, :subject_type, :subject_id, :quote, :payload).select { |row| plugin.quote_in_source?(source, row.quote) }
+      # A news claim's subject is the company it's about; its evidence is on the news item it wrote (#535).
+      facts = still.map { |row| (id = row.kind == "news_item" && row.payload["news_item_id"]) ? [ "NewsItem", id ] : [ row.subject_type, row.subject_id ] }
+      directory.reconfirm_source(source_id: source.id, facts: facts.uniq,
         quotes: still.map(&:quote).uniq, rows_sha256: rows, at: source.fetched_at || Time.current)
     end
 
