@@ -33,6 +33,24 @@ class InstantIndexTest < ApplicationSystemTestCase
     JS
   end
 
+  # The server search answers late, after the index: its HTML must not replace the local results.
+  def stub_slow_server(delay: 2000)
+    page.execute_script(<<~JS)
+      const before = window.fetch
+      window.fetch = (url, options) => {
+        if (String(url).includes("/search?q=")) {
+          window.__requests.push(String(url))
+          return new Promise((resolve) => setTimeout(() => {
+            const response = new Response('<turbo-frame id="search-large-frame"><div class="nd-instant" data-instant-search-count="1">STALE SERVER ANSWER</div></turbo-frame>', { headers: { "Content-Type": "text/html" } })
+            Object.defineProperty(response, "url", { value: new URL(String(url), location.origin).href })
+            resolve(response)
+          }, #{delay}))
+        }
+        return before(url, options)
+      }
+    JS
+  end
+
   def requests = page.evaluate_script("window.__requests")
 
   test "typing filters the index in the browser: aliases, grouped results, close spellings, Enter goes to the full results" do
@@ -112,6 +130,47 @@ class InstantIndexTest < ApplicationSystemTestCase
     field.send_keys("zz")
     eventually { requests.any? { |url| url.include?("/search?q=zz") } }
     assert true
+  end
+
+  test "a slow /search answer that arrives after the index doesn't replace the local results" do
+    visit root_path
+    stub_index(delay: 500)
+    stub_slow_server
+    field = find("input[type=search]")
+    field.send_keys("oklo")
+    eventually { requests.any? { |url| url.include?("/search?q=oklo") } }
+    assert_selector ".nd-instant__row b", text: "Oklo", wait: 10
+    sleep 2.5
+    assert_selector ".nd-instant__row b", text: "Oklo"
+    assert_no_text "STALE SERVER ANSWER"
+  end
+
+  test "Escape on the server's results while the index is still loading keeps them closed" do
+    visit root_path
+    stub_index(delay: 2000)
+    stub_slow_server(delay: 100)
+    field = find("input[type=search]")
+    field.send_keys("oklo")
+    assert_selector ".nd-instant", text: "STALE SERVER ANSWER", wait: 10
+    field.send_keys(:escape)
+    assert_no_selector ".nd-instant", visible: true
+    sleep 2.5
+    assert_no_selector ".nd-instant__row", visible: true
+    assert_equal "oklo", field.value
+
+    field.send_keys(:backspace)
+    assert_selector ".nd-instant__row b", text: "Oklo", wait: 10
+  end
+
+  test "an index that can't be fetched is tried once per page" do
+    visit root_path
+    page.execute_script("window.__requests = []; const real = window.fetch; window.fetch = (url, o) => { window.__requests.push(String(url)); return String(url).includes('/search/index.json') ? Promise.resolve(new Response('', { status: 404 })) : real(url, o) }")
+    field = find("input[type=search]")
+    field.send_keys("zz")
+    sleep 0.5
+    field.send_keys("zzz")
+    sleep 0.5
+    assert_equal 1, requests.count { |url| url.include?("/search/index.json") }
   end
 
   test "filtering 3,000 records takes a few milliseconds" do

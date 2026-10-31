@@ -20,7 +20,7 @@
            data-action="input->instant-search#search keydown->instant-search#keydown focus->instant-search#search">
   </form>
   <div id="<%= field_id %>-results" class="nd-searchbox__results" role="dialog" aria-label="Search results" data-instant-search-target="results"
-       data-action="keydown->instant-search#navigate turbo:frame-load->instant-search#loaded turbo:fetch-request-error->instant-search#failed turbo:frame-missing->instant-search#failed" hidden>
+       data-action="keydown->instant-search#navigate turbo:before-frame-render->instant-search#beforeRender turbo:frame-load->instant-search#loaded turbo:fetch-request-error->instant-search#failed turbo:frame-missing->instant-search#failed" hidden>
     <turbo-frame id="<%= field_id %>-frame" target="_top" data-instant-search-target="frame"></turbo-frame>
   </div>
   <p id="<%= field_id %>-status" class="sr-only" role="status" aria-live="polite" data-instant-search-target="status"></p>

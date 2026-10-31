@@ -39,6 +39,7 @@ export default class extends Controller {
 
     clearTimeout(this.timer)
     this.pending = false
+    this.dismissed = false
     this.fetchIndex()
     if (this.index) return this.renderLocal()
 
@@ -54,14 +55,24 @@ export default class extends Controller {
     // The index is what search needs; the extras (icons, topic pages) only dress it, so without them rows still work.
     indexes[this.indexUrlValue] ||= Promise.all([get(this.indexUrlValue), this.extrasUrlValue ? get(this.extrasUrlValue).catch(() => ({})) : {}])
       .then(([index, extras]) => prepare({ ...index, ...extras, icons: { ...index.icons, ...extras.icons } }))
+    // A failed index stays cached (the promise is shared), so an unavailable index is tried once per page, not on every keystroke.
     indexes[this.indexUrlValue].then((index) => {
       this.index = index
-      if (this.inputTarget.value.trim().length >= this.minimumValue && this.inputTarget === document.activeElement) this.renderLocal()
-    }).catch(() => { delete indexes[this.indexUrlValue]; this.fetching = false })
+      // Escape (or clearing the field) while it loaded keeps the results closed until the next search.
+      if (!this.dismissed && this.inputTarget.value.trim().length >= this.minimumValue && this.inputTarget === document.activeElement) this.renderLocal()
+    }).catch(() => {})
+  }
+
+  // A /search response that arrives after the local results took over must not replace them (Turbo can't cancel the request).
+  beforeRender(event) {
+    if (!this.index) return
+    event.detail.render = () => {}
+    event.preventDefault()
   }
 
   renderLocal() {
     clearTimeout(this.timer)
+    this.pending = false
     const text = this.inputTarget.value.trim()
     if (text.length < this.minimumValue) return this.close()
 
@@ -245,6 +256,7 @@ export default class extends Controller {
 
   close() {
     clearTimeout(this.timer)
+    this.dismissed = true
     this.pending = false
     this.markFresh()
     this.resultsTarget.hidden = true
