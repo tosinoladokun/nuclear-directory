@@ -63,6 +63,8 @@ class DataQuality::Stages::Extract < DataQuality::Stage
           attrs[:review_origin] = "extract" if attrs[:status].to_s == "needs_review"
           attrs.merge(crawl_run: run)
         end
+        # Every news claim's headline and summary, from the source's own text.
+        extracted = DataQuality::NewsDraft.new.apply(extracted, plugin:, source:, run:)
 
         # Results belong to the snapshot they were read from, from a source
         # that's still usable. If a crawl stored new content or flagged the
