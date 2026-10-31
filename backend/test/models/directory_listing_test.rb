@@ -105,8 +105,11 @@ class DirectoryListingTest < ActiveSupport::TestCase
     fusion_site = plant("Orion", technology: Technology.find_by!(key: "fusion"))
     @unit.update!(technology: Technology.find_by!(key: "smr"))
 
-    assert_equal [ "Plant Vogtle" ], DirectoryListing.new(category: "plants", technology: "fission").plants.map(&:name)
-    assert_equal [ fusion_site.name ], DirectoryListing.new(category: "plants", technology: "fusion").plants.map(&:name)
+    # The plants list filters by type and reactor, not technology (#614); a technology narrows plants in search results.
+    assert_equal [ "Plant Vogtle" ], DirectoryListing.new(q: "o", technology: "fission").plants.map(&:name)
+    assert_equal [ fusion_site.name ], DirectoryListing.new(q: "o", technology: "fusion").plants.map(&:name)
+    assert_nil DirectoryListing.new(category: "plants", technology: "fusion").technology, "ignored on the plants list"
+    assert_equal 2, DirectoryListing.new(category: "plants", technology: "fusion").plants.size, "a stale technology doesn't narrow the plants list"
     # Coolant is a company role: it hides plants in search results, and isn't an option on the plants list.
     assert_empty DirectoryListing.new(q: "orion", technology: "molten_salt").plants
     assert_nil DirectoryListing.new(category: "plants", technology: "molten_salt").technology
@@ -129,7 +132,7 @@ class DirectoryListingTest < ActiveSupport::TestCase
     plant("Pending Fusion", verified: false, technology: fusion).tap { |site| plant("Pending Fusion Unit", parent: site) }
     shown = plant("Shown Site", verified: false).tap { |site| plant("Shown Unit", parent: site, technology: fusion) }
 
-    assert_equal [ shown.name ], DirectoryListing.new(category: "plants", technology: "fusion_magnetic").plants.map(&:name)
+    assert_equal [ shown.name ], DirectoryListing.new(q: "s", technology: "fusion_magnetic").plants.map(&:name)
     assert_equal [ shown.name ], DirectoryListing.new(q: "magnetic").plants.map(&:name)
 
     own_only = technology("pebble_bed", "Pebble bed")
@@ -148,7 +151,7 @@ class DirectoryListingTest < ActiveSupport::TestCase
     plant("Orion", technology: technology("fusion_magnetic", "Magnetic confinement"))
 
     assert_includes DirectoryListing.new(category: "plants").technology_options.map(&:last), "fusion_magnetic"
-    assert_equal "fusion_magnetic", DirectoryListing.new(category: "plants", technology: "fusion_magnetic").technology
+    assert_equal "fusion_magnetic", DirectoryListing.new(q: "s", technology: "fusion_magnetic").technology
     assert_not_includes DirectoryListing.new(category: "plants").technology_options.map(&:last), "molten_salt"
   end
 
