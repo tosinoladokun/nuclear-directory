@@ -76,7 +76,7 @@ class SearchIndex
   def topics
     PublicPages.new.tags.map do |tag|
       icon, bucket = h.tag_square(tag, size: 16)
-      compact("s" => tag.key, "n" => tag.name, "a" => TOPIC_WORDS[tag.key], "c" => Organization.where(id: tag.organization_ids).count,
+      compact("s" => tag.key, "n" => tag.name, "a" => TOPIC_WORDS[tag.key], "c" => Organization.published.where(id: tag.organization_ids).count,
         "i" => (icon_key("tag-#{tag.key}-16") { icon } if icon), "b" => (h.bucket_class(bucket) if bucket))
     end
   end
