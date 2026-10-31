@@ -17,15 +17,16 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
 
   def index_json = (get search_index_path; JSON.parse(response.body))
 
-  test "published companies and plant sites, compact, with other names and the results line" do
+  test "published companies and plant sites, compact, with other names, the results line and each icon once" do
     json = index_json
-    company = json["companies"].find { |c| c["s"] == "index-reactors" }
-    assert_equal({ "s" => "index-reactors", "n" => "Index Reactors", "sn" => "IR", "a" => [ "IR Nuclear" ], "d" => "Small reactors", "m" => "Austin, TX" }, company)
-    assert_nil json["companies"].find { |c| c["s"] == "hidden-index" }, "unpublished stays out"
-    plant = json["plants"].find { |p| p["s"] == "index-station" }
-    assert_equal [ "Index Nuclear Station" ], plant["a"]
-    assert_equal "Power plant · Glen Rose, TX", plant["m"]
-    assert plant["i"].present?
+    company = json["items"].find { |c| c["s"] == "index-reactors" }
+    assert_equal({ "k" => "c", "s" => "index-reactors", "n" => "Index Reactors", "sn" => "IR", "a" => [ "IR Nuclear" ], "d" => "Small reactors",
+      "m" => "Austin, TX", "i" => "buildings-16", "c" => 0 }, company)
+    assert_nil json["items"].find { |c| c["s"] == "hidden-index" }, "unpublished stays out"
+    plant = json["items"].find { |p| p["s"] == "index-station" }
+    assert_equal [ "p", [ "Index Nuclear Station" ], "Power plant · Glen Rose, TX" ], plant.values_at("k", "a", "m")
+    assert_match "<svg", json["icons"].fetch(plant["i"])
+    assert_equal json["items"].map { |item| item["i"] }.uniq.sort, json["icons"].keys.sort
     assert_equal SearchIndex.version, json["v"]
   end
 
@@ -39,6 +40,6 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
     @company.update!(short_description: "Microreactors")
     get search_index_path, headers: { "If-None-Match" => etag }
     assert_response :success
-    assert_equal "Microreactors", JSON.parse(response.body)["companies"].find { |c| c["s"] == "index-reactors" }["d"]
+    assert_equal "Microreactors", JSON.parse(response.body)["items"].find { |c| c["s"] == "index-reactors" }["d"]
   end
 end

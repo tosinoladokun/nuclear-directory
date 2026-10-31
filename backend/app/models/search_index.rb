@@ -1,15 +1,15 @@
 # Instant search's index (#696): every published company and plant site,
-# compact, for the browser to filter as people type. Only what the public
-# pages show. Keys are short to keep it small:
+# compact, for the browser to filter as people type and draw the same rows
+# as today's instant results. Only what the public pages show. Shape agreed
+# with Site (31 Oct):
 #
 #   { "v" => version,
-#     "companies" => [ { "s" => slug, "n" => name, "sn" => short name, "a" => [ other names ],
-#                        "d" => short description, "c" => category key, "m" => "Reactor designer · Seattle, WA" } ],
-#     "plants" => [ { "s" => slug, "n" => name, "a" => [ other names ], "t" => "Power plant",
-#                     "i" => icon name, "m" => "Power plant · Glen Rose, TX" } ] }
+#     "icons" => { key => "<svg ...>" },   # only the icons in use
+#     "items" => [ { "k" => "c" or "p", "s" => slug, "n" => name, "sn" => short name, "a" => [ other names ],
+#                    "d" => short description, "m" => "Reactor designer · Seattle, WA", "i" => icon key,
+#                    "b" => "nd-bucket--fuel", "c" => connection count } ] }
 #
-# "m" is the line the instant results show under a name today; "i" is the
-# site's icon (set :nd), so the results look as they do now.
+# Companies first, then plant sites, each Most connected first. Empty keys are left out.
 class SearchIndex
   # Changes whenever anything the index shows may have changed: a row
   # updated, added or deleted (the count) in any table it reads.
@@ -21,7 +21,11 @@ class SearchIndex
 
   def initialize(helpers: ApplicationController.helpers) = @h = helpers
 
-  def as_json(*) = { "v" => self.class.version, "companies" => companies, "plants" => plants }
+  def as_json(*)
+    @icons = {}
+    items = companies + plants
+    { "v" => self.class.version, "icons" => @icons, "items" => items }
+  end
 
   private
 
@@ -35,9 +39,17 @@ class SearchIndex
     categories = Bucket.firsts(list)
     list.map do |company|
       role = roles[company.id]&.map(&:role)&.find { |r| r.parent_id.nil? } || roles[company.id]&.first&.role
-      compact("s" => company.slug, "n" => company.name, "sn" => company.short_name, "a" => aliases[company.id],
-        "d" => company.short_description, "c" => categories[company.id]&.key,
-        "m" => [ (h.role_label(role) if role), h.place(company.hq_city, company.hq_state) ].compact.join(" · ").presence)
+      category = categories[company.id]
+      # As company_square draws it: the category's icon, else a building.
+      key = if category
+        icon_key("nd-#{category.plants ? 'site-plant' : "bucket-#{category.key}"}-16") { h.bucket_icon(category) }
+      else
+        icon_key("buildings-16") { h.icon("buildings") }
+      end
+      compact("k" => "c", "s" => company.slug, "n" => company.name, "sn" => company.short_name, "a" => aliases[company.id],
+        "d" => company.short_description, "i" => key, "b" => (h.bucket_class(category) if category),
+        "m" => [ (h.role_label(role) if role), h.place(company.hq_city, company.hq_state) ].compact.join(" · ").presence,
+        "c" => company.try(:connections_count).to_i)
     end
   end
 
@@ -47,12 +59,18 @@ class SearchIndex
     list.map do |plant|
       shown = plant.verified?
       sourced = shown && plant.try(:site_sourced)
-      compact("s" => plant.slug, "n" => plant.name, "a" => aliases[plant.id],
-        "t" => (h.facility_type_label(plant.facility_type) if shown),
-        "i" => h.site_icon_name((plant.facility_type if sourced), reactor_types: [ (plant.reactor_type if sourced), *plant.try(:units_reactor_types) ],
-          status: (plant.status if sourced)),
-        "m" => ([ h.facility_type_label(plant.facility_type), h.place(plant.city, plant.state) ].compact.join(" · ").presence if shown))
+      name = h.site_icon_name((plant.facility_type if sourced), reactor_types: [ (plant.reactor_type if sourced), *plant.try(:units_reactor_types) ],
+        status: (plant.status if sourced))
+      compact("k" => "p", "s" => plant.slug, "n" => plant.name, "a" => aliases[plant.id],
+        "i" => icon_key("nd-#{name}-20") { h.icon(name, set: :nd, size: 20) },
+        "m" => ([ h.facility_type_label(plant.facility_type), h.place(plant.city, plant.state) ].compact.join(" · ").presence if shown),
+        "c" => plant.try(:connections_count).to_i)
     end
+  end
+
+  def icon_key(key)
+    @icons[key] ||= yield.to_s
+    key
   end
 
   # Other names only: not the record's own name again, each once.
