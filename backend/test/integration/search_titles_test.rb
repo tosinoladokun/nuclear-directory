@@ -45,6 +45,11 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get companies_path(tag: "smr")
     assert_select "title", "SMR companies in the US | Nuclear Directory"
     assert_equal "2 small modular reactor (SMR) companies in the US.", description
+    assert_select ".nd-pagehead__square svg", minimum: 1, message: "the tag page heading carries the tag's icon square, like a category page"
+
+    cite!(company("Isotope Co", roles: [ role("isotopes") ]))
+    get companies_path(tag: "isotopes")
+    assert_select ".nd-pagehead__square svg", minimum: 1, message: "a role tag shows its category's icon"
 
     get company_path(slug: kairos.slug)
     assert_select ".nd-pagehead__tags a.nd-tag--link[href=?]", companies_path(tag: "smr"), /Small modular reactor/

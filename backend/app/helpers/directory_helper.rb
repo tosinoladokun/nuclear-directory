@@ -161,6 +161,20 @@ module DirectoryHelper
     roles + techs
   end
 
+  # A tag page's own icon square, the one its chip carries on a company: the role's category icon and colour, or the
+  # technology's site icon. [icon html, Category or nil]
+  def tag_square(tag, size: 24)
+    if tag.role_key
+      role = Role.find_by(key: tag.role_key)
+      keys = [ tag.role_key, role&.parent&.key ].compact
+      bucket = Category.buckets.find { |category| (category.role_keys & keys).any? }
+      [ (bucket_icon(bucket, size:) if bucket), bucket ]
+    else
+      tech = Technology.find_by(key: tag.technology_key)
+      [ icon(TECHNOLOGY_ICONS[tag.technology_key] || TECHNOLOGY_ICONS[tech&.parent&.key] || "site-plant", set: :nd, size:), nil ]
+    end
+  end
+
   # A tag under a company's summary opens that tag's list when there is one (#606). The company holds the tag, so the
   # list is never empty.
   def tag_href(tag) = (companies_path(tag: tag.to_param) if tag)
