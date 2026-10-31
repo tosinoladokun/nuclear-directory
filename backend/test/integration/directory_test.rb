@@ -87,7 +87,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(tag: "fusion")
 
     assert_response :success
-    assert_select "title", "Fusion energy companies in the US · Nuclear Directory"
+    assert_select "title", "Fusion energy companies in the US | Nuclear Directory"
     assert_select "h1", /Fusion/
     assert_select ".nd-pagehead__count", "1 company"
     assert_select "a.nd-line[href='/companies/helion']"
@@ -353,8 +353,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   end
 
   test "a tag we don't have searches its words instead of listing every company" do
-    get companies_path(tag: "smr", state: "TX")
-    assert_redirected_to companies_url(q: "SMR", state: "TX")
+    get companies_path(tag: "pwr", state: "TX")
+    assert_redirected_to companies_url(q: "PWR", state: "TX")
     assert_equal 301, response.status
     get companies_path(tag: "molten-salt")
     assert_redirected_to companies_url(q: "molten salt")
@@ -383,13 +383,13 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "form.nd-sortbar[data-controller=auto-submit] select[name=sort]", 1, "phones: Sort beside Filters"
   end
 
-  test "a tag page and All companies mark the right index entry, and a tag page has no head square" do
+  test "a tag page and All companies mark the right index entry, and a tag page's head carries the tag's icon square (Design, #665)" do
     get companies_path
     assert_select "nav.nd-idx a[aria-current=page]", /All companies/
 
     get companies_path(tag: "fusion")
     assert_select "nav.nd-idx a[aria-current=page]", 0
-    assert_select ".nd-pagehead__square", 0
+    assert_select ".nd-pagehead__square svg", minimum: 1
   end
 
   test "a written short description is the row's middle column, with the location helper's place" do

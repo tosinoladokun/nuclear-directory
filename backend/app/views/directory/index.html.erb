@@ -3,6 +3,7 @@
   # A bucket's page, or a tag's (/companies?tag=fusion, #281): each has its
   # own heading, title, description and canonical address.
   list_page = listing.category || listing.tag
+  tag_icon, tag_bucket = (tag_square(listing.tag) if listing.tag && !listing.category)
   heading = if list_page then list_page.name
             elsif listing.searching? then "Results for “#{listing.query}”"
             else "All companies"
@@ -17,7 +18,8 @@
   # A category's title and description use the words people search with,
   # and the description gives its count (#290); the heading stays short.
   category_page = list_page && !listing.searching?
-  content_for :title, "#{category_page ? list_page.title : heading} · Nuclear Directory"
+  # A tag's title ends " | Nuclear Directory" ("SMR companies in the US | Nuclear Directory", #606).
+  content_for :title, listing.tag && category_page ? "#{list_page.title} | Nuclear Directory" : "#{category_page ? list_page.title : heading} · Nuclear Directory"
   # The count of what this page lists (a state or technology filter narrows it).
   description = if category_page then list_page.description(total)
                 elsif listing.searching? then "Companies and plants matching “#{listing.query}”."
@@ -65,7 +67,8 @@
 
   <div class="nd-listpage__main">
   <%= render "shared/page_head", name: heading, count: pluralize(total, noun, plural:), about: (list_page.description(1) if category_page),
-        square: (bucket_icon(listing.category, size: 24) if listing.category), bucket: (listing.category unless listing.category&.plants) %>
+        square: (listing.category ? bucket_icon(listing.category, size: 24) : tag_icon),
+        bucket: (listing.category ? (listing.category unless listing.category.plants) : tag_bucket) %>
 
   <div class="nd-listhead nd-listhead--bare">
     <%# On phones the filters open in a full-screen sheet behind "Filters (N)"
