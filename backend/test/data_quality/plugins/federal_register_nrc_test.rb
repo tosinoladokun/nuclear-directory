@@ -72,4 +72,27 @@ class DataQuality::Plugins::FederalRegisterNrcTest < ActiveSupport::TestCase
     assert_equal [ "matched", company.id ], [ claim.status, claim.subject_id ]
     assert_equal claim.payload["url"], claim.source.url
   end
+
+  test "each notice gets a headline from its title's parts: what NRC did, then the site (DQ, 30 Oct)" do
+    notice = ->(title) { Plugin::Notice.new(number: "1", published_on: "2026-10-28", title:, url: "https://www.federalregister.gov/d/1", abstract: nil) }
+    p = Plugin.new
+    assert_equal "Final environmental impact statement: Paducah Laser Enrichment Facility",
+      p.headline(notice.("Global Laser Enrichment, LLC; Paducah Laser Enrichment Facility; Final Environmental Impact Statement"))
+    assert_equal "License amendment application: Vistra Operations Company LLC",
+      p.headline(notice.("Vistra Operations Company LLC; License Amendment Application"))
+    assert_equal "Environmental assessment: Christopher M. Crane Clean Energy Center",
+      p.headline(notice.("Constellation Energy Generation, LLC; Christopher M. Crane Clean Energy Center; Environmental Assessment and Finding of No Significant Impact"))
+    assert_equal "Phased construction permit application: Pioneer Units 1 and 2",
+      p.headline(notice.("Pioneer Energy, LLC; Pioneer Units 1 and 2; Phased Construction Permit Application-Limited Work Authorization"))
+    many = "Dominion Energy Nuclear Connecticut, Inc.; Millstone Power Station; North Anna Power Station; Surry Power Station; V.C. Summer; Consideration of Approval of Transfer of Licenses"
+    assert_equal "License transfer application", p.headline(notice.(many)), "many sites: subject only"
+    refute_match(/\.\.\.|…/, p.headline(notice.("Duke Energy Carolinas, LLC; Catawba Nuclear Station, Units 1 and 2, and McGuire Nuclear Station, Units 1 and 2; Exemption")).to_s)
+    surry = "NextEra Energy, Inc.; Dominion Energy, Inc.; Virginia Electric and Power Company; Dominion Energy Nuclear Connecticut; " \
+      "Dominion Energy South Carolina, Inc.; Surry Power Station, Unit Nos. 1 and 2; North Anna Power Station, Unit Nos. 1 and 2; " \
+      "Consideration of Approval of Transfer of Licenses"
+    assert_equal "License transfer application", p.headline(notice.(surry)), "a fixture title (2026-17529): many parties, subject only"
+    assert_equal "Exemption: Surry Power Station, Unit Nos. 1 and 2",
+      p.headline(notice.("Dominion Energy Nuclear Connecticut; Surry Power Station, Unit Nos. 1 and 2; Exemption")), "the site, not the licensee"
+    assert_nil p.headline(notice.("Sunshine Act Meetings"))
+  end
 end
