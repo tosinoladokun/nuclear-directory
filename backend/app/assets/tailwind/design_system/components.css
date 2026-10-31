@@ -1491,3 +1491,22 @@
   .nd-similar { display: flex; flex-direction: column; gap: var(--nd-space-3); }
   @media (min-width: 1024px) { .nd-similar { grid-column: 2; } }
 }
+
+/* "Latest" (#137): up to three approved news items, one line each: date (mono), headline, the source's domain as the link out. */
+@layer components {
+  .nd-lines--news { background: transparent; padding: 0; }
+  .nd-news { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; column-gap: var(--nd-space-4); align-items: baseline; padding: var(--nd-space-3) 0; }
+  .nd-news + .nd-news { border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-news__date { font: 400 13px/22px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink-muted); white-space: nowrap; }
+  /* A headline may take two lines (agency notices share a long first half); then it ends in an ellipsis, the full text in its title. */
+  .nd-news__what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  /* The one plain line that says what the item means (NewsItem#summary, 160 characters at most): two lines, then an ellipsis. */
+  .nd-news__summary { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+  .nd-news__title { font: 500 15px/22px var(--font-text); color: var(--nd-ink); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-width: 0; overflow-wrap: anywhere; }
+  .nd-news__src { font: 400 13px/22px var(--font-text); white-space: nowrap; }
+  @media (max-width: 639px) {
+    .nd-news { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
+    .nd-news__what { grid-column: 1; grid-row: 2; }
+    .nd-news__src { grid-column: 1; grid-row: 3; }
+  }
+}

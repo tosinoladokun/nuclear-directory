@@ -45,6 +45,11 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get companies_path(tag: "smr")
     assert_select "title", "SMR companies in the US | Nuclear Directory"
     assert_equal "2 small modular reactor (SMR) companies in the US.", description
+    assert_select ".nd-pagehead__square svg", minimum: 1, message: "the tag page heading carries the tag's icon square, like a category page"
+
+    cite!(company("Isotope Co", roles: [ role("isotopes") ]))
+    get companies_path(tag: "isotopes")
+    assert_select ".nd-pagehead__square svg", minimum: 1, message: "a role tag shows its category's icon"
 
     get company_path(slug: kairos.slug)
     assert_select ".nd-pagehead__tags a.nd-tag--link[href=?]", companies_path(tag: "smr"), /Small modular reactor/
@@ -65,7 +70,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: utility.slug)
 
     assert_select "title", "Alabama Power: plants | Nuclear Directory"
-    assert_match(/\AAlabama Power: Utility in Birmingham, AL\. 3 plants\.\z/, meta_description)
+    assert_equal "Alabama Power is a utility in Birmingham, AL, with 3 plants.", meta_description
     assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
     assert_equal description, og_description
     assert_no_match(/Plants, sites and deals/, description)

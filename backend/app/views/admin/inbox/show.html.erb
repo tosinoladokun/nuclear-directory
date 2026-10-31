@@ -4,7 +4,7 @@
 <% checked = @inbox.checked %>
 <% headings = { "new_record" => "New companies and plants", "new_fact" => "New facts and deals", "change" => "Changes to something you decided" } %>
 <%# One checked item needs no batch button: its own Yes does it (Design). %>
-<% batch_after = (%w[new_record new_fact].find { |key| sections[key].any?(&:checked) } if checked.size > 1) %>
+<% batch_after = (%w[new_record new_fact change].find { |key| sections[key].any? { |entry| checked.include?(entry) } } if checked.size > 1) %>
 
 <% if flash[:undo] %>
   <% content_for :flash_action do %>

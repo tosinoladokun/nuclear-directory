@@ -383,13 +383,13 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "form.nd-sortbar[data-controller=auto-submit] select[name=sort]", 1, "phones: Sort beside Filters"
   end
 
-  test "a tag page and All companies mark the right index entry, and a tag page has no head square" do
+  test "a tag page and All companies mark the right index entry, and a tag page's head carries the tag's icon square (Design, #665)" do
     get companies_path
     assert_select "nav.nd-idx a[aria-current=page]", /All companies/
 
     get companies_path(tag: "fusion")
     assert_select "nav.nd-idx a[aria-current=page]", 0
-    assert_select ".nd-pagehead__square", 0
+    assert_select ".nd-pagehead__square svg", minimum: 1
   end
 
   test "a written short description is the row's middle column, with the location helper's place" do

@@ -242,7 +242,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
         attach(candidate, found.record, "Matched existing #{found.record.name} (by #{found.by})")
         settle(candidate, found.record)
       when Under
-        write(candidate, payload.symbolize_keys.merge(parent_id: found.site.id), existing: false,
+        write(candidate, payload.symbolize_keys.merge(parent_id: found.site.id), existing: false, create_only: true,
           note: "New pending unit under the existing site #{found.site.name}")
       else
         # FactWriter may still find a record by a key match didn't use; trust its answer.
@@ -535,12 +535,18 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # without writing; its aliases are added only when it's approved.
       by_name ||= Array(payload["aliases"]).compact_blank.lazy.filter_map { |other| by.call(other) }.first
 
-      if by_docket && by_name && by_docket.id != by_name.id
+      # The unit made under a same-named site (#554) is found by its docket, while the name still finds the site.
+      if by_docket && by_name && by_docket.id != by_name.id && by_docket.parent_id != by_name.id
         return Review.new("docket matches #{by_docket.name} but name matches #{by_name.name}")
       end
       return Found.new(by_docket, "NRC docket") if by_docket
       if by_name && docket && by_name.nrc_docket.present?
         return Review.new("name matches #{by_name.name}, which has a different docket (#{by_name.nrc_docket})")
+      end
+      # An NRC unit named like an EIA site (Columbia, plant 371) is a unit
+      # under that site, so its docket isn't lost on the site (#554).
+      if by_name && docket && by_name.nrc_docket.blank? && by_name.parent_id.nil? && by_name.eia_plant_id.present?
+        return Under.new(by_name)
       end
       return Found.new(by_name, "name") if by_name
 
@@ -697,10 +703,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # The write, a new link's quote and the candidate's update happen in one
     # transaction, so a stop part-way leaves nothing half-done for a rerun to
     # mistake for an existing record.
-    def write(candidate, attributes, existing: nil, note: nil, evidence: true)
+    # create_only: always a new record (a unit under a same-named site, #554).
+    def write(candidate, attributes, existing: nil, note: nil, evidence: true, create_only: false)
       result = nil
       ActiveRecord::Base.transaction(requires_new: true) do
-        result = directory.write_pending(candidate.kind, attributes, candidate:, crawl_run: @run, evidence:)
+        result = directory.write_pending(candidate.kind, attributes, candidate:, crawl_run: @run, evidence:, create_only:)
         # A link written without evidence (so an existing one isn't changed) that
         # turned out to be new is a proposal, and a proposal carries its quote.
         if result.success? && result.created && !evidence

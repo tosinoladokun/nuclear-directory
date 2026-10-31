@@ -161,6 +161,20 @@ module DirectoryHelper
     roles + techs
   end
 
+  # A tag page's own icon square, the one its chip carries on a company: the role's category icon and colour, or the
+  # technology's site icon. [icon html, Category or nil]
+  def tag_square(tag, size: 24)
+    if tag.role_key
+      role = Role.find_by(key: tag.role_key)
+      keys = [ tag.role_key, role&.parent&.key ].compact
+      bucket = Category.buckets.find { |category| (category.role_keys & keys).any? }
+      [ (bucket_icon(bucket, size:) if bucket), bucket ]
+    else
+      tech = Technology.find_by(key: tag.technology_key)
+      [ icon(TECHNOLOGY_ICONS[tag.technology_key] || TECHNOLOGY_ICONS[tech&.parent&.key] || "site-plant", set: :nd, size:), nil ]
+    end
+  end
+
   # A tag under a company's summary opens that tag's list when there is one (#606). The company holds the tag, so the
   # list is never empty.
   def tag_href(tag) = (companies_path(tag: tag.to_param) if tag)
@@ -440,20 +454,80 @@ module DirectoryHelper
   # "plant" only when every site the company is linked to is a published power plant; a mine or a fuel plant makes
   # them "sites" (VOICE.md), as in company_description.
   def company_places_noun(profile)
-    sites = profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq
+    sites = company_current_sites(profile)
     sites.all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site"
   end
 
+  # The sites a company is linked to today: a link that has ended or not yet started isn't one (as company_description).
+  def company_current_sites(profile)
+    profile.plant_links.select { |l| (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
+      .map { |l| l.facility.parent || l.facility }.uniq
+  end
+
+  # How a description that isn't a signed deal starts (the connections map's rule, #363).
+  NOT_SIGNED_DEAL = [ "MOU", "Framework", "Term sheet", "Binding term sheet", "Letter of intent", "Non-binding", "Preorder", "Option",
+    "Conditional", "Announced plan", "Agreement to explore", "Partnership", "Strategic agreement", "Prepayment" ].freeze
+
+  # Signed supply and power deals, as the connections map counts arrows: a power deal with verified terms is signed when a
+  # term counts (agreement, status and conditions say so), else its words must say "Signed"; any other deal unless it starts
+  # with an earlier stage or is pending. A framework or MOU, an announced or conditional one, and any investment or funding
+  # (counted as investors) are not.
+  def company_signed_deals(profile)
+    profile.counted_deals.select do |deal|
+      next false unless %w[supplies offtake_with].include?(deal.relationship_type)
+
+      terms = deal.deal_terms.select { |term| term.verification_status == "verified" }
+      text = deal.description.to_s.strip
+      if deal.relationship_type == "offtake_with"
+        terms.any? ? terms.any?(&:counted?) : text.match?(/\ASigned\b/i)
+      else
+        NOT_SIGNED_DEAL.none? { |label| text.match?(/\A#{Regexp.escape(label)}\b/i) } && !text.match?(/\bpending\b/i)
+      end
+    end
+  end
+
+  # What a company is, as a noun phrase for a sentence; only roles with a plain company noun (the title's words).
+  COMPANY_NOUNS = TITLE_ROLES.merge(
+    "project_developer" => "project developer", "components" => "component maker", "isotopes" => "isotope producer",
+    "waste_decommissioning" => "waste and decommissioning company", "regulatory_consultant" => "regulatory consultant",
+    "government_agency" => "government agency", "national_lab" => "national laboratory", "research_organization" => "research organization",
+    "university" => "university"
+  ).freeze
+
+  # One factual sentence for a company page with no written description, built only from published facts (Outcome 30 Nov,
+  # thin pages): "Oklo is a reactor developer in Santa Clara, CA, with 3 deals and 2 sites." No adjectives; nil when the page
+  # has nothing to say yet (no role, place, deal or site), so a bare page stays bare.
+  def company_summary(profile)
+    return if profile.description.present?
+
+    noun = profile.shown_roles.filter_map { |link| COMPANY_NOUNS[link.role.key] || COMPANY_NOUNS[link.role.parent&.key] }.first
+    where = location(profile.hq_city, profile.hq_state, country: (profile.organization.country_code if profile.sourced?))
+    sites = company_current_sites(profile).size
+    deals = company_signed_deals(profile).size
+    with = [ (pluralize(deals, "deal") if deals.positive?), (pluralize(sites, company_places_noun(profile)) if sites.positive?) ].compact.to_sentence(two_words_connector: " and ", last_word_connector: " and ")
+    # Nothing beyond the title: a bare role noun, or "a company with 1 plant" (no role, no place), adds nothing.
+    return if where.blank? && (noun.nil? || with.blank?)
+
+    kind = noun ? "#{noun.match?(/\A(?:[aeio]|un(?!i))/i) ? "an" : "a"} #{noun}" : "a company"
+    "#{profile.name} is #{kind}#{" in #{where}" if where}#{", with #{with}" if with.present? && where}#{" with #{with}" if with.present? && !where}."
+  end
+
   # The meta description of a company (Tosin, 29 Oct): its one-line description, then what the page counts:
-  # "Oklo: Develops advanced fission power plants. 3 plants, 2 deals." Link previews keep
-  # company_description.
+  # "Oklo: Develops advanced fission power plants. 3 plants, 2 deals." With no description, the summary sentence, then only
+  # the counts it doesn't already say (investors). Link previews keep company_description.
   def company_meta_description(profile)
-    lead = profile.description.presence || [ profile.shown_roles.first && role_label(profile.shown_roles.first.role),
-      place(profile.hq_city, profile.hq_state) ].compact.join(" in ").presence
-    head = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
+    lead = profile.description.presence
+    summary = company_summary(profile)
+    head = if lead then "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}"
+    else summary || "#{profile.name}, a company in the US nuclear industry."
+    end
     head = head.truncate(PREVIEW_LIMIT, separator: " ") if head.length > PREVIEW_LIMIT
-    counts = counted([ profile.plant_links.map { |l| l.facility.parent || l.facility }.uniq.size, company_places_noun(profile) ], [ profile.counted_deals.count { |d| !(d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id) }, "deal" ], # signed deals only (as the page counts them); investments are counted as investors
-      [ investors_of(profile).size, "investor" ])
+    investors = [ investors_of(profile).size, "investor" ]
+    counts = if lead.nil? && summary
+      counted(investors)
+    else
+      counted([ company_current_sites(profile).size, company_places_noun(profile) ], [ company_signed_deals(profile).size, "deal" ], investors)
+    end
     fit_counts(head, counts)
   end
 
@@ -550,9 +624,20 @@ module DirectoryHelper
     nil
   end
 
+  # The publisher of a news item for the Latest rows. A URL URI can't parse (e.g. a non-ASCII path) still gets its host as text; it just isn't linked.
+  def news_publisher(item)
+    host = (URI.parse(item.url.to_s.strip).host rescue nil) || item.url.to_s[%r{\Ahttps?://([^/?#]+)}i, 1]
+    host.to_s.downcase.delete_prefix("www.").presence || "source"
+  end
+
   # "kairospower.com" for a source, from its domain or URL.
   # A URL with no host (a bad import such as "javascript:...") reads
   # "unlinked source", so chips and their labels are never blank.
+  # A news item's headline for "Latest" (#137): its plain headline when it has one, else its title (an agency notice's
+  # title can run long). try: the column comes with Data Quality's headline work.
+  # NewsItem#display_title (#683) is the plain headline, at most 80 characters, else the title.
+  def news_headline(item) = item.try(:display_title).presence || item.try(:headline).presence || item.title
+
   def source_domain(source)
     source.domain.presence || URI.parse(source.url.to_s).host.to_s.delete_prefix("www.").presence || "unlinked source"
   rescue URI::InvalidURIError

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_160100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -178,7 +178,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160100) do
     t.index ["created_at"], name: "index_dq_actions_on_created_at", order: :desc
     t.index ["request_key"], name: "index_dq_actions_on_request_key", unique: true, where: "(request_key IS NOT NULL)"
     t.check_constraint "(target_type IS NULL) = (target_id IS NULL)", name: "dq_actions_target_check"
-    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying, 'subsidiary_of'::character varying, 'new'::character varying, 'close'::character varying, 'recommend'::character varying, 'propose_role'::character varying]::text[])", name: "dq_actions_action_check"
+    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying, 'subsidiary_of'::character varying, 'new'::character varying, 'close'::character varying, 'recommend'::character varying, 'propose_role'::character varying, 'propose_fields'::character varying]::text[])", name: "dq_actions_action_check"
     t.check_constraint "by::text ~~ 'agent:%'::text OR by::text ~~ 'human:%'::text", name: "dq_actions_by_check"
     t.check_constraint "char_length(btrim(reason)) > 0", name: "dq_actions_reason_check"
   end
@@ -342,6 +342,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160100) do
   create_table "news_items", force: :cascade do |t|
     t.string "url", null: false
     t.string "title", null: false
+    t.string "headline"
     t.string "publisher"
     t.date "published_on", null: false
     t.text "summary"
@@ -354,6 +355,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160100) do
     t.index ["published_on"], name: "index_news_items_on_published_on"
     t.index ["url"], name: "index_news_items_on_url", unique: true
     t.index ["verification_status"], name: "index_news_items_on_verification_status"
+    t.check_constraint "char_length(headline::text) <= 80", name: "news_items_headline_length"
     t.check_constraint "confidence IS NULL OR confidence >= 0::numeric AND confidence <= 1::numeric", name: "news_items_confidence_check"
     t.check_constraint "url::text ~ '^https?://'::text", name: "news_items_url_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "news_items_verification_status_check"
