@@ -116,6 +116,7 @@ module DataQuality::Review
   # A deal term (an award, a round) is never approved in bulk or in a safe
   # class (PM, 18 Oct): a person decides it, or accepts Data Quality's call on it.
   BY_A_PERSON = "a deal term is decided by a person".freeze
+  DECIDED = "it would change a record a person decided".freeze
   # The holds a person's Accept of Data Quality's reviewed list lifts.
   REVIEWED_HOLDS = [ FIRST_BATCH, BY_A_PERSON ].freeze
   # A trade-press item (#127): a pointer for Data Quality to the primary
@@ -192,6 +193,16 @@ module DataQuality::Review
     # - it isn't attached to a record yet: approving could find a record a
     #   person decided by its name and change it
     # nil when it's safe. decided: whether a person decided its record, when already known.
+    # Fills only blanks on a published record: every value it would write is
+    # one the record doesn't have yet (Data Quality's propose_fields, #676).
+    # Such a fill may join "Yes to all" with Data Quality's approve; a change
+    # to a value already there stays Tosin's to decide on its own.
+    def only_fills?(candidate, directory:)
+      record = directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return false
+      changes = DataQuality::Differences.changes(candidate, record, directory:)
+      changes.present? && changes.to_h.values.all? { |(stored, _)| stored.blank? }
+    end
+
     def held_reason(candidate, directory: DataQuality::DirectoryClient.new, record: :lookup, firsts: first_batches, decided: nil)
       return LEAD if lead?(candidate)
       return "it isn't attached to a record yet" unless candidate.subject_id
@@ -202,7 +213,7 @@ module DataQuality::Review
         decided = record&.verified_by.to_s.start_with?("human:")
       end
       if (decided || candidate.notes.to_s.match?(/\Ahuman-verified /i)) && !evidence_only?(candidate, directory:)
-        return "it would change a record a person decided"
+        return DECIDED
       end
       return BY_A_PERSON if candidate.kind_deal_term?
       return FIRST_BATCH if candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
@@ -1038,6 +1049,8 @@ module DataQuality::Review
             elsif only_recommended then held_reason(candidate, directory:, firsts: firsts || first_batches)
             end
           held = nil if data_quality_reviewed && REVIEWED_HOLDS.include?(held)
+          # Data Quality's first-hand fill of blanks on a decided record (#676), checked under its lock.
+          held = nil if first_hand && data_quality_reviewed && held == DECIDED && only_fills?(candidate, directory:)
           if held
             why = safe_check ? "it's no longer safe: #{held}" : "it waits for Data Quality: #{held}"
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ why ])
