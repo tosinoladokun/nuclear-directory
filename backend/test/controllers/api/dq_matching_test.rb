@@ -496,4 +496,25 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert result.ok?, result.errors.inspect
     assert_equal [ "Camden", "Spent fuel storage." ], @holtec.reload.values_at(:hq_city, :description)
   end
+
+  test "propose_fields: an SEC CIK, from an sec.gov page only, padded to 10 digits, never one another company has" do
+    edgar = Source.create!(url: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001018724", source_kind: "dummy", crawl_status: "ok",
+      content_sha256: "e", content_text: "Holtec International CIK#: 1018724")
+    Organization.create!(name: "Other Filer", sec_cik: "0000320193", verification_status: "verified", verified_by: "human:tosin")
+    act({ action: "propose_fields", target: @holtec.id, fields: { sec_cik: "1018724" }, quote: "q", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { sec_cik: "12345678901" }, quote: "q", source_url: edgar.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { sec_cik: "320193" }, quote: "q", source_url: edgar.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { sec_cik: "1018724" }, quote: "Holtec International CIK#: 1018724", source_url: edgar.url, reason: "EDGAR" })
+    assert_match "sec.gov (EDGAR)", results.first["error"]
+    assert_match "up to 10 digits", results.second["error"]
+    assert_match "already Other Filer's", results.third["error"]
+    assert results.fourth["ok"], results.inspect
+    claim = Candidate.find(results.fourth["id"])
+    assert_equal "0001018724", claim.payload["sec_cik"]
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_equal [ "Organization", @holtec.id ], claim.reload.values_at(:subject_type, :subject_id), claim.notes
+    assert_equal "change", DataQuality::Review.inbox_kind(claim)
+    assert DataQuality::Review.approve([ claim.id ], by: "human:tosin").sole.ok?
+    assert_equal "0001018724", @holtec.reload.sec_cik
+  end
 end
