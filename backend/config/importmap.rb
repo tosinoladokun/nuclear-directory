@@ -5,6 +5,8 @@ pin "@hotwired/turbo-rails", to: "turbo.min.js"
 pin "@hotwired/stimulus", to: "stimulus.min.js"
 pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
 pin_all_from "app/javascript/controllers", under: "controllers"
+# The instant search filter (#696): runs in the browser against /search/index.json.
+pin "search_index"
 
 # Anonymous page views and page leaves (#66): loaded lazily by app/javascript/analytics.js.
 pin "analytics"
