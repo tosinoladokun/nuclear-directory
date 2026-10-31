@@ -51,4 +51,16 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
     get company_path(slug: lone.slug)
     assert_select "#similar", 0
   end
+
+  test "an SMR-only company's similar list reaches its parent tag (fission) once SMR peers run out" do
+    fission = technology("fission", "Fission")
+    Technology.find_by!(key: "smr").update!(parent: fission)
+    lone = cite!(company("Lone Smr Co", techs: [ Technology.find_by!(key: "smr") ]))
+    peer = cite!(company("Fission Only Peer", techs: [ fission ]))
+
+    held = SimilarCompanies.new(CompanyProfile.new(lone)).send(:held_tags).map(&:key)
+    assert_includes held, "smr"
+    assert_includes held, "fission", "the parent's tag list holds it too"
+    assert_includes SimilarCompanies.new(CompanyProfile.new(lone)).send(:pools).flat_map { |listing| listing.companies.to_a }, peer, "once the SMR peers run out, the fission list follows"
+  end
 end

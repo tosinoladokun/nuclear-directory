@@ -33,8 +33,10 @@ class SimilarCompanies
     end
 
     def held_tags
-      roles = @profile.shown_roles.map { |link| Tag.for_role(link.role.key) }
-      techs = @profile.technologies.map { |link| Tag.for_technology(link.technology.key) }
+      # A tag's list holds its children too (SMR sits under fission), so a held role or technology also puts the company
+      # in its parent's tag list, matching Tag#organization_ids.
+      roles = @profile.shown_roles.flat_map { |link| [ link.role, link.role.parent ].compact.map { |role| Tag.for_role(role.key) } }
+      techs = @profile.technologies.flat_map { |link| [ link.technology, link.technology.parent ].compact.map { |tech| Tag.for_technology(tech.key) } }
       (roles + techs).compact.uniq
     end
 end
