@@ -1512,6 +1512,9 @@
     .nd-prow__units { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); }
     .nd-prow__foot .nd-prow__place { font-size: 13px; }
     .nd-prow__foot .nd-prow__cap + .nd-prow__place::before { content: "· "; }
+  }
+}
+
 /* "Latest" (#137): up to three approved news items, one line each: date (mono), headline, the source's domain as the link out. */
 @layer components {
   .nd-lines--news { background: transparent; padding: 0; }
