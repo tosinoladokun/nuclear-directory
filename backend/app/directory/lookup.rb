@@ -216,6 +216,9 @@ module Directory
 
     def role_key?(key) = key.present? && Role.exists?(key:)
 
+    # A company's headquarters city, or nil (gap fill only adds a missing one).
+    def organization_hq_city(id) = Organization.where(id:).pick(:hq_city).presence
+
     # A company's published role keys (["data_center_offtaker"]).
     def role_keys(organization_id)
       OrganizationRole.joins(:role).where(organization_id:, verification_status: "verified").pluck("roles.key")
