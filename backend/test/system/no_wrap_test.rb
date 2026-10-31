@@ -32,6 +32,21 @@ class NoWrapTest < ApplicationSystemTestCase
   PAGES = ->(test) { [ "/", "/companies", "/companies?category=reactor-developers", "/companies?category=reactor-developers&role=project_developer", "/companies?category=services", "/companies?category=plants",
     "/companies/#{test.instance_variable_get(:@allied).slug}", "/plants/#{test.instance_variable_get(:@plant).slug}" ] }
 
+  test "the footer's one-line text and the crawler page's Glance stay one line each from 760px up and on a phone (Design, #660)" do
+    [ [ 760, 900 ], [ 1024, 800 ], [ 1440, 800 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit bot_path
+      assert_empty page.evaluate_script(AUDIT), "no-wrap audit at #{width}"
+      assert_equal [ "Pace, per site", "Visits per page", "Rules", "If blocked" ], all(".nd-glance dt").map(&:text)
+      heights = page.evaluate_script("[...document.querySelectorAll('.nd-glance__fact')].map((f) => Math.round(f.getBoundingClientRect().height))")
+      assert heights.all? { |h| h <= 52 }, "one value and one label each, no third line at #{width}: #{heights.inspect}"
+    end
+    resize_viewport(1440, 800)
+    visit bot_path
+    assert_equal "29px", page.evaluate_script("getComputedStyle(document.querySelector('.nd-info__summary')).lineHeight")
+    assert_equal page.evaluate_script("getComputedStyle(document.querySelector('h1')).color"), page.evaluate_script("getComputedStyle(document.querySelector('.nd-info__summary')).color"), "the summary is in ink, the page's main point"
+  end
+
   test "on a touch phone the footer links are 44px tall and their tap areas never overlap (the credit moved to About, #660)" do
     resize_viewport(390, 844)
     page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)

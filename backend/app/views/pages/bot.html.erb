@@ -5,9 +5,9 @@
 <% end %>
 <%= render layout: "pages/frame", locals: { current: :bot, title: "NuclearDirectoryBot", updated: "October 2026",
       summary: "NuclearDirectoryBot is the crawler that keeps Nuclear Directory up to date. It reads public pages, such as regulator filings, company press releases and news reports, for facts about the US nuclear industry. It follows robots.txt, and you can block it.",
-      facts: [ { label: "Pace", value: "Every #{DataQuality::Fetcher::HOST_INTERVAL} seconds", note: "per site" },
-               { label: "Visits", value: "Once a day", note: "at most, per page" },
-               { label: "Rules", value: "Follows robots.txt" }, { label: "Blocked", value: "It stops" } ] } do %>
+      facts: [ { label: "Pace, per site", value: "Every #{DataQuality::Fetcher::HOST_INTERVAL} seconds" },
+               { label: "Visits per page", value: "Once a day at most" },
+               { label: "Rules", value: "Follows robots.txt" }, { label: "If blocked", value: "Stops" } ] } do %>
   <section class="nd-info__sec" aria-labelledby="identity">
     <h2 id="identity" class="nd-info__h">How to recognize it</h2>
     <p>Every request sends this user agent:</p>
