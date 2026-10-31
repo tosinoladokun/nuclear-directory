@@ -516,5 +516,15 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "change", DataQuality::Review.inbox_kind(claim)
     assert DataQuality::Review.approve([ claim.id ], by: "human:tosin").sole.ok?
     assert_equal "0001018724", @holtec.reload.sec_cik
+
+    # Taken by another company before matching: it goes to review, never to that company.
+    act({ action: "propose_fields", target: @holtec.id, fields: { sec_cik: "1018725" }, quote: "Holtec International CIK#: 1018724",
+      source_url: "  #{edgar.url} ", reason: "EDGAR" })
+    assert results.sole["ok"], results.inspect
+    late = Candidate.find(results.sole["id"])
+    Organization.create!(name: "Late Filer", sec_cik: "0001018725", verification_status: "verified", verified_by: "human:tosin")
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_nil late.reload.subject_id
+    assert_match "but it matches Late Filer (by SEC CIK)", late.notes
   end
 end

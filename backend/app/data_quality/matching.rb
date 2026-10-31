@@ -236,7 +236,7 @@ module DataQuality::Matching
       if fields.key?("sec_cik")
         cik = directory.normalize_cik(fields["sec_cik"])
         return fail_with.call("an SEC CIK is up to 10 digits") unless cik.to_s.match?(/\A\d{10}\z/)
-        return fail_with.call("an SEC CIK's source must be an sec.gov (EDGAR) page") unless EDGAR_HOSTS.include?((URI.parse(row["source_url"].to_s).host rescue nil).to_s.downcase)
+        return fail_with.call("an SEC CIK's source must be an sec.gov (EDGAR) page") unless EDGAR_HOSTS.include?((URI.parse(row["source_url"].to_s.strip).host rescue nil).to_s.downcase)
         fields["sec_cik"] = cik
       end
     end
