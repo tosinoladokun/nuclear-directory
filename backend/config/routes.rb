@@ -23,6 +23,7 @@ Rails.application.routes.draw do
   get "privacy" => "pages#privacy", as: :privacy
   get "disclaimer" => "pages#disclaimer", as: :disclaimer
   get "bot" => "pages#bot", as: :bot
+  get "updates" => "updates#index", as: :updates, format: false
   get "updates.atom" => "updates#feed", as: :updates_feed, format: false, defaults: { format: :atom }
   get "sitemap.xml" => "sitemaps#show", as: :sitemap, format: false, defaults: { format: :xml }
   get "robots.txt" => "sitemaps#robots", as: :robots, format: false

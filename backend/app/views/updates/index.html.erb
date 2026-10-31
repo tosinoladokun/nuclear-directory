@@ -1,0 +1,35 @@
+<% content_for :title, "What's new: newly approved facts, deals and news | Nuclear Directory" %>
+<% content_for :head do %>
+  <link rel="canonical" href="<%= updates_url %>">
+  <meta name="description" content="Facts, deals and news added to Nuclear Directory after a person checked them, newest first, each with the page it is on and its source. Also an Atom feed.">
+  <link rel="alternate" type="application/atom+xml" title="Nuclear Directory: what's new" href="<%= updates_feed_url %>">
+<% end %>
+<%= render "shared/site_header" %>
+
+<main class="nd-page nd-page--narrow">
+  <%= render "shared/page_head", name: "What's new", count: pluralize(@entries.size, "update"),
+        about: "Facts, deals and news added after a person checked them, newest first." %>
+  <p class="type-small text-ink-muted nd-updates__feed">Follow along with the <%= link_to "Atom feed", updates_feed_path, class: "nd-link" %>.</p>
+
+  <% if @entries.any? %>
+    <ul class="nd-lines nd-lines--news nd-updates">
+      <% @entries.each do |entry| %>
+        <% kind, slug = entry.page %>
+        <% href = kind == :plant ? plant_path(slug:) : company_path(slug:) %>
+        <li class="nd-news">
+          <time class="nd-news__date" datetime="<%= data_date(entry.at) %>"><%= data_date(entry.at) %></time>
+          <span class="nd-news__what">
+            <span class="nd-news__title" title="<%= entry.title %>" data-truncate><%= link_to entry.title, href, class: "nd-link" %></span>
+            <% if (summary = entry.summary.to_s.squish.truncate(160, separator: " ").presence) %><span class="nd-news__summary" title="<%= entry.summary.to_s.squish %>" data-truncate><%= summary %></span><% end %>
+          </span>
+          <% if entry.source_url && (host = (URI.parse(entry.source_url).host rescue nil)) %>
+            <%= link_to entry.source_url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "updates" },
+                  aria: { label: "#{entry.title}: read on #{host.delete_prefix("www.")} (opens the source)" } do %><%= host.delete_prefix("www.") %><span aria-hidden="true"> ↗</span><% end %>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p class="type-body text-ink-muted">Nothing has been added yet.</p>
+  <% end %>
+</main>
