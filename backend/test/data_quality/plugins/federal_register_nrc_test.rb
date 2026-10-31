@@ -87,6 +87,12 @@ class DataQuality::Plugins::FederalRegisterNrcTest < ActiveSupport::TestCase
     many = "Dominion Energy Nuclear Connecticut, Inc.; Millstone Power Station; North Anna Power Station; Surry Power Station; V.C. Summer; Consideration of Approval of Transfer of Licenses"
     assert_equal "License transfer application", p.headline(notice.(many)), "many sites: subject only"
     refute_match(/\.\.\.|…/, p.headline(notice.("Duke Energy Carolinas, LLC; Catawba Nuclear Station, Units 1 and 2, and McGuire Nuclear Station, Units 1 and 2; Exemption")).to_s)
+    surry = "NextEra Energy, Inc.; Dominion Energy, Inc.; Virginia Electric and Power Company; Dominion Energy Nuclear Connecticut; " \
+      "Dominion Energy South Carolina, Inc.; Surry Power Station, Unit Nos. 1 and 2; North Anna Power Station, Unit Nos. 1 and 2; " \
+      "Consideration of Approval of Transfer of Licenses"
+    assert_equal "License transfer application", p.headline(notice.(surry)), "a fixture title (2026-17529): many parties, subject only"
+    assert_equal "Exemption: Surry Power Station, Unit Nos. 1 and 2",
+      p.headline(notice.("Dominion Energy Nuclear Connecticut; Surry Power Station, Unit Nos. 1 and 2; Exemption")), "the site, not the licensee"
     assert_nil p.headline(notice.("Sunshine Act Meetings"))
   end
 end

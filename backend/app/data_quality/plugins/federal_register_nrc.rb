@@ -76,6 +76,8 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
     "Phased Construction Permit Application-Limited Work Authorization" => "Phased construction permit application",
     "Consideration of Approval of Transfer of Licenses" => "License transfer application"
   }.freeze
+  # A part naming a site or unit, chosen before any other.
+  SITE_WORDS = /\b(?:Station|Plant|Units?|Reactors?|Facility|Center|Project|Installation|Site)\b/i
   # A title naming more parties or sites than this gets no site part.
   MAX_NAMES = 3
 
@@ -89,7 +91,7 @@ class DataQuality::Plugins::FederalRegisterNrc < DataQuality::Plugin
 
     short = SHORT_SUBJECTS.fetch(subject, subject)
     subject = sentence_case(subject)
-    site = names.find { |name| !name.match?(COMPANY_WORDS) } || names.first
+    site = names.find { |name| name.match?(SITE_WORDS) } || names.find { |name| !name.match?(COMPANY_WORDS) } || names.first
     choices = names.size > MAX_NAMES ? [] : [ "#{subject}: #{site}", "#{short}: #{site}" ]
     (choices + [ short, subject ]).find { |text| text.length <= HEADLINE_LENGTH }
   end
