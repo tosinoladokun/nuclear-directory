@@ -151,15 +151,33 @@ module DirectoryHelper
     roles = profile.shown_roles.map do |link|
       keys = [ link.role.key, link.role.parent&.key ].compact
       bucket = Category.buckets.find { |category| (category.role_keys & keys).any? }
-      { text: role_label(link.role), icon: (bucket_icon(bucket, size: 16) if bucket), bucket: }
+      { text: role_label(link.role), icon: (bucket_icon(bucket, size: 16) if bucket), bucket:, href: tag_href(Tag.for_role(link.role.key)) }
     end
     techs = profile.technologies.map do |link|
       tech = link.technology
       name = TECHNOLOGY_ICONS[tech.key] || TECHNOLOGY_ICONS[tech.parent&.key] || "site-plant"
-      { text: tech.name, icon: icon(name, set: :nd, size: 16), bucket: nil }
+      { text: tech.name, icon: icon(name, set: :nd, size: 16), bucket: nil, href: tag_href(Tag.for_technology(tech.key)) }
     end
     roles + techs
   end
+
+  # A tag page's own icon square, the one its chip carries on a company: the role's category icon and colour, or the
+  # technology's site icon. [icon html, Category or nil]
+  def tag_square(tag, size: 24)
+    if tag.role_key
+      role = Role.find_by(key: tag.role_key)
+      keys = [ tag.role_key, role&.parent&.key ].compact
+      bucket = Category.buckets.find { |category| (category.role_keys & keys).any? }
+      [ (bucket_icon(bucket, size:) if bucket), bucket ]
+    else
+      tech = Technology.find_by(key: tag.technology_key)
+      [ icon(TECHNOLOGY_ICONS[tag.technology_key] || TECHNOLOGY_ICONS[tech&.parent&.key] || "site-plant", set: :nd, size:), nil ]
+    end
+  end
+
+  # A tag under a company's summary opens that tag's list when there is one (#606). The company holds the tag, so the
+  # list is never empty.
+  def tag_href(tag) = (companies_path(tag: tag.to_param) if tag)
 
   # Roles whose parent is shown instead (enrichment under fuel) are left to the caller.
   def role_label(role)

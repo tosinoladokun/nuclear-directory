@@ -1255,6 +1255,14 @@
   /* A square tag with an icon: a role in its category's colour, a technology in ink. */
   .nd-tag--icon { display: inline-flex; align-items: center; gap: 5px; }
   .nd-tag--icon .nd-ic { flex: none; color: var(--nd-cat, var(--nd-ink-muted)); }
+  /* A tag that opens its list (#606): the same box; the label underlines on hover and focus. */
+  .nd-tag--link { position: relative; text-decoration: none; color: var(--nd-ink); border-color: var(--nd-control); }
+  .nd-tag--link:hover, .nd-tag--link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+  /* A resting cue that doesn't need hover (phones have none): the ink label, a 12px chevron, the control border; the
+     tap area is 44px tall without changing the box. */
+  .nd-tag__go { display: inline-flex; flex: none; margin-left: -1px; transform: rotate(-90deg); color: var(--nd-ink-muted); }
+  /* The 44px area grows downward only: a tag in the row below paints over it, so it never covers a neighbour above. */
+  .nd-tag--link::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 44px; }
 
   /* Index (nd-idx): the left column on desktop, sticky. */
   .nd-idx { position: sticky; top: var(--nd-space-6); width: var(--nd-index-width); display: flex; flex-direction: column; gap: 2px; align-self: flex-start; }
