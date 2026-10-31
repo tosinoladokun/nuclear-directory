@@ -26,6 +26,7 @@
 
   <%
     index = [ { label: "Overview", href: "#overview", current: true } ]
+    index << { label: "Latest", href: "#latest", count: p.latest.size } if p.latest.any?
     index << { label: "Deals and links", href: "#deals", count: p.counted_deals.size } if p.deals.any?
     # A plant the company both owns and operates is one row ("owner and operator"), not two. Only links to
     # the same facility fold: two units of one site, one operated and one owned, stay two rows.
@@ -56,7 +57,7 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, about: p.description, tags: company_tags(p) %>
+      <%= render "shared/page_head", name: p.name, about: (p.description.presence || company_summary(p)), tags: company_tags(p) %>
     </div>
 
     <%# No key facts, no empty card. %>
@@ -66,9 +67,10 @@
 
     <% map = ConnectionsMap.for_company(p) %>
     <%# Nothing to list, no empty column (it held a gap open under the name). %>
-    <% if map.edges.any? || p.deals.any? || plants.any? %><div class="nd-company__main nd-secs">
-      <%# Connections (#363, #561): in the middle column, before Deals and links. %>
+    <% if map.edges.any? || p.deals.any? || plants.any? || p.latest.any? %><div class="nd-company__main nd-secs">
+      <%# Connections (#363, #561): in the middle column, before Latest and Deals and links. %>
       <%= render("shared/connections_map", map:) if map.edges.any? %>
+      <%= render "shared/latest", items: p.latest if p.latest.any? %>
       <% if p.deals.any? %>
         <section aria-labelledby="deals-heading" id="deals">
           <%= render "shared/section_head", title: "Deals and links", count: deal_count(p), id: "deals-heading" %>

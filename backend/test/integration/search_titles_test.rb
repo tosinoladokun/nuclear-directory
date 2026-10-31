@@ -44,7 +44,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: utility.slug)
 
     assert_select "head > title", "Alabama Power: plants | Nuclear Directory"
-    assert_match(/\AAlabama Power: Utility in Birmingham, AL\. 3 plants\.\z/, meta_description)
+    assert_equal "Alabama Power is a utility in Birmingham, AL, with 3 plants.", meta_description
     assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
     assert_equal description, og_description
     assert_no_match(/Plants, sites and deals/, description)

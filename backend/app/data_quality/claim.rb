@@ -48,6 +48,7 @@ module DataQuality::Claim
       about = Array(payload["about"]).map { |entry| entry["name"] }.compact
       "News: “#{payload['title']}”#{" (#{payload['publisher']}, #{payload['published_on']})" if payload['publisher'] || payload['published_on']}" \
         "#{", about #{about.to_sentence}" if about.any?}." \
+        "#{" Headline: “#{payload['headline']}”" if payload['headline'].present?}" \
         "#{" Summary: “#{payload['summary']}”" if payload['summary'].present?}"
     when "organization_alias"
       "#{name_of(payload['organization'])} is also known as “#{payload['alias']}”."

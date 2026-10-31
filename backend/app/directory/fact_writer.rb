@@ -79,7 +79,7 @@ module Directory
         attributes: %i[organization_id facility_id relationship_type ownership_pct description short_phrase started_on ended_on]
       },
       # A news item for "Latest" (#137), the same one by its link.
-      news_item: { model: NewsItem, attributes: %i[url title publisher published_on summary] },
+      news_item: { model: NewsItem, attributes: %i[url title headline publisher published_on summary] },
       # One award, offtake or funding round under its link (#256).
       deal_term: {
         model: DealTerm,
