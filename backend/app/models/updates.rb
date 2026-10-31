@@ -10,6 +10,9 @@ class Updates
   # page: [:company or :plant, slug]
 
   KINDS = %w[Organization Facility Relationship FacilityRelationship OrganizationRole OrganizationTechnology DealTerm LicensingStage NewsItem].freeze
+  # A seed or a bulk approval can approve dozens of one kind of fact in a day
+  # (Data Quality, 31 Oct): at most this many of one kind per day.
+  PER_KIND_PER_DAY = 5
   DEAL_WORDS = { "award" => "Award", "offtake" => "Power deal", "funding_round" => "Funding round", "loan" => "Loan" }.freeze
 
   # Each fact once: the first time a person approved it.
@@ -24,7 +27,14 @@ class Updates
       model = type.constantize
       [ type, model.published.where(id: of_type.map(&:second)).index_by(&:id) ]
     end
-    rows.filter_map { |type, id, at| (record = records[type][id]) && entry(record, at) }.first(limit)
+    seen = Hash.new(0)
+    rows.filter_map do |type, id, at|
+      record = records[type][id] or next
+      group = [ at.to_date, type, record.try(:relationship_type) || record.try(:term_type) ]
+      next if (seen[group] += 1) > PER_KIND_PER_DAY
+
+      entry(record, at)
+    end.first(limit)
   end
 
   private
@@ -59,9 +69,9 @@ class Updates
       [ "#{record.organization.name} #{DirectoryHelper::FACILITY_RELATIONSHIP_VERBS.fetch(record.relationship_type)} #{record.facility.name}",
         record.description, plant(record.facility.parent || record.facility) ]
     when OrganizationRole
-      [ "#{record.organization.name}: #{DirectoryHelper::ROLE_LABELS.fetch(record.role.key, record.role.name)}", nil, company(record.organization) ]
+      [ "#{record.organization.name} is now listed under #{DirectoryHelper::ROLE_LABELS.fetch(record.role.key, record.role.name)}", nil, company(record.organization) ]
     when OrganizationTechnology
-      [ "#{record.organization.name}: #{record.technology.name}", nil, company(record.organization) ]
+      [ "#{record.organization.name} is now listed under #{record.technology.name}", nil, company(record.organization) ]
     when DealTerm then deal(record)
     when LicensingStage
       on = record.facility ? record.facility.parent || record.facility : record.organization
@@ -75,7 +85,10 @@ class Updates
   end
 
   def deal(term)
+    # The amount and date tell one award from another (Data Quality, 31 Oct).
+    details = [ (usd(term.amount_usd) if term.amount_usd), (term.signed_on || term.starts_on)&.strftime("%b %Y") ].compact
     word = DEAL_WORDS.fetch(term.term_type, term.term_type.humanize)
+    word = "#{word} (#{details.join(', ')})" if details.any?
     case (link = term.link)
     when Organization then [ "#{word}: #{link.name}", nil, company(link) ]
     when Relationship
@@ -89,6 +102,14 @@ class Updates
 
   def company(organization) = ([ :company, organization.slug ] if organization&.slug && Organization.published.exists?(organization.id))
   def plant(facility) = ([ :plant, facility.slug ] if facility&.slug && Facility.published.exists?(facility.id))
+
+  def usd(amount)
+    amount = amount.to_d
+    if amount >= 1_000_000_000 then "$#{format('%g', (amount / 1_000_000_000).round(1))} billion"
+    elsif amount >= 1_000_000 then "$#{format('%g', (amount / 1_000_000).round(1))} million"
+    else "$#{amount.round.to_i.to_fs(:delimited)}"
+    end
+  end
 
   def source_of(record) = record.evidence.joins(:source).order(:id).pick("sources.url")
 end
