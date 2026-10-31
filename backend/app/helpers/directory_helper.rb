@@ -487,7 +487,8 @@ module DirectoryHelper
     sites = company_current_sites(profile).size
     deals = company_signed_deals(profile).size
     with = [ (pluralize(deals, "deal") if deals.positive?), (pluralize(sites, company_places_noun(profile)) if sites.positive?) ].compact.to_sentence(two_words_connector: " and ", last_word_connector: " and ")
-    return if noun.nil? && where.blank? && with.blank?
+    # Nothing beyond the title: a bare role noun, or "a company with 1 plant" (no role, no place), adds nothing.
+    return if where.blank? && (noun.nil? || with.blank?)
 
     kind = noun ? "#{noun.match?(/\A(?:[aeio]|un(?!i))/i) ? "an" : "a"} #{noun}" : "a company"
     "#{profile.name} is #{kind}#{" in #{where}" if where}#{", with #{with}" if with.present? && where}#{" with #{with}" if with.present? && !where}."

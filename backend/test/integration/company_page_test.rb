@@ -408,7 +408,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
 
     assert_select ".nd-gaps", 0
     # No written description: the one factual sentence from its published facts (Outcome 30 Nov), never a guess; an unsigned deal isn't counted.
-    assert_select ".nd-pagehead__about", /\AGoogle is a power buyer\.\z/
+    assert_select ".nd-pagehead__about", 0, "a bare role alone adds nothing the title doesn't"
     assert_select ".nd-glance dt", text: "Headquarters", count: 0
   end
 

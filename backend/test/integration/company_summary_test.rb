@@ -18,10 +18,14 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     assert_match(/\A#{Regexp.escape(sentence)}/, css_select("meta[name='description']").first["content"])
   end
 
-  test "an enrichment company takes 'an', and a company with only a role is still one sentence" do
-    centrus = cite!(company("Centrus Energy", roles: [ role("enrichment") ]))
+  test "an enrichment company takes 'an'; a bare role alone, or a bare 'company with 1 plant', says nothing the title doesn't (DQ)" do
+    centrus = cite!(company("Centrus Energy", roles: [ role("enrichment") ], city: "Bethesda", state: "MD"))
     get company_path(slug: centrus.slug)
-    assert_select ".nd-pagehead__about", "Centrus Energy is an enrichment company."
+    assert_select ".nd-pagehead__about", "Centrus Energy is an enrichment company in Bethesda, MD."
+
+    bare = cite!(company("Bare Role Co", roles: [ Role.find_by!(key: "enrichment") ]))
+    get company_path(slug: bare.slug)
+    assert_select ".nd-pagehead__about", 0
   end
 
   test "only what is in effect and signed is counted: an ended site link, an investment and an unsigned deal are not" do
