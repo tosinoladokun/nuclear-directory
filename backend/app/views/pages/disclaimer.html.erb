@@ -3,42 +3,32 @@
   <link rel="canonical" href="<%= disclaimer_url %>">
   <meta name="description" content="Nuclear Directory is built from public sources. It may be incomplete or out of date, and it isn't safety or investment advice.">
 <% end %>
-<%= render "shared/site_header" %>
-
-<main class="nd-page nd-page--narrow nd-prose">
-  <h1 class="type-title-md">Disclaimer</h1>
-  <p class="type-body"><strong>In short:</strong> Nuclear Directory is a reference built from public sources. Check a fact's source before you rely on it.</p>
-
-  <section aria-labelledby="sources">
-    <h2 id="sources" class="type-body-strong">Sources</h2>
-    <p class="type-body">Every fact comes from a public source.</p>
-    <ul class="type-body">
-      <li>Sources are company announcements, regulator filings and news reports.</li>
-      <li>Each fact links to the source it came from and shows when we last checked it.</li>
-    </ul>
+<%= render layout: "pages/frame", locals: { current: :disclaimer, title: "Disclaimer", updated: "October 2026",
+      summary: "Nuclear Directory is a reference built from public sources. Check a fact's source before you rely on it.",
+      facts: [ { label: "Built from", value: "Public sources" }, { label: "Checked", value: "Fact by fact" },
+               { label: "Advice", value: "None given" }, { label: "Corrections", value: "Welcome" } ] } do %>
+  <section class="nd-info__sec" aria-labelledby="sources">
+    <h2 id="sources" class="nd-info__h">Sources</h2>
+    <p>Every fact comes from a public source: company announcements, regulator filings and news reports. Each fact links to the source it came from and shows when we last checked it.</p>
   </section>
 
-  <section aria-labelledby="currency">
-    <h2 id="currency" class="type-body-strong">Accuracy</h2>
-    <p class="type-body">The directory may be incomplete or out of date.</p>
-    <ul class="type-body">
-      <li>Companies change names, deals end and plans move.</li>
-      <li>Check the source and its date before you rely on a fact.</li>
-    </ul>
+  <section class="nd-info__sec" aria-labelledby="currency">
+    <h2 id="currency" class="nd-info__h">Accuracy</h2>
+    <p>The directory may be incomplete or out of date. Companies change names, deals end and plans move. Check the source and its date before you rely on a fact.</p>
   </section>
 
-  <section aria-labelledby="advice">
-    <h2 id="advice" class="type-body-strong">Advice</h2>
-    <p class="type-body">Nothing here is safety, engineering, legal or investment advice.</p>
+  <section class="nd-info__sec" aria-labelledby="advice">
+    <h2 id="advice" class="nd-info__h">Advice</h2>
+    <p>Nothing here is safety, engineering, legal or investment advice.</p>
   </section>
 
-  <section aria-labelledby="endorsement">
-    <h2 id="endorsement" class="type-body-strong">Endorsement</h2>
-    <p class="type-body">A company, plant or deal appears because a source reports it, not because we recommend it.</p>
+  <section class="nd-info__sec" aria-labelledby="endorsement">
+    <h2 id="endorsement" class="nd-info__h">Endorsement</h2>
+    <p>A company, plant or deal appears because a source reports it, not because we recommend it.</p>
   </section>
 
-  <section aria-labelledby="mistakes">
-    <h2 id="mistakes" class="type-body-strong">Corrections</h2>
-    <p class="type-body">Use "Report a correction" next to any fact, or email <%= mail_to DirectoryHelper::CORRECTIONS_EMAIL, nil, class: "nd-link" %>. We check every correction against its source.</p>
+  <section class="nd-info__sec" aria-labelledby="mistakes">
+    <h2 id="mistakes" class="nd-info__h">Corrections</h2>
+    <p>Use "Report a correction" next to any fact, or email <%= mail_to DirectoryHelper::CORRECTIONS_EMAIL, nil, class: "nd-link" %>. We check every correction against its source.</p>
   </section>
-</main>
+<% end %>

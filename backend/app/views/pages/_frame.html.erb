@@ -1,0 +1,25 @@
+<%# One About set (#660): About · Our data · Our crawler · Privacy · Disclaimer, with the company page's index on the left
+    (chips on phones), a 40px title and a plain summary, the page's key facts in the Glance panel, short sections under
+    22px headings, and a "Last updated" line. Locals: current (:about, :data, :bot, :privacy, :disclaimer), title, summary,
+    facts ([{ label:, value: }]), updated ("October 2026"). The sections are the block. %>
+<%= render "shared/site_header" %>
+<main class="nd-page nd-page--wide">
+  <div class="nd-company nd-info">
+    <div class="nd-company__index">
+      <%= render "shared/index", items: info_pages.map { |label, key, path| { label:, href: path, current: key == current } }, label: "About this site" %>
+    </div>
+    <%# Phones: the same five pages as one scrolling row of chips. %>
+    <nav class="nd-chips nd-info__chips" data-controller="pill-row" aria-label="About this site">
+      <% info_pages.each do |label, key, path| %><%= render "shared/chip", label:, href: path, current: key == current %><% end %>
+    </nav>
+    <header class="nd-company__head nd-info__head">
+      <h1 class="nd-info__title"><%= title %></h1>
+      <p class="nd-info__summary"><%= summary %></p>
+    </header>
+    <% if facts.present? %><div class="nd-company__glance"><%= render "shared/glance", facts: %></div><% end %>
+    <div class="nd-company__main nd-info__body">
+      <%= yield %>
+      <p class="nd-info__updated type-data-sm">Last updated <%= updated %></p>
+    </div>
+  </div>
+</main>

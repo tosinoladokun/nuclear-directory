@@ -1,54 +1,37 @@
 <% content_for :title, "About · Nuclear Directory" %>
 <% content_for :head do %>
   <link rel="canonical" href="<%= about_url %>">
-  <meta name="description" content="Nuclear Directory is a free, sourced reference to the companies and plants of the US nuclear industry. How it is checked, how it is licensed and how to cite it.">
+  <meta name="description" content="Nuclear Directory is a free, sourced reference to the companies and plants of the US nuclear industry. How it is built, how to use the data and who runs it.">
 <% end %>
-<%= render "shared/site_header" %>
-
-<main class="nd-page nd-page--narrow nd-prose">
-  <h1 class="type-title-md">About</h1>
-  <p class="type-body"><strong>In short:</strong> Nuclear Directory is a free reference to the companies and plants of the US nuclear industry. Every fact comes from a public source, listed on its page.</p>
-
-  <section aria-labelledby="what">
-    <h2 id="what" class="type-body-strong">What it is</h2>
-    <p class="type-body">The directory lists US companies, power plants and sites across the whole industry, from fuel and reactor developers to waste, research and investors. It also shows how they are connected: who owns, operates, supplies or buys from whom.</p>
+<%= render layout: "pages/frame", locals: { current: :about, title: "About", updated: "October 2026",
+      summary: "Nuclear Directory is a free reference to the companies and plants of the US nuclear industry. Every fact links to the public source it came from.",
+      facts: [ { label: "Covers", value: "US nuclear industry" }, { label: "Sources", value: "Public records" },
+               { label: "Data licence", value: "CC BY 4.0" }, { label: "Code licence", value: "MIT" },
+               { label: "Dataset", value: "v2026.11", note: "DOI 10.5281/zenodo.23703377" }, { label: "Price", value: "Free" } ] } do %>
+  <section class="nd-info__sec" aria-labelledby="what">
+    <h2 id="what" class="nd-info__h">What it is</h2>
+    <p>The directory lists US companies, power plants and sites across the whole industry, from fuel and reactor developers to waste, research and investors. It also shows how they are connected: who owns, operates, supplies or buys from whom.</p>
   </section>
 
-  <section aria-labelledby="checked">
-    <h2 id="checked" class="type-body-strong">How it is checked</h2>
-    <ul class="type-body">
-      <li>A fact is published only with a public source: a regulator or agency record, a filing, the party's own announcement, or named news or trade reporting. A power deal, investment or award needs a regulator, filing or party source.</li>
-      <li>Directories and aggregators are leads, never sources.</li>
-      <li>Sources are listed on each page, and each page shows when it was last checked.</li>
-      <li>Corrections are checked against the source before anything changes.</li>
-    </ul>
-    <p class="type-body">See also the <%= link_to "disclaimer", disclaimer_path, class: "nd-link" %>.</p>
+  <section class="nd-info__sec" aria-labelledby="built">
+    <h2 id="built" class="nd-info__h">How it's built</h2>
+    <p>A fact is published only with a public source: a regulator or agency record, a filing, the party's own announcement, or named news or trade reporting. A power deal, investment or award needs a regulator, filing or party source. Directories and aggregators are leads, never sources.</p>
+    <p>A person checks each fact against its source before it goes live. Each page lists its sources and shows when it was last checked. Corrections are checked against the source before anything changes. Read the <%= link_to "disclaimer", disclaimer_path, class: "nd-link" %> too.</p>
   </section>
 
-  <section aria-labelledby="licences">
-    <h2 id="licences" class="type-body-strong">Licences</h2>
-    <ul class="type-body">
-      <li>The code is open source under the <%= link_to "MIT License", "https://github.com/tosinoladokun/nuclear-directory/blob/main/LICENSE", class: "nd-link", rel: "noopener noreferrer" %>.</li>
-      <li>The data is open under <%= link_to "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/", class: "nd-link", rel: "noopener noreferrer" %>. Reuse it with credit.</li>
-      <li>Short source quotations stay the property of their owners.</li>
-    </ul>
+  <section class="nd-info__sec" aria-labelledby="data">
+    <h2 id="data" class="nd-info__h">How to use the data</h2>
+    <p>Every published fact is free to download as CSV or JSON from the <%= link_to "data page", data_path, class: "nd-link" %>, which also has the schema. The data is open under <%= link_to "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/", class: "nd-link", rel: "noopener noreferrer" %>: reuse it with credit. The code is open source under the <%= link_to "MIT License", "https://github.com/tosinoladokun/nuclear-directory/blob/main/LICENSE", class: "nd-link", rel: "noopener noreferrer" %>. Short source quotations stay the property of their owners.</p>
+    <p>To cite the dataset, name the release you used and the day you downloaded it: Nuclear Directory (2026), <%= link_to "doi:10.5281/zenodo.23703377", "https://doi.org/10.5281/zenodo.23703377", class: "nd-link", rel: "noopener noreferrer" %>. That DOI covers every release. Each release has its own version DOI on Zenodo, and its README gives the full citation.</p>
   </section>
 
-  <section aria-labelledby="cite">
-    <h2 id="cite" class="type-body-strong">How to cite</h2>
-    <p class="type-body">Cite the dataset, and say which release you used and the day you downloaded it:</p>
-    <p class="type-data">Nuclear Directory (2026). <%= link_to "doi:10.5281/zenodo.23703377", "https://doi.org/10.5281/zenodo.23703377", class: "nd-link", rel: "noopener noreferrer" %></p>
-    <p class="type-body">The files, the schema and the full citation are on the <%= link_to "data page", data_path, class: "nd-link" %>.</p>
-    <p class="type-body">That DOI covers every release. Each release has its own version DOI on Zenodo, and its README gives the full citation.</p>
+  <section class="nd-info__sec" aria-labelledby="who">
+    <h2 id="who" class="nd-info__h">Who runs it</h2>
+    <p><%= link_to "Tosin Oladokun", "https://tosinoladokun.com", class: "nd-link", rel: "noopener noreferrer" %> builds and runs Nuclear Directory. Hosting is supported by <%= link_to "Render", "https://render.com", class: "nd-link", rel: "noopener noreferrer", target: "_blank" %>.</p>
   </section>
 
-  <section aria-labelledby="thanks">
-    <h2 id="thanks" class="type-body-strong">Thanks</h2>
-    <p class="type-body">Hosting is supported by <%= link_to "Render", "https://render.com", class: "nd-link", rel: "noopener noreferrer", target: "_blank" %>.</p>
+  <section class="nd-info__sec" aria-labelledby="contact">
+    <h2 id="contact" class="nd-info__h">Get in touch</h2>
+    <p>Found a mistake or have a source we missed? Use "Report a correction" on any page, or email <%= mail_to DirectoryHelper::CORRECTIONS_EMAIL, nil, class: "nd-link" %>.</p>
   </section>
-
-  <section aria-labelledby="contact">
-    <h2 id="contact" class="type-body-strong">Contact</h2>
-    <p class="type-body">Found a mistake or have a source we missed? Email <%= mail_to DirectoryHelper::CORRECTIONS_EMAIL, nil, class: "nd-link" %>.</p>
-  </section>
-</main>
+<% end %>

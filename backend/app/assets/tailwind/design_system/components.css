@@ -842,7 +842,8 @@
   /* One calm line on desktop: the links left, the Render credit right. Each
      item stays whole; on a phone they wrap as items, never as words. */
   .nd-footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--nd-space-6); }
-  .nd-footer__links a, .nd-footer__credit { white-space: nowrap; }
+  .nd-footer__links a, .nd-footer__credit, .nd-footer__col a { white-space: nowrap; }
+  .nd-info a[href^="mailto:"] { white-space: nowrap; }
   @media (max-width: 639px) { .nd-footer { flex-direction: column; align-items: flex-start; } .nd-footer__links { gap: 0 var(--nd-space-4); } }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -1544,6 +1545,48 @@
     .nd-partygroup .nd-crow__who { display: flex; flex: 0 1 280px; max-width: none; }
     .nd-partygroup .nd-crow__who .nd-crow__name { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nd-partygroup .nd-crow__what { flex: 0 0 auto; min-width: 0; }
+  }
+}
+
+/* The About set's frame (#660): a 40px title (30px on phones), the summary as a 19px sentence, short sections under 22px
+   headings with a 1px rule between (an ink rule above the first), a code box with Copy, and a mono "Last updated". */
+@layer components {
+  .nd-info__title { margin: 0; font: 600 40px/46px var(--font-text); }
+  .nd-info__summary { margin: var(--nd-space-3) 0 0; max-width: 640px; font: 400 19px/29px var(--font-text); color: var(--nd-ink); }
+  .nd-info__body { gap: 0; }
+  .nd-info__sec { display: flex; flex-direction: column; gap: var(--nd-space-3); padding: var(--nd-space-8) 0; max-width: var(--nd-prose-max, 640px); border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-info__sec:first-of-type { border-top: 1px solid var(--nd-ink); }
+  .nd-info__sec p { margin: 0; font: 400 16px/26px var(--font-text); }
+  /* Lists keep their bullets, indent and spacing (the .nd-prose rules don't reach this frame). */
+  .nd-info__sec ul, .nd-info__sec ol { margin: 0; padding-left: var(--nd-space-6); display: flex; flex-direction: column; gap: var(--nd-space-2); list-style: disc; font: 400 16px/26px var(--font-text); }
+  .nd-info__sec ol { list-style: decimal; }
+  .nd-info__sec li::marker { color: var(--nd-ink-muted); }
+  .nd-info__h { margin: 0; font: 600 22px/30px var(--font-text); }
+  .nd-info__updated { margin: var(--nd-space-6) 0 0; color: var(--nd-ink-muted); }
+  .nd-info__chips { display: none; margin-bottom: var(--nd-space-4); }
+  .nd-codebox { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-space-4); padding: var(--nd-space-3) var(--nd-space-4); background: var(--nd-paper-raised); border-radius: var(--nd-radius-md, 8px); }
+  .nd-codebox__text { margin: 0; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 13px/20px var(--font-mono); }
+  @media (max-width: 1023px) {
+    .nd-info__chips { display: flex; }
+    .nd-info__title { font-size: 30px; line-height: 34px; }
+  }
+}
+
+/* The footer (#660): three columns and a count line on desktop; today's wrapped row of small links on phones. */
+@layer components {
+  .nd-footer__desk { display: none; }
+  @media (min-width: 760px) {
+    .nd-footer { border-top: 1px solid var(--nd-ink); display: block; padding-block: var(--nd-space-8) var(--nd-space-8); }
+    .nd-footer__links { display: none; }
+    .nd-footer__desk { display: grid; grid-template-columns: minmax(max-content, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--nd-space-10); row-gap: var(--nd-space-6); align-items: start; }
+    .nd-footer__mark { display: block; color: var(--nd-ink); }
+    .nd-footer__mark .nd-wordmark__svg { height: auto; width: 100%; max-width: 297px; aspect-ratio: 15356 / 1760; display: block; }
+    .nd-footer__brand p { margin: var(--nd-space-3) 0 0; white-space: nowrap; }
+    .nd-footer__col { display: flex; flex-direction: column; gap: var(--nd-space-2); }
+    .nd-footer__col a { font: 400 15px/24px var(--font-text); color: var(--nd-ink); text-decoration: none; }
+    .nd-footer__col a:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .nd-footer__label { margin: 0 0 var(--nd-space-1); font: 500 11px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
+    .nd-footer__count { grid-column: 1 / -1; margin: 0; padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); font: 400 12px/18px var(--font-mono); color: var(--nd-ink-muted); }
   }
 }
 
