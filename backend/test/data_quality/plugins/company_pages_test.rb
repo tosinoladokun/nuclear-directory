@@ -418,4 +418,26 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal 0, descriptions.(HOME), "the home page yields to the About page"
     assert_equal 1, descriptions.(ABOUT)
   end
+
+  test "a CIK company with a malformed website: EDGAR is read, the website skipped, the request finished" do
+    @company.update_columns(website: "https://bad host", sec_cik: "0001018724", enrich_requested_at: Time.current)
+    stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{data\.sec\.gov/submissions/CIK0001018724\.json}).to_return(body: { name: "ACME", addresses: { business: {} } }.to_json)
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    assert_equal 1, stats["companies"]
+    assert @company.reload.enriched_at
+  end
+
+  test "the description page: who-we-are and about.html count as About; a blocked About page yields to the home page" do
+    plugin = DataQuality::Plugins::CompanyPages.new
+    home = Source.create!(url: HOME, source_kind: "company_pages", crawl_status: "ok", content_text: "x", enrich_organization_id: @company.id)
+    who = Source.create!(url: "https://www.acmefission.com/who-we-are", source_kind: "company_pages", crawl_status: "ok", content_text: "x", enrich_organization_id: @company.id)
+    company = DataQuality::DirectoryClient.new.organization(id: @company.id)
+    assert plugin.send(:description_page?, who, company)
+    refute plugin.send(:description_page?, home, company)
+
+    who.update_columns(crawl_status: "blocked")
+    assert plugin.send(:description_page?, home, company), "an unreadable About page doesn't win"
+    assert_match DataQuality::Plugins::CompanyPages::ABOUT_PAGE, "/about.html"
+  end
 end

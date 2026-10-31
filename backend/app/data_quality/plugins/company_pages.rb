@@ -138,7 +138,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       # A home page that couldn't be read is answered as read (the Enrich page
       # shows why, from the page's own status), and a new request reads again.
-      if (home = page(website, for_id: id))
+      # A malformed website (EDGAR-only companies may have one) is skipped, never stops the run.
+      if @directory.readable_website?(website) && (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         own_links(home).first(PAGES).each do |url|
@@ -173,14 +174,18 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   end
 
   private
-    # This read's pages for the company: an About page wins, then the home page.
+    # The company's one description page, the same on every read and retry:
+    # among its readable pages (read for it, or on its domain and read for no
+    # one), an About-like page wins, then the home page, then the oldest.
+    ABOUT_PAGE = %r{/(?:about(?:-us)?|who-we-are|our-company|company)(?:\.html?)?/?\z}i
     def description_page?(source, company)
-      pages = Source.where(source_kind:).where(enrich_organization_id: company.id).or(Source.where(source_kind:, domain: source.domain))
-        .where(fetched_at: 1.day.ago..).where.not(content_text: [ nil, "" ]).pluck(:id, :url)
+      pages = Source.crawl_ok.where(source_kind:).where.not(content_text: [ nil, "" ])
+      pages = pages.where(enrich_organization_id: company.id)
+        .or(pages.where(enrich_organization_id: nil, domain: source.domain)).pluck(:id, :url)
       return true if pages.size <= 1
 
       path = ->(url) { URI(url).path.to_s rescue "" }
-      chosen = pages.find { |_, url| path.(url).match?(%r{/about(?:-us)?/?\z}i) } || pages.find { |_, url| path.(url).delete("/").empty? } || pages.min_by(&:first)
+      chosen = pages.find { |_, url| path.(url).match?(ABOUT_PAGE) } || pages.find { |_, url| path.(url).delete("/").empty? } || pages.min_by(&:first)
       chosen.first == source.id
     end
 
