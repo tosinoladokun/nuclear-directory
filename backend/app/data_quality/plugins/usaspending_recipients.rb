@@ -73,7 +73,9 @@ class DataQuality::Plugins::UsaspendingRecipients < DataQuality::Plugin
       @directory.same_brand_organizations(name).then { |brand| brand.first if brand.one? }
     return [] if company && @directory.organization_hq_city(company.id)
     quote = lines.select { |line| line.start_with?("Recipient: ", "Address: ", "City: ", "State: ") }.join("\n")
-    [ { kind: "organization", quote:, payload: { "name" => name, "aliases" => ([ facts["Recipient"] ] if name != facts["Recipient"]),
+    # USAspending's spelling as an alias only when the company doesn't answer to it yet, in any case (DQ, 31 Oct).
+    alias_needed = name != facts["Recipient"] && company.nil?
+    [ { kind: "organization", quote:, payload: { "name" => name, "aliases" => ([ facts["Recipient"] ] if alias_needed),
       "hq_city" => facts["City"].titleize, "hq_state" => facts["State"] }.compact } ]
   end
 
