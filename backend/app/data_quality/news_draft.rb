@@ -26,12 +26,16 @@ class DataQuality::NewsDraft
     @llm = client
   end
 
-  # The model client, when one is configured (never in tests unless set).
+  # The model client, when one is fully configured (key and both models);
+  # never in tests, where only an injected one is used.
   def self.llm
     return @llm if defined?(@llm) && @llm
-    return unless DataQuality::Config.from_env.api_key
+    return if Rails.env.test?
 
+    DataQuality::Config.from_env.validate!
     DataQuality::OpenRouter::Client.new
+  rescue DataQuality::Config::ConfigurationError
+    nil
   end
 
   def initialize(llm: self.class.llm)

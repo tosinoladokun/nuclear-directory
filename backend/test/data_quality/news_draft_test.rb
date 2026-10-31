@@ -52,4 +52,8 @@ class DataQuality::NewsDraftTest < ActiveSupport::TestCase
     short = apply(nil, [ news("summary" => "Holtec signed a fuel deal. The post X appeared first on Holtec International.") ]).sole[:payload]
     assert_equal "Holtec signed a fuel deal.", short["summary"]
   end
+
+  test "no client in tests unless injected, and none when a model setting is missing" do
+    assert_nil DataQuality::NewsDraft.llm
+  end
 end
