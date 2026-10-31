@@ -1,0 +1,24 @@
+<%# "Latest" on a company or plant page (#137): up to three approved news items, newest first; the date in mono, the
+    headline, and the source's domain as the link out. No news page. Locals: items (NewsItems). %>
+<section aria-labelledby="latest-heading" id="latest" class="nd-latest">
+  <%= render "shared/section_head", title: "Latest", count: items.size, id: "latest-heading" %>
+  <ul class="nd-lines nd-lines--news">
+    <% items.each do |item| %>
+      <% headline = news_headline(item) %>
+      <li class="nd-news">
+        <time class="nd-news__date" datetime="<%= data_date(item.published_on) %>"><%= data_date(item.published_on) %></time>
+        <span class="nd-news__what">
+          <span class="nd-news__title" title="<%= headline %>" data-truncate><%= headline %></span>
+          <% if (summary = item.summary.to_s.squish.truncate(160, separator: " ").presence) %><span class="nd-news__summary" title="<%= item.summary.to_s.squish %>" data-truncate><%= summary %></span><% end %>
+        </span>
+        <% publisher = news_publisher(item) %>
+        <% if safe_source_url(item) %>
+          <%= link_to item.url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "news" },
+                aria: { label: "#{headline}: read on #{publisher} (opens the source)" } do %><%= publisher %><span aria-hidden="true"> ↗</span><% end %>
+        <% else %>
+          <span class="nd-news__src type-small text-ink-muted"><%= publisher %></span>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+</section>

@@ -47,6 +47,7 @@
     cite_text = "Nuclear Directory. “#{p.name}.” #{plant_url(slug: p.slug)}. Accessed #{Date.current.strftime("%-d %B %Y")}."
     covers = ->(parties) { parties.filter_map { |party| p.units_phrase(party) }.presence&.join("; ") }
     index = [ { label: "Overview", href: "#overview", current: true } ]
+    index << { label: "Latest", href: "#latest", count: p.latest.size } if p.latest.any?
     index << { label: parties_index, href: "#parties", count: parties_count } if parties_count.positive?
     index << { label: "Deals and links", href: "#deals", count: buyer_parties.size } if buyer_parties.any?
     index << { label: "Units", href: "#units", count: p.units.size } if p.units.any?
@@ -79,6 +80,7 @@
     <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
 
     <div class="nd-company__main nd-secs">
+      <%= render "shared/latest", items: p.latest if p.latest.any? %>
       <% if parties_count.positive? %>
         <section aria-labelledby="parties-heading" id="parties">
           <%= render "shared/section_head", title: parties_title, count: parties_count, id: "parties-heading" %>
