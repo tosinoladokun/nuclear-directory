@@ -15,7 +15,7 @@ class SearchExtrasController < ApplicationController
 
   private
     def payload
-      counted = Tag.all.map { |tag| [ tag, Organization.where(id: tag.organization_ids).count ] }.select { |_, count| count.positive? }
+      counted = Tag.all.map { |tag| [ tag, Organization.published.where(id: tag.organization_ids).count ] }.select { |_, count| count.positive? }
       tags = counted.sort_by { |tag, count| [ -count, tag.key ] }.map do |tag, count|
         { s: tag.key, n: tag.name, a: SYNONYMS.fetch(tag.key, []), c: count, i: icon_for(tag) }
       end
