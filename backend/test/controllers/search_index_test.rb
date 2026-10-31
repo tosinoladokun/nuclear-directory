@@ -30,8 +30,8 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
     assert_equal [ "p", [ "Index Nuclear Station" ], "Power plant · Glen Rose, TX" ], plant.values_at("k", "a", "m")
     assert_match "<svg", json["icons"].fetch(plant["i"])
     assert_equal [ "6145", "05000445" ], plant["x"], "the site's EIA ID and its unit's docket"
-    assert_equal PublicPages.new.tags.map(&:key), json["items"].select { |item| item["k"] == "t" }.map { |item| item["s"] }
-    assert_equal json["items"].filter_map { |item| item["i"] }.uniq.sort, json["icons"].keys.sort
+    assert_equal PublicPages.new.tags.map(&:key), json["tags"].map { |tag| tag["s"] }
+    assert_equal (json["items"] + json["tags"]).filter_map { |item| item["i"] }.uniq.sort, json["icons"].keys.sort
     assert_equal SearchIndex.version, json["v"]
   end
 
@@ -46,5 +46,15 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
     get search_index_path, headers: { "If-None-Match" => etag }
     assert_response :success
     assert_equal "Microreactors", JSON.parse(response.body)["items"].find { |c| c["s"] == "index-reactors" }["d"]
+  end
+
+  test "topics: a tag that lists someone, with its words, count and icon" do
+    role = Role.find_or_create_by!(key: "enrichment") { |r| r.name = "Enrichment" }
+    link = OrganizationRole.create!(organization: @company, role:, verification_status: "verified", verified_by: BY)
+    page = Source.create!(url: "https://example.com/enrich", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "t")
+    Evidence.create!(subject: link, source: page, quote: "t", found_by: "human")
+    tag = index_json["tags"].find { |t| t["s"] == "enrichment" }
+    assert_equal [ "Enrichment", 1 ], tag.values_at("n", "c")
+    assert_includes tag["a"], "haleu"
   end
 end

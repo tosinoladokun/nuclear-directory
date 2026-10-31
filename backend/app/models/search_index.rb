@@ -8,15 +8,16 @@
 #     "items" => [ { "k" => "c" or "p", "s" => slug, "n" => name, "sn" => short name, "a" => [ other names ],
 #                    "d" => short description, "m" => "Reactor designer · Seattle, WA", "i" => icon key,
 #                    "b" => "nd-bucket--fuel", "c" => connection count,
-#                    "x" => [ IDs people search by: ticker; NRC dockets and EIA plant ID of a site and its units ] },
-#                  { "k" => "t", "s" => tag key, "n" => "HALEU" } ] }   # a topic: /companies?tag=key
+#                    "x" => [ IDs people search by: ticker; NRC dockets and EIA plant ID of a site and its units ] } ],
+#     "tags" => [ { "s" => tag key, "n" => "Small modular reactors", "a" => [ "smr", "small modular" ],
+#                   "c" => company count, "i" => icon key } ] }   # a topic page: /companies?tag=key
 #
-# Companies, then plant sites (each Most connected first), then topics. Empty keys are left out.
+# Companies, then plant sites, each Most connected first. Empty keys are left out.
 class SearchIndex
   # Changes whenever anything the index shows may have changed: a row
   # updated, added or deleted (the count) in any table it reads.
   def self.version
-    stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship ]
+    stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship, Evidence ]
       .map { |model| model.pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
     Digest::SHA256.hexdigest(stamps.join("|")).first(16)
   end
@@ -25,8 +26,8 @@ class SearchIndex
 
   def as_json(*)
     @icons = {}
-    items = companies + plants + topics
-    { "v" => self.class.version, "icons" => @icons, "items" => items }
+    items = companies + plants
+    { "v" => self.class.version, "icons" => @icons, "items" => items, "tags" => topics }
   end
 
   private
@@ -55,8 +56,22 @@ class SearchIndex
     end
   end
 
-  # The topic pages that list someone (PublicPages#tags), found by their words.
-  def topics = PublicPages.new.tags.map { |tag| { "k" => "t", "s" => tag.key, "n" => tag.name } }
+  # Words people type for a topic besides its name (Tosin, 31 Oct: "HALEU", "SMR").
+  TOPIC_WORDS = {
+    "smr" => [ "smr", "smrs", "small modular" ], "uranium" => [ "mining", "milling", "uranium mining" ],
+    "enrichment" => [ "haleu", "leu", "enriched uranium" ], "fuel-fabrication" => [ "fuel", "triso", "fabrication" ],
+    "isotopes" => [ "medical isotopes", "radioisotopes" ], "national-labs" => [ "national lab", "doe lab" ],
+    "venture-capital" => [ "vc", "investors" ], "data-center-buyers" => [ "data centers", "hyperscalers" ]
+  }.freeze
+
+  # The topic pages that list someone (PublicPages#tags), with their words, count and icon.
+  def topics
+    PublicPages.new.tags.map do |tag|
+      icon, bucket = h.tag_square(tag, size: 16)
+      compact("s" => tag.key, "n" => tag.name, "a" => TOPIC_WORDS[tag.key], "c" => Organization.where(id: tag.organization_ids).count,
+        "i" => (icon_key("tag-#{tag.key}-16") { icon } if icon), "b" => (h.bucket_class(bucket) if bucket))
+    end
+  end
 
   def plants
     list = DirectoryListing.new(category: "plants").plants.to_a
