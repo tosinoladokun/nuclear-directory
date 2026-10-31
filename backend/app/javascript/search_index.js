@@ -15,10 +15,10 @@ export function prepare(payload) {
     ...(payload.companies || []).map((c) => ({ ...c, k: "c", i: c.c ? `bucket-${c.c}` : "buildings", b: c.c ? `nd-bucket--${c.c}` : null })),
     ...(payload.plants || []).map((p) => ({ ...p, k: "p" }))
   ]
-  const items = listed.map((item) => {
+  const items = listed.map((item, position) => {
     const names = [item.n, item.sn].filter(Boolean).map(normalise)
     const aliases = [ ...(item.a || []), ...(item.x || []) ].map(normalise).filter(Boolean)
-    return { item, names, aliases, name: names[0], nameWords: unique(names.flatMap((n) => n.split(" "))), aliasWords: unique(aliases.flatMap((a) => a.split(" "))), descWords: normalise(item.d).split(" ").filter(Boolean) }
+    return { item, position, names, aliases, name: names[0], nameWords: unique(names.flatMap((n) => n.split(" "))), aliasWords: unique(aliases.flatMap((a) => a.split(" "))), descWords: normalise(item.d).split(" ").filter(Boolean) }
   })
   const tags = (payload.tags || []).map((tag) => ({ tag, names: [tag.n, tag.s, ...(tag.a || [])].map(normalise).filter(Boolean) }))
   return { icons: payload.icons || {}, items, tags }
@@ -77,7 +77,7 @@ function closeScore(entry, tokens) {
 }
 
 function rank(found) {
-  return found.sort((a, b) => b.score - a.score || (b.item.c || 0) - (a.item.c || 0) || a.name.length - b.name.length || a.name.localeCompare(b.name)).map((entry) => entry.item)
+  return found.sort((a, b) => b.score - a.score || a.position - b.position).map((entry) => entry.item)
 }
 
 // Topic pages (HALEU, fusion, SMR, enrichment...) whose name or words the typed text starts, at most two, biggest first.
