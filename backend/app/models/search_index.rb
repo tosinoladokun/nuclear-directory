@@ -1,6 +1,8 @@
 # Instant search's index (#696): every published company and plant site,
 # compact, for the browser to filter as people type and draw the same rows
-# as today's instant results. Only what the public pages show. Shape agreed
+# as today's instant results. Only what the public pages show, plus public
+# identifiers to search by: NRC dockets and EIA plant IDs (both in the open
+# dataset) and stock tickers. Shape agreed
 # with Site (31 Oct):
 #
 #   { "v" => version,
