@@ -328,6 +328,7 @@ class DataQuality::DirectoryClient
   def facility_by_slug(slug) = lookup.facility(slug:)
   def evidence_rows(type:, id:) = lookup.evidence_rows(type:, id:)
   def role_key?(key) = lookup.role_key?(key)
+  def readable_website?(url) = lookup.readable_website?(url)
   def sourced_role?(organization_id) = lookup.sourced_role?(organization_id)
   def role_keys(organization_id) = lookup.role_keys(organization_id)
   def organization_hq_city(id) = lookup.organization_hq_city(id)

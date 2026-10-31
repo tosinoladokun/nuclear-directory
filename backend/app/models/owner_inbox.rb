@@ -74,7 +74,7 @@ class OwnerInbox
     end
   end
 
-  def checked = sections.values_at("new_record", "new_fact").flatten.select(&:checked)
+  def checked = checkable.select(&:checked)
 
   # What "Yes to all" takes: each checked fact's first copy as Data Quality's
   # call on it, for Recommendations.accept (rechecked under its locks).
@@ -85,7 +85,8 @@ class OwnerInbox
         snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
     end
   end
-  def checkable = sections.values_at("new_record", "new_fact").flatten
+  # New records and facts, and changes that only fill blanks (#676).
+  def checkable = sections.values_at("new_record", "new_fact").flatten + sections["change"].select { |entry| entry.changes.present? && entry.changes.values.all? { |(stored, _)| stored.blank? } }
 
   # Decisions a person made in the last week, newest first.
   def recent(limit: 50)

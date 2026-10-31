@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../../data_quality/support/dummy_plugin"
 
 # #548 option a: Data Quality's agent settles company claims through a
 # token-only API; nothing it does publishes, and each action can be undone.
@@ -449,5 +450,50 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "merged or taken off", DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal made.id, wrong.reload.subject_id
     assert_equal "pending", made.reload.verification_status
+  end
+
+  test "propose_fields: sourced values for a published company become one company claim, a Change for Tosin; bad fields are refused" do
+    @page.update!(content_text: "Holtec International is headquartered in Camden, New Jersey.")
+    act({ action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden", hq_state: "NJ", short_description: "Spent fuel storage and SMR design" },
+      quote: "Holtec International is headquartered in Camden, New Jersey.", source_url: @page.url, reason: "Their own about page" },
+      { action: "propose_fields", target: @holtec.id, fields: { name: "Other" }, quote: "q", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { short_description: "x" * 41 }, quote: "q", source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "only website", results.second["error"]
+    assert_match "40 characters at most", results.third["error"]
+    claim = Candidate.find(results.first["id"])
+    assert_equal({ "name" => "Holtec International", "hq_city" => "Camden", "hq_state" => "NJ", "short_description" => "Spent fuel storage and SMR design" }, claim.payload)
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_equal [ "Organization", @holtec.id ], claim.reload.values_at(:subject_type, :subject_id), claim.notes
+    assert_equal "change", DataQuality::Review.inbox_kind(claim)
+    assert_nil @holtec.reload.hq_city, "nothing written until Tosin's Yes"
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "rejected", claim.reload.status
+    act({ action: "propose_fields", target: @holtec.id, fields: { website: "javascript:alert(1)" }, quote: "q", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { description: "x" * 2001 }, quote: "q", source_url: @page.url, reason: "r" })
+    assert_match "full https:// address", results.first["error"]
+    assert_match "2000 characters at most", results.second["error"]
+  end
+
+  test "propose_fields: a blank filled with Data Quality's approve goes through Yes to all; a changed value stays Tosin's own; a list of fields is refused" do
+    @holtec.update!(verified_by: "human:tosin", description: "Spent fuel storage.")
+    Evidence.create!(subject: @holtec, source: @page, quote: "Licensee: Holtec.", found_by: "human")
+    @page.update!(content_text: "Holtec International is headquartered in Camden, New Jersey. Holtec builds reactors.")
+    act({ action: "propose_fields", target: @holtec.id, fields: [ "hq_city" ], quote: "q", source_url: @page.url, reason: "r" })
+    assert_match "give fields", results.sole["error"]
+
+    act({ action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote: "Holtec International is headquartered in Camden, New Jersey.",
+      source_url: @page.url, reason: "Their page" },
+      { action: "propose_fields", target: @holtec.id, fields: { description: "Holtec builds reactors." }, quote: "Holtec builds reactors.",
+        source_url: @page.url, reason: "Their page" })
+    fill, change = results.map { |r| Candidate.find(r["id"]) }
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    [ fill, change ].each { |c| act({ id: c.id, action: "recommend", verdict: "approve", reason: "On their page" }) }
+
+    inbox = OwnerInbox.new
+    assert_equal [ fill.id ], inbox.checked.map { |entry| entry.item.candidate_id }, "only the blank fill joins the one button"
+    result = DataQuality::Recommendations.accept(inbox.checked_items, by: "human:tosin", first_hand: true).sole
+    assert result.ok?, result.errors.inspect
+    assert_equal [ "Camden", "Spent fuel storage." ], @holtec.reload.values_at(:hq_city, :description)
   end
 end
