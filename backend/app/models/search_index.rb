@@ -18,7 +18,7 @@ class SearchIndex
   # updated, added or deleted (the count) in any table it reads.
   def self.version
     stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship, Evidence ]
-      .map { |model| model.pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
+      .map { |model| model.pick(Arel.sql("MAX(#{model.column_names.include?('updated_at') ? 'updated_at' : 'created_at'})"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
     Digest::SHA256.hexdigest(stamps.join("|")).first(16)
   end
 
