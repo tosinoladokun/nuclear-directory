@@ -9,10 +9,18 @@ class NewsItem < ApplicationRecord
   has_many :news_mentions, dependent: :delete_all
 
   normalizes :url, :title, :publisher, with: ->(value) { value.strip.presence }
+  # One line, spaces collapsed, before the 80-character check.
+  normalizes :headline, with: ->(value) { value.squish.presence }
 
   validates :url, presence: true, uniqueness: true, format: { with: %r{\Ahttps?://\S+\z} }
   validates :title, :published_on, presence: true
   validates :confidence, numericality: { in: 0..1 }, allow_nil: true
+  # A short headline for Latest (PM, 30 Oct), when the title is a long docket string.
+  HEADLINE_MAX = 80
+  validates :headline, length: { maximum: HEADLINE_MAX }, allow_nil: true
+
+  # What Latest shows: the headline when there is one, else the title.
+  def display_title = headline.presence || title
 
   # Public: approved by a person (never by an agent: Tosin approves each,
   # 21 Oct), and about at least one published company or plant.
