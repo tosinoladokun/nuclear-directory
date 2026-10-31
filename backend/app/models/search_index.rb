@@ -7,14 +7,16 @@
 #     "icons" => { key => "<svg ...>" },   # only the icons in use
 #     "items" => [ { "k" => "c" or "p", "s" => slug, "n" => name, "sn" => short name, "a" => [ other names ],
 #                    "d" => short description, "m" => "Reactor designer · Seattle, WA", "i" => icon key,
-#                    "b" => "nd-bucket--fuel", "c" => connection count } ] }
+#                    "b" => "nd-bucket--fuel", "c" => connection count,
+#                    "x" => [ IDs people search by: ticker; NRC dockets and EIA plant ID of a site and its units ] },
+#                  { "k" => "t", "s" => tag key, "n" => "HALEU" } ] }   # a topic: /companies?tag=key
 #
-# Companies first, then plant sites, each Most connected first. Empty keys are left out.
+# Companies, then plant sites (each Most connected first), then topics. Empty keys are left out.
 class SearchIndex
   # Changes whenever anything the index shows may have changed: a row
   # updated, added or deleted (the count) in any table it reads.
   def self.version
-    stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, Relationship, FacilityRelationship ]
+    stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship ]
       .map { |model| model.pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
     Digest::SHA256.hexdigest(stamps.join("|")).first(16)
   end
@@ -23,7 +25,7 @@ class SearchIndex
 
   def as_json(*)
     @icons = {}
-    items = companies + plants
+    items = companies + plants + topics
     { "v" => self.class.version, "icons" => @icons, "items" => items }
   end
 
@@ -49,13 +51,17 @@ class SearchIndex
       compact("k" => "c", "s" => company.slug, "n" => company.name, "sn" => company.short_name, "a" => aliases[company.id],
         "d" => company.short_description, "i" => key, "b" => (h.bucket_class(category) if category),
         "m" => [ (h.role_label(role) if role), h.place(company.hq_city, company.hq_state) ].compact.join(" · ").presence,
-        "c" => company.try(:connections_count).to_i)
+        "c" => company.try(:connections_count).to_i, "x" => [ company.ticker ].compact.presence)
     end
   end
+
+  # The topic pages that list someone (PublicPages#tags), found by their words.
+  def topics = PublicPages.new.tags.map { |tag| { "k" => "t", "s" => tag.key, "n" => tag.name } }
 
   def plants
     list = DirectoryListing.new(category: "plants").plants.to_a
     aliases = other_names(FacilityAlias.where(facility_id: list.map(&:id)).pluck(:facility_id, :alias), list)
+    units = Facility.published.where(parent_id: list.map(&:id)).pluck(:parent_id, :nrc_docket).group_by(&:first)
     list.map do |plant|
       shown = plant.verified?
       sourced = shown && plant.try(:site_sourced)
@@ -64,7 +70,8 @@ class SearchIndex
       compact("k" => "p", "s" => plant.slug, "n" => plant.name, "a" => aliases[plant.id],
         "i" => icon_key("nd-#{name}-20") { h.icon(name, set: :nd, size: 20) },
         "m" => ([ h.facility_type_label(plant.facility_type), h.place(plant.city, plant.state) ].compact.join(" · ").presence if shown),
-        "c" => plant.try(:connections_count).to_i)
+        "c" => plant.try(:connections_count).to_i,
+        "x" => [ plant.nrc_docket, plant.eia_plant_id, *units[plant.id]&.map(&:last) ].compact_blank.uniq.presence)
     end
   end
 
