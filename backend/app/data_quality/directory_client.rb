@@ -332,6 +332,7 @@ class DataQuality::DirectoryClient
   def sourced_role?(organization_id) = lookup.sourced_role?(organization_id)
   def role_keys(organization_id) = lookup.role_keys(organization_id)
   def organization_hq_city(id) = lookup.organization_hq_city(id)
+  def readable_website?(url) = lookup.readable_website?(url)
   def sourced_role_ids(organization_ids) = lookup.sourced_role_ids(organization_ids)
 
   # A company name kept as a lead, never thrown away (#548).

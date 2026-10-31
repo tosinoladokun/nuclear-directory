@@ -137,7 +137,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       # A home page that couldn't be read is answered as read (the Enrich page
       # shows why, from the page's own status), and a new request reads again.
-      if (home = page(website, for_id: id))
+      # A malformed website (EDGAR-only companies may have one) is skipped, never stops the run.
+      if @directory.readable_website?(website) && (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         own_links(home).first(PAGES).each do |url|
