@@ -19,7 +19,7 @@ class DirectoryController < ApplicationController
       return redirect_to companies_url(params.permit(:technology, :state, :sort).merge(q: words.length <= 4 ? words.upcase : words)), status: :moved_permanently
     end
 
-    @listing = DirectoryListing.new(**params.permit(:category, :tag, :q, :technology, :state, :sort, :role).to_h.symbolize_keys)
+    @listing = DirectoryListing.new(**params.permit(:category, :tag, :q, :technology, :state, :sort, :role, :status, :type, :reactor).to_h.symbolize_keys)
 
     # The first PAGE rows of each list (companies, plants), then PAGE more per "Show more" (?shown=2 is two
     # pages' worth), so the page stays light as the directory grows. The

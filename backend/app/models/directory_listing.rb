@@ -14,7 +14,16 @@ class DirectoryListing
   SORTS = { "connections" => "Most connected", "name" => "A to Z" }.freeze
   DEFAULT_SORT = "connections"
 
-  attr_reader :category, :tag, :query, :technology, :state, :sort, :role
+  # The Plants and sites list has its own sorts, status chips and filters (#614): largest first by default.
+  PLANT_SORTS = { "capacity" => "Largest first", "name" => "A to Z", "units" => "Most units" }.freeze
+  DEFAULT_PLANT_SORT = "capacity"
+  # The chips under the heading, in order, each with the statuses it counts. Shut down includes a site being decommissioned.
+  STATUS_CHIPS = {
+    "operating" => %w[operating], "under_construction" => %w[under_construction], "planned" => %w[planned],
+    "restart_under_review" => %w[restart_under_review], "shut_down" => %w[shut_down decommissioning]
+  }.freeze
+
+  attr_reader :category, :tag, :query, :technology, :state, :sort, :role, :status, :type, :reactor
 
   # Close names (#431): used only when an exact search finds nothing, so it
   # fills an empty result and never adds extras to a real one.
@@ -23,8 +32,8 @@ class DirectoryListing
   FUZZY_MINIMUM_LENGTH = 3
 
   # Unknown values are ignored rather than raising: these come from the URL.
-  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil, fuzzy: false)
-    @args = { category:, tag:, q:, technology:, state:, sort:, role: }
+  def initialize(category: nil, tag: nil, q: nil, technology: nil, state: nil, sort: nil, role: nil, status: nil, type: nil, reactor: nil, fuzzy: false)
+    @args = { category:, tag:, q:, technology:, state:, sort:, role:, status:, type:, reactor: }
     @fuzzy = fuzzy
     @category = Category.find(category)
     # A tag narrows companies, so it's ignored on Plants and sites.
@@ -32,13 +41,24 @@ class DirectoryListing
     @query = q.to_s.strip.first(100).presence
     # A filter value that isn't one of the options is dropped, so a stale or
     # mistyped URL can't silently narrow the list behind an "Any" control.
-    @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last))
+    # The plants list has no Technology control (it filters by type and reactor), so a stale technology in the URL is ignored.
+    @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last)) unless plants_list?
     @state = state.to_s.strip.upcase.presence&.presence_in(state_options)
-    @sort = SORTS.key?(sort.to_s) ? sort.to_s : DEFAULT_SORT
+    @sort = sorts.key?(sort.to_s) ? sort.to_s : default_sort
+    # Status, type and reactor filter the plants list only; a value that isn't an option is dropped.
+    if plants_list?
+      @status = status.to_s.presence&.presence_in(STATUS_CHIPS.keys)
+      @type = type.to_s.presence&.presence_in(type_options.map(&:last))
+      @reactor = reactor.to_s.presence&.presence_in(reactor_options.map(&:last))
+    end
     # A bucket made of several roles narrows to one of them (Developers:
     # reactor designers or project developers). Any other value is dropped.
     @role = role.to_s.presence&.presence_in(@category.role_keys) if @category && @category.role_keys.size > 1
   end
+
+  def plants_list? = category&.plants == true
+  def sorts = plants_list? ? PLANT_SORTS : SORTS
+  def default_sort = plants_list? ? DEFAULT_PLANT_SORT : DEFAULT_SORT
 
   # Number of published companies in each bucket, and of plants and sites,
   # for the pills. A company in two buckets counts in both.
@@ -60,7 +80,11 @@ class DirectoryListing
       # For the site's icon: its sourced units' reactor types, and whether the
       # site's own facts are sourced, as its page decides (PlantProfile).
       "ARRAY(#{units_sql("u.reactor_type")} AND #{sourced_sql("u.id")}) AS units_reactor_types",
-      "(#{sourced_sql("facilities.id")}) AS site_sourced"), "facilities.name")
+      "(#{sourced_sql("facilities.id")}) AS site_sourced",
+      "(#{units_sql("COUNT(*)")}) AS units_count",
+      # What the row shows as capacity: the operating units' sum, else a standalone operating site's own figure.
+      "COALESCE((#{units_sql("SUM(u.capacity_mw) FILTER (WHERE u.status = 'operating')")}), " \
+        "CASE WHEN facilities.status = 'operating' AND #{sourced_sql("facilities.id")} AND NOT EXISTS (#{units_sql("1")}) THEN facilities.capacity_mw END) AS capacity_total"), "facilities.name")
   end
 
   # Companies are listed unless the Plants and sites category is chosen.
@@ -88,6 +112,9 @@ class DirectoryListing
 
     scope = public_sites
     scope = scope.verified.where(state:) if state
+    scope = scope.verified.where(facility_type: type) if type
+    scope = with_reactor(scope) if reactor
+    scope = scope.verified.where(status: STATUS_CHIPS.fetch(status)) if status
     scope = plants_with_technology(scope) if technology
     scope = (fuzzy? ? fuzzy_plants(scope) : matching_plants(scope)) if query
     scope
@@ -99,7 +126,7 @@ class DirectoryListing
   # The same listing, matching close names instead of exact text.
   def fuzzy_copy = self.class.new(**@args, fuzzy: true)
   def fuzzy_possible? = query.to_s.length >= FUZZY_MINIMUM_LENGTH && !fuzzy?
-  def filtered? = technology.present? || state.present? || role.present?
+  def filtered? = technology.present? || state.present? || role.present? || status.present? || type.present? || reactor.present?
 
   # Filter choices that actually occur in published data.
   # Technologies used by published companies, plants or units, plus their
@@ -129,6 +156,29 @@ class DirectoryListing
     @state_options ||= [ (Organization.published.distinct.pluck(:hq_state) if lists_companies?),
                          (public_sites.verified.distinct.pluck(:state) if lists_plants?) ]
       .compact.flatten.compact_blank.uniq.sort
+  end
+
+  # The count under each status chip, with every other filter applied (the chosen status doesn't narrow its own row of
+  # chips). { "operating" => 19, ... }, plus "all".
+  def status_counts
+    @status_counts ||= begin
+      base = self.class.new(**@args, status: nil, fuzzy: fuzzy?)
+      scope = base.plant_scope.verified
+      counts = scope.group(:status).count
+      STATUS_CHIPS.transform_values { |statuses| statuses.sum { |s| counts[s].to_i } }.merge("all" => base.plant_scope.count)
+    end
+  end
+
+  # The kinds of site that have rows, as [label, key] for the Type filter.
+  def type_options
+    @type_options ||= public_sites.verified.where.not(facility_type: nil).distinct.pluck(:facility_type)
+      .filter_map { |key| [ DirectoryHelper::FACILITY_TYPE_LABELS[key], key ] if DirectoryHelper::FACILITY_TYPE_LABELS[key] }.sort_by(&:first)
+  end
+
+  # The reactor types that have rows (a verified site's or a published unit's), as [label, key].
+  def reactor_options
+    @reactor_options ||= plant_technology_sources.where(id: Evidence.where(subject_type: "Facility").select(:subject_id)).where.not(reactor_type: [ nil, "" ]).distinct.pluck(:reactor_type)
+      .map { |key| [ DirectoryHelper::REACTOR_TYPE_LABELS.fetch(key.upcase, key), key ] }.sort_by(&:first)
   end
 
   # Companies show unless the Plants and sites category is chosen; plants
@@ -199,6 +249,14 @@ class DirectoryListing
         .or(scope.verified.where(technology_id: techs)).or(scope.where(id: tech_units)).or(scope.where(id: alias_sites))
     end
 
+    # Verified sites with the reactor type, or any public site with a published unit of it.
+    def with_reactor(scope)
+      # Only sourced facts, as the profile and the row icon use them.
+      sourced = Evidence.where(subject_type: "Facility").select(:subject_id)
+      units = Facility.published.where.not(parent_id: nil).where(reactor_type: reactor).where(id: sourced).select(:parent_id)
+      scope.verified.where(reactor_type: reactor).where(id: sourced).or(scope.where(id: units))
+    end
+
     # A technology key (fission, smr) or a coolant sub-role key (molten_salt).
     # Verified sites whose own technology, or any public site whose published
     # unit's, is the chosen one or a sub-technology of it. Coolant is a
@@ -257,7 +315,12 @@ class DirectoryListing
       return scope.order(fuzzy_position_sql(name_column)) if fuzzy? && query
 
       scope = scope.order(relevance_sql(name_column, aliases: name_column == "organizations.name")) if query
-      sort == "name" ? scope.order(name_column) : scope.order(Arel.sql("connections_count DESC"), name_column)
+      return scope.order(name_column) if sort == "name"
+      # The Plants and sites list: largest first (rows with no capacity last) or most units.
+      # Ties (no capacity, no units): rows with sourced facts before the bare names.
+      return scope.order(Arel.sql(sort == "units" ? "units_count DESC NULLS LAST" : "capacity_total DESC NULLS LAST"), Arel.sql("site_sourced DESC"), name_column) if plants_list?
+
+      scope.order(Arel.sql("connections_count DESC"), name_column)
     end
 
     def relevance_sql(name_column, aliases: false)

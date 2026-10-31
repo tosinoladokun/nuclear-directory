@@ -1,16 +1,40 @@
-<%# The plants and sites of a list as one white panel of rows (#560): site icon, name, status mark and word,
-    type and units, MW, location. The site's own type, status and place show only once it's verified (as on its page). Locals: plants. %>
-<ul class="nd-lines">
+<%# The plants and sites of a list as one white panel of rows (#560, #614). On the Plants and sites list (columns: true)
+    they line up under a header row: plant or site, status, type, units, capacity, location. A site's own type,
+    status and place show only once it's verified (as on its page); the rest stay empty, never guessed. Locals: plants, columns (optional). %>
+<% columns = local_assigns[:columns] %>
+<ul class="nd-lines<%= " nd-lines--plants" if columns %>">
+  <% if columns %>
+    <li class="nd-lines__head nd-prow type-label" aria-hidden="true"><span></span><span>Plant or site</span><span>Status</span><span>Type</span><span class="nd-prow__num">Units</span><span class="nd-prow__num">Capacity</span><span class="nd-prow__place">Location</span></li>
+  <% end %>
   <% plants.each do |facility| %>
     <% own = facility.verified? %>
     <% sourced = own && facility.try(:site_sourced) %>
-    <% units = units_summary(Array(facility.try(:units_statuses)), shown_status: (facility.status if own)) %>
-    <% capacity = facility.try(:units_capacity_mw) %>
-    <% what = [ (facility_type_label(facility.facility_type) if own), units ].compact.join(" · ").presence %>
-    <%= render "shared/line", href: plant_url_for(facility), name: facility.name,
-          mark: icon(site_icon_name((facility.facility_type if sourced), reactor_types: [ (facility.reactor_type if sourced), *facility.try(:units_reactor_types) ], status: (facility.status if sourced)), set: :nd, size: 20),
-          status: (facility.status if own && facility.status.present?), what:,
-          cap: (number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present?),
-          place: (location(facility.city, facility.state) if own) %>
+    <% mark = icon(site_icon_name((facility.facility_type if sourced), reactor_types: [ (facility.reactor_type if sourced), *facility.try(:units_reactor_types) ], status: (facility.status if sourced)), set: :nd, size: 20) %>
+    <% if columns %>
+      <% unit_count = facility.try(:units_count).to_i %>
+      <% capacity = facility.try(:capacity_total) %>
+      <% name_text, small = line_name(facility.name, nil, full: DirectoryHelper::LIST_NAME_FULL, small: DirectoryHelper::LIST_NAME_SMALL) %>
+      <li><%= link_to plant_url_for(facility), class: "nd-prow" do %>
+        <span class="nd-prow__mark nd-catsq" aria-hidden="true"><%= mark %></span>
+        <span class="nd-prow__name" title="<%= facility.name %>" data-truncate <%= 'data-fit=small'.html_safe if small %>><%= name_text %></span>
+        <span class="nd-prow__meta">
+          <span class="nd-prow__status"><%= render "shared/status_mark", status: facility.status if own && facility.status.present? %></span>
+          <span class="nd-prow__type" title="<%= facility_type_label(facility.facility_type) if own %>" data-truncate><%= facility_type_label(facility.facility_type) if own %></span>
+          <span class="nd-prow__num nd-prow__units"><%= unit_count if unit_count.positive? %><span class="nd-prow__unit-word"><%= " #{'unit'.pluralize(unit_count)}" if unit_count.positive? %></span></span>
+        </span>
+        <span class="nd-prow__foot">
+          <span class="nd-prow__num nd-prow__cap"><%= number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present? %></span>
+          <span class="nd-prow__place" title="<%= location(facility.city, facility.state) if own %>" data-truncate><%= location(facility.city, facility.state) if own %></span>
+        </span>
+      <% end %></li>
+    <% else %>
+      <% units = units_summary(Array(facility.try(:units_statuses)), shown_status: (facility.status if own)) %>
+      <% capacity = facility.try(:units_capacity_mw) %>
+      <% what = [ (facility_type_label(facility.facility_type) if own), units ].compact.join(" · ").presence %>
+      <%= render "shared/line", href: plant_url_for(facility), name: facility.name, mark:,
+            status: (facility.status if own && facility.status.present?), what:,
+            cap: (number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present?),
+            place: (location(facility.city, facility.state) if own) %>
+    <% end %>
   <% end %>
 </ul>
