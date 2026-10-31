@@ -104,7 +104,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
       assert_select ".nd-crow__more[hidden]" do
         assert_select "p", /Co-owned with Oglethorpe Power and MEAG Power\./
         assert_select ".nd-quote", "“the project's co-owners”"
-        assert_select "a[href='/companies/georgia-power']", "View Georgia Power"
+        assert_select "a[href='/companies/georgia-power']", "Open Georgia Power"
       end
     end
     assert_select ".nd-crow", text: /Southern Nuclear/ do
@@ -161,6 +161,11 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a source's latest check date is in the page's Sources list, not the opened row (#655)" do
+    get plant_path(slug: "plant-vogtle")
+    assert_select "ol.nd-sources li small", /nrc\.gov.*checked \d{4}-\d{2}-\d{2}/
+  end
+
   test "every correction link on a plant page is nofollow: overview panel, missing details and the quiet line" do
     get plant_path(slug: "plant-vogtle")
 
@@ -172,8 +177,10 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "an opened row shows its source as plain text: no boxed number" do
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-crow__more a.nd-src--plain", /georgiapower\.com · checked/
+    assert_select ".nd-crow__more a.nd-src--plain", "georgiapower.com", "the domain only: no date, no number, no confidence"
     assert_select ".nd-crow__more .nd-src sup", 0
+    assert_select ".nd-crow__more .nd-conf", 0
+    assert_select ".nd-crow__more", text: /checked/, count: 0
   end
 
   test "a share shows only when every folded link states the same one" do
@@ -345,7 +352,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "sources are numbered once, in reading order" do
     get plant_path(slug: "plant-vogtle")
 
-    assert_select "li#source-1 small", "nrc.gov"
+    assert_select "li#source-1 small", /\Anrc\.gov/
     assert_select "li#source-2 a[href='https://www.georgiapower.com/vogtle-4']", "Vogtle Unit 4 enters commercial operation"
   end
 

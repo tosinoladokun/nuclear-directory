@@ -178,6 +178,6 @@ class PlantProfile
     end
 
     def cite(fact)
-      @cited[fact] = citations.cite(fact.evidence)
+      @cited[fact] = citations.cite(fact.evidence, checked: fact.try(:verified_at))
     end
 end
