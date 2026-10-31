@@ -4,10 +4,13 @@ require "application_system_test_case"
 class InstantIndexTest < ApplicationSystemTestCase
   INDEX = {
     icons: { "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
+    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ],
     items: [
       { k: "c", s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", m: "Reactor developer · Camden, NJ", i: "bucket-fuel", b: "nd-bucket--fuel", c: 9 },
       { k: "c", s: "oklo", n: "Oklo", sn: nil, a: [ "Oklo Inc" ], d: "Develops advanced fission power plants.", m: "Reactor developer · Santa Clara, CA", i: "bucket-fuel", b: nil, c: 4 },
       { k: "c", s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", m: "Enrichment · Bethesda, MD", i: "bucket-fuel", b: nil, c: 3 },
+      { k: "c", s: "nuscale-power", n: "NuScale Power", sn: "NuScale", a: [], x: [ "SMR" ], d: "Small modular reactor designer.", m: "Reactor developer · Portland, OR", i: "bucket-fuel", b: nil, c: 5 },
+      { k: "p", s: "davis-besse", n: "Davis-Besse Nuclear Power Station", sn: nil, a: [], x: [ "05000346", "EIA 6149" ], d: nil, m: "Power reactor · Oak Harbor, OH", i: "site-plant", b: nil, c: 1 },
       { k: "p", s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", sn: nil, a: [], d: nil, m: "Power reactor · Athens, AL", i: "site-plant", b: nil, c: 2 }
     ]
   }.freeze
@@ -58,6 +61,29 @@ class InstantIndexTest < ApplicationSystemTestCase
     assert_selector ".nd-instant__all", text: "All results for “centrus”"
     field.send_keys(:enter)
     assert_current_path(/\/companies\?.*q=centrus/)
+  end
+
+  test "IDs find their record, and topic words jump to the tag page" do
+    visit root_path
+    stub_index
+    field = find("input[type=search]")
+    field.send_keys("05000346")
+    assert_selector ".nd-instant__row b", text: "Davis-Besse Nuclear Power Station", wait: 10
+
+    field.send_keys([ :control, "a" ], :backspace)
+    field.send_keys("smr")
+    assert_selector ".nd-instant__group", text: /topics/i
+    assert_selector ".nd-instant__row b", text: "NuScale Power"
+    find(".nd-instant__row", text: "Small modular reactors").click
+    assert_current_path(/\/companies\?tag=smr/)
+  end
+
+  test "no results offers the correction form" do
+    visit root_path
+    stub_index
+    find("input[type=search]").send_keys("zzzqqq")
+    assert_selector ".nd-instant__empty", text: /No results for/
+    assert_selector ".nd-instant__empty a[href*='corrections/new'][href*='A+missing+company'][rel=nofollow]", text: /Report a correction/
   end
 
   test "ranking: an exact or prefix name beats an alias, which beats a description match" do

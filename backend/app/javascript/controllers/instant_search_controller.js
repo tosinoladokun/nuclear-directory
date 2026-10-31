@@ -65,7 +65,7 @@ export default class extends Controller {
     if (text.length < this.minimumValue) return this.close()
 
     const found = search(this.index, text)
-    const total = found.companies.length + found.plants.length
+    const total = found.topics.length + found.companies.length + found.plants.length
     this.frameTarget.replaceChildren(this.panel(text, found, total))
     this.statusTarget.textContent = total === 0 ? "No results" : `${found.fuzzy ? "No exact match. " : ""}${total} ${found.fuzzy ? (total === 1 ? "close name" : "close names") : (total === 1 ? "result" : "results")}, use the down arrow to browse`
     this.markFresh()
@@ -108,10 +108,36 @@ export default class extends Controller {
       })
       panel.append(heading, list)
     }
+    if (found.topics.length) {
+      const heading = make("div", "nd-label nd-instant__group", "Topics")
+      heading.id = `${this.frameTarget.id}-topics`
+      const list = make("ul", "nd-instant__list")
+      list.setAttribute("aria-labelledby", heading.id)
+      found.topics.forEach((tag) => {
+        const row = make("li")
+        const link = make("a", "nd-instant__row")
+        link.href = `/companies?tag=${encodeURIComponent(tag.s)}`
+        const square = make("span", "nd-catsq")
+        square.setAttribute("aria-hidden", "true")
+        square.innerHTML = this.index.icons[tag.i] || ""
+        const label = make("span", "nd-instant__text")
+        label.append(make("b", "type-body-strong", tag.n))
+        if (tag.c) label.append(make("span", "type-small", `${tag.c} ${tag.c === 1 ? "company" : "companies"}`))
+        link.append(square, label)
+        row.append(link)
+        list.append(row)
+      })
+      panel.append(heading, list)
+    }
     group("Companies", "companies", found.companies, "/companies")
     group("Plants and sites", "plants", found.plants, "/plants")
     if (total === 0) {
-      panel.append(make("p", "nd-instant__empty type-body", `No results for “${text}”. Check the spelling, or search a company or plant name.`))
+      const empty = make("p", "nd-instant__empty type-body", `No results for “${text}”. Check the spelling, or search a company or plant name. `)
+      const report = make("a", "nd-link", "Missing a company? Report a correction")
+      report.href = `/corrections/new?${new URLSearchParams({ subject: "A missing company", page: `/companies?q=${encodeURIComponent(text)}` })}`
+      report.rel = "nofollow"
+      empty.append(report)
+      panel.append(empty)
     } else {
       const all = make("a", "nd-instant__all type-ui")
       const url = new URL(this.allUrlValue || "/companies", window.location.origin)

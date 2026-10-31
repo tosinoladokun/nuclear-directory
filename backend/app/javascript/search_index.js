@@ -1,4 +1,5 @@
 // Instant search in the browser (#696): the filter for the compact index at /search/index.json.
+// Items also carry x: [ids] (NRC docket, ticker, EIA plant id), matched like aliases. payload.tags: [{ s: key, n: name, a: [words], c: companies, i: icon key }] are topic pages.
 // Items: { k: "c"|"p", s: slug, n: name, sn: short name, a: [aliases], d: description, m: meta line, i: icon key, b: bucket class, c: connections }.
 // prepare() normalises once; search() matches every typed word, ranks exact and prefix names above aliases above
 // descriptions, and falls back to close spellings (one letter off, two on long words) only when nothing matches.
@@ -10,10 +11,11 @@ export function normalise(text) {
 export function prepare(payload) {
   const items = (payload.items || []).map((item) => {
     const names = [item.n, item.sn].filter(Boolean).map(normalise)
-    const aliases = (item.a || []).map(normalise).filter(Boolean)
+    const aliases = [ ...(item.a || []), ...(item.x || []) ].map(normalise).filter(Boolean)
     return { item, names, aliases, name: names[0], nameWords: unique(names.flatMap((n) => n.split(" "))), aliasWords: unique(aliases.flatMap((a) => a.split(" "))), descWords: normalise(item.d).split(" ").filter(Boolean) }
   })
-  return { icons: payload.icons || {}, items }
+  const tags = (payload.tags || []).map((tag) => ({ tag, names: [tag.n, tag.s, ...(tag.a || [])].map(normalise).filter(Boolean) }))
+  return { icons: payload.icons || {}, items, tags }
 }
 
 function unique(list) { return [...new Set(list)] }
@@ -72,19 +74,26 @@ function rank(found) {
   return found.sort((a, b) => b.score - a.score || (b.item.c || 0) - (a.item.c || 0) || a.name.length - b.name.length || a.name.localeCompare(b.name)).map((entry) => entry.item)
 }
 
-// => { companies, plants, fuzzy }. fuzzy: nothing matched exactly, these are close names.
+// Topic pages (HALEU, fusion, SMR, enrichment...) whose name or words the typed text starts, at most two, biggest first.
+function topics(index, query) {
+  return (index.tags || []).filter(({ names }) => names.some((n) => n === query || n.startsWith(query) || (query.length >= 3 && n.split(" ").some((w) => w === query))))
+    .map(({ tag }) => tag).sort((a, b) => (b.c || 0) - (a.c || 0)).slice(0, 2)
+}
+
+// => { topics, companies, plants, fuzzy }. fuzzy: nothing matched exactly, these are close names.
 export function search(index, text, { companies = 5, plants = 4 } = {}) {
   const query = normalise(text)
   const tokens = query.split(" ").filter(Boolean)
-  if (tokens.length === 0) return { companies: [], plants: [], fuzzy: false }
+  if (tokens.length === 0) return { topics: [], companies: [], plants: [], fuzzy: false }
 
   const pick = (score) => {
     const scored = index.items.map((entry) => ({ ...entry, score: score(entry) })).filter((entry) => entry.score > 0)
     return { companies: rank(scored.filter((e) => e.item.k === "c")).slice(0, companies), plants: rank(scored.filter((e) => e.item.k === "p")).slice(0, plants) }
   }
 
+  const matched = topics(index, query)
   const exact = pick((entry) => exactScore(entry, query, tokens))
-  if (exact.companies.length || exact.plants.length) return { ...exact, fuzzy: false }
+  if (exact.companies.length || exact.plants.length) return { ...exact, topics: matched, fuzzy: false }
   const close = pick((entry) => closeScore(entry, tokens))
-  return { ...close, fuzzy: close.companies.length + close.plants.length > 0 }
+  return { ...close, topics: matched, fuzzy: matched.length === 0 && close.companies.length + close.plants.length > 0 }
 }
