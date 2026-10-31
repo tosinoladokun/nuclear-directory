@@ -63,4 +63,14 @@ class LatestTest < ActionDispatch::IntegrationTest
     assert_empty NewsItem.latest_for(hidden)
     assert_empty NewsItem.published.where(title: "Hidden news")
   end
+
+  test "a source URL URI can't parse still renders the page: publisher as plain text, no link (Copilot)" do
+    holtec = cite!(company("Holtec International"))
+    news(holtec, "Odd URL item", Date.new(2026, 10, 15), url: "https://example.org/café")
+    get company_path(slug: holtec.slug)
+    assert_response :success
+    assert_select "#latest .nd-news__title", "Odd URL item"
+    assert_select "#latest span.nd-news__src", "example.org"
+    assert_select "#latest a.nd-news__src", count: 0
+  end
 end

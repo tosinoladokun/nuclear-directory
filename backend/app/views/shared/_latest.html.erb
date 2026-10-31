@@ -11,8 +11,13 @@
           <span class="nd-news__title" title="<%= headline %>" data-truncate><%= headline %></span>
           <% if (summary = item.summary.to_s.squish.truncate(160, separator: " ").presence) %><span class="nd-news__summary" title="<%= item.summary.to_s.squish %>" data-truncate><%= summary %></span><% end %>
         </span>
-        <%= link_to item.url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "news" },
-              aria: { label: "#{headline}: read on #{URI.parse(item.url).host.to_s.delete_prefix("www.")} (opens the source)" } do %><%= URI.parse(item.url).host.to_s.delete_prefix("www.") %><span aria-hidden="true"> ↗</span><% end %>
+        <% publisher = news_publisher(item) %>
+        <% if safe_source_url(item) %>
+          <%= link_to item.url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "news" },
+                aria: { label: "#{headline}: read on #{publisher} (opens the source)" } do %><%= publisher %><span aria-hidden="true"> ↗</span><% end %>
+        <% else %>
+          <span class="nd-news__src type-small text-ink-muted"><%= publisher %></span>
+        <% end %>
       </li>
     <% end %>
   </ul>

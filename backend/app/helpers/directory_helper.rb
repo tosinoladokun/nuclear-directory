@@ -546,6 +546,12 @@ module DirectoryHelper
     nil
   end
 
+  # The publisher of a news item for the Latest rows. A URL URI can't parse (e.g. a non-ASCII path) still gets its host as text; it just isn't linked.
+  def news_publisher(item)
+    host = (URI.parse(item.url.to_s.strip).host rescue nil) || item.url.to_s[%r{\Ahttps?://([^/?#]+)}i, 1]
+    host.to_s.downcase.delete_prefix("www.").presence || "source"
+  end
+
   # "kairospower.com" for a source, from its domain or URL.
   # A URL with no host (a bad import such as "javascript:...") reads
   # "unlinked source", so chips and their labels are never blank.
