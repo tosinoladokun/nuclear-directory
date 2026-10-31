@@ -132,6 +132,7 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
 
       rows = page.evaluate_script("[...document.querySelectorAll('.nd-tree__row')].map((row) => [row.classList.contains('nd-tree__row--in'), row.getBoundingClientRect().height, row.querySelector('.nd-tree__verb').textContent])")
       assert rows.all? { |_, height, _| height >= 44 }, rows.inspect
+      assert rows.all? { |_, _, verb| verb == verb.upcase }, "phone group labels use the desktop headings (capitals): #{rows.map(&:last).inspect}"
       directions = rows.map(&:first)
       assert_equal directions, directions.sort_by { |inbound| inbound ? 0 : 1 }, "givers first"
       assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
@@ -142,11 +143,11 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   test "on a phone the folded plants open under their row" do
     resize_viewport(390, 844)
     visit "/companies/#{build_constellation.slug}"
-    owns = find(".nd-tree__row", text: /\Aowns/)
+    owns = find(".nd-tree__row", text: /\AOWNS/)
     owns.find("summary", text: "2 of 13 plants").click
 
     assert_selector ".nd-tree__fold[open] .nd-tree__plants li", count: 2, text: /Clean Energy Center/
-    find(".nd-tree__row", text: /\Aoperates/).find("summary", text: "13 plants").click
+    find(".nd-tree__row", text: /\AOPERATES/).find("summary", text: "13 plants").click
     assert_selector ".nd-tree__fold[open] .nd-tree__plants li", count: 15
   end
 

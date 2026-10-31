@@ -1151,7 +1151,7 @@
   .nd-tree__rows { list-style: none; margin: 0; padding: 0; position: relative; }
   .nd-tree__rows::before { content: ""; position: absolute; left: 17px; top: 0; bottom: 22px; width: 1.5px; background: var(--nd-control); }
   .nd-tree__row { position: relative; display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: 16px auto; align-items: start; padding-left: 0; }
-  .nd-tree__verb { grid-column: 2; grid-row: 1; font: 500 12px/16px var(--font-text); color: var(--nd-ink-muted); padding-left: 4px; align-self: end; }
+  .nd-tree__verb { grid-column: 2; grid-row: 1; font: 500 11px/16px var(--font-mono); letter-spacing: .08em; color: var(--nd-ink-muted); padding-left: 4px; align-self: end; }
   /* Anchored to the verb and node line (fixed from the top), so opening a fold below doesn't move it. */
   .nd-tree__branch { position: absolute; left: 17px; top: 38px; width: 35px; height: 1.5px; background: var(--nd-control); }
   /* A verb said once: its next partners follow without repeating it (the verb stays in the row for screen readers). */

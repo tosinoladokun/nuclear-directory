@@ -34,6 +34,9 @@ class ConnectionsMap
     # One straight line (a move and horizontal or vertical runs). arrow: it ends in an arrowhead.
     Line = Data.define(:path, :arrow)
     # A group's heading above its rows.
+    # The group heading on both widths: the verb, passive when the record receives it, in capitals.
+    def self.heading_text(verb, inbound) = (inbound ? ConnectionsMapHelper::PASSIVE.fetch(verb) : verb).upcase
+
     Heading = Data.define(:text, :x, :y, :anchor)
 
     attr_reader :size, :prefix, :height, :centre, :placed, :lines, :headings, :bus_x
@@ -85,7 +88,7 @@ class ConnectionsMap
           y += cy - (first_row + last_row) / 2.0
           rows = []
           list.each do |verb, inbound, edges|
-            @headings << Heading.new(text: heading_text(verb, inbound), x: (node_x[side] - sign * r).round(1), y: (y + HEAD - 9).round(1), anchor: side == :left ? "end" : "start")
+            @headings << Heading.new(text: Layout.heading_text(verb, inbound), x: (node_x[side] - sign * r).round(1), y: (y + HEAD - 9).round(1), anchor: side == :left ? "end" : "start")
             y += HEAD
             edges.each do |edge|
               node = other(edge, inbound)
@@ -114,7 +117,6 @@ class ConnectionsMap
       def f(value) = value.round(1).to_s.delete_suffix(".0")
 
       # The words over a group: what the record does ("SUPPLIES") or what is done to it ("SUPPLIED BY").
-      def heading_text(verb, inbound) = (inbound ? ConnectionsMapHelper::PASSIVE.fetch(verb) : verb).upcase
 
       def name_estimate(edge, node)
         text = node.fold? ? row_name(edge, node) : (node.short_name.presence || node.name)
