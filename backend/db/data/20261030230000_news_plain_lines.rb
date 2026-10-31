@@ -35,7 +35,7 @@ class NewsPlainLines < DeployData::Migration
          summary: "The NRC approved Holtec's request to build permanent excavation support walls for Pioneer Units 1 and 2 before a limited work authorization is issued." },
     6 => { url: "https://www.federalregister.gov/documents/2026/08/27/2026-17529/nextera-energy-inc-dominion-energy-inc-virginia-electric-and-power-company-dominion-energy-nuclear",
          title: "NextEra Energy, Inc.; Dominion Energy, Inc.; Virginia Electric and Power Company; Dominion Energy Nuclear Connecticut; Dominion Energy South Carolina, Inc.; Surry Power Station, Unit Nos. 1 and 2; North Anna Power Station, Unit Nos. 1 and 2; Virgil C. Summer Nuclear Station, Unit 1; Millstone Power Station, Units 1, 2, & 3; North Anna Unit 3; North Anna Early Site Permit; and the Associated Independent Spent Fuel Storage Installations; Consideration of Approval of Transfer of Licenses",
-         headline: "License transfer application",
+         headline: "NextEra and Dominion license transfer application",
          summary: "The NRC received and is considering an application from NextEra Energy and Dominion companies, filed on 15 July 2026, to approve a transfer of licenses." },
     7 => { url: "https://www.federalregister.gov/documents/2026/08/26/2026-17408/stp-nuclear-operating-company-south-texas-project-unit-1-license-amendment-application",
          title: "STP Nuclear Operating Company; South Texas Project, Unit 1; License Amendment Application",
