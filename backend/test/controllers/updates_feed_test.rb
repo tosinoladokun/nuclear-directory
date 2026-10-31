@@ -85,4 +85,25 @@ class UpdatesFeedTest < ActionDispatch::IntegrationTest
     assert_includes titles, "DOE is now listed under Government agency"
     assert_equal 5, titles.grep(/is the reactor developer for/).size
   end
+
+  test "hidden approvals beyond a batch don't hide older public ones; a news item goes to its public page; a deal says its form and stage" do
+    hidden = 3.times.map { |n| Organization.create!(name: "Gone #{n}", slug: "gone-#{n}", verification_status: "pending") }
+    hidden.each { |org| approve(org, at: 1.minute.ago) }
+    gone = Organization.create!(name: "Gone Co", slug: "gone-co", verification_status: "pending")
+    @news.news_mentions.create!(subject: gone)
+    assert_equal "New company: Feed Vendor", Updates.new.entries(limit: 3, batch: 2).last.title
+    assert_equal [ :company, "feed-vendor" ], Updates.new.entries.find { |e| e.kind == "news" }.page
+
+    deal = DealTerm.create!(link: @link, term_type: "offtake", agreement: "mou", status: "announced", capacity_mw: 50, signed_on: Date.new(2026, 8, 1),
+      verification_status: "verified", verified_by: BY)
+    approve(deal, at: 1.minute.ago)
+    assert_equal "Power deal (MOU, announced, Aug 2026): Feed Buyer offtakes from Feed Vendor", Updates.new.entries.first.title
+  end
+
+  test "a few queries per batch, not per entry" do
+    queries = 0
+    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { Updates.new.entries }
+    assert_operator queries, :<, 25
+  end
 end
