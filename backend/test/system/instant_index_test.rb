@@ -2,17 +2,22 @@ require "application_system_test_case"
 
 # Instant search in the browser (#696): filtering the compact index on every keystroke, no /search request.
 class InstantIndexTest < ApplicationSystemTestCase
+  # Backend's index (SearchIndex) and the extras (SearchExtrasController), as the browser gets them.
   INDEX = {
-    icons: { "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
-    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ],
-    items: [
-      { k: "c", s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", m: "Reactor developer · Camden, NJ", i: "bucket-fuel", b: "nd-bucket--fuel", c: 9 },
-      { k: "c", s: "oklo", n: "Oklo", sn: nil, a: [ "Oklo Inc" ], d: "Develops advanced fission power plants.", m: "Reactor developer · Santa Clara, CA", i: "bucket-fuel", b: nil, c: 4 },
-      { k: "c", s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", m: "Enrichment · Bethesda, MD", i: "bucket-fuel", b: nil, c: 3 },
-      { k: "c", s: "nuscale-power", n: "NuScale Power", sn: "NuScale", a: [], x: [ "SMR" ], d: "Small modular reactor designer.", m: "Reactor developer · Portland, OR", i: "bucket-fuel", b: nil, c: 5 },
-      { k: "p", s: "davis-besse", n: "Davis-Besse Nuclear Power Station", sn: nil, a: [], x: [ "05000346", "EIA 6149" ], d: nil, m: "Power reactor · Oak Harbor, OH", i: "site-plant", b: nil, c: 1 },
-      { k: "p", s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", sn: nil, a: [], d: nil, m: "Power reactor · Athens, AL", i: "site-plant", b: nil, c: 2 }
+    companies: [
+      { s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", c: "reactor-developers", m: "Reactor developer · Camden, NJ" },
+      { s: "oklo", n: "Oklo", a: [ "Oklo Inc" ], d: "Develops advanced fission power plants.", c: "reactor-developers", m: "Reactor developer · Santa Clara, CA" },
+      { s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", c: "fuel", m: "Enrichment · Bethesda, MD" },
+      { s: "nuscale-power", n: "NuScale Power", sn: "NuScale", x: [ "SMR" ], d: "Small modular reactor designer.", c: "reactor-developers", m: "Reactor developer · Portland, OR" }
+    ],
+    plants: [
+      { s: "davis-besse", n: "Davis-Besse Nuclear Power Station", x: [ "05000346", "EIA 6149" ], t: "Power plant", i: "site-plant", m: "Power plant · Oak Harbor, OH" },
+      { s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", t: "Power plant", i: "site-plant", m: "Power reactor · Athens, AL" }
     ]
+  }.freeze
+  EXTRAS = {
+    icons: { "bucket-reactor-developers" => "<svg viewBox='0 0 1 1'></svg>", "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
+    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ]
   }.freeze
 
   def stub_index(delay: 0)
@@ -21,6 +26,7 @@ class InstantIndexTest < ApplicationSystemTestCase
       const real = window.fetch
       window.fetch = (url, options) => {
         window.__requests.push(String(url))
+        if (String(url).includes("/search/extras.json")) return Promise.resolve(new Response(#{EXTRAS.to_json.to_json}, { headers: { "Content-Type": "application/json" } }))
         if (String(url).includes("/search/index.json")) return new Promise((resolve) => setTimeout(() => resolve(new Response(#{INDEX.to_json.to_json}, { headers: { "Content-Type": "application/json" } })), #{delay}))
         return real(url, options)
       }
@@ -113,8 +119,8 @@ class InstantIndexTest < ApplicationSystemTestCase
     ms = page.evaluate_async_script(<<~JS)
       const done = arguments[arguments.length - 1]
       import("search_index").then(({ prepare, search }) => {
-        const items = Array.from({ length: 3000 }, (_, n) => ({ k: n % 4 ? "c" : "p", s: `slug-${n}`, n: `Company ${n} Energy Partners`, sn: null, a: [`Alias ${n}`], d: "Develops nuclear things for the industry.", m: "x", i: "k", c: n }))
-        const index = prepare({ icons: {}, items })
+        const make = (n) => ({ s: `slug-${n}`, n: `Company ${n} Energy Partners`, a: [`Alias ${n}`], d: "Develops nuclear things for the industry.", m: "x", c: "fuel" })
+        const index = prepare({ companies: Array.from({ length: 2250 }, (_, n) => make(n)), plants: Array.from({ length: 750 }, (_, n) => make(n + 3000)) })
         const started = performance.now()
         ;["ene", "energy part", "compny 12", "zzzz"].forEach((query) => search(index, query))
         done((performance.now() - started) / 4)

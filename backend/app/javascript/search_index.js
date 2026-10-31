@@ -8,8 +8,14 @@ export function normalise(text) {
   return String(text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim()
 }
 
+// Backend's index is { companies: [{ s, n, sn, a, d, c: category key, m }], plants: [{ s, n, a, t, i: icon name, m }] }; the extras
+// ({ icons: { name: svg }, tags }) come from /search/extras.json. Both become items { k, s, n, sn, a, d, x, m, i, b }.
 export function prepare(payload) {
-  const items = (payload.items || []).map((item) => {
+  const listed = [
+    ...(payload.companies || []).map((c) => ({ ...c, k: "c", i: c.c ? `bucket-${c.c}` : "buildings", b: c.c ? `nd-bucket--${c.c}` : null })),
+    ...(payload.plants || []).map((p) => ({ ...p, k: "p" }))
+  ]
+  const items = listed.map((item) => {
     const names = [item.n, item.sn].filter(Boolean).map(normalise)
     const aliases = [ ...(item.a || []), ...(item.x || []) ].map(normalise).filter(Boolean)
     return { item, names, aliases, name: names[0], nameWords: unique(names.flatMap((n) => n.split(" "))), aliasWords: unique(aliases.flatMap((a) => a.split(" "))), descWords: normalise(item.d).split(" ").filter(Boolean) }
