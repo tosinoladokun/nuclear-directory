@@ -8,7 +8,9 @@ class NewsItem < ApplicationRecord
 
   has_many :news_mentions, dependent: :delete_all
 
-  normalizes :url, :title, :publisher, :headline, with: ->(value) { value.strip.presence }
+  normalizes :url, :title, :publisher, with: ->(value) { value.strip.presence }
+  # One line, spaces collapsed, before the 80-character check.
+  normalizes :headline, with: ->(value) { value.squish.presence }
 
   validates :url, presence: true, uniqueness: true, format: { with: %r{\Ahttps?://\S+\z} }
   validates :title, :published_on, presence: true

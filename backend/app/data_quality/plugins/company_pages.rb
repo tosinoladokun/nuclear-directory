@@ -104,8 +104,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # Gap fill (Tosin, 29 Oct): each night Enrich is also asked for the
   # GAP_FILL_PER_NIGHT published companies with the most empty basics; what
   # their pages say goes through the usual claims, checks and approval.
-  # 5 a night for the first week (DQ, 29 Oct); Data Quality raises it.
-  GAP_FILL_PER_NIGHT = 5
+  # 10 a night (DQ, 30 Oct: the first nights' claims were clean).
+  GAP_FILL_PER_NIGHT = 10
 
   def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill

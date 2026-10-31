@@ -7,6 +7,8 @@ class NewsHeadlineTest < ActiveSupport::TestCase
   test "80 characters at most, in the model and the database; Latest shows it, else the title" do
     assert item(headline: "x" * 80).valid?
     assert_not item(headline: "x" * 81).valid?
+    assert item(headline: "#{'a' * 39}\n   #{'b' * 39}").valid?, "squished to 79 before the check"
+    assert_equal "a b", item(headline: "a\n  b").headline
     assert_equal "Columbia licence renewal", item(headline: " Columbia licence renewal ").display_title
     assert_equal "Long docket title, Docket No. 50-397; NRC-2026-0001", item.display_title
     saved = item.tap(&:save!)
