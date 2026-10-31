@@ -110,8 +110,6 @@ export default class extends Controller {
         const square = make("span", `nd-catsq${item.b ? ` ${item.b}` : ""}`)
         square.setAttribute("aria-hidden", "true")
         square.innerHTML = this.index.icons[item.i] || ""
-        // Plant squares draw their icon at 20px, company squares at 16px (as the server's rows do).
-        if (item.k === "p") square.querySelector("svg")?.classList.add("nd-ic--20")
         const label = make("span", "nd-instant__text")
         label.append(make("b", "type-body-strong", item.n))
         if (item.m) label.append(make("span", "type-small", item.m))
