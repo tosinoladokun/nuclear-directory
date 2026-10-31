@@ -1,7 +1,10 @@
 require "application_system_test_case"
+require_relative "../support/directory_builders"
 
 # Instant search in the browser (#696): filtering the compact index on every keystroke, no /search request.
 class InstantIndexTest < ApplicationSystemTestCase
+  include DirectoryBuilders
+
   # Backend's index (SearchIndex, #698), as the browser gets it.
   INDEX = {
     v: "abc",
@@ -170,6 +173,24 @@ class InstantIndexTest < ApplicationSystemTestCase
     field.send_keys("zzz")
     sleep 0.5
     assert_equal 1, requests.count { |url| url.include?("/search/index.json") }
+  end
+
+  test "against the real index endpoint, with no stub: a topic, a company and a plant show, with their icons" do
+    smr = technology("smr", "Small modular reactor")
+    cite!(company("Real Smr Co", techs: [ smr ], roles: [ role("reactor_vendor") ], description: "Designs small modular reactors."))
+    cite!(plant("Real Smr Plant", facility_type: "power_reactor", status: "operating", city: "Athens", state: "AL"))
+    visit root_path
+    field = find("input[type=search]")
+    field.send_keys("smr")
+    assert_selector ".nd-instant__group", text: /topics/i, wait: 15
+    assert_selector ".nd-instant__row b", text: "Small modular reactors"
+    assert_selector ".nd-instant__row b", text: "Real Smr Co"
+    assert_selector ".nd-instant__row .nd-catsq svg", minimum: 2
+
+    field.send_keys([ :control, "a" ], :backspace)
+    field.send_keys("real smr pl")
+    assert_selector ".nd-instant__row b", text: "Real Smr Plant", wait: 10
+    assert_selector ".nd-instant__row .nd-catsq svg.nd-ic--20"
   end
 
   test "filtering 3,000 records takes a few milliseconds" do
