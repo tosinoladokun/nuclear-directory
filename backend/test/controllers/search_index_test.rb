@@ -13,6 +13,9 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
     @site = Facility.create!(name: "Index Station", slug: "index-station", facility_type: "power_reactor", city: "Glen Rose", state: "TX",
       verification_status: "verified", verified_by: BY)
     @site.aliases.create!(alias: "Index Nuclear Station")
+    @site.update!(eia_plant_id: "6145")
+    Facility.create!(name: "Index Station 1", slug: "index-station-1", parent: @site, nrc_docket: "05000445", verification_status: "verified", verified_by: BY)
+    @company.update!(exchange: "NYSE", ticker: "IDXR")
   end
 
   def index_json = (get search_index_path; JSON.parse(response.body))
@@ -21,12 +24,14 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
     json = index_json
     company = json["items"].find { |c| c["s"] == "index-reactors" }
     assert_equal({ "k" => "c", "s" => "index-reactors", "n" => "Index Reactors", "sn" => "IR", "a" => [ "IR Nuclear" ], "d" => "Small reactors",
-      "m" => "Austin, TX", "i" => "buildings-16", "c" => 0 }, company)
+      "m" => "Austin, TX", "i" => "buildings-16", "c" => 0, "x" => [ "IDXR" ] }, company)
     assert_nil json["items"].find { |c| c["s"] == "hidden-index" }, "unpublished stays out"
     plant = json["items"].find { |p| p["s"] == "index-station" }
     assert_equal [ "p", [ "Index Nuclear Station" ], "Power plant · Glen Rose, TX" ], plant.values_at("k", "a", "m")
     assert_match "<svg", json["icons"].fetch(plant["i"])
-    assert_equal json["items"].map { |item| item["i"] }.uniq.sort, json["icons"].keys.sort
+    assert_equal [ "6145", "05000445" ], plant["x"], "the site's EIA ID and its unit's docket"
+    assert_equal PublicPages.new.tags.map(&:key), json["items"].select { |item| item["k"] == "t" }.map { |item| item["s"] }
+    assert_equal json["items"].filter_map { |item| item["i"] }.uniq.sort, json["icons"].keys.sort
     assert_equal SearchIndex.version, json["v"]
   end
 
