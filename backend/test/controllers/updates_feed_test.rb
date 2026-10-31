@@ -48,4 +48,22 @@ class UpdatesFeedTest < ActionDispatch::IntegrationTest
     assert_includes feed.xpath("//entry/link[@rel='related']/@href").map(&:value), "https://example.com/deal"
     assert_no_match(/internal note|human:|agent:|Pending Co/, response.body)
   end
+
+  test "the feed is built once an hour and sends no session cookie" do
+    store, Rails.cache = Rails.cache, ActiveSupport::Cache::MemoryStore.new
+    begin
+      get updates_feed_path
+      first = response.body
+      Organization.create!(name: "Later Co", slug: "later-co", verification_status: "verified", verified_by: BY)
+      get updates_feed_path
+      assert_equal first, response.body, "served from the cache"
+      assert_nil response.headers["Set-Cookie"]
+      assert_match "public", response.headers["Cache-Control"]
+      Rails.cache.clear
+      get updates_feed_path
+      assert_match "New company: Later Co", response.body
+    ensure
+      Rails.cache = store
+    end
+  end
 end
