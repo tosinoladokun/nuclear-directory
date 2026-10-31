@@ -56,6 +56,9 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
     link = OrganizationRole.create!(organization: @company, role:, verification_status: "verified", verified_by: BY)
     page = Source.create!(url: "https://example.com/enrich", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "t")
     Evidence.create!(subject: link, source: page, quote: "t", found_by: "human")
+    hidden = Organization.create!(name: "Hidden Enricher", slug: "hidden-enricher", verification_status: "pending")
+    hidden_link = OrganizationRole.create!(organization: hidden, role:, verification_status: "verified", verified_by: BY)
+    Evidence.create!(subject: hidden_link, source: page, quote: "t", found_by: "human")
     tag = index_json["tags"].find { |t| t["s"] == "enrichment" }
     assert_equal [ "Enrichment", 1 ], tag.values_at("n", "c")
     assert_includes tag["a"], "haleu"
