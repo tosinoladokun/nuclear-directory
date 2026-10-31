@@ -52,7 +52,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
       "technologies" => [ { "key" => "smr", "quote" => "small modular reactors" } ]
     }
     plugin = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found))
-    claims = plugin.extract(Source.find_by!(url: HOME), nil)
+    claims = plugin.extract(Source.find_by!(url: ABOUT), nil) # the About page carries the description
 
     assert_equal [ [ "organization", "description" ], [ "organization", "hq_city" ], [ "organization", "founded_year" ],
       [ "organization_technology", "smr" ] ], # no categories: Data Quality's, by hand (28 Oct)
@@ -369,7 +369,8 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     home = Source.find_by!(url: HOME)
     assert_equal sister.id, home.enrich_organization_id
-    assert_equal [ "Acme Sister Fission" ], DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(home, nil).map { |c| c[:payload]["name"] }.uniq
+    about = Source.find_by!(url: ABOUT)
+    assert_equal [ "Acme Sister Fission" ], DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(about, nil).map { |c| c[:payload]["name"] }.uniq
     refute_equal owner.id, home.enrich_organization_id
   end
 
@@ -404,5 +405,17 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     assert_equal "#{HOME}en/", Source.find_by!(url: HOME).final_url
     assert_requested en_about
+  end
+
+  test "one description per company per read: only its About page's (DQ, 31 Oct)" do
+    found = { "description" => { "value" => "Acme Fission Inc. designs small modular reactors.", "quote" => "Acme Fission Inc. designs small modular reactors." },
+      "hq_city" => nil, "hq_state" => nil, "founded_year" => nil, "legal_name" => nil, "roles" => [], "technologies" => [] }
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    plugin = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found))
+    descriptions = ->(url) { plugin.extract(Source.find_by!(url:), nil).count { |c| c[:payload].key?("description") } }
+
+    assert_equal 0, descriptions.(HOME), "the home page yields to the About page"
+    assert_equal 1, descriptions.(ABOUT)
   end
 end
