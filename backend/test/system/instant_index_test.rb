@@ -12,6 +12,7 @@ class InstantIndexTest < ApplicationSystemTestCase
       { k: "c", s: "centrus-energy", n: "Centrus Energy", sn: "Centrus", a: [ "LEU supplier" ], d: "Enrichment company.", m: "Enrichment · Bethesda, MD", i: "bucket-fuel", b: "nd-bucket--fuel", c: 3 },
       { k: "c", s: "nuscale-power", n: "NuScale Power", sn: "NuScale", x: [ "SMR" ], d: "Small modular reactor designer.", m: "Reactor developer · Portland, OR", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 2 },
       { k: "p", s: "davis-besse", n: "Davis-Besse Nuclear Power Station", x: [ "05000346", "EIA 6149" ], m: "Power plant · Oak Harbor, OH", i: "site-plant", c: 1 },
+      { k: "t", s: "smr", n: "Small modular reactors" },
       { k: "p", s: "browns-ferry-nuclear-plant", n: "Browns Ferry Nuclear Plant", m: "Power reactor · Athens, AL", i: "site-plant", c: 1 }
     ]
   }.freeze
@@ -92,6 +93,10 @@ class InstantIndexTest < ApplicationSystemTestCase
     stub_index
     field = find("input[type=search]")
     field.send_keys("05000346")
+    assert_selector ".nd-instant__row b", text: "Davis-Besse Nuclear Power Station", wait: 10
+
+    field.send_keys([ :control, "a" ], :backspace)
+    field.send_keys("50-346")
     assert_selector ".nd-instant__row b", text: "Davis-Besse Nuclear Power Station", wait: 10
 
     field.send_keys([ :control, "a" ], :backspace)

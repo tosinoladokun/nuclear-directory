@@ -12,16 +12,20 @@ export function normalise(text) {
 // ({ icons: { name: svg }, tags }) come from /search/extras.json. Both become items { k, s, n, sn, a, d, x, m, i, b }.
 export function prepare(payload) {
   // Backend's #698 sends items already shaped ({ k, s, n, sn, a, d, x, m, i, b, c }) with their icons; the older companies/plants split still reads.
-  const listed = payload.items || [
+  const all = payload.items || [
     ...(payload.companies || []).map((c) => ({ ...c, k: "c", i: c.c ? `bucket-${c.c}` : "buildings", b: c.c ? `nd-bucket--${c.c}` : null })),
     ...(payload.plants || []).map((p) => ({ ...p, k: "p" }))
   ]
+  // Topics ({ k: "t", s: tag key, n: name }) in the index are enriched by the extras' tags (synonyms, counts, icons).
+  const extra = new Map((payload.tags || []).map((tag) => [tag.s, tag]))
+  const topicItems = all.filter((item) => item.k === "t").map((item) => ({ ...extra.get(item.s), ...item }))
+  const listed = all.filter((item) => item.k !== "t")
   const items = listed.map((item, position) => {
     const names = [item.n, item.sn].filter(Boolean).map(normalise)
     const aliases = [ ...(item.a || []), ...(item.x || []) ].map(normalise).filter(Boolean)
     return { item, position, names, aliases, name: names[0], nameWords: unique(names.flatMap((n) => n.split(" "))), aliasWords: unique(aliases.flatMap((a) => a.split(" "))), descWords: normalise(item.d).split(" ").filter(Boolean) }
   })
-  const tags = (payload.tags || []).map((tag) => ({ tag, names: [tag.n, tag.s, ...(tag.a || [])].map(normalise).filter(Boolean) }))
+  const tags = (topicItems.length ? topicItems : payload.tags || []).map((tag) => ({ tag, names: [tag.n, tag.s, ...(tag.a || [])].map(normalise).filter(Boolean) }))
   return { icons: payload.icons || {}, items, tags }
 }
 
@@ -99,7 +103,10 @@ export function search(index, text, { companies = 5, plants = 4 } = {}) {
   }
 
   const matched = topics(index, query)
-  const exact = pick((entry) => exactScore(entry, query, tokens))
+  // People type an NRC docket as 50-445; the stored form is 05000445.
+  const docket = query.match(/^0?50 ?(\d{3,5})$/)
+  const alt = docket ? `050${docket[1].padStart(5, "0")}` : null
+  const exact = pick((entry) => Math.max(exactScore(entry, query, tokens), alt ? exactScore(entry, alt, [alt]) : 0))
   if (exact.companies.length || exact.plants.length) return { ...exact, topics: matched, fuzzy: false }
   const close = pick((entry) => closeScore(entry, tokens))
   return { ...close, topics: matched, fuzzy: matched.length === 0 && close.companies.length + close.plants.length > 0 }
