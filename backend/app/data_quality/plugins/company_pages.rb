@@ -30,7 +30,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-5".freeze
+  PROMPT_VERSION = "company_pages-6".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
@@ -66,8 +66,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     industry directory. Fill a field only when the page states it plainly; otherwise leave it null or empty.
     Every value needs a quote: a sentence or phrase copied exactly from the page, and the value must appear in that quote.
     Fields:
-    - description: one neutral sentence of what the company does, copied from the page (no adjectives like leading or world-class;
-      leave it null if the page only has marketing language).
+    - description: one neutral sentence of what the company as a whole is or does, copied from the page (no adjectives like leading or
+      world-class; leave it null if the page only has marketing language, a mission or vision statement, or describes one division,
+      subsidiary or product line rather than the company).
     - hq_city and hq_state: where its headquarters are, only if the page says headquarters. An office is not headquarters unless the page says so.
     - founded_year: only if the quote contains the year it was founded.
     - legal_name: only an exact legal name with its suffix (Inc., LLC, Corp.), as written.
@@ -165,10 +166,29 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     run&.update!(prompt_version: PROMPT_VERSION)
     found = llm.structured(role: :extract, schema:, schema_name: "company_pages", crawl_run: run, reasoning_effort: "low",
       messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(company.name, text) } ]).data
-    candidates(company.name, found, text, url: source.url)
+    claims = candidates(company.name, found, text, url: source.url)
+    # One description per company per read (DQ, 31 Oct): only from the page
+    # that says what the company is (its About page, else its home page).
+    claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
+    claims
   end
 
   private
+    # The company's one description page, the same on every read and retry:
+    # among its readable pages (read for it, or on its domain and read for no
+    # one), an About-like page wins, then the home page, then the oldest.
+    ABOUT_PAGE = %r{/(?:about(?:-us)?|who-we-are|our-company|company)(?:\.html?)?/?\z}i
+    def description_page?(source, company)
+      pages = Source.crawl_ok.where(source_kind:).where.not(content_text: [ nil, "" ])
+      pages = pages.where(enrich_organization_id: company.id)
+        .or(pages.where(enrich_organization_id: nil, domain: source.domain)).pluck(:id, :url)
+      return true if pages.size <= 1
+
+      path = ->(url) { URI(url).path.to_s rescue "" }
+      chosen = pages.find { |_, url| path.(url).match?(ABOUT_PAGE) } || pages.find { |_, url| path.(url).delete("/").empty? } || pages.min_by(&:first)
+      chosen.first == source.id
+    end
+
     def gap_filled_today?
       CrawlRun.where(stage: "crawl", source_kind:, started_at: Time.current.all_day).where("stats ? 'gap_fill'").exists?
     end

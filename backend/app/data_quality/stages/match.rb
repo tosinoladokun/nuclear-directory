@@ -232,7 +232,13 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     def match_record(candidate, payload)
-      case (found = resolve(candidate.kind.to_sym, payload, closed: :found))
+      found = resolve(candidate.kind.to_sym, payload, closed: :found)
+      # Data Quality's proposal is for the company it named; if its CIK is
+      # another's by now, it goes to review, never to that company (#693).
+      if found.is_a?(Found) && (proposed = DqAction.where(candidate:, action: "propose_fields").pick(:target_id)) && proposed != found.record.id
+        found = Review.new("proposed for company ##{proposed}, but it matches #{found.record.name} (by #{found.by})")
+      end
+      case found
       when Review then review(candidate, found.reason)
       when Found
         # A decided fact the source states again is confirmed, not reviewed again (#240).
