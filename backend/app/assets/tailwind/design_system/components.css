@@ -278,7 +278,7 @@
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
   /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor, more so when the fallback serif is in use (fonts are font-display: optional): less side padding, a tighter gap and no count there (Tosin: counts may go if space is short). */
-  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__head--link .nd-catcard__count { display: none; } }
+  @media (min-width: 640px) and (max-width: 739px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__head--link .nd-catcard__count { display: none; } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
@@ -1563,5 +1563,22 @@
     .nd-news { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
     .nd-news__what { grid-column: 1; grid-row: 2; }
     .nd-news__src { grid-column: 1; grid-row: 3; }
+  }
+}
+
+/* Home card titles are the full names on every width (Tosin, 31 Oct), the longest being "Power Plant Owners and Operators":
+   at 13px it needs 241px, so the narrow cards give the title back some room (tighter side padding and gaps). */
+@layer components {
+  @media (min-width: 640px) {
+    .nd-catcard__head { gap: 6px; }
+    .nd-catcard__name { letter-spacing: -0.01em; }
+  }
+  @media (min-width: 1024px) and (max-width: 1279px) {
+    .nd-home .nd-catcard { padding-inline: 8px; }
+  }
+  @media (max-width: 420px) {
+    .nd-catcard__toggle, .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { padding-inline: 10px; gap: 8px; }
+    .nd-catcard__caret { margin-right: 0; }
+    .nd-catcard--stack .nd-catcard__name { letter-spacing: -0.01em; }
   }
 }
