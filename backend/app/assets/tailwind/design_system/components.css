@@ -1582,3 +1582,9 @@
     .nd-catcard--stack .nd-catcard__name { letter-spacing: -0.01em; }
   }
 }
+
+/* A card title is shown in full whatever the font (Tosin, 31 Oct): it shrinks to the 13px floor first, then these headings
+   (and only these) may take a second line, never an ellipsis. */
+@layer components {
+  .nd-catcard__name { white-space: normal; overflow: visible; text-overflow: clip; }
+}
