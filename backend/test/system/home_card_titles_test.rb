@@ -6,9 +6,10 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
   include DirectoryBuilders
 
   setup do
-    %w[reactor_vendor fuel components waste_decommissioning utility data_center_offtaker reactor_services venture_capital government_agency].each do |key|
-      cite!(company("#{key.humanize} Company", roles: [ role(key) ]))
-    end
+    roles = %w[reactor_vendor fuel components waste_decommissioning utility data_center_offtaker reactor_services venture_capital government_agency].to_h { |key| [ key, role(key) ] }
+    roles.each { |key, bucket_role| cite!(company("#{key.humanize} Company", roles: [ bucket_role ])) }
+    # Two-digit counts, as on production: the count must never take the title's room.
+    11.times { |n| cite!(company("Extra Utility #{n}", roles: [ roles["utility"] ])) }
     cite!(plant("Some Station", facility_type: "power_reactor", status: "operating"))
   end
 
@@ -16,7 +17,7 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
            "Power Buyers", "Services and Engineering", "Investors", "Government and Research", "Plants and Sites" ].freeze
 
   test "every title reads in full on ONE line, none cut short, all ten at one shared size, at every width" do
-    [ 360, 390, 640, 700, 768, 900, 1024, 1100, 1280, 1440 ].each do |width|
+    [ 320, 360, 390, 640, 700, 768, 900, 1024, 1100, 1280, 1440 ].each do |width|
       resize_viewport(width, 900)
       visit root_path
       sleep 0.2

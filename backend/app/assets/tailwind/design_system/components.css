@@ -1592,5 +1592,9 @@
   .nd-catcard__head--link .nd-catcard__name { grid-column: 2; grid-row: 1; font-size: clamp(13px, calc((100cqi - 26px) / 19.2), 15px); line-height: 20px; white-space: nowrap; overflow: visible; text-overflow: clip; }
   .nd-catcard__head--link .nd-catcard__count { grid-column: 2; grid-row: 2; line-height: 16px; }
   .nd-catcard--stack .nd-catcard__name { font-size: clamp(13px, calc((100cqi - 80px) / 19.2), 17px); white-space: nowrap; overflow: visible; text-overflow: clip; }
-  @media (max-width: 340px) { .nd-catcard--stack .nd-catcard__name { font-size: 11px; } }
+  /* The narrowest phones (320px) can't hold the longest title at the 13px floor beside the icon: the icon goes, the floor stays. */
+  @media (max-width: 340px) {
+    .nd-catcard--stack .nd-catcard__head .nd-ic { display: none; }
+    .nd-catcard__toggle, .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { padding-inline: 8px; gap: 6px; }
+  }
 }
