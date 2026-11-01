@@ -1583,8 +1583,14 @@
   }
 }
 
-/* A card title is shown in full whatever the font (Tosin, 31 Oct): it shrinks to the 13px floor first, then these headings
-   (and only these) may take a second line, never an ellipsis. */
+/* Home card titles (Tosin, 31 Oct): nothing wraps and nothing is cut. The ten cards share one title size, set for the longest
+   ("Power Plant Owners and Operators", 32 characters, about 0.58em each) from the room the title has, down to the 13px floor.
+   On wide screens the count sits under the title, so the title has the card's full width beside the icon. */
 @layer components {
-  .nd-catcard__name { white-space: normal; overflow: visible; text-overflow: clip; }
+  .nd-catcard__head--link { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; align-items: start; }
+  .nd-catcard__head--link > .nd-ic { grid-row: 1 / span 2; }
+  .nd-catcard__head--link .nd-catcard__name { grid-column: 2; grid-row: 1; font-size: clamp(13px, calc((100cqi - 26px) / 19.2), 15px); line-height: 20px; white-space: nowrap; overflow: visible; text-overflow: clip; }
+  .nd-catcard__head--link .nd-catcard__count { grid-column: 2; grid-row: 2; line-height: 16px; }
+  .nd-catcard--stack .nd-catcard__name { font-size: clamp(13px, calc((100cqi - 80px) / 19.2), 17px); white-space: nowrap; overflow: visible; text-overflow: clip; }
+  @media (max-width: 340px) { .nd-catcard--stack .nd-catcard__name { font-size: 11px; } }
 }

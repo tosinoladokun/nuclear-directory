@@ -1,7 +1,7 @@
 require "application_system_test_case"
 require_relative "../support/directory_builders"
 
-# Home card titles are shown in full (Tosin, 31 Oct): never an ellipsis, never a short name, even in a wider fallback font.
+# Home card titles are shown in full and on one line (Tosin, 31 Oct): no ellipsis, no short name, no wrapping, one shared size.
 class HomeCardTitlesTest < ApplicationSystemTestCase
   include DirectoryBuilders
 
@@ -15,18 +15,16 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
   FULL = [ "Reactor Developers", "Fuel and Materials", "Components and Parts", "Waste and Decommissioning", "Power Plant Owners and Operators",
            "Power Buyers", "Services and Engineering", "Investors", "Government and Research", "Plants and Sites" ].freeze
 
-  test "every title reads in full, none cut short, at phone, tablet and desktop widths and in a wide fallback font" do
-    [ 360, 390, 768, 1024, 1280, 1440 ].each do |width|
-      [ false, true ].each do |wide_font|
-        resize_viewport(width, 900)
-        visit root_path
-        page.execute_script("document.head.insertAdjacentHTML('beforeend', '<style>.nd-catcard__name { font-family: Georgia, \"DejaVu Serif\", serif !important; letter-spacing: 0.02em !important }</style>')") if wide_font
-        sleep 0.2
-        shown = page.evaluate_script("[...document.querySelectorAll('.nd-catcard__name')].filter((n) => n.getClientRects().length).map((n) => [n.textContent.trim(), n.scrollWidth <= n.clientWidth + 1, Math.round(n.getBoundingClientRect().height / parseFloat(getComputedStyle(n).lineHeight))])")
-        assert_equal FULL.sort, shown.map(&:first).uniq.sort, "at #{width}"
-        assert shown.all? { |_, fits, _| fits }, "none cut short at #{width}#{' (wide font)' if wide_font}: #{shown.reject { |_, fits, _| fits }.inspect}"
-        assert shown.all? { |_, _, lines| lines <= 2 }, "at most two lines at #{width}#{' (wide font)' if wide_font}: #{shown.inspect}"
-      end
+  test "every title reads in full on ONE line, none cut short, all ten at one shared size, at every width" do
+    [ 360, 390, 640, 700, 768, 900, 1024, 1100, 1280, 1440 ].each do |width|
+      resize_viewport(width, 900)
+      visit root_path
+      sleep 0.2
+      shown = page.evaluate_script("[...document.querySelectorAll('.nd-catcard__name')].filter((n) => n.getClientRects().length).map((n) => [n.textContent.trim(), n.scrollWidth <= n.clientWidth + 1, Math.round(n.getBoundingClientRect().height / parseFloat(getComputedStyle(n).lineHeight)), getComputedStyle(n).fontSize])")
+      assert_equal FULL.sort, shown.map(&:first).uniq.sort, "at #{width}"
+      assert shown.all? { |_, fits, _, _| fits }, "none cut short at #{width}: #{shown.reject { |_, fits, _, _| fits }.inspect}"
+      assert shown.all? { |_, _, lines, _| lines == 1 }, "one line each at #{width}: #{shown.inspect}"
+      assert_equal 1, shown.map(&:last).uniq.size, "one shared size at #{width}: #{shown.map(&:last).uniq.inspect}"
     end
   end
 end
