@@ -69,7 +69,7 @@ Build order: #558, #559, #560, then #556, #557, #561. Homepage: no change (kept 
   | Under construction | half-filled |
   | Planned | dotted grey |
 
-- **Sources are quiet:** one source mark per row, and one quiet line at the end of a page ("13 sources · Cite this page · Report a correction"). No Verified badge, no checked date in the panel, no per-row Report a correction.
+- **Sources are quiet:** an opened row shows its description, the quote, the source's domain as one muted link, then "Open <company>" (#655); one source mark per row, and one quiet line at the end of a page ("13 sources · Cite this page · Report a correction"). No Verified badge, no checked date in the panel, no per-row Report a correction.
 - **No logos for now.** Page heads align left.
 - **Removals approved on 25 Oct**, as exceptions to "Nothing live is removed":
   - on profiles: "Not verified yet", the Verified badge and checked date, per-row Report a correction, boxed source numbers;
@@ -455,7 +455,7 @@ Spacing in px with its token; a value with no token is listed under "Not yet to 
 |---|---|---|---|---|---|---|
 | Key facts panel | `nd-overview` | label (`dt`), value (`dd`), `__line`, `__val`, `__cites`; `__keep` and `__last` for a list's last name; `__stack`; `__foot`; `__fix` | padding 24 (space-6); gap 12 row, 16 column; foot 16 above | one column, label above value | label column and value column; lists and chips stacked | the stacked row's −8px margin; the 2px phone label gap |
 | Type chip | `nd-bucketchip` | category icon, `__full`, `__short` | padding 2 10 2 8; icon gap 6; chips gap 4 and 8 | stacked, full width | stacked, full width | the text starts 30px in from the value edge |
-| Source marker | `nd-src` | number linked to `#source-n`; in fact rows, the domain and checked date | padding 1 6; 4 before (space-1); 44px tap area on touch | same | same | record sources repeat on every record row |
+| Source marker | `nd-src` | number linked to `#source-n`; in fact rows, the domain and checked date; in an opened row (`nd-src--plain`, #655) only the domain, a muted link to the source page, after the quote and before "Open <company>", with no checked date and no confidence (the date stays in the page's Sources list) | padding 1 6; 4 before (space-1); 44px tap area on touch | same | same | record sources repeat on every record row |
 | Crumbs | `nd-crumbs` | links separated by " / " | none | one line | one line | no spacing tokens |
 | Profile header | `nd-profile` | mark (56px), name, summary with its sources, role tag row (`nd-tag`) | gap 16 and 20; main gap 10 | mark above the name | mark beside the name | 20 and 10 aren't tokens |
 | Fact row | `nd-factrow` | who → what, detail, quote (`nd-quote`), side (sources, confidence, Report a correction) | padding 14 0; gap 6 and 16 | one column, side wraps under | two columns | 14 and 6 aren't tokens |

@@ -66,4 +66,44 @@ class UpdatesFeedTest < ActionDispatch::IntegrationTest
       Rails.cache = store
     end
   end
+
+  test "awards carry amount and date; roles read as a sentence; at most 5 of one kind a day" do
+    VerificationEvent.delete_all
+    doe = Organization.create!(name: "DOE", slug: "doe", verification_status: "verified", verified_by: BY)
+    funds = Relationship.create!(from_organization: doe, to_organization: @vendor, relationship_type: "funds", verification_status: "verified", verified_by: BY)
+    award = DealTerm.create!(link: funds, term_type: "award", amount_usd: 12_500_000, starts_on: Date.new(2026, 9, 1), external_id: "A-1",
+      verification_status: "verified", verified_by: BY)
+    role = OrganizationRole.create!(organization: doe, role: Role.find_or_create_by!(key: "government_agency") { |r| r.name = "Government agency" },
+      verification_status: "verified", verified_by: BY)
+    plants = 7.times.map { |n| Facility.create!(name: "Feed Plant #{n}", slug: "feed-plant-#{n}", facility_type: "power_reactor", verification_status: "verified", verified_by: BY) }
+    links = plants.map { |plant| FacilityRelationship.create!(organization: @vendor, facility: plant, relationship_type: "vendor_for", verification_status: "verified", verified_by: BY) }
+    VerificationEvent.delete_all
+    [ award, role, *links ].each { |record| approve(record, at: 2.hours.ago) }
+
+    titles = Updates.new.entries.map(&:title)
+    assert_includes titles, "Award ($12.5 million, Sep 2026): DOE funds Feed Vendor"
+    assert_includes titles, "DOE is now listed under Government agency"
+    assert_equal 5, titles.grep(/is the reactor developer for/).size
+  end
+
+  test "hidden approvals beyond a batch don't hide older public ones; a news item goes to its public page; a deal says its form and stage" do
+    hidden = 3.times.map { |n| Organization.create!(name: "Gone #{n}", slug: "gone-#{n}", verification_status: "pending") }
+    hidden.each { |org| approve(org, at: 1.minute.ago) }
+    gone = Organization.create!(name: "Gone Co", slug: "gone-co", verification_status: "pending")
+    @news.news_mentions.create!(subject: gone)
+    assert_equal "New company: Feed Vendor", Updates.new.entries(limit: 3, batch: 2).last.title
+    assert_equal [ :company, "feed-vendor" ], Updates.new.entries.find { |e| e.kind == "news" }.page
+
+    deal = DealTerm.create!(link: @link, term_type: "offtake", agreement: "mou", status: "announced", capacity_mw: 50, signed_on: Date.new(2026, 8, 1),
+      verification_status: "verified", verified_by: BY)
+    approve(deal, at: 1.minute.ago)
+    assert_equal "Power deal (MOU, announced, Aug 2026): Feed Buyer offtakes from Feed Vendor", Updates.new.entries.first.title
+  end
+
+  test "a few queries per batch, not per entry" do
+    queries = 0
+    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { Updates.new.entries }
+    assert_operator queries, :<, 25
+  end
 end

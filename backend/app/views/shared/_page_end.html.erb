@@ -13,7 +13,7 @@
     <%= link_to correction_url_for(subject), rel: "nofollow" do %><%= icon("flag", size: 16) %>Report a correction<% end %>
   </nav>
   <% if sources.any? %>
-    <div class="nd-quietpanel"><%= render "shared/sources_list", sources:, hidden: true %></div>
+    <div class="nd-quietpanel"><%= render "shared/sources_list", sources:, checked: local_assigns[:checked], hidden: true %></div>
   <% end %>
   <div class="nd-quietpanel" id="cite"><%= render "shared/cite_panel", text: cite_text %></div>
 </div>
