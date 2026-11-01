@@ -65,8 +65,11 @@
       <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
     <% end %>
 
+    <% map = ConnectionsMap.for_company(p) %>
     <%# Nothing to list, no empty column (it held a gap open under the name). %>
-    <% if p.deals.any? || plants.any? || p.latest.any? %><div class="nd-company__main nd-secs">
+    <% if map.edges.any? || p.deals.any? || plants.any? || p.latest.any? %><div class="nd-company__main nd-secs">
+      <%# Connections (#363, #561): in the middle column, before Latest and Deals and links. %>
+      <%= render("shared/connections_map", map:) if map.edges.any? %>
       <%= render "shared/latest", items: p.latest if p.latest.any? %>
       <% if p.deals.any? %>
         <section aria-labelledby="deals-heading" id="deals">
@@ -89,7 +92,7 @@
       <% end %>
     </div><% end %>
 
-    <%= render "shared/page_end", sources: p.citations.sources, cite_text:, subject: p.name %>
+    <%= render "shared/page_end", sources: p.citations.sources, checked: p.citations.checked, cite_text:, subject: p.name %>
     <%# Other companies like this one (#606), after the record's own actions (sources, cite, report) on every width. %>
     <% similar = SimilarCompanies.for(p) %>
     <% if similar.any? %>

@@ -28,7 +28,9 @@ module DataQuality::Matching
   DAILY_RECOMMENDS = 500
   DAILY_ROLES = 200
   # What Data Quality may fill on a published company (PM, 30 Oct: complete companies).
-  FIELDS = %w[website description short_description hq_city hq_state].freeze
+  FIELDS = %w[website description short_description hq_city hq_state sec_cik].freeze
+  # An SEC CIK is sourced to EDGAR only (PM, 31 Oct).
+  EDGAR_HOSTS = %w[sec.gov www.sec.gov efts.sec.gov data.sec.gov].freeze
   MAX_DESCRIPTION = 2_000
   VERDICTS = %w[approve reject].freeze
   # Stops an action part-way: everything it wrote rolls back, and the message is the row's error.
@@ -208,7 +210,8 @@ module DataQuality::Matching
   #   { action: "propose_role", target: company id or slug, role: "reactor_vendor",
   #     quote: "…", source_url: "https://…", reason: "…" }
   # propose_fields (PM, 30 Oct): sourced values for a published company's
-  # website, description, short description or HQ, as one company claim:
+  # website, description, short description, HQ or SEC CIK (from an sec.gov
+  # page only), as one company claim:
   #   { action: "propose_fields", target:, fields: { "hq_city" => "Austin", … }, quote:, source_url:, reason: }
   # It's matched to the company and shows as a Change (old → new) for Tosin.
   def self.propose_role(row, directory, requeue)
@@ -230,6 +233,12 @@ module DataQuality::Matching
       return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if fields["description"].to_s.length > MAX_DESCRIPTION
       # Only a website people can open (https with a host): never a javascript: or broken link (Infra).
       return fail_with.call("the website must be a full https:// address") if fields.key?("website") && !directory.readable_website?(fields["website"])
+      if fields.key?("sec_cik")
+        cik = directory.normalize_cik(fields["sec_cik"])
+        return fail_with.call("an SEC CIK is up to 10 digits") unless cik.to_s.match?(/\A\d{10}\z/)
+        return fail_with.call("an SEC CIK's source must be an sec.gov (EDGAR) page") unless EDGAR_HOSTS.include?((URI.parse(row["source_url"].to_s.strip).host rescue nil).to_s.downcase)
+        fields["sec_cik"] = cik
+      end
     end
     # A retry (same request_key) is answered first, whatever today's count.
     key = row["request_key"].presence&.to_s
@@ -243,6 +252,9 @@ module DataQuality::Matching
     Candidate.transaction do
       record, error = target(row, directory)
       raise Abort, error if error
+      if fields["sec_cik"] && (holder = directory.organization(sec_cik: fields["sec_cik"])) && holder.id != record.id
+        raise Abort, "CIK #{fields['sec_cik']} is already #{holder.name}'s (##{holder.id})"
+      end
 
       source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
       raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
