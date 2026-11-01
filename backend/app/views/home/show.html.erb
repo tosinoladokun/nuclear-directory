@@ -18,4 +18,15 @@
   <div class="nd-home__cats">
     <%= render "shared/category_cards", cards: @cards %>
   </div>
+
+  <%# Browse by topic: the tag lists (#606), each with its count. %>
+  <% topics = Tag.listed %>
+  <% if topics.any? %>
+    <div class="nd-home__topics">
+      <p class="nd-label" id="home-topics">Topics</p>
+      <nav class="nd-chips" aria-labelledby="home-topics">
+        <% topics.each do |tag, count| %><%= render "shared/chip", label: tag.name, href: companies_path(tag: tag.to_param), count: count %><% end %>
+      </nav>
+    </div>
+  <% end %>
 </main>
