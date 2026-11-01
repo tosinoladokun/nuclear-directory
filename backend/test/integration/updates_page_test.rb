@@ -56,4 +56,14 @@ class UpdatesPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-updates", 0
     assert_select "main", /Nothing has been added yet/
   end
+
+  test "the HTML is private (only the entries are cached), and a source URL URI can't parse still names its publisher, unlinked" do
+    @news.update_columns(url: "https://www.example.org/café")
+    Rails.cache.delete("updates_page_entries")
+    get updates_path
+    assert_response :success
+    assert_no_match(/public/, response.headers["Cache-Control"].to_s)
+    assert_select ".nd-updates span.nd-news__src", "example.org"
+    assert_select ".nd-updates a.nd-news__src[href*='example.org']", count: 0
+  end
 end

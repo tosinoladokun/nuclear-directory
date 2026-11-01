@@ -6,8 +6,8 @@ class UpdatesController < ApplicationController
   CACHE_FOR = 1.hour
 
   def index
-    @entries = Updates.new.entries(limit: 50)
-    expires_in 10.minutes, public: true
+    # The page's HTML stays private (it carries a per-visitor CSRF token and bot-dependent analytics tags); only the entries are cached.
+    @entries = Rails.cache.fetch("updates_page_entries", expires_in: 10.minutes) { Updates.new.entries(limit: 50) }
   end
 
   def feed

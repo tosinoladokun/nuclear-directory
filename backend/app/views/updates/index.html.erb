@@ -22,9 +22,14 @@
             <span class="nd-news__title" title="<%= entry.title %>" data-truncate><%= link_to entry.title, href, class: "nd-link" %></span>
             <% if (summary = entry.summary.to_s.squish.truncate(160, separator: " ").presence) %><span class="nd-news__summary" title="<%= entry.summary.to_s.squish %>" data-truncate><%= summary %></span><% end %>
           </span>
-          <% if entry.source_url && (host = (URI.parse(entry.source_url).host rescue nil)) %>
-            <%= link_to entry.source_url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "updates" },
-                  aria: { label: "#{entry.title}: read on #{host.delete_prefix("www.")} (opens the source)" } do %><%= host.delete_prefix("www.") %><span aria-hidden="true"> ↗</span><% end %>
+          <% if entry.source_url.present? %>
+            <% publisher = url_publisher(entry.source_url) %>
+            <% if safe_source_url(Struct.new(:url).new(entry.source_url)) %>
+              <%= link_to entry.source_url, class: "nd-news__src nd-link nd-link--muted", target: "_blank", rel: "noopener noreferrer", data: { outbound: "updates" },
+                    aria: { label: "#{entry.title}: read on #{publisher} (opens the source)" } do %><%= publisher %><span aria-hidden="true"> ↗</span><% end %>
+            <% else %>
+              <span class="nd-news__src type-small text-ink-muted"><%= publisher %></span>
+            <% end %>
           <% end %>
         </li>
       <% end %>
