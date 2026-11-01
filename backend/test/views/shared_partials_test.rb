@@ -156,7 +156,7 @@ class SharedPartialsTest < ActionView::TestCase
     assert_select "section.nd-catcard.nd-bucket--fuel a.nd-catcard__more[aria-label=?]", "Open the list of 1 company in Fuel and materials", text: /Open the list ›/
 
     render partial: "shared/category_cards", locals: { cards: [ HomeCategories::Card.new(category: Category.find("utilities"), count: 14, records: [ centrus ]) ] }
-    assert_select "a.nd-catcard__head[aria-label=?]", "Power Plant Owners and Operators (#{Category.find("utilities").name}), 14 companies"
+    assert_select "a.nd-catcard__head[aria-label=?]", "Power Plant Owners and Operators, 14 companies"
   end
 
   test "empty state with and without an action" do
