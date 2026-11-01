@@ -15,10 +15,22 @@
 class HomeCategories
   SHOWN = 3
 
-  # What each card's title says: the same name the list pages' index shows (Category#list_name), so a
-  # category reads the same on the home page and on its list (Design's 27 Oct audit; the 20 Oct title-case
-  # labels are gone). The category's own full name stays in title and aria-label where it differs.
-  def self.label(category) = category.list_name
+  # What each card's title says (Tosin, 31 Oct): the full name in Title Case on every width, desktop and phone alike.
+  # The category's own name stays in title and aria-label where it differs; the title shrinks to 13px to stay on one line.
+  LABELS = {
+    "reactor-developers" => "Reactor Developers",
+    "fuel" => "Fuel and Materials",
+    "components" => "Components and Parts",
+    "waste-decommissioning" => "Waste and Decommissioning",
+    "utilities" => "Power Plant Owners and Operators",
+    "plants" => "Plants and Sites",
+    "power-buyers" => "Power Buyers",
+    "services" => "Services and Engineering",
+    "investors" => "Investors",
+    "government-research" => "Government and Research"
+  }.freeze
+
+  def self.label(category) = LABELS.fetch(category.key, category.name)
 
   # records: Organizations or Facilities (sites), in order.
   Card = Data.define(:category, :count, :records) do
