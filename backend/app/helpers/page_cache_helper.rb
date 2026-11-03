@@ -12,7 +12,8 @@
 module PageCacheHelper
   CONTENTS = %i[title og_title og_description head].freeze
   Card = Data.define(:digest, :alt)
-  EXPIRES = 1.day
+  # Short enough that a dependency a stamp missed heals within hours (Infra).
+  EXPIRES = 6.hours
 
   # version: what the page reads, as a stamp (PageStamps for a company or plant page); the whole
   # directory's DataVersion by default.

@@ -68,7 +68,8 @@ module PageStamps
       rows("facility_relationships", "t.id IN (#{plant_links})"), rows("facilities", "t.id IN (#{plants})"),
       rows("deal_terms", "t.id IN (#{deals})"), rows("licensing_stages", "t.id IN (#{stages})"),
       rows("news_mentions", "t.subject_type = 'Organization' AND t.subject_id = #{x}"), rows("news_items", "t.id IN (#{news})"),
-      evidence([ [ "Organization", x ], [ "Relationship", rels ], [ "OrganizationRole", roles ], [ "OrganizationRole", partner_roles ],
+      # Partners' own evidence too: a partner's written line shows only once it has a source (Infra).
+      evidence([ [ "Organization", x ], [ "Organization", partners ], [ "Relationship", rels ], [ "OrganizationRole", roles ], [ "OrganizationRole", partner_roles ],
         [ "OrganizationTechnology", technologies ], [ "FacilityRelationship", plant_links ], [ "Facility", plants ], [ "DealTerm", deals ],
         [ "LicensingStage", stages ] ])
     ])
@@ -90,7 +91,7 @@ module PageStamps
       rows("organization_roles", "t.id IN (#{company_roles})"),
       rows("deal_terms", "t.id IN (#{deals})"), rows("licensing_stages", "t.id IN (#{stages})"),
       rows("news_mentions", "t.subject_type = 'Facility' AND t.subject_id IN (#{places})"), rows("news_items", "t.id IN (#{news})"),
-      evidence([ [ "Facility", places ], [ "FacilityRelationship", links ], [ "OrganizationRole", company_roles ], [ "DealTerm", deals ],
+      evidence([ [ "Facility", places ], [ "Organization", companies ], [ "FacilityRelationship", links ], [ "OrganizationRole", company_roles ], [ "DealTerm", deals ],
         [ "LicensingStage", stages ] ])
     ])
   end

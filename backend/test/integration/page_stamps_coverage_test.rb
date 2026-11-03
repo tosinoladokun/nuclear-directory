@@ -90,4 +90,25 @@ class PageStampsCoverageTest < ActionDispatch::IntegrationTest
   test "everything a plant page reads is in its stamp" do
     assert_covered("/plants/stamp-station") { PageStamps.plant(@site.id) }
   end
+
+  # Each kind of change that should rebuild the pages showing it (Infra).
+  def assert_moves(stamp, why)
+    before = stamp.call
+    yield
+    assert_not_equal before, stamp.call, why
+  end
+
+  test "each kind of dependency moves the stamps of the pages that show it" do
+    company = -> { PageStamps.company(@company.id) }
+    plant = -> { PageStamps.plant(@site.id) }
+    partner = Organization.find_by!(slug: "stamp-buyer")
+    assert_moves(company, "a partner's first source") { cite(partner, "another quote") }
+    assert_moves(plant, "a listed company's new source") { cite(partner, "a third quote") }
+    assert_moves(company, "a partner's role") { OrganizationRole.where(organization: partner).update_all(updated_at: 1.hour.from_now) }
+    assert_moves(company, "a news item edited") { NewsItem.update_all(updated_at: 2.hours.from_now) }
+    assert_moves(plant, "a news item edited") { NewsItem.update_all(updated_at: 3.hours.from_now) }
+    assert_moves(company, "a deal term edited") { DealTerm.update_all(updated_at: 4.hours.from_now) }
+    assert_moves(plant, "a unit renamed") { Facility.find_by!(slug: "stamp-station-1").update!(name: "Stamp Station Unit 1") }
+    assert_moves(company, "a plant it links to renamed") { Facility.find_by!(slug: "stamp-station-1").update!(name: "Stamp Station One") }
+  end
 end
