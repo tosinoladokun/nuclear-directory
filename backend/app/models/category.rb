@@ -23,12 +23,11 @@ Category = Data.define(:key, :name, :title, :about, :role_keys, :links, :plants,
     super
   end
 
-  # The label where only a short one fits (a chip on a phone, a home card):
-  # approved by Tosin, 17 Oct. The full name stays in titles and aria-labels.
+  # The label where only a short one fits (a chip on a phone): approved by Tosin, 17 Oct.
+  # The full name stays in titles and aria-labels; home card titles never use it (2 Nov).
   def short_name = short || name
 
-  # The name the list pages' index and the home cards both show, so the same category reads the same
-  # everywhere (Design's 27 Oct audit): its name, or its short name where the name is long.
+  # The name the list pages' index shows: its name, or its short name where the name is long.
   LIST_NAME_LIMIT = 22
   def list_name = name.length > LIST_NAME_LIMIT ? short_name : name
 
