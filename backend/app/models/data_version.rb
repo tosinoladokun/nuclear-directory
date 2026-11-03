@@ -31,7 +31,12 @@ module DataVersion
 
   def self.compute
     stamps = TABLES.map { |model| model.pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
-    stamps << Evidence.pick(Arel.sql("MAX(id)"), Arel.sql("COUNT(*)"), Arel.sql("SUM(subject_id)"), Arel.sql("SUM(hashtext(subject_type))")).join("/")
+    # Evidence has no updated_at, and some of its writes skip callbacks: a
+    # fingerprint of what pages show from each row (its subject, source,
+    # quote, fields, confidence and when it was last checked) catches any edit.
+    stamps << Evidence.pick(Arel.sql("COUNT(*)"), Arel.sql(<<~SQL.squish)).join("/")
+      SUM(hashtext(concat_ws('|', id, subject_type, subject_id, source_id, quote, confidence, array_to_string(fields, ','), last_confirmed_at)))
+    SQL
     stamps << VerificationEvent.maximum(:id).to_s
     Digest::SHA256.hexdigest([ REVISION, Date.current.iso8601, *stamps ].join("|")).first(20)
   end

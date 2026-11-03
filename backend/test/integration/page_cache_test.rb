@@ -31,7 +31,14 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     assert_equal fresh, body
     assert_match "<title>Cache Co", body
     assert_match %(rel="canonical" href="http://www.example.com/companies/cache-co"), body
+    get "http://www.example.com:4000/companies/cache-co"
+    assert_match %(href="http://www.example.com:4000/companies/cache-co"), body, "another port is another entry"
     assert_operator queries, :<=, 4
+
+    before = DataVersion.current
+    Evidence.where(subject: @company).update_all(quote: "t.") # no callbacks, as a reconfirm writes
+    DataVersion.expire!
+    assert_not_equal before, DataVersion.current, "an evidence edit changes the version"
 
     @company.update!(description: "Builds small reactors.")
     get "/companies/cache-co"
