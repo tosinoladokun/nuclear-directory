@@ -448,7 +448,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     source = Source.find_by!(url: format(DataQuality::Plugins::CompanyPages::EDGAR, 1018724))
     claim = DataQuality::Plugins::CompanyPages.new.extract(source, nil).find { |c| c[:payload].key?("website") }
-    assert_equal "https://www.acmefission.com", claim[:payload]["website"]
+    assert_equal "https://www.acmefission.com/", claim[:payload]["website"]
     assert_includes claim[:quote], "www.acmefission.com"
   end
 end

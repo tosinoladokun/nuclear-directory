@@ -222,7 +222,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # The website the company gave the SEC, only when it has none on file (gap fill, 2 Nov).
       website = data["website"].to_s.strip
       if website.match?(%r{\A(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?\z}i) && !@directory.organization_website(company.id) && (quote = fragment.(/"website":\s*"[^"]*"/))
-        claims << { kind: "organization", payload: { "name" => company.name, "website" => website.match?(%r{\Ahttps?://}i) ? website : "https://#{website}" }, quote: }
+        # Its home page over https (DQ, 2 Nov: our sites' policy; never a deep path).
+        host = (URI.parse(website.match?(%r{\Ahttps?://}i) ? website : "https://#{website}").host rescue nil)
+        claims << { kind: "organization", payload: { "name" => company.name, "website" => "https://#{host}/" }, quote: } if host
       end
       claims
     end
