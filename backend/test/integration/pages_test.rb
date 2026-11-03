@@ -259,4 +259,18 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_includes body, DirectoryHelper::CORRECTIONS_EMAIL
     assert_not_includes body, "—"
   end
+
+  test "AX: llms.txt names the dataset DOI, the feeds, the crawl rules and the dataset citation; every page links the feed, the guide and the dataset" do
+    get "/llms.txt"
+    assert_includes response.body, "https://doi.org/#{StructuredDataHelper::DATASET_DOI}"
+    assert_includes response.body, updates_feed_url
+    assert_includes response.body, robots_url
+    assert_match "For the data as a whole, cite the dataset", response.body
+
+    get "/about"
+    head = Nokogiri::HTML(response.body).at("head")
+    assert_equal updates_feed_url, head.at("link[rel=alternate][type='application/atom+xml']")["href"]
+    assert_equal llms_url, head.at("link[rel=alternate][type='text/plain']")["href"]
+    assert_equal "https://doi.org/#{StructuredDataHelper::DATASET_DOI}", head.at("link[rel=describedby]")["href"]
+  end
 end

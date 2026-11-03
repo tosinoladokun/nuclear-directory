@@ -20,6 +20,10 @@
     <% end %>
 
     <%= yield :head %>
+    <%# For feed readers and agents: what's new, and the plain-text guide. %>
+    <link rel="alternate" type="application/atom+xml" title="Nuclear Directory: what's new" href="<%= updates_feed_url %>">
+    <link rel="alternate" type="text/plain" title="Guide for AI agents (llms.txt)" href="<%= llms_url %>">
+    <link rel="describedby" title="Open dataset (CC BY 4.0)" href="https://doi.org/<%= StructuredDataHelper::DATASET_DOI %>">
     <%= render "shared/link_preview" %>
 
     <%# Site icon: a nucleus with two orbits (script/build_site_icon.py). %>
