@@ -271,5 +271,8 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
       assert_equal "not_a_feed_dropped", DataQuality::Stages::Crawl.call(plugin:).stats["Energy Northwest"], "one already flagged is dropped too"
     end
     refute feed.reload.crawl_needs_human?
+    page = Source.find_by!(source_kind: Plugin::HOMEPAGE_KIND)
+    assert_nil page.etag, "its next read is a full one, so a repaired feed is found again"
+    assert_nil page.last_modified
   end
 end

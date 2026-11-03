@@ -182,7 +182,8 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
 
     def drop_found_feed(company, feed)
       Source.where(source_kind: HOMEPAGE_KIND).where("content_text LIKE ?", "Company: #{Source.sanitize_sql_like(company)}\n%").find_each do |page|
-        page.update!(content_text: "Company: #{company}\nFeed: none", content_sha256: nil)
+        # No validators kept, so its next read is a full one and finds a repaired feed.
+        page.update!(content_text: "Company: #{company}\nFeed: none", content_sha256: nil, etag: nil, last_modified: nil)
       end
       feed.update!(crawl_status: "ok", status_reason: "#{NOT_A_FEED}; dropped from the found feeds")
     end
