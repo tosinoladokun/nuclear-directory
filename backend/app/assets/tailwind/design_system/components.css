@@ -1595,6 +1595,7 @@
     .nd-footer__col a { font: 400 15px/24px var(--font-text); color: var(--nd-ink); text-decoration: none; }
     .nd-footer__col a:hover { text-decoration: underline; text-underline-offset: 3px; }
     .nd-footer__label { margin: 0 0 var(--nd-space-1); font: 500 11px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
+    .nd-footer__label--topics { margin-top: var(--nd-space-3); }
     .nd-footer__count { grid-column: 1 / -1; margin: 0; padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); font: 400 12px/18px var(--font-mono); color: var(--nd-ink-muted); }
   }
 }
