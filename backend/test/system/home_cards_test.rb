@@ -159,4 +159,23 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal [ "true" ], all(".nd-catcard__toggle").map { |t| t["aria-expanded"] }.uniq, "every card opens"
     assert_button "Collapse all"
   end
+
+  test "on a touch screen from 640px the card title link keeps its 44px tap target (Copilot)" do
+    resize_viewport(768, 900)
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" }, { name: "pointer", value: "coarse" } ])
+    visit root_path
+    heights = page.evaluate_script("[...document.querySelectorAll('.nd-catcard__link')].filter((a) => a.getClientRects().length).map((a) => Math.round(a.getBoundingClientRect().height))")
+    assert heights.size >= 3 && heights.all? { |height| height >= 44 }, "the link itself is 44px tall: #{heights.inspect}"
+  ensure
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
+  end
+
+  test "below 341px the caret button's tap area still reaches 44px (Copilot)" do
+    resize_viewport(320, 800)
+    visit root_path
+    width = page.evaluate_script("(() => { const b = document.querySelector('.nd-catcard__toggle'); const after = getComputedStyle(b, '::after'); return b.getBoundingClientRect().width + parseFloat(after.left) * -1 + parseFloat(after.right) * -1 })()")
+    assert_operator width, :>=, 44
+  end
 end

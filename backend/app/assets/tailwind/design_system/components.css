@@ -348,7 +348,7 @@
   /* Touch screens keep 44px targets, even if that means scrolling. */
   @media (pointer: coarse) and (min-width: 640px) {
     .nd-catcard__head, .nd-catcard__row { min-height: 44px; height: auto; }
-    .nd-catcard__link { align-items: center; }
+    .nd-catcard__link { align-items: center; min-height: 44px; }
   }
   /* Phones: built for scrolling. Every card starts open; its header stays at
      the top while its own rows scroll under it, and opens or closes the card. */
@@ -1598,6 +1598,7 @@
     .nd-catcard--stack .nd-catcard__link .nd-ic { display: none; }
     .nd-catcard--stack .nd-catcard__link { padding-left: 6px; gap: 4px; }
     .nd-catcard__toggle { width: 32px; }
+    .nd-catcard__toggle::after { inset-inline: -6px; }
     .nd-catcard--stack .nd-catcard__name { letter-spacing: -0.01em; }
   }
 }
