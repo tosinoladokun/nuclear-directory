@@ -32,16 +32,32 @@ class NoWrapTest < ApplicationSystemTestCase
   PAGES = ->(test) { [ "/", "/companies", "/companies?category=reactor-developers", "/companies?category=reactor-developers&role=project_developer", "/companies?category=services", "/companies?category=plants",
     "/companies/#{test.instance_variable_get(:@allied).slug}", "/plants/#{test.instance_variable_get(:@plant).slug}" ] }
 
-  test "on a touch phone the footer credit keeps the space before its link and the link is 44px tall" do
+  test "the footer's one-line text and the crawler page's Glance stay one line each from 760px up and on a phone (Design, #660)" do
+    [ [ 760, 900 ], [ 1024, 800 ], [ 1440, 800 ], [ 390, 844 ] ].each do |width, height|
+      resize_viewport(width, height)
+      visit bot_path
+      assert_empty page.evaluate_script(AUDIT), "no-wrap audit at #{width}"
+      assert_equal [ "Pace, per site", "Visits per page", "Rules", "If blocked" ], all(".nd-glance dt").map(&:text)
+      heights = page.evaluate_script("[...document.querySelectorAll('.nd-glance__fact')].map((f) => Math.round(f.getBoundingClientRect().height))")
+      assert heights.all? { |h| h <= 52 }, "one value and one label each, no third line at #{width}: #{heights.inspect}"
+    end
+    resize_viewport(1440, 800)
+    visit bot_path
+    assert_equal "29px", page.evaluate_script("getComputedStyle(document.querySelector('.nd-info__summary')).lineHeight")
+    assert_equal page.evaluate_script("getComputedStyle(document.querySelector('h1')).color"), page.evaluate_script("getComputedStyle(document.querySelector('.nd-info__summary')).color"), "the summary is in ink, the page's main point"
+  end
+
+  test "on a touch phone the footer links are 44px tall and their tap areas never overlap (the credit moved to About, #660)" do
     resize_viewport(390, 844)
     page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
     page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" }, { name: "pointer", value: "coarse" } ])
     visit root_path
-    credit = page.evaluate_script("(() => { const p = document.querySelector('.nd-footer__credit'); return [p.innerText, Math.round(p.querySelector('a').getBoundingClientRect().height), matchMedia('(pointer: coarse)').matches] })()")
-    assert_equal [ "Hosting supported by Render.", true ], [ credit[0], credit[2] ]
-    assert_operator credit[1], :>=, 43, "the Render link is a 44px tap target"
-    apart = page.evaluate_script("(() => { const credit = document.querySelector('.nd-footer__credit a').getBoundingClientRect(); return [...document.querySelectorAll('.nd-footer__links a')].every((a) => { const r = a.getBoundingClientRect(); return r.bottom <= credit.top + 0.5 || r.top >= credit.bottom - 0.5 || r.right <= credit.left || r.left >= credit.right }) })()")
-    assert apart, "tap areas of the footer links and the credit never overlap"
+    heights = page.evaluate_script("[...document.querySelectorAll('.nd-footer__links a')].map((a) => Math.round(a.getBoundingClientRect().height))")
+    assert_operator heights.size, :>=, 5
+    assert heights.all? { |height| height >= 43 }, "every footer link is a 44px tap target: #{heights.inspect}"
+    apart = page.evaluate_script("(() => { const rects = [...document.querySelectorAll('.nd-footer__links a')].map((a) => a.getBoundingClientRect()); return rects.every((a, i) => rects.every((b, j) => i === j || a.right <= b.left + 1 || b.right <= a.left + 1 || a.bottom <= b.top + 1 || b.bottom <= a.top + 1)) })()")
+    assert apart, "tap areas of the footer links never overlap"
+    assert_no_selector ".nd-footer__credit"
     assert_empty page.evaluate_script(AUDIT)
   ensure
     page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])

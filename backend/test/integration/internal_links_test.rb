@@ -17,10 +17,11 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
 
   test "the footer and the home page link the tag lists that have companies, and no empty one" do
     get companies_path
-    assert_select "footer nav[aria-label=Topics] .nd-footer__topics-label", "Topics:"
-    assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "smr"), "Small modular reactors"
-    assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "fusion")
-    assert_select "footer nav[aria-label=Topics] a[href=?]", companies_path(tag: "conversion"), count: 0
+    assert_select "footer nav[aria-label=Directory] .nd-footer__label--topics", "Topics"
+    assert_select "footer nav[aria-label=Directory] a[href=?]", companies_path(tag: "smr"), "Small modular reactors"
+    assert_select "footer nav[aria-label=Directory] a[href=?]", companies_path(tag: "fusion")
+    assert_select "footer nav[aria-label=Directory] a[href=?]", companies_path(tag: "conversion"), count: 0
+    assert_select "footer .nd-footer__links a[href*='tag=']", 0, "the phone row is unchanged: no topics there"
 
     get root_path
     assert_select ".nd-home__topics > p.nd-label", "Topics"
