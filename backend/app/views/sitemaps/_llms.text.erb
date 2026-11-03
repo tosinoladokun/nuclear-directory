@@ -25,10 +25,22 @@
 - [Our crawler](<%= bot_url %>): how the directory collects its sources.
 - [Disclaimer](<%= disclaimer_url %>) and [privacy](<%= privacy_url %>).
 
+## Data and feeds
+
+- [Open dataset](<%= data_url %>): every published company, plant, link and deal as CSV and JSON, under CC BY 4.0. Archived on Zenodo: https://doi.org/<%= StructuredDataHelper::DATASET_DOI %>
+- [What's new](<%= updates_feed_url %>): an Atom feed of newly approved facts, deals and news, each with its page and source.
+- [Snapshot](<%= api_snapshot_url %>): a JSON summary of the directory's counts.
+- Company and plant pages carry schema.org JSON-LD (Organization, Place) with their sources.
+
 ## Citing
 
 - Link the page and name the source it lists. The numbered Sources section at the foot of each page gives the title, the publisher and the link of every source.
 - Counts and dates change as records are added, so cite the page rather than a number.
+- For the data as a whole, cite the dataset: Nuclear Directory (2026), US nuclear supply chain dataset, https://doi.org/<%= StructuredDataHelper::DATASET_DOI %>
+
+## Crawling
+
+- Search engines and AI crawlers are welcome; see [robots.txt](<%= robots_url %>). <%= SitemapsController::DISALLOWED.to_sentence %> are not for crawling.
 
 ## Corrections
 
