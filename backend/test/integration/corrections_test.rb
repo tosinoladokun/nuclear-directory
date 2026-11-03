@@ -132,7 +132,8 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     cite!(link(company("Google"), "offtake_with", kairos))
     get company_path(slug: "kairos-power")
 
-    assert_select "a[href^='/corrections/new']", 1
+    assert_select "main a[href^='/corrections/new']", 1
+    assert_select "footer a[href^='/corrections/new']", 1, "and the footer's Add a company"
     assert_select ".nd-quiet a[href=?]", new_correction_path(subject: "Kairos Power", page: "/companies/kairos-power"), text: "Report a correction"
   end
 
@@ -141,7 +142,7 @@ class CorrectionsTest < ActionDispatch::IntegrationTest
     cite!(link(company("Georgia Power"), "owns", vogtle))
     get plant_path(slug: "plant-vogtle")
 
-    assert_select "a[href^='/corrections/new']", 1
+    assert_select "main a[href^='/corrections/new']", 1
     assert_select ".nd-quiet a[href=?]", new_correction_path(subject: "Plant Vogtle", page: "/plants/plant-vogtle"), text: "Report a correction"
   end
 end

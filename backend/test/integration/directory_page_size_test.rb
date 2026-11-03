@@ -14,7 +14,7 @@ class DirectoryPageSizeTest < ActionDispatch::IntegrationTest
 
   test "the first page, the full count, and Show more with the filters kept" do
     get companies_path(q: "Paged Fission")
-    assert_select ".nd-pagehead__count", /#{PAGE + 5} results/
+    assert_select ".nd-pagehead__count", "#{PAGE + 5}"
     assert_equal PAGE, rows
     assert_select "turbo-frame#directory-rows[target=_top]", 1, "company and plant links leave the frame; only Show more targets it"
     assert_select "turbo-frame#directory-rows a.nd-btn[href=?][data-turbo-frame=directory-rows]", companies_path(q: "Paged Fission", shown: 2), "Show more"

@@ -11,10 +11,10 @@
   total = @companies_total + @plants_total
   more = @companies_total > @companies.size || @plants_total > @plants.size
   # The plants category mixes plants, mines and test reactors (VOICE.md).
-  noun, plural = if listing.category&.plants then [ "plant or site", "plants and sites" ]
-                 elsif listing.searching? && list_page.nil? then [ "result", "results" ]
-                 else [ "company", "companies" ]
-                 end
+  noun = if listing.category&.plants then "plant or site"
+         elsif listing.searching? && list_page.nil? then "result"
+         else "company"
+         end
   # A category's title and description use the words people search with,
   # and the description gives its count (#290); the heading stays short.
   category_page = list_page && !listing.searching?
@@ -66,7 +66,7 @@
     <% end %>
 
   <div class="nd-listpage__main">
-  <%= render "shared/page_head", name: heading, count: pluralize(total, noun, plural:), about: (list_page.description(1) if category_page),
+  <%= render "shared/page_head", name: heading, count: (total if listing.searching? || listing.filtered? || listing.tag), about: (list_page.description(1) if category_page),
         square: (listing.category ? bucket_icon(listing.category, size: 24) : tag_icon),
         bucket: (listing.category ? (listing.category unless listing.category.plants) : tag_bucket) %>
 

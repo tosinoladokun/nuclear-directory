@@ -21,25 +21,23 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_no_match(/set to discard IP addresses/, response.body)
   end
 
-  test "privacy, disclaimer and the crawler page are linked from every page's footer" do
-    get root_path
-    assert_select "footer.nd-footer nav[aria-label='About this site']" do
-      assert_select "a[href='/about']", "About"
-      assert_select "a[href='/data']", "Our data"
-      assert_select "a[href='/updates']", "What's new"
-      assert_select "a[href='/privacy']", "Privacy"
-      assert_select "a[href='/disclaimer']", "Disclaimer"
-      assert_select "a[href='/bot']", "Our crawler"
-      assert_select "a[href='mailto:hello@nuclear-directory.org']", "Contact us"
+  test "every page's footer is one row of links: About, Our data, What's new, Add a company, Privacy, Contact (#700)" do
+    [ root_path, companies_path, about_path ].each do |path|
+      get path
+      assert_select "footer.nd-footer nav[aria-label='About this site']" do
+        assert_equal [ "About", "Our data", "What's new", "Add a company", "Privacy", "Contact" ], css_select("footer.nd-footer a").map { |node| node.text.strip }
+        assert_select "a[href='/about']"
+        assert_select "a[href='/data']"
+        assert_select "a[href='/updates']"
+        assert_select "a[href='/privacy']"
+        link = css_select("a[rel=nofollow]").find { |node| node.text.strip == "Add a company" }
+        assert link, "Add a company is a nofollow link"
+        assert_equal new_correction_path(subject: "A missing company", page: path), link["href"]
+        assert_select "a[href='mailto:hello@nuclear-directory.org']", "Contact"
+      end
+      assert_select "footer.nd-footer .nd-footer__desk, footer.nd-footer .nd-footer__count, footer.nd-footer .nd-footer__brand", 0
+      assert_select "footer.nd-footer a[href='https://render.com']", 0
     end
-    # Desktop: three columns and the live counts (#660); Render is credited on the About page, not in the footer.
-    assert_select "footer.nd-footer .nd-footer__desk" do
-      assert_select ".nd-footer__brand", /The US nuclear industry, from public sources\./
-      assert_equal [ "All companies", "Plants and sites", "Our data", "What's new" ], css_select("nav[aria-label=Directory] a").map(&:text)
-      assert_equal [ "About", "Our crawler", "Privacy", "Disclaimer", "Contact us" ], css_select("nav[aria-label=About] a").map(&:text)
-      assert_select ".nd-footer__count", /companies · .* plants? (and sites|or site)/
-    end
-    assert_select "footer.nd-footer a[href='https://render.com']", 0
 
     { about_path => "About", data_path => "Our data", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
       get path

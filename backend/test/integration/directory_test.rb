@@ -89,7 +89,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "title", "Fusion energy companies in the US | Nuclear Directory"
     assert_select "h1", /Fusion/
-    assert_select ".nd-pagehead__count", "1 company"
+    assert_select ".nd-pagehead__count", "1"
     assert_select "a.nd-line[href='/companies/helion']"
     assert_select "a.nd-line[href='/companies/kairos-power']", count: 0
     assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies?tag=fusion", 1
@@ -143,7 +143,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "title", "Nuclear reactor and project developers in the US · Nuclear Directory"
     assert_select "h1", /Developers/
-    assert_select ".nd-pagehead__count", "2 companies"
+    assert_select ".nd-pagehead__count", 0, "the side list already shows the count (#700)"
     assert_select ".nd-idx a[aria-current=page]", /Developers/
     assert_select ".nd-chips a.nd-chip[aria-current=page]", /Developers/, "phones: the same categories as a scrolling row"
     assert_select "a.nd-line[href='/companies/kairos-power'] .nd-line__what", /Reactor designer/, "no short description yet: role · specialty"
@@ -237,7 +237,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "select[name=technology]"
     assert_select "select[name=technology] option", text: /coolant/, count: 0
     assert_select "select[name=state]"
-    assert_select ".nd-pagehead__count", "1 plant or site"
+    assert_select ".nd-pagehead__count", 0
   end
 
   test "search results are grouped even when only one kind matches" do
@@ -311,7 +311,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   test "an unknown filter value is ignored, not applied behind an Any control" do
     get companies_path(category: "reactor-developers", state: "ZZ")
 
-    assert_select ".nd-pagehead__count", "2 companies"
+    assert_select ".nd-pagehead__count", 0
     assert_select "select[name=state] option[selected]", count: 0
   end
 
