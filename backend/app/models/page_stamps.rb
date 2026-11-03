@@ -18,6 +18,10 @@
 #
 # A new section on either page that reads something else must be added here,
 # or that part of the page waits for the next deploy or day to update.
+# test/integration/page_stamps_coverage_test.rb fails when a page reads a
+# record whose change doesn't move its stamp. (Site: a section that reads
+# other companies, such as Similar companies, needs its rows here too, or must
+# render outside page_cache.)
 module PageStamps
   # A page's cache version: its stamp, the deploy and today's date (pages say
   # "Accessed <date>" and read link dates against today).
@@ -38,7 +42,10 @@ module PageStamps
       "array_to_string(e.fields, ','), e.last_confirmed_at, s.updated_at)))) FROM evidence e JOIN sources s ON s.id = e.source_id WHERE #{where})"
   end
 
-  def self.digest(parts) = "md5(concat_ws('|', #{parts.join(', ')}))"
+  # The role and technology names every page labels things with: small tables, read whole.
+  LABELS = [ "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM roles t)", "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM technologies t)" ].freeze
+
+  def self.digest(parts) = "md5(concat_ws('|', #{(parts + LABELS).join(', ')}))"
 
   def self.company_sql(x)
     rels = "SELECT r.id FROM relationships r WHERE r.from_organization_id = #{x} OR r.to_organization_id = #{x}"
