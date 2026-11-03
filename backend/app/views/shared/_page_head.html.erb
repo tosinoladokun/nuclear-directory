@@ -4,6 +4,7 @@
     about:    a one-line description (optional)
     crumbs:   [[label, href], ...] (optional)
     square:   HTML for a 40px category square icon (optional); bucket: the Category that colours it
+    see_all:  a Category: a quiet "See all <category> ›" link after the tags (optional)
     tags:     [text, ...], or [{ text:, icon:, bucket: }, ...] for tags with an icon in their category's colour (optional) %>
 <header class="nd-pagehead <%= bucket_class(bucket) if local_assigns[:bucket] %>">
   <% if local_assigns[:crumbs].present? %>
@@ -22,4 +23,5 @@
       <% else %><span class="<%= tag_class %>"><%= item[:icon] %><%= item[:text] %></span><% end %>
     <% else %><span class="nd-tag"><%= item %></span><% end %>
   <% end %></div><% end %>
+  <% if local_assigns[:see_all] %><p class="nd-pagehead__more"><%= link_to "See all #{see_all.name.downcase} ›", directory_url_for(category: see_all), class: "nd-link nd-link--muted" %></p><% end %>
 </header>

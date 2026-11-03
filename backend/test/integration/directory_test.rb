@@ -110,7 +110,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get company_path(slug: nextera.slug)
     assert_response :success
     assert_select ".nd-overview dt", text: "Type", count: 0
-    assert_select ".nd-crumbs a", count: 0
+    assert_equal [ "Nuclear Directory" ], css_select(".nd-breadcrumb a").map { |node| node.text.strip }, "no category crumb, and no See all link"
+    assert_select ".nd-pagehead__more", 0
   end
 
   test "a pending site's row shows its name and verified units, not its own type or place" do

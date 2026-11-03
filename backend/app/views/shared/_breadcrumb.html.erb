@@ -1,0 +1,9 @@
+<%# The trail at the top of a company or plant page (#708): Nuclear Directory › category › the page. One line, never wrapping:
+    the page's own name shortens first (full text in title), then the category. Locals: trail (DirectoryHelper#page_trail). %>
+<nav class="nd-breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <% trail.each do |label, path| %>
+      <li><% if path %><%= link_to label, path, class: "nd-link nd-link--muted", title: label %><% else %><span aria-current="page" title="<%= label %>"><%= label %></span><% end %></li>
+    <% end %>
+  </ol>
+</nav>

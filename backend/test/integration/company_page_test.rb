@@ -42,7 +42,22 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__about .nd-src", 0, "the summary carries no source marks"
     assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
-    assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+  end
+
+  test "the trail reads Nuclear Directory > category > the company, with a See all link and a BreadcrumbList (#708)" do
+    get company_path(slug: "kairos-power")
+
+    assert_equal [ "Nuclear Directory", "Developers", "Kairos Power" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }
+    assert_select ".nd-breadcrumb li a[href='/']", "Nuclear Directory"
+    assert_select ".nd-breadcrumb li:last-child span[aria-current=page]", "Kairos Power"
+    assert_select ".nd-pagehead__more a[href=?]", "/companies?category=reactor-developers", "See all developers ›"
+
+    graph = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"]
+    list = graph.find { |node| node["@type"] == "BreadcrumbList" }
+    assert_equal [ "Nuclear Directory", "Developers", "Kairos Power" ], list["itemListElement"].map { |item| item["name"] }
+    assert_equal [ 1, 2, 3 ], list["itemListElement"].map { |item| item["position"] }
+    assert_equal [ "http://www.example.com/", "http://www.example.com/companies?category=reactor-developers", "http://www.example.com/companies/kairos-power" ], list["itemListElement"].map { |item| item["item"] }
   end
 
   test "a deal is one line: the other company, the verb, the date and a source mark; it opens to its details" do
@@ -371,7 +386,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     cite!(link(backer, "invests_in", @kairos))
     get company_path(slug: "backer-fund")
 
-    assert_select ".nd-crumbs a[href=?]", "/companies?category=investors", text: "Investors"
+    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=investors", text: "Investors"
   end
 
   test "the key facts have no Type chips: the tags and the trail say what the company is" do
@@ -386,7 +401,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__tags .nd-tag:not(.nd-tag--icon)", 0
     assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--reactor-developers svg", minimum: 1
     assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--services svg", minimum: 1
-    assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Developers"
   end
 
   test "the legal name isn't listed again under Also known as" do
@@ -407,7 +422,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     link(backer, "invests_in", @kairos)
     get company_path(slug: "quiet-fund")
 
-    assert_select ".nd-crumbs a", count: 0
+    assert_select ".nd-breadcrumb a", count: 1
   end
 
   test "a missing description or headquarters is left out, with no list of what's missing" do
@@ -462,7 +477,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     cite!(bare)
     get company_path(slug: bare.slug)
 
-    assert_select ".nd-crumbs", 0
+    assert_select ".nd-breadcrumb a", 1
     assert_select ".nd-company__glance", 0
     assert_select "#cite .nd-cite", /“Bare Co\.” http/, "a name ending in a full stop isn't given a second one"
   end

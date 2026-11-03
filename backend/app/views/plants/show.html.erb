@@ -21,9 +21,7 @@
 <main class="nd-page nd-page--company">
   <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
   <%= json_ld_tag(plant_json_ld(p, page_url: plant_url(slug: p.slug))) %>
-  <nav class="nd-crumbs" aria-label="Breadcrumb">
-    <%= link_to "Plants and sites", directory_url_for(category: Category.find("plants")), class: "nd-link nd-link--muted" %> / <span aria-current="page"><%= p.name %></span>
-  </nav>
+  <%= render "shared/breadcrumb", trail: page_trail(Category.find("plants"), p.name) %>
 
   <%
     owner_parties = p.parties_for("owns")
@@ -68,7 +66,7 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, tags: %>
+      <%= render "shared/page_head", name: p.name, tags:, see_all: Category.find("plants") %>
       <% if p.status.present? %><p class="nd-plantstatus"><%= render "shared/status_mark", status: p.status %><% if units_text %><span class="text-ink-muted"> · <%= units_text %></span><% end %></p><% end %>
       <% sentence = plant_owner_sentence(p) %>
       <% if sentence %>

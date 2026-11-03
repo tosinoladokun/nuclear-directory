@@ -1608,3 +1608,17 @@
     .nd-news__src { grid-column: 1; grid-row: 3; }
   }
 }
+
+/* The trail on a company or plant page (#708): one line; the page's own name shortens first, the category only past 45% of the line. */
+@layer components {
+  .nd-breadcrumb { font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); min-width: 0; }
+  .nd-breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 6px; }
+  .nd-breadcrumb li { display: flex; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
+  .nd-breadcrumb li:first-child { flex: none; }
+  .nd-breadcrumb li:nth-child(2):not(:last-child) { flex-shrink: 0; max-width: 45%; }
+  .nd-breadcrumb li:last-child { flex-shrink: 100; }
+  .nd-breadcrumb li + li::before { content: "\203A"; color: var(--nd-control); margin-right: 6px; flex: none; }
+  .nd-breadcrumb li > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  @media (pointer: coarse) { .nd-breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; } }
+  .nd-pagehead__more { margin: 0; font: 400 14px/20px var(--font-text); }
+}

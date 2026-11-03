@@ -17,12 +17,7 @@
 <main class="nd-page nd-page--company">
   <%# In the body, not the head: Turbo keeps head scripts from earlier pages, which would pile up one graph per profile visited. %>
   <%= json_ld_tag(company_json_ld(p, page_url: company_url(slug: p.slug))) %>
-  <%# A trail of one (the page itself) says nothing, so a company with no category has none. %>
-  <% if p.category %>
-    <nav class="nd-crumbs" aria-label="Breadcrumb">
-      <%= link_to p.category.name, directory_url_for(category: p.category), class: "nd-link nd-link--muted" %><span class="nd-crumbs__here"> / <span aria-current="page"><%= p.name %></span></span>
-    </nav>
-  <% end %>
+  <%= render "shared/breadcrumb", trail: page_trail(p.category, p.name) %>
 
   <%
     index = [ { label: "Overview", href: "#overview", current: true } ]
@@ -57,7 +52,7 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, about: (p.description.presence || company_summary(p)), tags: company_tags(p) %>
+      <%= render "shared/page_head", name: p.name, about: (p.description.presence || company_summary(p)), tags: company_tags(p), see_all: p.category %>
     </div>
 
     <%# No key facts, no empty card. %>
