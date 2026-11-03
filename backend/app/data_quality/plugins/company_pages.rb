@@ -134,6 +134,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # its legal name, listing and headquarters address (Data Quality).
       if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))
         DataQuality::Snapshot.take(edgar, fetcher: @fetcher)
+        # Read before this version of its claims (website, 2 Nov): extracted again.
+        edgar.update!(extracted_sha256: nil) if edgar.extracted_sha256.present? && edgar.extracted_rows_sha256 != rows_sha256(edgar)
         stats["pages"] += 1
       end
       # A home page that couldn't be read is answered as read (the Enrich page
@@ -151,6 +153,14 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       stats["companies"] += 1
     end
     stats
+  end
+
+  # An SEC record with what extract proposes from it: a new version reads it again.
+  EDGAR_VERSION = "edgar-website-1"
+  def rows_sha256(source)
+    return super unless source.url.match?(EDGAR_URL)
+
+    Digest::SHA256.hexdigest("#{EDGAR_VERSION}\n#{source.content_text}") if source.content_text.present?
   end
 
   def extract(source, run)
@@ -218,6 +228,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # Only a US state (EDGAR codes other places A1, X1…), never a PO box.
       if city.present? && STATES.key?(state) && !street.match?(/\b(P\.?\s*O\.?\s*Box|Post\s+Office\s+Box)\b/i) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
         claims << { kind: "organization", payload: { "name" => company.name, "hq_city" => city.titleize, "hq_state" => state }, quote: }
+      end
+      # The website the company gave the SEC, only when it has none on file (gap fill, 2 Nov).
+      website = data["website"].to_s.strip
+      if website.match?(%r{\A(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?\z}i) && !@directory.organization_website(company.id) && (quote = fragment.(/"website":\s*"[^"]*"/))
+        # Its home page over https (DQ, 2 Nov: our sites' policy; never a deep path).
+        host = (URI.parse(website.match?(%r{\Ahttps?://}i) ? website : "https://#{website}").host rescue nil)
+        claims << { kind: "organization", payload: { "name" => company.name, "website" => "https://#{host}" }, quote: } if host
       end
       claims
     end

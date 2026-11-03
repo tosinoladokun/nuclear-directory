@@ -27,14 +27,15 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   PAGE_SIZE = 50
   MAX_PAGES = 10
   NEW_PER_NIGHT = 5
-  FIELDS = [ "Project", "Organization", "Award", "Program", "Status", "Location", "Released", "Area", "Funder" ].freeze
+  FIELDS = [ "Project", "Organization", "Award", "Program", "Status", "Location", "Released", "Area", "Funder", "Website" ].freeze
 
   Project = Data.define(:facts) do
     def line = FIELDS.filter_map { |label| "#{label}: #{facts[label]}" if facts[label].present? }.join(" | ")
   end
 
-  def initialize(fetcher: DataQuality::Fetcher.new)
+  def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new)
     @fetcher = fetcher
+    @directory = directory
   end
 
   def crawl(_run)
@@ -72,7 +73,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     # two projects for one lab agree; each project is its own award term.
     [
       { kind: "organization", quote:, payload: { "name" => FUNDER, "aliases" => [ "ARPA-E" ] } },
-      { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])) },
+      { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])).merge(website(recipient["name"], facts["Website"], aliases: Array(recipient["aliases"]))) },
       { kind: "relationship", quote:, payload: link.merge("description" => "Research funding from ARPA-E (nuclear fission and fusion)") },
       # An award needs its amount and a start: ARPA-E's release date of the
       # project is the date it states; without both, no term is proposed.
@@ -84,7 +85,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   end
 
   # The line, with what extract proposes from it: a new version reads every project again.
-  EXTRACT_VERSION = "award-start-1"
+  EXTRACT_VERSION = "website-1"
   def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   def new_sources_per_run = NEW_PER_NIGHT
@@ -115,6 +116,25 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     def location(text)
       city, state = text.to_s.split(/,\s*/, 2)
       state.to_s.match?(/\A[A-Z]{2}\z/) && city.present? ? { "hq_city" => city.squish, "hq_state" => state } : {}
+    end
+
+    # The website ARPA-E lists for the organization, only for a company that has none (gap fill, 2 Nov).
+    def website(name, url, aliases: [])
+      return {} if url.blank?
+
+      # The company as match will find it: name, an alias (an acronym), else a unique brand match.
+      company = [ name, *aliases ].lazy.filter_map { |each| @directory.organization(name: each) }.first ||
+        @directory.same_brand_organizations(name).then { |brand| brand.first if brand.one? }
+      root = home_page(url) or return {}
+      company && @directory.organization_website(company.id) ? {} : { "website" => root }
+    end
+
+    # A listed address as its home page over https (DQ: never a department page or deep path).
+    def home_page(url)
+      host = URI.parse(url.to_s.strip).host.presence
+      "https://#{host}" if host
+    rescue URI::InvalidURIError
+      nil
     end
 
     def organization(name)
@@ -171,7 +191,9 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     def project_line(row, area)
       fields = row.dig("attributes", "fields") || {}
       path = Array(fields["urls"]).find { |url| url.start_with?("/programs-and-initiatives/") } or return
-      organization = Array(fields["organization"]).first&.dig("attributes", "title").to_s.squish
+      org = Array(fields["organization"]).first
+      organization = org&.dig("attributes", "title").to_s.squish
+      website = Array(org&.dig("fields", "website")).filter_map { |link| link["uri"] if link.is_a?(Hash) }.find { |uri| uri.to_s.match?(%r{\Ahttps?://[^\s/]+}) }
       return if organization.empty? || fields["title"].blank?
 
       award = fields["award"].to_s.delete(",")
@@ -179,7 +201,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
         "Award" => (award.match?(/\A\d+\z/) ? "$#{award.to_i.to_fs(:delimited)}" : nil),
         "Program" => Array(fields["related_programs"]).filter_map { |program| program.dig("fields", "title") }.first,
         "Status" => fields["status"], "Location" => fields["location"], "Released" => fields["release_date"], "Area" => area,
-        "Funder" => "#{FUNDER} (ARPA-E)" }
+        "Funder" => "#{FUNDER} (ARPA-E)", "Website" => website }
       [ "#{SITE}#{path}", Project.new(facts:).line ]
     end
 
