@@ -1,7 +1,7 @@
 // Tosin's rule (DESIGN.md, #365): text inside a box never wraps, and a source
 // number never starts a line on its own. Returns what breaks it, as strings.
 (() => {
-  const ONE_LINE = ".nd-bucketchip, .nd-btn, .nd-pill, .nd-tag, .nd-sugg, .nd-cat__name, .nd-cat__examples, .nd-catcard__name, .nd-catcard__rowname, .nd-catcard__more, .nd-sitechip, .nd-overview__line--fit, .nd-overview dd a:not(.nd-src), .nd-home .nd-suggs, .nd-footer__links a, .nd-footer__credit, .nd-line__name, .nd-line__what, .nd-line__end, .nd-line__cap, .nd-chip, .nd-idx__label, .nd-crow__name, .nd-crow__rest, .nd-crow__what, .nd-st"
+  const ONE_LINE = ".nd-bucketchip, .nd-btn, .nd-pill, .nd-tag, .nd-sugg, .nd-cat__name, .nd-cat__examples, .nd-catcard__name, .nd-catcard__rowname, .nd-catcard__more, .nd-sitechip, .nd-overview__line--fit, .nd-overview dd a:not(.nd-src), .nd-home .nd-suggs, .nd-footer__links a, .nd-footer__credit, .nd-line__name, .nd-line__what, .nd-line__end, .nd-line__cap, .nd-chip, .nd-idx__label, .nd-crow__name, .nd-crow__rest, .nd-crow__what, .nd-st, .nd-footer__brand p, .nd-footer__col a, .nd-info a[href^='mailto:']"
   // The redesigned rows and index (#560): a name, description or location may end in an ellipsis,
   // but only with its full text one hover away (a title on it or on the link around it).
   const MAY_TRUNCATE = ".nd-line__name, .nd-line__what, .nd-line__end, .nd-idx__label, .nd-crow__name, .nd-crow__what"
