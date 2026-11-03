@@ -32,7 +32,8 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
     get company_path(slug: @oklo.slug)
 
     assert_select "#similar-heading", /Similar companies\s*5/, "the shared section head with its count"
-    assert_select "#similar a.nd-line .nd-line__mark .nd-catsq", minimum: 5, message: "the shared row with the category square"
+    assert_select "#similar a.nd-line.nd-line--bare", minimum: 5, message: "the shared bare company row, as the category and tag lists use (no mark by design, Design 31 Oct)"
+    assert_select "#similar .nd-catsq", 0
     body = response.body
     assert_operator body.index('id="similar"'), :>, body.index("nd-company__end"), "after the record's own actions (sources, cite, report), on every width"
     links = css_select("#similar a.nd-line").map { |a| a["href"] }
