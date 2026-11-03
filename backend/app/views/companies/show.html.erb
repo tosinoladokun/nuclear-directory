@@ -97,7 +97,7 @@
     <% similar = SimilarCompanies.for(p) %>
     <% if similar.any? %>
       <section aria-labelledby="similar-heading" id="similar" class="nd-similar">
-        <%= render "shared/section_head", title: "Similar companies", count: similar.size, id: "similar-heading" %>
+        <%= render "shared/section_head", title: "Similar companies", id: "similar-heading" %>
         <ul class="nd-lines">
           <% short = ShortDescription.for(similar, category: p.category) %>
           <% similar.each do |company| %>

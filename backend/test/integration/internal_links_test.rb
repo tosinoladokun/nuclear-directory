@@ -32,7 +32,7 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
   test "a company page lists up to five similar companies: its tag first, then its category, never itself" do
     get company_path(slug: @oklo.slug)
 
-    assert_select "#similar-heading", /Similar companies\s*5/, "the shared section head with its count"
+    assert_select "#similar-heading", /\ASimilar companies\s*\z/, "the shared section head, with no count (it is nearly always the limit)"
     assert_select "#similar a.nd-line.nd-line--bare", minimum: 5, message: "the shared bare company row, as the category and tag lists use (no mark by design, Design 31 Oct)"
     assert_select "#similar .nd-catsq", 0
     body = response.body
