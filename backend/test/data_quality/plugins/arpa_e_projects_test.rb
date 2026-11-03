@@ -129,8 +129,10 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
     assert_includes line, "Website: https://www.exodysenergy.com/"
     company = plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload]
     assert_equal "https://www.exodysenergy.com", company["website"]
-    deep = line.sub("https://www.exodysenergy.com/", "http://www.exodysenergy.com/nuclear/team")
-    assert_equal "https://www.exodysenergy.com", plugin.extract(Source.new(url: "https://x", content_text: deep), nil)[1][:payload]["website"], "home page over https"
+    deep = line.sub("https://www.exodysenergy.com/", "https://www.exodysenergy.com/nuclear/team")
+    assert_equal "https://www.exodysenergy.com", plugin.extract(Source.new(url: "https://x", content_text: deep), nil)[1][:payload]["website"], "its home page"
+    plain = line.sub("https://www.exodysenergy.com/", "http://www.exodysenergy.com/")
+    refute plugin.extract(Source.new(url: "https://x", content_text: plain), nil)[1][:payload].key?("website"), "http: skipped (DQ, 3 Nov)"
 
     Organization.create!(name: "Exodys Energy Inc", website: "https://exodys.example").aliases.find_or_create_by!(alias: "Exodys Energy Inc")
     refute plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload].key?("website")
