@@ -9,7 +9,7 @@ require "app_hosts"
 # Debounced (Infra): it rebuilds only once the data has stood still for a
 # whole tick (what it saw last time is what it sees now), so a crawl or a
 # burst of approvals is handled once, after it ends. After each page it rests
-# twice as long as the page took, so it uses at most about a third of the
+# three times as long as the page took, so it uses at most about a quarter of the
 # CPU, and it stops if the data changes again (the next quiet tick finishes).
 # Most connected pages first.
 #
@@ -22,7 +22,7 @@ class PageWarmJob < ApplicationJob
   WARMED = "page_warm/warmed"
   SEEN = "page_warm/seen"
   PAUSE = 0.1
-  REST = 2
+  REST = 3
 
   def perform(pause: PAUSE, debounce: true)
     return unless (host = self.class.host)
