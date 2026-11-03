@@ -6,7 +6,6 @@ class HomeController < ApplicationController
   class_attribute :suggestion_random, default: nil
 
   def show
-    @cards = HomeCategories.cards
     @suggestions = HomeSuggestions.pick(random: suggestion_random || Random.new)
   end
 end

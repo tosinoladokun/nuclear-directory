@@ -19,6 +19,8 @@ class Evidence < ApplicationRecord
   validate { errors.add(:fields, "must be column names") if fields&.any? { |name| !name.match?(/\A[a-z_]+\z/) } }
 
   after_save :refresh_subject_confidence
+  # Cached pages show quotes and sources (#707): rebuild them at once.
+  after_commit { DataVersion.expire! }
   after_destroy :refresh_subject_confidence, unless: :destroyed_by_association
 
   # The v1 confidence rule, kept in one place so it is easy to change:
