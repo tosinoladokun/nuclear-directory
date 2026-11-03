@@ -56,6 +56,7 @@ class DirectorySnapshot
     CHANGES.write(CHANGED_AT, changed_at.to_f)
     @lock.synchronize { @generation += 1 }
     CACHE.clear
+    DataVersion.expire!
   end
 
   # The app's cache in production; tests use their own, since the test
