@@ -440,4 +440,15 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert plugin.send(:description_page?, home, company), "an unreadable About page doesn't win"
     assert_match DataQuality::Plugins::CompanyPages::ABOUT_PAGE, "/about.html"
   end
+
+  test "EDGAR's website for a company with none on file (2 Nov)" do
+    @company.update_columns(website: nil, sec_cik: "0001018724", enrich_requested_at: Time.current)
+    stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{data\.sec\.gov/submissions/CIK0001018724\.json}).to_return(body: { name: "ACME", website: "www.acmefission.com", addresses: { business: {} } }.to_json)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    source = Source.find_by!(url: format(DataQuality::Plugins::CompanyPages::EDGAR, 1018724))
+    claim = DataQuality::Plugins::CompanyPages.new.extract(source, nil).find { |c| c[:payload].key?("website") }
+    assert_equal "https://www.acmefission.com", claim[:payload]["website"]
+    assert_includes claim[:quote], "www.acmefission.com"
+  end
 end

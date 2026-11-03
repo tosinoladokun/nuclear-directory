@@ -219,6 +219,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       if city.present? && STATES.key?(state) && !street.match?(/\b(P\.?\s*O\.?\s*Box|Post\s+Office\s+Box)\b/i) && (quote = fragment.(/"business":\s*\{[^}]*\}/))
         claims << { kind: "organization", payload: { "name" => company.name, "hq_city" => city.titleize, "hq_state" => state }, quote: }
       end
+      # The website the company gave the SEC, only when it has none on file (gap fill, 2 Nov).
+      website = data["website"].to_s.strip
+      if website.match?(%r{\A(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?\z}i) && !@directory.organization_website(company.id) && (quote = fragment.(/"website":\s*"[^"]*"/))
+        claims << { kind: "organization", payload: { "name" => company.name, "website" => website.match?(%r{\Ahttps?://}i) ? website : "https://#{website}" }, quote: }
+      end
       claims
     end
 
