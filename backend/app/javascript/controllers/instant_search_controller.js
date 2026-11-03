@@ -1,8 +1,10 @@
 import { Controller } from "@hotwired/stimulus"
 import { prepare, search } from "search_index"
 
-// One index per page, shared by the header and home search boxes.
+// One index per page, shared by the header and home search boxes: { promise, at, failed } by URL. A page visit starts with a
+// fresh state for a failed or ten-minute-old entry (the HTTP cache lifetime), so Turbo visits don't keep either.
 const indexes = {}
+const INDEX_LIFETIME = 10 * 60 * 1000
 
 // Instant results under a search field (#41). Typing loads /search?q= into a
 // Turbo Frame below the field; Enter still submits the form to the full
@@ -20,6 +22,10 @@ export default class extends Controller {
   // from the page, never from the field: after a reconnect (a Turbo snapshot)
   // the field may already hold the short one.
   connect() {
+    const entry = indexes[this.indexUrlValue]
+    if (entry && (entry.failed || Date.now() - entry.at > INDEX_LIFETIME)) delete indexes[this.indexUrlValue]
+    this.index = null
+    this.fetching = false
     if (!this.shortPlaceholderValue || !this.longPlaceholderValue) return
     this.longPlaceholder = this.longPlaceholderValue
     this.narrow = window.matchMedia("(max-width: 379px)")
@@ -51,11 +57,16 @@ export default class extends Controller {
   fetchIndex() {
     if (!this.indexUrlValue || this.index || this.fetching) return
     this.fetching = true
-    indexes[this.indexUrlValue] ||= fetch(this.indexUrlValue, { headers: { Accept: "application/json" } })
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
-      .then(prepare)
-    // A failed index stays cached (the promise is shared), so an unavailable index is tried once per page, not on every keystroke.
-    indexes[this.indexUrlValue].then((index) => {
+    if (!indexes[this.indexUrlValue]) {
+      const entry = { at: Date.now(), failed: false }
+      entry.promise = fetch(this.indexUrlValue, { headers: { Accept: "application/json" } })
+        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
+        .then(prepare)
+      entry.promise.catch(() => { entry.failed = true })
+      indexes[this.indexUrlValue] = entry
+    }
+    // A failed index stays cached for this page (the entry is shared), so an unavailable index is tried once per page.
+    indexes[this.indexUrlValue].promise.then((index) => {
       this.index = index
       // Escape (or clearing the field) while it loaded keeps the results closed until the next search.
       if (!this.dismissed && this.inputTarget.value.trim().length >= this.minimumValue && this.inputTarget === document.activeElement) this.renderLocal()
@@ -65,8 +76,8 @@ export default class extends Controller {
   // A /search response that arrives after the local results took over must not replace them (Turbo can't cancel the request).
   beforeRender(event) {
     if (!this.index) return
+    // Let the no-op render complete (no preventDefault: that would pause the frame's load, leaving it busy).
     event.detail.render = () => {}
-    event.preventDefault()
   }
 
   renderLocal() {
@@ -236,6 +247,8 @@ export default class extends Controller {
   // A failed request closes the old results rather than leaving them up.
   failed(event) {
     if (event?.type === "turbo:frame-missing") event.preventDefault()
+    // A late failure of the fallback request must not dismiss the local results.
+    if (this.index) return
     this.pending = false
     this.close()
   }

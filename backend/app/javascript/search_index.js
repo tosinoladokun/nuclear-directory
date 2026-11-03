@@ -103,6 +103,8 @@ export function search(index, text, { companies = 5, plants = 4 } = {}) {
   const alt = docket ? `050${docket[1].padStart(5, "0")}` : null
   const exact = pick((entry) => Math.max(exactScore(entry, query, tokens), alt ? exactScore(entry, alt, [alt]) : 0))
   if (exact.companies.length || exact.plants.length) return { ...exact, topics: matched, fuzzy: false }
+  // A topic that matches is an exact hit: close names are only for when nothing matched exactly.
+  if (matched.length) return { companies: [], plants: [], topics: matched, fuzzy: false }
   const close = pick((entry) => closeScore(entry, tokens))
-  return { ...close, topics: matched, fuzzy: matched.length === 0 && close.companies.length + close.plants.length > 0 }
+  return { ...close, topics: matched, fuzzy: close.companies.length + close.plants.length > 0 }
 }

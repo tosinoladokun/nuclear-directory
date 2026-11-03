@@ -49,6 +49,20 @@ class InstantIndexTest < ApplicationSystemTestCase
     JS
   end
 
+  # The server search fails late (after the index): that must not dismiss the local results.
+  def stub_failing_server(delay: 1500)
+    page.execute_script(<<~JS)
+      const before = window.fetch
+      window.fetch = (url, options) => {
+        if (String(url).includes("/search?q=")) {
+          window.__requests.push(String(url))
+          return new Promise((_, reject) => setTimeout(() => reject(new TypeError("Failed to fetch")), #{delay}))
+        }
+        return before(url, options)
+      }
+    JS
+  end
+
   def requests = page.evaluate_script("window.__requests")
 
   test "typing filters the index in the browser: aliases, grouped results, close spellings, Enter goes to the full results" do
@@ -162,6 +176,44 @@ class InstantIndexTest < ApplicationSystemTestCase
 
     field.send_keys(:backspace)
     assert_selector ".nd-instant__row b", text: "Oklo", wait: 10
+  end
+
+  test "a late failure of the fallback /search request doesn't dismiss the local results" do
+    visit root_path
+    stub_index(delay: 300)
+    stub_failing_server
+    field = find("input[type=search]")
+    field.send_keys("oklo")
+    assert_selector ".nd-instant__row b", text: "Oklo", wait: 10
+    sleep 2.5
+    assert_selector ".nd-instant__row b", text: "Oklo"
+    assert_selector "#search-large-status", text: /result/, visible: :all
+  end
+
+  test "a failed index is tried again on the next page visit, not stuck for the whole session" do
+    visit root_path
+    page.execute_script("window.__requests = []; const real = window.fetch; window.fetch = (url, o) => { window.__requests.push(String(url)); return String(url).includes('/search/index.json') ? Promise.resolve(new Response('', { status: 404 })) : real(url, o) }")
+    find("input[type=search]").send_keys("zz")
+    eventually { requests.any? { |url| url.include?("/search/index.json") } }
+    click_link "About", match: :first
+    assert_current_path about_path
+    find("input[type=search]").send_keys("zz")
+    eventually { requests.count { |url| url.include?("/search/index.json") } == 2 }
+    assert true
+  end
+
+  test "an exact topic hit is not followed by close names from other records" do
+    visit root_path
+    ms = page.evaluate_async_script(<<~JS)
+      const done = arguments[arguments.length - 1]
+      import("search_index").then(({ prepare, search }) => {
+        const index = prepare({ icons: {}, tags: [{ s: "fusion", n: "Fusion", a: [], c: 3, i: "x" }], items: [{ k: "c", s: "fuzion-co", n: "Fuzion Co", m: "x", i: "k" }] })
+        done(search(index, "fusion"))
+      })
+    JS
+    assert_equal [ "fusion" ], ms["topics"].map { |tag| tag["s"] }
+    assert_equal [], ms["companies"]
+    assert_equal false, ms["fuzzy"]
   end
 
   test "an index that can't be fetched is tried once per page" do
