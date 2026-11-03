@@ -87,7 +87,7 @@ class HomeTest < ActionDispatch::IntegrationTest
   test "a card for each bucket with companies, then Plants and sites last, naming at most three (#362)" do
     get root_path
 
-    # Developers, Power buyers, Plants and sites: empty buckets have no card.
+    # Reactor developers, Power buyers, Plants and sites: empty buckets have no card.
     assert_equal %w[reactor-developers power-buyers plants], css_select("section.nd-catcard").map { |card| card["data-key"] }
     assert_select "section.nd-catcard", 3
     assert_select "section[data-key=reactor-developers]" do

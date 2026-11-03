@@ -391,7 +391,7 @@
     .nd-catcard--stack .nd-catcard__row { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; }
     .nd-catcard--stack .nd-catcard__rowname { font-size: clamp(13px, calc((100cqi - 52px) / (var(--chars) * 0.5)), 14px); }
     .nd-catcard--stack .nd-catcard__filler { display: none; }
-    .nd-catcard--stack .nd-catcard__more { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; font-size: 15px; }
+    .nd-catcard--stack .nd-catcard__more { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; }
     /* The rows run edge to edge and the card's wrapper clips what is drawn
        outside them, so the focus ring goes inside the row: it stays whole. */
     .nd-catcard--stack .nd-catcard__row:focus-visible, .nd-catcard--stack .nd-catcard__more:focus-visible { outline-offset: -2px; }
