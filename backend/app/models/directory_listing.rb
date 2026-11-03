@@ -15,7 +15,7 @@ class DirectoryListing
   DEFAULT_SORT = "connections"
 
   # The Plants and sites list has its own sorts, status chips and filters (#614): largest first by default.
-  PLANT_SORTS = { "capacity" => "Largest first", "name" => "A to Z", "units" => "Most units" }.freeze
+  PLANT_SORTS = { "capacity" => "Largest first", "name" => "A to Z" }.freeze
   DEFAULT_PLANT_SORT = "capacity"
   # The chips under the heading, in order, each with the statuses it counts. Shut down includes a site being decommissioned.
   STATUS_CHIPS = {
@@ -81,7 +81,6 @@ class DirectoryListing
       # site's own facts are sourced, as its page decides (PlantProfile).
       "ARRAY(#{units_sql("u.reactor_type")} AND #{sourced_sql("u.id")}) AS units_reactor_types",
       "(#{sourced_sql("facilities.id")}) AS site_sourced",
-      "(#{units_sql("COUNT(*)")}) AS units_count",
       # What the row shows as capacity: the operating units' sum, else a standalone operating site's own figure.
       "COALESCE((#{units_sql("SUM(u.capacity_mw) FILTER (WHERE u.status = 'operating')")}), " \
         "CASE WHEN facilities.status = 'operating' AND #{sourced_sql("facilities.id")} AND NOT EXISTS (#{units_sql("1")}) THEN facilities.capacity_mw END) AS capacity_total"), "facilities.name")
@@ -316,9 +315,9 @@ class DirectoryListing
 
       scope = scope.order(relevance_sql(name_column, aliases: name_column == "organizations.name")) if query
       return scope.order(name_column) if sort == "name"
-      # The Plants and sites list: largest first (rows with no capacity last) or most units.
-      # Ties (no capacity, no units): rows with sourced facts before the bare names.
-      return scope.order(Arel.sql(sort == "units" ? "units_count DESC NULLS LAST" : "capacity_total DESC NULLS LAST"), Arel.sql("site_sourced DESC"), name_column) if plants_list?
+      # The Plants and sites list: largest first (rows with no capacity last) or A to Z.
+      # Ties (no capacity): rows with sourced facts before the bare names.
+      return scope.order(Arel.sql("capacity_total DESC NULLS LAST"), Arel.sql("site_sourced DESC"), name_column) if plants_list?
 
       scope.order(Arel.sql("connections_count DESC"), name_column)
     end

@@ -119,7 +119,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "plants")
 
     assert_select "a.nd-prow", text: /Quiet Station/ do
-      assert_select ".nd-prow__units", /1/, "its verified unit counts"
+      assert_select ".nd-prow__units", 0, "no units column on the list (Tosin, 2 Nov): counts stay on the plant page"
       assert_select ".nd-prow__cap", "300 MW"
       assert_select ".nd-prow__status .nd-st", count: 0
       assert_select ".nd-prow__type", text: "", count: 1, message: "the pending site's own type isn't shown"
@@ -299,14 +299,12 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     plant("Vogtle Unit 5", parent: vogtle, capacity_mw: 999, status: "operating", verified: false)
     get companies_path(category: "plants")
 
-    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__units", /\A2/
     assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__type", "Power plant"
     assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5 MW"
 
     plant("Vogtle Unit 1", parent: vogtle, capacity_mw: 500, status: "decommissioning")
     get companies_path(category: "plants")
 
-    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__units", /\A3/
     assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5 MW", "capacity counts operating units only"
   end
 

@@ -2,7 +2,7 @@ require "test_helper"
 require_relative "../support/directory_builders"
 
 # The Plants and sites list (#614): status chips with counts, its own filters (type, reactor, state), the sorts (largest
-# first by default, A to Z, most units), and rows in columns. Nothing is guessed: a site without sourced facts keeps
+# first by default, A to Z), and rows in columns. Nothing is guessed: a site without sourced facts keeps
 # empty cells and sorts last by capacity.
 class PlantsListTest < ActionDispatch::IntegrationTest
   include DirectoryBuilders
@@ -59,7 +59,7 @@ class PlantsListTest < ActionDispatch::IntegrationTest
     assert_equal 5, names.size, "unknown values are dropped, not applied"
   end
 
-  test "largest first by default (rows with no capacity last); A to Z and most units are options" do
+  test "largest first by default (rows with no capacity last); A to Z is an option" do
     get companies_path(category: "plants")
     assert_equal [ "Big Station", "Small Station" ], names.first(2)
     assert_includes names.last(3), "Bare Name"
@@ -69,17 +69,18 @@ class PlantsListTest < ActionDispatch::IntegrationTest
     assert_equal names.sort_by(&:downcase), names
 
     get companies_path(category: "plants", sort: "units")
-    assert_equal "Big Station", names.first
+    assert_select "select[name=sort] option[selected][value=capacity]", "Largest first"
+    assert_select "select[name=sort] option[value=units]", 0
   end
 
-  test "rows line up under a header: plant or site, status, type, units, capacity, location" do
+  test "rows line up under a header: plant or site, status, type, capacity, location (no units column)" do
     get companies_path(category: "plants")
 
-    assert_select ".nd-lines--plants .nd-lines__head span", text: /Plant or site|Status|Type|Units|Capacity|Location/, count: 6
+    assert_select ".nd-lines--plants .nd-lines__head span", text: /Plant or site|Status|Type|Capacity|Location/, count: 5
     assert_select "a.nd-prow[href='/plants/big-station']" do
       assert_select ".nd-prow__status .nd-st", /Operating/
       assert_select ".nd-prow__type", "Power plant"
-      assert_select ".nd-prow__units", /\A2/
+      assert_select ".nd-prow__units", 0
       assert_select ".nd-prow__cap", "2,200 MW"
       assert_select ".nd-prow__place", /Waynesboro/
     end
@@ -120,11 +121,6 @@ class PlantsListTest < ActionDispatch::IntegrationTest
     assert_operator names.index("Test Rig"), :<, names.index("Bare Name")
     assert_select "a.nd-prow .nd-prow__mark.nd-catsq svg", minimum: 5, message: "the row mark is the icon square"
     assert_select ".nd-lines__head .nd-prow__place", "Location"
-  end
-
-  test "the unit word is there for screen readers on every row, whatever the layout" do
-    get companies_path(category: "plants")
-    assert_select "a.nd-prow[href='/plants/big-station'] .nd-prow__unit-word", /units/
   end
 
   test "the company lists keep their own filters, and the tag list is untouched" do
