@@ -134,6 +134,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # its legal name, listing and headquarters address (Data Quality).
       if sec_cik.present? && (edgar = page(format(EDGAR, sec_cik.to_i)))
         DataQuality::Snapshot.take(edgar, fetcher: @fetcher)
+        # Read before this version of its claims (website, 2 Nov): extracted again.
+        edgar.update!(extracted_sha256: nil) if edgar.extracted_sha256.present? && edgar.extracted_rows_sha256 != rows_sha256(edgar)
         stats["pages"] += 1
       end
       # A home page that couldn't be read is answered as read (the Enrich page
@@ -151,6 +153,14 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       stats["companies"] += 1
     end
     stats
+  end
+
+  # An SEC record with what extract proposes from it: a new version reads it again.
+  EDGAR_VERSION = "edgar-website-1"
+  def rows_sha256(source)
+    return super unless source.url.match?(EDGAR_URL)
+
+    Digest::SHA256.hexdigest("#{EDGAR_VERSION}\n#{source.content_text}") if source.content_text.present?
   end
 
   def extract(source, run)

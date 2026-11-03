@@ -135,4 +135,11 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
     Organization.create!(name: "Exodys Energy Inc", website: "https://exodys.example").aliases.find_or_create_by!(alias: "Exodys Energy Inc")
     refute plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload].key?("website")
   end
+
+  test "no website for a company found by its acronym alias that already has one" do
+    llnl = Organization.create!(name: "Lawrence Livermore", website: "https://www.llnl.gov/")
+    llnl.aliases.find_or_create_by!(alias: "LLNL")
+    line = "Project: X | Organization: Lawrence Livermore National Laboratory (LLNL) | Status: Active | Website: https://www.llnl.gov/x"
+    refute plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload].key?("website")
+  end
 end

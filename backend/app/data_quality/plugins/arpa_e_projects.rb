@@ -73,7 +73,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     # two projects for one lab agree; each project is its own award term.
     [
       { kind: "organization", quote:, payload: { "name" => FUNDER, "aliases" => [ "ARPA-E" ] } },
-      { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])).merge(website(recipient["name"], facts["Website"])) },
+      { kind: "organization", quote:, payload: recipient.merge(location(facts["Location"])).merge(website(recipient["name"], facts["Website"], aliases: Array(recipient["aliases"]))) },
       { kind: "relationship", quote:, payload: link.merge("description" => "Research funding from ARPA-E (nuclear fission and fusion)") },
       # An award needs its amount and a start: ARPA-E's release date of the
       # project is the date it states; without both, no term is proposed.
@@ -119,10 +119,12 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     end
 
     # The website ARPA-E lists for the organization, only for a company that has none (gap fill, 2 Nov).
-    def website(name, url)
+    def website(name, url, aliases: [])
       return {} if url.blank?
 
-      company = @directory.organization(name:)
+      # The company as match will find it: name, an alias (an acronym), else a unique brand match.
+      company = [ name, *aliases ].lazy.filter_map { |each| @directory.organization(name: each) }.first ||
+        @directory.same_brand_organizations(name).then { |brand| brand.first if brand.one? }
       root = home_page(url) or return {}
       company && @directory.organization_website(company.id) ? {} : { "website" => root }
     end
