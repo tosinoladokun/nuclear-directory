@@ -23,6 +23,7 @@ Rails.application.routes.draw do
   get "privacy" => "pages#privacy", as: :privacy
   get "disclaimer" => "pages#disclaimer", as: :disclaimer
   get "bot" => "pages#bot", as: :bot
+  get "updates.atom" => "updates#feed", as: :updates_feed, format: false, defaults: { format: :atom }
   get "sitemap.xml" => "sitemaps#show", as: :sitemap, format: false, defaults: { format: :xml }
   get "robots.txt" => "sitemaps#robots", as: :robots, format: false
   get "llms.txt" => "sitemaps#llms", as: :llms, format: false
@@ -41,6 +42,7 @@ Rails.application.routes.draw do
   # The home page and its instant search (#41). /search returns a Turbo Frame
   # of grouped results for the home and header search fields.
   root "home#show"
+  get "search/index.json" => "search_indexes#show", as: :search_index, format: false, defaults: { format: :json }
   get "search" => "search#index", as: :search
 
   # The admin (#86): one account, signed in at /admin/session/sign-in. Every

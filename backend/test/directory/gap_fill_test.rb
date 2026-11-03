@@ -49,4 +49,17 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     assert_equal Date.current, old.reload.enrich_requested_at.to_date
     refute unpublished.reload.enrich_requested_at&.today?
   end
+
+  test "a published company with an SEC CIK and no HQ is asked for first, even without a category or website" do
+    listed = company("Listed Fission", role: false, sec_cik: "0001018724")
+    bare = company("Bare Fission", website: "https://bare.example")
+    with_hq = company("Listed With HQ", role: false, sec_cik: "0000000002", hq_city: "Seattle", hq_state: "WA")
+
+    Directory::Lookup.request_gap_fill(limit: 1)
+    assert listed.reload.enrich_requested_at, "EDGAR states its address"
+    assert_nil bare.reload.enrich_requested_at
+    Directory::Lookup.request_gap_fill(limit: 10)
+    assert bare.reload.enrich_requested_at
+    assert_nil with_hq.reload.enrich_requested_at, "has an HQ: not read for EDGAR"
+  end
 end

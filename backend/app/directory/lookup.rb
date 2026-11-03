@@ -93,7 +93,13 @@ module Directory
         .or(gapped.where(enriched_at: ...GAP_REFILL_DAYS.days.ago).where("enriched_at >= enrich_requested_at"))
       readable, unreadable = due.order(Arel.sql("#{gaps} DESC"), :id).pluck(:id, :name, :website)
         .partition { |_, _, website| Organization.readable_website?(website) }
-      ids = readable.first(limit).map(&:first)
+      # A published company with an SEC CIK and no headquarters, first, with or
+      # without a category or website: Enrich reads its EDGAR record, which
+      # states its business address (PM, 30 Oct).
+      edgar = Organization.where(verification_status: "verified").where.not(sec_cik: nil)
+        .where("organizations.hq_city IS NULL OR organizations.hq_city = ''")
+      edgar = edgar.where(enrich_requested_at: nil).or(edgar.where(enriched_at: ...GAP_REFILL_DAYS.days.ago).where("enriched_at >= enrich_requested_at"))
+      ids = (edgar.order(:id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
       Organization.where(id: ids).update_all(enrich_requested_at: Time.current) if ids.any?
       { requested: ids.size, without_website: unreadable.map { |_, name, _| name }.sort.first(20) }
     end
@@ -215,6 +221,9 @@ module Directory
     end
 
     def role_key?(key) = key.present? && Role.exists?(key:)
+    def readable_website?(url) = Organization.readable_website?(url)
+
+    # A website Enrich can read (a full https address).
     def readable_website?(url) = Organization.readable_website?(url)
 
     # A company's headquarters city, or nil (gap fill only adds a missing one).

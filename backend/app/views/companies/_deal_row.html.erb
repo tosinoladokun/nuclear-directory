@@ -36,16 +36,14 @@
   </div>
   <div class="nd-crow__more" id="<%= detail_id %>" hidden data-row-open-target="panel">
     <% if deal.description.present? %><p class="type-body"><%= deal.description %></p><% end %>
-    <p class="type-ui"><%= link_to "View #{other.name}", company_url_for(other), class: "nd-link" %></p>
     <% fields = data_quote_fields(evidence) %>
     <% if fields %>
       <p class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>"><%= fields.join(" · ") %></p>
     <% elsif quote.present? %>
       <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= quote %>”</p>
     <% end %>
-    <div class="nd-row">
-      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, plain: true, checked: (deal.verified_at if index.zero?) %><% end %>
-      <%= render "shared/confidence", value: deal.confidence %>
-    </div>
+    <%# The source as its domain only, a muted link to the page; the check date lives in the page's Sources list (#655). %>
+    <% if citations.any? %><div class="nd-row"><% citations.each do |number, source| %><%= render "shared/source_chip", number:, source:, plain: true %><% end %></div><% end %>
+    <p class="type-ui"><%= link_to "Open #{other.name}", company_url_for(other), class: "nd-link" %></p>
   </div>
 </li>

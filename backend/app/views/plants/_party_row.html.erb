@@ -38,7 +38,6 @@
       <% text = [ each.description.presence, own_since ].compact.join(" ").presence %>
       <% if text %><p class="type-body"><% if party.links.size > 1 && each.facility != profile.site %><b><%= each.facility.name %>:</b> <% end %><%= text %></p><% end %>
     <% end %>
-    <p class="type-ui"><%= link_to "View #{organization.name}", company_url_for(organization), class: "nd-link" %></p>
     <% fields = data_quote_fields(evidence) %>
     <% if fields %>
       <div class="nd-quote nd-quote--data" data-source-number="<%= citations.first&.first %>">
@@ -51,9 +50,7 @@
     <% elsif evidence&.quote.present? %>
       <p class="nd-quote" data-source-number="<%= citations.first&.first %>">“<%= evidence.quote %>”</p>
     <% end %>
-    <div class="nd-row">
-      <% citations.each_with_index do |(number, source), index| %><%= render "shared/source_chip", number:, source:, plain: true, checked: (link.verified_at if index.zero?) %><% end %>
-      <%= render "shared/confidence", value: link.confidence %>
-    </div>
+    <% if citations.any? %><div class="nd-row"><% citations.each do |number, source| %><%= render "shared/source_chip", number:, source:, plain: true %><% end %></div><% end %>
+    <p class="type-ui"><%= link_to "Open #{organization.name}", company_url_for(organization), class: "nd-link" %></p>
   </div>
 </li>

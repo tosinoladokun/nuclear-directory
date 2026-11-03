@@ -17,7 +17,7 @@
           <% else %>
             <span><%= source.title.presence || source.url %></span>
           <% end %>
-          <small><%= [ source_domain(source), ("published #{data_date(source.published_on)}" if source.published_on) ].compact_blank.join(" · ") %></small>
+          <small><%= [ source_domain(source), ("published #{data_date(source.published_on)}" if source.published_on), ("checked #{data_date((local_assigns[:checked] || {})[number])}" if (local_assigns[:checked] || {})[number]) ].compact_blank.join(" · ") %></small>
         </span>
       </li>
     <% end %>

@@ -107,4 +107,12 @@ class DataQuality::Plugins::UsaspendingRecipientsTest < ActiveSupport::TestCase
     record = Source.new(content_text: "Recipient: DOMINION GENERATION LLC\nParent: DOMINION GENERATION LLC\nAddress: registered address (SAM registration)\nCity: GLEN ALLEN\nState: VA\nCountry: USA")
     assert_empty Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory:).extract(record, nil)
   end
+
+  test "no all-caps alias when the company already answers to that name (DQ, 31 Oct)" do
+    crawl
+    shine = Organization.create!(name: "SHINE Technologies")
+    shine.aliases.find_or_create_by!(alias: "Shine Technologies, LLC")
+    claim = plugin.extract(Source.find_by!(url: RECORD), nil).sole
+    refute claim[:payload].key?("aliases")
+  end
 end

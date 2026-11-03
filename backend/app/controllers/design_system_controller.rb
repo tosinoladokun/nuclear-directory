@@ -27,7 +27,24 @@ class DesignSystemController < ApplicationController
           city: "Waynesboro", state: "GA"),
         # Plant Vogtle is the site; its four reactor units sit under it as children.
         plant_sparse: Facility.new(name: "Hermes 2", slug: "hermes-2"),
-        verified_at: Time.zone.parse("2026-10-09 12:00")
+        verified_at: Time.zone.parse("2026-10-09 12:00"),
+        connections: connections_example(sources[1])
       }
+    end
+
+    # Plant Vogtle's owners as one bundle, with its operator (#363). Records
+    # in memory only; negative ids so nothing could ever match a real one.
+    def connections_example(source)
+      vogtle = Facility.new(id: -1, name: "Plant Vogtle", slug: "plant-vogtle", facility_type: "power_reactor", status: "operating")
+      map = ConnectionsMap.new(vogtle)
+      companies = { "Georgia Power" => 45.7, "Oglethorpe Power" => 30, "MEAG Power" => 22.7, "Dalton Utilities" => 1.6, "Southern Nuclear" => nil }
+      companies.each_with_index do |(name, share), index|
+        company = Organization.new(id: -10 - index, name:, slug: name.parameterize)
+        fact = FacilityRelationship.new(id: -20 - index, facility: vogtle, ownership_pct: share, verified_at: Time.zone.parse("2026-10-09 12:00"))
+        fact.evidence.build(source:)
+        map.link(company, vogtle, share ? "owns" : "operates", [ fact ])
+      end
+      map.categories = companies.keys.each_index.to_h { |index| [ -10 - index, Category.find("utilities") ] }
+      map
     end
 end

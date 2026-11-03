@@ -152,4 +152,11 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     DataQuality::Stages::Extract.call(plugin:)
     assert Candidate.exists?(source: letter, kind: "licensing_stage")
   end
+
+  test "an older document no longer in the searches is still extracted again for a new version" do
+    old = Source.create!(url: "https://www.nrc.gov/docs/ML2601/ML26010A001.pdf", source_kind: "nrc_adams", crawl_status: "ok",
+      content_text: "{}", content_sha256: "a", extracted_sha256: "a", extracted_rows_sha256: "old")
+    plugin.store_documents
+    assert_nil old.reload.extracted_sha256
+  end
 end

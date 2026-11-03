@@ -54,6 +54,11 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # Each developer document as its own source, at its public address (the
   # PDF): what a claim cites. Its line is written once; it doesn't change.
   def store_documents
+    # Documents read before this version of extract (any age, not only those
+    # still in the 14-day searches) are extracted again.
+    Source.where(source_kind:).where.not(extracted_sha256: nil).find_each do |source|
+      source.update!(extracted_sha256: nil) if source.extracted_rows_sha256 != rows_sha256(source)
+    end
     texts = Source.where(source_kind: INDEX_SOURCE_KIND).crawl_ok.pluck(:content_text)
     texts.sum do |text|
       self.class.developer_documents(text).count do |line, doc|
