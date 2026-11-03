@@ -76,14 +76,28 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
         source.source_kind = source_kind
         source.title = "#{company}: news feed"
       end
+      # One flagged before found feeds were dropped quietly: dropped now.
+      if found_feed?(company) && feed.crawl_needs_human? && feed.status_reason == NOT_A_FEED
+        drop_found_feed(company, feed)
+        stats[company] = "not_a_feed_dropped"
+        next
+      end
       outcome = DataQuality::Snapshot.take(feed, fetcher: @fetcher).to_s
       stats[company] = outcome
       next unless feed.crawl_ok? && feed.content_text.present?
 
       next if items(feed.content_text)
 
-      feed.update!(crawl_status: "needs_human", status_reason: NOT_A_FEED)
-      stats[company] = "not_a_feed"
+      if found_feed?(company)
+        # A found feed that isn't one (Energy Northwest's /feed/, 2 Nov) is
+        # dropped quietly: its homepage is marked as having no feed until
+        # it's read again, and nobody is asked to look.
+        drop_found_feed(company, feed)
+        stats[company] = "not_a_feed_dropped"
+      else
+        feed.update!(crawl_status: "needs_human", status_reason: NOT_A_FEED)
+        stats[company] = "not_a_feed"
+      end
     end
   end
 
@@ -165,6 +179,14 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
     end
 
     def found_feed?(company) = @discover && !@feeds.key?(company)
+
+    def drop_found_feed(company, feed)
+      Source.where(source_kind: HOMEPAGE_KIND).where("content_text LIKE ?", "Company: #{Source.sanitize_sql_like(company)}\n%").find_each do |page|
+        # No validators kept, so its next read is a full one and finds a repaired feed.
+        page.update!(content_text: "Company: #{company}\nFeed: none", content_sha256: nil, etag: nil, last_modified: nil)
+      end
+      feed.update!(crawl_status: "ok", status_reason: "#{NOT_A_FEED}; dropped from the found feeds")
+    end
 
     # A found feed's items published since it was found, and only the newest
     # FIRST_READ_ITEMS of those before: the same on every read, so its back

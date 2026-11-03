@@ -134,4 +134,10 @@ class HomeTest < ActionDispatch::IntegrationTest
 
     assert_select "header.nd-sitebar .nd-searchbox[data-controller=instant-search] input#search-compact"
   end
+
+  test "controllers are loaded on demand: no modulepreload of every controller on each page" do
+    get root_path
+    assert_select "link[rel=modulepreload][href*='/assets/controllers/']", 0
+    assert_select "link[rel=modulepreload][href*='turbo']", minimum: 1
+  end
 end
