@@ -55,4 +55,19 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") { PageWarmJob.perform_now(pause: 0) }
     assert_operator rendered, :>, 0, "quiet since the last tick: warm"
   end
+
+  test "a change rebuilds only the pages it touched" do
+    other = Organization.create!(name: "Other Warm Co", slug: "other-warm-co", description: "Makes fuel.", verification_status: "verified", verified_by: BY)
+    Evidence.create!(subject: other, source: Source.first, quote: "t", found_by: "human")
+    PageWarmJob.perform_now(pause: 0, debounce: false)
+
+    Organization.find_by!(slug: "warm-co").update!(description: "Builds small reactors.")
+    drawn = []
+    counter = ->(*, payload) { drawn << payload[:identifier].to_s[%r{views/(\w+/\w+)}, 1] }
+    ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") { PageWarmJob.perform_now(pause: 0, debounce: false) }
+    assert_equal [ "companies/show" ], drawn.compact.uniq.reject { |name| name == "home/show" }
+    assert_equal 1, drawn.count("companies/show"), "the other company's page is still current"
+    assert_operator queries_for("/companies/other-warm-co"), :<=, 4
+    assert_match "Builds small reactors.", (get("/companies/warm-co") && response.body)
+  end
 end
