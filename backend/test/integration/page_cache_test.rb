@@ -65,6 +65,10 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     get "/companies?sort=name&utm_source=x"
     assert_response :success
     queries = 0
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get "/companies?shown=50" }
+    assert_operator queries, :>, 3, "a long Show more list isn't cached"
+    assert_match "Cache Co", body
+    queries = 0
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get "/companies?q=cache" }
     assert_operator queries, :>, 3, "a search runs its queries"
     assert_match "Cache Co", body

@@ -5,6 +5,7 @@ class DirectoryController < ApplicationController
   CATEGORY_TAGS = { "fusion" => "fusion" }.freeze
 
   PAGE = 24
+  CACHED_PAGES = 3
 
   def index
     if (tag = CATEGORY_TAGS[params[:category]])
@@ -27,7 +28,8 @@ class DirectoryController < ApplicationController
     @shown = params[:shown].to_i.clamp(1, 1000) * PAGE
     # A list that isn't a search is the same for everyone: the page builds it
     # once per data version (PageCacheHelper), so its queries run only then (PM, 3 Nov).
-    if !@listing.searching? && request.format.html? && !turbo_frame_request?
+    # Up to CACHED_PAGES pages of rows: ?shown=4..1000 would each be a full list under its own key (Infra).
+    if !@listing.searching? && request.format.html? && !turbo_frame_request? && @shown <= CACHED_PAGES * PAGE
       listing, shown = @listing, @shown
       # Only the values the list accepted (a junk parameter is dropped), so the keys stay few.
       @page_key = [ "companies", listing.category&.key, listing.tag&.key, listing.technology, listing.state, listing.sort, listing.role, shown ]
