@@ -1613,10 +1613,11 @@
 @layer components {
   .nd-breadcrumb { font: 400 13px/18px var(--font-text); color: var(--nd-ink-muted); min-width: 0; }
   .nd-breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 6px; }
-  .nd-breadcrumb li { display: flex; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
+  .nd-breadcrumb li { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; white-space: nowrap; }
   .nd-breadcrumb li:first-child { flex: none; }
   .nd-breadcrumb li + li::before { content: "\203A"; color: var(--nd-control); margin-right: 6px; flex: none; }
   .nd-breadcrumb li > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  @media (pointer: coarse) { .nd-breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; } }
+  /* Touch: the 44px tap target comes from padding, so the link stays a block that can end in an ellipsis. */
+  @media (pointer: coarse) { .nd-breadcrumb a { padding-block: 13px; } }
   .nd-pagehead__more { margin: 0; font: 400 14px/20px var(--font-text); }
 }

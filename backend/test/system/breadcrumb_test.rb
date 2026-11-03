@@ -22,4 +22,19 @@ class BreadcrumbTest < ApplicationSystemTestCase
       assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"), "no sideways scroll at #{width}"
     end
   end
+
+  test "on a touch screen the links are 44px tall, a long category still ends in an ellipsis, and the chevron stays centred" do
+    resize_viewport(320, 800)
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" }, { name: "pointer", value: "coarse" } ])
+    visit company_path(slug: @company.slug)
+    rows = page.evaluate_script("[...document.querySelectorAll('.nd-breadcrumb li')].map((li) => { const a = li.firstElementChild, box = li.getBoundingClientRect(), text = a.getBoundingClientRect(); return [Math.round(a.getBoundingClientRect().height), getComputedStyle(a).textOverflow, getComputedStyle(a).display, Math.abs((box.top + box.height / 2) - (text.top + text.height / 2)) < 2] })")
+    assert rows.all? { |height, _, _, _| height >= 44 }, "44px tall: #{rows.inspect}"
+    assert rows.all? { |_, overflow, display, _| overflow == "ellipsis" && display != "inline-flex" }, "the link stays a block that can ellipsize: #{rows.inspect}"
+    assert rows.all? { |_, _, _, centred| centred }, "each li's contents are centred, so the chevron sits level with the text"
+    assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth")
+  ensure
+    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
+    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
+  end
 end
