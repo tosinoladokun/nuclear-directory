@@ -13,19 +13,28 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
     cite!(plant("Some Station", facility_type: "power_reactor", status: "operating"))
   end
 
-  FULL = [ "Reactor Developers", "Fuel and Materials", "Components and Parts", "Waste and Decommissioning", "Power Plant Owners and Operators",
-           "Power Buyers", "Services and Engineering", "Investors", "Government and Research", "Plants and Sites" ].freeze
+  FULL = Category.all.map(&:name).freeze
 
-  test "every title reads in full on ONE line, none cut short, all ten at one shared size, at every width" do
-    [ 320, 360, 390, 640, 700, 768, 900, 1024, 1100, 1280, 1440 ].each do |width|
+  test "every title reads in full on ONE line, none cut short, never smaller than the rows under it, at every width" do
+    [ 320, 360, 374, 375, 390, 640, 700, 768, 900, 1024, 1100, 1280, 1440 ].each do |width|
       resize_viewport(width, 900)
       visit root_path
       sleep 0.2
-      shown = page.evaluate_script("[...document.querySelectorAll('.nd-catcard__name')].filter((n) => n.getClientRects().length).map((n) => [n.textContent.trim(), n.scrollWidth <= n.clientWidth + 1, Math.round(n.getBoundingClientRect().height / parseFloat(getComputedStyle(n).lineHeight)), getComputedStyle(n).fontSize])")
-      assert_equal FULL.sort, shown.map(&:first).uniq.sort, "at #{width}"
-      assert shown.all? { |_, fits, _, _| fits }, "none cut short at #{width}: #{shown.reject { |_, fits, _, _| fits }.inspect}"
-      assert shown.all? { |_, _, lines, _| lines == 1 }, "one line each at #{width}: #{shown.inspect}"
-      assert_equal 1, shown.map(&:last).uniq.size, "one shared size at #{width}: #{shown.map(&:last).uniq.inspect}"
+      shown = page.evaluate_script("[...document.querySelectorAll('.nd-catcard__name')].filter((n) => n.getClientRects().length).map((n) => { const row = n.closest('.nd-catcard').querySelector('.nd-catcard__rowname'); return [n.textContent.trim(), n.scrollWidth <= n.clientWidth + 1, Math.round(n.getBoundingClientRect().height / parseFloat(getComputedStyle(n).lineHeight)), parseFloat(getComputedStyle(n).fontSize), row ? parseFloat(getComputedStyle(row).fontSize) : 0] })")
+      assert_equal FULL.sort, shown.map(&:first).sort, "at #{width}"
+      assert shown.all? { |_, fits, _, _, _| fits }, "none cut short at #{width}: #{shown.reject { |_, fits, _, _, _| fits }.inspect}"
+      assert shown.all? { |_, _, lines, _, _| lines == 1 }, "one line each at #{width}: #{shown.inspect}"
+      assert shown.all? { |_, _, _, size, row| size >= row || width < 375 }, "a title is never smaller than its rows (13px floor only below 375px) at #{width}: #{shown.reject { |_, _, _, size, row| size >= row }.inspect}"
+      assert_equal 1, shown.map { |item| item[3] }.uniq.size, "one title size at #{width}: #{shown.map { |item| item[3] }.uniq.inspect}"
     end
+  end
+
+  test "the home grid is two columns from 640px up, and the count sits beside the title" do
+    resize_viewport(1440, 900)
+    visit root_path
+    columns = page.evaluate_script("getComputedStyle(document.querySelector('.nd-catgrid')).gridTemplateColumns.split(' ').length")
+    assert_equal 2, columns
+    beside = page.evaluate_script("(() => { const h = document.querySelector('.nd-catcard__head--link'); const n = h.querySelector('.nd-catcard__name').getBoundingClientRect(); const c = h.querySelector('.nd-catcard__count').getBoundingClientRect(); return Math.abs((n.top + n.height / 2) - (c.top + c.height / 2)) < 12 })()")
+    assert beside, "the count is on the title's line"
   end
 end
