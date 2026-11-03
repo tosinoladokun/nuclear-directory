@@ -56,7 +56,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-plantstatus .nd-st--filled", /Operating/
     assert_select ".nd-plantstatus", /2 units/
     assert_select ".nd-breadcrumb a[href=?]", "/companies?category=plants", text: "Plants and sites"
-    assert_equal [ "Nuclear Directory", "Plants and sites", "Plant Vogtle" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }
+    assert_equal [ "Nuclear Directory", "Plants and sites" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }
     assert_select ".nd-pagehead__more a[href=?]", "/companies?category=plants", "See all plants and sites ›"
     list = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"].find { |node| node["@type"] == "BreadcrumbList" }
     assert_equal [ "Nuclear Directory", "Plants and sites", "Plant Vogtle" ], list["itemListElement"].map { |item| item["name"] }
