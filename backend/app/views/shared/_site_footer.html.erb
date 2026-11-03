@@ -11,12 +11,6 @@
       <%= link_to "All companies", companies_path %>
       <%= link_to "Plants and sites", companies_path(category: "plants") %>
       <%= link_to "Our data", data_path %>
-      <%# Topics: the biggest tag lists, so every page links to them (#606); desktop only, the phone row is unchanged. %>
-      <% topics = Tag.listed.first(8) %>
-      <% if topics.any? %>
-        <h2 class="nd-footer__label nd-footer__label--topics">Topics</h2>
-        <% topics.each do |tag, _| %><%= link_to tag.name, companies_path(tag: tag.to_param) %><% end %>
-      <% end %>
     </nav>
     <nav class="nd-footer__col" aria-label="About">
       <h2 class="nd-footer__label">About</h2>

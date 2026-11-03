@@ -1,8 +1,8 @@
 require "test_helper"
 require_relative "../support/directory_builders"
 
-# Internal links for indexing (#606, Outcome 30 Nov): the biggest tag lists in every footer, every non-empty tag on the
-# home page, and up to five similar companies on a company page. A link never leads to an empty list.
+# Internal links for indexing (#606, Outcome 30 Nov): up to five similar companies on a company page. (The Topics chips and
+# footer links were cut on 2 Nov.)
 class InternalLinksTest < ActionDispatch::IntegrationTest
   include DirectoryBuilders
 
@@ -15,18 +15,13 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
     cite!(company("Helion", roles: [ vendor ], techs: [ fusion ]))
   end
 
-  test "the footer and the home page link the tag lists that have companies, and no empty one" do
-    get companies_path
-    assert_select "footer nav[aria-label=Directory] .nd-footer__label--topics", "Topics"
-    assert_select "footer nav[aria-label=Directory] a[href=?]", companies_path(tag: "smr"), "Small modular reactors"
-    assert_select "footer nav[aria-label=Directory] a[href=?]", companies_path(tag: "fusion")
-    assert_select "footer nav[aria-label=Directory] a[href=?]", companies_path(tag: "conversion"), count: 0
-    assert_select "footer .nd-footer__links a[href*='tag=']", 0, "the phone row is unchanged: no topics there"
-
+  test "no Topics on the home page or in the footer (Tosin, 2 Nov): only Similar companies adds links" do
     get root_path
-    assert_select ".nd-home__topics > p.nd-label", "Topics"
-    assert_select ".nd-home__topics nav[aria-labelledby=home-topics] a.nd-chip[href=?]", companies_path(tag: "smr"), /Small modular reactors\s+7/
-    assert_select ".nd-home__topics a.nd-chip[href=?]", companies_path(tag: "conversion"), count: 0
+    assert_select ".nd-home__topics", 0
+    assert_select "footer a[href*='tag=']", 0
+    assert_select "footer .nd-footer__label--topics", 0
+    get companies_path
+    assert_select "footer a[href*='tag=']", 0
   end
 
   test "a company page lists up to five similar companies: its tag first, then its category, never itself" do

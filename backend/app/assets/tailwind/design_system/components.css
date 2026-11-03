@@ -1548,11 +1548,8 @@
   }
 }
 
-/* Internal links for indexing (#606): the home page's topic chips and a company's similar companies. */
+/* Similar companies on a company page (#606). */
 @layer components {
-  /* Topics: labelled, left-aligned with the cards; wrapping, never a scrolling row (no fade over a count). */
-  .nd-home__topics { width: 100%; max-width: 960px; margin-top: var(--nd-space-6); display: flex; flex-direction: column; gap: var(--nd-space-2); }
-  .nd-home__topics .nd-chips { flex-wrap: wrap; overflow: visible; mask-image: none; margin: 0; padding: 0; }
   .nd-similar { display: flex; flex-direction: column; gap: var(--nd-space-3); }
   @media (min-width: 1024px) { .nd-similar { grid-column: 2; } }
 }
@@ -1595,7 +1592,6 @@
     .nd-footer__col a { font: 400 15px/24px var(--font-text); color: var(--nd-ink); text-decoration: none; }
     .nd-footer__col a:hover { text-decoration: underline; text-underline-offset: 3px; }
     .nd-footer__label { margin: 0 0 var(--nd-space-1); font: 500 11px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
-    .nd-footer__label--topics { margin-top: var(--nd-space-3); }
     .nd-footer__count { grid-column: 1 / -1; margin: 0; padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); font: 400 12px/18px var(--font-mono); color: var(--nd-ink-muted); }
   }
 }
