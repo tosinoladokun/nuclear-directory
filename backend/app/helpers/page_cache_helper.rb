@@ -5,6 +5,10 @@
 # absolute URLs) and the template's own digest, so a code change rebuilds it.
 #
 #   <%= page_cache("company", @organization.id) do %> … the page … <% end %>
+#
+# The body is shared by every visitor: nothing per request goes inside it.
+# A form (button_to, form_with) would share its CSRF token, so forms stay
+# outside the block or load separately (Infra).
 module PageCacheHelper
   CONTENTS = %i[title og_title og_description head].freeze
   Card = Data.define(:digest, :alt)

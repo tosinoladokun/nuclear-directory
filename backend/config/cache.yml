@@ -13,3 +13,10 @@ test:
 
 production:
   <<: *default
+  # Whole pages are cached per data version (#707) in the same small
+  # Postgres as the data: old versions go after a day, and the cache stays
+  # small for the database's RAM, disk and backups (Infra).
+  store_options:
+    max_age: <%= 1.day.to_i %>
+    max_size: <%= 64.megabytes %>
+    namespace: <%= Rails.env %>
