@@ -107,8 +107,6 @@
           <%# A category's role (Reactor designer, Project developer) stays through the filters and their count. %>
           <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
-          <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
-          <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
           <label class="nd-select"><b>Technology</b>
             <%= select_tag :technology, options_for_select(listing.technology_options, listing.technology), include_blank: "Any", class: "type-input" %>
           </label>
@@ -165,8 +163,7 @@
   <% end %>
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
-      state: listing.state, role: listing.role, sort: (listing.sort unless listing.sort == DirectoryListing::DEFAULT_SORT), shown: @shown / DirectoryController::PAGE + 1,
-      from: ("suggestion" if listing.searching? && params[:from] == "suggestion")),
+      state: listing.state, role: listing.role, sort: (listing.sort unless listing.sort == DirectoryListing::DEFAULT_SORT), shown: @shown / DirectoryController::PAGE + 1),
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
   </turbo-frame>

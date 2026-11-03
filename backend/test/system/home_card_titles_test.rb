@@ -34,7 +34,7 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
     visit root_path
     columns = page.evaluate_script("getComputedStyle(document.querySelector('.nd-catgrid')).gridTemplateColumns.split(' ').length")
     assert_equal 2, columns
-    beside = page.evaluate_script("(() => { const h = document.querySelector('.nd-catcard__head--link'); const n = h.querySelector('.nd-catcard__name').getBoundingClientRect(); const c = h.querySelector('.nd-catcard__count').getBoundingClientRect(); return Math.abs((n.top + n.height / 2) - (c.top + c.height / 2)) < 12 })()")
+    beside = page.evaluate_script("(() => { const h = document.querySelector('.nd-catcard__link'); const n = h.querySelector('.nd-catcard__name').getBoundingClientRect(); const c = h.querySelector('.nd-catcard__count').getBoundingClientRect(); return Math.abs((n.top + n.height / 2) - (c.top + c.height / 2)) < 12 })()")
     assert beside, "the count is on the title's line"
   end
 end

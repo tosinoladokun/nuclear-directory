@@ -78,16 +78,6 @@ class SeedsTest < ActiveSupport::TestCase
     assert_equal [ "Meta", "Meta Platforms, Inc." ], Organization.find_by!(slug: "meta-platforms").aliases.pluck(:alias).sort
   end
 
-  test "every suggestion in the home page's pool finds 3 or more results in the seed" do
-    load_seeds
-    counts = HomeSuggestions::POOL.to_h do |suggestion|
-      listing = DirectoryListing.new(q: suggestion.query)
-      [ suggestion.label, listing.companies.size + listing.plants.size ]
-    end
-
-    assert counts.values.all? { |count| count >= 3 }, "a suggestion with fewer than 3 results: #{counts.inspect}"
-  end
-
   test "seeds roles and technologies" do
     load_seeds
 

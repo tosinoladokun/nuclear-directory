@@ -279,7 +279,7 @@
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
   /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor, more so when the fallback serif is in use (fonts are font-display: optional): less side padding, a tighter gap and no count there (Tosin: counts may go if space is short). */
   @media (min-width: 640px) and (max-width: 1023px) { .nd-home { padding-inline: var(--nd-space-4); } }
-  @media (min-width: 640px) and (max-width: 739px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catcard { padding-inline: 8px; } .nd-home .nd-catcard__head { gap: 6px; } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__head--link .nd-catcard__count { display: none; } }
+  @media (min-width: 640px) and (max-width: 739px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catcard { padding-inline: 8px; } .nd-home .nd-catcard__link { gap: 6px; } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__link .nd-catcard__count { display: none; } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
@@ -287,16 +287,6 @@
   /* Compact, as before the cards (Tosin, 19 Oct): never wider than 960px, centred. */
   .nd-home__cats { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
   .nd-home .nd-searchbox--large .nd-search { height: 52px; }
-  .nd-home .nd-sugg { height: 28px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
-  .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
-  .nd-sugg[hidden] { display: none; }
-  /* Four on phones where they fit (Tosin, 21 Oct): tighter pills on the narrowest phones. */
-  @media (max-width: 400px) { .nd-home .nd-suggs { column-gap: 6px; } .nd-home .nd-sugg { padding-inline: 9px; gap: 4px; } }
-  /* One line of suggestions at every width, never a second line or a scroll
-     (Tosin, 21 Oct: show fewer). The fit-row controller hides the pills that
-     wrap; without it the row clips them. The 8px above and below, taken back
-     by the margin, leave room for each pill's 44px tap area inside the clip. */
-  .nd-home .nd-suggs { flex-wrap: wrap; justify-content: center; row-gap: 16px; height: 44px; box-sizing: border-box; padding-block: 8px; margin-block: -8px; overflow: hidden; }
   @media (min-width: 1440px) {
     .nd-home { padding: 40px 120px 14px; }
     .nd-home__wordmark .nd-wordmark__svg { height: 60px; }
@@ -312,10 +302,12 @@
   /* /design shows its cards at the width they have on the home page at 1440 (two columns). */
   .nd-catgrid--example { max-width: 960px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nd-catcard { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 12px 4px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); }
-  .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit; container-type: inline-size; }
-  .nd-catcard__head--toggle, .nd-catstack__all { display: none; }
-  .nd-catcard__head .nd-ic { width: 20px; height: 20px; color: var(--nd-cat, var(--nd-ink)); }
-  .nd-catcard__head--link:hover .nd-catcard__name { text-decoration: underline; text-underline-offset: 2px; }
+  /* The card's title is its link to the full list (the count beside it); on phones a caret button next to it opens and closes the card. */
+  .nd-catcard__head { display: flex; align-items: flex-start; min-height: 40px; margin: 0; font: inherit; }
+  .nd-catcard__link { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: var(--nd-space-2); color: var(--nd-ink); text-decoration: none; }
+  .nd-catstack__all, .nd-catcard__toggle { display: none; }
+  .nd-catcard__link .nd-ic { width: 20px; height: 20px; color: var(--nd-cat, var(--nd-ink)); }
+  .nd-catcard__link:hover .nd-catcard__name, .nd-catcard__link:focus-visible .nd-catcard__name { text-decoration: underline; text-underline-offset: 2px; }
   /* One line (Tosin): the title fits the header less its icon and count. */
   /* Card titles are the category's full name at one fixed size, never smaller than the rows under them (Tosin, 2 Nov): 17px on
      desktop from 1024px, 14px on tablets and phones, 13px below 375px. Each fits its card on one line, so nothing is cut (a test checks). */
@@ -324,22 +316,19 @@
   .nd-catcard__body { flex: 1; display: flex; flex-direction: column; }
   .nd-catcard__inner { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
   .nd-catcard__rows { flex: 1; margin: 0; padding: 0; list-style: none; }
-  .nd-catcard__row, .nd-catcard__filler, .nd-catcard__more { display: flex; align-items: center; box-sizing: border-box; height: 30px; margin: 0 -6px; padding: 0 6px; border-radius: var(--nd-radius-sm); }
-  /* A row reads as a link at rest (the muted ›), tints on hover and
-     underlines its name on hover or focus. Its name fits the row, then ends
+  .nd-catcard__row, .nd-catcard__filler { display: flex; align-items: center; box-sizing: border-box; height: 30px; margin: 0 -6px; padding: 0 6px; border-radius: var(--nd-radius-sm); }
+  /* A row tints on hover and underlines its name on hover or focus. Its name fits the row, then ends
      in an ellipsis with the full name in title. */
   .nd-catcard__row { gap: var(--nd-space-1); color: var(--nd-ink); text-decoration: none; font: 400 14px/1 var(--font-text); cursor: pointer; container-type: inline-size; }
   .nd-catcard__row:hover .nd-catcard__rowname, .nd-catcard__row:focus-visible .nd-catcard__rowname { text-decoration: underline; text-underline-offset: 2px; }
-  .nd-catcard__row:hover, .nd-catcard__row:active, .nd-catcard__more:hover, .nd-catcard__more:active { background: var(--nd-paper-sunken); }
+  .nd-catcard__row:hover, .nd-catcard__row:active { background: var(--nd-paper-sunken); }
   /* line-height 1.4: the row's font is set at line-height 1, and the
      ellipsis needs overflow hidden, which would clip descenders ("X-energy"). */
   .nd-catcard__rowname { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4;
     font-size: clamp(13px, calc((100cqi - 24px) / (var(--chars) * 0.5)), 14px); }
-  .nd-catcard__chev { flex: none; color: var(--nd-ink-muted); }
-  .nd-catcard__more { font: 500 14px/1 var(--font-text); color: var(--nd-cat, var(--nd-ink)); text-decoration: none; }
   @media (min-width: 1440px) {
     .nd-catgrid { gap: 14px; }
-    .nd-catcard__row, .nd-catcard__filler, .nd-catcard__more { height: 32px; }
+    .nd-catcard__row, .nd-catcard__filler { height: 32px; }
   }
   /* The home grid is 960px wide at most, 2 columns from 640px up (the titles are the full names at 17px);
      /design's example grid sets its own. */
@@ -358,8 +347,8 @@
   }
   /* Touch screens keep 44px targets, even if that means scrolling. */
   @media (pointer: coarse) and (min-width: 640px) {
-    .nd-catcard__head, .nd-catcard__row, .nd-catcard__more { min-height: 44px; height: auto; }
-    .nd-catcard__head { align-items: center; }
+    .nd-catcard__head, .nd-catcard__row { min-height: 44px; height: auto; }
+    .nd-catcard__link { align-items: center; }
   }
   /* Phones: built for scrolling. Every card starts open; its header stays at
      the top while its own rows scroll under it, and opens or closes the card. */
@@ -368,21 +357,18 @@
     .nd-catstack__all:not([hidden]) { display: inline-flex; align-self: flex-end; align-items: center; min-height: 44px; padding: 0; border: 0; background: none;
       color: var(--nd-ink-muted); font: 400 14px/20px var(--font-text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
     .nd-catcard--stack { padding: 0; }
-    .nd-catcard--stack .nd-catcard__head--link { display: none; }
-    .nd-catcard--stack .nd-catcard__head--toggle { display: block; position: sticky; top: 0; z-index: 1; min-height: 52px;
+    .nd-catcard--stack .nd-catcard__head { position: sticky; top: 0; z-index: 1; min-height: 52px; align-items: center;
       background: var(--nd-paper-raised); border-bottom: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md) var(--nd-radius-md) 0 0; }
-    /* Without JavaScript the heading itself lays out its icon, name and count. */
-    .nd-catcard--stack .nd-catcard__head--toggle, .nd-catcard__toggle { align-items: center; gap: var(--nd-space-3); padding: 0 14px; }
-    .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { display: flex; }
-    /* With the button in it, the heading has no padding: the button fills it edge to edge, so all of it is tappable. */
-    .nd-catcard--stack .nd-catcard__head--toggle:has(.nd-catcard__toggle) { padding: 0; }
-    .nd-catcard__toggle { display: flex; width: 100%; min-height: 52px; border: 0; background: none; color: var(--nd-ink); font: inherit; cursor: pointer; }
-    .nd-catcard__caret { width: 8px; height: 8px; border: solid var(--nd-ink-muted); border-width: 0 2px 2px 0; transform: rotate(45deg); margin: 0 4px 4px 0; transition: transform 180ms ease-out; }
-    .nd-catcard--stack.is-collapsed .nd-catcard__caret { transform: rotate(-45deg); margin: 0 6px 0 0; }
-    .nd-catcard--stack.is-collapsed .nd-catcard__head--toggle { border-bottom-color: transparent; border-radius: var(--nd-radius-md); }
-    .nd-catcard--stack .nd-catcard__head .nd-ic { width: 24px; height: 24px; }
+    .nd-catcard--stack .nd-catcard__link { align-self: stretch; align-items: center; gap: var(--nd-space-3); padding-left: 14px; }
+    .nd-catcard--stack .nd-catcard__count { display: none; }
+    .nd-catcard__toggle { position: relative; display: flex; flex: none; align-self: stretch; align-items: center; justify-content: center; width: 44px; border: 0; background: none; cursor: pointer; }
+    /* The button may be narrower than 44px on small phones; its tap area still is. */
+    .nd-catcard__toggle::after { content: ""; position: absolute; inset-block: 0; inset-inline: -4px; }
+    .nd-catcard__caret { width: 8px; height: 8px; border: solid var(--nd-ink-muted); border-width: 0 2px 2px 0; transform: rotate(45deg); margin: 0 0 4px; transition: transform 180ms ease-out; }
+    .nd-catcard--stack.is-collapsed .nd-catcard__caret { transform: rotate(-45deg); margin: 0; }
+    .nd-catcard--stack.is-collapsed .nd-catcard__head { border-bottom-color: transparent; border-radius: var(--nd-radius-md); }
+    .nd-catcard--stack .nd-catcard__link .nd-ic { width: 24px; height: 24px; }
     .nd-catcard--stack .nd-catcard__name { font: 600 14px/22px var(--font-text); }
-    .nd-catcard__toggle { container-type: inline-size; }
     /* Collapsing: the body's row shrinks to nothing over 180ms. */
     .nd-catcard--stack .nd-catcard__body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 180ms ease-out, visibility 180ms; }
     .nd-catcard--stack.is-collapsed .nd-catcard__body { grid-template-rows: 0fr; visibility: hidden; }
@@ -391,12 +377,10 @@
     .nd-catcard--stack .nd-catcard__row { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; }
     .nd-catcard--stack .nd-catcard__rowname { font-size: clamp(13px, calc((100cqi - 52px) / (var(--chars) * 0.5)), 14px); }
     .nd-catcard--stack .nd-catcard__filler { display: none; }
-    .nd-catcard--stack .nd-catcard__more { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; font-size: 15px; }
     /* The rows run edge to edge and the card's wrapper clips what is drawn
        outside them, so the focus ring goes inside the row: it stays whole. */
-    .nd-catcard--stack .nd-catcard__row:focus-visible, .nd-catcard--stack .nd-catcard__more:focus-visible { outline-offset: -2px; }
+    .nd-catcard--stack .nd-catcard__row:focus-visible { outline-offset: -2px; }
     .nd-home__search { gap: var(--nd-space-4); }
-    .nd-home .nd-sugg:focus-visible { outline-offset: -2px; }
     .nd-home__wordmark .nd-wordmark__svg { height: 34px; }
     /* Search near the top, so the keyboard doesn't cover the results. */
     .nd-home { padding: max(var(--nd-space-6), env(safe-area-inset-top)) var(--nd-space-4) var(--nd-space-4); gap: var(--nd-space-4); }
@@ -424,10 +408,6 @@
   .nd-instant__note { margin: 0; padding: var(--nd-space-3) var(--nd-space-4) 0; color: var(--nd-ink-muted); }
   .nd-instant__empty { margin: 0; padding: var(--nd-space-4); }
 
-  .nd-suggs { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--nd-space-2); }
-  .nd-sugg { display: inline-flex; align-items: center; gap: 6px; padding: 6px var(--nd-space-3); border: var(--nd-hairline) solid var(--nd-rule); border-radius: 999px; color: var(--nd-ink); text-decoration: none; }
-  .nd-sugg:hover { border-color: var(--nd-ink); }
-  .nd-sugg .nd-ic { color: var(--nd-ink-muted); }
 }
 
 /* Phones and touch screens (#90). */
@@ -443,11 +423,9 @@
 
   /* 44px tap targets on touch screens, without changing how small parts look. */
   @media (any-pointer: coarse) {
-    .nd-pill, .nd-sugg, .nd-select, .nd-instant__row, .nd-instant__all { min-height: 44px; }
-    /* The home suggestions stay 28px as drawn; their tap area grows instead. */
-    .nd-home .nd-sugg { min-height: 0; }
-    .nd-src, .nd-wordmark, .nd-home .nd-sugg { position: relative; }
-    .nd-src::after, .nd-wordmark::after, .nd-home .nd-sugg::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+    .nd-pill, .nd-select, .nd-instant__row, .nd-instant__all { min-height: 44px; }
+    .nd-src, .nd-wordmark { position: relative; }
+    .nd-src::after, .nd-wordmark::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   }
 }
 
@@ -1179,10 +1157,6 @@
   }
 }
 
-/* The phone suggestions at the 13px floor. Outside the layers on purpose: the
-   pills' type-ui utility sets their size, and utilities outrank components. */
-@media (max-width: 639px) { .nd-home .nd-sugg { font-size: 13px; } }
-
 
 /* The 25 Oct system, built once (#558): Row, chip, page head, index, Glance panel,
    status mark, section head, toolbar, quiet line. The pages adopt them in #556, #557, #560. */
@@ -1227,7 +1201,7 @@
     .nd-line--bare .nd-line__what, .nd-line--bare > .nd-line__end, .nd-line--stack > .nd-line__what, .nd-line--stack > .nd-line__end { grid-column: -2 / -1; flex: none; width: auto; text-align: left; justify-content: flex-start; display: block; overflow: hidden; text-overflow: ellipsis; }
   }
 
-  /* Chip family (nd-chip): category chips, suggestions, the type chip. */
+  /* Chip family (nd-chip): category chips, the type chip. */
   .nd-chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--nd-space-3); border: var(--nd-hairline) solid var(--nd-rule); border-radius: 999px; background: transparent; color: var(--nd-ink); font: 400 14px/20px var(--font-text); text-decoration: none; white-space: nowrap; cursor: pointer; }
   .nd-chip:hover { border-color: var(--nd-ink); }
   .nd-chip .nd-ic { color: var(--nd-cat, currentColor); align-self: center; }
@@ -1615,12 +1589,23 @@
 /* The narrowest phones: the longest title stays on one line at the 13px floor below 375px, and below 341px the icon gives its room. */
 @layer components {
   @media (max-width: 420px) {
-    .nd-catcard__toggle, .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { padding-inline: 10px; gap: 8px; }
-    .nd-catcard__caret { margin-right: 0; }
+    .nd-catcard--stack .nd-catcard__link { padding-left: 8px; gap: 6px; }
+    .nd-catcard--stack .nd-catcard__link .nd-ic { width: 20px; height: 20px; }
+    .nd-catcard__toggle { width: 36px; }
   }
   @media (max-width: 374px) { .nd-catcard--stack .nd-catcard__name { font-size: 13px; } }
   @media (max-width: 340px) {
-    .nd-catcard--stack .nd-catcard__head .nd-ic { display: none; }
-    .nd-catcard__toggle, .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { padding-inline: 8px; gap: 6px; }
+    .nd-catcard--stack .nd-catcard__link .nd-ic { display: none; }
+    .nd-catcard--stack .nd-catcard__link { padding-left: 6px; gap: 4px; }
+    .nd-catcard__toggle { width: 32px; }
+    .nd-catcard--stack .nd-catcard__name { letter-spacing: -0.01em; }
+  }
+}
+
+/* The home page's footer is the one row of links on every width (#700). */
+@layer components {
+  @media (min-width: 760px) {
+    .nd-footer--compact { border-top: var(--nd-hairline) solid var(--nd-rule); }
+    .nd-footer--compact .nd-footer__links { display: flex; justify-content: center; }
   }
 }

@@ -19,76 +19,6 @@ class HomeCardsTest < ApplicationSystemTestCase
 
   def cards = page.evaluate_script("[...document.querySelectorAll('section.nd-catcard')].map((c) => [c.dataset.key, c.querySelectorAll('a.nd-catcard__row').length])")
 
-  test "the suggested searches are one line at every width: the ones that don't fit are hidden, never wrapped or scrolled" do
-    [ [ 360, 780 ], [ 390, 844 ], [ 640, 900 ], [ 700, 900 ], [ 1440, 900 ] ].each do |width, height|
-      resize_viewport(width, height)
-      visit root_path
-
-      row = page.evaluate_script(<<~JS)
-        (() => {
-          const row = document.querySelector(".nd-home .nd-suggs"), all = [...row.querySelectorAll(".nd-sugg")]
-          const shown = all.filter((pill) => !pill.hidden), tops = new Set(shown.map((pill) => Math.round(pill.getBoundingClientRect().top)))
-          const rowBox = row.getBoundingClientRect()
-          return [all.length, shown.length >= 3, tops.size, Math.max(...shown.map((pill) => Math.round(pill.getBoundingClientRect().height))),
-            parseFloat(getComputedStyle(shown[0]).fontSize) >= 13, shown.every((pill) => pill.getBoundingClientRect().right <= rowBox.right + 1 && pill.getBoundingClientRect().left >= rowBox.left - 1),
-            row.scrollWidth <= row.clientWidth, document.documentElement.scrollWidth <= innerWidth]
-        })()
-      JS
-      assert_equal [ HomeSuggestions::SHOWN, true, 1, 28, true, true, true, true ], row, "at #{width}: at least three pills, one line, 28px, inside the row, no scroll anywhere"
-      assert_empty page.evaluate_script(AUDIT), "at #{width}"
-    end
-  end
-
-  test "a phone shows three or four suggestions on one line, whichever five the server picked" do
-    [ [ 360, 780 ], [ 390, 844 ] ].each do |width, height|
-      resize_viewport(width, height)
-      8.times do |load|
-        visit root_path
-        shown = page.evaluate_script("(() => { const pills = [...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden); return [pills.map((pill) => pill.textContent.trim()), new Set(pills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size] })()")
-        assert_includes 3..4, shown[0].size, "at #{width}, load #{load}: three or four pills (#{shown[0].join(', ')})"
-        assert_equal 1, shown[1], "at #{width}, load #{load}: one line"
-        assert_empty page.evaluate_script(AUDIT), "at #{width}, load #{load}"
-      end
-    end
-  end
-
-  test "a wide screen shows all five picked suggestions; on a phone the ones that don't fit are hidden, out of the tab order, and come back when it widens" do
-    count = "[...document.querySelectorAll('.nd-home .nd-sugg')].filter((pill) => !pill.hidden).length"
-    resize_viewport(1440, 900)
-    visit root_path
-    assert_equal HomeSuggestions::SHOWN, page.evaluate_script(count), "all five fit on a wide screen"
-
-    resize_viewport(360, 780)
-    assert_selector ".nd-home .nd-sugg[hidden]", visible: :all, minimum: 1, wait: 5
-    assert page.evaluate_script("[...document.querySelectorAll('.nd-home .nd-sugg[hidden]')].every((pill) => pill.offsetParent === null)"), "hidden pills take no space and can't be tabbed to"
-    assert_operator page.evaluate_script(count), :<, HomeSuggestions::SHOWN
-
-    resize_viewport(1440, 900)
-    assert_equal HomeSuggestions::SHOWN, page.evaluate_script(count), "all five come back when the screen widens"
-    assert_no_selector ".nd-home .nd-sugg[hidden]", visible: :all
-  end
-
-  test "on a touch screen the suggestions stay 28px tall, with a 44px tap area" do
-    resize_viewport(390, 844)
-    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)
-    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [ { name: "any-pointer", value: "coarse" } ])
-    visit root_path
-
-    sizes = page.evaluate_script(<<~JS)
-      (() => {
-        const pill = document.querySelector(".nd-home .nd-sugg"), tap = getComputedStyle(pill, "::after"), box = pill.getBoundingClientRect()
-        const x = box.left + box.width / 2
-        // A tap 6px above or below the pill still reaches it: the row doesn't clip its tap area.
-        const reaches = (y) => document.elementFromPoint(x, y)?.closest(".nd-sugg") === pill
-        return [matchMedia("(any-pointer: coarse)").matches, Math.round(box.height), tap.height, reaches(box.top - 6), reaches(box.bottom + 6)]
-      })()
-    JS
-    assert_equal [ true, 28, "44px", true, true ], sizes
-  ensure
-    page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", features: [])
-    page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: false)
-  end
-
   test "at 360 the search placeholder is a shorter one that fits; at 390 the full one" do
     { 360 => "Search companies and plants", 390 => "Search a company, plant or site" }.each do |width, placeholder|
       resize_viewport(width, 800)
@@ -129,17 +59,14 @@ class HomeCardsTest < ApplicationSystemTestCase
     end
   end
 
-  test "on a phone the whole card header is the button, edge to edge" do
+  test "on a phone the title links to the list and a caret button beside it opens and closes the card" do
     resize_viewport(390, 844)
     visit root_path
-    edges = page.evaluate_script(<<~JS)
-      (() => {
-        const head = document.querySelector(".nd-catcard__head--toggle"), button = head.querySelector(".nd-catcard__toggle")
-        const h = head.getBoundingClientRect(), b = button.getBoundingClientRect()
-        return [Math.round(b.left - h.left), Math.round(h.right - b.right)]
-      })()
-    JS
-    assert_equal [ 0, 0 ], edges, "no untappable strip at either edge"
+    sizes = page.evaluate_script("(() => { const head = document.querySelector('.nd-catcard--stack .nd-catcard__head'); const link = head.querySelector('.nd-catcard__link'), button = head.querySelector('.nd-catcard__toggle'); const h = head.getBoundingClientRect(), l = link.getBoundingClientRect(), b = button.getBoundingClientRect(); return [Math.round(l.left - h.left), Math.round(h.right - b.right), Math.round(b.width), Math.round(b.height), link.getAttribute('href')] })()")
+    assert_equal [ 0, 0 ], sizes.first(2), "no untappable strip at either edge"
+    assert_operator sizes[2], :>=, 36, "the caret button is at least 36px wide; its tap area reaches 44px (::after)"
+    assert_operator sizes[3], :>=, 44
+    assert_match(%r{\A/companies\?category=}, sizes[4], "the title is the link to the full list")
   end
 
   test "a category title is never cut short: it fits, and it isn't excused from being cut" do
@@ -175,22 +102,6 @@ class HomeCardsTest < ApplicationSystemTestCase
     assert_equal 0, inset, "the row runs edge to edge, so only an inside ring survives"
   end
 
-  test "on a phone the focus ring on a suggestion pill is drawn inside the pill, so the row's clip can't cut it" do
-    resize_viewport(390, 844)
-    visit root_path
-
-    page.execute_script("document.querySelector('.nd-home .nd-sugg').focus()")
-    page.send_keys(:tab, [ :shift, :tab ]) # keyboard focus, so :focus-visible applies
-    style, offset = page.evaluate_script(<<~JS)
-      (() => {
-        const pill = document.activeElement
-        return [getComputedStyle(pill).outlineStyle, parseFloat(getComputedStyle(pill).outlineOffset)]
-      })()
-    JS
-    assert_equal "solid", style, "the pill shows a focus ring"
-    assert_operator offset, :<=, 0, "the ring is drawn inside the pill"
-  end
-
   test "the /design example cards are as wide as on the home page, and nothing in them is cut" do
     visit "/design"
     widths = page.evaluate_script("[...document.querySelectorAll('.nd-catgrid--example .nd-catcard')].map((card) => Math.round(card.getBoundingClientRect().width))")
@@ -215,7 +126,7 @@ class HomeCardsTest < ApplicationSystemTestCase
       assert_equal "plants", cards.last.first, "Plants and sites is the last card"
       assert(cards.all? { |_, rows| rows <= 3 })
       assert_empty page.evaluate_script(AUDIT)
-      assert page.evaluate_script("[...document.querySelectorAll('.nd-catcard__chev')].every((c) => c.offsetParent)"), "every row shows its › at rest"
+      assert_equal 0, page.evaluate_script("document.querySelectorAll('.nd-catcard__chev, .nd-catcard__more').length"), "no row chevrons and no See all link"
     end
   end
 
@@ -227,15 +138,15 @@ class HomeCardsTest < ApplicationSystemTestCase
     short = page.evaluate_script("[...document.querySelectorAll('.nd-catstack a, .nd-catstack button')].filter((el) => el.offsetParent && el.getBoundingClientRect().height < 44).map((el) => el.textContent.trim())")
     assert_empty short, "links under 44px tall"
     assert_equal "plants", cards.last.first
-    assert_equal 0, page.evaluate_script("document.querySelectorAll('.nd-catstack .nd-catcard__count').length - document.querySelectorAll('.nd-catcard__head--link .nd-catcard__count').length"), "no counts in phone headers"
+    assert_equal [], page.evaluate_script("[...document.querySelectorAll('.nd-catcard__count')].filter((c) => c.getClientRects().length).map((c) => c.textContent)"), "no counts in phone headers"
 
     # Scroll into the second card: its header sits at the top.
-    top = page.evaluate_script("(() => { const card = document.querySelectorAll('section.nd-catcard')[1]; window.scrollTo(0, card.getBoundingClientRect().top + scrollY + 60); return Math.round(card.querySelector('.nd-catcard__head--toggle').getBoundingClientRect().top) })()")
+    top = page.evaluate_script("(() => { const card = document.querySelectorAll('section.nd-catcard')[1]; window.scrollTo(0, card.getBoundingClientRect().top + scrollY + 60); return Math.round(card.querySelector('.nd-catcard__head').getBoundingClientRect().top) })()")
     assert_equal 0, top, "the header sticks at the top while its rows scroll under it"
 
     toggle = find("section[data-key=fuel] .nd-catcard__toggle")
     assert_equal "true", toggle["aria-expanded"]
-    assert_equal "Fuel and materials, 4 companies", toggle["aria-label"], "the count is in the button's name on phones"
+    assert_equal "Fuel and materials", toggle["aria-label"], "the caret button is named after its card"
     toggle.click
     assert_equal "false", toggle["aria-expanded"]
     assert_no_selector "section[data-key=fuel] a.nd-catcard__row", visible: true
