@@ -42,7 +42,8 @@ class PagesTest < ActionDispatch::IntegrationTest
 
     # The home page has the one-line footer (#700): the row of links only.
     get root_path
-    assert_select "footer.nd-footer.nd-footer--compact nav[aria-label='About this site'] a", 6
+    assert_select "footer.nd-footer.nd-footer--compact nav[aria-label='About this site'] a", 7
+    assert_select "footer.nd-footer--compact a[href='/companies']", "All companies"
     assert_select "footer.nd-footer .nd-footer__desk", 0
 
     { about_path => "About", data_path => "Our data", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
