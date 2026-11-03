@@ -91,12 +91,12 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_equal %w[reactor-developers power-buyers plants], css_select("section.nd-catcard").map { |card| card["data-key"] }
     assert_select "section.nd-catcard", 3
     assert_select "section[data-key=reactor-developers]" do
-      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Developers, 4 companies"
-      assert_select "section[data-label=?]", "Developers, 4 companies"
-      assert_select "h2.nd-catcard__head--toggle", /Developers/, "the phone header, which shows no count"
+      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Reactor developers, 4 companies"
+      assert_select "section[data-label=?]", "Reactor developers, 4 companies"
+      assert_select "h2.nd-catcard__head--toggle", /Reactor developers/, "the phone header, which shows no count"
       assert_select "a.nd-catcard__row", 3
       assert_select "a.nd-catcard__row[href=?][title=?]", "/companies/kairos-power", "Kairos Power", text: /Kairos Power/
-      assert_select "a.nd-catcard__more[href=?][aria-label=?]", "/companies?category=reactor-developers", "See all 4 in Developers", text: /\A\s*See all ›\s*\z/
+      assert_select "a.nd-catcard__more[href=?][aria-label=?]", "/companies?category=reactor-developers", "See all 4 in Reactor developers", text: /\A\s*See all ›\s*\z/
       assert_select "a.nd-catcard__head .nd-catcard__count[aria-hidden=true]", "4"
     end
     assert_select "section[data-key=power-buyers]" do
