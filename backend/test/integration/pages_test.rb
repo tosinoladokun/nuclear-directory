@@ -22,7 +22,7 @@ class PagesTest < ActionDispatch::IntegrationTest
   end
 
   test "privacy, disclaimer and the crawler page are linked from every page's footer" do
-    get root_path
+    get companies_path
     assert_select "footer.nd-footer nav[aria-label='About this site']" do
       assert_select "a[href='/about']", "About"
       assert_select "a[href='/data']", "Our data"
@@ -39,6 +39,11 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select ".nd-footer__count", /companies · .* plants? (and sites|or site)/
     end
     assert_select "footer.nd-footer a[href='https://render.com']", 0
+
+    # The home page has the one-line footer (#700): the row of links only.
+    get root_path
+    assert_select "footer.nd-footer.nd-footer--compact nav[aria-label='About this site'] a", 6
+    assert_select "footer.nd-footer .nd-footer__desk", 0
 
     { about_path => "About", data_path => "Our data", privacy_path => "Privacy", disclaimer_path => "Disclaimer", bot_path => "NuclearDirectoryBot" }.each do |path, heading|
       get path
