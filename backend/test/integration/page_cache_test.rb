@@ -51,4 +51,22 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     assert_equal fresh_cards = css_select(".nd-catgrid").to_s, (get("/") && css_select(".nd-catgrid").to_s)
     assert fresh_cards.present?
   end
+
+  test "the companies list is cached per filter; a search never is" do
+    get "/companies"
+    fresh = body
+    queries = 0
+    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get "/companies" }
+    assert_equal fresh, body
+    assert_operator queries, :<=, 3
+    assert_match "Cache Co", body
+
+    get "/companies?sort=name&utm_source=x"
+    assert_response :success
+    queries = 0
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get "/companies?q=cache" }
+    assert_operator queries, :>, 3, "a search runs its queries"
+    assert_match "Cache Co", body
+  end
 end

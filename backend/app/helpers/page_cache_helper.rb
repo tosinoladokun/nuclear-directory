@@ -14,8 +14,8 @@ module PageCacheHelper
   Card = Data.define(:digest, :alt)
   EXPIRES = 1.day
 
-  def page_cache(*name, &block)
-    return capture(&block) unless controller.perform_caching
+  def page_cache(*name, cache: true, &block)
+    return capture(&block) unless cache && controller.perform_caching
 
     key = cache_fragment_name([ "page/v1", *name, request.base_url, DataVersion.current ])
     if (stored = Rails.cache.read(key))
