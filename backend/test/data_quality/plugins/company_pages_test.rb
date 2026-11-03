@@ -440,4 +440,27 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert plugin.send(:description_page?, home, company), "an unreadable About page doesn't win"
     assert_match DataQuality::Plugins::CompanyPages::ABOUT_PAGE, "/about.html"
   end
+
+  test "EDGAR's website for a company with none on file (2 Nov)" do
+    @company.update_columns(website: nil, sec_cik: "0001018724", enrich_requested_at: Time.current)
+    stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{data\.sec\.gov/submissions/CIK0001018724\.json}).to_return(body: { name: "ACME", website: "www.acmefission.com", addresses: { business: {} } }.to_json)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    source = Source.find_by!(url: format(DataQuality::Plugins::CompanyPages::EDGAR, 1018724))
+    claim = DataQuality::Plugins::CompanyPages.new.extract(source, nil).find { |c| c[:payload].key?("website") }
+    assert_equal "https://www.acmefission.com", claim[:payload]["website"]
+    assert_includes claim[:quote], "www.acmefission.com"
+  end
+
+  test "an SEC record extracted before the website claim is extracted again on its next read" do
+    @company.update_columns(sec_cik: "0001018724", enrich_requested_at: Time.current)
+    stub_request(:get, "https://data.sec.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{data\.sec\.gov/submissions/CIK0001018724\.json}).to_return(body: { name: "ACME", website: "acme.example", addresses: { business: {} } }.to_json)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    edgar = Source.find_by!(url: format(DataQuality::Plugins::CompanyPages::EDGAR, 1018724))
+    edgar.update_columns(extracted_sha256: edgar.content_sha256, extracted_rows_sha256: edgar.content_sha256, fetched_at: 2.days.ago)
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    assert_nil edgar.reload.extracted_sha256
+  end
 end

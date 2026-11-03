@@ -252,4 +252,27 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     refute listed.send(:about_nuclear?, "GE Vernova", item.("GE Vernova Wins Wind Order With Kairos Power")), "GE Vernova is broad"
     refute listed.send(:about_nuclear?, "Constellation", item.("Constellation Energy Corporation Names New Board Chair")), "its own legal-name alias isn't another record"
   end
+
+  test "a found feed that isn't a feed is dropped quietly, never sent to a person (Energy Northwest, 2 Nov)" do
+    stub_request(:get, "https://www.energy-northwest.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://www.energy-northwest.com/").to_return(body: '<html><head><link rel="alternate" type="application/rss+xml" href="/feed/"></head></html>')
+    stub_request(:get, "https://www.energy-northwest.com/feed/").to_return(body: "<html><body>Not a feed</body></html>", headers: { "Content-Type" => "text/html" })
+    plugin = discovering([ [ "Energy Northwest", "https://www.energy-northwest.com" ] ])
+
+    stats = DataQuality::Stages::Crawl.call(plugin:).stats
+    assert_equal "not_a_feed_dropped", stats["Energy Northwest"]
+    feed = Source.find_by!(url: "https://www.energy-northwest.com/feed/")
+    refute feed.crawl_needs_human?
+    assert_nil plugin.feeds["Energy Northwest"], "its homepage now says no feed"
+
+    feed.update_columns(crawl_status: "needs_human", status_reason: Plugin::NOT_A_FEED)
+    Source.where(source_kind: Plugin::HOMEPAGE_KIND).update_all(content_text: "Company: Energy Northwest\nFeed: https://www.energy-northwest.com/feed/")
+    travel 1.day do
+      assert_equal "not_a_feed_dropped", DataQuality::Stages::Crawl.call(plugin:).stats["Energy Northwest"], "one already flagged is dropped too"
+    end
+    refute feed.reload.crawl_needs_human?
+    page = Source.find_by!(source_kind: Plugin::HOMEPAGE_KIND)
+    assert_nil page.etag, "its next read is a full one, so a repaired feed is found again"
+    assert_nil page.last_modified
+  end
 end
