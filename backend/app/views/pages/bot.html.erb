@@ -3,42 +3,31 @@
   <link rel="canonical" href="<%= bot_url %>">
   <meta name="description" content="NuclearDirectoryBot keeps Nuclear Directory up to date from public pages. It follows robots.txt, visits each page at most once a day and stops when blocked.">
 <% end %>
-<%= render "shared/site_header" %>
-
-<main class="nd-page nd-page--narrow nd-prose">
-  <h1 class="type-title-md">NuclearDirectoryBot</h1>
-  <p class="type-body"><strong>In short:</strong> NuclearDirectoryBot is the crawler that keeps Nuclear Directory up to date. It reads public pages, such as regulator filings, company press releases and news reports, for facts about the US nuclear industry. It follows robots.txt, and you can block it.</p>
-
-  <section aria-labelledby="identity">
-    <h2 id="identity" class="type-body-strong">How to recognize it</h2>
-    <p class="type-body">Every request sends this user agent:</p>
-    <pre class="nd-code type-data"><%= DataQuality::Fetcher::USER_AGENT %></pre>
+<%= render layout: "pages/frame", locals: { current: :bot, title: "NuclearDirectoryBot", updated: "October 2026",
+      summary: "NuclearDirectoryBot is the crawler that keeps Nuclear Directory up to date. It reads public pages, such as regulator filings, company press releases and news reports, for facts about the US nuclear industry. It follows robots.txt, and you can block it.",
+      facts: [ { label: "Pace, per site", value: "Every #{DataQuality::Fetcher::HOST_INTERVAL} seconds" },
+               { label: "Visits per page", value: "Once a day at most" },
+               { label: "Rules", value: "Follows robots.txt" }, { label: "If blocked", value: "Stops" } ] } do %>
+  <section class="nd-info__sec" aria-labelledby="identity">
+    <h2 id="identity" class="nd-info__h">How to recognize it</h2>
+    <p>Every request sends this user agent:</p>
+    <%= render "pages/code", text: DataQuality::Fetcher::USER_AGENT %>
   </section>
 
-  <section aria-labelledby="behaviour">
-    <h2 id="behaviour" class="type-body-strong">How it behaves</h2>
-    <p class="type-body">It follows each site's rules and keeps its visits light.</p>
-    <ul class="type-body">
-      <li>It checks every page against the site's robots.txt, including pages it's redirected to. It reads a site's robots.txt once per visit, not once per page.</li>
-      <li>It waits <%= DataQuality::Fetcher::HOST_INTERVAL %> seconds between requests to the same site.</li>
-      <li>It fetches each page at most once a day and asks only for changes (ETag and Last-Modified), so an unchanged page costs a short reply.</li>
-      <li>When a site blocks it, it stops. It doesn't retry, work around the block or pretend to be a browser.</li>
-    </ul>
+  <section class="nd-info__sec" aria-labelledby="behaviour">
+    <h2 id="behaviour" class="nd-info__h">How it behaves</h2>
+    <p>It checks every page against the site's robots.txt, including pages it's redirected to, and reads a site's robots.txt once per visit, not once per page. It waits <%= DataQuality::Fetcher::HOST_INTERVAL %> seconds between requests to the same site.</p>
+    <p>It fetches each page at most once a day and asks only for changes (ETag and Last-Modified), so an unchanged page costs a short reply. When a site blocks it, it stops. It doesn't retry, work around the block or pretend to be a browser.</p>
   </section>
 
-  <section aria-labelledby="blocking">
-    <h2 id="blocking" class="type-body-strong">How to block it</h2>
-    <p class="type-body">Two steps, and it stops on its next visit.</p>
-    <ol class="type-body">
-      <li>Open your site's robots.txt.</li>
-      <li>Add these two lines:</li>
-    </ol>
-    <pre class="nd-code type-data">User-agent: <%= DataQuality::Fetcher::AGENT_TOKEN %>
-Disallow: /</pre>
+  <section class="nd-info__sec" aria-labelledby="blocking">
+    <h2 id="blocking" class="nd-info__h">How to block it</h2>
+    <p>Open your site's robots.txt and add these two lines. It stops on its next visit.</p>
+    <%= render "pages/code", text: "User-agent: #{DataQuality::Fetcher::AGENT_TOKEN}\nDisallow: /" %>
   </section>
 
-  <section aria-labelledby="contact">
-    <h2 id="contact" class="type-body-strong">Questions about a visit</h2>
-    <p class="type-body">Email <%= mail_to DataQuality::Fetcher::CONTACT_EMAIL, nil, class: "nd-link" %> with the time and the page, or the reference number from your firewall's block page.</p>
+  <section class="nd-info__sec" aria-labelledby="contact">
+    <h2 id="contact" class="nd-info__h">Questions about a visit</h2>
+    <p>Email <%= mail_to DataQuality::Fetcher::CONTACT_EMAIL, nil, class: "nd-link" %> with the time and the page, or the reference number from your firewall's block page.</p>
   </section>
-</main>
+<% end %>

@@ -121,4 +121,25 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
     crawl
     assert_nil source.reload.extracted_sha256
   end
+
+  test "the website ARPA-E lists for an organization, only for a company without one (2 Nov)" do
+    row = { "attributes" => { "fields" => { "title" => "X", "urls" => [ "/programs-and-initiatives/search-all-projects/x" ],
+      "organization" => [ { "attributes" => { "title" => "Exodys Energy Inc" }, "fields" => { "website" => [ { "uri" => "https://www.exodysenergy.com/" } ] } } ] } } }
+    _url, line = plugin.send(:project_line, row, "nuclear fission")
+    assert_includes line, "Website: https://www.exodysenergy.com/"
+    company = plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload]
+    assert_equal "https://www.exodysenergy.com", company["website"]
+    deep = line.sub("https://www.exodysenergy.com/", "http://www.exodysenergy.com/nuclear/team")
+    assert_equal "https://www.exodysenergy.com", plugin.extract(Source.new(url: "https://x", content_text: deep), nil)[1][:payload]["website"], "home page over https"
+
+    Organization.create!(name: "Exodys Energy Inc", website: "https://exodys.example").aliases.find_or_create_by!(alias: "Exodys Energy Inc")
+    refute plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload].key?("website")
+  end
+
+  test "no website for a company found by its acronym alias that already has one" do
+    llnl = Organization.create!(name: "Lawrence Livermore", website: "https://www.llnl.gov/")
+    llnl.aliases.find_or_create_by!(alias: "LLNL")
+    line = "Project: X | Organization: Lawrence Livermore National Laboratory (LLNL) | Status: Active | Website: https://www.llnl.gov/x"
+    refute plugin.extract(Source.new(url: "https://x", content_text: line), nil)[1][:payload].key?("website")
+  end
 end
