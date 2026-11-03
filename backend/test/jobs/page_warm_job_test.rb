@@ -33,17 +33,26 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
   def without_token(body) = body.gsub(/<meta name="csrf-token" content="[^"]+"/, "")
 
   test "after a run, a company page's first view comes from the cache and matches a fresh build; a run with no change does nothing" do
-    PageWarmJob.perform_now(pause: 0)
+    PageWarmJob.perform_now(pause: 0, debounce: false)
     assert_operator queries_for("/companies/warm-co"), :<=, 4
     warmed = without_token(response.body)
     Rails.cache.clear
     get "/companies/warm-co"
     assert_equal without_token(response.body), warmed
 
-    PageWarmJob.perform_now(pause: 0)
+    PageWarmJob.perform_now(pause: 0, debounce: false)
+    rendered = 0
+    counter = ->(*) { rendered += 1 }
+    ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") { PageWarmJob.perform_now(pause: 0, debounce: false) }
+    assert_equal 0, rendered, "nothing changed, nothing rebuilt"
+  end
+
+  test "debounced: the first tick after a change only notes it; the next, with nothing new, warms" do
     rendered = 0
     counter = ->(*) { rendered += 1 }
     ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") { PageWarmJob.perform_now(pause: 0) }
-    assert_equal 0, rendered, "nothing changed, nothing rebuilt"
+    assert_equal 0, rendered, "just changed: wait a tick"
+    ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") { PageWarmJob.perform_now(pause: 0) }
+    assert_operator rendered, :>, 0, "quiet since the last tick: warm"
   end
 end

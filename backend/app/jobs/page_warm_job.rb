@@ -15,18 +15,29 @@ class PageWarmJob < ApplicationJob
   limits_concurrency to: 1, key: "page_warm", duration: 1.hour if respond_to?(:limits_concurrency)
 
   WARMED = "page_warm/version"
+  SEEN = "page_warm/seen"
   PAUSE = 0.1
+  # After each page it rests twice as long as the page took: at most about a third of the CPU (Infra).
+  REST = 2
 
-  def perform(pause: PAUSE)
+  # Debounced (Infra): it warms only once the data has stood still for a whole
+  # tick (the version it saw last time is the version now), so a crawl or a
+  # burst of approvals is warmed once, after it ends.
+  def perform(pause: PAUSE, debounce: true)
     version = DataVersion.current
     return if Rails.cache.read(WARMED) == version
     return unless (host = self.class.host)
+    if debounce && Rails.cache.read(SEEN) != version
+      Rails.cache.write(SEEN, version)
+      return
+    end
 
     pages(host).each do |render|
       return unless DataVersion.current == version
 
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       render.call
-      sleep pause if pause.positive?
+      sleep [ pause, REST * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) ].max if pause.positive?
     end
     Rails.cache.write(WARMED, version)
   end
