@@ -26,6 +26,7 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "footer.nd-footer nav[aria-label='About this site']" do
       assert_select "a[href='/about']", "About"
       assert_select "a[href='/data']", "Our data"
+      assert_select "a[href='/updates']", "What's new"
       assert_select "a[href='/privacy']", "Privacy"
       assert_select "a[href='/disclaimer']", "Disclaimer"
       assert_select "a[href='/bot']", "Our crawler"
@@ -34,7 +35,7 @@ class PagesTest < ActionDispatch::IntegrationTest
     # Desktop: three columns and the live counts (#660); Render is credited on the About page, not in the footer.
     assert_select "footer.nd-footer .nd-footer__desk" do
       assert_select ".nd-footer__brand", /The US nuclear industry, from public sources\./
-      assert_equal [ "All companies", "Plants and sites", "Our data" ], css_select("nav[aria-label=Directory] a").map(&:text)
+      assert_equal [ "All companies", "Plants and sites", "Our data", "What's new" ], css_select("nav[aria-label=Directory] a").map(&:text)
       assert_equal [ "About", "Our crawler", "Privacy", "Disclaimer", "Contact us" ], css_select("nav[aria-label=About] a").map(&:text)
       assert_select ".nd-footer__count", /companies · .* plants? (and sites|or site)/
     end
