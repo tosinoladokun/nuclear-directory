@@ -51,6 +51,26 @@ class ListPageSystemTest < ApplicationSystemTestCase
     end
   end
 
+  test "a plants row with no capacity has no stray dot before its location on phones, and a row with one has it" do
+    big = cite!(plant("Dotted Station", facility_type: "power_reactor", status: "operating", city: "Oak Ridge", state: "TN"))
+    cite!(plant("Dotted Station Unit 1", parent: big, capacity_mw: 900, status: "operating"))
+    cite!(plant("Undotted Site", facility_type: "power_reactor", status: "shut_down", city: "Athens", state: "AL"))
+    resize_viewport(390, 844)
+    visit companies_path(category: "plants")
+    before = ->(name) { page.evaluate_script("(() => { const row = [...document.querySelectorAll('a.nd-prow')].find((r) => r.textContent.includes('#{name}')); return getComputedStyle(row.querySelector('.nd-prow__place'), '::before').content })()") }
+    assert_equal '"· "', before.("Dotted Station")
+    assert_equal "none", before.("Undotted Site")
+  end
+
+  test "on desktop the location column has room after the right-aligned capacity (#614)" do
+    cite!(plant("Roomy Station", facility_type: "power_reactor", status: "operating", city: "Oak Ridge", state: "TN"))
+    resize_viewport(1440, 900)
+    visit companies_path(category: "plants")
+    gap = page.evaluate_script("(() => { const row = document.querySelector('a.nd-prow'); const place = row.querySelector('.nd-prow__place'); return parseFloat(getComputedStyle(place).paddingLeft) })()")
+    assert_operator gap, :>=, 12, "the location has its own 12px of air"
+    assert_empty page.evaluate_script(AUDIT), "a long location still fits on one line"
+  end
+
   test "the audit catches a wrapping name and a cut-short location with no full text in title" do
     resize_viewport(1440, 900)
     visit companies_path
