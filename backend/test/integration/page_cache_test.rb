@@ -26,7 +26,7 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     get "/companies/cache-co"
     fresh = body
     queries = 0
-    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" } # cached ones too: the query cache can outlive a request in tests
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get "/companies/cache-co" }
     assert_equal fresh, body
     assert_match "<title>Cache Co", body
@@ -56,7 +56,7 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     get "/companies"
     fresh = body
     queries = 0
-    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+    counter = ->(*, payload) { queries += 1 unless payload[:name] == "SCHEMA" } # cached ones too: the query cache can outlive a request in tests
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get "/companies" }
     assert_equal fresh, body
     assert_operator queries, :<=, 3
