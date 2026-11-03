@@ -10,15 +10,14 @@
     <% category = card.category %>
     <% noun = category.plants ? pluralize(card.count, "plant or site", plural: "plants and sites") : pluralize(card.count, "company", plural: "companies") %>
     <%# The card's title is the category's own name (Tosin, 2 Nov): one name for the title, the aria labels and the links. %>
-    <% label = category.name %>
-    <% head_name = "#{label}, #{noun}" %>
-    <section class="nd-catcard nd-catcard--rows nd-catcard--compact nd-catcard--stack <%= bucket_class(category) %>" aria-label="<%= label %>"
-             data-catstack-target="card" data-key="<%= category.key %>" data-name="<%= label %>">
+    <% head_name = "#{category.name}, #{noun}" %>
+    <section class="nd-catcard nd-catcard--rows nd-catcard--compact nd-catcard--stack <%= bucket_class(category) %>" aria-label="<%= category.name %>"
+             data-catstack-target="card" data-key="<%= category.key %>" data-name="<%= category.name %>">
       <h2 class="nd-catcard__head" data-catstack-target="head">
-        <%= link_to directory_url_for(category:), class: "nd-catcard__link", title: label, aria: { label: head_name } do %>
+        <%= link_to directory_url_for(category:), class: "nd-catcard__link", aria: { label: head_name } do %>
           <%= bucket_icon(category, size: 24) %>
           <%# A category name is one we write, so it fits: no ellipsis, no data-truncate (DESIGN.md rule 5). %>
-          <span class="nd-catcard__name"><%= label %></span><span class="nd-catcard__count" aria-hidden="true"><%= card.count %></span>
+          <span class="nd-catcard__name"><%= category.name %></span><span class="nd-catcard__count" aria-hidden="true"><%= card.count %></span>
         <% end %>
       </h2>
       <div class="nd-catcard__body" id="cat-body-<%= category.key %>">

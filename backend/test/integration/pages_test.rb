@@ -259,7 +259,7 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_includes body, "- 1 companies:"
     assert_includes body, "- 1 plants and sites:"
     assert_includes body, "A fact with no public source is not published."
-    assert_includes body, "[Developers](http://www.example.com/companies?category=reactor-developers)"
+    assert_includes body, "[Reactor developers](http://www.example.com/companies?category=reactor-developers)"
     assert_includes body, "(http://www.example.com/sitemap.xml)"
     assert_includes body, DirectoryHelper::CORRECTIONS_EMAIL
     assert_not_includes body, "—"

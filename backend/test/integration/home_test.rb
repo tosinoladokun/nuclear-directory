@@ -56,11 +56,11 @@ class HomeTest < ActionDispatch::IntegrationTest
   test "a card for each bucket with companies, then Plants and sites last, naming at most three (#362)" do
     get root_path
 
-    # Developers, Power buyers, Plants and sites: empty buckets have no card.
+    # Reactor developers, Power buyers, Plants and sites: empty buckets have no card.
     assert_equal %w[reactor-developers power-buyers plants], css_select("section.nd-catcard").map { |card| card["data-key"] }
     assert_select "section.nd-catcard", 3
     assert_select "section[data-key=reactor-developers]" do
-      assert_select "h2.nd-catcard__head a.nd-catcard__link[href=?][aria-label=?]", "/companies?category=reactor-developers", "Developers, 4 companies"
+      assert_select "h2.nd-catcard__head a.nd-catcard__link[href=?][aria-label=?]", "/companies?category=reactor-developers", "Reactor developers, 4 companies"
       assert_select "a.nd-catcard__link .nd-catcard__count[aria-hidden=true]", "4"
       assert_select "a.nd-catcard__row", 3
       assert_select "a.nd-catcard__row[href=?][title=?]", "/companies/kairos-power", "Kairos Power", text: /Kairos Power/

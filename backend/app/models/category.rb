@@ -50,7 +50,7 @@ class Category
   ALL = [
     # Tosin, 16 Oct: reactor designers and the companies developing new
     # nuclear plants. The slug predates the rename and stays.
-    new(key: "reactor-developers", name: "Developers", role_keys: %w[reactor_vendor project_developer],
+    new(key: "reactor-developers", name: "Reactor developers", role_keys: %w[reactor_vendor project_developer],
       title: "Nuclear reactor and project developers in the US",
       about: "companies designing reactors or developing new nuclear plants in the US, including small modular reactors and fusion"),
     new(key: "fuel", name: "Fuel and materials", role_keys: %w[fuel coolant isotopes],

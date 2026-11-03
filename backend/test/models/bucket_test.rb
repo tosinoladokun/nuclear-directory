@@ -94,7 +94,7 @@ class BucketTest < ActiveSupport::TestCase
     westinghouse = cite!(company("Westinghouse", roles: [ role("reactor_vendor"), role("fuel"), role("reactor_services") ]))
     cite!(company("Oklo", roles: [ Role.find_by!(key: "reactor_vendor") ]))
 
-    assert_equal [ "Developers", "Fuel and materials", "Services and engineering" ], Bucket.for(westinghouse).map(&:name)
+    assert_equal [ "Reactor developers", "Fuel and materials", "Services and engineering" ], Bucket.for(westinghouse).map(&:name)
     counts = Bucket.counts
     assert_equal({ "reactor-developers" => 2, "fuel" => 1, "services" => 1 }, counts.select { |_, n| n.positive? })
     assert_operator counts.values.sum, :>, Organization.published.count, "buckets overlap"
