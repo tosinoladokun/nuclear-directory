@@ -31,14 +31,16 @@ class UpdatesPageTest < ActionDispatch::IntegrationTest
   test "the page lists the entries newest first, each linking to its page, with the source domain as a link out" do
     get updates_path
     assert_response :success
-    assert_select "head > title", "What's new: newly approved facts, deals and news | Nuclear Directory"
+    assert_select "head > title", "What's new | Nuclear Directory"
     assert_select "link[rel=canonical][href=?]", updates_url
     assert_select "head link[rel=alternate][type='application/atom+xml'][href=?]", updates_feed_url
     assert_equal [ "Feed Vendor permit", "Feed Buyer offtakes from Feed Vendor", "New company: Feed Vendor" ], css_select(".nd-updates .nd-news__title").map { |node| node.text.strip }
     assert_select ".nd-updates .nd-news__title a[href=?]", company_path(slug: "feed-vendor"), minimum: 1
     assert_select ".nd-updates a.nd-news__src[href='https://www.federalregister.gov/d/2026-9'][rel~=noopener][target=_blank]", /federalregister\.gov/
     assert_select ".nd-news__date", count: 3
-    assert_select "a[href=?]", updates_feed_path, /Atom feed/
+    assert_select "h1", "What's new"
+    assert_select ".nd-pagehead__count, .nd-pagehead__about, .nd-updates__feed", 0, "no count, no description, no feed line: the rows explain themselves"
+    assert_select "ul.nd-lines--updates", 1
   end
 
   test "nothing internal or unpublished shows, and the sitemap lists the page" do

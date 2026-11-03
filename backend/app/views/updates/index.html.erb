@@ -1,4 +1,4 @@
-<% content_for :title, "What's new: newly approved facts, deals and news | Nuclear Directory" %>
+<% content_for :title, "What's new | Nuclear Directory" %>
 <% content_for :head do %>
   <link rel="canonical" href="<%= updates_url %>">
   <meta name="description" content="Facts, deals and news added to Nuclear Directory after a person checked them, newest first, each with the page it is on and its source. Also an Atom feed.">
@@ -7,12 +7,10 @@
 <%= render "shared/site_header" %>
 
 <main class="nd-page nd-page--narrow">
-  <%= render "shared/page_head", name: "What's new", count: pluralize(@entries.size, "update"),
-        about: "Facts, deals and news added after a person checked them, newest first." %>
-  <p class="type-small text-ink-muted nd-updates__feed">Follow along with the <%= link_to "Atom feed", updates_feed_path, class: "nd-link" %>.</p>
+  <%= render "shared/page_head", name: "What's new" %>
 
   <% if @entries.any? %>
-    <ul class="nd-lines nd-lines--news nd-updates">
+    <ul class="nd-lines nd-lines--news nd-lines--updates nd-updates">
       <% @entries.each do |entry| %>
         <% kind, slug = entry.page %>
         <% href = kind == :plant ? plant_path(slug:) : company_path(slug:) %>
