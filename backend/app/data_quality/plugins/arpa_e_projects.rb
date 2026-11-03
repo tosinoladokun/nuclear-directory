@@ -132,7 +132,7 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     # A listed address as its home page over https (DQ: never a department page or deep path).
     def home_page(url)
       host = URI.parse(url.to_s.strip).host.presence
-      "https://#{host}/" if host
+      "https://#{host}" if host
     rescue URI::InvalidURIError
       nil
     end
