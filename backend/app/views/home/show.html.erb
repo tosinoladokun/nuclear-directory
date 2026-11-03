@@ -13,6 +13,9 @@
   </div>
 
   <div class="nd-home__cats">
-    <%= render "shared/category_cards", cards: @cards %>
+    <%# Built once per data version (PM, 2 Nov: speed). %>
+    <% cache [ "home-cards/v1", DataVersion.current ] do %>
+      <%= render "shared/category_cards", cards: HomeCategories.cards %>
+    <% end %>
   </div>
 </main>

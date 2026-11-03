@@ -10,9 +10,11 @@ class PlantsController < ApplicationController
       return redirect_to plant_path(slug: site.slug, anchor: "unit-#{unit.slug}"), status: :moved_permanently
     end
 
-    @profile = PlantProfile.find(params[:slug])
-    if @profile
-      track_power_plant_viewed(@profile.slug)
+    # The profile is built only when the page isn't cached (PageCacheHelper).
+    if (@site = Facility.published.where(parent_id: nil).find_by(slug: params[:slug]))
+      site = @site
+      @load_profile = -> { PlantProfile.new(site) }
+      track_power_plant_viewed(site.slug)
       return
     end
 

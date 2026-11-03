@@ -1,7 +1,7 @@
 require "application_system_test_case"
 require_relative "../support/directory_builders"
 
-# Home card titles are shown in full and on one line (Tosin, 31 Oct): no ellipsis, no short name, no wrapping, one shared size.
+# Home card titles are shown in full and on one line (Tosin, 31 Oct): no ellipsis, no short name, no wrapping, one title size per width.
 class HomeCardTitlesTest < ApplicationSystemTestCase
   include DirectoryBuilders
 
@@ -30,10 +30,14 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
   end
 
   test "the home grid is two columns from 640px up, and the count sits beside the title" do
+    [ 640, 768, 1024, 1440 ].each do |width|
+      resize_viewport(width, 900)
+      visit root_path
+      columns = page.evaluate_script("getComputedStyle(document.querySelector('.nd-catgrid')).gridTemplateColumns.split(' ').length")
+      assert_equal 2, columns, "two columns at #{width}"
+    end
     resize_viewport(1440, 900)
     visit root_path
-    columns = page.evaluate_script("getComputedStyle(document.querySelector('.nd-catgrid')).gridTemplateColumns.split(' ').length")
-    assert_equal 2, columns
     beside = page.evaluate_script("(() => { const h = document.querySelector('.nd-catcard__link'); const n = h.querySelector('.nd-catcard__name').getBoundingClientRect(); const c = h.querySelector('.nd-catcard__count').getBoundingClientRect(); return Math.abs((n.top + n.height / 2) - (c.top + c.height / 2)) < 12 })()")
     assert beside, "the count is on the title's line"
   end

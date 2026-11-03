@@ -1,5 +1,6 @@
+<%= page_cache("company", @organization.id) do %>
 <%
-  p = @profile
+  p = (@profile ||= @load_profile.call)
   record_citations = p.citations_for(p.organization)
   # Title and description say what this page adds, from published facts (#292).
   content_for :title, company_title(p)
@@ -95,3 +96,4 @@
     <%= render "shared/page_end", sources: p.citations.sources, checked: p.citations.checked, cite_text:, subject: p.name %>
   </div>
 </main>
+<% end %>

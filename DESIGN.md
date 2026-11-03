@@ -130,7 +130,7 @@ Text inside a box (a card title, chip, pill, button, tab, badge, table header, m
    - 12px for map labels and node names on phones (see "Relationship map visual language").
 
    Fitting and the font-size check use these same floors.
-4. **Below the floor:** use the record's or category's short name, if it has one (`short_name`, or the category's `short`).
+4. **Below the floor:** use the record's or category's short name, if it has one (`short_name`, or the category's `short`). Home card titles never do: they are the category's full name, fixed at 17px from 1024px, 14px below, 13px under 375px, and sized to fit on one line.
 5. **Last resort:** cut with an ellipsis (`overflow: hidden; text-overflow: ellipsis`), and keep the full text in `title` and the accessible name. For a label we write, like a category or a button, an ellipsis is a bug to fix with a short label. For a record's long name in a row, such as a company in a homepage card, the ellipsis is accepted (Tosin, 17 Oct).
    - **A box never clips glyphs vertically** (Tosin, 18 Oct: "X-energy" lost its descenders). It only cuts horizontally, with the ellipsis. Give the one-line element a line-height of at least 1.25 times its font size, or vertical padding that holds the font's ascenders and descenders (g, y, p, j, Q). `overflow: hidden` on a box shorter than that clips them.
 6. **Checked:** a test at 1440, 1280 and 390 fails when any of these happens:
@@ -201,7 +201,7 @@ What each page type is for, in order of importance. Build and review pages again
 Start a search, or browse the industry by category. **For:** Anyone arriving from a link or a search engine; returning visitors who know what they want.
 
 - **Questions, in order:** 1. Can I find this company or plant here? 2. What does the directory cover? 3. Who are the main companies in each area?
-- **Sections, top to bottom:** Wordmark; Search box + suggestions (one row on phones, scrolling inside itself); Category cards: 9 categories + Plants and sites (a compact grid, 960px at most and centred: 3 columns from 1024px, 2 on tablets, 24px between rows; an open, collapsible stack on phones); Footer.
+- **Sections, top to bottom:** Wordmark; Search box + suggestions (one row on phones, scrolling inside itself); Category cards: 9 categories + Plants and sites (a compact grid, 960px at most and centred: two columns from 640px, titles 17px from 1024px, 14px below and 13px under 375px, 24px between rows; an open, collapsible stack on phones); Footer.
 - **Above the fold:** at 390, wordmark, search, the first category card and the top of the second. At 1440, wordmark, search and the first two rows of cards. The page scrolls on a laptop screen (about 1157px tall at 1440×900): Tosin chose the compact grid over the old no-scroll fit (19 Oct). The last card can sit alone on its row.
 - **Key facts and sources:** Count per category: published companies (plants for Plants and sites); Top 3 per category: most sourced connections; investors by funded companies; Short labels: Components, Waste, Services, Government, Plant operators (homepage only); Cost: the top 3 per category can sit behind a fragment cache keyed on the latest fact update, if it slows.
 - **Links in:** Search engines and shared links; The wordmark on every page. **Links out:** Category pages (card header, See all); Company and plant profiles (card rows); Search results.

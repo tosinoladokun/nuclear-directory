@@ -277,7 +277,7 @@
   body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
-  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor, more so when the fallback serif is in use (fonts are font-display: optional): less side padding, a tighter gap and no count there (Tosin: counts may go if space is short). */
+  /* Tablets, 640 to 1023px: two-column cards are narrower, so less side padding; from 640 to 739px a tighter gap and no count, to keep the longest title on one line (a test checks 320 to 1440). */
   @media (min-width: 640px) and (max-width: 1023px) { .nd-home { padding-inline: var(--nd-space-4); } }
   @media (min-width: 640px) and (max-width: 739px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catcard { padding-inline: 8px; } .nd-home .nd-catcard__link { gap: 6px; } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__link .nd-catcard__count { display: none; } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
@@ -308,7 +308,6 @@
   .nd-catstack__all, .nd-catcard__toggle { display: none; }
   .nd-catcard__link .nd-ic { width: 20px; height: 20px; color: var(--nd-cat, var(--nd-ink)); }
   .nd-catcard__link:hover .nd-catcard__name, .nd-catcard__link:focus-visible .nd-catcard__name { text-decoration: underline; text-underline-offset: 2px; }
-  /* One line (Tosin): the title fits the header less its icon and count. */
   /* Card titles are the category's full name at one fixed size, never smaller than the rows under them (Tosin, 2 Nov): 17px on
      desktop from 1024px, 14px on tablets and phones, 13px below 375px. Each fits its card on one line, so nothing is cut (a test checks). */
   .nd-catcard__name { flex: 1; min-width: 0; font: 600 17px/22px var(--font-text); white-space: nowrap; text-align: left; }
