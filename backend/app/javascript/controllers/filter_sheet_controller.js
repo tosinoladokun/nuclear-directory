@@ -18,6 +18,9 @@ export default class extends Controller {
 
   connect() {
     this.label = this.submitTarget.textContent
+    // With JavaScript the inline filters apply as they change, so their Apply button is hidden (CSS, data-live); in the
+    // phone sheet the button stays: it says how many results the choice shows.
+    this.formTarget.dataset.live = ""
     this.phone = window.matchMedia("(max-width: 560px)")
     this.leftPhone = () => { if (!this.phone.matches && this.isOpen) this.close() }
     this.phone.addEventListener("change", this.leftPhone)
@@ -69,6 +72,12 @@ export default class extends Controller {
     if (this.dialogTarget.children.length) this.sheetTarget.append(...this.dialogTarget.children)
     this.request = null
     this.show(this.label, "")
+  }
+
+  // A filter changed: in the sheet, count what it would show; inline, apply it.
+  changed() {
+    if (this.isOpen) this.count()
+    else this.formTarget.requestSubmit()
   }
 
   // Ask how many results the current choices give, and say so.

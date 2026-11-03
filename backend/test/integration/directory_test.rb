@@ -337,7 +337,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
       assert_select "button.nd-filterwrap__open[popovertarget=filter-sheet][popovertargetaction=show][data-action='filter-sheet#open']", /Filters\s+\(1\)/
       assert_select "dialog.nd-filtersheet--modal[aria-labelledby=filters-title][data-action='cancel->filter-sheet#close close->filter-sheet#closed']:empty"
       assert_select "#filter-sheet.nd-filtersheet[popover][data-action='toggle->filter-sheet#toggled']" do
-        assert_select "form.nd-filters[data-action='change->filter-sheet#count']"
+        assert_select "form.nd-filters[data-action='change->filter-sheet#changed']"
         assert_select "button[popovertarget=filter-sheet][popovertargetaction=hide][data-action='filter-sheet#close']", "Close filters"
         assert_select "p.sr-only[role=status][data-filter-sheet-target=status]"
       end
@@ -371,15 +371,14 @@ class DirectoryTest < ActionDispatch::IntegrationTest
       assert_select "a[aria-current=page]", /Developers\s*2/
     end
     assert_select ".nd-pagehead .nd-pagehead__square svg"
-    assert_select ".nd-pagehead__about", /Companies designing reactors/
-    assert_select "ul.nd-lines li.nd-lines__head[aria-hidden=true]", 1
+    assert_select ".nd-pagehead__about", 0, "no description under the heading (#700); it stays in the meta description"
+    assert_select "meta[name=description][content*='designing reactors']", 1
+    assert_select "ul.nd-lines li.nd-lines__head", 0, "no column header row"
     assert_select ".nd-line__end", /Alameda, CA/
     assert_select "ul.nd-lines .nd-num", 0, "no connection count on the row"
-    assert_select "nav.nd-quiet a[href^='/corrections/new']", 1, "one link, not two items"
-    assert_select "nav.nd-quiet a", /Missing a company\? Report a correction/
-    assert_select "nav.nd-quiet a svg"
+    assert_select "nav.nd-quiet", 0, "no Missing a company line: the footer's Add a company does it (#700)"
     get companies_path(category: "plants")
-    assert_select "nav.nd-quiet a", /Missing a plant\? Report a correction/
+    assert_select "nav.nd-quiet", 0
     assert_select "form.nd-sortbar[data-controller=auto-submit] select[name=sort]", 1, "phones: Sort beside Filters"
   end
 

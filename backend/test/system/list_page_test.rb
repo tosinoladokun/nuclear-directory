@@ -32,6 +32,20 @@ class ListPageSystemTest < ApplicationSystemTestCase
     end
   end
 
+  test "inline filters apply as they change, with no Apply button; the phone sheet keeps its button (#700)" do
+    cite!(company("Texas Co", roles: [ role("reactor_vendor") ], state: "TX", city: "Austin"))
+    resize_viewport(1440, 900)
+    visit companies_path
+    assert_not page.evaluate_script("[...document.querySelectorAll('.nd-filters [type=submit]')].some((b) => b.getClientRects().length)"), "no Apply button inline"
+    find("select[name=state]", match: :first).find("option", text: "TX").select_option
+    assert_current_path(/state=TX/)
+
+    resize_viewport(390, 844)
+    visit companies_path
+    find(".nd-filterwrap__open").click
+    assert_selector ".nd-filtersheet [type=submit]", visible: true
+  end
+
   test "the audit catches a wrapping name and a cut-short location with no full text in title" do
     resize_viewport(1440, 900)
     visit companies_path
