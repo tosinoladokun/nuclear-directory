@@ -21,11 +21,12 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_no_match(/set to discard IP addresses/, response.body)
   end
 
-  test "every page's footer is one row of links: About, Our data, What's new, Add a company, Privacy, Contact (#700)" do
+  test "every page's footer is one row of links: All companies, About, Our data, What's new, Add a company, Privacy, Contact (#700)" do
     [ root_path, companies_path, about_path ].each do |path|
       get path
       assert_select "footer.nd-footer nav[aria-label='About this site']" do
-        assert_equal [ "About", "Our data", "What's new", "Add a company", "Privacy", "Contact" ], css_select("footer.nd-footer a").map { |node| node.text.strip }
+        assert_equal [ "All companies", "About", "Our data", "What's new", "Add a company", "Privacy", "Contact" ], css_select("footer.nd-footer a").map { |node| node.text.strip }
+        assert_select "a[href='/companies']", "All companies"
         assert_select "a[href='/about']"
         assert_select "a[href='/data']"
         assert_select "a[href='/updates']"

@@ -1,8 +1,9 @@
-<%# The footer on every public page (#56, #660, #700): one row of small muted links and nothing else. Each is a 44px tap row on
+<%# The footer on every public page (#56, #660, #700): one row of small muted links and nothing else (All companies first: the way into the full list from any page). Each is a 44px tap row on
     touch. "Add a company" opens the correction form with the subject filled in. The About set's own menu has Our crawler and
     Disclaimer. %>
 <footer class="nd-footer">
   <nav class="nd-footer__links type-small" aria-label="About this site">
+    <%= link_to "All companies", companies_path, class: "nd-link nd-link--muted" %>
     <%= link_to "About", about_path, class: "nd-link nd-link--muted" %>
     <%= link_to "Our data", data_path, class: "nd-link nd-link--muted" %>
     <%= link_to "What's new", updates_path, class: "nd-link nd-link--muted" %>
