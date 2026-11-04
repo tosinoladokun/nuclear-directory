@@ -839,17 +839,13 @@
   .nd-prose li::marker { color: var(--nd-ink-muted); }
   .nd-code { margin: 0; padding: var(--nd-space-3) var(--nd-space-4); background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
   .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--nd-space-6); row-gap: 0; padding-block: var(--nd-space-4) var(--nd-space-6); }
-  .nd-footer p { margin: 0; }
-  /* One calm line on desktop: the links left, the Render credit right. Each
-     item stays whole; on a phone they wrap as items, never as words. */
+  /* One calm row of links. Each item stays whole; on a phone they wrap as items, never as words. */
   .nd-footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--nd-space-6); }
-  .nd-footer__links a, .nd-footer__credit, .nd-footer__col a { white-space: nowrap; }
+  .nd-footer__links a { white-space: nowrap; }
   .nd-info a[href^="mailto:"] { white-space: nowrap; }
   @media (max-width: 639px) { .nd-footer { flex-direction: column; align-items: flex-start; } .nd-footer__links { gap: 0 var(--nd-space-4); } }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
-    /* The credit stays a paragraph (a flex row would eat the space before the link); its link takes the 44px, in the row's own height, so it never overlaps the links above. */
-    .nd-footer__credit a { display: inline-block; padding-block: 13px; }
   }
 }
 
@@ -1579,21 +1575,11 @@
   }
 }
 
-/* The footer (#660): three columns and a count line on desktop; today's wrapped row of small links on phones. */
+/* The footer (#700): one row of links on every page, centred from 760px. */
 @layer components {
-  .nd-footer__desk { display: none; }
   @media (min-width: 760px) {
-    .nd-footer { border-top: 1px solid var(--nd-ink); display: block; padding-block: var(--nd-space-8) var(--nd-space-8); }
-    .nd-footer__links { display: none; }
-    .nd-footer__desk { display: grid; grid-template-columns: minmax(max-content, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--nd-space-10); row-gap: var(--nd-space-6); align-items: start; }
-    .nd-footer__mark { display: block; color: var(--nd-ink); }
-    .nd-footer__mark .nd-wordmark__svg { height: auto; width: 100%; max-width: 297px; aspect-ratio: 15356 / 1760; display: block; }
-    .nd-footer__brand p { margin: var(--nd-space-3) 0 0; white-space: nowrap; }
-    .nd-footer__col { display: flex; flex-direction: column; gap: var(--nd-space-2); }
-    .nd-footer__col a { font: 400 15px/24px var(--font-text); color: var(--nd-ink); text-decoration: none; }
-    .nd-footer__col a:hover { text-decoration: underline; text-underline-offset: 3px; }
-    .nd-footer__label { margin: 0 0 var(--nd-space-1); font: 500 11px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
-    .nd-footer__count { grid-column: 1 / -1; margin: 0; padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); font: 400 12px/18px var(--font-mono); color: var(--nd-ink-muted); }
+    .nd-footer { border-top: var(--nd-hairline) solid var(--nd-rule); display: block; padding-block: var(--nd-space-4); }
+    .nd-footer__links { justify-content: center; }
   }
 }
 
