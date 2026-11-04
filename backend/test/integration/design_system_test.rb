@@ -62,7 +62,7 @@ class DesignSystemTest < ActionDispatch::IntegrationTest
     assert_select "#{scope} .nd-lines__head[aria-hidden=true]", 1, "the header row is visual"
     assert_select "#{scope} .nd-line__head .nd-st", 2, "the status sits right after the name"
     assert_select "#{scope} .nd-line__foot .nd-line__cap", 2, "MW is its own element"
-    assert_select "#{scope} .nd-pagehead__count", "42 companies"
+    assert_select "#{scope} .nd-pagehead__count", "42"
     assert_select "#{scope} .nd-glance__fact", 3, "a fact with no value is left out"
     assert_select "#{scope} .nd-st", 9, "five marks, and each plant row twice (beside the name; before the type on phones)"
     assert_select "#{scope} .nd-st--filled, #{scope} .nd-st--open, #{scope} .nd-st--dashed, #{scope} .nd-st--half, #{scope} .nd-st--dotted", minimum: 5
