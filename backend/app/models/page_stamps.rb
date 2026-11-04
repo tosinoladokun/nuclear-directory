@@ -63,7 +63,10 @@ module PageStamps
     news = "SELECT m.news_item_id FROM news_mentions m WHERE m.subject_type = 'Organization' AND m.subject_id = #{x}"
     # Similar companies (#606): the companies sharing a role or technology with this one (a tag's list holds its children,
     # so a role or technology counts with its parent and the parent's children), with the roles and technologies they
-    # are ranked and shown by. Narrow on purpose: no whole-table stamp.
+    # are ranked and shown by. Narrow on purpose: no whole-table stamp. Cost (Backend, measured on a backup): all stamps
+    # 0.28 to 0.63 s, one 2.4 to 6 ms; one company's role change moves about 54 stamps, so the warmer rebuilds about 54 pages
+    # (debounced). Known gap, accepted: a company that is similar only through a category's links (operating plants, power
+    # deals, investments) isn't followed; the 6-hour expiry heals it.
     my_roles = "SELECT y.role_id FROM organization_roles y WHERE y.organization_id = #{x}"
     role_family = "SELECT r.id FROM roles r WHERE r.id IN (#{my_roles}) OR r.id IN (SELECT p.parent_id FROM roles p WHERE p.id IN (#{my_roles})) " \
       "OR r.parent_id IN (#{my_roles}) OR r.parent_id IN (SELECT p.parent_id FROM roles p WHERE p.id IN (#{my_roles}))"
