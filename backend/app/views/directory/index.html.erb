@@ -170,6 +170,9 @@
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
   </turbo-frame>
+  <% if listing.category&.plants %>
+    <p class="nd-quiet mt-6"><%= link_to "Missing a plant? Report a correction", correction_url_for("A missing plant"), class: "nd-link", rel: "nofollow" %></p>
+  <% end %>
   </div>
   </div>
 </main>

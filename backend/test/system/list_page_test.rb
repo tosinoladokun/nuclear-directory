@@ -36,14 +36,29 @@ class ListPageSystemTest < ApplicationSystemTestCase
     cite!(company("Texas Co", roles: [ role("reactor_vendor") ], state: "TX", city: "Austin"))
     resize_viewport(1440, 900)
     visit companies_path
+    assert_selector ".nd-filters[data-live]"
     assert_not page.evaluate_script("[...document.querySelectorAll('.nd-filters [type=submit]')].some((b) => b.getClientRects().length)"), "no Apply button inline"
     find("select[name=state]", match: :first).find("option", text: "TX").select_option
     assert_current_path(/state=TX/)
+    assert_selector "select[name=state]:focus", wait: 5
 
     resize_viewport(390, 844)
     visit companies_path
+    assert_selector ".nd-filters[data-live]", visible: :all
     find(".nd-filterwrap__open").click
     assert_selector ".nd-filtersheet [type=submit]", visible: true
+  end
+
+  test "a choice made in the phone sheet and never applied is dropped when the sheet closes (rotating to desktop)" do
+    cite!(company("Texas Co", roles: [ role("reactor_vendor") ], state: "TX", city: "Austin"))
+    resize_viewport(390, 844)
+    visit companies_path
+    assert_selector ".nd-filters[data-live]", visible: :all
+    find(".nd-filterwrap__open").click
+    find(".nd-filtersheet select[name=state]").find("option", text: "TX").select_option
+    resize_viewport(1440, 900)
+    assert_no_selector "dialog[open]", wait: 5
+    assert_equal "", find("select[name=state]", match: :first).value
   end
 
   test "the audit catches a wrapping name and a cut-short location with no full text in title" do

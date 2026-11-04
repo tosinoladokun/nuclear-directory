@@ -402,4 +402,11 @@ class DirectoryTest < ActionDispatch::IntegrationTest
       assert_select ".nd-line__end", "Courbevoie, France"
     end
   end
+
+  test "the plants list keeps its own way to report a missing plant; other lists don't" do
+    get companies_path(category: "plants")
+    assert_select "a[rel=nofollow][href*='A%20missing%20plant'], a[rel=nofollow][href*='A+missing+plant']", text: /Missing a plant\?/
+    get companies_path
+    assert_select "a", text: /Missing a plant/, count: 0
+  end
 end
