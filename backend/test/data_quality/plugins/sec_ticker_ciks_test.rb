@@ -36,4 +36,28 @@ class DataQuality::Plugins::SecTickerCiksTest < ActiveSupport::TestCase
     @amazon.update_columns(sec_cik: "0001018724")
     assert_empty plugin.extract(Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN"), nil)
   end
+
+  test "nothing is read from a ticker list whose last fetch failed" do
+    Source.find_by!(url: Plugin::TICKERS_URL).update_columns(crawl_status: "blocked", status_reason: "HTTP 403")
+    assert_match "last read failed", DataQuality::Stages::Crawl.call(plugin:).stats["ticker list"]
+  end
+
+  test "a ticker the list no longer gives once: its entry stops and its waiting claims go to a person" do
+    DataQuality::Stages::Crawl.call(plugin:)
+    source = Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN")
+    claim = Candidate.create!(source:, kind: "organization", status: "new", quote: source.content_text, payload: { "name" => "Amazon", "sec_cik" => "0001018724" })
+    Source.find_by!(url: Plugin::TICKERS_URL).update_columns(content_text: { "0" => { "cik_str" => 1, "ticker" => "OTHER", "title" => "X" } }.to_json)
+
+    assert_equal 1, DataQuality::Stages::Crawl.call(plugin:).stats["withdrawn"]
+    assert source.reload.crawl_needs_human?
+    assert claim.reload.status_needs_review?
+  end
+
+  test "a CIK already on another record goes to a person, noted" do
+    other = Organization.create!(name: "Amazon Duplicate", sec_cik: "0001018724")
+    DataQuality::Stages::Crawl.call(plugin:)
+    claim = plugin.extract(Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN"), nil).sole
+    assert_equal "needs_review", claim[:status]
+    assert_match "already on Amazon Duplicate (id #{other.id})", claim[:notes]
+  end
 end

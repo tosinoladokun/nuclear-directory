@@ -16,12 +16,21 @@ class DataQuality::Plugins::SecTickerCiks < DataQuality::Plugin
   end
 
   def crawl(_run)
-    list = Source.find_by(url: TICKERS_URL)&.content_text.presence or return { "ticker list" => "not stored yet" }
+    upstream = Source.find_by(url: TICKERS_URL)
+    # Only from a list the Form D plug-in read cleanly: a failed or blocked fetch keeps an old copy.
+    return { "ticker list" => "not stored yet" } unless upstream&.content_text.present?
+    return { "ticker list" => "last read failed: #{upstream.status_reason}" } unless upstream.crawl_ok? && upstream.status_reason.blank?
+
+    list = upstream.content_text
     entries = JSON.parse(list).values.group_by { |entry| entry["ticker"].to_s.upcase }
     stats = Hash.new(0)
     @directory.organizations_with_us_ticker_without_cik.each do |_id, name, ticker|
       found = entries[ticker.to_s.upcase]
-      next stats["not in the list"] += 1 unless found&.one?
+      unless found&.one?
+        stats["not in the list"] += 1
+        stats["withdrawn"] += 1 if withdraw("#{TICKERS_URL}##{ticker.upcase}")
+        next
+      end
 
       line = found.first.slice("cik_str", "ticker", "title").to_json
       source = Source.find_or_initialize_by(url: "#{TICKERS_URL}##{ticker.upcase}")
@@ -40,13 +49,33 @@ class DataQuality::Plugins::SecTickerCiks < DataQuality::Plugin
     entry = JSON.parse(source.content_text.to_s) rescue (return [])
     ticker = entry["ticker"].to_s.upcase
     company = @directory.organizations_with_us_ticker_without_cik.find { |_, _, each| each.to_s.upcase == ticker } or return []
-    cik = format("%010d", entry["cik_str"].to_i)
     return [] if entry["cik_str"].to_i.zero?
 
-    [ { kind: "organization", quote: source.content_text, payload: { "name" => company[1], "sec_cik" => cik } } ]
+    cik = format("%010d", entry["cik_str"].to_i)
+    claim = { kind: "organization", quote: source.content_text, payload: { "name" => company[1], "sec_cik" => cik } }
+    # The CIK already on another record (a duplicate, a parent): a person decides, it's never attached there.
+    holder = @directory.organization(sec_cik: cik)
+    if holder && holder.id != company[0]
+      claim.merge!(status: "needs_review", notes: "SEC CIK #{cik} is already on #{holder.name} (id #{holder.id}); check which record it belongs to")
+    end
+    [ claim ]
   end
 
   def max_dropped_share(_source) = 1.0
+
+  private
+    # SEC's list no longer gives the ticker once: its entry stops being read,
+    # and its claims still waiting go to a person (decided ones stay).
+    def withdraw(url)
+      source = Source.find_by(url:) or return false
+      return false unless source.crawl_ok?
+
+      source.update!(crawl_status: "needs_human", status_reason: "SEC's ticker list no longer gives this ticker exactly once")
+      source.candidates.where(status: %w[new matched]).update_all(status: "needs_review", updated_at: Time.current)
+      true
+    end
+
+  public
 
   def quote_in_source?(source, quote) = quote.present? && source.content_text == quote.to_s
 
