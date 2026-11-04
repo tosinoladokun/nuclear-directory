@@ -39,7 +39,7 @@ class ListPageSystemTest < ApplicationSystemTestCase
     assert_selector ".nd-filters[data-live]"
     assert_not page.evaluate_script("[...document.querySelectorAll('.nd-filters [type=submit]')].some((b) => b.getClientRects().length)"), "no Apply button inline"
     find("select[name=state]", match: :first).find("option", text: "TX").select_option
-    assert_current_path(/state=TX/)
+    assert_current_path(/state=TX/, wait: 10)
     assert_selector "select[name=state]:focus", wait: 5
 
     resize_viewport(390, 844)

@@ -42,7 +42,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__about .nd-src", 0, "the summary carries no source marks"
     assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
-    assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+    assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Reactor developers"
   end
 
   test "a deal is one line: the other company, the verb, the date and a source mark; it opens to its details" do
@@ -386,7 +386,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__tags .nd-tag:not(.nd-tag--icon)", 0
     assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--reactor-developers svg", minimum: 1
     assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--services svg", minimum: 1
-    assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+    assert_select ".nd-crumbs a[href=?]", "/companies?category=reactor-developers", text: "Reactor developers"
   end
 
   test "the legal name isn't listed again under Also known as" do
