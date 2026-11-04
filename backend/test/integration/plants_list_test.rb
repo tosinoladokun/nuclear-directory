@@ -81,7 +81,7 @@ class PlantsListTest < ActionDispatch::IntegrationTest
       assert_select ".nd-prow__status .nd-st", /Operating/
       assert_select ".nd-prow__type", "Power plant"
       assert_select ".nd-prow__units", 0
-      assert_select ".nd-prow__cap", "2,200 MW"
+      assert_select ".nd-prow__cap", "2,200"
       assert_select ".nd-prow__place", /Waynesboro/
     end
     assert_select "a.nd-prow[href='/plants/bare-name']" do
@@ -128,5 +128,21 @@ class PlantsListTest < ActionDispatch::IntegrationTest
     assert_select "select[name=technology]"
     assert_select "select[name=type]", 0
     assert_select "select[name=sort] option", text: "Largest first", count: 0
+  end
+
+  test "the capacity column is MWe: only power reactors show it; a research reactor's figure and a fuel site stay blank (Tosin, 2 Nov)" do
+    research = cite!(plant("Thermal Research Reactor", facility_type: "research_reactor", status: "operating", city: "Idaho Falls", state: "ID"))
+    cite!(plant("Thermal Research Reactor Unit 1", parent: research, capacity_mw: 250, status: "operating"))
+    cite!(plant("Enrichment Works", facility_type: "fuel_facility", status: "operating", city: "Piketon", state: "OH"))
+    get companies_path(category: "plants")
+
+    assert_select ".nd-lines__head .nd-prow__num", "Capacity (MWe)"
+    assert_select "a.nd-prow", text: /Thermal Research Reactor/ do
+      assert_select ".nd-prow__cap", text: "", count: 1
+    end
+    assert_select "a.nd-prow", text: /Enrichment Works/ do
+      assert_select ".nd-prow__cap", text: ""
+    end
+    assert_select "a.nd-prow[href='/plants/big-station'] .nd-prow__cap", "2,200", "a power reactor shows the bare number under the MWe header"
   end
 end

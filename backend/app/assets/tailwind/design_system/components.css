@@ -1555,11 +1555,12 @@
   .nd-statuschips { margin: var(--nd-space-4) 0 var(--nd-space-2); }
   .nd-statuschips .nd-st { flex: none; }
   .nd-lines--plants { padding-top: 0; }
-  .nd-prow, .nd-lines__head.nd-prow { display: grid; grid-template-columns: var(--nd-row-mark) minmax(172px, 1fr) 178px 112px 88px 134px; column-gap: var(--nd-space-3); align-items: center; }
+  .nd-prow, .nd-lines__head.nd-prow { display: grid; grid-template-columns: var(--nd-row-mark) minmax(172px, 1fr) 178px 112px 124px 134px; column-gap: var(--nd-space-3); align-items: center; }
   .nd-prow { min-height: 56px; padding: var(--nd-space-3) 0; color: var(--nd-ink); text-decoration: none; }
   a.nd-prow:hover { background: var(--nd-paper-sunken); }
   .nd-lines__head.nd-prow > * { flex: none; min-width: 0; text-align: left; }
   .nd-lines__head.nd-prow > .nd-prow__num { text-align: right; font: inherit; color: inherit; }
+  .nd-prow__unit { text-transform: none; }
   .nd-lines__head.nd-prow > .nd-prow__place { text-align: left; font: inherit; color: inherit; }
   .nd-prow__meta, .nd-prow__foot { display: contents; }
   .nd-prow__mark { width: var(--nd-row-mark); height: var(--nd-row-mark); display: grid; place-items: center; }
@@ -1582,6 +1583,8 @@
     .nd-prow__meta > .nd-prow__status { flex: none; overflow: visible; }
     .nd-prow__foot .nd-prow__place { font-size: 13px; padding-left: 0; }
     .nd-prow__foot .nd-prow__cap:not(:empty) + .nd-prow__place::before { content: "· "; }
+    /* Stacked rows have no header, so the unit follows the number. */
+    .nd-prow__cap:not(:empty)::after { content: " MWe"; }
   }
 }
 

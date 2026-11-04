@@ -1,10 +1,11 @@
 <%# The plants and sites of a list as one white panel of rows (#560, #614). On the Plants and sites list (columns: true)
-    they line up under a header row: plant or site, status, type, capacity, location. A site's own type,
+    they line up under a header row: plant or site, status, type, capacity (MWe), location. Capacity is electrical (EIA net summer),
+    so only power reactors show it: research reactors are licensed in thermal power and fuel sites have none, so theirs stays blank. A site's own type,
     status and place show only once it's verified (as on its page); the rest stay empty, never guessed. Locals: plants, columns (optional). %>
 <% columns = local_assigns[:columns] %>
 <ul class="nd-lines<%= " nd-lines--plants" if columns %>">
   <% if columns %>
-    <li class="nd-lines__head nd-prow type-label" aria-hidden="true"><span></span><span>Plant or site</span><span>Status</span><span>Type</span><span class="nd-prow__num">Capacity</span><span class="nd-prow__place">Location</span></li>
+    <li class="nd-lines__head nd-prow type-label" aria-hidden="true"><span></span><span>Plant or site</span><span>Status</span><span>Type</span><span class="nd-prow__num">Capacity <span class="nd-prow__unit">(MWe)</span></span><span class="nd-prow__place">Location</span></li>
   <% end %>
   <% plants.each do |facility| %>
     <% own = facility.verified? %>
@@ -21,7 +22,7 @@
           <span class="nd-prow__type" title="<%= facility_type_label(facility.facility_type) if own %>" data-truncate><%= facility_type_label(facility.facility_type) if own %></span>
         </span>
         <span class="nd-prow__foot">
-          <span class="nd-prow__num nd-prow__cap"><%= number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present? %></span>
+          <span class="nd-prow__num nd-prow__cap"><%= number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") if capacity.present? && facility.facility_type == "power_reactor" %></span>
           <span class="nd-prow__place" title="<%= location(facility.city, facility.state) if own %>" data-truncate><%= location(facility.city, facility.state) if own %></span>
         </span>
       <% end %></li>
