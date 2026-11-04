@@ -122,4 +122,10 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     dow = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/dcc-mi-triga")
     assert_equal %w[facility organization], plugin.extract(dow, nil).map { |c| c[:kind] }, "a company gets no role from its name"
   end
+
+  test "only a well-formed positive power is proposed" do
+    plugin = DataQuality::Plugins::NrcResearchReactors.new
+    assert_equal [ "6000", "0.005", "1000000", nil, nil, nil ],
+      [ "6,000", "0.005", "1,000,000", "1,2", "1,,000", "0" ].map { |text| plugin.send(:thermal_power_kw, text) }
+  end
 end

@@ -137,6 +137,11 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       take_over(source)
       return [ "another_kind", nil ] unless source.source_kind == source_kind
 
+      # Stored before the power line was kept: a full read (no "not modified"), so it's added.
+      if source.content_text.present? && !source.content_text.include?(POWER)
+        source.update!(etag: nil, last_modified: nil, content_sha256: nil)
+      end
+
       [ DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s, source.reload ]
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: NO_FACTS)
@@ -175,10 +180,15 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       text.gsub(/[[:space:]]+/, " ").strip.presence
     end
 
-    # Licensed thermal power in kW, the number NRC states ("6,000" => "6000"; "0.005" stays); nil otherwise.
+    # Licensed thermal power in kW, the number NRC states ("6,000" => "6000"; "0.005" stays); nil when it
+    # isn't a well-formed positive number ("1,2", "1,,000", "0").
+    POWER_NUMBER = /\A(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\z/
     def thermal_power_kw(text)
-      number = text.to_s.delete(",").strip
-      number if number.match?(/\A\d+(?:\.\d+)?\z/)
+      text = text.to_s.strip
+      return unless text.match?(POWER_NUMBER)
+
+      number = text.delete(",")
+      number if number.to_d.positive?
     end
 
     def parse(text)
