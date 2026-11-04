@@ -1547,6 +1547,12 @@
   }
 }
 
+/* Similar companies on a company page (#606). */
+@layer components {
+  .nd-similar { display: flex; flex-direction: column; gap: var(--nd-space-3); }
+  @media (min-width: 1024px) { .nd-similar { grid-column: 2; } }
+}
+
 /* The About set's frame (#660): a 40px title (30px on phones), the summary as a 19px sentence, short sections under 22px
    headings with a 1px rule between (an ink rule above the first), a code box with Copy, and a mono "Last updated". */
 @layer components {
