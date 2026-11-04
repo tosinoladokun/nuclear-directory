@@ -5,6 +5,7 @@ class DirectoryController < ApplicationController
   CATEGORY_TAGS = { "fusion" => "fusion" }.freeze
 
   PAGE = 24
+  CACHED_PAGES = 3
 
   def index
     if (tag = CATEGORY_TAGS[params[:category]])
@@ -25,6 +26,17 @@ class DirectoryController < ApplicationController
     # pages' worth), so the page stays light as the directory grows. The
     # count stays the full one.
     @shown = params[:shown].to_i.clamp(1, 1000) * PAGE
+    # A list that isn't a search is the same for everyone: the page builds it
+    # once per data version (PageCacheHelper), so its queries run only then (PM, 3 Nov).
+    # Up to CACHED_PAGES pages of rows: ?shown=4..1000 would each be a full list under its own key (Infra).
+    if !@listing.searching? && request.format.html? && !turbo_frame_request? && @shown <= CACHED_PAGES * PAGE
+      listing, shown = @listing, @shown
+      # Only the values the list accepted (a junk parameter is dropped), so the keys stay few.
+      @page_key = [ "companies", listing.category&.key, listing.tag&.key, listing.technology, listing.state, listing.sort, listing.role, shown ]
+      @load_list = -> { self.class.list(listing, shown, counts: true) }
+      return
+    end
+
     @companies_total, @plants_total = @listing.company_scope.count, @listing.plant_scope.count
     # A search with no exact match falls back to close names ("brown ferry" finds
     # Browns Ferry), and the page says so (#431).
@@ -41,14 +53,8 @@ class DirectoryController < ApplicationController
     # search. It counts what the page shows, close names included.
     return render(json: { count: @companies_total + @plants_total }) if request.format.json?
 
-    @companies = @listing.companies.limit(@shown).to_a
-    @plants = @listing.plants.limit(@shown).to_a
-    # A Show more request wants only the frame's rows (Turbo drops the rest), so the
-    # category counts, the slowest part of the page, are skipped for it.
-    @counts = DirectoryListing.category_counts unless turbo_frame_request?
-    @all_count = DirectoryListing.new.company_scope.count unless turbo_frame_request?
-    # The middle column of each company row, for the whole list in one go (#560).
-    @short = ShortDescription.for(@companies, category: @listing.category)
+    list = self.class.list(@listing, @shown, counts: !turbo_frame_request?, totals: [ @companies_total, @plants_total ])
+    @companies, @plants, @counts, @all_count, @short = list.values_at(:companies, :plants, :counts, :all_count, :short)
 
     # A suggested search on the home page says so (from=suggestion).
     source = params[:from] == "suggestion" ? "suggestion" : "typed"
@@ -60,5 +66,18 @@ class DirectoryController < ApplicationController
     unfiltered = !@listing.filtered? && @listing.category.nil? && @listing.tag.nil?
     track_search(@listing.query, results: exact_total, source:, gap: (params[:q].to_s if unfiltered),
       shown: @companies_total + @plants_total) if @listing.searching? && params[:shown].blank?
+  end
+
+  # What the list shows. A Show more request wants only the frame's rows (Turbo drops the rest), so the
+  # category counts, the slowest part of the page, are skipped for it (counts: false).
+  def self.list(listing, shown, counts:, totals: nil)
+    companies = listing.companies.limit(shown).to_a
+    companies_total, plants_total = totals || [ listing.company_scope.count, listing.plant_scope.count ]
+    {
+      companies:, plants: listing.plants.limit(shown).to_a, companies_total:, plants_total:,
+      counts: (DirectoryListing.category_counts if counts), all_count: (DirectoryListing.new.company_scope.count if counts),
+      # The middle column of each company row, for the whole list in one go (#560).
+      short: ShortDescription.for(companies, category: listing.category)
+    }
   end
 end

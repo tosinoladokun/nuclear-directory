@@ -27,12 +27,12 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_select "link[rel=preload][as=font]", count: 0
   end
 
-  test "card titles are the list pages' names (Category#list_name); the category's full name stays in title" do
+  test "card titles are the category's own full name, in sentence case, on every width (Tosin, 2 Nov)" do
     shown = HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [])
     long = HomeCategories::Card.new(category: Category.find("utilities"), count: 1, records: [])
     html = ApplicationController.render(partial: "shared/category_cards", locals: { cards: [ shown, long ] })
     names = Nokogiri::HTML.fragment(html).css("a.nd-catcard__head .nd-catcard__name").map(&:text)
-    assert_equal [ "Waste", "Plant operators" ], names
+    assert_equal [ "Waste and decommissioning", "Power plant owners and operators" ], names
   end
 
   test "the home page has one job: search" do
@@ -87,16 +87,16 @@ class HomeTest < ActionDispatch::IntegrationTest
   test "a card for each bucket with companies, then Plants and sites last, naming at most three (#362)" do
     get root_path
 
-    # Developers, Power buyers, Plants and sites: empty buckets have no card.
+    # Reactor developers, Power buyers, Plants and sites: empty buckets have no card.
     assert_equal %w[reactor-developers power-buyers plants], css_select("section.nd-catcard").map { |card| card["data-key"] }
     assert_select "section.nd-catcard", 3
     assert_select "section[data-key=reactor-developers]" do
-      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Developers, 4 companies"
-      assert_select "section[data-label=?]", "Developers, 4 companies"
-      assert_select "h2.nd-catcard__head--toggle", /Developers/, "the phone header, which shows no count"
+      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Reactor developers, 4 companies"
+      assert_select "section[data-label=?]", "Reactor developers, 4 companies"
+      assert_select "h2.nd-catcard__head--toggle", /Reactor developers/, "the phone header, which shows no count"
       assert_select "a.nd-catcard__row", 3
       assert_select "a.nd-catcard__row[href=?][title=?]", "/companies/kairos-power", "Kairos Power", text: /Kairos Power/
-      assert_select "a.nd-catcard__more[href=?][aria-label=?]", "/companies?category=reactor-developers", "See all 4 in Developers", text: /\A\s*See all ›\s*\z/
+      assert_select "a.nd-catcard__more[href=?][aria-label=?]", "/companies?category=reactor-developers", "See all 4 in Reactor developers", text: /\A\s*See all ›\s*\z/
       assert_select "a.nd-catcard__head .nd-catcard__count[aria-hidden=true]", "4"
     end
     assert_select "section[data-key=power-buyers]" do
