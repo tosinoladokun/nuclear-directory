@@ -35,6 +35,13 @@ production:
     class: DataQuality::CatchUpJob
     schedule: every hour at minute 30
 
+  # PR Newswire's energy and utilities feeds hold only their 20 newest items,
+  # so they're read every 3 hours and their items kept (wire_press, 3 Nov).
+  wire_press:
+    class: DataQuality::RunJob
+    args: [ "wire_press" ]
+    schedule: every 3 hours
+
   # Asks for each source a published fact cites, never-checked first, then the oldest check, and
   # records its answer (#510). Never unpublishes anything.
   link_check:

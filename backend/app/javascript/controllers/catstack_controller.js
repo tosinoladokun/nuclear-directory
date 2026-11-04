@@ -30,7 +30,7 @@ export default class extends Controller {
     button.className = "nd-catcard__toggle"
     button.setAttribute("aria-controls", body.id)
     button.setAttribute("data-action", "catstack#toggle")
-    // Phones show no count, so the button's name carries it ("Developers, 20 companies").
+    // Phones show no count, so the button's name carries it ("Reactor developers, 20 companies").
     button.setAttribute("aria-label", card.dataset.label)
     button.append(...head.childNodes)
     button.insertAdjacentHTML("beforeend", '<span class="nd-catcard__caret" aria-hidden="true"></span>')

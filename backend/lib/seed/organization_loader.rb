@@ -518,7 +518,12 @@ module Seed
           next unless detail.is_a?(Hash) && detail["value"].present?
 
           cited = evidence(detail, sources)
-          cited = cited.merge(fields: [ field ]) if cited && field == "thermal_power_kw"
+          if field == "thermal_power_kw"
+            # Always sourced (DATA.md): a value without its page and quote fails the load.
+            next @errors << "facilities.yml: #{name.inspect}'s thermal_power_kw needs a source_url and a quote" if detail["source_url"].blank? || detail["quote"].blank?
+
+            cited = cited.merge(fields: [ field ])
+          end
           write("facilities.yml", :facility, { id: facility.id, field.to_sym => detail["value"] }, cited)
         end
         if entry["other_names"].present?

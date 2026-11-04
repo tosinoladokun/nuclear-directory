@@ -287,6 +287,13 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ "thermal_power_kw" ], plant.evidence.find_by!(quote: "Licensed at 5 watts thermal.").fields
   end
 
+  test "facilities.yml thermal_power_kw without its page or quote fails the load" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Plant", "thermal_power_kw" => { "value" => 250 } } ] }.to_yaml)
+    error = assert_raises(Seed::OrganizationLoader::Error) { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load! }
+    assert_match "thermal_power_kw needs a source_url and a quote", error.message
+  end
+
   test "a plant written field by field counts once: created, then unchanged, then changed (#301)" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
     details = ->(status) do

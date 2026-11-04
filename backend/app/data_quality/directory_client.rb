@@ -201,7 +201,7 @@ class DataQuality::DirectoryClient
       end
     evidence = [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", confidence:, crawl_run_id: crawl_run&.id } ]
     # The quote states the thermal power (#721): marked so it can be shown with its own source.
-    evidence.first[:fields] = [ "thermal_power_kw" ] if candidate.kind == "facility" && attributes[:thermal_power_kw].present?
+    evidence.first[:fields] = stated_fields(candidate) if stated_fields(candidate)
     return write_alias(candidate, verification:, evidence:, by:) if candidate.kind == "organization_alias"
     return write_news(candidate, verification:, evidence:, by:) if candidate.kind == "news_item"
 
@@ -256,7 +256,12 @@ class DataQuality::DirectoryClient
     attributes = deal_term_link(candidate.payload, attributes) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
-      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind, add_evidence:)
+      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind, add_evidence:, fields: stated_fields(candidate))
+  end
+
+  # The fields a claim's quote is marked as stating (#721).
+  def stated_fields(candidate)
+    [ "thermal_power_kw" ] if candidate.kind == "facility" && candidate.payload.to_h["thermal_power_kw"].present?
   end
 
   # A source read again with the same rows: all its evidence was checked at:.
