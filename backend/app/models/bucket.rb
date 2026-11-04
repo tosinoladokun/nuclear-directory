@@ -26,21 +26,23 @@ class Bucket
     new.ids(category)
   end
 
-  # The first category (in display order) of each of several companies, in one pass: { id => Category },
-  # absent for a company in none. Nine queries however many companies, instead of nine each.
+  # The first category (in display order) of each of several companies: { id => Category }, absent for a
+  # company in none. One query however many companies (PM, 3 Nov: speed).
   def self.firsts(organizations)
-    ids = organizations.map(&:id).uniq
-    finder = new
-    found = {}
-    Category.buckets.each do |category|
-      Organization.where(id: ids).where(id: finder.ids(category)).pluck(:id).each { |id| found[id] ||= category }
-    end
-    found
+    memberships(organizations.map(&:id)).transform_values(&:first).compact
   end
 
-  def self.for(organization)
+  def self.for(organization) = memberships([ organization.id ]).fetch(organization.id, [])
+
+  # { id => [Category, ...] in display order }, one query: each bucket's rule as a column.
+  def self.memberships(ids)
+    ids = ids.uniq
+    return {} if ids.empty?
+
     finder = new
-    Category.buckets.select { |category| Organization.where(id: organization.id).where(id: finder.ids(category)).exists? }
+    buckets = Category.buckets
+    columns = buckets.map { |category| Arel.sql("organizations.id IN (#{finder.ids(category).to_sql})") }
+    Organization.where(id: ids).pluck(:id, *columns).to_h { |id, *flags| [ id, buckets.select.with_index { |_, i| flags[i] } ] }
   end
 
   # Ids, as a subquery, of companies with this role or one of its sub-roles,

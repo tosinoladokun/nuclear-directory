@@ -1609,3 +1609,10 @@
     .nd-footer--compact .nd-footer__links { display: flex; justify-content: center; }
   }
 }
+
+/* The What's new list (#695): the Latest rows under one ink rule; a title is underlined only on hover and focus. */
+@layer components {
+  .nd-lines--updates { border-top: 1px solid var(--nd-ink); border-radius: 0; }
+  .nd-lines--updates .nd-news__title a { text-decoration: none; }
+  .nd-lines--updates .nd-news__title a:hover, .nd-lines--updates .nd-news__title a:focus-visible { text-decoration: underline; }
+}

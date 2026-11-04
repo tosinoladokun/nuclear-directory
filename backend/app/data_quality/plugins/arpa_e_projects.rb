@@ -130,9 +130,11 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
     end
 
     # A listed address as its home page over https (DQ: never a department page or deep path).
+    # Only an https link ARPA-E gives: an http one can't be confirmed to work
+    # over https from the record alone (DQ, 3 Nov), so it's skipped.
     def home_page(url)
-      host = URI.parse(url.to_s.strip).host.presence
-      "https://#{host}" if host
+      uri = URI.parse(url.to_s.strip)
+      "https://#{uri.host}" if uri.scheme == "https" && uri.host.present?
     rescue URI::InvalidURIError
       nil
     end

@@ -3,8 +3,8 @@
 # and plant. The admin's Where it appears (#166) counts the same list, so the
 # two never disagree.
 class PublicPages
-  # Home, the company list, Privacy, Disclaimer and /bot.
-  FIXED = 7
+  # Home, the company list, About, Data, Privacy, Disclaimer, /bot and What's new.
+  FIXED = 8
 
   def companies = Organization.published.select(:slug).order(:slug)
 
