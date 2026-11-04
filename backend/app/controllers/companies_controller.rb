@@ -3,9 +3,11 @@
 # current page (#143). Unknown or unverified companies get "Page not found".
 class CompaniesController < ApplicationController
   def show
-    @profile = CompanyProfile.find(params[:slug])
-    if @profile
-      track_company_viewed(@profile.slug)
+    # The profile is built only when the page isn't cached (PageCacheHelper).
+    if (@organization = Organization.published.find_by(slug: params[:slug]))
+      organization = @organization
+      @load_profile = -> { CompanyProfile.new(organization) }
+      track_company_viewed(organization.slug)
       return
     end
 
