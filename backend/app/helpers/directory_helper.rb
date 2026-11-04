@@ -625,8 +625,11 @@ module DirectoryHelper
   end
 
   # The publisher of a news item for the Latest rows. A URL URI can't parse (e.g. a non-ASCII path) still gets its host as text; it just isn't linked.
-  def news_publisher(item)
-    host = (URI.parse(item.url.to_s.strip).host rescue nil) || item.url.to_s[%r{\Ahttps?://([^/?#]+)}i, 1]
+  def news_publisher(item) = url_publisher(item.url)
+
+  # The host of a source link as text ("federalregister.gov"), also for a URL URI can't parse (a non-ASCII path); "source" if none.
+  def url_publisher(url)
+    host = (URI.parse(url.to_s.strip).host rescue nil) || url.to_s[%r{\Ahttps?://([^/?#]+)}i, 1]
     host.to_s.downcase.delete_prefix("www.").presence || "source"
   end
 
