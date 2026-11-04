@@ -21,7 +21,7 @@ class FuzzySearchTest < ActionDispatch::IntegrationTest
 
     assert_equal [ "Browns Ferry Nuclear Plant" ], names
     assert_select ".nd-fuzzy-note", "No exact match for “browns fery”. Showing close names."
-    assert_select ".nd-pagehead__count", /1 result/
+    assert_select ".nd-pagehead__count", "1"
   end
 
   test "typos in a company name: 'westinghus', 'nextara energy'" do
