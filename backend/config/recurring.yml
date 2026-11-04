@@ -26,6 +26,11 @@ production:
 
   # Marks runs cut off by a restart as failed, and queues the daily crawl
   # again (once a day per source) for a source whose run was cut off (#188).
+  # Rebuilds cached pages after a data change, before visitors ask (#707).
+  page_warm:
+    class: PageWarmJob
+    schedule: every 5 minutes
+
   data_quality_catch_up:
     class: DataQuality::CatchUpJob
     schedule: every hour at minute 30
