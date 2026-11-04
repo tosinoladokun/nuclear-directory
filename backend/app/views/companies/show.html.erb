@@ -1,4 +1,4 @@
-<%= page_cache("company", @organization.id) do %>
+<%= page_cache("company", @organization.id, version: PageStamps.version(:company, @organization.id)) do %>
 <%
   p = (@profile ||= @load_profile.call)
   record_citations = p.citations_for(p.organization)
