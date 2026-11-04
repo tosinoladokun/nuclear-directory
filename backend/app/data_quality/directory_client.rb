@@ -334,6 +334,7 @@ class DataQuality::DirectoryClient
   def sourced_role?(organization_id) = lookup.sourced_role?(organization_id)
   def role_keys(organization_id) = lookup.role_keys(organization_id)
   def organization_hq_city(id) = lookup.organization_hq_city(id)
+  def organizations_with_us_ticker_without_cik = lookup.organizations_with_us_ticker_without_cik
   def organization_website(id) = lookup.organization_website(id)
   def readable_website?(url) = lookup.readable_website?(url)
   def sourced_role_ids(organization_ids) = lookup.sourced_role_ids(organization_ids)
