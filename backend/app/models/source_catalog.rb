@@ -56,6 +56,7 @@ class SourceCatalog
     "nrc_news" => { name: "NRC news releases", daily: true },
     "usaspending_recipients" => { name: "USAspending recipient records (headquarters)", daily: true },
     "wire_press" => { name: "PR Newswire releases", note: "read every 3 hours", daily: true },
+    "sec_ticker_ciks" => { name: "SEC ticker list (CIKs)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },

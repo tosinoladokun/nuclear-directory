@@ -226,6 +226,12 @@ module Directory
     # A website Enrich can read (a full https address).
     def readable_website?(url) = Organization.readable_website?(url)
 
+    # Published companies listed on a US exchange with no SEC CIK yet: [[id, name, ticker]].
+    def organizations_with_us_ticker_without_cik
+      Organization.where(verification_status: "verified", sec_cik: nil, exchange: [ "NASDAQ", "NYSE", "NYSE American", "OTC" ])
+        .where.not(ticker: nil).order(:id).pluck(:id, :name, :ticker)
+    end
+
     # A company's headquarters city, or nil (gap fill only adds a missing one).
     def organization_hq_city(id) = Organization.where(id:).pick(:hq_city).presence
 
