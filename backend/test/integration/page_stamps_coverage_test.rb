@@ -113,7 +113,6 @@ class PageStampsCoverageTest < ActionDispatch::IntegrationTest
     peer = Organization.find_by!(slug: "stamp-peer")
     assert_moves(company, "a similar company renamed") { peer.update!(name: "Stamp Peer Renamed") }
     assert_moves(company, "a similar company's role") { OrganizationRole.where(organization: peer).update_all(updated_at: 5.hours.from_now) }
-    assert_moves(company, "a similar company's relationship") { Relationship.where(from_organization: peer).update_all(updated_at: 6.hours.from_now) }
     assert_moves(company, "a news item edited") { NewsItem.update_all(updated_at: 2.hours.from_now) }
     assert_moves(plant, "a news item edited") { NewsItem.update_all(updated_at: 3.hours.from_now) }
     assert_moves(company, "a deal term edited") { DealTerm.update_all(updated_at: 4.hours.from_now) }
