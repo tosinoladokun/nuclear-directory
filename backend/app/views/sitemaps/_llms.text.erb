@@ -21,6 +21,7 @@
 - [<%= category.name %>](<%= companies_url(category: category.to_param) %>)
 <% end -%>
 - [Sitemap](<%= sitemap_url %>): every company and plant page.
+- [What's new](<%= updates_url %>): newly added facts, deals and news, also as an [Atom feed](<%= updates_feed_url %>).
 - Company pages are at <%= companies_url %>/{slug}, plant pages at <%= root_url.chomp("/") %>/plants/{slug}.
 - [Our crawler](<%= bot_url %>): how the directory collects its sources.
 - [Disclaimer](<%= disclaimer_url %>) and [privacy](<%= privacy_url %>).

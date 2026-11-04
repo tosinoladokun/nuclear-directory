@@ -12,12 +12,15 @@
 module PageCacheHelper
   CONTENTS = %i[title og_title og_description head].freeze
   Card = Data.define(:digest, :alt)
-  EXPIRES = 1.day
+  # Short enough that a dependency a stamp missed heals within hours (Infra).
+  EXPIRES = 6.hours
 
-  def page_cache(*name, cache: true, &block)
+  # version: what the page reads, as a stamp (PageStamps for a company or plant page); the whole
+  # directory's DataVersion by default. cache: false draws it fresh (a search, a long list).
+  def page_cache(*name, version: nil, cache: true, &block)
     return capture(&block) unless cache && controller.perform_caching
 
-    key = cache_fragment_name([ "page/v1", *name, request.base_url, DataVersion.current ])
+    key = cache_fragment_name([ "page/v2", *name, request.base_url, version || DataVersion.current ])
     if (stored = Rails.cache.read(key))
       stored[:contents].each { |content, value| content_for(content, value.html_safe) } # rubocop:disable Rails/OutputSafety
       @link_card = [ Card.new(**stored[:card][:card]), *stored[:card][:rest] ] if stored[:card]

@@ -165,6 +165,7 @@ class PlantProfile
 
   private
     def number_sources
+      ActiveRecord::Associations::Preloader.new(records: [ site ], associations: { evidence: :source }).call
       cite(site) if site_fields_shown?
       links.each { |link| cite(link) }
       units.each { |unit| cite(unit) }
