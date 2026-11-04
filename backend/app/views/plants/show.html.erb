@@ -1,4 +1,4 @@
-<%= page_cache("plant", @site.id) do %>
+<%= page_cache("plant", @site.id, version: PageStamps.version(:plant, @site.id)) do %>
 <%
   p = (@profile ||= @load_profile.call)
   owners, operators, vendors, buyers = PlantProfile::LINK_ORDER.map { |type| p.companies_for(type) }
