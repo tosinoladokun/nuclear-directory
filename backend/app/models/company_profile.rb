@@ -172,6 +172,8 @@ class CompanyProfile
     # The company record's own evidence backs its description and the key
     # facts stored on it (website, aliases, legal name, headquarters, founded).
     def number_sources
+      # The record's own evidence with its sources, in one query rather than one per quote.
+      ActiveRecord::Associations::Preloader.new(records: [ organization ], associations: { evidence: :source }).call
       cite(organization) if description.present? || website.present? || aliases.any? || legal_name.present?
       shown_roles.each { |role| cite(role) }
       technologies.each { |technology| cite(technology) }
