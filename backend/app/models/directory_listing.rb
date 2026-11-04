@@ -51,7 +51,7 @@ class DirectoryListing
       @type = type.to_s.presence&.presence_in(type_options.map(&:last))
       @reactor = reactor.to_s.presence&.presence_in(reactor_options.map(&:last))
     end
-    # A bucket made of several roles narrows to one of them (Developers:
+    # A bucket made of several roles narrows to one of them (Reactor developers:
     # reactor designers or project developers). Any other value is dropped.
     @role = role.to_s.presence&.presence_in(@category.role_keys) if @category && @category.role_keys.size > 1
   end

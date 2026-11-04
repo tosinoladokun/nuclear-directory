@@ -143,10 +143,10 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "title", "Nuclear reactor and project developers in the US · Nuclear Directory"
-    assert_select "h1", /Developers/
+    assert_select "h1", /Reactor developers/
     assert_select ".nd-pagehead__count", "2 companies"
-    assert_select ".nd-idx a[aria-current=page]", /Developers/
-    assert_select ".nd-chips a.nd-chip[aria-current=page]", /Developers/, "phones: the same categories as a scrolling row"
+    assert_select ".nd-idx a[aria-current=page]", /Reactor developers/
+    assert_select ".nd-chips a.nd-chip[aria-current=page]", /Reactor developers/, "phones: the same categories as a scrolling row"
     assert_select "a.nd-line[href='/companies/kairos-power'] .nd-line__what", /Reactor designer/, "no short description yet: role · specialty"
     assert_select "a.nd-line[href='/companies/kairos-power'] .nd-line__end", "Alameda, CA"
     assert_select "a.nd-line[href='/companies/kairos-power'] .nd-mono, a.nd-line[href='/companies/kairos-power'] .nd-tag", 0, "no mark, no tags on the row"
@@ -198,7 +198,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
   test "no results offers to clear the search" do
     get companies_path(category: "reactor-developers", q: "molten salt pump")
 
-    assert_select ".nd-notice", /No results for “molten salt pump” in Developers./
+    assert_select ".nd-notice", /No results for “molten salt pump” in Reactor developers./
     assert_select ".nd-notice a[href=?]", "/companies?category=reactor-developers", text: "Clear search"
   end
 
@@ -368,7 +368,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "nav.nd-idx--list[aria-label=Categories]" do
       assert_select "a", text: /All companies/
       assert_select "a[aria-current=page]", 1
-      assert_select "a[aria-current=page]", /Developers\s*2/
+      assert_select "a[aria-current=page]", /Reactor developers\s*2/
     end
     assert_select ".nd-pagehead .nd-pagehead__square svg"
     assert_select ".nd-pagehead__about", /Companies designing reactors/

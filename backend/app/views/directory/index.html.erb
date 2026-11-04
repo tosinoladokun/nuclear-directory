@@ -1,4 +1,6 @@
+<%= page_cache(*(@page_key || [ "companies-uncached" ]), cache: @page_key.present?) do %>
 <%
+  (@load_list&.call || {}).each { |name, value| instance_variable_set("@#{name}", value) }
   listing = @listing
   # A bucket's page, or a tag's (/companies?tag=fusion, #281): each has its
   # own heading, title, description and canonical address.
@@ -209,3 +211,4 @@
   </div>
   </div>
 </main>
+<% end %>

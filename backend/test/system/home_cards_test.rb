@@ -200,13 +200,13 @@ class HomeCardsTest < ApplicationSystemTestCase
   end
 
   [ [ 1440, 900 ], [ 1280, 800 ] ].each do |width, height|
-    test "at #{width}x#{height} the cards are a compact 3-column grid, never wider than 960px, one line everywhere" do
+    test "at #{width}x#{height} the cards are a compact 2-column grid, never wider than 960px, one line everywhere" do
       resize_viewport(width, height)
       visit root_path
 
       grid = page.evaluate_script("(() => { const g = document.querySelector('.nd-home .nd-catgrid'), box = g.getBoundingClientRect(), page = document.documentElement; return [Math.round(box.width), getComputedStyle(g).gridTemplateColumns.split(' ').length, Math.round(box.left + box.width / 2), page.clientWidth / 2] })()")
       assert_operator grid[0], :<=, 960, "the grid is compact, not screen-wide"
-      assert_equal 3, grid[1], "3 columns"
+      assert_equal 2, grid[1], "2 columns (Tosin, 2 Nov)"
       assert_in_delta grid[3], grid[2], 1, "centred"
       gaps = page.evaluate_script("(() => { const c = [...document.querySelectorAll('.nd-home .nd-catcard')]; return [Math.round(c[3].getBoundingClientRect().top - c[0].getBoundingClientRect().bottom), Math.round(c[1].getBoundingClientRect().left - c[0].getBoundingClientRect().right)] })()")
       assert_equal 24, gaps[0], "24px between rows of cards"

@@ -74,10 +74,10 @@ class Admin::SourcesByCategoryTest < ActionDispatch::IntegrationTest
 
   test "categories are matched by their stable slug, so renaming one keeps its sources" do
     config = YAML.load_file(SourceCoverage::FILE)
-    config["categories"].find { |entry| entry["key"] == "reactor-developers" }["name"] = "Developers"
+    config["categories"].find { |entry| entry["key"] == "reactor-developers" }["name"] = "An older name"
     renamed = SourceCoverage.new(config).categories.find { |category| category.key == "reactor-developers" }
 
-    assert_equal "Developers", renamed.name
+    assert_equal Category.find("reactor-developers").name, renamed.name, "the page shows the category's current name, not the config's"
     assert_equal SourceCoverage.new.categories.find { |category| category.key == "reactor-developers" }.sources, renamed.sources
     assert_equal %w[utilities reactor-developers fuel components waste-decommissioning services power-buyers investors government-research],
       SourceCoverage.new.categories.map(&:key), "the buckets' slugs (#322), in DATA.md order"
