@@ -165,13 +165,7 @@ class ConnectionsMap
   def category(node)
     return unless node.company?
 
-    @categories ||= begin
-      ids = nodes.select(&:company?).map { |company| company.record.id }
-      finder = Bucket.new
-      Category.buckets.each_with_object({}) do |category, found|
-        Organization.where(id: ids).where(id: finder.ids(category)).pluck(:id).each { |id| found[id] ||= category }
-      end
-    end
+    @categories ||= Bucket.firsts(nodes.select(&:company?).map(&:record))
     @categories[node.record.id]
   end
 
