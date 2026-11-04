@@ -61,6 +61,20 @@ module PageStamps
       "OR (d.link_type = 'Relationship' AND d.link_id IN (#{rels})) OR (d.link_type = 'FacilityRelationship' AND d.link_id IN (#{plant_links}))"
     stages = "SELECT g.id FROM licensing_stages g WHERE g.organization_id = #{x}"
     news = "SELECT m.news_item_id FROM news_mentions m WHERE m.subject_type = 'Organization' AND m.subject_id = #{x}"
+    # Similar companies (#606): the companies sharing a role or technology with this one (a tag's list holds its children,
+    # so a role or technology counts with its parent and the parent's children), with the roles and technologies they
+    # are ranked and shown by. Narrow on purpose: no whole-table stamp.
+    my_roles = "SELECT y.role_id FROM organization_roles y WHERE y.organization_id = #{x}"
+    role_family = "SELECT r.id FROM roles r WHERE r.id IN (#{my_roles}) OR r.id IN (SELECT p.parent_id FROM roles p WHERE p.id IN (#{my_roles})) " \
+      "OR r.parent_id IN (#{my_roles}) OR r.parent_id IN (SELECT p.parent_id FROM roles p WHERE p.id IN (#{my_roles}))"
+    my_techs = "SELECT y.technology_id FROM organization_technologies y WHERE y.organization_id = #{x}"
+    tech_family = "SELECT t.id FROM technologies t WHERE t.id IN (#{my_techs}) OR t.id IN (SELECT p.parent_id FROM technologies p WHERE p.id IN (#{my_techs})) " \
+      "OR t.parent_id IN (#{my_techs}) OR t.parent_id IN (SELECT p.parent_id FROM technologies p WHERE p.id IN (#{my_techs}))"
+    peers = "SELECT y.organization_id FROM organization_roles y WHERE y.role_id IN (#{role_family}) AND y.organization_id <> #{x} " \
+      "UNION SELECT y.organization_id FROM organization_technologies y WHERE y.technology_id IN (#{tech_family}) AND y.organization_id <> #{x}"
+    peer_roles = "SELECT y.id FROM organization_roles y WHERE y.organization_id IN (#{peers})"
+    peer_techs = "SELECT y.id FROM organization_technologies y WHERE y.organization_id IN (#{peers})"
+    peer_rels = "SELECT r.id FROM relationships r WHERE r.from_organization_id IN (#{peers}) OR r.to_organization_id IN (#{peers})"
     digest([
       rows("organizations", "t.id = #{x}"), rows("organization_aliases", "t.organization_id = #{x}"),
       rows("organization_roles", "t.organization_id = #{x}"), rows("organization_technologies", "t.organization_id = #{x}"),
@@ -68,9 +82,12 @@ module PageStamps
       rows("facility_relationships", "t.id IN (#{plant_links})"), rows("facilities", "t.id IN (#{plants})"),
       rows("deal_terms", "t.id IN (#{deals})"), rows("licensing_stages", "t.id IN (#{stages})"),
       rows("news_mentions", "t.subject_type = 'Organization' AND t.subject_id = #{x}"), rows("news_items", "t.id IN (#{news})"),
+      rows("organizations", "t.id IN (#{peers})"), rows("organization_roles", "t.id IN (#{peer_roles})"),
+      rows("organization_technologies", "t.id IN (#{peer_techs})"), rows("relationships", "t.id IN (#{peer_rels})"),
       # Partners' own evidence too: a partner's written line shows only once it has a source (Infra).
       evidence([ [ "Organization", x ], [ "Organization", partners ], [ "Relationship", rels ], [ "OrganizationRole", roles ], [ "OrganizationRole", partner_roles ],
-        [ "OrganizationTechnology", technologies ], [ "FacilityRelationship", plant_links ], [ "Facility", plants ], [ "DealTerm", deals ],
+        [ "OrganizationTechnology", technologies ], [ "Organization", peers ], [ "OrganizationRole", peer_roles ], [ "OrganizationTechnology", peer_techs ],
+        [ "FacilityRelationship", plant_links ], [ "Facility", plants ], [ "DealTerm", deals ],
         [ "LicensingStage", stages ] ])
     ])
   end
