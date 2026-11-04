@@ -46,7 +46,8 @@ class SearchTest < ActionDispatch::IntegrationTest
     get search_path(q: "ghost")
 
     assert_select ".nd-instant__row", count: 0
-    assert_select ".nd-instant__empty", "No results for “ghost”. Check the spelling, or search a company or plant name."
+    assert_select ".nd-instant__empty", "No results for “ghost”. Add a company"
+    assert_select ".nd-instant__empty a[rel=nofollow][href=?]", new_correction_path(subject: "A missing company", page: companies_path(q: "ghost")), "Add a company"
   end
 
   test "the response fills the frame Turbo asked for" do

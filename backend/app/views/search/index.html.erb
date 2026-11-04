@@ -37,7 +37,7 @@
         </ul>
       <% end %>
       <% if total.zero? %>
-        <p class="nd-instant__empty type-body">No results for “<%= @query %>”. Check the spelling, or search a company or plant name.</p>
+        <p class="nd-instant__empty type-body">No results for “<%= @query %>”. <%= link_to "Add a company", new_correction_path(subject: "A missing company", page: directory_url_for(q: @query)), class: "nd-link", rel: "nofollow" %></p>
       <% else %>
         <%= link_to directory_url_for(q: @query), class: "nd-instant__all type-ui" do %>
           <span>All results for “<%= @query %>”</span><kbd class="type-data-sm">Enter</kbd>
