@@ -60,6 +60,8 @@ module PageStamps
   # The role and technology names every page labels things with: small tables, read whole.
   LABELS = [ "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM roles t)", "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM technologies t)" ].freeze
 
+  SIMILAR = %w[organizations organization_roles organization_technologies].map { |table| "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM #{table} t)" }.freeze
+
   def self.digest(parts) = "md5(concat_ws('|', #{(parts + LABELS).join(', ')}))"
 
   def self.company_sql(x)
@@ -83,6 +85,9 @@ module PageStamps
       rows("facility_relationships", "t.id IN (#{plant_links})"), rows("facilities", "t.id IN (#{plants})"),
       rows("deal_terms", "t.id IN (#{deals})"), rows("licensing_stages", "t.id IN (#{stages})"),
       rows("news_mentions", "t.subject_type = 'Organization' AND t.subject_id = #{x}"), rows("news_items", "t.id IN (#{news})"),
+      # Similar companies (#678) may show any company that shares a role or technology: coarse on purpose (Infra, PM, 3 Nov),
+      # the whole tables' latest change and count, so a company page rebuilds when any company, role or technology changes.
+      *SIMILAR,
       # Partners' own evidence too: a partner's written line shows only once it has a source (Infra).
       evidence([ [ "Organization", x ], [ "Organization", partners ], [ "Relationship", rels ], [ "OrganizationRole", roles ], [ "OrganizationRole", partner_roles ],
         [ "OrganizationTechnology", technologies ], [ "FacilityRelationship", plant_links ], [ "Facility", plants ], [ "DealTerm", deals ],
