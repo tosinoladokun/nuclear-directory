@@ -1386,7 +1386,6 @@
   /* A page with no deals or plants: the quiet line follows the name, no empty row between. */
   @media (min-width: 1024px) { .nd-company:not(:has(.nd-company__main)) .nd-company__end { grid-row: 2; } }
   /* On phones the trail is just the way up; the page's own name is the heading right below it. */
-  @media (max-width: 639px) { .nd-crumbs__here { display: none; } }
 
   /* One row on the page (a deal, a plant): held apart by space, no lines. */
   .nd-crows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

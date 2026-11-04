@@ -422,7 +422,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     link(backer, "invests_in", @kairos)
     get company_path(slug: "quiet-fund")
 
-    assert_select ".nd-breadcrumb a", count: 1
+    assert_select ".nd-breadcrumb", 0, "a trail of one says nothing: no nav for a company with no category"
   end
 
   test "a missing description or headquarters is left out, with no list of what's missing" do
@@ -477,7 +477,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     cite!(bare)
     get company_path(slug: bare.slug)
 
-    assert_select ".nd-breadcrumb a", 1
+    assert_select ".nd-breadcrumb", 0
     assert_select ".nd-company__glance", 0
     assert_select "#cite .nd-cite", /“Bare Co\.” http/, "a name ending in a full stop isn't given a second one"
   end

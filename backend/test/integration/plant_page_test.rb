@@ -58,6 +58,8 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-breadcrumb a[href=?]", "/companies?category=plants", text: "Plants and sites"
     assert_equal [ "Nuclear Directory", "Plants and sites" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }
     assert_select ".nd-pagehead__more a[href=?]", "/companies?category=plants", "See all plants and sites ›"
+    head = response.body[/<div class="nd-company__head".*?<div class="nd-company__glance"/m]
+    assert_operator head.index("nd-plantstatus"), :<, head.index("nd-pagehead__more"), "See all comes after the status, so the type and status stay together"
     list = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"].find { |node| node["@type"] == "BreadcrumbList" }
     assert_equal [ "Nuclear Directory", "Plants and sites", "Plant Vogtle" ], list["itemListElement"].map { |item| item["name"] }
   end

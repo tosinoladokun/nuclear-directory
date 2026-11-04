@@ -1,10 +1,14 @@
 <%# The trail above a company or plant page (#708): Nuclear Directory › category. The page's own name is the heading right
-    below, so it isn't repeated (#700); the structured data keeps the full trail. One line, never wrapping: the category shortens
-    (full text in title) before anything wraps. Locals: trail (DirectoryHelper#page_trail). %>
-<nav class="nd-breadcrumb" aria-label="Breadcrumb">
-  <ol>
-    <% trail[0...-1].each do |label, path| %>
-      <li><%= link_to label, path, class: "nd-link nd-link--muted", title: label %></li>
-    <% end %>
-  </ol>
-</nav>
+    below, so it isn't repeated (#700); the structured data keeps the full trail. A trail of one (a company with no category)
+    says nothing next to the wordmark, so there is no nav. One line, never wrapping: the category shortens (full text in
+    title) before anything wraps. Locals: trail (DirectoryHelper#page_trail). %>
+<% crumbs = trail[0...-1] %>
+<% if crumbs.size > 1 %>
+  <nav class="nd-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <% crumbs.each do |label, path| %>
+        <li><%= link_to label, path, class: "nd-link nd-link--muted", title: label %></li>
+      <% end %>
+    </ol>
+  </nav>
+<% end %>

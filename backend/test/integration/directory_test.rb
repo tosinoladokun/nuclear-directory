@@ -110,7 +110,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get company_path(slug: nextera.slug)
     assert_response :success
     assert_select ".nd-overview dt", text: "Type", count: 0
-    assert_equal [ "Nuclear Directory" ], css_select(".nd-breadcrumb a").map { |node| node.text.strip }, "no category crumb, and no See all link"
+    assert_select ".nd-breadcrumb", 0, "no category crumb, so no trail at all (the JSON-LD keeps it), and no See all link"
     assert_select ".nd-pagehead__more", 0
   end
 

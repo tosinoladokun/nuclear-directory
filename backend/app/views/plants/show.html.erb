@@ -67,13 +67,15 @@
     <div class="nd-company__index"><%= render "shared/index", items: index, label: "On this page" %></div>
 
     <div class="nd-company__head" id="overview">
-      <%= render "shared/page_head", name: p.name, tags:, see_all: Category.find("plants") %>
+      <%= render "shared/page_head", name: p.name, tags: %>
       <% if p.status.present? %><p class="nd-plantstatus"><%= render "shared/status_mark", status: p.status %><% if units_text %><span class="text-ink-muted"> · <%= units_text %></span><% end %></p><% end %>
       <% sentence = plant_owner_sentence(p) %>
       <% if sentence %>
         <p class="nd-pagehead__about nd-sentence nd-sentence--wide"><%= sentence %></p>
         <p class="nd-pagehead__about nd-sentence nd-sentence--narrow"><%= plant_owner_sentence(p, narrow: true) %></p>
       <% end %>
+      <%# At the end of the head block, after the status and owners: the type and status stay together. %>
+      <p class="nd-pagehead__more"><%= link_to "See all #{Category.find("plants").name.downcase} ›", directory_url_for(category: Category.find("plants")), class: "nd-link nd-link--muted" %></p>
     </div>
 
     <div class="nd-company__glance"><%= render "shared/glance", facts: %></div>
