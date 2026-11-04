@@ -53,4 +53,27 @@ class DataQuality::Plugins::WirePressTest < ActiveSupport::TestCase
     refute_match Plugin::STRONG_NUCLEAR, "Oracle Adds Data Enrichment to Its Repository; Plasma Screens for Duke Energy"
     refute_match Plugin::STRONG_NUCLEAR, "Duke Energy Completes Decommissioning of Coal Plant"
   end
+
+  test "a release both feeds carry is proposed once; TVA counts as a name; stored order is stable" do
+    tva = Organization.create!(name: "Tennessee Valley Authority")
+    tva.aliases.find_or_create_by!(alias: "TVA")
+    tva.verify!(by: "human:tosin")
+    item = "<item><title>TVA Picks Site for New Reactor</title><link>https://www.prnewswire.com/news-releases/tva-1.html</link>" \
+      "<pubDate>Tue, 3 Nov 2026 09:00:00 +0000</pubDate></item>"
+    both = { "PR Newswire (energy)" => FEED, "PR Newswire (utilities)" => Plugin::FEEDS["PR Newswire (utilities)"] }
+    rss = "<?xml version='1.0'?><rss version='2.0'><channel><title>x</title>#{item}</channel></rss>"
+    both.each_value { |url| stub_request(:get, url).to_return(body: rss, headers: { "Content-Type" => "application/xml" }) }
+    p = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: both, today: -> { TODAY }, now: -> { Time.zone.local(2026, 11, 3, 13) })
+    DataQuality::Stages::Crawl.call(plugin: p)
+    DataQuality::Stages::Extract.call(plugin: p)
+
+    claims = Candidate.where(kind: "news_item")
+    assert_equal 1, claims.count, "one release, one claim"
+    assert_equal [ "TVA" ], claims.sole.payload["about"].map { |a| a["name"] }
+  end
+
+  test "an on-time read three hours later isn't skipped" do
+    DataQuality::Stages::Crawl.call(plugin:)
+    assert_equal({ "PR Newswire (energy)" => "unchanged" }, DataQuality::Stages::Crawl.call(plugin: plugin(now: Time.zone.local(2026, 11, 3, 16))).stats)
+  end
 end

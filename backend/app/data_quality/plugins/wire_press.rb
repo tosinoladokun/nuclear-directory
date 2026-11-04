@@ -44,7 +44,9 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
 
   def extract(source, _run)
     since = @today.call - WINDOW_DAYS
-    taken = decided_urls(source)
+    # Decided, or waiting from the other wire feed (a release both carry is proposed once).
+    taken = decided_urls(source) + Candidate.joins(:source).where(sources: { source_kind: }, kind: "news_item", status: "new")
+      .where.not(source_id: source.id).pluck(Arel.sql("candidates.payload->>'url'")).compact
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
       .select { |item| "#{item.title} #{item.summary}".match?(STRONG_NUCLEAR) }
       .sort_by(&:published_on).reverse.filter_map do |item|
@@ -57,6 +59,20 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
       end.first(PER_FEED)
   end
 
+  private
+
+  # Also a short all-capitals name in the directory (TVA, EPRI is long
+  # enough already), as a whole word in capitals: never an ordinary word.
+  def named_in(text)
+    @acronyms ||= @directory.published_names.flat_map do |type, names|
+      names.select { |name| name.length < MIN_NAME && name.match?(/\A[A-Z0-9&]{2,3}\z/) }.map { |name| [ type, name ] }
+    end
+    short = @acronyms.filter_map { |type, name| { "name" => name, "type" => type } if text.match?(/(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/) }
+    (super + short).uniq { |hit| hit["name"].downcase }
+  end
+
+  public
+
   def source_facts(_source)
     "This is PR Newswire's feed of news releases: each item is a release a company issued through PR Newswire, with " \
       "its title, date, link and the release's opening words."
@@ -65,10 +81,12 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
   private
     # Every READ_HOURS: the feed's items merged into those kept, newest WINDOW_DAYS, stored as RSS.
     def read(source)
-      return :skipped_recent if source.fetched_at && source.fetched_at > @now.call - READ_HOURS.hours
+      # One time for the guard and the record, taken before the request, so an on-time run is never skipped.
+      started = @now.call
+      return :skipped_recent if source.fetched_at && source.fetched_at > started - READ_HOURS.hours + 5.minutes
 
       response = @fetcher.get(source.url)
-      attempt = { fetched_at: @now.call, http_status: response.status }
+      attempt = { fetched_at: started, http_status: response.status }
       unless response.kind == :ok
         streak = response.kind == :blocked ? source.blocked_streak + 1 : source.blocked_streak
         status = response.kind == :disallowed || streak >= DataQuality::Snapshot::BLOCKED_STREAK_LIMIT ? "needs_human" : (response.kind == :blocked ? "blocked" : source.crawl_status)
@@ -79,7 +97,7 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
       fresh = items(response.body) or (source.update!(attempt.merge(crawl_status: "needs_human", status_reason: NOT_A_FEED)) && (return :needs_human))
       since = @today.call - WINDOW_DAYS
       kept = (fresh + Array(items(source.content_text))).uniq(&:url).select { |item| item.published_on && item.published_on >= since }
-        .sort_by(&:published_on).reverse
+        .sort_by { |item| [ item.published_on, item.url ] }.reverse
       text = rss(kept)
       sha = Digest::SHA256.hexdigest(text)
       changed = sha != source.content_sha256
