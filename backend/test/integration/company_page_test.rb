@@ -42,20 +42,20 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__about .nd-src", 0, "the summary carries no source marks"
     assert_select ".nd-tag", "Reactor designer"
     assert_select ".nd-tag", "Small modular reactor"
-    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Reactor developers"
   end
 
   test "the trail reads Nuclear Directory > category, with a See all link, and the structured data keeps the full trail (#708)" do
     get company_path(slug: "kairos-power")
 
-    assert_equal [ "Nuclear Directory", "Developers" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }, "the page's own name is the heading below, not repeated (#700)"
+    assert_equal [ "Nuclear Directory", "Reactor developers" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }, "the page's own name is the heading below, not repeated (#700)"
     assert_select ".nd-breadcrumb li a[href='/']", "Nuclear Directory"
     assert_select ".nd-breadcrumb [aria-current]", 0
-    assert_select ".nd-pagehead__more a[href=?]", "/companies?category=reactor-developers", "See all developers ›"
+    assert_select ".nd-pagehead__more a[href=?]", "/companies?category=reactor-developers", "See all reactor developers ›"
 
     graph = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"]
     list = graph.find { |node| node["@type"] == "BreadcrumbList" }
-    assert_equal [ "Nuclear Directory", "Developers", "Kairos Power" ], list["itemListElement"].map { |item| item["name"] }
+    assert_equal [ "Nuclear Directory", "Reactor developers", "Kairos Power" ], list["itemListElement"].map { |item| item["name"] }
     assert_equal [ 1, 2, 3 ], list["itemListElement"].map { |item| item["position"] }
     assert_equal [ "http://www.example.com/", "http://www.example.com/companies?category=reactor-developers", "http://www.example.com/companies/kairos-power" ], list["itemListElement"].map { |item| item["item"] }
   end
@@ -401,7 +401,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__tags .nd-tag:not(.nd-tag--icon)", 0
     assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--reactor-developers svg", minimum: 1
     assert_select ".nd-pagehead__tags .nd-tag--icon.nd-bucket--services svg", minimum: 1
-    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Developers"
+    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Reactor developers"
   end
 
   test "the legal name isn't listed again under Also known as" do

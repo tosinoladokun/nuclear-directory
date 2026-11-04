@@ -15,11 +15,6 @@
 class HomeCategories
   SHOWN = 3
 
-  # What each card's title says: the same name the list pages' index shows (Category#list_name), so a
-  # category reads the same on the home page and on its list (Design's 27 Oct audit; the 20 Oct title-case
-  # labels are gone). The category's own full name stays in title and aria-label where it differs.
-  def self.label(category) = category.list_name
-
   # records: Organizations or Facilities (sites), in order.
   Card = Data.define(:category, :count, :records) do
     def more? = count > records.size
