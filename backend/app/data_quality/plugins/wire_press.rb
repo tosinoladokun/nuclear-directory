@@ -23,6 +23,9 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
   WINDOW_DAYS = 14
   READ_HOURS = 3
   PER_FEED = 15
+  # The wire carries all energy news: only strong nuclear words (DQ, 3 Nov),
+  # not the newsrooms' wider list (plasma, enrichment, repository, radiation…).
+  STRONG_NUCLEAR = /\b(?:nuclear|reactors?|microreactors?|uranium|fission|fusion|SMRs?|HALEU|TRISO|NRC|radioisotopes?|spent fuel)\b/i
 
   def initialize(fetcher: DataQuality::Fetcher.new, feeds: FEEDS, today: -> { Date.current }, directory: DataQuality::DirectoryClient.new, now: -> { Time.current })
     super(fetcher:, feeds:, today:, directory:)
@@ -43,7 +46,7 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
     since = @today.call - WINDOW_DAYS
     taken = decided_urls(source)
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
-      .select { |item| "#{item.title} #{item.summary}".match?(NUCLEAR) }
+      .select { |item| "#{item.title} #{item.summary}".match?(STRONG_NUCLEAR) }
       .sort_by(&:published_on).reverse.filter_map do |item|
         named = named_in("#{item.title} #{item.summary}")
         next if named.empty?

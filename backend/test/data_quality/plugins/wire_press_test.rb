@@ -47,4 +47,10 @@ class DataQuality::Plugins::WirePressTest < ActiveSupport::TestCase
     refute payload.key?("lead")
     assert plugin.quote_in_source?(source, claims.sole[:quote])
   end
+
+  test "only strong nuclear words count on the wire" do
+    assert_match Plugin::STRONG_NUCLEAR, "Duke Energy Files to Extend Nuclear Plant Licenses"
+    refute_match Plugin::STRONG_NUCLEAR, "Oracle Adds Data Enrichment to Its Repository; Plasma Screens for Duke Energy"
+    refute_match Plugin::STRONG_NUCLEAR, "Duke Energy Completes Decommissioning of Coal Plant"
+  end
 end
