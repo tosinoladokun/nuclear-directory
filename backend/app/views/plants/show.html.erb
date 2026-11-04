@@ -1,5 +1,6 @@
+<%= page_cache("plant", @site.id) do %>
 <%
-  p = @profile
+  p = (@profile ||= @load_profile.call)
   owners, operators, vendors, buyers = PlantProfile::LINK_ORDER.map { |type| p.companies_for(type) }
   where = place(p.city, p.state)
   tags = [ facility_type_label(p.facility_type), facility_status_label(p.status), *p.technologies ].compact
@@ -110,3 +111,4 @@
     <%= render "shared/page_end", sources: p.citations.sources, checked: p.citations.checked, cite_text:, subject: p.name %>
   </div>
 </main>
+<% end %>
