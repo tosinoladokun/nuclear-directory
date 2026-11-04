@@ -62,7 +62,7 @@ class PageWarmJob < ApplicationJob
   def pages(host)
     urls = Rails.application.routes.url_helpers
     draw = ->(controller, path, template, assigns) { controller.renderer.new(http_host: host, https: true, "PATH_INFO" => path).render(template:, assigns:) }
-    [ [ "home", -> { draw.call(HomeController, urls.root_path, "home/show", { suggestions: HomeSuggestions.pick }) } ] ] +
+    [ [ "home", -> { draw.call(HomeController, urls.root_path, "home/show", {}) } ] ] +
       DirectoryListing.new.companies.map do |organization|
         [ [ "company", organization.id ],
           -> { draw.call(CompaniesController, urls.company_path(slug: organization.slug), "companies/show", { organization:, load_profile: -> { CompanyProfile.new(organization) } }) } ]

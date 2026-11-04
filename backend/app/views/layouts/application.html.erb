@@ -47,6 +47,6 @@
     <%# Each page renders its own <main> after the site header, so the header
         stays outside the main landmark and there's only ever one. %>
     <%= yield %>
-    <%= render "shared/site_footer", compact: content_for?(:compact_footer) %>
+    <%= render "shared/site_footer" %>
   </body>
 </html>

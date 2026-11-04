@@ -1,8 +1,6 @@
 <%# The footer on every public page (#56, #660). Desktop: three columns (the wordmark and a line; Directory; About) and one
-    mono line of live counts. Phones: one wrapped row of small muted links, each a 44px tap row. compact (the home page): only
-    that row of links, on every width. %>
-<footer class="nd-footer<%= " nd-footer--compact" if local_assigns[:compact] %>">
-  <% unless local_assigns[:compact] %>
+    mono line of live counts. Phones: one wrapped row of small muted links, each a 44px tap row. %>
+<footer class="nd-footer">
   <div class="nd-footer__desk">
     <div class="nd-footer__brand">
       <a class="nd-footer__mark" href="/"><span class="sr-only">Nuclear Directory</span><%= render "shared/wordmark" %></a>
@@ -25,9 +23,7 @@
     </nav>
     <p class="nd-footer__count"><%= footer_counts %></p>
   </div>
-  <% end %>
   <nav class="nd-footer__links type-small" aria-label="About this site">
-    <%= link_to "All companies", companies_path, class: "nd-link nd-link--muted" %>
     <%= link_to "About", about_path, class: "nd-link nd-link--muted" %>
     <%= link_to "Our data", data_path, class: "nd-link nd-link--muted" %>
     <%= link_to "What's new", updates_path, class: "nd-link nd-link--muted" %>

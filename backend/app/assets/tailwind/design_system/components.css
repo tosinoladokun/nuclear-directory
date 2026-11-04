@@ -1608,14 +1608,6 @@
   }
 }
 
-/* The home page's footer is the one row of links on every width (#700). */
-@layer components {
-  @media (min-width: 760px) {
-    .nd-footer--compact { border-top: var(--nd-hairline) solid var(--nd-rule); }
-    .nd-footer--compact .nd-footer__links { display: flex; justify-content: center; }
-  }
-}
-
 /* The What's new list (#695): the Latest rows under one ink rule; a title is underlined only on hover and focus. */
 @layer components {
   .nd-lines--updates { border-top: 1px solid var(--nd-ink); border-radius: 0; }
