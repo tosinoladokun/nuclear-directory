@@ -120,7 +120,7 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
     assert_select "a.nd-prow", text: /Quiet Station/ do
       assert_select ".nd-prow__units", 0, "no units column on the list (Tosin, 2 Nov): counts stay on the plant page"
-      assert_select ".nd-prow__cap", "300"
+      assert_select ".nd-prow__cap", "300 MWe"
       assert_select ".nd-prow__status .nd-st", count: 0
       assert_select ".nd-prow__type", text: "", count: 1, message: "the pending site's own type isn't shown"
     end
@@ -300,12 +300,12 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path(category: "plants")
 
     assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__type", "Power plant"
-    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5"
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5 MWe"
 
     plant("Vogtle Unit 1", parent: vogtle, capacity_mw: 500, status: "decommissioning")
     get companies_path(category: "plants")
 
-    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5", "capacity counts operating units only"
+    assert_select "a.nd-prow[href='/plants/plant-vogtle'] .nd-prow__cap", "2,234.5 MWe", "capacity counts operating units only"
   end
 
   test "an unknown filter value is ignored, not applied behind an Any control" do
