@@ -6,7 +6,7 @@
     Without JavaScript it's a plain form: Enter goes to the directory's full results. %>
 <% size = local_assigns.fetch(:size, :compact) %>
 <% field_id = local_assigns[:id] || "search-#{size}" %>
-<div class="nd-searchbox nd-searchbox--<%= size %>" data-controller="instant-search" data-instant-search-url-value="<%= search_path %>"
+<div class="nd-searchbox nd-searchbox--<%= size %>" data-controller="instant-search" data-instant-search-url-value="<%= search_path %>" data-instant-search-index-url-value="<%= search_index_path %>" data-instant-search-all-url-value="<%= directory_url_for %>"
      data-instant-search-long-placeholder-value="Search a company, plant or site"
      data-instant-search-short-placeholder-value="Search companies and plants"
      data-action="click@window->instant-search#outside">
@@ -20,7 +20,7 @@
            data-action="input->instant-search#search keydown->instant-search#keydown focus->instant-search#search">
   </form>
   <div id="<%= field_id %>-results" class="nd-searchbox__results" role="dialog" aria-label="Search results" data-instant-search-target="results"
-       data-action="keydown->instant-search#navigate turbo:frame-load->instant-search#loaded turbo:fetch-request-error->instant-search#failed turbo:frame-missing->instant-search#failed" hidden>
+       data-action="keydown->instant-search#navigate turbo:before-frame-render->instant-search#beforeRender turbo:frame-load->instant-search#loaded turbo:fetch-request-error->instant-search#failed turbo:frame-missing->instant-search#failed" hidden>
     <turbo-frame id="<%= field_id %>-frame" target="_top" data-instant-search-target="frame"></turbo-frame>
   </div>
   <p id="<%= field_id %>-status" class="sr-only" role="status" aria-live="polite" data-instant-search-target="status"></p>
