@@ -314,16 +314,28 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "capacity reads MW, with its basis once in the key facts" do
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-glance dd", text: /2,228 MW/
+    assert_select ".nd-glance dd", text: /2,228 MWe/
     assert_select "main", text: /net summer \(EIA\)/, count: 1
-    assert_no_match "MWe", response.body
+    assert_select ".nd-glance dt", text: "Thermal power", count: 0
+  end
+
+  test "a research reactor shows its licensed thermal power in kWt as NRC states it, never converted, and never as capacity (#721)" do
+    rr = cite!(plant("Test Research Reactor", facility_type: "research_reactor", status: "operating", city: "Idaho Falls", state: "ID", thermal_power_kw: 1000), source: @nrc)
+    small = cite!(plant("Tiny Reactor", facility_type: "research_reactor", status: "operating", thermal_power_kw: 0.1), source: @nrc)
+    get plant_path(slug: rr.slug)
+    assert_select ".nd-glance dt", text: /\AThermal power/
+    assert_select ".nd-glance dd", text: /\A\s*1,000 kWt/
+    assert_select ".nd-glance dt", text: /\ACapacity/, count: 0
+    assert_select ".nd-glance dd", text: /MWe/, count: 0
+    get plant_path(slug: small.slug)
+    assert_select ".nd-glance dd", text: /0\.1 kWt/
   end
 
   test "capacity counts operating units only, and says so when some units are left out" do
     cite!(plant("Unit 1", parent: @vogtle, capacity_mw: 900, status: "decommissioning"), source: @nrc)
     get plant_path(slug: "plant-vogtle")
 
-    assert_select ".nd-glance dd", text: /\A2,228 MW\b/
+    assert_select ".nd-glance dd", text: /\A2,228 MWe\b/
     assert_select ".nd-glance dt", text: /operating units, net summer \(EIA\)/
     assert_select ".nd-plantstatus", /2 of 3 units/
     assert_select "td[data-col=capacity]", "900 MW", "the units table still lists every unit"
@@ -333,7 +345,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
   test "a standalone reactor shows its own capacity only while it's operating" do
     columbia = cite!(plant("Columbia", facility_type: "power_reactor", status: "operating", capacity_mw: 1169), source: @nrc)
     get plant_path(slug: columbia.slug)
-    assert_select ".nd-glance dd", text: /\A1,169 MW\b/
+    assert_select ".nd-glance dd", text: /\A1,169 MWe\b/
 
     columbia.update!(status: "not_operating")
     get plant_path(slug: columbia.slug)
