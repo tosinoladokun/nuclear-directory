@@ -101,6 +101,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 | Field | Rule |
 |---|---|
 | Capacity | **MW, net summer**, from EIA-860M's "Net Summer Capacity (MW)", stored to 0.1 MW. Shown as "MW", with the note "Net summer capacity, from EIA" on plant pages (Tosin, D2). Nameplate is never mixed in. A site's capacity is the sum of its units, never stored. |
+| Thermal power | **MWt, licensed** (`thermal_power_mwt`, #721): the thermal power in the reactor's NRC licence or the NRC's page for it, with its quote. For research and test reactors, which are licensed by thermal power (a few watts up to 20 MWt). Stored to six decimals (5 W is 0.000005 MWt) and shown as "MWt", never mixed with or converted to Capacity (MWe). Blank when no source states it |
 | Plant status | `operating`, `not_operating`, `under_construction`, `planned`, `shut_down`, `decommissioning`. Blank means not stated, shown as "Not stated". Never guessed. A power reactor is `operating` if NRC lists it and its daily status report shows power above 0% on at least one of the last 365 days; a refuelling outage doesn't change that. It's `not_operating` ("Not operating") if it's licensed but at 0% on all 365 days, like Palisades in 2026. That isn't permanent, which is `shut_down`. A restart plan goes only in a sourced note (#296) |
 | Company status | `active`, `acquired`, `defunct`, each with a quote when it isn't `active` |
 | Dates | ISO `2026-10-09` in data. A month-only source date is stored as the 1st, with the description saying "October 2026" |

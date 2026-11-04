@@ -42,6 +42,7 @@ class Facility < ApplicationRecord
   validates :eia_plant_id, absence: { message: "belongs on the site, not a unit" }, if: -> { parent_id || nrc_docket }
   validates :country_code, length: { is: 2 }
   validates :capacity_mw, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validates :thermal_power_mwt, numericality: { greater_than: 0 }, allow_nil: true
   validates :latitude, numericality: { in: -90..90 }, allow_nil: true
   validates :longitude, numericality: { in: -180..180 }, allow_nil: true
   validate :sites_and_units_only

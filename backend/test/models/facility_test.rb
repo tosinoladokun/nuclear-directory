@@ -132,4 +132,17 @@ class FacilityTest < ActiveSupport::TestCase
     plant.update!(verification_status: "verified", verified_by: "human:tosin")
     assert_not_nil plant.reload.verified_at
   end
+
+  test "licensed thermal power (MWt) is positive, down to a few watts (#721)" do
+    reactor = Facility.new(name: "AGN-201", facility_type: "research_reactor")
+    reactor.thermal_power_mwt = 0.000005
+    assert reactor.valid?, reactor.errors.full_messages.to_sentence
+    reactor.thermal_power_mwt = 0
+    assert_not reactor.valid?
+    reactor.thermal_power_mwt = nil
+    assert reactor.save
+    assert_raises(ActiveRecord::StatementInvalid) { Facility.transaction(requires_new: true) { reactor.update_columns(thermal_power_mwt: -1) } }
+    reactor.update!(thermal_power_mwt: 0.000005)
+    assert_equal BigDecimal("0.000005"), reactor.reload.thermal_power_mwt
+  end
 end
