@@ -35,7 +35,7 @@ class DirectoryListing
     @technology = technology.to_s.presence&.presence_in(technology_options.map(&:last))
     @state = state.to_s.strip.upcase.presence&.presence_in(state_options)
     @sort = SORTS.key?(sort.to_s) ? sort.to_s : DEFAULT_SORT
-    # A bucket made of several roles narrows to one of them (Developers:
+    # A bucket made of several roles narrows to one of them (Reactor developers:
     # reactor designers or project developers). Any other value is dropped.
     @role = role.to_s.presence&.presence_in(@category.role_keys) if @category && @category.role_keys.size > 1
   end

@@ -2,7 +2,7 @@ require "test_helper"
 
 class CategoryTest < ActiveSupport::TestCase
   test "nine buckets and Plants and sites, in display order" do
-    assert_equal [ "Developers", "Fuel and materials", "Components and manufacturing", "Waste and decommissioning",
+    assert_equal [ "Reactor developers", "Fuel and materials", "Components and manufacturing", "Waste and decommissioning",
       "Power plant owners and operators", "Plants and sites", "Power buyers", "Services and engineering", "Investors",
       "Government and research" ], Category.all.map(&:name)
     assert_equal 9, Category.buckets.size
@@ -19,7 +19,7 @@ class CategoryTest < ActiveSupport::TestCase
   test "short labels where only a short one fits, approved by Tosin; others keep their name" do
     assert_equal({ "components" => "Components", "waste-decommissioning" => "Waste", "services" => "Services",
       "government-research" => "Government", "utilities" => "Plant operators" }, Category.all.select(&:short).to_h { |c| [ c.key, c.short_name ] })
-    assert_equal "Developers", Category.find("reactor-developers").short_name
+    assert_equal "Reactor developers", Category.find("reactor-developers").short_name
   end
 
   test "find by key" do
