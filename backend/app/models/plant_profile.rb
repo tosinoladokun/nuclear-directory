@@ -118,7 +118,10 @@ class PlantProfile
   end
 
   # Licensed thermal power of a research reactor, in kW as NRC states it (#721). Never converted, never mixed with capacity_mw.
-  def thermal_power_kw = (site.thermal_power_kw if site_facts?)
+  # Shown only with evidence that backs this field: a quote scoped to it, or an older record-wide one (fields nil).
+  def thermal_power_kw
+    site.thermal_power_kw if site_facts? && site.evidence.any? { |e| e.fields.nil? || e.fields.include?("thermal_power_kw") }
+  end
 
   # Operating capacity only (PM, 16 Oct): a standalone reactor's own figure
   # while it's operating, or the sum of the operating units' when each is

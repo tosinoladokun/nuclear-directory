@@ -272,7 +272,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select "tr#unit-unit-4" do
       assert_select "th[scope=row]", "Unit 4"
       assert_select "td[data-col=reactor]", "AP1000"
-      assert_select "td[data-col=capacity]", "1,114 MW"
+      assert_select "td[data-col=capacity]", "1,114 MWe"
       assert_select "td[data-col=nrc-docket]", "05200026"
       assert_select "td[data-col=status] .nd-st--filled", /Operating/
       assert_select "td[data-col=sources] a.nd-mark[href='#source-2']"
@@ -329,6 +329,21 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-glance dd", text: /MWe/, count: 0
     get plant_path(slug: small.slug)
     assert_select ".nd-glance dd", text: /0\.1 kWt/
+
+    unrelated = plant("Unrelated Evidence Reactor", facility_type: "research_reactor", status: "operating", thermal_power_kw: 500)
+    unrelated.evidence.create!(source: @nrc, found_by: "human", confidence: 1, fields: [ "status" ])
+    get plant_path(slug: unrelated.slug)
+    assert_select ".nd-glance dt", text: /\AThermal power/, count: 0
+    assert_no_match "500 kWt", response.body
+
+    scoped = plant("Scoped Evidence Reactor", facility_type: "research_reactor", status: "operating", thermal_power_kw: 250)
+    scoped.evidence.create!(source: @nrc, found_by: "human", confidence: 1, fields: [ "status", "thermal_power_kw" ])
+    get plant_path(slug: scoped.slug)
+    assert_select ".nd-glance dd", text: /\A\s*250 kWt/
+
+    scoped.evidence.destroy_all
+    get plant_path(slug: scoped.slug)
+    assert_no_match "250 kWt", response.body
   end
 
   test "capacity counts operating units only, and says so when some units are left out" do
@@ -338,7 +353,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-glance dd", text: /\A2,228 MWe\b/
     assert_select ".nd-glance dt", text: /operating units, net summer \(EIA\)/
     assert_select ".nd-plantstatus", /2 of 3 units/
-    assert_select "td[data-col=capacity]", "900 MW", "the units table still lists every unit"
+    assert_select "td[data-col=capacity]", "900 MWe", "the units table still lists every unit"
     assert_select "tr#unit-unit-1 td[data-col=status]", /Being decommissioned/
   end
 
