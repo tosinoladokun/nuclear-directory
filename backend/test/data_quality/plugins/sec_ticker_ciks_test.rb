@@ -53,11 +53,34 @@ class DataQuality::Plugins::SecTickerCiksTest < ActiveSupport::TestCase
     assert claim.reload.status_needs_review?
   end
 
-  test "a CIK already on another record goes to a person, noted" do
-    other = Organization.create!(name: "Amazon Duplicate", sec_cik: "0001018724")
+  test "a CIK already on another record: no claim (it would land there), counted for a person" do
+    Organization.create!(name: "Amazon Duplicate", sec_cik: "0001018724")
+    stats = DataQuality::Stages::Crawl.call(plugin:).stats
+    assert_equal 1, stats["CIK already on another record"]
+    refute Source.exists?(url: "#{Plugin::TICKERS_URL}#AMZN")
+  end
+
+  test "a ticker two directory companies share is no one's; a withdrawn entry back unchanged is read again" do
+    Organization.create!(name: "Amazon Twin", exchange: "NYSE", ticker: "AMZN", verification_status: "verified", verified_by: "human:tosin")
+    assert_equal 2, DataQuality::Stages::Crawl.call(plugin:).stats["ticker on several companies"], "both companies"
+    Organization.find_by!(name: "Amazon Twin").destroy
+
     DataQuality::Stages::Crawl.call(plugin:)
-    claim = plugin.extract(Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN"), nil).sole
-    assert_equal "needs_review", claim[:status]
-    assert_match "already on Amazon Duplicate (id #{other.id})", claim[:notes]
+    source = Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN")
+    source.update_columns(crawl_status: "needs_human")
+    DataQuality::Stages::Crawl.call(plugin:)
+    assert source.reload.crawl_ok?
+  end
+
+  test "a company whose ticker changed: its old entry is withdrawn while a claim is open" do
+    DataQuality::Stages::Crawl.call(plugin:)
+    source = Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN")
+    claim = Candidate.create!(source:, kind: "organization", status: "new", quote: source.content_text, payload: { "name" => "Amazon", "sec_cik" => "0001018724" },
+      ai_recommendation: "recommend_publish")
+    @amazon.update_columns(ticker: "AMZX")
+    assert_equal 1, DataQuality::Stages::Crawl.call(plugin:).stats["withdrawn"]
+    claim.reload
+    assert claim.status_needs_review?
+    assert_nil claim.ai_recommendation
   end
 end
