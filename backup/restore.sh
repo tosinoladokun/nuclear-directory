@@ -24,4 +24,5 @@ psql "$target" --no-psqlrc --quiet --tuples-only --no-align --field-separator=' 
          (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM public.%I', table_name), false, true, '')))[1]::text
   FROM information_schema.tables
   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    AND table_name <> 'solid_cache_entries'
   ORDER BY table_name"

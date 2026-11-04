@@ -52,11 +52,15 @@ query "
          (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM public.%I', table_name), false, true, '')))[1]::text
   FROM information_schema.tables
   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    AND table_name <> 'solid_cache_entries'
   ORDER BY table_name;"
 
 # Custom format (compressed, restorable with pg_restore). The plain dump only
 # ever exists in the pipe; only the encrypted file touches disk.
-pg_dump --snapshot="$snapshot" --format=custom --no-owner --no-acl "$DATABASE_URL" \
+# The page cache lives in solid_cache_entries (up to 64 MB of rebuildable
+# HTML, #707): its table is dumped, its rows are not, so backups stay small
+# and a restore starts with an empty cache.
+pg_dump --snapshot="$snapshot" --format=custom --no-owner --no-acl --exclude-table-data=solid_cache_entries "$DATABASE_URL" \
   | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$file"
 query "COMMIT;" > /dev/null
 printf '\\q\n' >&"${PSQL[1]}"
