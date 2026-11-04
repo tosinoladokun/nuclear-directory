@@ -28,7 +28,8 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
   NO_FACTS = "The reactor's page has no title, Docket Number or Reactor Type; the page layout may have changed"
   UNLISTED = "NRC's research and test reactor table no longer links this reactor"
   LISTED_AGAIN = "NRC's research and test reactor table links this reactor again"
-  FIELDS = [ "Licensee", "Location", "Docket Number", "Reactor Type" ].freeze
+  POWER = "Power Level (kW)"
+  FIELDS = [ "Licensee", "Location", "Docket Number", "Reactor Type", POWER ].freeze
   STATE_CODES = LinkCard::US_STATES.invert.merge(LinkCard::US_STATES.keys.to_h { |code| [ code, code ] }).freeze
 
   Row = Data.define(:listed_name, :location, :path)
@@ -86,7 +87,7 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
     reactor = parse(source.content_text) or return []
 
     site = { "name" => reactor.name, "facility_type" => "research_reactor", "nrc_docket" => reactor.facts["Docket Number"],
-      "country_code" => "US", "city" => reactor.city, "state" => reactor.state }.compact
+      "country_code" => "US", "city" => reactor.city, "state" => reactor.state, "thermal_power_kw" => thermal_power_kw(reactor.facts[POWER]) }.compact
     licensee = { "name" => reactor.facts["Licensee"] }
     claims = [ { kind: "facility", quote: reactor.line, payload: site }, { kind: "organization", quote: reactor.line, payload: licensee } ]
     claims << { kind: "organization_role", quote: reactor.line, payload: { "organization" => licensee, "role" => reactor.kind_role } } if reactor.kind_role
@@ -151,7 +152,8 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
       doc = Nokogiri::HTML(html.to_s)
       licensee = doc.at_css("main h1, h1")&.text.to_s.squish
       facts = { "Licensee" => licensee.presence, "Location" => value_after(doc, "Location"),
-        "Docket Number" => value_after(doc, "Docket Number"), "Reactor Type" => value_after(doc, "Reactor Type") }.compact
+        "Docket Number" => value_after(doc, "Docket Number"), "Reactor Type" => value_after(doc, "Reactor Type"),
+        POWER => value_after(doc, POWER) }.compact
       raise Unreadable if licensee.empty? || facts["Docket Number"].blank? || facts["Reactor Type"].blank?
 
       Reactor.new(name: "#{licensee} #{facts['Reactor Type']} reactor", facts:).line
@@ -171,6 +173,12 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
         node = node.next_sibling
       end
       text.gsub(/[[:space:]]+/, " ").strip.presence
+    end
+
+    # Licensed thermal power in kW, the number NRC states ("6,000" => "6000"; "0.005" stays); nil otherwise.
+    def thermal_power_kw(text)
+      number = text.to_s.delete(",").strip
+      number if number.match?(/\A\d+(?:\.\d+)?\z/)
     end
 
     def parse(text)

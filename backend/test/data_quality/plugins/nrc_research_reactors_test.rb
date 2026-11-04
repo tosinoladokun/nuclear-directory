@@ -42,8 +42,11 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     assert_equal({ "skipped_recent" => 29 }, second.stats["reactor_pages"])
     assert_not_requested :get, %r{nonpower/shine-medical}
     assert_equal "Massachusetts Institute of Technology HWR Reflected reactor | Licensee: Massachusetts Institute of Technology | " \
-      "Location: Cambridge, MA | Docket Number: 05000020 | Reactor Type: HWR Reflected", mit.content_text
-    refute_match(/Project Manager|Power Level|R-37/, mit.content_text)
+      "Location: Cambridge, MA | Docket Number: 05000020 | Reactor Type: HWR Reflected | Power Level (kW): 6,000", mit.content_text
+    refute_match(/Project Manager|R-37/, mit.content_text)
+    site = DataQuality::Plugins::NrcResearchReactors.new.extract(mit, nil).find { |c| c[:kind] == "facility" }
+    assert_equal "6000", site[:payload]["thermal_power_kw"], "kW as NRC states it, no conversion"
+    assert_includes site[:quote], "Power Level (kW): 6,000"
   end
 
   test "a same-day rerun after a block requests no later page" do
@@ -114,7 +117,7 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
 
     assert_equal %w[facility organization organization_role], claims.map { |c| c[:kind] }
     assert_equal({ "name" => "Massachusetts Institute of Technology HWR Reflected reactor", "facility_type" => "research_reactor", "nrc_docket" => "05000020",
-      "country_code" => "US", "city" => "Cambridge", "state" => "MA" }, claims.first[:payload])
+      "country_code" => "US", "city" => "Cambridge", "state" => "MA", "thermal_power_kw" => "6000" }, claims.first[:payload])
     assert_equal "university", claims.last[:payload]["role"]
     dow = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/dcc-mi-triga")
     assert_equal %w[facility organization], plugin.extract(dow, nil).map { |c| c[:kind] }, "a company gets no role from its name"
