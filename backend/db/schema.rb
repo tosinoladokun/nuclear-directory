@@ -226,7 +226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_120000) do
     t.datetime "updated_at", null: false
     t.string "eia_plant_id"
     t.string "short_name"
-    t.decimal "thermal_power_mwt", precision: 12, scale: 6
+    t.decimal "thermal_power_kw", precision: 12, scale: 4
     t.index ["eia_plant_id"], name: "index_facilities_on_eia_plant_id_for_sites", unique: true, where: "((parent_id IS NULL) AND (eia_plant_id IS NOT NULL))"
     t.index ["nrc_docket"], name: "index_facilities_on_nrc_docket", unique: true, where: "(nrc_docket IS NOT NULL)"
     t.index ["parent_id"], name: "index_facilities_on_parent_id"
@@ -237,7 +237,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_120000) do
     t.check_constraint "facility_type::text = ANY (ARRAY['power_reactor'::character varying::text, 'research_reactor'::character varying::text, 'fuel_facility'::character varying::text, 'enrichment'::character varying::text, 'fusion_facility'::character varying::text, 'other'::character varying::text, 'uranium_mine'::character varying::text, 'mill'::character varying::text])", name: "facilities_facility_type_check"
     t.check_constraint "short_name IS NULL OR char_length(short_name::text) >= 1 AND char_length(short_name::text) <= 30", name: "facilities_short_name_check"
     t.check_constraint "status::text = ANY (ARRAY['operating'::character varying::text, 'under_construction'::character varying::text, 'planned'::character varying::text, 'shut_down'::character varying::text, 'decommissioning'::character varying::text, 'not_operating'::character varying::text])", name: "facilities_status_check"
-    t.check_constraint "thermal_power_mwt IS NULL OR thermal_power_mwt > 0::numeric", name: "facilities_thermal_power_check"
+    t.check_constraint "thermal_power_kw IS NULL OR thermal_power_kw > 0::numeric", name: "facilities_thermal_power_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "facilities_verification_status_check"
   end
 
