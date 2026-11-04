@@ -8,7 +8,7 @@ class InstantIndexTest < ApplicationSystemTestCase
   # Backend's index (SearchIndex, #698), as the browser gets it.
   INDEX = {
     v: "abc",
-    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ],
+    tags: [ { s: "smr", n: "Small modular reactors", a: [ "small modular", "haleu" ], c: 7, i: "bucket-fuel", b: "nd-bucket--fuel" }, { s: "fusion", n: "Fusion", a: [], c: 3, i: "bucket-fuel" } ],
     icons: { "bucket-reactor-developers" => "<svg viewBox='0 0 1 1'></svg>", "bucket-fuel" => "<svg viewBox='0 0 1 1'></svg>", "site-plant" => "<svg viewBox='0 0 1 1'></svg>" },
     items: [
       { k: "c", s: "holtec-international", n: "Holtec International", sn: "Holtec", a: [ "Holtec Intl" ], d: "Builds casks and small modular reactors.", m: "Reactor developer · Camden, NJ", i: "bucket-reactor-developers", b: "nd-bucket--reactor-developers", c: 9 },
@@ -114,6 +114,7 @@ class InstantIndexTest < ApplicationSystemTestCase
     field.send_keys("smr")
     assert_selector ".nd-instant__group", text: /topics/i
     assert_selector ".nd-instant__row b", text: "NuScale Power"
+    assert_selector ".nd-instant__row .nd-catsq.nd-bucket--fuel", text: "", wait: 5
     find(".nd-instant__row", text: "Small modular reactors").click
     assert_current_path(/\/companies\?tag=smr/)
   end
@@ -123,7 +124,8 @@ class InstantIndexTest < ApplicationSystemTestCase
     stub_index
     find("input[type=search]").send_keys("zzzqqq")
     assert_selector ".nd-instant__empty", text: /No results for/
-    assert_selector ".nd-instant__empty a[href*='corrections/new'][href*='A+missing+company'][rel=nofollow]", text: /Report a correction/
+    assert_selector ".nd-instant__empty a[href*='corrections/new'][href*='A+missing+company'][rel=nofollow]", text: "Add a company"
+    assert_equal "No results for “zzzqqq”. Add a company", find(".nd-instant__empty").text.squish
   end
 
   test "ranking: an exact or prefix name beats an alias, which beats a description match" do

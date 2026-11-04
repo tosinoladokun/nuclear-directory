@@ -139,7 +139,7 @@ export default class extends Controller {
         const row = make("li")
         const link = make("a", "nd-instant__row")
         link.href = `/companies?tag=${encodeURIComponent(tag.s)}`
-        const square = make("span", "nd-catsq")
+        const square = make("span", `nd-catsq${tag.b ? ` ${tag.b}` : ""}`)
         square.setAttribute("aria-hidden", "true")
         square.innerHTML = this.index.icons[tag.i] || ""
         const label = make("span", "nd-instant__text")
@@ -154,8 +154,9 @@ export default class extends Controller {
     group("Companies", "companies", found.companies, "/companies")
     group("Plants and sites", "plants", found.plants, "/plants")
     if (total === 0) {
-      const empty = make("p", "nd-instant__empty type-body", `No results for “${text}”. Check the spelling, or search a company or plant name. `)
-      const report = make("a", "nd-link", "Missing a company? Report a correction")
+      // The same words and the same one link as the server's fallback panel and the footer (#700).
+      const empty = make("p", "nd-instant__empty type-body", `No results for “${text}”. `)
+      const report = make("a", "nd-link", "Add a company")
       report.href = `/corrections/new?${new URLSearchParams({ subject: "A missing company", page: `/companies?q=${encodeURIComponent(text)}` })}`
       report.rel = "nofollow"
       empty.append(report)
