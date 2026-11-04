@@ -86,4 +86,17 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal 0, stamp_queries { PageWarmJob.perform_now(pause: 0) }, "nothing changed: no stamps"
   end
+
+  test "a map the cache dropped is rebuilt on the next tick; a commit moves the data version even if MAX(updated_at) doesn't" do
+    PageWarmJob.perform_now(pause: 0, debounce: false)
+    data = DataVersion.current
+    Rails.cache.delete([ PageStamps::MAP, data ])
+    assert_operator stamp_queries { PageWarmJob.perform_now(pause: 0, debounce: false) }, :>, 0
+    assert Rails.cache.exist?([ PageStamps::MAP, data ])
+
+    company = Organization.find_by!(slug: "warm-co")
+    company.update_columns(updated_at: 1.year.ago) # an older timestamp: the aggregates alone wouldn't move
+    DirectorySnapshot.expire! # what the commit callback does
+    assert_not_equal data, DataVersion.current
+  end
 end

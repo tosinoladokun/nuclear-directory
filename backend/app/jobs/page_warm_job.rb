@@ -31,7 +31,8 @@ class PageWarmJob < ApplicationJob
     # A tick reads only the cheap DataVersion; the page stamps are computed
     # once per data change, after it goes quiet (Infra).
     data = DataVersion.current
-    return if Rails.cache.read(WARMED_DATA) == data
+    # Done for this data, unless the size-limited cache dropped the map (then it's rebuilt).
+    return if Rails.cache.read(WARMED_DATA) == data && Rails.cache.exist?([ PageStamps::MAP, data ])
 
     seen = Rails.cache.read(SEEN)
     Rails.cache.write(SEEN, data)
