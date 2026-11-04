@@ -25,7 +25,22 @@
 module PageStamps
   # A page's cache version: its stamp, the deploy and today's date (pages say
   # "Accessed <date>" and read link dates against today).
-  def self.version(kind, id) = [ DataVersion::REVISION, Date.current.iso8601, public_send(kind, id) ].join("/")
+  # A page's cache version, read from the stamp map the warmer builds once per
+  # data change (Infra, 3 Nov: computing a big company's stamp on every visit
+  # cost ~0.1-0.5 s on production). Until the map for the current data exists
+  # (the minutes after a change), the whole directory's DataVersion stands in:
+  # correct at once, just not shared with the warmed copy.
+  MAP = "page_stamps/map/v1"
+  def self.version(kind, id)
+    data = DataVersion.current
+    Rails.cache.read([ MAP, data ])&.dig(kind, id) || "data/#{data}"
+  end
+
+  # Every page's version for this data, computed once and kept for visits to read: { company: { id => v }, plant: { id => v } }.
+  def self.map(data = DataVersion.current)
+    Rails.cache.fetch([ MAP, data ], expires_in: 1.day) { { company: versions(:company), plant: versions(:plant) } }
+  end
+
   def self.versions(kind) = public_send(kind == :company ? :companies : :plants).transform_values { |stamp| [ DataVersion::REVISION, Date.current.iso8601, stamp ].join("/") }
 
   def self.company(id) = Organization.where(id:).pick(Arel.sql(company_sql("organizations.id")))

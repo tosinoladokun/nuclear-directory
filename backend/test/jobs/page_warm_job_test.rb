@@ -70,4 +70,19 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     assert_operator queries_for("/companies/other-warm-co"), :<=, 4
     assert_match "Builds small reactors.", (get("/companies/warm-co") && response.body)
   end
+
+  def stamp_queries
+    count = 0
+    counter = ->(*, payload) { count += 1 if payload[:sql].to_s.include?("md5(concat_ws") }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { yield }
+    count
+  end
+
+  test "stamps are computed once per data change, never on a visit or a quiet tick (Infra)" do
+    assert_match %r{\Adata/}, PageStamps.version(:company, Organization.find_by!(slug: "warm-co").id), "no map yet: the directory's version stands in"
+    assert_operator stamp_queries { PageWarmJob.perform_now(pause: 0, debounce: false) }, :>, 0
+    assert_equal 0, stamp_queries { get "/companies/warm-co" }, "a visit reads its version from the map"
+    assert_response :success
+    assert_equal 0, stamp_queries { PageWarmJob.perform_now(pause: 0) }, "nothing changed: no stamps"
+  end
 end
