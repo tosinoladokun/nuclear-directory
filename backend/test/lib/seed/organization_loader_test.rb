@@ -273,6 +273,20 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_includes plant.evidence.pluck(:quote), "Running since 2020."
   end
 
+  test "facilities.yml thermal_power_kw (#721) is written with its quote, marked as stating that field" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ {
+      "name" => "Acme Plant",
+      "thermal_power_kw" => { "value" => 0.005, "source_url" => "https://example.com/licence", "quote" => "Licensed at 5 watts thermal." }
+    } ] }.to_yaml)
+
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+
+    plant = Facility.find_by!(name: "Acme Plant")
+    assert_equal BigDecimal("0.005"), plant.thermal_power_kw
+    assert_equal [ "thermal_power_kw" ], plant.evidence.find_by!(quote: "Licensed at 5 watts thermal.").fields
+  end
+
   test "a plant written field by field counts once: created, then unchanged, then changed (#301)" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
     details = ->(status) do

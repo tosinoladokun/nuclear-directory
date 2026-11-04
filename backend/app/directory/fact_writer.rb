@@ -67,7 +67,7 @@ module Directory
       organization_technology: { model: OrganizationTechnology, attributes: %i[organization_id technology] },
       facility: {
         model: Facility,
-        attributes: %i[name short_name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket
+        attributes: %i[name short_name slug parent_id facility_type status technology reactor_type capacity_mw thermal_power_kw nrc_docket
           eia_plant_id city state country_code latitude longitude aliases]
       },
       relationship: {
@@ -306,7 +306,7 @@ module Directory
     OPEN_CLAIMS = %w[new matched needs_review].freeze
 
     # Site fields a merge copies to into when into has none.
-    SITE_FIELDS = %i[eia_plant_id facility_type status technology_id reactor_type capacity_mw city state latitude longitude].freeze
+    SITE_FIELDS = %i[eia_plant_id facility_type status technology_id reactor_type capacity_mw thermal_power_kw city state latitude longitude].freeze
 
     # Merges one site into another (one page per plant, #229), the
     # counterpart of merge_organization: a human's decision, in one

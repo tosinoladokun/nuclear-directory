@@ -28,7 +28,7 @@ module DataQuality::Claim
     "national_lab" => "a national lab", "waste_decommissioning" => "a waste and decommissioning company"
   }.freeze
   LABELS = { "exchange" => "stock exchange", "ticker" => "ticker", "nrc_docket" => "NRC docket", "facility_type" => "plant type", "ownership_pct" => "ownership",
-    "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity",
+    "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity", "thermal_power_kw" => "thermal power",
     "amount_usd" => "amount", "amount_offered_usd" => "amount offered", "external_id" => "external ID", "link_name" => "belongs to",
     "sec_cik" => "SEC CIK", "parent_name" => "site" }.freeze
   # A Form D round's fields in its own words (#129): what it sold, and when it first sold.
@@ -117,6 +117,7 @@ module DataQuality::Claim
     when "facility_type", "status" then humanize(value)
     when "ownership_pct" then "#{value}%"
     when "capacity_mw" then "#{value} MW"
+    when "thermal_power_kw" then "#{value} kW thermal"
     when "amount_usd", "amount_offered_usd", "amount sold" then dollars(value)
     else value.to_s
     end
