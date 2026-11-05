@@ -25,7 +25,22 @@
 module PageStamps
   # A page's cache version: its stamp, the deploy and today's date (pages say
   # "Accessed <date>" and read link dates against today).
-  def self.version(kind, id) = [ DataVersion::REVISION, Date.current.iso8601, public_send(kind, id) ].join("/")
+  # A page's cache version, read from the stamp map the warmer builds once per
+  # data change (Infra, 3 Nov: computing a big company's stamp on every visit
+  # cost ~0.1-0.5 s on production). Until the map for the current data exists
+  # (the minutes after a change), the whole directory's DataVersion stands in:
+  # correct at once, just not shared with the warmed copy.
+  MAP = "page_stamps/map/v1"
+  def self.version(kind, id)
+    data = DataVersion.current
+    Rails.cache.read([ MAP, data ])&.dig(kind, id) || "data/#{data}"
+  end
+
+  # Every page's version for this data, computed once and kept for visits to read: { company: { id => v }, plant: { id => v } }.
+  def self.map(data = DataVersion.current)
+    Rails.cache.fetch([ MAP, data ], expires_in: 1.day) { { company: versions(:company), plant: versions(:plant) } }
+  end
+
   def self.versions(kind) = public_send(kind == :company ? :companies : :plants).transform_values { |stamp| [ DataVersion::REVISION, Date.current.iso8601, stamp ].join("/") }
 
   def self.company(id) = Organization.where(id:).pick(Arel.sql(company_sql("organizations.id")))
@@ -44,6 +59,8 @@ module PageStamps
 
   # The role and technology names every page labels things with: small tables, read whole.
   LABELS = [ "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM roles t)", "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM technologies t)" ].freeze
+
+  SIMILAR = %w[organizations organization_roles organization_technologies].map { |table| "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM #{table} t)" }.freeze
 
   def self.digest(parts) = "md5(concat_ws('|', #{(parts + LABELS).join(', ')}))"
 
@@ -68,6 +85,9 @@ module PageStamps
       rows("facility_relationships", "t.id IN (#{plant_links})"), rows("facilities", "t.id IN (#{plants})"),
       rows("deal_terms", "t.id IN (#{deals})"), rows("licensing_stages", "t.id IN (#{stages})"),
       rows("news_mentions", "t.subject_type = 'Organization' AND t.subject_id = #{x}"), rows("news_items", "t.id IN (#{news})"),
+      # Similar companies (#678) may show any company that shares a role or technology: coarse on purpose (Infra, PM, 3 Nov),
+      # the whole tables' latest change and count, so a company page rebuilds when any company, role or technology changes.
+      *SIMILAR,
       # Partners' own evidence too: a partner's written line shows only once it has a source (Infra).
       evidence([ [ "Organization", x ], [ "Organization", partners ], [ "Relationship", rels ], [ "OrganizationRole", roles ], [ "OrganizationRole", partner_roles ],
         [ "OrganizationTechnology", technologies ], [ "FacilityRelationship", plant_links ], [ "Facility", plants ], [ "DealTerm", deals ],

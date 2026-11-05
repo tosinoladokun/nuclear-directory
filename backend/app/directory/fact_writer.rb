@@ -67,7 +67,7 @@ module Directory
       organization_technology: { model: OrganizationTechnology, attributes: %i[organization_id technology] },
       facility: {
         model: Facility,
-        attributes: %i[name short_name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket
+        attributes: %i[name short_name slug parent_id facility_type status technology reactor_type capacity_mw thermal_power_kw nrc_docket
           eia_plant_id city state country_code latitude longitude aliases]
       },
       relationship: {
@@ -265,7 +265,9 @@ module Directory
           row.update!(ends) && moved["relationships"] += 1
         end
         Evidence.where(subject: from).each do |row|
-          duplicate = Evidence.where(subject: into, source_id: row.source_id, quote: row.quote).exists?
+          duplicate = Evidence.find_by(subject: into, source_id: row.source_id, quote: row.quote)
+          # The kept row keeps what the moved one said it states (thermal power, #721).
+          duplicate.update_columns(fields: Array(duplicate.fields) | row.fields) if duplicate && row.fields.present?
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Organization", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
@@ -306,7 +308,8 @@ module Directory
     OPEN_CLAIMS = %w[new matched needs_review].freeze
 
     # Site fields a merge copies to into when into has none.
-    SITE_FIELDS = %i[eia_plant_id facility_type status technology_id reactor_type capacity_mw city state latitude longitude].freeze
+    EXACT_DECIMALS = %w[thermal_power_kw].freeze
+    SITE_FIELDS = %i[eia_plant_id facility_type status technology_id reactor_type capacity_mw thermal_power_kw city state latitude longitude].freeze
 
     # Merges one site into another (one page per plant, #229), the
     # counterpart of merge_organization: a human's decision, in one
@@ -378,7 +381,9 @@ module Directory
           row.update!(facility: into) && moved["facility_relationships"] += 1
         end
         Evidence.where(subject: from).each do |row|
-          duplicate = Evidence.where(subject: into, source_id: row.source_id, quote: row.quote).exists?
+          duplicate = Evidence.find_by(subject: into, source_id: row.source_id, quote: row.quote)
+          # The kept row keeps what the moved one said it states (thermal power, #721).
+          duplicate.update_columns(fields: Array(duplicate.fields) | row.fields) if duplicate && row.fields.present?
           duplicate ? row.destroy! : row.update!(subject: into) && moved["evidence"] += 1
         end
         moved["candidates"] = Candidate.where(subject_type: "Facility", subject_id: from.id).update_all(subject_id: into.id, proposed_subject: false) # they didn't propose into
@@ -542,7 +547,8 @@ module Directory
     # and confirms, instead of waiting for a person to approve the same values.
     # add_evidence: the caller found it only adds evidence (#548): a published
     # fact's identical values from a crawled source confirm and cite it.
-    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil, add_evidence: false)
+    # fields: the fields the claim's quote states (evidence fields, #721), kept on its evidence row.
+    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil, add_evidence: false, fields: nil)
       kind = kind.to_sym
       spec = KINDS[kind] or return Confirmation.new(outcome: :missing, errors: [ "unknown kind #{kind.inspect}" ])
       attributes = attributes.to_h.symbolize_keys
@@ -577,9 +583,11 @@ module Directory
         if current.empty? && source_kind && source_kind != "web_page" && quote.present? && still_there.call(quote) &&
             record.try(:verification_status) == "verified" &&
             (add_evidence || Evidence.joins(:source).where(subject: record, sources: { source_kind: }).where.not(source_id:).exists?)
-          current = [ Evidence.create!(subject: record, source_id:, quote:, found_by: "crawler") ]
+          current = [ Evidence.create!(subject: record, source_id:, quote:, found_by: "crawler", fields: fields.presence) ]
         end
         next Confirmation.new(outcome: :unsourced, overruled:) if current.empty?
+
+        current.select { |row| row.quote == quote }.each { |row| row.update_columns(fields: (Array(row.fields) | fields)) } if fields.present?
 
         Evidence.where(id: current.map(&:id)).update_all(last_confirmed_at: at, confirmed_sha256: rows_sha256)
         Confirmation.new(outcome: :confirmed, overruled:)
@@ -897,6 +905,8 @@ module Directory
       def same_stored_value?(record, name, stored, stated)
         column = record.class.columns_hash[name.to_s]
         if column&.type == :decimal && column.scale && (number = BigDecimal(stated.to_s, exception: false))
+          # Thermal power is stored exactly as the source states it (#721): only the same number agrees.
+          return stored == number if EXACT_DECIMALS.include?(name.to_s)
           return true if stored == number.round(column.scale)
 
           # A source that gives fewer decimals than we store (EIA's 33.142 for

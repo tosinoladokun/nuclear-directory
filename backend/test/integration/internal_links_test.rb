@@ -60,4 +60,17 @@ class InternalLinksTest < ActionDispatch::IntegrationTest
     assert_includes held, "fission", "the parent's tag list holds it too"
     assert_includes SimilarCompanies.new(CompanyProfile.new(lone)).send(:pools).flat_map { |listing| listing.companies.to_a }, peer, "once the SMR peers run out, the fission list follows"
   end
+
+  test "a similar company's place shows only when its record has a source, as on its own page" do
+    utility = role("utility")
+    mine = cite!(company("Quartz Home", roles: [ utility ], city: "Austin", state: "TX"))
+    unsourced = company("Zebra Unsourced", roles: [ utility ], city: "Nowhere", state: "ND")
+    unsourced.organization_roles.each { |link| link.evidence.create!(source: default_source, found_by: "human", confidence: 1) } # the role is sourced, its own record is not
+    sourced = cite!(company("Yak Sourced", roles: [ utility ], city: "Somewhere", state: "SD"))
+    get company_path(slug: mine.slug)
+
+    assert_select "#similar a[href=?]", company_path(slug: sourced.slug), text: /Somewhere, SD/
+    assert_select "#similar a[href=?]", company_path(slug: unsourced.slug), text: /Zebra Unsourced/
+    assert_no_match "Nowhere", css_select("#similar").text
+  end
 end
