@@ -13,7 +13,7 @@ class DataQuality::DirectoryClient
   # What a lookup found: enough to match on and to explain a match.
   # values: a link's stored values ({ "ownership_pct" => 45.7, ... }), else nil.
   Record = Data.define(:type, :id, :name, :domain, :sec_cik, :eia_utility_id, :nrc_docket, :eia_plant_id, :parent_id, :facility_type, :status, :city, :state,
-    :country_code, :verification_status, :verified_by, :verified_at, :values) do
+    :country_code, :verification_status, :verified_by, :verified_at, :values, :thermal_power_kw) do
     def ref = Ref.new(type:, id:)
     def rejected? = verification_status == "rejected"
     def unpublished? = verification_status == "unpublished"
@@ -200,6 +200,8 @@ class DataQuality::DirectoryClient
         { status: "verified", by: "agent:verifier/#{crawl_run&.model || 'unknown'}" }
       end
     evidence = [ { source_id: candidate.source_id, quote: candidate.quote, found_by: "crawler", confidence:, crawl_run_id: crawl_run&.id } ]
+    # The quote states the thermal power (#721): marked so it can be shown with its own source.
+    evidence.first[:fields] = stated_fields(candidate) if stated_fields(candidate)
     return write_alias(candidate, verification:, evidence:, by:) if candidate.kind == "organization_alias"
     return write_news(candidate, verification:, evidence:, by:) if candidate.kind == "news_item"
 
@@ -254,7 +256,12 @@ class DataQuality::DirectoryClient
     attributes = deal_term_link(candidate.payload, attributes) if candidate.kind == "deal_term"
     # Checked when the source was read, not when this ran.
     fact_writer.confirm(candidate.kind, attributes, source_id: candidate.source_id, quote: candidate.quote, in_source:, rows_sha256:,
-      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind, add_evidence:)
+      at: candidate.source.fetched_at || Time.current, source_kind: candidate.source.source_kind, add_evidence:, fields: stated_fields(candidate))
+  end
+
+  # The fields a claim's quote is marked as stating (#721).
+  def stated_fields(candidate)
+    [ "thermal_power_kw" ] if candidate.kind == "facility" && candidate.payload.to_h["thermal_power_kw"].present?
   end
 
   # A source read again with the same rows: all its evidence was checked at:.
@@ -589,7 +596,7 @@ class DataQuality::DirectoryClient
         nrc_docket: ref.try(:nrc_docket), eia_plant_id: ref.try(:eia_plant_id), parent_id: ref.try(:parent_id),
         facility_type: ref.try(:facility_type), status: ref.try(:status), city: ref.try(:city), state: ref.try(:state),
         country_code: ref.try(:country_code), verification_status: ref.verification_status,
-        verified_by: ref.try(:verified_by), verified_at: ref.try(:verified_at), values:) if ref
+        verified_by: ref.try(:verified_by), verified_at: ref.try(:verified_at), values:, thermal_power_kw: ref.try(:thermal_power_kw)) if ref
     end
 
     def write_result(result)
