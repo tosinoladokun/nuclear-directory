@@ -38,6 +38,9 @@ module DataVersion
       SUM(hashtext(concat_ws('|', id, subject_type, subject_id, source_id, quote, confidence, array_to_string(fields, ','), last_confirmed_at)))
     SQL
     stamps << VerificationEvent.maximum(:id).to_s
+    # When a fact last committed (DirectorySnapshot.expire!, durable): moves even when two commits land out of
+    # updated_at order and leave MAX(updated_at) and COUNT where they were.
+    stamps << DirectorySnapshot::CHANGES.read(DirectorySnapshot::CHANGED_AT).to_s
     Digest::SHA256.hexdigest([ REVISION, Date.current.iso8601, *stamps ].join("|")).first(20)
   end
 end
