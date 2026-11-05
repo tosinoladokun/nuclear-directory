@@ -1561,6 +1561,15 @@
 @layer components {
   .nd-similar { display: flex; flex-direction: column; gap: var(--nd-space-3); }
   @media (min-width: 1024px) { .nd-similar { grid-column: 2; } }
+  /* Between 1024px and 1279px the column holds about 425px: the three-column row (300px name, description, place) is stacked
+     as on phones whenever the section itself is narrow. */
+  .nd-similar { container-type: inline-size; }
+  @container (max-width: 599px) {
+    .nd-similar .nd-line--bare { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px var(--nd-space-3); align-items: start; }
+    .nd-similar .nd-line--bare .nd-line__name { flex: 0 1 auto; }
+    .nd-similar .nd-line--bare .nd-line__what, .nd-similar .nd-line--bare > .nd-line__end { grid-column: -2 / -1; flex: none; width: auto; text-align: left; justify-content: flex-start; display: block; overflow: hidden; text-overflow: ellipsis; }
+    .nd-similar .nd-line--bare .nd-line__end { text-align: left; }
+  }
 }
 
 /* The About set's frame (#660): a 40px title (30px on phones), the summary as a 19px sentence, short sections under 22px
