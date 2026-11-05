@@ -20,6 +20,7 @@ class PageWarmJob < ApplicationJob
   limits_concurrency to: 1, key: "page_warm", duration: 1.hour if respond_to?(:limits_concurrency)
 
   WARMED = "page_warm/warmed"
+  WARMED_DATA = "page_warm/warmed_data"
   SEEN = "page_warm/seen"
   PAUSE = 0.1
   REST = 3
@@ -27,15 +28,21 @@ class PageWarmJob < ApplicationJob
   def perform(pause: PAUSE, debounce: true)
     return unless (host = self.class.host)
 
-    now = state
-    seen = Rails.cache.read(SEEN)
-    Rails.cache.write(SEEN, now)
-    return if debounce && seen != now
+    # A tick reads only the cheap DataVersion; the page stamps are computed
+    # once per data change, after it goes quiet (Infra).
+    data = DataVersion.current
+    # Done for this data, unless the size-limited cache dropped the map (then it's rebuilt).
+    return if Rails.cache.read(WARMED_DATA) == data && Rails.cache.exist?([ PageStamps::MAP, data ])
 
+    seen = Rails.cache.read(SEEN)
+    Rails.cache.write(SEEN, data)
+    return if debounce && seen != data
+
+    now = state(data)
     warmed = Rails.cache.read(WARMED) || {}
     todo = pages(host).reject { |key, _| warmed[key] == now[key] }
     todo.each do |key, draw|
-      return unless state == now
+      return unless DataVersion.current == data
 
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       draw.call
@@ -43,6 +50,7 @@ class PageWarmJob < ApplicationJob
       Rails.cache.write(WARMED, warmed)
       sleep [ pause, REST * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) ].max if pause.positive?
     end
+    Rails.cache.write(WARMED_DATA, data)
   end
 
   def self.host = ENV["WARM_HOST"].presence || AppHosts.from_env(ENV).first
@@ -50,10 +58,11 @@ class PageWarmJob < ApplicationJob
   private
 
   # What each page's cache key rests on: { "home" => DataVersion, ["company", id] => its version, … }.
-  def state
-    { "home" => DataVersion.current }
-      .merge(PageStamps.versions(:company).transform_keys { |id| [ "company", id ] })
-      .merge(PageStamps.versions(:plant).transform_keys { |id| [ "plant", id ] })
+  def state(data)
+    map = PageStamps.map(data)
+    { "home" => data }
+      .merge(map[:company].transform_keys { |id| [ "company", id ] })
+      .merge(map[:plant].transform_keys { |id| [ "plant", id ] })
   end
 
   # [ key, draw ] for every page, most connected first. Each is drawn as a

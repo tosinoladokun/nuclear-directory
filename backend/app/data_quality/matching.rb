@@ -350,7 +350,7 @@ module DataQuality::Matching
         payload = candidate.payload.to_h
         plant = candidate.kind == "facility"
         type = plant ? "Facility" : "Organization"
-        attributes = payload.slice(*(plant ? %w[name nrc_docket eia_plant_id facility_type status reactor_type capacity_mw city state] :
+        attributes = payload.slice(*(plant ? %w[name nrc_docket eia_plant_id facility_type status reactor_type capacity_mw thermal_power_kw city state] :
           %w[name hq_city hq_state description website])).symbolize_keys
         result = directory.write_pending(candidate.kind, attributes, candidate:, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil),
           verification: { status: "pending", by: BY, reason: })

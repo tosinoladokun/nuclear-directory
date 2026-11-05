@@ -277,8 +277,9 @@
   body:has(> .nd-home) { min-height: 100dvh; display: flex; flex-direction: column; }
   body:has(> .nd-home) > .nd-footer { margin-top: auto; padding-top: var(--nd-space-4); padding-bottom: var(--nd-space-4); }
   .nd-home { flex: 1 0 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 48px 14px; }
-  /* Just past the phone breakpoint the two-column cards are too narrow for "Waste and Decommissioning" at the 13px floor, more so when the fallback serif is in use (fonts are font-display: optional): less side padding, a tighter gap and no count there (Tosin: counts may go if space is short). */
-  @media (min-width: 640px) and (max-width: 699px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__head--link .nd-catcard__count { display: none; } }
+  /* Tablets, 640 to 1023px: two-column cards are narrower, so less side padding; from 640 to 739px a tighter gap and no count, to keep the longest title on one line (a test checks 320 to 1440). */
+  @media (min-width: 640px) and (max-width: 1023px) { .nd-home { padding-inline: var(--nd-space-4); } }
+  @media (min-width: 640px) and (max-width: 739px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catcard { padding-inline: 8px; } .nd-home .nd-catcard__head { gap: 6px; } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__head--link .nd-catcard__count { display: none; } }
   .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
   /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
   .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
@@ -308,16 +309,16 @@
      No lines between rows: spacing separates them, and a row tints on hover.
      Colour only on the icon and the footer link. */
   .nd-catgrid { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-  /* /design shows three cards at the width they have on the home page at 1440. */
-  .nd-catgrid--example { max-width: 960px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* /design shows its cards at the width they have on the home page at 1440 (two columns). */
+  .nd-catgrid--example { max-width: 960px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nd-catcard { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; padding: 10px 12px 4px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-md); }
-  .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit; container-type: inline-size; }
+  .nd-catcard__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-height: 40px; margin: 0; color: var(--nd-ink); text-decoration: none; font: inherit }
   .nd-catcard__head--toggle, .nd-catstack__all { display: none; }
   .nd-catcard__head .nd-ic { width: 20px; height: 20px; color: var(--nd-cat, var(--nd-ink)); }
   .nd-catcard__head--link:hover .nd-catcard__name { text-decoration: underline; text-underline-offset: 2px; }
-  /* One line (Tosin): the title fits the header less its icon and count. */
-  .nd-catcard__name { flex: 1; min-width: 0; font: 600 clamp(13px, calc((100cqi - 50px) / (var(--chars) * 0.6)), 15px)/20px var(--font-text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  /* Card titles are the category's full name at one fixed size, never smaller than the rows under them (Tosin, 2 Nov): 17px on
+     desktop from 1024px, 14px on tablets and phones, 13px below 375px. Each fits its card on one line, so nothing is cut (a test checks). */
+  .nd-catcard__name { flex: 1; min-width: 0; font: 600 17px/22px var(--font-text); white-space: nowrap; text-align: left; }
   .nd-catcard__count { font: 400 12px/20px var(--font-mono); color: var(--nd-ink-muted); }
   .nd-catcard__body { flex: 1; display: flex; flex-direction: column; }
   .nd-catcard__inner { flex: 1; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
@@ -339,10 +340,10 @@
     .nd-catgrid { gap: 14px; }
     .nd-catcard__row, .nd-catcard__filler, .nd-catcard__more { height: 32px; }
   }
-  /* The home grid is 960px wide at most, so it is 3 columns from 1024px up;
+  /* The home grid is 960px wide at most, 2 columns from 640px up (the titles are the full names at 17px);
      /design's example grid sets its own. */
   @media (min-width: 1024px) {
-    .nd-home .nd-catgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .nd-home .nd-catgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   /* More air between the rows of cards (Tosin, 19 Oct); the column gap stays.
      Phones keep their stack's own gap. */
@@ -352,6 +353,7 @@
   /* Tablets: 2 columns of the same cards; scrolling is fine here. */
   @media (min-width: 640px) and (max-width: 1023px) {
     .nd-catgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .nd-catcard__name { font-size: 14px; }
   }
   /* Touch screens keep 44px targets, even if that means scrolling. */
   @media (pointer: coarse) and (min-width: 640px) {
@@ -378,17 +380,16 @@
     .nd-catcard--stack.is-collapsed .nd-catcard__caret { transform: rotate(-45deg); margin: 0 6px 0 0; }
     .nd-catcard--stack.is-collapsed .nd-catcard__head--toggle { border-bottom-color: transparent; border-radius: var(--nd-radius-md); }
     .nd-catcard--stack .nd-catcard__head .nd-ic { width: 24px; height: 24px; }
-    .nd-catcard--stack .nd-catcard__name { font: 600 clamp(13px, calc((100cqi - 80px) / (var(--chars) * 0.6)), 17px)/22px var(--font-text); }
-    .nd-catcard__toggle { container-type: inline-size; }
+    .nd-catcard--stack .nd-catcard__name { font: 600 14px/22px var(--font-text); }
     /* Collapsing: the body's row shrinks to nothing over 180ms. */
     .nd-catcard--stack .nd-catcard__body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 180ms ease-out, visibility 180ms; }
     .nd-catcard--stack.is-collapsed .nd-catcard__body { grid-template-rows: 0fr; visibility: hidden; }
     .nd-catcard--stack .nd-catcard__inner { min-height: 0; overflow: hidden; gap: 6px; padding: 6px 0; }
     .nd-catcard--stack.is-collapsed .nd-catcard__inner { padding: 0; }
     .nd-catcard--stack .nd-catcard__row { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; }
-    .nd-catcard--stack .nd-catcard__rowname { font-size: clamp(13px, calc((100cqi - 52px) / (var(--chars) * 0.5)), 16px); }
+    .nd-catcard--stack .nd-catcard__rowname { font-size: clamp(13px, calc((100cqi - 52px) / (var(--chars) * 0.5)), 14px); }
     .nd-catcard--stack .nd-catcard__filler { display: none; }
-    .nd-catcard--stack .nd-catcard__more { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; font-size: 15px; }
+    .nd-catcard--stack .nd-catcard__more { height: auto; min-height: 48px; margin: 0; padding: 0 14px; border-radius: 0; }
     /* The rows run edge to edge and the card's wrapper clips what is drawn
        outside them, so the focus ring goes inside the row: it stays whole. */
     .nd-catcard--stack .nd-catcard__row:focus-visible, .nd-catcard--stack .nd-catcard__more:focus-visible { outline-offset: -2px; }
@@ -838,17 +839,13 @@
   .nd-prose li::marker { color: var(--nd-ink-muted); }
   .nd-code { margin: 0; padding: var(--nd-space-3) var(--nd-space-4); background: var(--nd-paper-sunken); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
   .nd-footer { max-width: var(--nd-content-max); margin: 0 auto; padding: var(--nd-space-8) clamp(16px, 4vw, 32px) var(--nd-space-12); border-top: var(--nd-hairline) solid var(--nd-rule); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--nd-space-6); row-gap: 0; padding-block: var(--nd-space-4) var(--nd-space-6); }
-  .nd-footer p { margin: 0; }
-  /* One calm line on desktop: the links left, the Render credit right. Each
-     item stays whole; on a phone they wrap as items, never as words. */
+  /* One calm row of links. Each item stays whole; on a phone they wrap as items, never as words. */
   .nd-footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--nd-space-6); }
-  .nd-footer__links a, .nd-footer__credit, .nd-footer__col a { white-space: nowrap; }
+  .nd-footer__links a { white-space: nowrap; }
   .nd-info a[href^="mailto:"] { white-space: nowrap; }
   @media (max-width: 639px) { .nd-footer { flex-direction: column; align-items: flex-start; } .nd-footer__links { gap: 0 var(--nd-space-4); } }
   @media (any-pointer: coarse) {
     .nd-footer__links a { display: inline-flex; align-items: center; min-height: 44px; }
-    /* The credit stays a paragraph (a flex row would eat the space before the link); its link takes the 44px, in the row's own height, so it never overlaps the links above. */
-    .nd-footer__credit a { display: inline-block; padding-block: 13px; }
   }
 }
 
@@ -1548,6 +1545,49 @@
   }
 }
 
+/* The Plants and sites list (#614): status chips, then rows in columns under a header: plant or site, status, type,
+   units, capacity, location. Units and capacity are mono and right-aligned; a row with no sourced facts keeps its empty
+   cells. On phones: the mark and name; the status, type and units on line 2; the MW and location on line 3. */
+@layer components {
+  .nd-statuschips { margin: var(--nd-space-4) 0 var(--nd-space-2); }
+  .nd-statuschips .nd-st { flex: none; }
+  .nd-lines--plants { padding-top: 0; }
+  .nd-prow, .nd-lines__head.nd-prow { display: grid; grid-template-columns: var(--nd-row-mark) minmax(172px, 1fr) 178px 112px 104px 134px; column-gap: var(--nd-space-3); align-items: center; }
+  .nd-prow { min-height: 56px; padding: var(--nd-space-3) 0; color: var(--nd-ink); text-decoration: none; }
+  a.nd-prow:hover { background: var(--nd-paper-sunken); }
+  .nd-lines__head.nd-prow > * { flex: none; min-width: 0; text-align: left; }
+  .nd-lines__head.nd-prow > .nd-prow__num { text-align: right; font: inherit; color: inherit; }
+  .nd-lines__head.nd-prow > .nd-prow__place { text-align: left; font: inherit; color: inherit; }
+  .nd-prow__meta, .nd-prow__foot { display: contents; }
+  .nd-prow__mark { width: var(--nd-row-mark); height: var(--nd-row-mark); display: grid; place-items: center; }
+  .nd-prow__name { font: 600 15px/22px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-prow__name[data-fit="small"] { font-size: 13px; }
+  .nd-prow__status, .nd-prow__type { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-prow__num { font: 400 13px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink); text-align: right; white-space: nowrap; }
+  .nd-prow__place { font: 400 14px/20px var(--font-text); color: var(--nd-ink-muted); text-align: left; padding-left: var(--nd-space-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nd-lines--plants > li + li { border-top: var(--nd-hairline) solid var(--nd-rule); }
+  .nd-lines--plants > .nd-lines__head + li { border-top: 0; }
+  /* Stacked rows on phones and until the list column can hold the columns (826px): up to 1279px. */
+  @media (max-width: 1279px) {
+    .nd-lines--plants > .nd-lines__head { display: none; }
+    .nd-prow { grid-template-columns: var(--nd-row-mark) minmax(0, 1fr); row-gap: 2px; align-items: start; }
+    .nd-prow__mark { grid-row: 1 / span 3; align-self: center; }
+    .nd-prow__name { grid-column: 2; }
+    .nd-prow__meta, .nd-prow__foot { display: flex; grid-column: 2; align-items: baseline; gap: var(--nd-space-3); min-width: 0; overflow: hidden; }
+    .nd-prow__meta > *, .nd-prow__foot > * { flex: 0 1 auto; text-align: left; }
+    .nd-prow__meta > :empty, .nd-prow__foot > :empty { display: none; }
+    .nd-prow__meta > .nd-prow__status { flex: none; overflow: visible; }
+    .nd-prow__foot .nd-prow__place { font-size: 13px; padding-left: 0; }
+    .nd-prow__foot .nd-prow__cap:not(:empty) + .nd-prow__place::before { content: "· "; }
+  }
+}
+
+/* Similar companies on a company page (#606). */
+@layer components {
+  .nd-similar { display: flex; flex-direction: column; gap: var(--nd-space-3); }
+  @media (min-width: 1024px) { .nd-similar { grid-column: 2; } }
+}
+
 /* The About set's frame (#660): a 40px title (30px on phones), the summary as a 19px sentence, short sections under 22px
    headings with a 1px rule between (an ink rule above the first), a code box with Copy, and a mono "Last updated". */
 @layer components {
@@ -1572,21 +1612,11 @@
   }
 }
 
-/* The footer (#660): three columns and a count line on desktop; today's wrapped row of small links on phones. */
+/* The footer (#700): one row of links on every page, centred from 760px. */
 @layer components {
-  .nd-footer__desk { display: none; }
   @media (min-width: 760px) {
-    .nd-footer { border-top: 1px solid var(--nd-ink); display: block; padding-block: var(--nd-space-8) var(--nd-space-8); }
-    .nd-footer__links { display: none; }
-    .nd-footer__desk { display: grid; grid-template-columns: minmax(max-content, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--nd-space-10); row-gap: var(--nd-space-6); align-items: start; }
-    .nd-footer__mark { display: block; color: var(--nd-ink); }
-    .nd-footer__mark .nd-wordmark__svg { height: auto; width: 100%; max-width: 297px; aspect-ratio: 15356 / 1760; display: block; }
-    .nd-footer__brand p { margin: var(--nd-space-3) 0 0; white-space: nowrap; }
-    .nd-footer__col { display: flex; flex-direction: column; gap: var(--nd-space-2); }
-    .nd-footer__col a { font: 400 15px/24px var(--font-text); color: var(--nd-ink); text-decoration: none; }
-    .nd-footer__col a:hover { text-decoration: underline; text-underline-offset: 3px; }
-    .nd-footer__label { margin: 0 0 var(--nd-space-1); font: 500 11px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--nd-ink-muted); }
-    .nd-footer__count { grid-column: 1 / -1; margin: 0; padding-top: var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); font: 400 12px/18px var(--font-mono); color: var(--nd-ink-muted); }
+    .nd-footer { border-top: var(--nd-hairline) solid var(--nd-rule); display: block; padding-block: var(--nd-space-4); }
+    .nd-footer__links { justify-content: center; }
   }
 }
 
@@ -1606,6 +1636,19 @@
     .nd-news { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
     .nd-news__what { grid-column: 1; grid-row: 2; }
     .nd-news__src { grid-column: 1; grid-row: 3; }
+  }
+}
+
+/* The narrowest phones: the longest title stays on one line at the 13px floor below 375px, and below 341px the icon gives its room. */
+@layer components {
+  @media (max-width: 420px) {
+    .nd-catcard__toggle, .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { padding-inline: 10px; gap: 8px; }
+    .nd-catcard__caret { margin-right: 0; }
+  }
+  @media (max-width: 374px) { .nd-catcard--stack .nd-catcard__name { font-size: 13px; } }
+  @media (max-width: 340px) {
+    .nd-catcard--stack .nd-catcard__head .nd-ic { display: none; }
+    .nd-catcard__toggle, .nd-catcard--stack .nd-catcard__head--toggle:not(:has(.nd-catcard__toggle)) { padding-inline: 8px; gap: 6px; }
   }
 }
 
