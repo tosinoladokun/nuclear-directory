@@ -39,17 +39,25 @@ class DataQuality::Plugins::SecTickerCiks < DataQuality::Plugin
       # The CIK already on another record: no claim (approving it would land on that record); a person sees the stat.
       next (stats["CIK already on another record"] += 1) if holder && holder.id != id
 
-      current[ticker] = [ name, found.first.slice("cik_str", "ticker", "title").to_json ]
+      current[ticker] = [ id, name, found.first.slice("cik_str", "ticker", "title").to_json ]
     end
-    current.each do |ticker, (name, line)|
+    current.each do |ticker, (id, name, line)|
       source = Source.find_or_initialize_by(url: "#{TICKERS_URL}##{ticker}")
+      # The ticker now belongs to another company: the old one's open claims are withdrawn, and the entry is read for the new one.
+      if source.persisted? && source.enrich_organization_id && source.enrich_organization_id != id
+        withdraw(source)
+        source.update!(enrich_organization_id: id, title: "SEC ticker list: #{ticker} (#{name})", crawl_status: "ok", status_reason: nil,
+          extracted_sha256: nil, extracted_rows_sha256: nil)
+        next stats["new company for ticker"] += 1
+      end
       if source.persisted? && source.content_text == line
-        # Withdrawn earlier, back unchanged: read again.
-        source.update!(crawl_status: "ok", status_reason: nil, content_sha256: nil) unless source.crawl_ok?
+        # Withdrawn earlier, back unchanged: extracted again (its content digest kept).
+        source.update!(crawl_status: "ok", status_reason: nil, extracted_sha256: nil, extracted_rows_sha256: nil) unless source.crawl_ok?
+        source.update!(enrich_organization_id: id) unless source.enrich_organization_id
         next stats["unchanged"] += 1
       end
 
-      source.update!(source_kind:, title: "SEC ticker list: #{ticker} (#{name})", content_text: line,
+      source.update!(source_kind:, title: "SEC ticker list: #{ticker} (#{name})", content_text: line, enrich_organization_id: id,
         content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", status_reason: nil, fetched_at: Time.current)
       stats["stored"] += 1
     end

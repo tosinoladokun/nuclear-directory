@@ -67,9 +67,15 @@ class DataQuality::Plugins::SecTickerCiksTest < ActiveSupport::TestCase
 
     DataQuality::Stages::Crawl.call(plugin:)
     source = Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN")
-    source.update_columns(crawl_status: "needs_human")
-    DataQuality::Stages::Crawl.call(plugin:)
-    assert source.reload.crawl_ok?
+    2.times do
+      DataQuality::Stages::Extract.call(plugin:)
+      source.update_columns(crawl_status: "needs_human")
+      DataQuality::Stages::Crawl.call(plugin:)
+      assert source.reload.crawl_ok?
+      assert_nil source.extracted_sha256
+    end
+    DataQuality::Stages::Extract.call(plugin:)
+    assert Candidate.exists?(source:, kind: "organization"), "claims written after a withdrawal and return"
   end
 
   test "a company whose ticker changed: its old entry is withdrawn while a claim is open" do
@@ -82,5 +88,18 @@ class DataQuality::Plugins::SecTickerCiksTest < ActiveSupport::TestCase
     claim.reload
     assert claim.status_needs_review?
     assert_nil claim.ai_recommendation
+  end
+
+  test "a ticker that moves to another company: the old company's open claims withdrawn, the entry read for the new one" do
+    DataQuality::Stages::Crawl.call(plugin:)
+    source = Source.find_by!(url: "#{Plugin::TICKERS_URL}#AMZN")
+    claim = Candidate.create!(source:, kind: "organization", status: "new", quote: source.content_text, payload: { "name" => "Amazon", "sec_cik" => "0001018724" })
+    @amazon.update_columns(ticker: "AMZX")
+    newco = Organization.create!(name: "New Amazon", exchange: "NASDAQ", ticker: "AMZN", verification_status: "verified", verified_by: "human:tosin")
+
+    assert_equal 1, DataQuality::Stages::Crawl.call(plugin:).stats["new company for ticker"]
+    assert claim.reload.status_needs_review?
+    assert_equal newco.id, source.reload.enrich_organization_id
+    assert_nil source.extracted_sha256
   end
 end
