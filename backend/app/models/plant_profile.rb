@@ -117,6 +117,10 @@ class PlantProfile
     [ (site.reactor_type if site_facts?), *units.map(&:reactor_type) ].compact_blank.uniq
   end
 
+  # Capacity is electric (EIA net summer): only power reactors have it. Research reactors are licensed in thermal power
+  # (thermal_power_kw) and fuel sites have none, so a stored figure on any other type is never shown under Capacity.
+  def shows_capacity? = site.facility_type == "power_reactor"
+
   # Licensed thermal power of a research reactor, in kW as NRC states it (#721). Never converted, never mixed with capacity_mw.
   # Shown only with evidence that backs this field: a quote scoped to it, or an older record-wide one (fields nil).
   def thermal_power_kw

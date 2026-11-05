@@ -39,7 +39,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_equal "Waynesboro", place.dig("address", "addressLocality")
     props = place["additionalProperty"].to_h { |property| [ property["name"], property["value"] ] }
     assert_equal "Operating", props["Status"]
-    assert_equal({ "@type" => "QuantitativeValue", "value" => 2228.0, "unitText" => "MW" }, props["Capacity"])
+    assert_equal({ "@type" => "QuantitativeValue", "value" => 2228.0, "unitText" => "MWe" }, props["Capacity"])
     assert_includes page["citation"].map { |c| c["url"] }, "https://www.nrc.gov/vogtle"
     assert_equal page["citation"].size, css_select("ol.nd-sources li").size
   end
@@ -311,12 +311,28 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-glance", text: /checked/, count: 0
   end
 
-  test "capacity reads MW, with its basis once in the key facts" do
+  test "capacity reads MWe, with its basis once in the key facts" do
     get plant_path(slug: "plant-vogtle")
 
     assert_select ".nd-glance dd", text: /2,228 MWe/
     assert_select "main", text: /net summer \(EIA\)/, count: 1
     assert_select ".nd-glance dt", text: "Thermal power", count: 0
+  end
+
+  test "capacity is for power reactors only: a research reactor with a figure stored shows none, in the key facts, units table, summary and structured data (#724)" do
+    rr = cite!(plant("Odd Research Reactor", facility_type: "research_reactor", status: "operating", city: "Idaho Falls", state: "ID", capacity_mw: 5, thermal_power_kw: 250), source: @nrc)
+    cite!(plant("Odd Research Reactor Unit 1", parent: rr, capacity_mw: 5, status: "operating"), source: @nrc)
+    get plant_path(slug: rr.slug)
+
+    assert_select ".nd-glance dt", text: /\ACapacity/, count: 0
+    assert_select ".nd-glance dd", text: /250 kWt/
+    assert_select "td[data-col=capacity]", 0
+    assert_no_match(/\b5 MW/, response.body)
+    assert_no_match "\"unitText\":\"MWe\"", response.body
+
+    get plant_path(slug: "plant-vogtle")
+    assert_select ".nd-glance dd", text: /MWe/
+    assert_select ".nd-glance dt", text: /\AThermal power\s+licensed \(NRC\)/, count: 0
   end
 
   test "a research reactor shows its licensed thermal power in kWt as NRC states it, never converted, and never as capacity (#721)" do
@@ -459,7 +475,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
       assert_select ".nd-crow__more p", /Starts /
     end
     # The one-line summary doesn't state a scheduled link as current (#246).
-    line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MW. Owned by Georgia Power."
+    line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MWe. Owned by Georgia Power."
     assert_select "meta[property='og:description'][content=?]", line
     assert_select "meta[property='og:description'][content=?]", line
     assert_select "meta[name='description'][content^=?]", "Plant Vogtle: Operating power plant in Waynesboro, Georgia."
@@ -488,7 +504,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     get plant_path(slug: "plant-vogtle")
 
     assert_select "meta[property='og:title'][content='Plant Vogtle']"
-    line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MW. Owned by Georgia Power; operated by Southern Nuclear."
+    line = "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 2 units, 2,228 MWe. Owned by Georgia Power; operated by Southern Nuclear."
     assert_select "meta[property='og:description'][content=?]", line
     assert_select "meta[property='og:description'][content=?]", line
     assert_select "meta[name='description'][content^=?]", "Plant Vogtle: Operating power plant in Waynesboro, Georgia." # search results: the lead, then counts

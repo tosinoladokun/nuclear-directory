@@ -5,7 +5,7 @@
   where = place(p.city, p.state)
   tags = [ facility_type_label(p.facility_type), facility_status_label(p.status), *p.technologies ].compact
   company_links = ->(orgs) { safe_join(orgs.map { |o| link_to(o.name, company_url_for(o), class: "nd-link") }, ", ") if orgs.any? }
-  capacity = "#{number_with_precision(p.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MWe" if p.capacity_mw
+  capacity = "#{number_with_precision(p.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MWe" if p.capacity_mw && p.shows_capacity?
   thermal = "#{number_with_precision(p.thermal_power_kw, precision: 4, strip_insignificant_zeros: true, delimiter: ",")} kWt" if p.thermal_power_kw
   content_for :title, plant_title(p)
   content_for :og_title, p.name
@@ -57,7 +57,7 @@
     facts = [
       { label: "Status", note: units_text, value: (render("shared/status_mark", status: p.status) if p.status.present?) },
       { label: "Capacity", note: (p.capacity_leaves_out_units? ? "operating units, net summer (EIA)" : "net summer (EIA)"), value: capacity },
-      { label: "Thermal power", value: thermal },
+      { label: "Thermal power", note: "licensed (NRC)", value: thermal },
       { label: "Location", value: location(p.city, p.state) },
       { label: operators = (p.companies_for("operates").size > 1 ? "Operators" : "Operator"), value: company_links.(p.companies_for("operates")), wide: p.companies_for("operates").size > 1 },
       { label: p.companies_for("vendor_for").size > 1 ? "Reactor developers" : "Reactor developer", value: company_links.(p.companies_for("vendor_for")),
