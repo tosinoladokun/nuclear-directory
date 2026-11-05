@@ -20,7 +20,10 @@ class SimilarCompanies
 
       found |= listing.companies.where.not(id: [ @organization.id, *found.map(&:id) ]).limit(LIMIT - found.size).to_a
     end
-    found.first(LIMIT)
+    found = found.first(LIMIT)
+    # The place is shown only for a company with a source behind its record, as on its own page (CompanyProfile#hq_city).
+    ActiveRecord::Associations::Preloader.new(records: found, associations: :evidence).call
+    found
   end
 
   private
