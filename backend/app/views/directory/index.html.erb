@@ -173,7 +173,9 @@
   <% end %>
   </turbo-frame>
   <% if listing.category&.plants %>
-    <p class="nd-quiet mt-6"><%= link_to "Missing a plant? Report a correction", correction_url_for("A missing plant"), class: "nd-link", rel: "nofollow" %></p>
+    <nav class="nd-quiet" aria-label="About this list">
+      <%= link_to correction_url_for("A missing plant"), rel: "nofollow" do %><%= icon("flag", size: 16) %>Add a plant<% end %>
+    </nav>
   <% end %>
   </div>
   </div>

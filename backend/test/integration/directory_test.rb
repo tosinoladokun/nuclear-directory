@@ -378,7 +378,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     assert_select "ul.nd-lines .nd-num", 0, "no connection count on the row"
     assert_select "nav.nd-quiet", 0, "no Missing a company line: the footer's Add a company does it (#700)"
     get companies_path(category: "plants")
-    assert_select "nav.nd-quiet", 0
+    assert_select "nav.nd-quiet", 1, "only the plants list keeps a quiet line"
+    assert_select "nav.nd-quiet a[rel=nofollow]", text: "Add a plant"
     assert_select "form.nd-sortbar[data-controller=auto-submit] select[name=sort]", 1, "phones: Sort beside Filters"
   end
 
@@ -405,8 +406,8 @@ class DirectoryTest < ActionDispatch::IntegrationTest
 
   test "the plants list keeps its own way to report a missing plant; other lists don't" do
     get companies_path(category: "plants")
-    assert_select "a[rel=nofollow][href*='A%20missing%20plant'], a[rel=nofollow][href*='A+missing+plant']", text: /Missing a plant\?/
+    assert_select "a[rel=nofollow][href*='A%20missing%20plant'], a[rel=nofollow][href*='A+missing+plant']", text: "Add a plant"
     get companies_path
-    assert_select "a", text: /Missing a plant/, count: 0
+    assert_select "a", text: /Add a plant/, count: 0
   end
 end
