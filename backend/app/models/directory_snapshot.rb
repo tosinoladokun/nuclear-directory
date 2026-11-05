@@ -111,9 +111,8 @@ class DirectorySnapshot
     # company's HQ once a source backs the company (CompanyProfile), a site's
     # once the site itself is verified and sourced (PlantProfile). nil when
     # the page shows none.
-    def company_location(company) = (place(company.hq_city, company.hq_state) if company.evidence.any?)
-    def site_location(site) = (place(site.city, site.state) if site.verified? && site.evidence.any?)
-    def place(city, state) = ApplicationController.helpers.place(city, state)
+    def company_location(company) = ApplicationController.helpers.company_place(company)
+    def site_location(site) = (ApplicationController.helpers.location(site.city, site.state) if site.verified? && site.evidence.any?)
 
     # Sites here are public, so their verified units are published. The
     # earlier of the site's own date and its first unit's (LEAST skips nulls).

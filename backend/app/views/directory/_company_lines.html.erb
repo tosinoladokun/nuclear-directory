@@ -3,6 +3,6 @@
 <ul class="nd-lines">
   <% companies.each do |company| %>
     <%= render "shared/line", variant: :bare, href: company_url_for(company), name: company.name, short_name: company.short_name, what: short[company.id],
-          place: location(company.hq_city, company.hq_state, country: company.country_code) %>
+          place: company_place(company) %>
   <% end %>
 </ul>

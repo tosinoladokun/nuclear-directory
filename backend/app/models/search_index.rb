@@ -59,7 +59,7 @@ class SearchIndex
       end
       compact("k" => "c", "s" => company.slug, "n" => company.name, "sn" => company.short_name, "a" => aliases[company.id],
         "d" => lines[company.id], "i" => key, "b" => (h.bucket_class(category) if category),
-        "m" => [ (h.role_label(role) if role), h.place(company.hq_city, company.hq_state) ].compact.join(" · ").presence,
+        "m" => [ (h.role_label(role) if role), h.company_place(company) ].compact.join(" · ").presence,
         "c" => company.try(:connections_count).to_i, "x" => [ company.ticker ].compact.presence)
     end
   end
