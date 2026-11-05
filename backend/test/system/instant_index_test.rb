@@ -266,4 +266,26 @@ class InstantIndexTest < ApplicationSystemTestCase
   def eventually(wait: 10)
     page.document.synchronize(wait) { raise Capybara::ExpectationNotMet, "condition not met" unless yield }
   end
+
+  test "a long name stays on one line in the dropdown: 13px first, the short name if there is one, an ellipsis last (one-line law)" do
+    vendor = role("reactor_vendor")
+    cite!(company("Massachusetts Reactor Developers of America", roles: [ vendor ], state: "MA", description: "Reactors."))
+    cite!(company("Carolina Advanced Fuel Fabrication Incorporated", short_name: "Carolina Advanced Fuel", roles: [ vendor ], state: "NC", description: "Fuel."))
+    cite!(company("Plain Co", roles: [ vendor ], city: "Richland", state: "WA", description: "Reactors."))
+    [ 375, 320, 1440 ].each do |width|
+      resize_viewport(width, 800)
+      visit root_path
+      field = find("input[type=search]")
+      { "carolina" => "Carolina Advanced Fuel", "massachusetts" => "Massachusetts Reactor Developers of America" }.each do |query, shown|
+        field.send_keys([ :control, "a" ], :backspace)
+        field.send_keys(query)
+        assert_selector ".nd-instant__row b[title]", wait: 15
+        name = page.evaluate_script("(() => { const b = document.querySelector('.nd-instant__text > b'); return [b.textContent, b.dataset.fit || '', b.getBoundingClientRect().height] })()")
+        assert_equal shown, name[0], "at #{width}: the short name stands in for a very long one when there is one" if query == "carolina"
+        assert_equal "small", name[1], "at #{width}: a long name drops to 13px"
+        assert_operator name[2], :<, 30, "at #{width}: #{query}: the name is one line (24px), not two"
+      end
+      assert_operator page.evaluate_script("document.documentElement.scrollWidth - innerWidth"), :<=, 0, "at #{width}: no sideways scroll"
+    end
+  end
 end
