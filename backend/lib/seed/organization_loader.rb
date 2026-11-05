@@ -24,7 +24,8 @@ module Seed
     # A row's state across its writes: the first listed wins.
     STATES = %i[created changed unchanged].freeze
 
-    FACILITY_FIELDS = %w[facility_type status city state].freeze
+    # thermal_power_kw (#721): a research reactor's licensed thermal power, kW thermal, with its quote.
+    FACILITY_FIELDS = %w[facility_type status city state thermal_power_kw].freeze
 
     # facilities: the plant-details file; defaults to facilities.yml next to dir.
     def initialize(dir, facilities: File.join(File.dirname(dir), "facilities.yml"))
@@ -516,7 +517,14 @@ module Seed
           detail = entry[field]
           next unless detail.is_a?(Hash) && detail["value"].present?
 
-          write("facilities.yml", :facility, { id: facility.id, field.to_sym => detail["value"] }, evidence(detail, sources))
+          cited = evidence(detail, sources)
+          if field == "thermal_power_kw"
+            # Always sourced (DATA.md): a value without its page and quote fails the load.
+            next @errors << "facilities.yml: #{name.inspect}'s thermal_power_kw needs a source_url and a quote" if detail["source_url"].blank? || detail["quote"].blank?
+
+            cited = cited.merge(fields: [ field ])
+          end
+          write("facilities.yml", :facility, { id: facility.id, field.to_sym => detail["value"] }, cited)
         end
         if entry["other_names"].present?
           write("facilities.yml", :facility, { id: facility.id, aliases: entry["other_names"] }, [])
