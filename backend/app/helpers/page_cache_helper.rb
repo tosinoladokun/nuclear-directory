@@ -16,9 +16,9 @@ module PageCacheHelper
   EXPIRES = 6.hours
 
   # version: what the page reads, as a stamp (PageStamps for a company or plant page); the whole
-  # directory's DataVersion by default.
-  def page_cache(*name, version: nil, &block)
-    return capture(&block) unless controller.perform_caching
+  # directory's DataVersion by default. cache: false draws it fresh (a search, a long list).
+  def page_cache(*name, version: nil, cache: true, &block)
+    return capture(&block) unless cache && controller.perform_caching
 
     key = cache_fragment_name([ "page/v2", *name, request.base_url, version || DataVersion.current ])
     if (stored = Rails.cache.read(key))
