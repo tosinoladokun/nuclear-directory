@@ -79,7 +79,7 @@ A failed write changes nothing and returns errors. It does not raise.
 | `organization` | `name slug legal_name website domain description hq_city hq_state country_code founded_year status aliases` | name or any alias (normalized), then domain |
 | `organization_role` | `organization_id role` (role **key**) | organization + role |
 | `organization_technology` | `organization_id technology` (technology **key**) | organization + technology |
-| `facility` | `name slug parent_id facility_type status technology reactor_type capacity_mw nrc_docket eia_plant_id city state country_code latitude longitude aliases` | NRC docket, then EIA plant ID (sites only), then name or any alias (a site's name or alias for an EIA site) |
+| `facility` | `name slug parent_id facility_type status technology reactor_type capacity_mw thermal_power_kw nrc_docket eia_plant_id city state country_code latitude longitude aliases` | NRC docket, then EIA plant ID (sites only), then name or any alias (a site's name or alias for an EIA site) |
 | `relationship` | `from_organization_id to_organization_id relationship_type description started_on ended_on` | from + to + type |
 | `facility_relationship` | `organization_id facility_id relationship_type ownership_pct description started_on ended_on` | organization + facility + type |
 | `deal_term` | `link_type link_id term_type external_id amount_usd capacity_mw signed_on starts_on ends_on status program round lead_investor_ids` | link + term type + `external_id` (no `external_id`: always a new row) |

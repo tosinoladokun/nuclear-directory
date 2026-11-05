@@ -14,7 +14,8 @@ module DataQuality::Differences
     # eia_utility_id likewise (#382): a second EIA utility for one company
     # goes to review, never over the stored one.
     "organization" => %w[domain sec_cik eia_utility_id],
-    "facility" => %w[nrc_docket eia_plant_id facility_type status city state country_code],
+    # thermal_power_kw (#721): a research reactor's licensed power, kW thermal, compared as a number.
+    "facility" => %w[nrc_docket eia_plant_id facility_type status city state country_code thermal_power_kw],
     # A link's type and ends say which link it is; these are its details.
     "relationship" => %w[description started_on ended_on],
     "facility_relationship" => %w[ownership_pct description started_on ended_on],
@@ -153,7 +154,7 @@ module DataQuality::Differences
   # "terrapower.com"), percentages as numbers (40 is 40.0), CIKs normalized
   # to 10 zero-padded digits ("320193" is "0000320193", #402).
   def self.comparable(name, value, directory:)
-    if %w[ownership_pct amount_usd amount_offered_usd capacity_mw firm_mw term_years].include?(name) && (number = BigDecimal(value.to_s, exception: false))
+    if %w[ownership_pct amount_usd amount_offered_usd capacity_mw thermal_power_kw firm_mw term_years].include?(name) && (number = BigDecimal(value.to_s, exception: false))
       return number.to_s("F").delete_suffix(".0")
     end
     return value.to_s.strip.upcase if name == "country_code"
