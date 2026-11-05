@@ -42,6 +42,10 @@ class PageStampsCoverageTest < ActionDispatch::IntegrationTest
     cite(verified(FacilityRelationship, organization: partner, facility: @site, relationship_type: "owns"))
     cite(verified(LicensingStage, facility: unit, stage: "operating_licence", nrc_docket: "05000990", effective_on: Date.new(2020, 1, 1)),
       "NRC operating licence 05000990")
+    # Similar companies (#678): a company sharing a role and a technology.
+    peer = cite(verified(Organization, name: "Stamp Peer", slug: "stamp-peer", description: "Also builds reactors."))
+    cite(verified(OrganizationRole, organization: peer, role:))
+    cite(verified(OrganizationTechnology, organization: peer, technology: Technology.find_by!(key: "smr")))
     news = verified(NewsItem, url: "https://www.federalregister.gov/d/stamps", title: "Stamp Co news", published_on: Date.current, summary: "s")
     news.news_mentions.create!(subject: @company)
     news.news_mentions.create!(subject: @site)
@@ -105,6 +109,10 @@ class PageStampsCoverageTest < ActionDispatch::IntegrationTest
     assert_moves(company, "a partner's first source") { cite(partner, "another quote") }
     assert_moves(plant, "a listed company's new source") { cite(partner, "a third quote") }
     assert_moves(company, "a partner's role") { OrganizationRole.where(organization: partner).update_all(updated_at: 1.hour.from_now) }
+    peer = Organization.find_by!(slug: "stamp-peer")
+    assert_moves(company, "a similar company renamed") { peer.update!(name: "Stamp Peer Renamed") }
+    assert_moves(company, "a similar company's role") { OrganizationRole.where(organization: peer).update_all(updated_at: 5.hours.from_now) }
+    assert_moves(company, "a similar company's technology") { OrganizationTechnology.where(organization: peer).update_all(updated_at: 6.hours.from_now) }
     assert_moves(company, "a news item edited") { NewsItem.update_all(updated_at: 2.hours.from_now) }
     assert_moves(plant, "a news item edited") { NewsItem.update_all(updated_at: 3.hours.from_now) }
     assert_moves(company, "a deal term edited") { DealTerm.update_all(updated_at: 4.hours.from_now) }

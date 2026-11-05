@@ -61,6 +61,45 @@ class ListPageSystemTest < ApplicationSystemTestCase
     assert_equal "", find("select[name=state]", match: :first).value
   end
 
+  [ [ 390, 844 ], [ 1144, 900 ], [ 1279, 900 ], [ 1280, 900 ], [ 1440, 900 ] ].each do |width, height|
+    test "the plants list's status chips, columns and rows are audited at #{width} (#614)" do
+      sites = [ [ "Big Generating Station with a Very Long Official Name", "operating", "power_reactor" ], [ "Test Rig", "under_construction", "research_reactor" ],
+                [ "Future Plant", "planned", "power_reactor" ], [ "Closed Site", "shut_down", "power_reactor" ] ]
+      sites.each_with_index do |(name, status, type), n|
+        site = cite!(plant(name, facility_type: type, status:, city: "Oak Ridge", state: "TN"))
+        cite!(plant("#{name} Unit 1", parent: site, capacity_mw: 1100 - n * 200, status:)) if n.zero?
+      end
+      plant("Bare Name")
+      resize_viewport(width, height)
+      visit companies_path(category: "plants")
+      assert_selector ".nd-prow__name", minimum: 5
+      assert_selector ".nd-statuschips .nd-chip", minimum: 4
+      assert_empty page.evaluate_script(AUDIT)
+      assert_equal width <= 1279, page.evaluate_script("getComputedStyle(document.querySelector('.nd-lines__head')).display === 'none'"), "the header row is desktop only"
+      assert_operator page.evaluate_script("document.documentElement.scrollWidth"), :<=, width, "nothing scrolls sideways"
+    end
+  end
+
+  test "a plants row with no capacity has no stray dot before its location on phones, and a row with one has it" do
+    big = cite!(plant("Dotted Station", facility_type: "power_reactor", status: "operating", city: "Oak Ridge", state: "TN"))
+    cite!(plant("Dotted Station Unit 1", parent: big, capacity_mw: 900, status: "operating"))
+    cite!(plant("Undotted Site", facility_type: "power_reactor", status: "shut_down", city: "Athens", state: "AL"))
+    resize_viewport(390, 844)
+    visit companies_path(category: "plants")
+    before = ->(name) { page.evaluate_script("(() => { const row = [...document.querySelectorAll('a.nd-prow')].find((r) => r.textContent.includes('#{name}')); return getComputedStyle(row.querySelector('.nd-prow__place'), '::before').content })()") }
+    assert_equal '"· "', before.("Dotted Station")
+    assert_equal "none", before.("Undotted Site")
+  end
+
+  test "on desktop the location column has room after the right-aligned capacity (#614)" do
+    cite!(plant("Roomy Station", facility_type: "power_reactor", status: "operating", city: "Oak Ridge", state: "TN"))
+    resize_viewport(1440, 900)
+    visit companies_path(category: "plants")
+    gap = page.evaluate_script("(() => { const row = document.querySelector('a.nd-prow'); const place = row.querySelector('.nd-prow__place'); return parseFloat(getComputedStyle(place).paddingLeft) })()")
+    assert_operator gap, :>=, 12, "the location has its own 12px of air"
+    assert_empty page.evaluate_script(AUDIT), "a long location still fits on one line"
+  end
+
   test "the audit catches a wrapping name and a cut-short location with no full text in title" do
     resize_viewport(1440, 900)
     visit companies_path

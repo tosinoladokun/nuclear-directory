@@ -61,13 +61,42 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     Evidence.create!(subject: other, source: Source.first, quote: "t", found_by: "human")
     PageWarmJob.perform_now(pause: 0, debounce: false)
 
-    Organization.find_by!(slug: "warm-co").update!(description: "Builds small reactors.")
+    # A change only this page reads: its own quote (any company change rebuilds every company page, for Similar companies).
+    Evidence.where(subject: Organization.find_by!(slug: "warm-co")).update_all(quote: "Builds small reactors.")
+    DataVersion.expire!
     drawn = []
     counter = ->(*, payload) { drawn << payload[:identifier].to_s[%r{views/(\w+/\w+)}, 1] }
     ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") { PageWarmJob.perform_now(pause: 0, debounce: false) }
     assert_equal [ "companies/show" ], drawn.compact.uniq.reject { |name| name == "home/show" }
     assert_equal 1, drawn.count("companies/show"), "the other company's page is still current"
     assert_operator queries_for("/companies/other-warm-co"), :<=, 4
-    assert_match "Builds small reactors.", (get("/companies/warm-co") && response.body)
+  end
+
+  def stamp_queries
+    count = 0
+    counter = ->(*, payload) { count += 1 if payload[:sql].to_s.include?("md5(concat_ws") }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { yield }
+    count
+  end
+
+  test "stamps are computed once per data change, never on a visit or a quiet tick (Infra)" do
+    assert_match %r{\Adata/}, PageStamps.version(:company, Organization.find_by!(slug: "warm-co").id), "no map yet: the directory's version stands in"
+    assert_operator stamp_queries { PageWarmJob.perform_now(pause: 0, debounce: false) }, :>, 0
+    assert_equal 0, stamp_queries { get "/companies/warm-co" }, "a visit reads its version from the map"
+    assert_response :success
+    assert_equal 0, stamp_queries { PageWarmJob.perform_now(pause: 0) }, "nothing changed: no stamps"
+  end
+
+  test "a map the cache dropped is rebuilt on the next tick; a commit moves the data version even if MAX(updated_at) doesn't" do
+    PageWarmJob.perform_now(pause: 0, debounce: false)
+    data = DataVersion.current
+    Rails.cache.delete([ PageStamps::MAP, data ])
+    assert_operator stamp_queries { PageWarmJob.perform_now(pause: 0, debounce: false) }, :>, 0
+    assert Rails.cache.exist?([ PageStamps::MAP, data ])
+
+    company = Organization.find_by!(slug: "warm-co")
+    company.update_columns(updated_at: 1.year.ago) # an older timestamp: the aggregates alone wouldn't move
+    DirectorySnapshot.expire! # what the commit callback does
+    assert_not_equal data, DataVersion.current
   end
 end

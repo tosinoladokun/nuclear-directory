@@ -48,7 +48,7 @@ Build order: #558, #559, #560, then #556, #557, #561. Homepage: no change (kept 
 - **One row for every list:**
   - Companies: **name · description · location**, in three columns on desktop (name 240px, description the rest, location 170px right-aligned), three lines on phones.
   - No mark, no tags, no connection count on the row. Most connected stays as the sort.
-  - Plants: site ring, name, status mark and word, type and units, MW, location.
+  - Plants: site ring, name, status mark and word, type, MW, location.
 - **Lists sit in a white panel of rows, with no header row** (name, description, location; the filters and rows say what each is). Filters apply as they change (no Apply button; the phone sheet keeps its "Show N results" button).
 - **Short description** (#559):
   - 40 characters at most, measured to fit 330px at 14px (the phone line is the tightest place).

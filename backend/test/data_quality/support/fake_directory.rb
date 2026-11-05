@@ -29,7 +29,7 @@ module FakeDirectory
       one_of!(id:, slug:, name:, site_name:, nrc_docket:, eia_plant_id:)
       Directory::FacilityRef.new(id: @facilities[name], slug: nil, name: name, nrc_docket: nil, eia_plant_id: nil, parent_id: nil,
         verification_status: "verified", verified_by: nil, verified_at: nil, facility_type: nil, status: nil, city: nil, state: nil, country_code: nil,
-        latitude: nil, longitude: nil) if @facilities.key?(name)
+        latitude: nil, longitude: nil, thermal_power_kw: nil) if @facilities.key?(name)
     end
 
     # The fake knows nothing similar; match tests that need it use the real directory.
@@ -100,7 +100,7 @@ module FakeDirectory
     def fill_site_from_unit(unit_id, fields:, evidence:) = nil
 
     # The fake directory keeps no evidence, so nothing is ever re-confirmed.
-    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil, add_evidence: false)
+    def confirm(kind, attributes, source_id:, quote:, in_source: nil, rows_sha256: nil, at: Time.current, source_kind: nil, add_evidence: false, fields: nil)
       Directory::FactWriter::Confirmation.new(outcome: :unsourced)
     end
 
