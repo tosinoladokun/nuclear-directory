@@ -61,7 +61,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "each recent addition gives its place as its page shows it: City, ST, the state alone, or null (#225)" do
+  test "each recent addition gives its place as its page shows it: City, ST, the state alone in full, or null (#225)" do
     @kairos.update!(hq_city: "Alameda", hq_state: "CA")
     @nuscale.update!(hq_city: nil, hq_state: "OR")
     @vogtle.update!(city: "Waynesboro", state: "GA")
@@ -72,7 +72,7 @@ class ApiSnapshotTest < ActionDispatch::IntegrationTest
     places = snapshot["recentlyAdded"].to_h { |entry| [ entry["name"], entry["location"] ] }
 
     assert_equal "Alameda, CA", places["Kairos Power"]
-    assert_equal "OR", places["NuScale Power"]
+    assert_equal "Oregon", places["NuScale Power"], "a state alone is written in full, never a lone code"
     assert_nil places["Duke Energy"], "no HQ stored"
     assert_equal "Waynesboro, GA", places["Vogtle"]
     assert places.key?("Pending Site"), "public for its published unit"

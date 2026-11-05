@@ -10,7 +10,7 @@
         <ul class="nd-instant__list" aria-labelledby="<%= @frame_id %>-companies">
           <% @companies.each do |company| %>
             <% role = @roles[company.id]&.map(&:role)&.find { |r| r.parent_id.nil? } || @roles[company.id]&.first&.role %>
-            <% meta = [ (role_label(role) if role), place(company.hq_city, company.hq_state) ].compact.join(" · ").presence %>
+            <% meta = [ (role_label(role) if role), company_place(company) ].compact.join(" · ").presence %>
             <li>
               <%= link_to company_url_for(company), class: "nd-instant__row" do %>
                 <%= company_square(company, category: @categories[company.id]) %>
