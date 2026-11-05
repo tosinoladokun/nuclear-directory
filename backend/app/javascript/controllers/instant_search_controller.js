@@ -132,7 +132,13 @@ export default class extends Controller {
         square.innerHTML = this.index.icons[item.i] || ""
         const label = make("span", "nd-instant__text")
         label.append(nameElement(item.n, item.sn))
-        if (item.m) label.append(make("span", "type-small", item.m))
+        if (item.m) {
+          const meta = make("span", "type-small", item.m)
+          meta.title = item.m
+          label.append(meta)
+        }
+        // The visible name may be the short one: the link's accessible name keeps the full name.
+        link.setAttribute("aria-label", item.m ? `${item.n}, ${item.m}` : item.n)
         link.append(square, label)
         row.append(link)
         list.append(row)
