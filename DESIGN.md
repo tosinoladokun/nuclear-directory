@@ -202,11 +202,11 @@ What each page type is for, in order of importance. Build and review pages again
 Start a search, or browse the industry by category. **For:** Anyone arriving from a link or a search engine; returning visitors who know what they want.
 
 - **Questions, in order:** 1. Can I find this company or plant here? 2. What does the directory cover? 3. Who are the main companies in each area?
-- **Sections, top to bottom:** Wordmark; Search box + suggestions (one row on phones, scrolling inside itself); Category cards: 9 categories + Plants and sites (a compact grid, 960px at most and centred: two columns from 640px, titles 17px from 1024px, 14px below and 13px under 375px, 24px between rows; an open, collapsible stack on phones); Footer.
+- **Sections, top to bottom:** Wordmark; Search box; Category cards: 9 categories + Plants and sites; the card title, with its count, is the one link to the list, underlined on hover and focus (a compact grid, 960px at most and centred: two columns from 640px, titles 17px from 1024px, 14px below and 13px under 375px, 24px between rows; an open, collapsible stack on phones, where a 44px caret button beside the title collapses the card; no chevrons, no "See all"; without JavaScript every card stays open); Footer (the one row of links, as on every page).
 - **Above the fold:** at 390, wordmark, search, the first category card and the top of the second. At 1440, wordmark, search and the first two rows of cards. The page scrolls on a laptop screen (about 1157px tall at 1440×900): Tosin chose the compact grid over the old no-scroll fit (19 Oct). The last card can sit alone on its row.
 - **Key facts and sources:** Count per category: published companies (plants for Plants and sites); Top 3 per category: most sourced connections; investors by funded companies; Cost: the top 3 per category can sit behind a fragment cache keyed on the latest fact update, if it slows.
-- **Links in:** Search engines and shared links; The wordmark on every page. **Links out:** Category pages (card header, See all); Company and plant profiles (card rows); Search results.
-- **Keep (nothing live is removed):** Everything on today's homepage stays: wordmark, search, suggestions, every category card, footer; Tosin's homepage decisions stand (#362): no 'How we pick' link, no counts in phone card headers; Don't add a headline or marketing copy above search.
+- **Links in:** Search engines and shared links; The wordmark on every page. **Links out:** Category pages (the card title); Company and plant profiles (card rows); Search results.
+- **Keep (nothing live is removed):** Everything on today's homepage stays: wordmark, search, every category card, footer (the search suggestions were cut by Tosin on #700, 2 Nov); Tosin's homepage decisions stand (#362): no 'How we pick' link, no counts in phone card headers; Don't add a headline or marketing copy above search.
 - **Spec:** #362
 
 ### Company list (`/companies`)
@@ -330,7 +330,7 @@ Find a company, plant or site by name, alias or topic. **For:** Everyone; it's t
 - **Sections, top to bottom:** Instant results under the box: Companies, Plants and sites (5 each), All results ›; Results page: title "Results for …" + count; Filters; Companies; Plants and sites; No results: the 3 closest names by trigram match (#223) + Report a missing company.
 - **Above the fold:** at 390, the instant results; on the results page, the title, Filters and the first 4 results. At 1440, instant results in place; the results page through about 10 results.
 - **Key facts and sources:** Matches name, aliases, legal name, plant and unit names; Plain group labels; no record types.
-- **Links in:** The search box on every page; Homepage suggestions. **Links out:** Profiles (units land on their plant row); Corrections (missing company).
+- **Links in:** The search box on every page. **Links out:** Profiles (units land on their plant row); Corrections (missing company).
 - **Keep (nothing live is removed):** Everything search shows today stays; Add the no-results suggestions and Report a missing company.
 - **Spec:** #223
 
@@ -340,10 +340,9 @@ Everyone working on one technology tag: fission, fusion, smr, and next htgr and 
 
 - **Questions, in order:** 1. Who's working on it? 2. What is it, in one line? 3. Which plants or sites use it?
 - **Sections, top to bottom:** the category page's layout (#560): the index with no entry selected; Title: technology name + count (no square); One-line definition from the Tag `about`; Companies, in the same rows; Plants and sites using it (left out while unit technology is empty: 0 of 173 today); Footer.
-- **SMR has no tag page.** The "SMR" homepage suggestion runs a search for companies tagged as SMR (an engineering fix: `?tag=smr` shows all companies today).
 - **Above the fold:** at 390, title, definition, the first 4 companies. At 1440, title, definition, about 8 companies.
 - **Key facts and sources:** Definition: plain, one line (VOICE.md); Companies tagged with it; plants whose units use it, once unit technology is populated; URL scheme: ?tag=… as shipped in #281 (directory#index). ?technology=… stays a working, combinable filter (it includes coolant values such as molten_salt that aren't tags), so it isn't redirected; the only legacy redirect is ?category=fusion to ?tag=fusion; Indexing: a noindex meta below 5 results, and the sitemap lists only tags with 5 or more.
-- **Links in:** Technology tags on profiles; Homepage suggestions (SMR); Search engines, only when it has 5+ results. **Links out:** Profiles; The full list with the filter.
+- **Links in:** Technology tags on profiles; Search engines, only when it has 5+ results. **Links out:** Profiles; The full list with the filter.
 - **Keep (nothing live is removed):** New page (confirmed); nothing removed; Indexed by search engines only with 5+ results (noindex below that).
 - **Spec:** new
 
@@ -479,7 +478,7 @@ Every page also has the site header (`nd-sitebar`: wordmark and search box; not 
 
 Square brackets mark a component shown only when its data exists, or one that's approved and coming.
 
-- **Home (`/`):** wordmark; search box (large); suggestions (one row on phones, scrolling inside itself); category cards (a zero count hides its card); footer. **A company appears in only one card** (Tosin, 18 Oct): cards fill in display order, and each skips names an earlier card already shows. A header count stays the category's real total. A card left with fewer than three names shows what's left; with none left, it keeps its header and "See all".
+- **Home (`/`):** wordmark; search box (large); category cards, the title with its count linking to the list (a zero count hides its card); footer. **A company appears in only one card** (Tosin, 18 Oct): cards fill in display order, and each skips names an earlier card already shows. A header count stays the category's real total. A card left with fewer than three names shows what's left; with none left, it keeps its title and count.
 - **Company list, category and tag pages (`/companies`, `?category=`, `?tag=`):** header; category pills (current on a category page); list head; filters (a sheet on phones); list rows, or the empty state; [with a search, two groups]; footer.
 - **Company profile:** header; breadcrumb; profile header; key facts (Type, record facts, roles, technology, headquarters, founded, parents, subsidiaries, source line); [connections map: after key facts on phones; on desktop it runs full width under the profile header, above key facts and the lists]; the category's own sections; Deals and links; Plants and sites; [missing facts]; Sources with the cite line; Report a correction; Similar companies (up to five, in the shared bare company row, no count); footer.
 - **Plant profile:** header; breadcrumb; profile header; [owner and operator sentence]; key facts ("About this plant" line); [connections map: after key facts on phones; on desktop it runs full width under the profile header, above key facts and the lists]; Companies; units table; [missing facts]; Sources; footer.
