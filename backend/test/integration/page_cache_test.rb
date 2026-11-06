@@ -76,6 +76,20 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     assert_equal [ "Building Reactor Two" ], names.call, "and a second visit to a variant is the same, from the cache"
   end
 
+  test "every filter the listing accepts changes its cache key" do
+    base = DirectoryListing.new(category: "plants").cache_key_parts
+    { tag: "smr", technology: "smr", state: "TX", sort: "name", role: "reactor_vendor", status: "operating", type: "research_reactor", reactor: "BWR" }.each do |filter, value|
+      category = filter == :role ? "reactor-developers" : "plants"
+      variant = DirectoryListing.new(category:, filter => value)
+      assert_not_equal base, variant.cache_key_parts, "#{filter} must be part of the page cache key" if variant.public_send(filter).present?
+    end
+    DirectoryListing.instance_method(:initialize).parameters.map(&:last).each do |name|
+      next if %i[q fuzzy category].include?(name)
+
+      assert_respond_to DirectoryListing.new, name, "a filter argument (#{name}) the key can't see"
+    end
+  end
+
   test "the companies list is cached per filter; a search never is" do
     get "/companies"
     fresh = body

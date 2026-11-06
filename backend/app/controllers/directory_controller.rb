@@ -31,9 +31,9 @@ class DirectoryController < ApplicationController
     # Up to CACHED_PAGES pages of rows: ?shown=4..1000 would each be a full list under its own key (Infra).
     if !@listing.searching? && request.format.html? && !turbo_frame_request? && @shown <= CACHED_PAGES * PAGE
       listing, shown = @listing, @shown
-      # Every filter the list accepts is in the key (status, type and reactor too: without them one cached page answered every
-      # variant of the plants list), and only the values it accepted (a junk parameter is dropped), so the keys stay few.
-      @page_key = [ "companies", listing.category&.key, listing.tag&.key, listing.technology, listing.state, listing.sort, listing.role, listing.status, listing.type, listing.reactor, shown ]
+      # The key is built from the listing's accepted filters (DirectoryListing#cache_key_parts), so only values it accepted
+      # count (a junk parameter is dropped) and a new filter can't be left out.
+      @page_key = [ "companies", *listing.cache_key_parts, shown ]
       @load_list = -> { self.class.list(listing, shown, counts: true) }
       return
     end
