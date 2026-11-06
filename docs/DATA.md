@@ -100,7 +100,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 
 | Field | Rule |
 |---|---|
-| Capacity | **MW, net summer**, from EIA-860M's "Net Summer Capacity (MW)", stored to 0.1 MW. Shown as "MW", with the note "Net summer capacity, from EIA" on plant pages (Tosin, D2). Nameplate is never mixed in. A site's capacity is the sum of its units, never stored. |
+| Capacity | **MWe (electric), net summer**, from EIA-860M's "Net Summer Capacity (MW)", stored to 0.1 MW and shown as MWe with the note "Net summer capacity, from EIA" on plant pages (Tosin, D2; now MWe, not MW, #724). Only power-reactor units have it (research reactors use Thermal power, below). A site's capacity is the sum of its units, never stored. Nameplate is never mixed in. |
 | Thermal power | **kW thermal, licensed** (`thermal_power_kw`, #721), exactly as the source states it, so the value matches its quote: NRC's "Power Level (kW): 6,000" is 6000. From the reactor's NRC licence or NRC page. For research and test reactors (a few watts up to 20,000 kW). Shown as thermal power, never mixed with or converted to Capacity (MWe). Blank when no source states it |
 | Headquarters | **Always aim for a city** (Tosin, 5 Nov). `hq_city` plus `hq_state` for a US company, shown "Richland, WA"; outside the US `hq_city` plus the country, shown "Paris, France". If no city can be sourced, the state alone is stored and shown written out in full ("Virginia"); a record with only a state is **not complete** while a sourced city exists. Never a guess: the quote states the place (a company's own contact or about page, SEC's business address, the NRC licensee address). A subsidiary's or branch's registered address is not the headquarters |
 | Plant status | `operating`, `not_operating`, `under_construction`, `planned`, `shut_down`, `decommissioning`. Blank means not stated, shown as "Not stated". Never guessed. A power reactor is `operating` if NRC lists it and its daily status report shows power above 0% on at least one of the last 365 days; a refuelling outage doesn't change that. It's `not_operating` ("Not operating") if it's licensed but at 0% on all 365 days, like Palisades in 2026. That isn't permanent, which is `shut_down`. A restart plan goes only in a sourced note (#296) |
@@ -265,7 +265,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | Reactor design types: planned values, roadmap only | Tosin | #238, #263 |
 | Display names are ours; a source's spelling never renames | PM, Backend | #241 |
 | Company display name is the brand it uses; every other spelling is an alias (D1) | Tosin | #238 |
-| Capacity is shown as "MW", noted "Net summer capacity, from EIA" on plant pages (D2) | Tosin | #238 |
+| Capacity is shown as "MWe" (now MWe, not MW; Site, 3 Nov), noted "Net summer capacity, from EIA" on plant pages (D2) | Tosin | #238 |
 | A counted deal is a signed power deal; frameworks and MOUs are listed separately by stage | Tosin | #253, #255 |
 | Nuclear Capital Partners is venture capital (#250) | Tosin | #250 |
 | Government and research includes independent research organizations (`research_organization`), e.g. EPRI | Tosin | #322, #341 |
