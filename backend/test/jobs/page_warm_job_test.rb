@@ -61,8 +61,9 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     Evidence.create!(subject: other, source: Source.first, quote: "t", found_by: "human")
     PageWarmJob.perform_now(pause: 0, debounce: false)
 
-    # A change only this page reads: its own quote (any company change rebuilds every company page, for Similar companies).
-    Evidence.where(subject: Organization.find_by!(slug: "warm-co")).update_all(quote: "Builds small reactors.")
+    # A change only this page reads: another name for it (a company, its roles, technologies or sources rebuild every
+    # company page, for Similar companies).
+    Organization.find_by!(slug: "warm-co").aliases.create!(alias: "Warm Company Holdings")
     DataVersion.expire!
     drawn = []
     counter = ->(*, payload) { drawn << payload[:identifier].to_s[%r{views/(\w+/\w+)}, 1] }

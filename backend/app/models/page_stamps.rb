@@ -60,7 +60,12 @@ module PageStamps
   # The role and technology names every page labels things with: small tables, read whole.
   LABELS = [ "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM roles t)", "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM technologies t)" ].freeze
 
-  SIMILAR = %w[organizations organization_roles organization_technologies].map { |table| "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM #{table} t)" }.freeze
+  SIMILAR = [
+    *%w[organizations organization_roles organization_technologies].map { |table| "(SELECT concat(MAX(t.updated_at), '/', COUNT(*)) FROM #{table} t)" },
+    # Which companies have their own source (#730: Similar companies shows a peer's HQ only then). Uncorrelated, so
+    # Postgres computes it once per query, not once per company.
+    "(SELECT concat(COUNT(*), '/', SUM(hashtext(concat_ws('|', e.id, e.subject_id, e.source_id, e.quote)))) FROM evidence e WHERE e.subject_type = 'Organization')"
+  ].freeze
 
   def self.digest(parts) = "md5(concat_ws('|', #{(parts + LABELS).join(', ')}))"
 
