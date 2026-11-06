@@ -52,6 +52,30 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     assert fresh_cards.present?
   end
 
+  # Tosin, 5 Nov: the status chips and the type and reactor filters on Plants and sites did nothing, because a cached page
+  # was served for every variant of them.
+  test "the plants list is cached per status, type and reactor, not once for all of them" do
+    require_relative "../support/directory_builders"
+    extend DirectoryBuilders
+    cite!(plant("Operating Reactor One", facility_type: "power_reactor", status: "operating", reactor_type: "PWR", city: "Austin", state: "TX"))
+    cite!(plant("Building Reactor Two", facility_type: "power_reactor", status: "under_construction", reactor_type: "BWR", city: "Austin", state: "TX"))
+    cite!(plant("Test Research Rig", facility_type: "research_reactor", status: "operating", city: "Austin", state: "TX"))
+    names = -> { css_select("a.nd-prow .nd-prow__name").map { |node| node.text.strip }.sort }
+
+    get "/companies?category=plants"
+    assert_equal [ "Building Reactor Two", "Operating Reactor One", "Test Research Rig" ], names.call
+    get "/companies?category=plants&status=under_construction"
+    assert_equal [ "Building Reactor Two" ], names.call, "the status chip filters"
+    get "/companies?category=plants&status=operating"
+    assert_equal [ "Operating Reactor One", "Test Research Rig" ], names.call
+    get "/companies?category=plants&type=research_reactor"
+    assert_equal [ "Test Research Rig" ], names.call, "the type filter"
+    get "/companies?category=plants&reactor=BWR"
+    assert_equal [ "Building Reactor Two" ], names.call, "the reactor filter"
+    get "/companies?category=plants&status=under_construction"
+    assert_equal [ "Building Reactor Two" ], names.call, "and a second visit to a variant is the same, from the cache"
+  end
+
   test "the companies list is cached per filter; a search never is" do
     get "/companies"
     fresh = body
