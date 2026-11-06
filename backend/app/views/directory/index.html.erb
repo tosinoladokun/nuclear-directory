@@ -68,7 +68,7 @@
     <% end %>
 
   <div class="nd-listpage__main">
-  <%= render "shared/page_head", name: heading, count: (total if listing.searching? || listing.filtered? || listing.tag), about: (list_page.description(1) if category_page),
+  <%= render "shared/page_head", name: heading, count: (total if listing.searching? || listing.filtered? || listing.tag),
         square: (listing.category ? bucket_icon(listing.category, size: 24) : tag_icon),
         bucket: (listing.category ? (listing.category unless listing.category.plants) : tag_bucket) %>
 
@@ -123,7 +123,7 @@
           <h2 id="filters-title" class="type-body-strong">Filters</h2>
           <button type="button" class="nd-btn nd-btn--ghost nd-btn--sm" popovertarget="filter-sheet" popovertargetaction="hide" data-action="filter-sheet#close">Close filters</button>
         </div>
-        <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#count" } do %>
+        <%= form_with url: companies_path, method: :get, class: "nd-filters", data: { filter_sheet_target: "form", action: "change->filter-sheet#changed" } do %>
           <%= hidden_field_tag :category, listing.category&.key, id: nil if listing.category %>
           <%= hidden_field_tag :tag, listing.tag.key, id: nil if listing.tag %>
           <%# A category's role (Reactor designer, Project developer) stays through the filters and their count. %>
@@ -205,9 +205,11 @@
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
   </turbo-frame>
-  <nav class="nd-quiet" aria-label="About this list">
-    <%= link_to correction_url_for(listing.category&.plants ? "A missing plant" : "A missing company"), rel: "nofollow" do %><%= icon("flag", size: 16) %><%= listing.category&.plants ? "Missing a plant?" : "Missing a company?" %> Report a correction<% end %>
-  </nav>
+  <% if listing.category&.plants %>
+    <nav class="nd-quiet" aria-label="About this list">
+      <%= link_to correction_url_for("A missing plant"), rel: "nofollow" do %><%= icon("flag", size: 16) %>Add a plant<% end %>
+    </nav>
+  <% end %>
   </div>
   </div>
 </main>
