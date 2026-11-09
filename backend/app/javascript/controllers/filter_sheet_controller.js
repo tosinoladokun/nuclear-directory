@@ -87,15 +87,21 @@ export default class extends Controller {
     clearTimeout(this.submitTimer)
     this.submitTimer = setTimeout(() => {
       const name = event?.target?.name
-      if (name) sessionStorage.setItem("nd-filter-focus", name)
+      // Storage can be blocked (some private modes): losing the focus hint must never break the filters.
+      try { if (name) sessionStorage.setItem("nd-filter-focus", name) } catch { /* ignore */ }
       this.formTarget.requestSubmit()
     }, 500)
   }
 
   restoreFocus() {
-    const name = sessionStorage.getItem("nd-filter-focus")
+    let name = null
+    try {
+      name = sessionStorage.getItem("nd-filter-focus")
+      sessionStorage.removeItem("nd-filter-focus")
+    } catch {
+      return
+    }
     if (!name) return
-    sessionStorage.removeItem("nd-filter-focus")
     const control = [...this.formTarget.elements].find((el) => el.name === name)
     if (control && control.getClientRects().length) control.focus({ preventScroll: true })
   }

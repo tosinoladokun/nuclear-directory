@@ -24,21 +24,48 @@ class DataQuality::Plugins::SecTickerCiks < DataQuality::Plugin
     list = upstream.content_text
     entries = JSON.parse(list).values.group_by { |entry| entry["ticker"].to_s.upcase }
     stats = Hash.new(0)
-    @directory.organizations_with_us_ticker_without_cik.each do |_id, name, ticker|
-      found = entries[ticker.to_s.upcase]
-      unless found&.one?
-        stats["not in the list"] += 1
-        stats["withdrawn"] += 1 if withdraw("#{TICKERS_URL}##{ticker.upcase}")
-        next
+    companies = @directory.organizations_with_us_ticker_without_cik
+    # A ticker two directory companies share (different US exchanges) is no one's to claim.
+    shared = companies.map { |_, _, ticker| ticker.to_s.upcase }.tally.select { |_, count| count > 1 }.keys
+    current = {}
+    companies.each do |id, name, ticker|
+      ticker = ticker.to_s.upcase
+      found = entries[ticker]
+      next stats["ticker on several companies"] += 1 if shared.include?(ticker)
+      next stats["not in the list"] += 1 unless found&.one?
+
+      cik = found.first["cik_str"].to_i
+      holder = cik.positive? && @directory.organization(sec_cik: format("%010d", cik))
+      # The CIK already on another record: no claim (approving it would land on that record); a person sees the stat.
+      next (stats["CIK already on another record"] += 1) if holder && holder.id != id
+
+      current[ticker] = [ id, name, found.first.slice("cik_str", "ticker", "title").to_json ]
+    end
+    current.each do |ticker, (id, name, line)|
+      source = Source.find_or_initialize_by(url: "#{TICKERS_URL}##{ticker}")
+      # The ticker now belongs to another company: the old one's open claims are withdrawn, and the entry is read for the new one.
+      if source.persisted? && source.enrich_organization_id && source.enrich_organization_id != id
+        withdraw(source)
+        source.update!(enrich_organization_id: id, title: "SEC ticker list: #{ticker} (#{name})", crawl_status: "ok", status_reason: nil,
+          extracted_sha256: nil, extracted_rows_sha256: nil)
+        next stats["new company for ticker"] += 1
+      end
+      if source.persisted? && source.content_text == line
+        # Withdrawn earlier, back unchanged: extracted again (its content digest kept).
+        source.update!(crawl_status: "ok", status_reason: nil, extracted_sha256: nil, extracted_rows_sha256: nil) unless source.crawl_ok?
+        source.update!(enrich_organization_id: id) unless source.enrich_organization_id
+        next stats["unchanged"] += 1
       end
 
-      line = found.first.slice("cik_str", "ticker", "title").to_json
-      source = Source.find_or_initialize_by(url: "#{TICKERS_URL}##{ticker.upcase}")
-      next stats["unchanged"] += 1 if source.persisted? && source.content_text == line
-
-      source.update!(source_kind:, title: "SEC ticker list: #{ticker.upcase} (#{name})", content_text: line,
-        content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", fetched_at: Time.current)
+      source.update!(source_kind:, title: "SEC ticker list: #{ticker} (#{name})", content_text: line, enrich_organization_id: id,
+        content_sha256: Digest::SHA256.hexdigest(line), crawl_status: "ok", status_reason: nil, fetched_at: Time.current)
       stats["stored"] += 1
+    end
+    # Any stored entry no longer current (ticker changed or gone, shared, CIK elsewhere) with claims still open: withdrawn.
+    Source.where(source_kind:).crawl_ok.find_each do |source|
+      next if current.key?(source.url.split("#", 2).last)
+
+      stats["withdrawn"] += 1 if withdraw(source)
     end
     stats.to_h
   rescue JSON::ParserError
@@ -48,30 +75,30 @@ class DataQuality::Plugins::SecTickerCiks < DataQuality::Plugin
   def extract(source, _run)
     entry = JSON.parse(source.content_text.to_s) rescue (return [])
     ticker = entry["ticker"].to_s.upcase
-    company = @directory.organizations_with_us_ticker_without_cik.find { |_, _, each| each.to_s.upcase == ticker } or return []
+    matches = @directory.organizations_with_us_ticker_without_cik.select { |_, _, each| each.to_s.upcase == ticker }
+    company = matches.first if matches.one?
+    return [] unless company
     return [] if entry["cik_str"].to_i.zero?
 
     cik = format("%010d", entry["cik_str"].to_i)
-    claim = { kind: "organization", quote: source.content_text, payload: { "name" => company[1], "sec_cik" => cik } }
-    # The CIK already on another record (a duplicate, a parent): a person decides, it's never attached there.
     holder = @directory.organization(sec_cik: cik)
-    if holder && holder.id != company[0]
-      claim.merge!(status: "needs_review", notes: "SEC CIK #{cik} is already on #{holder.name} (id #{holder.id}); check which record it belongs to")
-    end
-    [ claim ]
+    return [] if holder && holder.id != company[0]
+
+    [ { kind: "organization", quote: source.content_text, payload: { "name" => company[1], "sec_cik" => cik } } ]
   end
 
   def max_dropped_share(_source) = 1.0
 
   private
-    # SEC's list no longer gives the ticker once: its entry stops being read,
-    # and its claims still waiting go to a person (decided ones stay).
-    def withdraw(url)
-      source = Source.find_by(url:) or return false
-      return false unless source.crawl_ok?
+    # An entry that no longer applies: it stops being read, and its claims
+    # still open go to a person with no recommendation left standing
+    # (decided ones stay). Only when something is still open.
+    def withdraw(source)
+      open = source.candidates.where(status: %w[new matched needs_review])
+      return false unless open.exists?
 
-      source.update!(crawl_status: "needs_human", status_reason: "SEC's ticker list no longer gives this ticker exactly once")
-      source.candidates.where(status: %w[new matched]).update_all(status: "needs_review", updated_at: Time.current)
+      source.update!(crawl_status: "needs_human", status_reason: "SEC's ticker list no longer gives this company this CIK")
+      open.update_all(status: "needs_review", ai_recommendation: nil, dq_recommendation: nil, updated_at: Time.current)
       true
     end
 
