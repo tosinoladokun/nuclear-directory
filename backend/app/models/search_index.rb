@@ -96,7 +96,7 @@ class SearchIndex
         status: (plant.status if sourced))
       compact("k" => "p", "s" => plant.slug, "n" => plant.name, "a" => [ *aliases[plant.id], *unit_names[plant.id] ].compact_blank.uniq(&:downcase).reject { |name| name.casecmp?(plant.name) }.presence,
         "i" => icon_key("nd-#{name}-20") { h.icon(name, set: :nd, size: 20) },
-        "m" => ([ h.facility_type_label(plant.facility_type), h.place(plant.city, plant.state) ].compact.join(" · ").presence if shown),
+        "m" => ([ h.facility_type_label(plant.facility_type), h.location(plant.city, plant.state) ].compact.join(" · ").presence if shown),
         "c" => plant.try(:connections_count).to_i,
         "x" => [ plant.nrc_docket, plant.eia_plant_id, *units[plant.id] ].compact_blank.uniq.presence)
     end

@@ -24,7 +24,7 @@
         <div class="nd-label nd-instant__group" id="<%= @frame_id %>-plants">Plants and sites</div>
         <ul class="nd-instant__list" aria-labelledby="<%= @frame_id %>-plants">
           <% @plants.each do |plant| %>
-            <% meta = ([ facility_type_label(plant.facility_type), place(plant.city, plant.state) ].compact.join(" · ").presence if plant.verified?) %>
+            <% meta = ([ facility_type_label(plant.facility_type), location(plant.city, plant.state) ].compact.join(" · ").presence if plant.verified?) %>
             <li>
               <%= link_to plant_url_for(plant), class: "nd-instant__row" do %>
                 <span class="nd-catsq" aria-hidden="true"><%= icon(site_icon_name((plant.facility_type if plant.verified? && plant.try(:site_sourced)),
