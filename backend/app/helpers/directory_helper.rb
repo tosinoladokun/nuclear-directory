@@ -92,6 +92,10 @@ module DirectoryHelper
 
   def company_url_for(organization) = company_path(slug: organization.slug)
 
+  # The trail on a company or plant page (#708): [[label, path], ...], the page itself last with no path. A company with no
+  # category has Nuclear Directory and itself.
+  def page_trail(category, name) = [ [ "Nuclear Directory", root_path ], (category && [ category.name, directory_url_for(category:) ]), [ name, nil ] ].compact
+
   # "Report a correction", prefilled with what it's about and where it was.
   CORRECTIONS_EMAIL = "hello@nuclear-directory.org".freeze
   def correction_url_for(subject, page: request.path) = new_correction_path(subject:, page:)
