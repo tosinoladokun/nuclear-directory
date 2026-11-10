@@ -26,6 +26,9 @@ module CompanySuggestion
     url = text if text.match?(%r{\Ahttps?://\S+\z}i)
     name = url ? (URI.parse(url).host.to_s.delete_prefix("www.").presence || text rescue text) : text
     lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(text)}", label: LABEL, url:) or return
+    # The same line again while it's being found: one find is enough (Infra).
+    return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.updated_at > 5.minutes.ago
+
     lead.update!(status: "new", note: LeadFinding::FINDING, decided_by: by, decided_at: Time.current, reason: nil,
       record_type: nil, record_id: nil, find_attempts: 0, next_find_at: nil)
     LeadFindJob.perform_later(lead.id)

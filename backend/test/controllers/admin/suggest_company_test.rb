@@ -37,6 +37,11 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     assert_equal "Added 3 leads. They're being found now.", flash[:notice]
   end
 
+  test "the same lead again while it's being found isn't queued twice" do
+    assert_enqueued_jobs(1, only: LeadFindJob) { 2.times { add("Kairos Power") } }
+    travel(6.minutes) { assert_enqueued_jobs(1, only: LeadFindJob) { add("Kairos Power") } }
+  end
+
   test "a link is kept as the lead's source, named by its site" do
     add("https://www.linkedin.com/company/oklo-inc/")
     lead = Lead.find_by!(normalized_name: "linkedin com")

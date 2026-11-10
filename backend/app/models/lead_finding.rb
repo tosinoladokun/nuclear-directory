@@ -12,6 +12,15 @@ module LeadFinding
   RETRY_AFTER = 1.week
   TRIES = 4 # weekly for a month
   PER_NIGHT = 20
+  # Finds a day at most, nightly and added ones together, so a pasted list can't use up the search quota (Infra).
+  PER_DAY = 60
+  WAITING = "Waiting: today's finds are used up; tried tonight".freeze
+
+  # Counts one find against today's limit; false when it's reached.
+  def self.take_today(now: Time.current)
+    key = "lead_find/#{now.to_date.iso8601}"
+    Rails.cache.increment(key, 1, expires_in: 2.days, initial: 0).to_i <= PER_DAY
+  end
   FINDING = "Finding it".freeze
   UNCONFIRMED = "Couldn't confirm".freeze
 

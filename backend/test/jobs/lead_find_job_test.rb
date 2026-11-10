@@ -45,4 +45,17 @@ class LeadFindJobTest < ActiveJob::TestCase
     LeadFindJob.perform_now(l.id)
     assert_equal [ "new", 0, "Waiting for the finder" ], l.reload.values_at(:status, :find_attempts, :note)
   end
+
+  test "at most PER_DAY finds a day; past that a lead waits for tonight, its tries untouched" do
+    store, Rails.cache = Rails.cache, ActiveSupport::Cache::MemoryStore.new
+    LeadFindJob.finder = ->(*) { Found.new(outcome: :proposed, reason: nil) }
+    LeadFinding::PER_DAY.times { LeadFinding.take_today }
+    l = lead("Over Co")
+    LeadFindJob.perform_now(l.id)
+    assert_equal [ "new", 0, LeadFinding::WAITING ], l.reload.values_at(:status, :find_attempts, :note)
+    travel(1.day) { LeadFindJob.perform_now(l.id) }
+    assert_equal "added", l.reload.status
+  ensure
+    Rails.cache = store
+  end
 end

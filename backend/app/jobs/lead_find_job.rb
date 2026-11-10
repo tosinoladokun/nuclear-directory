@@ -22,6 +22,8 @@ class LeadFindJob < ApplicationJob
     # Before Crawl's finder ships, a lead waits untouched (no tries used up).
     return lead.update!(note: "Waiting for the finder") unless finder
 
+    return lead.update!(note: LeadFinding::WAITING) unless LeadFinding.take_today
+
     LeadFinding.start(lead)
     found = finder.call(lead).to_h.symbolize_keys
     LeadFinding.record(lead, **found.slice(:outcome, :organization_id, :candidate_id, :reason, :name, :website))
