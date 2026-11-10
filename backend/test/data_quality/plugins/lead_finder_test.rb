@@ -153,4 +153,11 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal 1, slept.size
     assert_operator slept.first, :<=, Plugin::SEARCH_GAP
   end
+
+  test "a Brave 429 makes the lead busy, not 'no website found' (Infra)" do
+    Plugin.class_variable_set(:@@last_search, nil)
+    stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 429)
+    real = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { })
+    assert_equal :busy, Plugin.call(lead("Ghost Nuclear").id, finder: real).outcome
+  end
 end

@@ -83,6 +83,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
       return propose(name, website, page, found)
     end
+    return outcome(:busy, name:, reason: "The search service was busy; tried again later", found:) if @search_failed && !found["checked"]
+
     unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company" : "No website found", found)
   end
 
@@ -227,10 +229,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         http.get(uri.request_uri, { "X-Subscription-Token" => @search_key, "Accept" => "application/json",
           "User-Agent" => DataQuality::Fetcher::USER_AGENT })
       end
+      # A 429 or a server error is a blip: noted, so the lead is "busy" (not a try), never "no website" (Infra).
+      @search_failed = true unless response.is_a?(Net::HTTPSuccess) || response.code.to_i.between?(400, 428)
       return [] unless response.is_a?(Net::HTTPSuccess)
 
       Array(JSON.parse(response.body).dig("web", "results")).map { |result| result["url"].to_s }
     rescue JSON::ParserError, Net::OpenTimeout, Net::ReadTimeout
+      @search_failed = true
       []
     end
 
