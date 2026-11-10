@@ -65,6 +65,8 @@ Rails.application.routes.draw do
     post "inbox/records/:type/:id/:decision" => "inbox#decide_record", as: :inbox_decide_record,
       constraints: { type: /Organization|Facility/, id: /\d+/, decision: /yes|no/ }
     post "inbox/undo" => "inbox#undo", as: :inbox_undo
+    # Suggest a company (#752): a name, website or link; found in the background.
+    post "inbox/suggest" => "inbox#suggest", as: :inbox_suggest
     post "inbox/:candidate_id/:decision" => "inbox#decide", as: :inbox_decide, constraints: { decision: /yes|no/ }
     get "today" => "today#show", as: :today
     post "today/list" => "today#list", as: :today_list

@@ -34,6 +34,16 @@ class Admin::InboxController < Admin::BaseController
     redirect_to admin_inbox_path
   end
 
+  # Suggest a company (#752): found in the background; it comes back as a Create, or as couldn't confirm.
+  def suggest
+    if CompanySuggestion.suggest(params[:suggestion], by: actor)
+      flash[:notice] = "Finding it. It shows here when it's ready."
+    else
+      flash[:alert] = "Type a company name, its website or a link (#{CompanySuggestion::MAX} characters at most)."
+    end
+    redirect_to admin_inbox_path
+  end
+
   # Create or No on a pending company or plant that has no open claim.
   def decide_record
     type, id = params[:type], params[:id].to_i

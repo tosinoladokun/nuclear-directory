@@ -16,6 +16,28 @@
   <p class="type-body m-0"><%= total.zero? ? "Nothing to decide today." : "#{total} to decide. Nothing goes live until you say yes." %></p>
 </div>
 
+<%= form_with url: admin_inbox_suggest_path, class: "nd-row", aria: { label: "Suggest a company" } do %>
+  <%= label_tag :suggestion, "Suggest a company", class: "sr-only" %>
+  <%= text_field_tag :suggestion, nil, class: "nd-input type-input", placeholder: "Suggest a company: name, website or link", maxlength: CompanySuggestion::MAX, required: true %>
+  <%= submit_tag "Find", class: "nd-btn type-ui", name: nil %>
+<% end %>
+
+<% suggestions = CompanySuggestion.shown.to_a %>
+<% if suggestions.any? %>
+  <section class="nd-stack" aria-labelledby="inbox-suggestions">
+    <h2 id="inbox-suggestions" class="type-admin-h2 m-0">Your suggestions <span class="type-count"><%= suggestions.size %></span></h2>
+    <ul class="nd-stack m-0 p-0 list-none">
+      <% suggestions.each do |lead| %>
+        <li class="nd-inbox__recent" id="suggestion-<%= lead.id %>">
+          <span class="type-body-strong"><%= lead.name %></span>
+          <span class="type-body"><%= lead.note %></span>
+          <% if lead.record %><%= link_to "Open it", admin_fact_path(type: lead.record_type, id: lead.record_id), class: "nd-link type-small whitespace-nowrap" %><% end %>
+        </li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
 <% OwnerInbox::SECTIONS.each do |key| %>
   <% entries = sections[key] %>
   <% records = key == "new_record" ? @inbox.records : [] %>
