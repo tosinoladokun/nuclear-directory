@@ -72,4 +72,11 @@ class OwnerInboxCapTest < ActiveSupport::TestCase
   ensure
     silence_warnings { OwnerInbox.const_set(:CREATES_A_DAY, 10) }
   end
+
+  test "the most complete come first (website, description, HQ), then the best-sourced" do
+    well_sourced = new_company("Many Pages Co", pages: 3)
+    complete = new_company("Complete Co")
+    complete.update_columns(website: "https://complete.example", description: "Builds reactors.", hq_city: "Austin")
+    assert_equal [ complete.id, well_sourced.id ], OwnerInbox.new.ranked_companies.first(2)
+  end
 end

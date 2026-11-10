@@ -66,10 +66,18 @@ class OwnerInbox
   # The new-company claim groups (a company's pages may give different fields, so a company can have several).
   def company_groups = groups.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
 
-  # The new companies with open claims, by company: best-sourced first (most distinct pages naming it), then newest.
+  # What makes a new company complete enough to Create without gaps (Data Quality, 10 Nov).
+  COMPLETE = %w[website description hq_city].freeze
+
+  # The new companies with open claims, by company: most complete first (website, description, HQ, on the
+  # record or in its claims), then best-sourced (most distinct pages naming it), then newest.
   def ranked_companies
-    @ranked_companies ||= company_groups.flat_map { |_, copies| copies }.group_by(&:subject_id)
-      .sort_by { |id, claims| [ -claims.map(&:source_id).uniq.size, -claims.map(&:id).max ] }.map(&:first)
+    @ranked_companies ||= begin
+      by_company = company_groups.flat_map { |_, copies| copies }.group_by(&:subject_id)
+      stored = Organization.where(id: by_company.keys).pluck(:id, *COMPLETE).to_h { |id, *values| [ id, COMPLETE.zip(values).to_h ] }
+      complete = ->(id, claims) { COMPLETE.count { |field| stored.dig(id, field).present? || claims.any? { |c| c.payload[field].present? } } }
+      by_company.sort_by { |id, claims| [ -complete.call(id, claims), -claims.map(&:source_id).uniq.size, -claims.map(&:id).max ] }.map(&:first)
+    end
   end
 
   # Today's share of them.
