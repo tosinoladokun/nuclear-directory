@@ -44,8 +44,18 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     # (NUCLEAR_ENERGY).
     "small_business" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.049" ], min_amount: 100_000,
       keywords: [ "nuclear reactor", "advanced reactor", "nuclear fuel", "nuclear power", "spent fuel", "nuclear waste",
-        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt reactor", "uranium enrichment" ] }
+        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt reactor", "uranium enrichment" ] },
+    # More companies (Tosin, 10 Nov): any DOE contract or grant to a business
+    # whose description is about nuclear work, from any office (NE, NNSA, EM,
+    # Science). The keyword alone isn't enough: only awards whose own
+    # description states nuclear work (NUCLEAR_ENERGY) are kept, so a general
+    # DOE contractor isn't proposed for mentioning the word.
+    "nuclear_contracts" => { award_type_codes: CONTRACTS, keywords: NUCLEAR_KEYWORDS = [ "nuclear reactor", "advanced reactor", "nuclear fuel",
+      "spent fuel", "nuclear waste", "isotope production", "medical isotope", "uranium enrichment", "microreactor" ].freeze },
+    "nuclear_grants" => { award_type_codes: ASSISTANCE, keywords: NUCLEAR_KEYWORDS }
   }.freeze
+  # Searches whose awards must state nuclear work in their description.
+  NUCLEAR_ONLY = %w[small_business nuclear_contracts nuclear_grants].freeze
   # The fusion search's keyword also finds awards that only mention fusion:
   # data fusion, plastics, and software, simulation or quantum computing run
   # on fusion data. Only awards for fusion energy work itself are kept: its
@@ -53,7 +63,9 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   FUSION_ENERGY = /\b(?:fusion (?:energy|reactors?|magnets?|plasmas?|pilot plants?|program|facilit(?:y|ies))|inertial fusion|tokamaks?|stellarators?|burning plasma|for fusion\b)/i
   NUCLEAR_ENERGY = /\b(?:(?:nuclear|advanced|microreactors?|test) reactors?|microreactors?|nuclear (?:fuel|power|energy|plants?|waste)|spent (?:nuclear )?fuel|isotope production|medical isotopes?|HALEU|TRISO|molten salt (?:reactors?|fuel|coolant for (?:a |nuclear )?reactors?)|uranium enrichment)\b/i
   NOT_FUSION_ENERGY = /\b(?:data fusion|machine learning|data science|software|quantum|simulations?|meshing|computation)\b/i
-  FIELDS = [ "Award ID", "Recipient Name", "Award Amount", "Start Date", "End Date", "Description", "generated_internal_id", "recipient_id" ].freeze
+  # The awarding office (NE, NNSA, EM, Science…) shows in each row, so a reader sees who funded what (DQ, 10 Nov).
+  FIELDS = [ "Award ID", "Recipient Name", "Award Amount", "Start Date", "End Date", "Description", "generated_internal_id", "recipient_id",
+    "Awarding Sub Agency" ].freeze
   # USAspending's recipient hash and level, e.g. "1f4e2b…-C".
   RECIPIENT_ID = /\A[0-9a-f-]+-[A-Z]\z/i
   # Legal suffixes a display name leaves out (DATA.md D1), and words kept as written.
@@ -64,7 +76,7 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   # Line-of-business words a shared brand drops ("BWXT Nuclear" => "BWXT").
   GENERIC_WORDS = %w[nuclear energy power operations operating group services technologies technology holdings government].freeze
   COLUMNS = %w[award_id recipient_name amount_usd start_date end_date award_type assistance_listing search award_url
-    generated_award_id recipient_id description].freeze
+    generated_award_id recipient_id description awarding_office].freeze
 
   def initialize(fetcher: DataQuality::Fetcher.new)
     @fetcher = fetcher
@@ -189,7 +201,8 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     "Each row is one award from the U.S. Department of Energy to the company named in it, from USAspending.gov's " \
       "award search: its award ID, amount in US dollars, start and end dates, and whether it's financial assistance " \
       "(a grant or cooperative agreement, with its Assistance Listing: 81.121 is Nuclear Energy research, development " \
-      "and demonstration, 81.049 is the Office of Science) or a contract."
+      "and demonstration, 81.049 is the Office of Science) or a contract, its description, and the DOE office that " \
+      "awarded it (awarding_office, e.g. Office of Nuclear Energy, National Nuclear Security Administration)."
   end
 
   # The link's total, award count and first year come from every row, so the
@@ -291,7 +304,7 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
           data = JSON.parse(response.body)
           data["results"].to_a.each do |award|
             next if name == "fusion" && !fusion_energy?(award["Description"])
-            next if name == "small_business" && !award["Description"].to_s.match?(NUCLEAR_ENERGY)
+            next if NUCLEAR_ONLY.include?(name) && !nuclear_work?(award["Description"])
 
             row = row_for(award, name)
             rows[row["generated_award_id"]] ||= row # an award two searches find is kept once
@@ -305,6 +318,12 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
       [ rows.values, nil ]
     rescue JSON::ParserError => error
       [ nil, failure("USAspending answered with something that isn't JSON (#{error.message.truncate(80)})", status: 200) ]
+    end
+
+    # Nuclear work stated, and not a support service that only serves a nuclear office.
+    SUPPORT_SERVICE = /\b(?:IT (?:support|services?)|information technology|janitorial|custodial|facilit(?:y|ies) (?:maintenance|support|services)|security (?:guards?|services|support)|staffing|administrative support|professional support|technical support|training|records management)\b/i
+    def nuclear_work?(description)
+      description.to_s.match?(NUCLEAR_ENERGY) && !description.to_s.match?(SUPPORT_SERVICE)
     end
 
     def fusion_energy?(description)
@@ -339,7 +358,8 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
         "award_type" => id.start_with?("CONT_") ? "contract" : "assistance", "assistance_listing" => award["CFDA Number"],
         "search" => search, "award_url" => "https://www.usaspending.gov/award/#{id}",
         "generated_award_id" => id, "recipient_id" => award["recipient_id"].to_s,
-        "description" => award["Description"].to_s.squish.truncate(200)
+        "description" => award["Description"].to_s.squish.truncate(200),
+        "awarding_office" => award["Awarding Sub Agency"].to_s.squish.presence
       }
     end
 
