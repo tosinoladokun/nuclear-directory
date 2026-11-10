@@ -20,8 +20,12 @@ module IndexNow
   LAST_SENT = "indexnow/last_sent_at"
 
   # (uri, json) => true when the engine accepted it. Tests replace it.
+  # Short timeouts: it runs inside the warmer job, which a hung endpoint mustn't hold (Infra).
+  TIMEOUT = 8
   mattr_accessor :sender, default: lambda { |uri, json|
-    Net::HTTP.post(uri, json, "Content-Type" => "application/json; charset=utf-8").code.to_i.between?(200, 299)
+    Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: TIMEOUT, read_timeout: TIMEOUT, write_timeout: TIMEOUT) do |http|
+      http.post(uri.path, json, "Content-Type" => "application/json; charset=utf-8").code.to_i.between?(200, 299)
+    end
   }
 
   # The key IndexNow checks against /<key>.txt: 8 to 128 letters, digits or dashes.
