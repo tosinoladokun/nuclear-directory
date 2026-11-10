@@ -95,15 +95,15 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
   end
 
   test "NRC assigning a project number to a company we have is one news item, never proposed twice" do
-    known("The Leapfrog Group")
+    known("Leapfrog Nuclear Co")
     letter = document("Assignment of Project Number")
     news = plugin.extract(letter, nil).select { |c| c[:kind] == "news_item" }.sole[:payload]
 
     assert_match "Assignment of Project Number", news["title"]
-    assert_equal [ "U.S. Nuclear Regulatory Commission", "The Leapfrog Group" ], news["about"].map { |a| a["name"] }
+    assert_equal [ "U.S. Nuclear Regulatory Commission", "Leapfrog Nuclear Co" ], news["about"].map { |a| a["name"] }
     assert_equal "2026-10-19", news["published_on"]
     stage = plugin.extract(letter, nil).find { |c| c[:kind] == "licensing_stage" }[:payload]
-    assert_equal({ "organization" => { "name" => "The Leapfrog Group" }, "stage" => "pre_application", "nrc_docket" => "99902187",
+    assert_equal({ "organization" => { "name" => "Leapfrog Nuclear Co" }, "stage" => "pre_application", "nrc_docket" => "99902187",
       "effective_on" => "2026-10-19" }, stage)
 
     Candidate.create!(source: letter, kind: "news_item", status: "rejected", quote: "x", payload: news)
@@ -113,7 +113,7 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
   test "a developer the directory doesn't have, in a company form, is proposed as a new company (10 Nov)" do
     names = documents.flat_map { |source| plugin.extract(source, nil) }.map { |claim| claim[:payload]["name"] }.uniq
     assert_includes names, "Leapfrog Nuclear Co", "the company the title names"
-    assert_includes names, "The Leapfrog Group"
+    refute_includes names, "The Leapfrog Group", "the title names the company: the addressee's affiliation is dropped"
     refute_includes names, "Radiant", "no company form in its name: never proposed"
     refute_includes names, "Arizona Public Service Co", "an operating plant's document isn't read"
   end
@@ -126,14 +126,14 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
   end
 
   test "project-number news: only the last 60 days, at most 5 a read" do
-    known("The Leapfrog Group")
+    known("Leapfrog Nuclear Co")
     later = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), key: "k", today: -> { Date.new(2027, 1, 30) })
     assert_empty later.extract(document("Assignment of Project Number"), nil).select { |c| c[:kind] == "news_item" }, "older than 60 days"
     assert_equal 5, Plugin::NEWS_PER_READ
   end
 
   test "the project-number letter's stage reaches the directory as a pending pre-application stage (#650)" do
-    known("The Leapfrog Group")
+    known("Leapfrog Nuclear Co")
     documents
     DataQuality::Stages::Extract.call(plugin:)
     run = DataQuality::Stages::Match.call(plugin:)
@@ -147,7 +147,7 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     letter.update_columns(extracted_sha256: letter.content_sha256, extracted_rows_sha256: letter.content_sha256)
     plugin.store_documents
     assert_nil letter.reload.extracted_sha256
-    known("The Leapfrog Group")
+    known("Leapfrog Nuclear Co")
     DataQuality::Stages::Extract.call(plugin:)
     assert Candidate.exists?(source: letter, kind: "licensing_stage")
   end

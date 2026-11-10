@@ -147,7 +147,9 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # and addressees other than NRC's own offices (DQ, 29 Oct).
   def self.organizations(doc)
     titled = doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).then { |head, rest| head.to_s.squish.delete_suffix(".") if rest && head.to_s.match?(COMPANY_FORM) }
-    ([ titled ] + Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
+    # A title naming the company wins over the addressee's affiliation (DQ, 10 Nov: "The Leapfrog Group" isn't Leapfrog Nuclear Co).
+    addressees = titled ? [] : Array(doc["AddresseeAffiliation"])
+    ([ titled ] + Array(doc["AuthorAffiliation"]) + addressees).map { |name| name.to_s.squish }
       .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
   end
 
