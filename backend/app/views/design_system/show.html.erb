@@ -274,7 +274,6 @@ Disallow: /</pre>
     <div class="flex flex-col gap-2">
       <span class="type-label">Row: company rows (name · description · location), then plant rows</span>
       <ul class="nd-lines">
-        <li class="nd-lines__head type-label" aria-hidden="true"><span>Company</span><span>Description</span><span>Location</span></li>
         <%= render "shared/line", variant: :bare, href: "#", name: "Centrus Energy", what: "Uranium enrichment and HALEU", place: location("Bethesda", "MD") %>
         <%= render "shared/line", variant: :bare, href: "#", name: "Westinghouse Electric Company", what: "Reactor designer · AP1000", place: location("Cranberry Township", "PA") %>
         <%= render "shared/line", variant: :bare, href: "#", name: "Électricité de France Nuclear Division", short_name: "EDF Nuclear", what: "Reactor operator", place: location("Courbevoie", nil, country: "FR") %>

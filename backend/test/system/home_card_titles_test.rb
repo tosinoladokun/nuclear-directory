@@ -38,7 +38,7 @@ class HomeCardTitlesTest < ApplicationSystemTestCase
     end
     resize_viewport(1440, 900)
     visit root_path
-    beside = page.evaluate_script("(() => { const h = document.querySelector('.nd-catcard__head--link'); const n = h.querySelector('.nd-catcard__name').getBoundingClientRect(); const c = h.querySelector('.nd-catcard__count').getBoundingClientRect(); return Math.abs((n.top + n.height / 2) - (c.top + c.height / 2)) < 12 })()")
+    beside = page.evaluate_script("(() => { const h = document.querySelector('.nd-catcard__link'); const n = h.querySelector('.nd-catcard__name').getBoundingClientRect(); const c = h.querySelector('.nd-catcard__count').getBoundingClientRect(); return Math.abs((n.top + n.height / 2) - (c.top + c.height / 2)) < 12 })()")
     assert beside, "the count is on the title's line"
   end
 end
