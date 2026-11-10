@@ -15,6 +15,7 @@ module LeadFinding
   # Finds a day at most, nightly and added ones together, so a pasted list can't use up the search quota (Infra).
   PER_DAY = 60
   WAITING = "Waiting: today's finds are used up; tried tonight".freeze
+  BUSY = "Waiting: busy, tried again soon".freeze
 
   # Counts one find against today's limit; false when it's reached.
   def self.take_today(now: Time.current)
@@ -92,6 +93,9 @@ module LeadFinding
     case outcome.to_s
     when "proposed"
       lead.update!(status: "added", note: nil, next_find_at: nil, candidate_id:)
+    when "retry"
+      # Not a try (another run held the lock, a search limit): no attempt used, tried again in an hour.
+      lead.update!(status: "researching", note: BUSY, next_find_at: now + 1.hour)
     when "not_us", "not_nuclear"
       # Found, and not ours: closed at once, no retry.
       why = outcome.to_s == "not_us" ? "not a US company" : "no nuclear work"

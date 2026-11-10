@@ -96,4 +96,17 @@ class LeadFindJobTest < ActiveJob::TestCase
     assert_equal "Closed at check: not a US company: Toronto head office", l.reason
     assert_equal l.reason, LeadFinding.state(l)
   end
+
+  test "a busy pipeline or a :retry outcome isn't a try: no attempt used, due again within the hour" do
+    l = lead("Busy Co", find_attempts: 1)
+    LeadFindJob.finder = ->(*) { raise DataQuality::Pipeline::AlreadyRunning, "match in progress" }
+    LeadFindJob.perform_now(l.id)
+    assert_equal [ "researching", 1, LeadFinding::BUSY ], l.reload.values_at(:status, :find_attempts, :note)
+    assert_in_delta 1.hour.from_now, l.next_find_at, 1.minute
+    travel(2.hours) do
+      LeadFindJob.finder = ->(*) { Found.new(outcome: :retry, reason: "search limit reached") }
+      LeadFindJob.perform_now(l.id)
+      assert_equal 1, l.reload.find_attempts
+    end
+  end
 end

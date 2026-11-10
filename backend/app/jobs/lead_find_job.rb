@@ -28,6 +28,9 @@ class LeadFindJob < ApplicationJob
     attempt = LeadFinding.start(lead) or return
     found = finder.call(lead).to_h.symbolize_keys
     LeadFinding.record(lead, attempt:, **found.slice(:outcome, :organization_id, :candidate_id, :reason, :name, :website))
+  rescue DataQuality::Pipeline::AlreadyRunning
+    # Overlapping the nightly match: try again soon, without using up a try (Infra).
+    LeadFinding.record(lead, attempt:, outcome: :retry) if attempt
   rescue StandardError => e
     Rails.error.report(e, handled: true, context: { lead_id: lead.id })
     LeadFinding.record(lead, attempt:, outcome: :unconfirmed, reason: "the search stopped (#{e.class.name.demodulize})") if attempt
