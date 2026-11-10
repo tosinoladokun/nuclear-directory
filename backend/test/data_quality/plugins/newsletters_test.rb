@@ -43,6 +43,8 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     refute_match(/bot@|unsubscribe|open\.gif|utm_source|mc_eid|click\?u=|This email was sent/i, kept, "no recipient, unsubscribe, pixel, tracker or query")
     assert_includes kept, "https://www.freshfission.com/news"
     assert_includes kept, "Fresh Fission picked a site in Idaho"
+    refute_includes kept, "<", "no markup kept"
+    assert_equal "smartbrief.com: Today in nuclear", Source.find_by!(url: "https://resend.com/emails/receiving/m1").title, "the sender's domain, not its full From header"
     assert Source.find_by!(url: "https://resend.com/emails/receiving/m5").crawl_needs_human?, "DMARC failed (a spoof with its own DKIM): recorded, not stored"
     assert_equal({ "emails" => 0, "opened" => 0 }, plugin.crawl(nil))
   end

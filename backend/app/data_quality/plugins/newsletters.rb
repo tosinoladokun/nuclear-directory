@@ -22,7 +22,8 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   # Resend allows 2 requests a second: a pause between calls, one retry on 429.
   PAUSE = 0.6
   # The stored email at most (Infra: a 1 GB database).
-  MAX_STORED = 300_000
+  MAX_STORED = 100_000
+  LINKS = "\n\nLinks in the email:\n".freeze
   # Emails opened a run, stored or not, and listing pages read.
   MAX_OPENED = 50
   MAX_PAGES = 5
@@ -59,7 +60,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       valid = email.dig("authentication", "dmarc") == "pass" && email["html"].present?
       # A rejected email is recorded too, so it never takes a later run's place.
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
-        http_status: 200, title: "#{mail['from'].to_s.truncate(80)}: #{email['subject'].to_s.truncate(150)}",
+        http_status: 200, title: "#{sender_domain(mail['from'])}: #{email['subject'].to_s.gsub(EMAIL, '[email]').truncate(150)}",
         status_reason: (valid ? nil : "DMARC didn't pass, or no HTML"),
         **(valid ? stored(email["html"]) : {}))
       stored += 1 if valid
@@ -69,7 +70,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
 
   # Leads only, never claims: returns [] and notes each company as a lead.
   def extract(source, run)
-    text = visible_text(source)
+    text = email_text(source)
     return [] if text.blank?
 
     urls = links(source)
@@ -120,8 +121,10 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       end
       doc.css("p, td, div, span, li").select { |node| node.element_children.none? && node.text.match?(FOOTER) }.each(&:remove)
       doc.xpath("//text()").each { |node| node.content = node.content.gsub(EMAIL, "[email]") }
-      body = doc.at("body")&.inner_html.to_s.squish.byteslice(0, MAX_STORED).to_s.scrub("")
-      text = "<html><body>#{body}</body></html>"
+      # Only what's needed (Infra): the visible text, then the email's own links, one a line.
+      visible = doc.xpath("//body//text()").map(&:text).join(" ").squish.byteslice(0, MAX_STORED).to_s.scrub("")
+      urls = doc.css("a[href]").map { |link| link["href"] }.grep(%r{\Ahttps?://}i).uniq
+      text = "#{visible}#{LINKS}#{urls.join("\n")}"
       { content_text: text, content_sha256: Digest::SHA256.hexdigest(text) }
     end
 
@@ -150,7 +153,16 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       mails
     end
 
-    def links(source) = Nokogiri::HTML(source.content_text).css("a[href]").map { |a| a["href"].to_s.strip }.grep(%r{\Ahttps?://}i)
+    def links(source) = source.content_text.to_s.split(LINKS, 2).last.to_s.lines.map(&:strip).grep(%r{\Ahttps?://}i)
+
+    # The email's text, without its links list.
+    def email_text(source) = source.content_text.to_s.split(LINKS, 2).first.to_s.squish
+
+    def sender_domain(from)
+      Mail::Address.new(from.to_s).domain.to_s.downcase
+    rescue Mail::Field::ParseError
+      ""
+    end
 
     # The model's website, only when the email links that host and it isn't a newsletter's or tracker's.
     def own_site(website, hosts)
