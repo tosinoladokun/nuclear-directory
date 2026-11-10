@@ -16,6 +16,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   DEEP_LINK = /news|press|partners?|investors?|projects?|customers?|funding|announcements?/i
   DEEP_KINDS = %w[wire_press company_newsrooms trade_press usaspending_doe_awards arpa_e_projects nrc_adams doe_loans doe_programs].freeze
   DEEP_SOURCES = 50
+  # Re-read stored sources a day, all clicks together (Infra): the rest wait for tomorrow.
+  DEEP_SOURCES_PER_DAY = 100
   # Its own address for the same record: Form D (#504) saves that file's
   # filing rows under the plain URL, and Enrich keeps the raw JSON, so the
   # two never share one snapshot (the query is ignored by the SEC).
@@ -163,7 +165,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       end
       if deep
         stats["deep"] = stats.fetch("deep", 0) + 1
-        stats["deep_sources"] = stats.fetch("deep_sources", 0) + reread_sources_naming(id)
+        room = DEEP_SOURCES_PER_DAY - deep_sources_today - stats.fetch("deep_sources", 0)
+        stats["deep_sources"] = stats.fetch("deep_sources", 0) + reread_sources_naming(id, limit: [ room, DEEP_SOURCES ].min)
       end
       @directory.mark_enriched(id, requested_at)
       stats["companies"] += 1
@@ -274,18 +277,24 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       source
     end
 
+    # Sources earlier runs re-queued today (their crawl stats).
+    def deep_sources_today
+      CrawlRun.where(source_kind:, stage: "crawl", started_at: Time.current.all_day).where("stats ? 'deep_sources'")
+        .sum(Arel.sql("(stats->>'deep_sources')::int"))
+    end
+
     # Stored sources of the kinds that hold deals, partners, funding and
     # plants which name the company: their next extraction reads them again
     # (each in its own plug-in's way, with its own checks). Returns how many.
-    def reread_sources_naming(id)
+    def reread_sources_naming(id, limit: DEEP_SOURCES)
       names = @directory.organization_names(id).select { |name| name.length >= 4 }
-      return 0 if names.empty?
+      return 0 if names.empty? || limit <= 0
 
       # Each name as a whole phrase (a POSIX regular expression, its special characters escaped).
       pattern = names.map { |name| name.gsub(/[.*+?^${}()|\[\]\\]/) { |char| "\\#{char}" } }.join("|")
       ids = Source.where(source_kind: DEEP_KINDS).where.not(extracted_sha256: nil)
         .where("content_text ~* ?", "(^|[^[:alnum:]])(#{pattern})($|[^[:alnum:]])")
-        .order(fetched_at: :desc).limit(DEEP_SOURCES).ids
+        .order(fetched_at: :desc).limit(limit).ids
       Source.where(id: ids).update_all(extracted_sha256: nil)
       ids.size
     end

@@ -511,5 +511,13 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal 1, stats["deep_sources"]
     assert_nil naming.reload.extracted_sha256, "read again tonight"
     assert_equal "b", other.reload.extracted_sha256, "a longer name isn't this company"
+
+    naming.update_columns(extracted_sha256: "a")
+    CrawlRun.create!(source_kind: "company_pages", stage: "crawl", status: "succeeded",
+      stats: { "deep_sources" => DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY })
+    @company.update_columns(enrich_requested_at: Time.current)
+    again = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory: DeepDirectory.new).crawl(nil)
+    assert_equal 0, again["deep_sources"], "today's #{DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY} are used: tomorrow"
+    assert_equal "a", naming.reload.extracted_sha256
   end
 end
