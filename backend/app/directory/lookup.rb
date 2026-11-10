@@ -103,7 +103,7 @@ module Directory
       edgar = Organization.where(verification_status: "verified").where.not(sec_cik: nil)
         .where("organizations.hq_city IS NULL OR organizations.hq_city = '' OR organizations.website IS NULL OR organizations.website = ''")
       edgar = edgar.where(enrich_requested_at: nil).or(edgar.where(enriched_at: ...GAP_REFILL_DAYS.days.ago).where("enriched_at >= enrich_requested_at"))
-      ids = (edgar.order(no_hq, :id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
+      ids = (edgar.order(no_hq, no_description, :id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
       Organization.where(id: ids).update_all(enrich_requested_at: Time.current) if ids.any?
       { requested: ids.size, without_website: unreadable.map { |_, name, _| name }.sort.first(20) }
     end
