@@ -42,10 +42,19 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     travel(6.minutes) { assert_enqueued_jobs(1, only: LeadFindJob) { add("Kairos Power") } }
   end
 
-  test "a link is kept as the lead's source, named by its site" do
-    add("https://www.linkedin.com/company/oklo-inc/")
-    lead = Lead.find_by!(normalized_name: "linkedin com")
-    assert_equal "https://www.linkedin.com/company/oklo-inc/", lead.sources.sole["url"]
+  test "a link is kept as the lead's source, named by its site and path: two pages on one site are two leads" do
+    add("https://www.linkedin.com/company/oklo-inc/\nhttps://www.linkedin.com/company/kairos-power/")
+    oklo = Lead.find_by!(name: "linkedin.com/company/oklo-inc")
+    assert_equal "https://www.linkedin.com/company/oklo-inc/", oklo.sources.sole["url"]
+    assert Lead.exists?(name: "linkedin.com/company/kairos-power")
+  end
+
+  test "Your leads shows the last two weeks by when Tosin added them, not when a source last mentioned them" do
+    add("Old Lead Co")
+    lead = Lead.find_by!(normalized_name: "old lead co")
+    lead.update!(sources: lead.sources.map { |s| s.merge("first" => 20.days.ago.to_date.iso8601, "last" => 20.days.ago.to_date.iso8601) })
+    Lead.sighted!(name: "Old Lead Co", kind: "company", key: "news:x", label: "A press release")
+    assert_not CompanySuggestion.shown.exists?(id: lead.id)
   end
 
   test "states, one line each: waiting for check, in your inbox, already listed, couldn't confirm" do

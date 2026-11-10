@@ -24,7 +24,8 @@ module CompanySuggestion
     return if text.blank? || text.length > MAX
 
     url = text if text.match?(%r{\Ahttps?://\S+\z}i)
-    name = url ? (URI.parse(url).host.to_s.delete_prefix("www.").presence || text rescue text) : text
+    # A link is named by its site and path, so two LinkedIn pages or two articles are two leads.
+    name = url ? (link_name(url) || text) : text
     lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(text)}", label: LABEL, url:) or return
     # The same line again while it's being found: one find is enough (Infra).
     return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.updated_at > 5.minutes.ago
@@ -35,9 +36,20 @@ module CompanySuggestion
     lead
   end
 
-  # Tosin's leads of the last two weeks, newest first, each with its state (LeadFinding.state).
-  def self.shown
-    Lead.where(kind: "company", updated_at: SHOWN_FOR.ago..).where("leads.sources @> ?", [ { "label" => LABEL } ].to_json)
-      .includes(:candidate).order(updated_at: :desc)
+  def self.link_name(url)
+    uri = URI.parse(url)
+    "#{uri.host.to_s.delete_prefix('www.')}#{uri.path.to_s.chomp('/')}".presence
+  rescue URI::InvalidURIError
+    nil
+  end
+
+  # Tosin's leads added in the last two weeks (by when he added them, not when a source last mentioned them),
+  # newest first, each with its state (LeadFinding.state).
+  def self.shown(today: Date.current)
+    added = Arel.sql(<<~SQL.squish)
+      EXISTS (SELECT 1 FROM jsonb_array_elements(leads.sources) s
+        WHERE s->>'label' = #{Lead.connection.quote(LABEL)} AND (s->>'last')::date >= #{Lead.connection.quote((today - SHOWN_FOR).iso8601)})
+    SQL
+    Lead.where(kind: "company").where(added).includes(:candidate).order(updated_at: :desc)
   end
 end

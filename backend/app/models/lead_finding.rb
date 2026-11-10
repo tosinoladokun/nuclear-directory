@@ -31,8 +31,17 @@ module LeadFinding
       .order(Arel.sql("COALESCE(leads.next_find_at, leads.updated_at)"))
   end
 
-  # A find that never reports back (a restart) is due again the next day.
-  def self.start(lead, now: Time.current) = lead.update!(status: "researching", note: FINDING, next_find_at: now + 1.day)
+  # Marks the lead as being found, under its row lock, if it's still due; returns the attempt (the moment it
+  # started, kept in next_find_at's place until the outcome), or nil. A find that never reports back (a restart)
+  # is due again the next day.
+  def self.start(lead, now: Time.current)
+    lead.with_lock do
+      next unless due(now:).exists?(id: lead.id)
+
+      lead.update!(status: "researching", note: FINDING, next_find_at: now + 1.day)
+      lead.reload.next_find_at # as stored (microseconds), to compare with later
+    end
+  end
 
   # Where a lead is, in one word for the admin (PM, 10 Nov): Finding, Waiting for check, In your inbox, Created,
   # Said no, Already listed, Couldn't confirm.
@@ -52,7 +61,20 @@ module LeadFinding
 
   # Writes the finder's outcome onto the lead.
   #   outcome: :proposed, :duplicate or :unconfirmed (anything else counts as unconfirmed)
-  def self.record(lead, outcome:, organization_id: nil, candidate_id: nil, reason: nil, name: nil, website: nil, now: Time.current)
+  # attempt: what start returned. The outcome is written only while that attempt is still the lead's current one
+  # (checked under its row lock): a person's decision, or a newer attempt, made meanwhile wins. Returns whether
+  # it was written.
+  def self.record(lead, attempt: nil, outcome:, organization_id: nil, candidate_id: nil, reason: nil, name: nil, website: nil, now: Time.current)
+    lead.with_lock do
+      current = attempt.nil? || (lead.status_researching? && lead.note == FINDING && lead.next_find_at == attempt)
+      next false unless current
+
+      write(lead, outcome:, organization_id:, candidate_id:, reason:, name:, website:, now:)
+      true
+    end
+  end
+
+  def self.write(lead, outcome:, organization_id:, candidate_id:, reason:, name:, website:, now:)
     case outcome.to_s
     when "proposed"
       lead.update!(status: "added", note: nil, next_find_at: nil, candidate_id:)

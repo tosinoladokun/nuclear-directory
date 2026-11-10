@@ -78,8 +78,11 @@ class Lead < ApplicationRecord
 
   def record = (record_type.constantize.find_by(id: record_id) if record_type && RECORD_TYPES.include?(record_type))
 
+  # A person's decision. It ends any automatic find (#752): the finder's retry date is cleared, and a find
+  # running now won't overwrite it (LeadFinding.record checks).
   def decide!(status, by:, reason: nil, record: nil)
     update!(status:, reason: (reason if status == "ignored"), record_type: record&.class&.name || (record_type if status == "researching"),
-      record_id: record&.id || (record_id if status == "researching"), decided_by: by, decided_at: Time.current)
+      record_id: record&.id || (record_id if status == "researching"), decided_by: by, decided_at: Time.current,
+      next_find_at: nil, note: (note unless note == LeadFinding::FINDING))
   end
 end

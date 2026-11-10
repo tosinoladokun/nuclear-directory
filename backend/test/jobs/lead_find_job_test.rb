@@ -58,4 +58,33 @@ class LeadFindJobTest < ActiveJob::TestCase
   ensure
     Rails.cache = store
   end
+
+  test "a person's decision during a find wins: the finder's result is dropped" do
+    l = lead("Raced Co")
+    LeadFindJob.finder = ->(found) { found.reload.decide!("ignored", by: "human:tosin", reason: "not ours"); Found.new(outcome: :proposed, reason: nil) }
+    LeadFindJob.perform_now(l.id)
+    assert_equal [ "ignored", "not ours" ], l.reload.values_at(:status, :reason)
+  end
+
+  test "a queued find for a lead no longer due does nothing (found already, or ignored)" do
+    l = lead("Done Co", status: "added")
+    calls = 0
+    LeadFindJob.finder = ->(*) { calls += 1; Found.new(outcome: :proposed, reason: nil) }
+    LeadFindJob.perform_now(l.id)
+    l.update!(status: "ignored", reason: "no")
+    LeadFindJob.perform_now(l.id)
+    assert_equal 0, calls
+  end
+
+  test "a person taking over research clears the finder's retry, so it isn't picked up again" do
+    l = lead("Retry Co", status: "researching", next_find_at: 1.hour.ago, find_attempts: 1, note: "Couldn't confirm: no site")
+    l.decide!("researching", by: "human:tosin")
+    assert_nil l.reload.next_find_at
+    assert_not LeadFinding.due.exists?(id: l.id)
+  end
+
+  test "once the finder is in, the 2 am proposals leave company leads to it and keep plants" do
+    assert_equal %w[company plant], LeadProposals.kinds(finder: false)
+    assert_equal %w[plant], LeadProposals.kinds(finder: true)
+  end
 end

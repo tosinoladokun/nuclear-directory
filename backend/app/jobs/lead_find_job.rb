@@ -11,7 +11,8 @@ class LeadFindJob < ApplicationJob
   class_attribute :finder, default: nil
 
   def perform(lead_id = nil)
-    leads = lead_id ? Lead.where(id: lead_id).to_a : LeadFinding.due.limit(LeadFinding::PER_NIGHT).to_a
+    # A queued find for one lead still has to be due: a lead found meanwhile, or ignored by a person, is left alone.
+    leads = (lead_id ? LeadFinding.due.where(id: lead_id) : LeadFinding.due.limit(LeadFinding::PER_NIGHT)).to_a
     leads.each { |lead| find(lead) }
   end
 
@@ -24,11 +25,11 @@ class LeadFindJob < ApplicationJob
 
     return lead.update!(note: LeadFinding::WAITING) unless LeadFinding.take_today
 
-    LeadFinding.start(lead)
+    attempt = LeadFinding.start(lead) or return
     found = finder.call(lead).to_h.symbolize_keys
-    LeadFinding.record(lead, **found.slice(:outcome, :organization_id, :candidate_id, :reason, :name, :website))
+    LeadFinding.record(lead, attempt:, **found.slice(:outcome, :organization_id, :candidate_id, :reason, :name, :website))
   rescue StandardError => e
     Rails.error.report(e, handled: true, context: { lead_id: lead.id })
-    LeadFinding.record(lead, outcome: :unconfirmed, reason: "the search stopped (#{e.class.name.demodulize})")
+    LeadFinding.record(lead, attempt:, outcome: :unconfirmed, reason: "the search stopped (#{e.class.name.demodulize})") if attempt
   end
 end
