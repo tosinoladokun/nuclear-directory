@@ -54,7 +54,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
         http_status: 200, title: "#{mail['from'].to_s.truncate(80)}: #{email['subject'].to_s.truncate(150)}",
         status_reason: (valid ? nil : "DKIM didn't pass, or no HTML"),
-        **(valid ? { content_text: email["html"], content_sha256: Digest::SHA256.hexdigest(email["html"]) } : {}))
+        **(valid ? stored(email["html"]) : {}))
       stored += 1 if valid
     end
     { "emails" => stored, "opened" => opened }
@@ -90,6 +90,32 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
 
   private
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
+
+    # What's kept of an email (DQ, 10 Nov: the repo is public): no images
+    # (tracking pixels), no unsubscribe, preferences or "you're receiving
+    # this" lines, no tracker links, no query strings, no email addresses.
+    FOOTER = /unsubscribe|manage (?:your )?(?:preferences|subscription)|update (?:your )?(?:profile|preferences)|view (?:this email )?in (?:your |a )?browser|forward to a friend|you(?:'re| are) receiving this|this email was sent to|opt[ -]out/i
+    TRACKER = /(?:\A|\.)(?:list-manage\.com|mailchimp\.com|mandrillapp\.com|hubspot(?:email)?\.(?:com|net)|hs-sites\.com|sendgrid\.net|constantcontact\.com|mcusercontent\.com|links\.smartbrief\.com|cmail\d*\.com|createsend\.com|exacttarget\.com|pardot\.com|marketo\.com|mktoweb\.com)\z|\A(?:click|clicks|trk|track|tracking|links?|email|e)\./i
+    EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+    def stored(html)
+      doc = Nokogiri::HTML(html)
+      doc.css("img, script, style, head").each(&:remove)
+      doc.css("a").each do |link|
+        next link.remove if link.text.match?(FOOTER) || link["href"].to_s.match?(/unsubscribe|optout|opt-out|preferences/i)
+
+        uri = (URI.parse(link["href"].to_s.strip) rescue nil)
+        if uri.is_a?(URI::HTTP) && uri.host.present? && !uri.host.match?(TRACKER)
+          link["href"] = "#{uri.scheme}://#{uri.host}#{uri.path}"
+        else
+          link.remove_attribute("href")
+        end
+        link.attributes.each_key { |name| link.remove_attribute(name) unless name == "href" }
+      end
+      doc.css("p, td, div, span, li").select { |node| node.element_children.none? && node.text.match?(FOOTER) }.each(&:remove)
+      doc.xpath("//text()").each { |node| node.content = node.content.gsub(EMAIL, "[email]") }
+      text = "<html><body>#{doc.at("body")&.inner_html.to_s.squish}</body></html>"
+      { content_text: text, content_sha256: Digest::SHA256.hexdigest(text) }
+    end
 
     def url_for(id) = "https://resend.com/emails/receiving/#{id}"
 

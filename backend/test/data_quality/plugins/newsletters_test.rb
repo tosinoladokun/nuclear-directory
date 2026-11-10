@@ -10,6 +10,9 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     <p>Fresh Fission picked a site in Idaho for its first microreactor. <a href="https://www.freshfission.com/">Fresh Fission</a></p>
     <p>Tracked Atom signed a fuel deal. <a href="https://links.smartbrief.com/click?u=tracked">Read more</a></p>
     <p>Acme Fission raised money. <a href="https://www.acmefission.com">Acme</a></p>
+    <img src="https://t.smartbrief.com/open.gif?r=bot">
+    <p>This email was sent to bot@mail.nuclear-directory.org. <a href="https://smartbrief.com/unsubscribe?u=bot">Unsubscribe</a></p>
+    <p><a href="https://www.freshfission.com/news?utm_source=smartbrief&amp;mc_eid=123">More</a></p>
     </body></html>
   HTML
 
@@ -35,6 +38,10 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     assert_equal [ "Bearer re_test" ], @asked.map(&:last).uniq
     refute(@asked.any? { |url, _| url.end_with?("/m2", "/m3", "/m4") }, "another sender, another inbox or a spoofed display name is never opened")
     assert_includes Source.find_by!(url: "https://resend.com/emails/receiving/m1").title, "Today in nuclear"
+    kept = Source.find_by!(url: "https://resend.com/emails/receiving/m1").content_text
+    refute_match(/bot@|unsubscribe|open\.gif|utm_source|mc_eid|click\?u=|This email was sent/i, kept, "no recipient, unsubscribe, pixel, tracker or query")
+    assert_includes kept, "https://www.freshfission.com/news"
+    assert_includes kept, "Fresh Fission picked a site in Idaho"
     assert Source.find_by!(url: "https://resend.com/emails/receiving/m5").crawl_needs_human?, "DKIM failed: recorded, not stored"
     assert_equal({ "emails" => 0, "opened" => 0 }, plugin.crawl(nil))
   end
