@@ -401,6 +401,7 @@
   .nd-instant__row:hover, .nd-instant__row:focus-visible { background: var(--nd-paper-sunken); }
   .nd-instant__text { display: flex; flex-direction: column; min-width: 0; }
   .nd-instant__text span { color: var(--nd-ink-muted); }
+  .nd-instant__text > b, .nd-instant__text > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-instant__all { display: flex; align-items: center; justify-content: space-between; gap: var(--nd-space-2); padding: var(--nd-space-3) var(--nd-space-4); border-top: var(--nd-hairline) solid var(--nd-rule); color: var(--nd-ink-muted); text-decoration: none; }
   .nd-instant__all:hover, .nd-instant__all:focus-visible { background: var(--nd-paper-sunken); color: var(--nd-ink); }
   .nd-instant__all kbd { border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); padding: 2px 6px; }
@@ -1660,3 +1661,7 @@
   .nd-lines--updates .nd-news__title a { text-decoration: none; }
   .nd-lines--updates .nd-news__title a:hover, .nd-lines--updates .nd-news__title a:focus-visible { text-decoration: underline; }
 }
+
+/* A long name in the dropdown drops to 13px before it is cut (one-line law). Outside the layers on purpose: the type-body-strong
+   utility on the name would otherwise win over a components rule. */
+.nd-instant__text > b[data-fit="small"] { font-size: 13px; line-height: 24px; }
