@@ -57,12 +57,13 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       email = api_get("#{API}/#{mail['id']}") or raise InboxError, "Resend: couldn't read received email #{mail['id']}"
       # DMARC pass: the From domain itself is authenticated (aligned SPF or DKIM),
       # not just some domain's signature; bot@ is a public address (Infra).
-      valid = email.dig("authentication", "dmarc") == "pass" && email["html"].present?
+      body = email["html"].presence || (ERB::Util.html_escape(email["text"]).gsub("\n", "<br>") if email["text"].present?)
+      valid = email.dig("authentication", "dmarc") == "pass" && body.present?
       # A rejected email is recorded too, so it never takes a later run's place.
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
         http_status: 200, title: "#{sender_domain(mail['from'])}: #{email['subject'].to_s.gsub(EMAIL, '[email]').truncate(150)}",
         status_reason: (valid ? nil : "DMARC didn't pass, or no HTML"),
-        **(valid ? stored(email["html"]) : {}))
+        **(valid ? stored(body) : {}))
       stored += 1 if valid
     end
     { "emails" => stored, "opened" => opened }
@@ -79,15 +80,19 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
     # The model sees the email's links too, so it can pick a company's own site.
     input = "#{text.truncate(50_000)}\n\nLinks in the email:\n#{urls.uniq.first(300).join("\n")}"
     found = llm.structured(role: :extract, schema:, schema_name: "newsletters", crawl_run: run, reasoning_effort: "low",
-      messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: input } ]).data
+      messages: [ { role: "system", content: instructions }, { role: "user", content: input } ]).data
     id = source.url.split("/").last
+    added, listed = [], []
     Array(found["companies"]).each do |company|
       name, quote = company["name"].to_s.squish, company["quote"].to_s.squish
-      next if name.blank? || !quote.include?(name) || !text.include?(quote) || @directory.organization(name:)
+      next if name.blank? || !quote.include?(name) || !text.include?(quote)
+      next listed << name if @directory.organization(name:)
 
-      @directory.keep_lead(name:, key: "newsletter:#{id}:#{name.downcase.squish}",
-        label: "Newsletter: #{source.title.to_s.truncate(120)}", url: own_site(company["website"], hosts))
+      @directory.keep_lead(name:, key: "#{lead_key}:#{id}:#{name.downcase.squish}",
+        label: "#{lead_label}: #{source.title.to_s.truncate(120)}", url: own_site(company["website"], hosts))
+      added << name
     end
+    after_leads(source, added.uniq, listed.uniq)
     []
   end
 
@@ -98,6 +103,13 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
 
   private
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
+
+    # What a subclass (lead forwards, #757) changes.
+    def inbox = INBOX
+    def instructions = INSTRUCTIONS
+    def lead_key = "newsletter"
+    def lead_label = "Newsletter"
+    def after_leads(_source, _added, _listed) = nil
 
     # What's kept of an email (DQ, 10 Nov: the repo is public): no images
     # (tracking pixels), no unsubscribe, preferences or "you're receiving
@@ -145,7 +157,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       MAX_PAGES.times do
         page = api_get("#{API}?limit=100#{"&after=#{after}" if after}") or raise InboxError, "Resend: couldn't list received emails"
         data = Array(page["data"])
-        mails.concat(data.select { |mail| Array(mail["to"]).map(&:downcase).include?(INBOX) && sender?(mail["from"]) })
+        mails.concat(data.select { |mail| Array(mail["to"]).map(&:downcase).include?(inbox) && sender?(mail["from"]) })
         break unless page["has_more"] && data.any?
 
         after = data.last["id"]

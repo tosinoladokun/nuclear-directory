@@ -42,6 +42,12 @@ production:
     args: [ "wire_press" ]
     schedule: every 3 hours
 
+  # Emails Tosin forwards to leads@ (#757): read every hour, so his reply comes soon.
+  lead_forwards:
+    class: DataQuality::RunJob
+    args: [ "lead_forwards" ]
+    schedule: every hour at minute 45
+
   # Asks for each source a published fact cites, never-checked first, then the oldest check, and
   # records its answer (#510). Never unpublishes anything.
   link_check:
