@@ -3,7 +3,7 @@ require "test_helper"
 class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
   Plugin = DataQuality::Plugins::LeadFinder
   HOME = "https://www.freshfission.example".freeze
-  PAGE = "<html><body><h1>Fresh Fission</h1><p>Fresh Fission designs microreactors for remote sites.</p>" \
+  PAGE = "<html><head><title>Fresh Fission | Microreactors</title></head><body><h1>Fresh Fission</h1><p>Fresh Fission designs microreactors for remote sites.</p>" \
     "<p>Fresh Fission Inc., 1 Main St, Austin, TX 78701</p></body></html>".freeze
 
   setup do
@@ -86,5 +86,14 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     Plugin.call(lead("One More Nuclear").id, finder: finder)
     assert_equal Plugin::SEARCHES_PER_DAY, @searched.size
     assert_equal Plugin::SEARCHES_PER_DAY, Plugin.searches_in(Date.current)
+  end
+
+  test "Suggest a company: the typed text is read in place of the lead's name (#752)" do
+    typed = Lead.sighted!(name: "suggestion", kind: "company", key: "admin:1", label: "Suggested by Tosin")
+    result = DataQuality::CompanySuggestion.call("#{HOME}/about", lead_id: typed.id, finder: finder)
+    assert_equal [ :proposed, "Fresh Fission" ], [ result.outcome, result.name ], "a website alone: the name its own page gives"
+    result = DataQuality::CompanySuggestion.call("Fresh Fission", lead_id: typed.id, finder: finder(results: [ HOME ]))
+    assert_equal :proposed, result.outcome
+    assert_equal %i[outcome candidate_id organization_id name website reason found], result.to_h.keys
   end
 end

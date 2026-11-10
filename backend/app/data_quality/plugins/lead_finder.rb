@@ -29,7 +29,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   NEWS_HOSTS = /(?:\A|\.)(?:prnewswire|businesswire|globenewswire|accessnewswire|world-nuclear-news|ans|nucnet|neimagazine|utilitydive|reuters|bloomberg|yahoo)\.(?:com|org)\z/
   NOT_OWN = /(?:\A|\.)(?:linkedin|twitter|x|facebook|youtube|instagram|wikipedia|crunchbase|bloomberg|google|sec|prnewswire|cision)\.[a-z.]+\z/
 
-  def self.call(lead_id, finder: new) = finder.find(lead_id)
+  def self.call(lead_id, finder: new, input: nil) = finder.find(lead_id, input:)
 
   # Brave searches made in a month (each is a recorded crawl run), for PM's cost report:
   #   DataQuality::Plugins::LeadFinder.searches_in(Date.new(2026, 11))
@@ -44,10 +44,14 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Nothing to crawl on a schedule: each lead is found when asked.
   def crawl(_run) = {}
 
-  def find(lead_id)
+  # input: what Tosin typed (#752), read in place of the lead's name.
+  def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
+    lead = lead.with(name: input) if input.present?
     found = {}
     name, links = read_input(lead)
+    # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
+    name ||= site_name(links)
     found["name"] = name
     return unconfirmed(name, nil, "No company name to look for", found) if name.blank?
 
@@ -106,6 +110,15 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         slug = link[%r{linkedin\.com/company/([^/?#]+)}i, 1] and name ||= slug.tr("-_", " ").squish.titleize
       end
       [ name, links.reject { |link| link.match?(/linkedin\.com/i) } ]
+    end
+
+    def site_name(links)
+      site = links.filter_map { |link| own_host(link) }.first or return
+      page = snapshot(site) or return
+      doc = Nokogiri::HTML(page.content_text)
+      named = doc.at_css("meta[property='og:site_name']")&.[]("content").to_s.squish.presence ||
+        doc.at_css("title")&.text.to_s.split(/\s+[|\u2013\u2014-]\s+/).first.to_s.squish.presence
+      named if named && named.length.between?(2, 80)
     end
 
     # Websites to check, in order: given, a news link's About paragraph, EDGAR, search.
