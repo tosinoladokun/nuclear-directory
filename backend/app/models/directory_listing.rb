@@ -25,10 +25,17 @@ class DirectoryListing
 
   attr_reader :category, :tag, :query, :technology, :state, :sort, :role, :status, :type, :reactor
 
-  # Every filter the list accepted, in one place: the page cache key is built from this, so a new filter can't be
-  # forgotten there (the plants list's status, type and reactor were, and one cached page answered every variant).
-  # A search is never cached, so the query isn't part of it.
-  def cache_key_parts = [ category&.key, tag&.key, technology, state, sort, role, status, type, reactor ]
+  # Every parameter the list reads: the controller permits these, and the page cache key is built from the same
+  # list (the plants list's status, type and reactor were once left out, and one cached page answered every variant).
+  FILTERS = %i[category tag q technology state sort role status type reactor].freeze
+
+  # Every filter the list accepted but the search (a search is never cached), in FILTERS order: the page cache key.
+  def cache_key_parts
+    (FILTERS - %i[q]).map do |name|
+      value = public_send(name)
+      value.respond_to?(:key) ? value.key : value
+    end
+  end
 
   # Close names (#431): used only when an exact search finds nothing, so it
   # fills an empty result and never adds extras to a real one.
