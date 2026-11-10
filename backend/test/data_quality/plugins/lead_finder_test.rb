@@ -97,10 +97,10 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal %i[outcome candidate_id organization_id name website reason found], result.to_h.keys
   end
 
-  test "at most #{Plugin::FINDS_PER_DAY} finds a day, then unconfirmed for tomorrow (Infra)" do
+  test "at most #{Plugin::FINDS_PER_DAY} finds a day, then busy for tomorrow (Infra)" do
     Plugin::FINDS_PER_DAY.times { CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", stats: { "finds" => 1 }) }
     result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: finder)
-    assert_equal :unconfirmed, result.outcome
+    assert_equal :busy, result.outcome, "not one of the lead's tries"
     assert_match "limit", result.reason
     assert_not_requested :get, HOME
   end

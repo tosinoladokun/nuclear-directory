@@ -59,7 +59,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
     unless reserve(FINDS, FINDS_PER_DAY)
-      return unconfirmed(input.presence || lead.name, nil, "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", {})
+      # Not a try (Infra): the lead waits for tomorrow with its tries untouched.
+      return outcome(:busy, name: input.presence || lead.name, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", found: {})
     end
     lead = lead.with(name: input) if input.present?
     found = {}
