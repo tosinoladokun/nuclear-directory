@@ -40,11 +40,11 @@ class PageCacheKeysTest < ActiveSupport::TestCase
     assert_includes source, "*listing.cache_key_parts, shown", "the key holds the filters and the rows shown"
   end
 
-  test "cached page bodies read no request parameters; the list view only from" do
+  test "cached page bodies read no request parameters; the list view at most from" do
     %w[companies/show.html.erb plants/show.html.erb].each do |view|
       assert_no_match(/\bparams\b/, VIEWS.join(view).read, "#{view} is cached per record: it may read no parameter")
     end
-    assert_equal %i[from], params_read(VIEWS.join("directory/index.html.erb").read, "directory/index")
+    assert_empty params_read(VIEWS.join("directory/index.html.erb").read, "directory/index") - %i[from], "the list reads a parameter its key doesn't hold"
   end
 end
 
