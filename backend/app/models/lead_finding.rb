@@ -95,6 +95,8 @@ module LeadFinding
   end
 
   def self.write(lead, outcome:, organization_id:, candidate_id:, reason:, name:, website:, now:)
+    # A limit the finder hit isn't a look at the lead, whatever it's called.
+    outcome = :retry if outcome.to_s == "unconfirmed" && reason.to_s.start_with?("Today's limit")
     case outcome.to_s
     when "proposed"
       lead.update!(status: "added", note: nil, next_find_at: nil, candidate_id:)

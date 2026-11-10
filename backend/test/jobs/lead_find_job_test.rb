@@ -120,4 +120,11 @@ class LeadFindJobTest < ActiveJob::TestCase
     travel(1.minute) { Lead.sighted!(name: "His Co", kind: "company", key: "admin:suggest:his co", label: CompanySuggestion::LABEL) }
     assert_equal "His Co", LeadFinding.due.first.name
   end
+
+  test "an unconfirmed outcome that's really the finder's daily limit isn't a try" do
+    l = lead("Limit Co")
+    LeadFindJob.finder = ->(*) { Found.new(outcome: :unconfirmed, reason: "Today's limit of 50 finds is reached; tried again tomorrow") }
+    LeadFindJob.perform_now(l.id)
+    assert_equal [ "researching", 0, LeadFinding::BUSY ], l.reload.values_at(:status, :find_attempts, :note)
+  end
 end
