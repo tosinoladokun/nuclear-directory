@@ -30,7 +30,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-6".freeze
+  PROMPT_VERSION = "company_pages-7".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
@@ -69,7 +69,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     - description: one neutral sentence of what the company as a whole is or does, copied from the page (no adjectives like leading or
       world-class; leave it null if the page only has marketing language, a mission or vision statement, or describes one division,
       subsidiary or product line rather than the company).
-    - hq_city and hq_state: where its headquarters are, only if the page says headquarters. An office is not headquarters unless the page says so.
+    - hq_city and hq_state: where its headquarters are. Only from (a) an address the page labels headquarters, head office, main office,
+      corporate office, "our office" or "our address", or (b) the only street address on the page, next to the company's own name.
+      Never when the page lists several offices, plants or sites without marking one as the main one, and never another or parent
+      company's address. The quote is the full address line with the company's name and the city, state and ZIP as written.
     - founded_year: only if the quote contains the year it was founded.
     - legal_name: only an exact legal name with its suffix (Inc., LLC, Corp.), as written.
     - roles: what the company does, from the role keys given; never from "plans to", "aims to" or "will".
@@ -275,6 +278,17 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         "Technology keys: #{choices['technology'].map(&:first).join(', ')}\n\nPage text:\n#{text.first(12_000)}"
     end
 
+    HQ_LABEL = /\b(?:headquarter(?:s|ed)|head office|main office|corporate office|our office|our address)\b/i
+    # A US street address's "ST 12345" (or ZIP+4).
+    US_ADDRESS = /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/
+
+    # A labelled headquarters line, or an address line when the page has exactly one address.
+    def hq_quote_allowed?(quote, page_text)
+      return true if quote.to_s.match?(HQ_LABEL)
+
+      quote.to_s.match?(US_ADDRESS) && page_text.upcase.scan(US_ADDRESS).uniq.size == 1
+    end
+
     # Only what's in its quote, with a quote on the page; keys from the lists.
     def candidates(name, found, text, url: nil)
       page = text.downcase.squish
@@ -284,6 +298,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         value, quote = found.dig(field, "value"), found.dig(field, "quote")
         # Every value inside its own quote, a description included (Data Quality).
         next if value.blank? || !quoted.(value, quote)
+
+        # An HQ only as Data Quality rules it (10 Nov): a labelled main address,
+        # or the page's one street address; never one of several unmarked.
+        next if %w[hq_city hq_state].include?(field) && !hq_quote_allowed?(quote, page)
 
         value = value.to_s.strip
         # The directory keeps a state as its two-letter code ("Texas" in the quote is TX).

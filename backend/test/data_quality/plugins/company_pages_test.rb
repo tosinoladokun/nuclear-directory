@@ -72,7 +72,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     rules = DataQuality::Plugins::CompanyPages::INSTRUCTIONS
     assert_includes rules, "a menu heading, a navigation label or a list\nof links is not enough"
     assert_includes rules, "If the page is about another company"
-    assert_includes rules, "An office is not headquarters unless the page says so."
+    assert_includes rules, "Never when the page lists several offices, plants or sites without marking one as the main one"
   end
 
   test "part 2: a listing with its ticker in the quote, and links naming the other party, in the directory's verbs" do
@@ -462,5 +462,14 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     @company.update_columns(enrich_requested_at: Time.current)
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     assert_nil edgar.reload.extracted_sha256
+  end
+
+  test "an HQ from a contact page only when labelled main or the page's one address (DQ, 10 Nov)" do
+    plugin = DataQuality::Plugins::CompanyPages.new
+    allowed = ->(quote, page) { plugin.send(:hq_quote_allowed?, quote, page) }
+    assert allowed.("Corporate Office: Acme Fission, 1 Main St, Austin, TX 78701", "Corporate Office: Acme Fission, 1 Main St, Austin, TX 78701. Plant: Ely, NV 89301")
+    assert allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Contact us. Acme Fission, 1 Main St, Austin, TX 78701")
+    refute allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Offices: 1 Main St, Austin, TX 78701. 2 Elm St, Ely, NV 89301"), "one of several unmarked"
+    refute allowed.("Our team works in Austin", "Our team works in Austin"), "no address, no label"
   end
 end
