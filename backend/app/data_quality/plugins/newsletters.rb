@@ -63,7 +63,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
         http_status: 200, title: "#{sender_domain(mail['from'])}: #{email['subject'].to_s.gsub(EMAIL, '[email]').truncate(150)}",
         status_reason: (valid ? nil : "DMARC didn't pass, or no HTML"),
-        **(valid ? stored(body) : {}))
+        **sender_attributes(mail), **(valid ? stored(body) : {}))
       stored += 1 if valid
     end
     { "emails" => stored, "opened" => opened }
@@ -110,6 +110,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
     def lead_key = "newsletter"
     def lead_label = "Newsletter"
     def after_leads(_source, _added, _listed) = nil
+    def sender_attributes(_mail) = {}
 
     # What's kept of an email (DQ, 10 Nov: the repo is public): no images
     # (tracking pixels), no unsubscribe, preferences or "you're receiving

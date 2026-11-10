@@ -6,7 +6,7 @@
 # - only mail from LEADS_ALLOWED_SENDERS (comma-separated, in the environment, never
 #   in the repo) with DMARC pass is read; anything else is dropped unread;
 # - any company the email names, not only US ones (the lead finder checks);
-# - one short reply to the sender: "Added N leads: A, B. Already listed: C."
+# - one short reply to the allow-listed address that sent it: "Added N leads: A, B. Already listed: C."
 # A LinkedIn link is never opened: the lead finder takes its name only.
 class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
   INBOX = "leads@mail.nuclear-directory.org".freeze
@@ -49,11 +49,22 @@ class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
       false
     end
 
+    # Which allow-listed address sent it, by its place in the list (no address is stored).
+    def sender_attributes(mail)
+      address = Mail::Address.new(mail["from"].to_s).address.to_s.downcase
+      index = @forwarders.index(address)
+      index ? { last_modified: "sender:#{index}" } : {}
+    rescue Mail::Field::ParseError
+      {}
+    end
+
     # One reply per email, to the forwarder, sent once (the source remembers it in its etag).
     def after_leads(source, added, listed)
       return if source.etag == "replied"
 
-      to = @forwarders.first or return
+      # The allow-listed address that sent it (Infra), never another one.
+      index = source.last_modified.to_s[/\Asender:(\d+)\z/, 1] or return
+      to = @forwarders[index.to_i] or return
       lines = [ "Added #{added.size} #{'lead'.pluralize(added.size)}#{": #{added.join(', ')}" if added.any?}." ]
       lines << "Already listed: #{listed.join(', ')}." if listed.any?
       # One Idempotency-Key per email, so a retry after a lost answer never sends a second reply (Copilot);

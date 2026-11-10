@@ -59,4 +59,15 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
     assert_raises(Plugin::ReplyFailed) { failing.extract(source, nil) }
     assert_nil source.reload.etag
   end
+
+  test "the reply goes to the allow-listed address that sent it (Infra)" do
+    @answers["#{API}?limit=100"]["data"].first["from"] = "Owner <second@example.com>"
+    @answers["#{API}/f1"]["from"] = "Owner <second@example.com>"
+    two = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new({ "companies" => [] }), sleeper: ->(_) { }, forwarders: "owner@example.com, second@example.com",
+      sender: ->(**reply) { @replies << reply; true })
+    two.crawl(nil)
+    two.extract(Source.find_by!(source_kind: "lead_forwards"), nil)
+    assert_equal "second@example.com", @replies.sole[:to]
+    refute_includes Source.find_by!(source_kind: "lead_forwards").attributes.values.join(" "), "second@example.com", "no address stored"
+  end
 end
