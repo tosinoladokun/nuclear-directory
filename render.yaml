@@ -109,7 +109,7 @@ services:
         sync: false
       # Addresses whose mail to leads@ becomes leads (#757), comma-separated,
       # set by Tosin. Unset, leads@ isn't read.
-      - key: LEAD_FORWARDERS
+      - key: LEADS_ALLOWED_SENDERS
         sync: false
       # Its backup before writing: the same script, key and repo as the
       # backup cron job below, tagged backup-<time>-predeploy.
