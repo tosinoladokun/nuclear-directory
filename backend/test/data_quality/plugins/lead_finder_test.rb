@@ -80,4 +80,11 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     result = Plugin.call(lead("Ghost Nuclear").id, finder: Plugin.new(search_key: nil))
     assert_equal [ :unconfirmed, "No website found" ], [ result.outcome, result.reason ]
   end
+
+  test "at most #{Plugin::SEARCHES_PER_DAY} searches a day, each counted for the month's cost" do
+    Plugin::SEARCHES_PER_DAY.times { |n| Plugin.call(lead("Ghost #{n} Nuclear").id, finder: finder) }
+    Plugin.call(lead("One More Nuclear").id, finder: finder)
+    assert_equal Plugin::SEARCHES_PER_DAY, @searched.size
+    assert_equal Plugin::SEARCHES_PER_DAY, Plugin.searches_in(Date.current)
+  end
 end

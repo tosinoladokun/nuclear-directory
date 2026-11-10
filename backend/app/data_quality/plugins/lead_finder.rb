@@ -20,7 +20,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   Outcome = Data.define(:outcome, :candidate_id, :organization_id, :name, :website, :reason, :found)
 
   SEARCH_API = "https://api.search.brave.com/res/v1/web/search".freeze
+  # Paid, no attribution credit (PM, 10 Nov): at most this many a day, ~$3 a month at $5 per 1,000.
   SEARCHES_PER_DAY = 20
+  USAGE = "brave_searches".freeze
   SEARCH_RESULTS = 5
   NUCLEAR = DataQuality::Plugins::WirePress::STRONG_NUCLEAR
   US = /\b(?:United States|U\.S\.A?\.?|USA)\b|\b(?:A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\s+\d{5}\b/
@@ -29,9 +31,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
   def self.call(lead_id, finder: new) = finder.find(lead_id)
 
+  # Brave searches made in a month (each is a recorded crawl run), for PM's cost report:
+  #   DataQuality::Plugins::LeadFinder.searches_in(Date.new(2026, 11))
+  def self.searches_in(month) = CrawlRun.where(source_kind: "lead_finder", stage: "crawl")
+    .where("stats ? '#{USAGE}'").where(started_at: month.beginning_of_month.all_month).count
+
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, search: nil,
-    # Search runs only when switched on (LEAD_FINDER_SEARCH=on), not just because a key is set (PM, 10 Nov: on hold).
-    search_key: (ENV["BRAVE_SEARCH_API_KEY"] if ENV["LEAD_FINDER_SEARCH"] == "on"), pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    search_key: ENV["BRAVE_SEARCH_API_KEY"], pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
     @fetcher, @directory, @search, @search_key, @pipeline = fetcher, directory, search, search_key, pipeline
   end
 
@@ -157,14 +163,15 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       return [] if @search_key.blank? && @search.nil?
       return [] if searches_today >= SEARCHES_PER_DAY
 
-      Rails.cache.increment(search_counter_key, 1, expires_in: 2.days) || Rails.cache.write(search_counter_key, 1, expires_in: 2.days)
-      @searches_today = searches_today + 1
+      # Each search is recorded (never its results), so the cap and the monthly cost count from the database.
+      CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { USAGE => 1 })
+      Rails.logger.info("[lead_finder] Brave search #{searches_today + 1}/#{SEARCHES_PER_DAY} today; " \
+        "#{self.class.searches_in(Date.current)} this month")
       urls = (@search || method(:brave)).call("\"#{name}\" nuclear")
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
 
-    def search_counter_key = "lead_finder:searches:#{Date.current.iso8601}"
-    def searches_today = @searches_today ||= Rails.cache.read(search_counter_key).to_i
+    def searches_today = CrawlRun.where(source_kind:, stage: "crawl", started_at: Time.current.all_day).where("stats ? '#{USAGE}'").count
 
     def brave(query)
       uri = URI("#{SEARCH_API}?#{URI.encode_www_form(q: query, count: SEARCH_RESULTS, country: 'us')}")
