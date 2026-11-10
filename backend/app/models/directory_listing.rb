@@ -25,6 +25,11 @@ class DirectoryListing
 
   attr_reader :category, :tag, :query, :technology, :state, :sort, :role, :status, :type, :reactor
 
+  # Every filter the list accepted, in one place: the page cache key is built from this, so a new filter can't be
+  # forgotten there (the plants list's status, type and reactor were, and one cached page answered every variant).
+  # A search is never cached, so the query isn't part of it.
+  def cache_key_parts = [ category&.key, tag&.key, technology, state, sort, role, status, type, reactor ]
+
   # Close names (#431): used only when an exact search finds nothing, so it
   # fills an empty result and never adds extras to a real one.
   FUZZY_THRESHOLD = 0.45

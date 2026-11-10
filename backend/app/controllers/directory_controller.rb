@@ -31,8 +31,9 @@ class DirectoryController < ApplicationController
     # Up to CACHED_PAGES pages of rows: ?shown=4..1000 would each be a full list under its own key (Infra).
     if !@listing.searching? && request.format.html? && !turbo_frame_request? && @shown <= CACHED_PAGES * PAGE
       listing, shown = @listing, @shown
-      # Only the values the list accepted (a junk parameter is dropped), so the keys stay few.
-      @page_key = [ "companies", listing.category&.key, listing.tag&.key, listing.technology, listing.state, listing.sort, listing.role, shown ]
+      # The key is built from the listing's accepted filters (DirectoryListing#cache_key_parts), so only values it accepted
+      # count (a junk parameter is dropped) and a new filter can't be left out.
+      @page_key = [ "companies", *listing.cache_key_parts, shown ]
       @load_list = -> { self.class.list(listing, shown, counts: true) }
       return
     end
@@ -56,15 +57,13 @@ class DirectoryController < ApplicationController
     list = self.class.list(@listing, @shown, counts: !turbo_frame_request?, totals: [ @companies_total, @plants_total ])
     @companies, @plants, @counts, @all_count, @short = list.values_at(:companies, :plants, :counts, :all_count, :short)
 
-    # A suggested search on the home page says so (from=suggestion).
-    source = params[:from] == "suggestion" ? "suggestion" : "typed"
     # Show more (?shown=2) is the same search, expanded: not a new one.
     # A gap is a search of the whole directory finding nothing: a category,
     # tag or filter narrowing it to nothing isn't one. What the page showed
     # decides it, so a typo the close-match fallback answers (#496) is a hit
     # (closing a gap it had), while analytics keep the exact count.
     unfiltered = !@listing.filtered? && @listing.category.nil? && @listing.tag.nil?
-    track_search(@listing.query, results: exact_total, source:, gap: (params[:q].to_s if unfiltered),
+    track_search(@listing.query, results: exact_total, gap: (params[:q].to_s if unfiltered),
       shown: @companies_total + @plants_total) if @listing.searching? && params[:shown].blank?
   end
 

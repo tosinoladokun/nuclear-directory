@@ -52,6 +52,44 @@ class PageCacheTest < ActionDispatch::IntegrationTest
     assert fresh_cards.present?
   end
 
+  # Tosin, 5 Nov: the status chips and the type and reactor filters on Plants and sites did nothing, because a cached page
+  # was served for every variant of them.
+  test "the plants list is cached per status, type and reactor, not once for all of them" do
+    require_relative "../support/directory_builders"
+    extend DirectoryBuilders
+    cite!(plant("Operating Reactor One", facility_type: "power_reactor", status: "operating", reactor_type: "PWR", city: "Austin", state: "TX"))
+    cite!(plant("Building Reactor Two", facility_type: "power_reactor", status: "under_construction", reactor_type: "BWR", city: "Austin", state: "TX"))
+    cite!(plant("Test Research Rig", facility_type: "research_reactor", status: "operating", city: "Austin", state: "TX"))
+    names = -> { css_select("a.nd-prow .nd-prow__name").map { |node| node.text.strip }.sort }
+
+    get "/companies?category=plants"
+    assert_equal [ "Building Reactor Two", "Operating Reactor One", "Test Research Rig" ], names.call
+    get "/companies?category=plants&status=under_construction"
+    assert_equal [ "Building Reactor Two" ], names.call, "the status chip filters"
+    get "/companies?category=plants&status=operating"
+    assert_equal [ "Operating Reactor One", "Test Research Rig" ], names.call
+    get "/companies?category=plants&type=research_reactor"
+    assert_equal [ "Test Research Rig" ], names.call, "the type filter"
+    get "/companies?category=plants&reactor=BWR"
+    assert_equal [ "Building Reactor Two" ], names.call, "the reactor filter"
+    get "/companies?category=plants&status=under_construction"
+    assert_equal [ "Building Reactor Two" ], names.call, "and a second visit to a variant is the same, from the cache"
+  end
+
+  test "every filter the listing accepts changes its cache key" do
+    base = DirectoryListing.new(category: "plants").cache_key_parts
+    { tag: "smr", technology: "smr", state: "TX", sort: "name", role: "reactor_vendor", status: "operating", type: "research_reactor", reactor: "BWR" }.each do |filter, value|
+      category = filter == :role ? "reactor-developers" : "plants"
+      variant = DirectoryListing.new(category:, filter => value)
+      assert_not_equal base, variant.cache_key_parts, "#{filter} must be part of the page cache key" if variant.public_send(filter).present?
+    end
+    DirectoryListing.instance_method(:initialize).parameters.map(&:last).each do |name|
+      next if %i[q fuzzy category].include?(name)
+
+      assert_respond_to DirectoryListing.new, name, "a filter argument (#{name}) the key can't see"
+    end
+  end
+
   test "the companies list is cached per filter; a search never is" do
     get "/companies"
     fresh = body
