@@ -27,11 +27,18 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   FINDS_PER_DAY = 50
   FINDS = "finds".freeze
   LEAD_MARK = "#lead-finder".freeze
+  # Brave's plan allows 1 request a second (Infra): this much between our calls.
+  SEARCH_GAP = 1.1
+  # Another run holding this kind's lock: waits and tries again, then :busy (not a try).
+  BUSY_TRIES = 3
+  BUSY_WAIT = 30
   SEARCH_RESULTS = 5
   NUCLEAR = DataQuality::Plugins::WirePress::STRONG_NUCLEAR
   US = /\b(?:United States|U\.S\.A?\.?|USA)\b|\b(?:A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\s+\d{5}\b/
   NEWS_HOSTS = /(?:\A|\.)(?:prnewswire|businesswire|globenewswire|accessnewswire|world-nuclear-news|ans|nucnet|neimagazine|utilitydive|reuters|bloomberg|yahoo)\.(?:com|org)\z/
   NOT_OWN = /(?:\A|\.)(?:linkedin|twitter|x|facebook|youtube|instagram|wikipedia|crunchbase|bloomberg|google|sec|prnewswire|cision)\.[a-z.]+\z/
+
+  @@last_search = nil
 
   def self.call(lead_id, finder: new, input: nil) = finder.find(lead_id, input:)
 
@@ -41,8 +48,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     .where("stats ? '#{USAGE}'").where(started_at: month.beginning_of_month.all_month).count
 
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, search: nil,
-    search_key: ENV["BRAVE_SEARCH_API_KEY"], pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
-    @fetcher, @directory, @search, @search_key, @pipeline = fetcher, directory, search, search_key, pipeline
+    search_key: ENV["BRAVE_SEARCH_API_KEY"], sleeper: ->(seconds) { sleep seconds }, pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    @fetcher, @directory, @search, @search_key, @pipeline, @sleeper = fetcher, directory, search, search_key, pipeline, sleeper
   end
 
   # Nothing to crawl on a schedule: each lead is found when asked.
@@ -195,6 +202,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
       Rails.logger.info("[lead_finder] Brave search #{counted_today(USAGE)}/#{SEARCHES_PER_DAY} today; " \
         "#{self.class.searches_in(Date.current)} this month")
+      wait = @@last_search && (SEARCH_GAP - (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @@last_search))
+      @sleeper.call(wait) if wait&.positive?
+      @@last_search = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       urls = (@search || method(:brave)).call("\"#{name}\" nuclear")
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
@@ -257,7 +267,15 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       verified = Source.find_or_initialize_by(url: "#{page.final_url.presence || page.url}#{LEAD_MARK}")
       verified.update!(source_kind:, title: name, crawl_status: "ok", fetched_at: page.fetched_at, http_status: page.http_status,
         content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil)
-      @pipeline.call(self)
+      BUSY_TRIES.times do |attempt|
+        @pipeline.call(self)
+        break
+      rescue DataQuality::Pipeline::AlreadyRunning
+        # A crawl's run holds the lock: wait, and in the end say "busy", which isn't one of the lead's tries (Infra).
+        return outcome(:busy, name:, website:, reason: "Another run was busy; tried again later", found:) if attempt == BUSY_TRIES - 1
+
+        @sleeper.call(BUSY_WAIT)
+      end
       candidate = Candidate.where(source: verified, kind: "organization").order(:id).last
       return unconfirmed(name, website, "The page has no sentence naming #{name} and its nuclear work", found) unless candidate
 

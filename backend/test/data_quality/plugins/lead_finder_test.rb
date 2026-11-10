@@ -135,4 +135,22 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     result = DataQuality::LeadFinder.call(lead("Fresh Fission", url: HOME), finder: finder)
     assert_equal :proposed, result.to_h[:outcome]
   end
+
+  test "a busy pipeline is waited for, then :busy, never a lost try (Infra)" do
+    slept = []
+    busy = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, sleeper: ->(seconds) { slept << seconds },
+      pipeline: ->(_) { raise DataQuality::Pipeline::AlreadyRunning })
+    result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: busy)
+    assert_equal :busy, result.outcome
+    assert_equal [ Plugin::BUSY_WAIT ] * (Plugin::BUSY_TRIES - 1), slept
+  end
+
+  test "searches are at least #{Plugin::SEARCH_GAP} s apart (Brave's 1 a second)" do
+    Plugin.class_variable_set(:@@last_search, nil)
+    slept = []
+    spaced = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(_) { [] }, sleeper: ->(seconds) { slept << seconds })
+    2.times { |n| Plugin.call(lead("Ghost #{n} Nuclear").id, finder: spaced) }
+    assert_equal 1, slept.size
+    assert_operator slept.first, :<=, Plugin::SEARCH_GAP
+  end
 end
