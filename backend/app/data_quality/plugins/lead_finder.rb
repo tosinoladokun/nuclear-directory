@@ -29,7 +29,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   LEAD_MARK = "#lead-finder".freeze
   # Brave's plan allows 1 request a second (Infra): this much between our calls.
   SEARCH_GAP = 1.1
-  # Another run holding this kind's lock: waits and tries again, then :busy (not a try).
+  # Another run holding this kind's lock: waits and tries again, then :retry (not a try).
   BUSY_TRIES = 3
   BUSY_WAIT = 30
   SEARCH_RESULTS = 5
@@ -60,7 +60,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
     unless reserve(FINDS, FINDS_PER_DAY)
       # Not a try (Infra): the lead waits for tomorrow with its tries untouched.
-      return outcome(:busy, name: input.presence || lead.name, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", found: {})
+      return outcome(:retry, name: input.presence || lead.name, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", found: {})
     end
     lead = lead.with(name: input) if input.present?
     found = {}
@@ -84,7 +84,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
       return propose(name, website, page, found)
     end
-    return outcome(:busy, name:, reason: "The search service was busy; tried again later", found:) if @search_failed && !found["checked"]
+    return outcome(:retry, name:, reason: "The search service was busy; tried again later", found:) if @search_failed && !found["checked"]
 
     unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company" : "No website found", found)
   end
@@ -278,7 +278,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         break
       rescue DataQuality::Pipeline::AlreadyRunning
         # A crawl's run holds the lock: wait, and in the end say "busy", which isn't one of the lead's tries (Infra).
-        return outcome(:busy, name:, website:, reason: "Another run was busy; tried again later", found:) if attempt == BUSY_TRIES - 1
+        return outcome(:retry, name:, website:, reason: "Another run was busy; tried again later", found:) if attempt == BUSY_TRIES - 1
 
         @sleeper.call(BUSY_WAIT)
       end

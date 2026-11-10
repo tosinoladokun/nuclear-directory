@@ -100,7 +100,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
   test "at most #{Plugin::FINDS_PER_DAY} finds a day, then busy for tomorrow (Infra)" do
     Plugin::FINDS_PER_DAY.times { CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", stats: { "finds" => 1 }) }
     result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: finder)
-    assert_equal :busy, result.outcome, "not one of the lead's tries"
+    assert_equal :retry, result.outcome, "not one of the lead's tries"
     assert_match "limit", result.reason
     assert_not_requested :get, HOME
   end
@@ -136,12 +136,12 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal :proposed, result.to_h[:outcome]
   end
 
-  test "a busy pipeline is waited for, then :busy, never a lost try (Infra)" do
+  test "a busy pipeline is waited for, then :retry, never a lost try (Infra)" do
     slept = []
     busy = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, sleeper: ->(seconds) { slept << seconds },
       pipeline: ->(_) { raise DataQuality::Pipeline::AlreadyRunning })
     result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: busy)
-    assert_equal :busy, result.outcome
+    assert_equal :retry, result.outcome
     assert_equal [ Plugin::BUSY_WAIT ] * (Plugin::BUSY_TRIES - 1), slept
   end
 
@@ -158,6 +158,6 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     Plugin.class_variable_set(:@@last_search, nil)
     stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 429)
     real = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { })
-    assert_equal :busy, Plugin.call(lead("Ghost Nuclear").id, finder: real).outcome
+    assert_equal :retry, Plugin.call(lead("Ghost Nuclear").id, finder: real).outcome
   end
 end
