@@ -20,7 +20,7 @@ class DataQuality::Plugins::ArpaEProjectsTest < ActiveSupport::TestCase
   test "is the plug-in for arpa_e_projects, nightly, capped" do
     assert_instance_of Plugin, DataQuality::Plugin.for("arpa_e_projects")
     assert_includes DataQuality::DailyCrawlJob::SOURCE_KINDS, "arpa_e_projects"
-    assert_equal 5, plugin.new_sources_per_run
+    assert_equal 10, plugin.new_sources_per_run
   end
 
   test "reads the fission and fusion projects once a day, each stored at its page, only when new or changed" do

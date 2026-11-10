@@ -26,7 +26,8 @@ class DataQuality::Plugins::ArpaEProjects < DataQuality::Plugin
   SUB_AREAS = { "74" => "nuclear fission", "81" => "nuclear fusion" }.freeze
   PAGE_SIZE = 50
   MAX_PAGES = 10
-  NEW_PER_NIGHT = 5
+  # 10 a night (DQ, 10 Nov: real nuclear awardees; Tosin wants more companies).
+  NEW_PER_NIGHT = 10
   FIELDS = [ "Project", "Organization", "Award", "Program", "Status", "Location", "Released", "Area", "Funder", "Website" ].freeze
 
   Project = Data.define(:facts) do
