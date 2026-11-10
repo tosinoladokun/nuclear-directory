@@ -102,4 +102,21 @@ class DataQuality::Plugins::WirePressTest < ActiveSupport::TestCase
     assert plugin.quote_in_source?(release, claims.sole[:quote])
     assert_equal 0, DataQuality::Stages::Crawl.call(plugin: plugin(now: Time.zone.local(2026, 11, 3, 17))).stats.fetch("releases", 0), "read once"
   end
+
+  test "each About heading keeps its own text and links; inline headings and markup read as shown (Copilot)" do
+    url = "https://www.prnewswire.com/news-releases/sections-2.html"
+    page = <<~HTML
+      <html><body><section class="release-body"><p>News.</p>
+      <p><b>About Fresh Energy</b></p><p>Fresh Energy builds nuclear-ready grid software for utilities.</p>
+      <p><b>About Fresh Fission</b></p><p><b>Fresh Fission</b> designs microreactors for remote sites. Visit <a href="https://freshfission.example/">our website</a>.</p>
+      <p><b>About Inline Atom:</b> Inline Atom makes <i>TRISO</i> fuel for reactors. <a href="https://inlineatom.example">inlineatom.example</a></p>
+      </section></body></html>
+    HTML
+    release = Source.create!(url:, source_kind: "wire_press", crawl_status: "ok", content_text: page, content_sha256: "x")
+    claims = plugin.extract(release, nil)
+    assert_equal [ { "name" => "Fresh Fission", "website" => "https://freshfission.example" }, { "name" => "Inline Atom", "website" => "https://inlineatom.example" } ],
+      claims.map { |c| c[:payload] }, "Fresh Energy has no link of its own: never Fresh Fission's"
+    assert(claims.all? { |c| plugin.quote_in_source?(release, c[:quote]) })
+    assert_includes plugin.verification_context(release, claims.first[:quote]), "https://freshfission.example/", "the verifier sees the link target"
+  end
 end

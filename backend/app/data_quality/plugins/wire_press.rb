@@ -88,28 +88,45 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
     items.reject { |item| read.include?(item.url) }.sort_by(&:published_on).reverse
   end
 
-  ABOUT = /\AAbout\s+(.{2,80}?)\s*:?\z/
-  # The issuer's own "About <Company>" paragraph: a new company when it
-  # states nuclear work, links the company's own https site and isn't in
-  # the directory. Its description, HQ and category come from that site
-  # (Enrich, the same night).
+  ABOUT = /\AAbout\s+([^:]{2,80}?)\s*:?\z/
+  ABOUT_INLINE = /\AAbout\s+([^:]{2,80}?)\s*:/
+  # The issuer's own "About <Company>" section: a new company when its text
+  # names the company in full, states nuclear work, links the company's own
+  # https site and the company isn't in the directory. Its description, HQ
+  # and category come from that site (Enrich, the same night).
   def release_claims(source)
+    about_sections(source).filter_map do |name, text, hrefs|
+      next if name.match?(/\A(?:the|this|us)\b/i) || @directory.organization(name:)
+      next unless text.match?(STRONG_NUCLEAR) && text.downcase.include?(name.downcase)
+
+      website = hrefs.filter_map { |href| own_site(href) }.first or next
+      { kind: "organization", quote: text.truncate(300, separator: " ", omission: "").strip, payload: { "name" => name, "website" => website } }
+    end.uniq { |claim| claim[:payload]["name"] }
+  end
+
+  # [[name, text, hrefs]]: each About heading (its own block, or bold at the
+  # start of a paragraph) with its own text and links, up to the next About
+  # heading. Text reads as the page shows it, across inline markup.
+  def about_sections(source)
     return [] if source.content_text.blank?
 
     body = Nokogiri::HTML(source.content_text).at_css("section.release-body, .release-body") or return []
-    paragraphs = body.css("p, h2, h3, b, strong").to_a
-    paragraphs.each_with_index.filter_map do |heading, index|
-      name = heading.text.squish[ABOUT, 1] or next
-      next if name.match?(/\A(?:the|this|us)\b/i) || @directory.organization(name:)
+    sections = []
+    body.css("p, h2, h3, h4, div:not(:has(p, div))").each do |block|
+      text = block.xpath(".//text()").map(&:text).join(" ").squish
+      if (name = text[ABOUT, 1])
+        sections << [ name, [], [] ]
+        next
+      elsif (name = text[ABOUT_INLINE, 1])
+        sections << [ name, [], [] ]
+        text = text.sub(ABOUT_INLINE, "").strip
+      end
+      next unless (current = sections.last)
 
-      about = paragraphs[(index + 1)..].find { |node| node.name == "p" && node.text.squish.length > 40 } or next
-      # The quote is the paragraph's opening text, before its first link or markup, as the page shows it.
-      text = about.children.take_while(&:text?).map(&:text).join.squish
-      next unless text.match?(STRONG_NUCLEAR) && text.downcase.include?(name.downcase.split.first.to_s)
-
-      website = about.css("a[href]").filter_map { |link| own_site(link["href"]) }.first or next
-      { kind: "organization", quote: text.truncate(300, separator: " ", omission: "").strip, payload: { "name" => name, "website" => website } }
-    end.uniq { |claim| claim[:payload]["name"] }
+      current[1] << text if text.present?
+      current[2].concat(block.css("a[href]").map { |link| link["href"].to_s.strip })
+    end
+    sections.filter_map { |name, texts, hrefs| [ name, texts.first.to_s, hrefs ] if texts.any? }
   end
 
   BOILERPLATE_HOSTS = /(?:\A|\.)(?:prnewswire|cision|linkedin|twitter|x|facebook|youtube|instagram|sec)\.(?:com|gov)\z/
@@ -147,7 +164,9 @@ class DataQuality::Plugins::WirePress < DataQuality::Plugins::TradePress
 
     text = visible_text(source)
     at = text.index(quote.to_s.squish) or return
-    text[[ at - 1_500, 0 ].max, 3_000]
+    # The section's link targets too, so its website can be checked.
+    links = about_sections(source).find { |_, section, _| section.include?(quote.to_s.squish) }&.last.to_a
+    [ text[[ at - 1_500, 0 ].max, 3_000], ("Links in this section: #{links.join(' ')}" if links.any?) ].compact.join("\n")
   end
 
   def source_facts(source)
