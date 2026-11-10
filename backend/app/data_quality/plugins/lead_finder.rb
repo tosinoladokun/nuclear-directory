@@ -53,7 +53,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         return outcome(:duplicate, name:, website:, organization_id: known.id, reason: "Its website is already listed", found:)
       end
       verdict, page, why = verify(name, website)
-      (found["checked"] ||= []) << { "website" => website, "verdict" => verdict.to_s, "why" => why }
+      (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
       next unless verdict == :ok
 
       return propose(name, website, page, found)
@@ -120,8 +120,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         sites << edgar
       end
       if sites.empty?
+        # Brave's terms forbid keeping search results: only how many were checked is noted, and only a site
+        # that then checks out on its own home page is kept (as the company's website).
         results = search(name)
-        found["search"] = results if results.any?
+        found["searched"] = results.size if results.any?
         sites.concat(results)
       end
       sites.uniq
@@ -185,7 +187,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     # [:ok | :not_found | :not_named | :not_nuclear | :not_us, page, why]
     def verify(name, website)
-      page = snapshot(website) or return [ :not_found, nil, "Couldn't read #{website}" ]
+      page = snapshot(website) or return [ :not_found, nil, "Couldn't read the site" ]
       text = visible_text(page)
       return [ :not_named, page, "The page doesn't name #{name}" ] unless text.downcase.include?(name.downcase)
       return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear?(text, name)

@@ -31,7 +31,8 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     result = Plugin.call(lead("Fresh Fission").id, finder: finder(results: [ "https://www.linkedin.com/company/fresh", "#{HOME}/team" ]))
     assert_equal :proposed, result.outcome
     assert_equal [ "\"Fresh Fission\" nuclear" ], @searched
-    assert_equal [ "https://www.freshfission.example" ], result.found["search"], "LinkedIn is never a website"
+    assert_equal 1, result.found["searched"], "LinkedIn is never a website; results themselves are never kept (Brave's terms)"
+    refute_includes result.found.to_s, "linkedin"
   end
 
   test "a LinkedIn link gives the name only and is never fetched" do
