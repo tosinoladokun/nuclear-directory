@@ -45,8 +45,22 @@ module LeadFinding
 
   # Where a lead is, in one word for the admin (PM, 10 Nov): Finding, Waiting for check, In your inbox, Created,
   # Said no, Already listed, Couldn't confirm.
+  SAID_NO = "Said no".freeze
+  CLOSED = "Closed at check".freeze
+
+  # Its claim was rejected: by a person (Said no) or at Data Quality's check, with its reason.
+  def self.closed_at_check(lead, claim)
+    by_person = claim.reviewed_by.to_s.start_with?("human:")
+    why = (claim.dq_reason.presence || claim.notes.to_s.lines.last.to_s.squish.presence || "no reason given").truncate(300)
+    reason = by_person ? SAID_NO : "#{CLOSED}: #{why}"
+    lead.update!(status: "ignored", reason:, note: reason, next_find_at: nil,
+      decided_by: claim.reviewed_by.presence || "agent:dq", decided_at: claim.reviewed_at || Time.current)
+  end
+
   def self.state(lead)
     note = lead.note.to_s
+    return SAID_NO if lead.status_ignored? && lead.reason == SAID_NO
+    return note if lead.status_ignored? && note.start_with?(CLOSED)
     return "Couldn't confirm" if note.start_with?(UNCONFIRMED) || lead.status_ignored?
     return "Already listed" if lead.status_added? && lead.record_id && lead.candidate_id.nil?
     return "Finding" unless lead.status_added?

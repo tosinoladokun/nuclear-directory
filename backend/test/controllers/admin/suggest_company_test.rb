@@ -99,7 +99,7 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
       subject_type: "Organization", subject_id: company.id)
     lead.update!(status: "added", candidate: claim)
     assert_equal "Created", LeadFinding.state(lead)
-    claim.update!(status: "rejected")
+    claim.update!(status: "rejected", reviewed_by: "human:tosin")
     assert_equal "Said no", LeadFinding.state(lead.reload)
   end
 
@@ -111,5 +111,20 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     assert_equal "Couldn't confirm", LeadFinding.state(lead)
     assert_equal [ "researching", 1 ], lead.values_at(:status, :find_attempts)
     assert_in_delta 1.week.from_now, lead.next_find_at, 1.minute
+  end
+
+  test "its claim closed at Data Quality's check closes the lead with the reason; Tosin's No closes it as Said no" do
+    page = Source.create!(url: "https://closed.example", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    leads = %w[Dup\ Co Nope\ Co].map do |name|
+      claim = Candidate.create!(source: page, kind: "organization", status: "needs_review", payload: { "name" => name }, quote: "q")
+      Lead.sighted!(name:, kind: "company", key: "admin:suggest:#{name.downcase}", label: CompanySuggestion::LABEL).tap { |l| l.update!(status: "added", candidate: claim) }
+    end
+    leads.first.candidate.update!(status: "rejected", reviewed_by: "agent:dq", dq_reason: "duplicate of Oklo")
+    leads.last.candidate.update!(status: "rejected", reviewed_by: "human:tosin")
+    assert_equal [ "ignored", "Closed at check: duplicate of Oklo" ], [ leads.first.reload.status, LeadFinding.state(leads.first) ]
+    assert_equal [ "ignored", "Said no" ], [ leads.last.reload.status, LeadFinding.state(leads.last) ]
+    get admin_inbox_path
+    assert_select "#lead-#{leads.first.id}", text: /Dup Co Closed at check: duplicate of Oklo/
+    assert_select "#lead-#{leads.last.id}", count: 0
   end
 end

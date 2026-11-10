@@ -20,6 +20,9 @@ class Candidate < ApplicationRecord
   belongs_to :verify_run, class_name: "CrawlRun", optional: true
   belongs_to :subject, polymorphic: true, optional: true
 
+  # A lead's claim closed (#752): Data Quality's check (duplicate, not US, not nuclear) or Tosin's No closes the lead with it.
+  after_update_commit :close_its_lead, if: -> { saved_change_to_status? && status_rejected? }
+
   validates :ai_recommendation, inclusion: { in: AI_RECOMMENDATIONS }, allow_nil: true
   validates :ai_confidence, numericality: { in: 0..1 }, allow_nil: true
 
@@ -36,4 +39,9 @@ class Candidate < ApplicationRecord
   # Checks the columns rather than loading the record, so the data quality
   # module can set the link without touching directory models.
   validates :subject_type, :subject_id, presence: true, if: -> { status_matched? || status_merged? }
+
+  private
+    def close_its_lead
+      Lead.where(candidate_id: id, status: "added").find_each { |lead| LeadFinding.closed_at_check(lead, self) }
+    end
 end
