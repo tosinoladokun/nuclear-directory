@@ -158,4 +158,14 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     plugin.store_documents
     assert_nil old.reload.extracted_sha256
   end
+
+  test "a document extracted at stages-1 is extracted again and proposes its new company (10 Nov)" do
+    letter = document("Assignment of Project Number")
+    stale = Digest::SHA256.hexdigest("stages-1\n#{letter.content_text}")
+    letter.update_columns(extracted_sha256: letter.content_sha256, extracted_rows_sha256: stale)
+    plugin.store_documents
+    assert_nil letter.reload.extracted_sha256
+    DataQuality::Stages::Extract.call(plugin:)
+    assert(Candidate.where(source: letter, kind: "organization").any? { |c| c.payload["name"] == "Leapfrog Nuclear Co" })
+  end
 end

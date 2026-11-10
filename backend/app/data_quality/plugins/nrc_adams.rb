@@ -82,7 +82,8 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
 
   INDEX_SOURCE_KIND = "nrc_adams_index"
   # What extract proposes from a document: a new version reads every document again.
-  EXTRACT_VERSION = "stages-1"
+  # stages-2: new companies proposed (10 Nov), so documents read before are extracted again.
+  EXTRACT_VERSION = "stages-2"
   NRC = "U.S. Nuclear Regulatory Commission"
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
