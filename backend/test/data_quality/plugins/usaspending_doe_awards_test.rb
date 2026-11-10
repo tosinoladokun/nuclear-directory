@@ -420,7 +420,8 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
       "generated_internal_id" => "CONT_AWD_NC#{n}", "recipient_id" => "00000000-0000-0000-0000-#{(n + 80).to_s.rjust(12, '0')}-C") }
     @answers[[ "nuclear_contracts", 1 ]] = { "results" => [ award.(1, "SPENT NUCLEAR FUEL CASK FABRICATION").merge("Awarding Sub Agency" => "Office of Environmental Management"), award.(2, "IT SUPPORT SERVICES FOR THE NUCLEAR FUEL PROGRAM OFFICE BUILDING JANITORIAL") ],
       "page_metadata" => { "hasNext" => false } }
-    @answers[[ "nuclear_grants", 1 ]] = { "results" => [ award.(3, "GENERAL FACILITIES MAINTENANCE"), award.(4, "MICROREACTOR HEAT PIPE TESTING") ],
+    @answers[[ "nuclear_grants", 1 ]] = { "results" => [ award.(3, "GENERAL FACILITIES MAINTENANCE"), award.(4, "MICROREACTOR HEAT PIPE TESTING"), award.(5, "IT SERVICES FOR THE NUCLEAR FUEL PROGRAM"),
+      award.(6, "SECURITY SUPPORT FOR THE NUCLEAR WASTE PROGRAM OFFICE"), award.(7, "NUCLEAR REACTOR OPERATOR TRAINING COURSE DEVELOPMENT") ],
       "page_metadata" => { "hasNext" => false } }
 
     crawl!
@@ -428,6 +429,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert_includes kept, "SPENT NUCLEAR FUEL CASK FABRICATION"
     assert_includes kept, "MICROREACTOR HEAT PIPE TESTING"
     refute_includes kept, "GENERAL FACILITIES MAINTENANCE"
+    %w[IT\ SERVICES SECURITY\ SUPPORT OPERATOR\ TRAINING].each { |words| refute(kept.any? { |d| d.include?(words) }, "#{words}: support, not nuclear work") }
     cask = Source.where(source_kind: "usaspending_doe_awards").find { |source| source.content_text.include?("SPENT NUCLEAR FUEL CASK") }
     claim = plugin.extract(cask, nil).find { |c| c[:kind] == "relationship" }
     assert_includes claim[:quote], "Office of Environmental Management", "the quote names the awarding office and the nuclear subject"

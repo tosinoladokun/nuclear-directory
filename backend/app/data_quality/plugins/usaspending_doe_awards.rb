@@ -321,7 +321,7 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     end
 
     # Nuclear work stated, and not a support service that only serves a nuclear office.
-    SUPPORT_SERVICE = /\b(?:IT support|information technology|janitorial|custodial|facilit(?:y|ies) (?:maintenance|support|services)|security (?:guards?|services)|staffing|administrative support|professional support services|technical support services|training services|records management)\b/i
+    SUPPORT_SERVICE = /\b(?:IT (?:support|services?)|information technology|janitorial|custodial|facilit(?:y|ies) (?:maintenance|support|services)|security (?:guards?|services|support)|staffing|administrative support|professional support|technical support|training|records management)\b/i
     def nuclear_work?(description)
       description.to_s.match?(NUCLEAR_ENERGY) && !description.to_s.match?(SUPPORT_SERVICE)
     end
