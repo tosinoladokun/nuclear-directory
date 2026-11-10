@@ -30,7 +30,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   def self.call(lead_id, finder: new) = finder.find(lead_id)
 
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, search: nil,
-    search_key: ENV["BRAVE_SEARCH_API_KEY"], pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    # Search runs only when switched on (LEAD_FINDER_SEARCH=on), not just because a key is set (PM, 10 Nov: on hold).
+    search_key: (ENV["BRAVE_SEARCH_API_KEY"] if ENV["LEAD_FINDER_SEARCH"] == "on"), pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
     @fetcher, @directory, @search, @search_key, @pipeline = fetcher, directory, search, search_key, pipeline
   end
 
