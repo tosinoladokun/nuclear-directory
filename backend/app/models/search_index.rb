@@ -18,6 +18,8 @@
 class SearchIndex
   # Changes whenever anything the index shows may have changed: a row
   # updated, added or deleted (the count) in any table it reads.
+  FORMAT = "hq-v2"
+
   def self.version
     stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship,
                DealTerm, Role ].map { |model| model.pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
@@ -25,6 +27,9 @@ class SearchIndex
     stamps << Evidence.pick(Arel.sql("MAX(id)"), Arel.sql("COUNT(*)"), Arel.sql("SUM(subject_id)"), Arel.sql("SUM(hashtext(subject_type))")).join("/")
     # A link's start and end dates are read against today.
     stamps << Date.current.iso8601
+    # The payload's format: bump it when what a row says changes without the data (the HQ rule of 5 Nov, #733), so the cached JSON
+    # and the browser's ETag don't outlive the change.
+    stamps << FORMAT
     Digest::SHA256.hexdigest(stamps.join("|")).first(16)
   end
 
