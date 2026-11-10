@@ -20,7 +20,7 @@ class LeadProposals
   def self.run = new.run
 
   # Once the lead finder is in (#752), company leads go through it (find, verify, fill); plants stay here.
-  def self.kinds(finder: defined?(DataQuality::LeadFinder)) = finder ? %w[plant] : %w[company plant]
+  def self.kinds(finder: defined?(DataQuality::Plugins::LeadFinder)) = finder ? %w[plant] : %w[company plant]
 
   # Returns how many leads became proposals.
   def run

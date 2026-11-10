@@ -39,7 +39,7 @@ class LeadFindJobTest < ActiveJob::TestCase
   end
 
   test "without the finder, a lead waits untouched: no try used" do
-    skip "the finder is in" if defined?(DataQuality::LeadFinder)
+    skip "the finder is in" if defined?(DataQuality::Plugins::LeadFinder)
     LeadFindJob.finder = nil
     l = lead("Early Co")
     LeadFindJob.perform_now(l.id)

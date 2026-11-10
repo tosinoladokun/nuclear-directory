@@ -2,7 +2,7 @@
 # press release, NRC, USAspending, ARPA-E, or Tosin's "Suggest a company"),
 # goes the same way: find its website, check it's the same company, in the
 # US, doing nuclear work, fill it in, and propose it for his Create. Crawl's
-# finder (DataQuality::LeadFinder) does that; this keeps the lead's state.
+# finder (DataQuality::Plugins::LeadFinder) does that; this keeps the lead's state.
 #
 #   new          waiting (out of triage)
 #   researching  being found, or waiting for its weekly retry (next_find_at)

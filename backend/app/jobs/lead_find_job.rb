@@ -1,4 +1,4 @@
-# The lead pipeline's runner (#752): Crawl's finder (DataQuality::LeadFinder)
+# The lead pipeline's runner (#752): Crawl's finder (DataQuality::Plugins::LeadFinder)
 # finds, checks and fills a lead; this keeps its state (LeadFinding). Nightly
 # it takes up to PER_NIGHT due leads; "Suggest a company" runs one at once.
 class LeadFindJob < ApplicationJob
@@ -19,7 +19,7 @@ class LeadFindJob < ApplicationJob
   private
 
   def find(lead)
-    finder = self.finder || (->(l) { DataQuality::LeadFinder.call(l.id) } if defined?(DataQuality::LeadFinder))
+    finder = self.finder || (->(l) { DataQuality::Plugins::LeadFinder.call(l.id) } if defined?(DataQuality::Plugins::LeadFinder))
     # Before Crawl's finder ships, a lead waits untouched (no tries used up).
     return lead.update!(note: "Waiting for the finder") unless finder
 
