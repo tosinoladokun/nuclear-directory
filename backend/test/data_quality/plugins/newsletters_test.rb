@@ -24,14 +24,15 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
         @mail.merge("id" => "m3", "to" => [ "tosin@mail.nuclear-directory.org" ]),
         @mail.merge("id" => "m4", "from" => "\"News@smartbrief.com alert\" <attacker@example.net>") ] },
       "#{Plugin::API}?limit=100&after=m4" => { "has_more" => false, "data" => [ @mail.merge("id" => "m5") ] },
-      "#{Plugin::API}/m5" => @mail.merge("id" => "m5", "html" => "<p>x</p>", "authentication" => { "dkim" => "fail" }),
-      "#{Plugin::API}/m1" => @mail.merge("html" => HTML, "authentication" => { "dkim" => "pass" })
+      "#{Plugin::API}/m5" => @mail.merge("id" => "m5", "html" => "<p>x</p>", "authentication" => { "dkim" => "pass", "dmarc" => "fail" }),
+      "#{Plugin::API}/m1" => @mail.merge("html" => HTML, "authentication" => { "dkim" => "pass", "dmarc" => "pass" })
     }
     @asked = []
+    @slept = []
   end
 
-  def http = ->(url, headers) { @asked << [ url, headers["Authorization"] ]; @answers[url]&.to_json }
-  def plugin(found = {}) = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new(found))
+  def http = ->(url, headers) { @asked << [ url, headers["Authorization"] ]; (body = @answers[url]&.to_json) ? [ 200, body, nil ] : [ 404, nil, nil ] }
+  def plugin(found = {}, http: self.http) = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new(found), sleeper: ->(seconds) { @slept << seconds })
 
   test "reads only bot@'s mail from newsletter senders, across pages, each email once (a rejected one too)" do
     assert_equal({ "emails" => 1, "opened" => 2 }, plugin.crawl(nil))
@@ -42,7 +43,7 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     refute_match(/bot@|unsubscribe|open\.gif|utm_source|mc_eid|click\?u=|This email was sent/i, kept, "no recipient, unsubscribe, pixel, tracker or query")
     assert_includes kept, "https://www.freshfission.com/news"
     assert_includes kept, "Fresh Fission picked a site in Idaho"
-    assert Source.find_by!(url: "https://resend.com/emails/receiving/m5").crawl_needs_human?, "DKIM failed: recorded, not stored"
+    assert Source.find_by!(url: "https://resend.com/emails/receiving/m5").crawl_needs_human?, "DMARC failed (a spoof with its own DKIM): recorded, not stored"
     assert_equal({ "emails" => 0, "opened" => 0 }, plugin.crawl(nil))
   end
 
@@ -67,5 +68,19 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
   test "is a daily source" do
     assert_includes DataQuality::DailyCrawlJob::SOURCE_KINDS, "newsletters"
     assert_instance_of Plugin, DataQuality::Plugin.for("newsletters")
+  end
+
+  test "pauses between Resend calls and retries once on 429 (Infra)" do
+    limited = true
+    http = lambda do |url, headers|
+      if url.end_with?("/m1") && limited
+        limited = false
+        next [ 429, nil, "2" ]
+      end
+      self.http.call(url, headers)
+    end
+    assert_equal 1, plugin({}, http:).crawl(nil)["emails"]
+    assert_includes @slept, 2.0, "Retry-After honoured"
+    assert(@slept.count(Plugin::PAUSE) >= 2, "a pause between calls")
   end
 end

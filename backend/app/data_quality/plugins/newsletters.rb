@@ -19,6 +19,10 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org exchangemonitor.com].freeze
   class InboxError < StandardError; end
   PER_RUN = 20
+  # Resend allows 2 requests a second: a pause between calls, one retry on 429.
+  PAUSE = 0.6
+  # The stored email at most (Infra: a 1 GB database).
+  MAX_STORED = 300_000
   # Emails opened a run, stored or not, and listing pages read.
   MAX_OPENED = 50
   MAX_PAGES = 5
@@ -34,8 +38,9 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
     only a link from the email that is plainly the company's own site (its home page), else null. Report nothing else.
   TEXT
 
-  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, http: nil, api_key: ENV["RESEND_API_KEY"])
-    @fetcher, @llm, @directory, @http, @api_key = fetcher, llm, directory, http, api_key
+  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, http: nil, api_key: ENV["RESEND_API_KEY"],
+    sleeper: ->(seconds) { sleep seconds })
+    @fetcher, @llm, @directory, @http, @api_key, @sleeper = fetcher, llm, directory, http, api_key, sleeper
   end
 
   def crawl(_run)
@@ -49,11 +54,13 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
 
       opened += 1
       email = api_get("#{API}/#{mail['id']}") or raise InboxError, "Resend: couldn't read received email #{mail['id']}"
-      valid = email.dig("authentication", "dkim") == "pass" && email["html"].present?
+      # DMARC pass: the From domain itself is authenticated (aligned SPF or DKIM),
+      # not just some domain's signature; bot@ is a public address (Infra).
+      valid = email.dig("authentication", "dmarc") == "pass" && email["html"].present?
       # A rejected email is recorded too, so it never takes a later run's place.
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
         http_status: 200, title: "#{mail['from'].to_s.truncate(80)}: #{email['subject'].to_s.truncate(150)}",
-        status_reason: (valid ? nil : "DKIM didn't pass, or no HTML"),
+        status_reason: (valid ? nil : "DMARC didn't pass, or no HTML"),
         **(valid ? stored(email["html"]) : {}))
       stored += 1 if valid
     end
@@ -113,7 +120,8 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       end
       doc.css("p, td, div, span, li").select { |node| node.element_children.none? && node.text.match?(FOOTER) }.each(&:remove)
       doc.xpath("//text()").each { |node| node.content = node.content.gsub(EMAIL, "[email]") }
-      text = "<html><body>#{doc.at("body")&.inner_html.to_s.squish}</body></html>"
+      body = doc.at("body")&.inner_html.to_s.squish.byteslice(0, MAX_STORED).to_s.scrub("")
+      text = "<html><body>#{body}</body></html>"
       { content_text: text, content_sha256: Digest::SHA256.hexdigest(text) }
     end
 
@@ -153,9 +161,18 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
     end
 
     def api_get(url)
-      response = http.call(url, { "Authorization" => "Bearer #{@api_key}", "Accept" => "application/json",
-        "User-Agent" => DataQuality::Fetcher::USER_AGENT })
-      JSON.parse(response) if response
+      headers = { "Authorization" => "Bearer #{@api_key}", "Accept" => "application/json", "User-Agent" => DataQuality::Fetcher::USER_AGENT }
+      2.times do |attempt|
+        @sleeper.call(PAUSE) if @called
+        @called = true
+        status, body, retry_after = http.call(url, headers)
+        if status == 429 && attempt.zero?
+          @sleeper.call([ retry_after.to_f, 1.0 ].max)
+          next
+        end
+        return (JSON.parse(body) if status == 200 && body)
+      end
+      nil
     rescue JSON::ParserError
       nil
     end
@@ -166,7 +183,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
         response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) do |client|
           client.get(uri.request_uri, headers)
         end
-        response.body if response.is_a?(Net::HTTPSuccess)
+        [ response.code.to_i, response.body, response["Retry-After"] ]
       end
     end
 
