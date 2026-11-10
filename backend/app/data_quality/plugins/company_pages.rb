@@ -9,6 +9,13 @@
 # Part 1: description, HQ, founded year, legal name, roles, technologies.
 class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PAGES = 4
+  # A person's click on Enrich (#758): the deep look, more of its own pages,
+  # news, partners, investors and projects first, and the stored sources that
+  # name it read again for deals, partners, funding and plants.
+  DEEP_PAGES = 12
+  DEEP_LINK = /news|press|partners?|investors?|projects?|customers?|funding|announcements?/i
+  DEEP_KINDS = %w[wire_press company_newsrooms trade_press usaspending_doe_awards arpa_e_projects nrc_adams doe_loans doe_programs].freeze
+  DEEP_SOURCES = 50
   # Its own address for the same record: Form D (#504) saves that file's
   # filing rows under the plain URL, and Enrich keeps the raw JSON, so the
   # two never share one snapshot (the query is ignored by the SEC).
@@ -125,7 +132,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
     read_for = {}
-    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik, deep|
       # A website another queued company shares was read for it tonight: this
       # request waits for tomorrow, once that one's findings are extracted (#534).
       if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
@@ -147,10 +154,16 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       if @directory.readable_website?(website) && (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
-        own_links(home).first(PAGES).each do |url|
+        links = own_links(home, deep:)
+        links = links.sort_by { |url| url.match?(DEEP_LINK) ? 0 : 1 } if deep
+        links.first(deep ? DEEP_PAGES : PAGES).each do |url|
           DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
         end
+      end
+      if deep
+        stats["deep"] = stats.fetch("deep", 0) + 1
+        stats["deep_sources"] = stats.fetch("deep_sources", 0) + reread_sources_naming(id)
       end
       @directory.mark_enriched(id, requested_at)
       stats["companies"] += 1
@@ -261,8 +274,24 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       source
     end
 
+    # Stored sources of the kinds that hold deals, partners, funding and
+    # plants which name the company: their next extraction reads them again
+    # (each in its own plug-in's way, with its own checks). Returns how many.
+    def reread_sources_naming(id)
+      names = @directory.organization_names(id).select { |name| name.length >= 4 }
+      return 0 if names.empty?
+
+      # Each name as a whole phrase (a POSIX regular expression, its special characters escaped).
+      pattern = names.map { |name| name.gsub(/[.*+?^${}()|\[\]\\]/) { |char| "\\#{char}" } }.join("|")
+      ids = Source.where(source_kind: DEEP_KINDS).where.not(extracted_sha256: nil)
+        .where("content_text ~* ?", "(^|[^[:alnum:]])(#{pattern})($|[^[:alnum:]])")
+        .order(fetched_at: :desc).limit(DEEP_SOURCES).ids
+      Source.where(id: ids).update_all(extracted_sha256: nil)
+      ids.size
+    end
+
     # Links on the home page to the company's own pages worth reading.
-    def own_links(home)
+    def own_links(home, deep: false)
       return [] unless home.crawl_ok? && home.content_text.present?
 
       # Relative links are read against where the page ended (#525).
@@ -271,7 +300,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"]).to_s.split("#").first rescue next
         uri = URI(url)
-        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) && "#{uri.path} #{link.text}".match?(LINK)
+        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) && "#{uri.path} #{link.text}".match?(deep ? Regexp.union(LINK, DEEP_LINK) : LINK)
       end.uniq
     end
 

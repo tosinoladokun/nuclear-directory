@@ -60,6 +60,7 @@ class DataQuality::DirectoryClient
   def enrich_queue(limit: 5) = lookup.enrich_queue(limit:)
   def request_gap_fill(limit: 10) = lookup.request_gap_fill(limit:)
   def mark_enriched(id, requested_at) = lookup.mark_enriched(id, requested_at)
+  def organization_names(id) = lookup.organization_names(id)
   def company_fact_choices = lookup.company_fact_choices
 
   def organization(id: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
