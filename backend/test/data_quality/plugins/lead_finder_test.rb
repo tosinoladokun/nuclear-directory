@@ -104,4 +104,30 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_match "limit", result.reason
     assert_not_requested :get, HOME
   end
+
+  test "only a verified home page is ever extracted; the page itself stays a web page Enrich can take over (Copilot)" do
+    stub_request(:get, HOME).to_return(body: "<html><head><title>Foreign Fission</title></head><body><p>Foreign Fission builds reactors in Canada.</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    Plugin.call(lead("Foreign Fission", url: HOME).id, finder: finder)
+    page = Source.find_by!(url: HOME)
+    assert_equal "web_page", page.source_kind
+    assert_empty Plugin.new.extract(page, nil), "a page that failed verify is never extracted"
+  end
+
+  test "a name in capitals on the page still gives its quote (Copilot)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>FRESH FISSION designs microreactors. Austin, TX 78701</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: finder)
+    assert_equal :proposed, result.outcome
+    assert_equal "FRESH FISSION designs microreactors.", Candidate.find(result.candidate_id).quote
+  end
+
+  test "a news link alone: the name from its About heading (Copilot)" do
+    news = "https://www.prnewswire.com/news-releases/fresh-2.html"
+    stub_request(:get, "https://www.prnewswire.com/robots.txt").to_return(status: 404)
+    stub_request(:get, news).to_return(body: "<html><body><p><b>About Fresh Fission</b></p><p>Fresh Fission builds reactors. <a href=\"#{HOME}\">site</a></p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    result = DataQuality::CompanySuggestion.call(news, lead_id: lead("typed").id, finder: finder)
+    assert_equal [ :proposed, "Fresh Fission" ], [ result.outcome, result.name ]
+  end
 end

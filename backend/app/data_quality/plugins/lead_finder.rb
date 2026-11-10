@@ -26,6 +26,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Leads found a day, whatever asks (Infra, 10 Nov: a pasted long list can't spend the quotas).
   FINDS_PER_DAY = 50
   FINDS = "finds".freeze
+  LEAD_MARK = "#lead-finder".freeze
   SEARCH_RESULTS = 5
   NUCLEAR = DataQuality::Plugins::WirePress::STRONG_NUCLEAR
   US = /\b(?:United States|U\.S\.A?\.?|USA)\b|\b(?:A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\s+\d{5}\b/
@@ -50,11 +51,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # input: what Tosin typed (#752), read in place of the lead's name.
   def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
-    if counted_today(FINDS) >= FINDS_PER_DAY
+    unless reserve(FINDS, FINDS_PER_DAY)
       return unconfirmed(input.presence || lead.name, nil, "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", {})
     end
-
-    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { FINDS => 1 })
     lead = lead.with(name: input) if input.present?
     found = {}
     name, links = read_input(lead)
@@ -83,11 +82,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # The pending company, from the verified home page.
   def extract(source, _run)
     name = source.title.to_s.squish
-    return [] if name.blank? || source.content_text.blank?
+    return [] if !source.url.end_with?(LEAD_MARK) || name.blank? || source.content_text.blank?
 
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
     quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
-      .find { |sentence| sentence.include?(name) && nuclear?(sentence, name) } or return []
+      .find { |sentence| sentence.downcase.include?(name.downcase) && nuclear?(sentence, name) } or return []
     [ { kind: "organization", quote: quote.strip, payload: { "name" => name, "website" => "https://#{URI(source.url).host}" } } ]
   end
 
@@ -121,12 +120,22 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
 
     def site_name(links)
+      news = links.find { |link| (URI.parse(link).host.to_s.downcase rescue "").match?(NEWS_HOSTS) }
+      return about_name(news) if news
+
       site = links.filter_map { |link| own_host(link) }.first or return
       page = snapshot(site) or return
       doc = Nokogiri::HTML(page.content_text)
       named = doc.at_css("meta[property='og:site_name']")&.[]("content").to_s.squish.presence ||
         doc.at_css("title")&.text.to_s.split(/\s+[|\u2013\u2014-]\s+/).first.to_s.squish.presence
       named if named && named.length.between?(2, 80)
+    end
+
+    # A news page's single "About <Company>" heading names it.
+    def about_name(url)
+      page = snapshot(url) or return
+      names = Nokogiri::HTML(page.content_text).css("p, h2, h3, h4, b, strong").filter_map { |node| node.text.squish[/\AAbout\s+([^:]{2,80}?)\s*:?\z/, 1] }.uniq
+      names.first if names.one?
     end
 
     # Websites to check, in order: given, a news link's About paragraph, EDGAR, search.
@@ -182,17 +191,24 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Brave Search API: at most SEARCHES_PER_DAY a day, top results' own hosts.
     def search(name)
       return [] if @search_key.blank? && @search.nil?
-      return [] if searches_today >= SEARCHES_PER_DAY
+      return [] unless reserve(USAGE, SEARCHES_PER_DAY)
 
-      # Each search is recorded (never its results), so the cap and the monthly cost count from the database.
-      CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { USAGE => 1 })
-      Rails.logger.info("[lead_finder] Brave search #{searches_today + 1}/#{SEARCHES_PER_DAY} today; " \
+      Rails.logger.info("[lead_finder] Brave search #{counted_today(USAGE)}/#{SEARCHES_PER_DAY} today; " \
         "#{self.class.searches_in(Date.current)} this month")
       urls = (@search || method(:brave)).call("\"#{name}\" nuclear")
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
 
-    def searches_today = counted_today(USAGE)
+    # Takes one of today's places atomically (a transaction-scoped advisory lock), so two finders can't both take the last.
+    # Each place is a recorded crawl run (never a search's results), so the cap and the monthly cost count from the database.
+    def reserve(key, limit)
+      CrawlRun.transaction do
+        CrawlRun.connection.execute("SELECT pg_advisory_xact_lock(#{Zlib.crc32("lead_finder:#{key}")})")
+        next false if counted_today(key) >= limit
+
+        CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { key => 1 })
+      end.present?
+    end
     def counted_today(key) = CrawlRun.where(source_kind:, stage: "crawl", started_at: Time.current.all_day).where("stats ? '#{key}'").count
 
     def brave(query)
@@ -228,19 +244,21 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     # A page as a source of this kind, read through the shared Fetcher.
     def snapshot(url)
-      source = Source.find_or_create_by!(url:) { |row| row.source_kind = source_kind }
+      # Read as a plain web page, so Enrich (company_pages) can take it over later; only a verified copy is this kind's.
+      source = Source.find_or_create_by!(url:) { |row| row.source_kind = "web_page" }
       DataQuality::Snapshot.take(source, fetcher: @fetcher)
       source.reload
       source if source.crawl_ok? && source.content_text.present?
     end
 
     def propose(name, website, page, found)
-      # A page another source kind already reads isn't re-titled for this one.
-      return unconfirmed(name, website, "Its home page is already read for another source", found) unless page.source_kind == source_kind
-
-      page.update!(title: name, extracted_sha256: nil)
+      # The verified home page, copied as this kind's own source (its URL marked): only
+      # a page that passed verify is ever extracted here (Copilot).
+      verified = Source.find_or_initialize_by(url: "#{page.final_url.presence || page.url}#{LEAD_MARK}")
+      verified.update!(source_kind:, title: name, crawl_status: "ok", fetched_at: page.fetched_at, http_status: page.http_status,
+        content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil)
       @pipeline.call(self)
-      candidate = Candidate.where(source: page, kind: "organization").order(:id).last
+      candidate = Candidate.where(source: verified, kind: "organization").order(:id).last
       return unconfirmed(name, website, "The page has no sentence naming #{name} and its nuclear work", found) unless candidate
 
       outcome(:proposed, name:, website:, candidate_id: candidate.id, found:)
