@@ -32,6 +32,14 @@ module StructuredDataHelper
     }
   end
 
+  # schema.org BreadcrumbList of the page's trail, with absolute URLs (the last item is the page itself).
+  def breadcrumb_json_ld(trail, page_url)
+    items = trail.each_with_index.map do |(label, path), index|
+      { "@type" => "ListItem", "position" => index + 1, "name" => label, "item" => (path ? "#{request.base_url}#{path}" : page_url) }
+    end
+    { "@type" => "BreadcrumbList", "@id" => "#{page_url}#breadcrumb", "itemListElement" => items }
+  end
+
   def company_json_ld(profile, page_url:)
     org = {
       "@type" => "Organization", "@id" => "#{page_url}#organization", "name" => profile.name,
@@ -41,7 +49,7 @@ module StructuredDataHelper
       "parentOrganization" => profile.parents.map { |link| organization_ref(link.to_organization) }.presence,
       "subOrganization" => profile.subsidiaries.map { |link| organization_ref(link.from_organization) }.presence
     }.compact
-    { "@context" => "https://schema.org", "@graph" => [ web_page(profile, page_url, org["@id"]), org ] }
+    { "@context" => "https://schema.org", "@graph" => [ web_page(profile, page_url, org["@id"]), org, breadcrumb_json_ld(page_trail(profile.category, profile.name), page_url) ] }
   end
 
   def plant_json_ld(profile, page_url:)
@@ -55,7 +63,7 @@ module StructuredDataHelper
       "@type" => "Place", "@id" => "#{page_url}#place", "name" => profile.name,
       "address" => postal_address(profile.city, profile.state), "additionalProperty" => properties.presence
     }.compact
-    { "@context" => "https://schema.org", "@graph" => [ web_page(profile, page_url, place["@id"]), place ] }
+    { "@context" => "https://schema.org", "@graph" => [ web_page(profile, page_url, place["@id"]), place, breadcrumb_json_ld(page_trail(Category.find("plants"), profile.name), page_url) ] }
   end
 
   private
