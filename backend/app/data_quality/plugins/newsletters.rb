@@ -16,11 +16,11 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   API = "https://api.resend.com/emails/receiving".freeze
   INBOX = "bot@mail.nuclear-directory.org".freeze
   # Sender domains of the newsletters bot@ is subscribed to.
-  SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org neutronbytes.com].freeze
+  SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org neutronbytes.com exchangemonitor.com].freeze
   PER_RUN = 20
   PROMPT_VERSION = "newsletters-1".freeze
   # Newsletter, mail and social hosts: never a company's own site.
-  NOT_OWN = /(?:\A|\.)(?:smartbrief|ans|nucnet|neimagazine|world-nuclear-news|world-nuclear|neutronbytes|resend|mailchimp|list-manage|
+  NOT_OWN = /(?:\A|\.)(?:smartbrief|ans|nucnet|neimagazine|world-nuclear-news|world-nuclear|neutronbytes|exchangemonitor|resend|mailchimp|list-manage|
     substack|hubspot|hs-sites|constantcontact|sendgrid|mailgun|linkedin|twitter|x|facebook|youtube|instagram|google|bit|ow|t)\.[a-z.]+\z/x
   INSTRUCTIONS = <<~TEXT.freeze
     You read one nuclear industry newsletter email. List the US companies whose own nuclear work a story reports: reactor
