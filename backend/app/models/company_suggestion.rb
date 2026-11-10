@@ -1,11 +1,11 @@
-# "Suggest a company" on Tosin's inbox (#752): what he types (a name, a
-# website or any link) becomes a lead in the one lead pipeline
-# (LeadFinding), found at once instead of waiting for the night.
+# "Add a lead" on Tosin's inbox (#752, PM's wording 10 Nov): what he types (a
+# company name, a website or any link) becomes a lead in the one lead
+# pipeline (LeadFinding), found at once instead of waiting for the night.
 #
 #   CompanySuggestion.suggest("Kairos Power", by: "human:tosin") # => Lead, its find queued
 module CompanySuggestion
   KEY = "admin:suggest".freeze
-  LABEL = "Suggested in the admin".freeze
+  LABEL = "Added in the admin".freeze
   MAX = 500
   SHOWN_FOR = 14.days
 
@@ -22,10 +22,9 @@ module CompanySuggestion
     lead
   end
 
-  # Tosin's suggestions of the last two weeks that are being found, couldn't be confirmed (yet), or turned out
-  # to be listed already. A proposed one is a Create in the inbox instead.
+  # Tosin's leads of the last two weeks, newest first, each with its state (LeadFinding.state).
   def self.shown
-    Lead.where(kind: "company", updated_at: SHOWN_FOR.ago..).where.not(note: nil)
-      .where("leads.sources @> ?", [ { "label" => LABEL } ].to_json).order(updated_at: :desc)
+    Lead.where(kind: "company", updated_at: SHOWN_FOR.ago..).where("leads.sources @> ?", [ { "label" => LABEL } ].to_json)
+      .includes(:candidate).order(updated_at: :desc)
   end
 end

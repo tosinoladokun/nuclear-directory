@@ -5,7 +5,8 @@ class LeadFindJob < ApplicationJob
   queue_as :data_quality
   limits_concurrency to: 1, key: "lead_find", duration: 2.hours if respond_to?(:limits_concurrency)
 
-  # (lead) => an object whose to_h has outcome, and maybe organization_id, reason, name and website.
+  # (lead) => an object whose to_h has outcome, and maybe candidate_id (the claim it proposed), organization_id
+  # (already listed), reason, name and website.
   # nil uses Crawl's finder; tests set their own.
   class_attribute :finder, default: nil
 
@@ -23,7 +24,7 @@ class LeadFindJob < ApplicationJob
 
     LeadFinding.start(lead)
     found = finder.call(lead).to_h.symbolize_keys
-    LeadFinding.record(lead, **found.slice(:outcome, :organization_id, :reason, :name, :website))
+    LeadFinding.record(lead, **found.slice(:outcome, :organization_id, :candidate_id, :reason, :name, :website))
   rescue StandardError => e
     Rails.error.report(e, handled: true, context: { lead_id: lead.id })
     LeadFinding.record(lead, outcome: :unconfirmed, reason: "the search stopped (#{e.class.name.demodulize})")

@@ -16,6 +16,8 @@ class Lead < ApplicationRecord
   validates :kind, inclusion: { in: KINDS }
   validates :reason, presence: true, if: :status_ignored?
   validates :record_type, inclusion: { in: RECORD_TYPES }, allow_nil: true
+  # The new-company claim the lead became (#752), once the finder proposed it.
+  belongs_to :candidate, optional: true
 
   def self.normalize(name) = name.to_s.downcase.gsub(/[^\p{Alnum}]+/, " ").squish
 

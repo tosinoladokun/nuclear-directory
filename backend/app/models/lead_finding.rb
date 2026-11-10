@@ -25,12 +25,28 @@ module LeadFinding
   # A find that never reports back (a restart) is due again the next day.
   def self.start(lead, now: Time.current) = lead.update!(status: "researching", note: FINDING, next_find_at: now + 1.day)
 
+  # Where a lead is, in one word for the admin (PM, 10 Nov): Finding, Waiting for check, In your inbox, Created,
+  # Said no, Already listed, Couldn't confirm.
+  def self.state(lead)
+    note = lead.note.to_s
+    return "Couldn't confirm" if note.start_with?(UNCONFIRMED) || lead.status_ignored?
+    return "Already listed" if lead.status_added? && lead.record_id && lead.candidate_id.nil?
+    return "Finding" unless lead.status_added?
+
+    claim = lead.candidate or return "Waiting for check"
+    case claim.status
+    when "merged" then "Created"
+    when "rejected" then "Said no"
+    else %w[new_record new_fact change].include?(DataQuality::Review.inbox_kind(claim)) ? "In your inbox" : "Waiting for check"
+    end
+  end
+
   # Writes the finder's outcome onto the lead.
   #   outcome: :proposed, :duplicate or :unconfirmed (anything else counts as unconfirmed)
-  def self.record(lead, outcome:, organization_id: nil, reason: nil, name: nil, website: nil, now: Time.current)
+  def self.record(lead, outcome:, organization_id: nil, candidate_id: nil, reason: nil, name: nil, website: nil, now: Time.current)
     case outcome.to_s
     when "proposed"
-      lead.update!(status: "added", note: nil, next_find_at: nil)
+      lead.update!(status: "added", note: nil, next_find_at: nil, candidate_id:)
     when "duplicate"
       lead.update!(status: "added", note: "Already listed", next_find_at: nil,
         record_type: ("Organization" if organization_id), record_id: organization_id)

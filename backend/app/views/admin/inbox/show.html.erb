@@ -16,22 +16,24 @@
   <p class="type-body m-0"><%= total.zero? ? "Nothing to decide today." : "#{total} to decide. Nothing goes live until you say yes." %></p>
 </div>
 
-<%= form_with url: admin_inbox_suggest_path, class: "nd-row", aria: { label: "Suggest a company" } do %>
-  <%= label_tag :suggestion, "Suggest a company", class: "sr-only" %>
-  <%= text_field_tag :suggestion, nil, class: "nd-input type-input", placeholder: "Suggest a company: name, website or link", maxlength: CompanySuggestion::MAX, required: true %>
-  <%= submit_tag "Find", class: "nd-btn type-ui", name: nil %>
+<%= form_with url: admin_inbox_suggest_path, class: "nd-row", aria: { label: "Add a lead" } do %>
+  <%= label_tag :suggestion, "Add a lead", class: "sr-only" %>
+  <%= text_field_tag :suggestion, nil, class: "nd-input type-input", placeholder: "Add a lead: company name, website or link", maxlength: CompanySuggestion::MAX, required: true %>
+  <%= submit_tag "Add", class: "nd-btn type-ui", name: nil %>
 <% end %>
 
-<% suggestions = CompanySuggestion.shown.to_a %>
-<% if suggestions.any? %>
-  <section class="nd-stack" aria-labelledby="inbox-suggestions">
-    <h2 id="inbox-suggestions" class="type-admin-h2 m-0">Your suggestions <span class="type-count"><%= suggestions.size %></span></h2>
+<% leads = CompanySuggestion.shown.to_a %>
+<% if leads.any? %>
+  <section class="nd-stack" aria-labelledby="inbox-leads">
+    <h2 id="inbox-leads" class="type-admin-h2 m-0">Your leads <span class="type-count"><%= leads.size %></span></h2>
     <ul class="nd-stack m-0 p-0 list-none">
-      <% suggestions.each do |lead| %>
-        <li class="nd-inbox__recent" id="suggestion-<%= lead.id %>">
+      <% leads.each do |lead| %>
+        <% state = LeadFinding.state(lead) %>
+        <li class="nd-inbox__recent" id="lead-<%= lead.id %>">
           <span class="type-body-strong"><%= lead.name %></span>
-          <span class="type-body"><%= lead.note %></span>
-          <% if lead.record %><%= link_to "Open it", admin_fact_path(type: lead.record_type, id: lead.record_id), class: "nd-link type-small whitespace-nowrap" %><% end %>
+          <span class="type-body"><%= state %><%= ": #{lead.note.delete_prefix(LeadFinding::UNCONFIRMED).delete_prefix(': ')}" if state == "Couldn't confirm" && lead.note.to_s.length > LeadFinding::UNCONFIRMED.length %></span>
+          <% if state == "In your inbox" %><%= link_to "Show", "#inbox-item-#{lead.candidate_id}", class: "nd-link type-small whitespace-nowrap" %><% end %>
+          <% if lead.record && state == "Already listed" %><%= link_to "Open it", admin_fact_path(type: lead.record_type, id: lead.record_id), class: "nd-link type-small whitespace-nowrap" %><% end %>
         </li>
       <% end %>
     </ul>
