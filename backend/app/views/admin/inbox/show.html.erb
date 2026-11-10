@@ -22,6 +22,9 @@
   <% next if entries.empty? && records.empty? %>
   <section class="nd-stack" aria-labelledby="inbox-<%= key %>">
     <h2 id="inbox-<%= key %>" class="type-admin-h2 m-0"><%= headings.fetch(key) %> <span class="type-count"><%= entries.size + records.size %></span></h2>
+    <% if key == "new_record" && (waiting = @inbox.companies_waiting).positive? %>
+      <p class="type-small text-ink-muted m-0"><%= pluralize(waiting, "more new company", plural: "more new companies") %> tomorrow. <%= OwnerInbox::CREATES_A_DAY %> a day, best-sourced first.</p>
+    <% end %>
     <ol class="nd-waits">
       <% entries.each do |entry| %>
         <% item = entry.item %>

@@ -7,6 +7,9 @@ class OwnerInbox
   # Everything he needs to do (Tosin, 26 Oct): what's new, and changes to
   # something already there.
   RECORDS = 200
+  # New companies to create, at most this many a day (PM, 10 Nov): the rest wait for the next day,
+  # best-sourced first. Plants aren't counted.
+  CREATES_A_DAY = 10
   SECTIONS = %w[new_record new_fact change].freeze
   # changes: { field => [stored, stated] } for a change, else {}.
   Entry = Data.define(:kind, :item, :copy_ids, :checked, :changes) do
@@ -32,12 +35,37 @@ class OwnerInbox
   end
 
   # How many facts wait for him, without building their rows (the nav badge).
-  def size = (@sections ? sections.values.sum(&:size) : groups.size) + records.size
+  def size
+    capped = groups.size - company_claims.size + company_claims.first(creates_left).size
+    (@sections ? sections.values.sum(&:size) : capped) + records.size
+  end
 
   # Pending companies and plants with no open claim (seeded, or a claim
   # decided since): his too, decided on the record itself.
   def records
-    @records ||= pending_records("facility") + pending_records("organization")
+    # The day's new-company claims come first; pending companies fill what's left of today's share.
+    @records ||= pending_records("facility") + pending_companies.first(company_records_left)
+  end
+
+  # New companies he can still create today: CREATES_A_DAY less the ones he decided (created or said no) today.
+  def creates_left(now: Time.current)
+    @creates_left ||= begin
+      decided = VerificationEvent.where(subject_type: "Organization", from_status: "pending", to_status: %w[verified rejected],
+        created_at: now.all_day).where("verification_events.by LIKE 'human:%'").distinct.count(:subject_id)
+      [ CREATES_A_DAY - decided, 0 ].max
+    end
+  end
+
+  # New companies waiting beyond today's share.
+  def companies_waiting = [ company_claims.size - creates_left, 0 ].max + (pending_companies.size - company_records_left).clamp(0..)
+
+  def pending_companies = (@pending_companies ||= pending_records("organization"))
+  def company_records_left = [ creates_left - company_claims.first(creates_left).size, 0 ].max
+
+  # The new-company claims' first copies, best-sourced first (most pages naming it), then newest.
+  def company_claims
+    @company_claims ||= groups.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
+      .sort_by.with_index { |((*), copies), i| [ -copies.size, i ] }.map { |_, copies| copies.first.id }
   end
 
   # Up to `limit` pending records of a kind, paging past companies without a
@@ -70,7 +98,9 @@ class OwnerInbox
         changes = kind == "change" ? changes_of(copies.first) : {}
         Entry.new(kind:, item:, copy_ids: copies.drop(1).map(&:id), checked: checked?(copies.first), changes:)
       end
-      SECTIONS.index_with { |section| entries.select { |entry| entry.kind == section } }
+      by_section = SECTIONS.index_with { |section| entries.select { |entry| entry.kind == section } }
+      by_section["new_record"] = todays_share(by_section["new_record"])
+      by_section
     end
   end
 
@@ -95,6 +125,13 @@ class OwnerInbox
   end
 
   private
+    # Today's share of new companies, best-sourced first (most pages naming it), then newest; plants all.
+    def todays_share(new_records)
+      shown = company_claims.first(creates_left)
+      new_records.reject { |entry| company_claims.include?(entry.item.candidate_id) && !shown.include?(entry.item.candidate_id) }
+        .sort_by.with_index { |entry, i| [ shown.index(entry.item.candidate_id) || shown.size, i ] }
+    end
+
     # Data Quality said approve, and the claim is still as it looked at it.
     def changes_of(candidate)
       record = @directory.fact(type: candidate.subject_type, id: candidate.subject_id) or return {}
