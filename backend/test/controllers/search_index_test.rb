@@ -77,4 +77,13 @@ class SearchIndexTest < ActionDispatch::IntegrationTest
       assert_not_equal after_role, SearchIndex.version
     end
   end
+
+  test "a plant with only a state gives the state in full, as the plants list does (#733)" do
+    plant = Facility.create!(name: "Statesman Index Station", slug: "statesman-index-station", facility_type: "power_reactor", status: "operating", state: "OR",
+      verification_status: "verified", verified_by: BY)
+    Evidence.create!(subject: plant, source: Source.first || Source.create!(url: "https://example.com/s", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "t"), quote: "t", found_by: "human")
+    get search_index_path(format: :json)
+    item = response.parsed_body["items"].find { |entry| entry["s"] == "statesman-index-station" }
+    assert_equal "Power plant · Oregon", item["m"]
+  end
 end

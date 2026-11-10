@@ -18,6 +18,8 @@
 class SearchIndex
   # Changes whenever anything the index shows may have changed: a row
   # updated, added or deleted (the count) in any table it reads.
+  FORMAT = "hq-v2"
+
   def self.version
     stamps = [ Organization, Facility, OrganizationAlias, FacilityAlias, OrganizationRole, OrganizationTechnology, Relationship, FacilityRelationship,
                DealTerm, Role ].map { |model| model.pick(Arel.sql("MAX(updated_at)"), Arel.sql("COUNT(*)")).then { |at, count| "#{at&.utc&.iso8601(6)}/#{count}" } }
@@ -25,6 +27,9 @@ class SearchIndex
     stamps << Evidence.pick(Arel.sql("MAX(id)"), Arel.sql("COUNT(*)"), Arel.sql("SUM(subject_id)"), Arel.sql("SUM(hashtext(subject_type))")).join("/")
     # A link's start and end dates are read against today.
     stamps << Date.current.iso8601
+    # The payload's format: bump it when what a row says changes without the data (the HQ rule of 5 Nov, #733), so the cached JSON
+    # and the browser's ETag don't outlive the change.
+    stamps << FORMAT
     Digest::SHA256.hexdigest(stamps.join("|")).first(16)
   end
 
@@ -59,7 +64,7 @@ class SearchIndex
       end
       compact("k" => "c", "s" => company.slug, "n" => company.name, "sn" => company.short_name, "a" => aliases[company.id],
         "d" => lines[company.id], "i" => key, "b" => (h.bucket_class(category) if category),
-        "m" => [ (h.role_label(role) if role), h.place(company.hq_city, company.hq_state) ].compact.join(" · ").presence,
+        "m" => [ (h.role_label(role) if role), h.company_place(company) ].compact.join(" · ").presence,
         "c" => company.try(:connections_count).to_i, "x" => [ company.ticker ].compact.presence)
     end
   end
@@ -96,7 +101,7 @@ class SearchIndex
         status: (plant.status if sourced))
       compact("k" => "p", "s" => plant.slug, "n" => plant.name, "a" => [ *aliases[plant.id], *unit_names[plant.id] ].compact_blank.uniq(&:downcase).reject { |name| name.casecmp?(plant.name) }.presence,
         "i" => icon_key("nd-#{name}-20") { h.icon(name, set: :nd, size: 20) },
-        "m" => ([ h.facility_type_label(plant.facility_type), h.place(plant.city, plant.state) ].compact.join(" · ").presence if shown),
+        "m" => ([ h.facility_type_label(plant.facility_type), h.location(plant.city, plant.state) ].compact.join(" · ").presence if shown),
         "c" => plant.try(:connections_count).to_i,
         "x" => [ plant.nrc_docket, plant.eia_plant_id, *units[plant.id] ].compact_blank.uniq.presence)
     end

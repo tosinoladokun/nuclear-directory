@@ -411,4 +411,20 @@ class DirectoryTest < ActionDispatch::IntegrationTest
     get companies_path
     assert_select "a", text: /Add a plant/, count: 0
   end
+
+  test "HQ reads City, ST in the US, the state in full when there is no city, City, Country abroad; and only when a source backs the company (Tosin, 5 Nov)" do
+    vendor = Role.find_by!(key: "reactor_vendor")
+    cite!(company("Alpha City Co", roles: [ vendor ], city: "Richland", state: "WA"))
+    cite!(company("Bravo State Co", roles: [ vendor ], state: "VA"))
+    cite!(company("Charlie Abroad Co", roles: [ vendor ], city: "Courbevoie", country_code: "FR"))
+    no_source = company("Delta Unsourced Co", roles: [ vendor ], city: "Nowhere", state: "ND")
+    no_source.organization_roles.each { |link| link.evidence.create!(source: default_source, found_by: "human", confidence: 1) }
+    get companies_path(category: "reactor-developers")
+
+    places = css_select("a.nd-line").to_h { |row| [ row.at_css(".nd-line__name")&.text&.strip, row.at_css(".nd-line__end")&.text&.strip.to_s ] }
+    assert_equal "Richland, WA", places["Alpha City Co"]
+    assert_equal "Virginia", places["Bravo State Co"]
+    assert_equal "Courbevoie, France", places["Charlie Abroad Co"]
+    assert_equal "", places["Delta Unsourced Co"], "no source behind the record: the same rule as its own page, an empty cell and no placeholder"
+  end
 end

@@ -129,6 +129,11 @@ class LinkCardTest < ActiveSupport::TestCase
     assert_equal "Reactor designer", LinkCard.for_company(kairos(hq_city: nil, hq_state: nil)).label
   end
 
+  test "an unsourced company's country doesn't leak into its card: no source, no location (#733)" do
+    org = Organization.create!(name: "Unsourced Abroad", slug: "unsourced-abroad", country_code: "FR", verification_status: "verified", verified_by: "human:tosin")
+    assert_not_includes LinkCard.for_company(CompanyProfile.new(org)).label.to_s, "France"
+  end
+
   test "a company's plant counts are in the present tense: only links in effect today" do
     links = [ link("operates", started_on: 1.year.from_now.to_date), link("operates", ended_on: Date.current), link("owns", ended_on: 1.day.from_now.to_date),
       link("owns", started_on: Date.current) ]

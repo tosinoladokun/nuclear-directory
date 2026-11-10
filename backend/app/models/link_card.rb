@@ -71,7 +71,7 @@ class LinkCard
     else profile.shown_roles.first&.role&.then { |r| helpers.role_label(r) }
     end
     # Only what the page shows: HQ when a source backs the company (CompanyProfile).
-    place = [ profile.hq_city.presence, profile.hq_state.presence ].compact.join(", ").presence
+    place = helpers.location(profile.hq_city, profile.hq_state, country: (profile.try(:organization)&.country_code if profile.try(:sourced?) != false))
     label = [ kind, place ].compact.join(" · ").presence
     # Present tense, so only links in effect today (as on a plant's card).
     current = ->(link) { (link.started_on.nil? || link.started_on <= Date.current) && (link.ended_on.nil? || link.ended_on > Date.current) }

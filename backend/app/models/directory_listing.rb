@@ -80,7 +80,8 @@ class DirectoryListing
 
   # Each with #connections_count, in the chosen order.
   def companies
-    ordered(company_scope.select("organizations.*", "(#{company_connections_sql}) AS connections_count"), "organizations.name")
+    # Evidence is loaded for the HQ gate (DirectoryHelper#company_place), one query for the list.
+    ordered(company_scope.select("organizations.*", "(#{company_connections_sql}) AS connections_count"), "organizations.name").preload(:evidence)
   end
 
   # Each site also gets #units_statuses (one per published unit, for

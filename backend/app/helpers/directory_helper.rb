@@ -217,6 +217,10 @@ module DirectoryHelper
     [ city.presence, state.presence ].compact.join(", ").presence
   end
 
+  # A company's HQ as its own page shows it: only when a source backs the record (CompanyProfile#sourced?), written by
+  # #location. nil otherwise, so a row keeps its empty cell. Load :evidence with the companies to avoid a query per row.
+  def company_place(company) = (location(company.hq_city, company.hq_state, country: company.country_code) if company.evidence.any?)
+
   COUNTRY_NAMES = {
     "US" => "United States", "CA" => "Canada", "MX" => "Mexico", "GB" => "United Kingdom", "FR" => "France", "DE" => "Germany",
     "ES" => "Spain", "IT" => "Italy", "NL" => "Netherlands", "BE" => "Belgium", "CH" => "Switzerland", "SE" => "Sweden",
@@ -597,7 +601,7 @@ module DirectoryHelper
       ("Legal name: #{profile.legal_name}" if profile.legal_name.present? && profile.legal_name != profile.name)
     ].compact.map { |fact| fact.end_with?(".") ? fact : "#{fact}." }
     role = profile.shown_roles.first && role_label(profile.shown_roles.first.role)
-    lead = profile.description.presence || [ role, place(profile.hq_city, profile.hq_state) ].compact.join(" in ").presence
+    lead = profile.description.presence || [ role, location(profile.hq_city, profile.hq_state, country: (profile.organization.country_code if profile.sourced?)) ].compact.join(" in ").presence
     # With nothing published yet, still a plain line about the company.
     text = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
     text = text.truncate(PREVIEW_LIMIT, separator: " ") if text.length > PREVIEW_LIMIT

@@ -73,6 +73,14 @@ class SearchTest < ActionDispatch::IntegrationTest
     assert_select "ul[aria-labelledby=instant-results-companies] li", SearchController::COMPANY_LIMIT
   end
 
+  test "a plant with only a state reads the state in full in search results, as on the plants list (#733)" do
+    cite!(plant("Statesman Test Station", facility_type: "power_reactor", status: "operating", state: "OR"))
+    get search_path(q: "statesman")
+
+    assert_select ".nd-instant__row", text: /Power plant · Oregon/
+    assert_no_match(/· OR\b/, response.body)
+  end
+
   test "full search results give a plant's capacity as MWe, for power reactors only (#724)" do
     big = cite!(plant("Capsearch Power Station", facility_type: "power_reactor", status: "operating", city: "Athens", state: "AL"))
     cite!(plant("Capsearch Power Station Unit 1", parent: big, capacity_mw: 1100, status: "operating"))
