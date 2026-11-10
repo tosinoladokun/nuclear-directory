@@ -76,4 +76,30 @@ class DataQuality::Plugins::WirePressTest < ActiveSupport::TestCase
     DataQuality::Stages::Crawl.call(plugin:)
     assert_equal({ "PR Newswire (energy)" => "unchanged" }, DataQuality::Stages::Crawl.call(plugin: plugin(now: Time.zone.local(2026, 11, 3, 16))).stats)
   end
+
+  test "a nuclear release naming no company we have proposes its issuer from the About paragraph, with the site it links (10 Nov)" do
+    url = "https://www.prnewswire.com/news-releases/fresh-fission-raises-1.html"
+    item = "<item><title>Fresh Fission Unveils Microreactor Design</title><link>#{url}</link>" \
+      "<pubDate>Tue, 3 Nov 2026 12:00:00 +0000</pubDate><description><![CDATA[<p>A new microreactor.</p>]]></description></item>"
+    stub_request(:get, FEED).to_return(body: file_fixture("wire/prn_energy.xml").read.sub("<item>", "#{NUCLEAR_ITEM}#{item}<item>"),
+      headers: { "Content-Type" => "application/xml" })
+    page = <<~HTML
+      <html><body><section class="release-body"><p>Fresh Fission today unveiled a microreactor.</p>
+      <p><b>About Fresh Fission</b></p>
+      <p>Fresh Fission Inc. designs microreactors for remote sites. Learn more at <a href="http://www.freshfission.com/about">www.freshfission.com</a>
+      and follow us on <a href="https://www.linkedin.com/company/fresh">LinkedIn</a>.</p>
+      <p><b>About Partner Utility</b></p><p>Partner Utility serves two million customers with gas and power. <a href="https://partner.example">partner.example</a></p>
+      </section></body></html>
+    HTML
+    stub_request(:get, url).to_return(body: page, headers: { "Content-Type" => "text/html" })
+
+    stats = DataQuality::Stages::Crawl.call(plugin:).stats
+    assert_equal 1, stats["releases"], "only the release that names no company we have"
+    release = Source.find_by!(url:)
+    claims = plugin.extract(release, nil)
+    assert_equal [ { "name" => "Fresh Fission", "website" => "https://www.freshfission.com" } ], claims.map { |c| c[:payload] },
+      "the nuclear issuer only; never a social link, never a non-nuclear partner"
+    assert plugin.quote_in_source?(release, claims.sole[:quote])
+    assert_equal 0, DataQuality::Stages::Crawl.call(plugin: plugin(now: Time.zone.local(2026, 11, 3, 17))).stats.fetch("releases", 0), "read once"
+  end
 end
