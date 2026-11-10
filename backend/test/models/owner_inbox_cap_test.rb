@@ -46,4 +46,30 @@ class OwnerInboxCapTest < ActiveSupport::TestCase
       assert_equal 10, shown_names.size, "a new day, ten again"
     end
   end
+
+  test "a company is one slot however many fields its pages give, ranked by distinct pages" do
+    spread = give_sourced_role(Organization.create!(name: "Spread Co", verification_status: "pending"))
+    4.times do |n|
+      source = Source.create!(url: "https://spread.example/#{n}", source_kind: "dummy", crawl_status: "ok", content_sha256: "sha", content_text: "q")
+      Candidate.create!(source:, crawl_run: @run, kind: "organization", payload: { "name" => "Spread Co", "hq_city" => "City #{n}" }, quote: "q",
+        status: "matched", subject_type: "Organization", subject_id: spread.id, proposed_subject: true, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    end
+    new_company("Twice Co", pages: 2)
+    10.times { |n| new_company("Plain Co #{n}") }
+    inbox = OwnerInbox.new
+    assert_equal spread.id, inbox.ranked_companies.first, "four distinct pages"
+    assert_equal 10, inbox.shown_companies.size
+    assert_equal 2, inbox.companies_waiting
+  end
+
+  test "the waiting count covers every pending company, beyond the rows fetched" do
+    3.times { |n| give_sourced_role(Organization.create!(name: "Bare Co #{n}", verification_status: "pending")) }
+    inbox = OwnerInbox.new
+    silence_warnings { OwnerInbox.const_set(:CREATES_A_DAY, 1) }
+    total = inbox.pending_company_count
+    assert_operator total, :>=, 3
+    assert_equal total - 1, OwnerInbox.new.companies_waiting
+  ensure
+    silence_warnings { OwnerInbox.const_set(:CREATES_A_DAY, 10) }
+  end
 end

@@ -36,7 +36,7 @@ class OwnerInbox
 
   # How many facts wait for him, without building their rows (the nav badge).
   def size
-    capped = groups.size - company_claims.size + company_claims.first(creates_left).size
+    capped = groups.size - company_groups.size + company_groups.count { |_, copies| shown_companies.include?(copies.first.subject_id) }
     (@sections ? sections.values.sum(&:size) : capped) + records.size
   end
 
@@ -44,7 +44,7 @@ class OwnerInbox
   # decided since): his too, decided on the record itself.
   def records
     # The day's new-company claims come first; pending companies fill what's left of today's share.
-    @records ||= pending_records("facility") + pending_companies.first(company_records_left)
+    @records ||= pending_records("facility") + pending_records("organization").first(company_records_left)
   end
 
   # New companies he can still create today: CREATES_A_DAY less the ones he decided (created or said no) today.
@@ -57,16 +57,23 @@ class OwnerInbox
   end
 
   # New companies waiting beyond today's share.
-  def companies_waiting = [ company_claims.size - creates_left, 0 ].max + (pending_companies.size - company_records_left).clamp(0..)
+  def companies_waiting = (ranked_companies.size - shown_companies.size) + (pending_company_count - company_records_left).clamp(0..)
 
-  def pending_companies = (@pending_companies ||= pending_records("organization"))
-  def company_records_left = [ creates_left - company_claims.first(creates_left).size, 0 ].max
+  # Every pending company with a sourced role and no open claim, however many (not just the rows fetched).
+  def pending_company_count = (@pending_company_count ||= pending_records("organization", limit: 10_000).size)
+  def company_records_left = [ creates_left - shown_companies.size, 0 ].max
 
-  # The new-company claims' first copies, best-sourced first (most pages naming it), then newest.
-  def company_claims
-    @company_claims ||= groups.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
-      .sort_by.with_index { |((*), copies), i| [ -copies.size, i ] }.map { |_, copies| copies.first.id }
+  # The new-company claim groups (a company's pages may give different fields, so a company can have several).
+  def company_groups = groups.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
+
+  # The new companies with open claims, by company: best-sourced first (most distinct pages naming it), then newest.
+  def ranked_companies
+    @ranked_companies ||= company_groups.flat_map { |_, copies| copies }.group_by(&:subject_id)
+      .sort_by { |id, claims| [ -claims.map(&:source_id).uniq.size, -claims.map(&:id).max ] }.map(&:first)
   end
+
+  # Today's share of them.
+  def shown_companies = (@shown_companies ||= ranked_companies.first(creates_left).to_set)
 
   # Up to `limit` pending records of a kind, paging past companies without a
   # sourced category (role; PM, 28 Oct) so they never hide eligible ones.
@@ -127,9 +134,10 @@ class OwnerInbox
   private
     # Today's share of new companies, best-sourced first (most pages naming it), then newest; plants all.
     def todays_share(new_records)
-      shown = company_claims.first(creates_left)
-      new_records.reject { |entry| company_claims.include?(entry.item.candidate_id) && !shown.include?(entry.item.candidate_id) }
-        .sort_by.with_index { |entry, i| [ shown.index(entry.item.candidate_id) || shown.size, i ] }
+      subject = company_groups.to_h { |_, copies| [ copies.first.id, copies.first.subject_id ] }
+      order = ranked_companies.each_with_index.to_h
+      new_records.reject { |entry| (id = subject[entry.item.candidate_id]) && !shown_companies.include?(id) }
+        .sort_by.with_index { |entry, i| [ order.fetch(subject[entry.item.candidate_id], order.size), i ] }
     end
 
     # Data Quality said approve, and the claim is still as it looked at it.
