@@ -469,7 +469,10 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     found = { "roles" => [ { "key" => "reactor_vendor", "quote" => "designs small modular reactors" } ] }
     roles = -> { DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: ABOUT), nil).select { |c| c[:kind] == "organization_role" } }
-    assert_empty roles.call
+    assert_empty roles.call, "a published company: no new role"
+    OrganizationRole.create!(organization: @company, role: Role.find_by!(key: "reactor_vendor")).verify!(by: "human:tosin")
+    assert_equal 1, roles.call.size, "its own published role is still sighted, so a re-read never drops it"
+    OrganizationRole.where(organization: @company).delete_all
     @company.update_columns(verification_status: "pending", verified_by: nil)
     assert_equal [ { "organization" => { "name" => "Acme Fission" }, "role" => "reactor_vendor" } ], roles.call.map { |c| c[:payload] }
   end
