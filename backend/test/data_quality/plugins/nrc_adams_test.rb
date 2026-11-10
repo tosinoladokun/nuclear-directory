@@ -110,13 +110,12 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_empty plugin.extract(letter, nil).select { |c| c[:kind] == "news_item" }
   end
 
-  test "a developer the directory doesn't have becomes a lead, not a claim" do
-    assert_empty documents.flat_map { |source| plugin.extract(source, nil) }
-    LeadSync.run
-    assert Lead.exists?(name: "Leapfrog Nuclear Co"), "the company the title names"
-    assert Lead.exists?(name: "The Leapfrog Group")
-    refute Lead.exists?(name: "Radiant"), "no company form in its name: not a lead"
-    refute Lead.exists?(name: "Arizona Public Service Co"), "an operating plant's document isn't read"
+  test "a developer the directory doesn't have, in a company form, is proposed as a new company (10 Nov)" do
+    names = documents.flat_map { |source| plugin.extract(source, nil) }.map { |claim| claim[:payload]["name"] }.uniq
+    assert_includes names, "Leapfrog Nuclear Co", "the company the title names"
+    assert_includes names, "The Leapfrog Group"
+    refute_includes names, "Radiant", "no company form in its name: never proposed"
+    refute_includes names, "Arizona Public Service Co", "an operating plant's document isn't read"
   end
 
   test "an operating plant's 052 docket isn't a developer's" do
