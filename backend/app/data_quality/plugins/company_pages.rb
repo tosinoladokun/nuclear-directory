@@ -279,6 +279,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     HQ_LABEL = /\b(?:headquarter(?:s|ed)|head office|main office|corporate office|our office|our address)\b/i
+    # "1 MAIN ST, AUSTIN, TX 78701": its street number and ZIP.
+    STREET_ADDRESS = /\b(\d{1,6})\s+[A-Z0-9 .'#-]{2,60}?,\s*[A-Z .'-]{2,40},?\s+[A-Z]{2}\s+(\d{5})\b/
     # A US street address's "ST 12345" (or ZIP+4).
     US_ADDRESS = /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/
 
@@ -286,7 +288,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     def hq_quote_allowed?(quote, page_text)
       return true if quote.to_s.match?(HQ_LABEL)
 
-      quote.to_s.match?(US_ADDRESS) && page_text.upcase.scan(US_ADDRESS).uniq.size == 1
+      return false unless quote.to_s.match?(US_ADDRESS)
+
+      # Distinct addresses by street number and ZIP, so two offices in one ZIP count as two;
+      # the same address repeated (header and footer) counts once.
+      page = page_text.upcase
+      streets = page.scan(STREET_ADDRESS).uniq
+      streets.any? ? streets.size == 1 : page.scan(US_ADDRESS).uniq.size == 1
     end
 
     # Only what's in its quote, with a quote on the page; keys from the lists.

@@ -471,5 +471,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Contact us. Acme Fission, 1 Main St, Austin, TX 78701")
     refute allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Offices: 1 Main St, Austin, TX 78701. 2 Elm St, Ely, NV 89301"), "one of several unmarked"
     refute allowed.("Our team works in Austin", "Our team works in Austin"), "no address, no label"
+    refute allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Offices: 1 Main St, Austin, TX 78701. 2 Elm St, Austin, TX 78701"), "two streets, one ZIP"
+    assert allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Acme Fission, 1 Main St, Austin, TX 78701. Footer: 1 Main St, Austin, TX 78701"), "one address, repeated"
   end
 end
