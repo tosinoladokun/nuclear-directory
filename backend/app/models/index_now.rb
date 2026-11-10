@@ -39,8 +39,10 @@ module IndexNow
     stamps = map.to_h { |kind, versions| [ kind, versions.transform_values { |version| version.to_s.split("/").last } ] }
     sent = Rails.cache.read(SENT) || {}
     changed = stamps.to_h { |kind, now| [ kind, now.reject { |id, stamp| sent.dig(kind, id) == stamp }.keys ] }
+    # A page taken off changes the lists, home and /updates though no other stamp moves.
+    removed = sent.any? { |kind, before| (before.keys - stamps.fetch(kind, {}).keys).any? }
     Rails.cache.write(SENT, stamps)
-    return if changed.values.all?(&:empty?)
+    return if changed.values.all?(&:empty?) && !removed
 
     add(changed_paths(changed).map { |path| "https://#{host}#{path}" })
   end
@@ -58,7 +60,8 @@ module IndexNow
     ].reject { |path| SitemapsController::DISALLOWED.any? { |off| path == off || path.start_with?("#{off}/", "#{off}?") } }
   end
 
-  def self.add(new_urls) = Rails.cache.write(PENDING, ((Rails.cache.read(PENDING) || []) | new_urls).first(MAX_URLS))
+  # Everything waiting is kept; each batch takes at most MAX_URLS and leaves the rest for the next window.
+  def self.add(new_urls) = Rails.cache.write(PENDING, (Rails.cache.read(PENDING) || []) | new_urls)
 
   # Sends what's waiting, in one batch, unless a batch went in the last WINDOW.
   def self.flush(host:)
@@ -67,12 +70,13 @@ module IndexNow
     last = Rails.cache.read(LAST_SENT)
     return if last && Time.zone.at(last) > WINDOW.ago
 
-    json = { host:, key:, keyLocation: "https://#{host}/#{key}.txt", urlList: pending.first(MAX_URLS) }.to_json
+    batch, rest = pending.first(MAX_URLS), pending.drop(MAX_URLS)
+    json = { host:, key:, keyLocation: "https://#{host}/#{key}.txt", urlList: batch }.to_json
     Rails.cache.write(LAST_SENT, Time.current.to_f)
-    Rails.cache.delete(PENDING)
+    rest.any? ? Rails.cache.write(PENDING, rest) : Rails.cache.delete(PENDING)
     return true if send_once(json) || send_once(json)
 
-    Rails.logger.warn("IndexNow: #{pending.size} URLs not accepted after a retry")
+    Rails.logger.warn("IndexNow: #{batch.size} URLs not accepted after a retry")
     false
   end
 

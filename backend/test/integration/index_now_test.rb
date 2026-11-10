@@ -74,4 +74,23 @@ class IndexNowTest < ActionDispatch::IntegrationTest
     assert_nil IndexNow.flush(host: "nuclear-directory.org")
     assert_empty @sent
   end
+
+  test "a page taken off still sends the lists; past 10,000 URLs the rest wait for the next window" do
+    IndexNow.note_changes(map, host: "nuclear-directory.org")
+    IndexNow.flush(host: "nuclear-directory.org")
+    IndexNow.note_changes({ company: { @company.id => "rev/2026-11-09/a" }, plant: {} }, host: "nuclear-directory.org")
+    assert_includes Rails.cache.read(IndexNow::PENDING), "https://nuclear-directory.org/companies", "Quiet Co went: the lists changed"
+
+    Rails.cache.write(IndexNow::PENDING, (1..10_005).map { |n| "https://nuclear-directory.org/companies/c#{n}" })
+    travel 11.minutes do
+      IndexNow.flush(host: "nuclear-directory.org")
+      assert_equal 10_000, @sent.last.last["urlList"].size
+      assert_equal 5, Rails.cache.read(IndexNow::PENDING).size, "the rest wait"
+    end
+    travel 22.minutes do
+      IndexNow.flush(host: "nuclear-directory.org")
+      assert_equal 5, @sent.last.last["urlList"].size
+      assert_nil Rails.cache.read(IndexNow::PENDING)
+    end
+  end
 end
