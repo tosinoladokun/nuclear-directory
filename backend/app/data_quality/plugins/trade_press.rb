@@ -35,9 +35,10 @@ class DataQuality::Plugins::TradePress < DataQuality::Plugins::CompanyNewsrooms
   # A name shorter than this is too likely to be an ordinary word in a headline.
   MIN_NAME = 4
 
-  def initialize(fetcher: DataQuality::Fetcher.new, feeds: FEEDS, today: -> { Date.current }, directory: DataQuality::DirectoryClient.new, llm: nil)
+  def initialize(fetcher: DataQuality::Fetcher.new, feeds: FEEDS, today: -> { Date.current }, directory: DataQuality::DirectoryClient.new, llm: nil,
+    examined: Rails.cache)
     super(fetcher:, feeds:, today:)
-    @directory, @llm = directory, llm
+    @directory, @llm, @examined = directory, llm, examined
   end
 
   # Only an item whose headline or summary names a company or plant in the
@@ -45,7 +46,12 @@ class DataQuality::Plugins::TradePress < DataQuality::Plugins::CompanyNewsrooms
   # proposed at all.
   def extract(source, run)
     publisher = company_for(source) or return []
-    keep_new_names(source, publisher, run)
+    # Discovery never blocks the news leads: a model failure is reported, and those items are tried next read.
+    begin
+      keep_new_names(source, publisher, run)
+    rescue StandardError => error
+      Rails.error.report(error, handled: true, context: { source_kind:, source_id: source.id, step: "trade press names" })
+    end
     since = @today.call - WINDOW_DAYS
     taken = decided_urls(source)
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
@@ -74,7 +80,8 @@ class DataQuality::Plugins::TradePress < DataQuality::Plugins::CompanyNewsrooms
     def keep_new_names(source, publisher, run)
       since = @today.call - NEW_NAMES_DAYS
       items = Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since }
-        .select { |item| named_in("#{item.title} #{item.summary}").empty? }.first(NAMES_PER_FEED)
+        .select { |item| named_in("#{item.title} #{item.summary}").empty? }
+        .reject { |item| @examined.exist?(examined_key(item)) }.first(NAMES_PER_FEED)
       return if items.empty?
 
       run&.update!(prompt_version: PROMPT_VERSION)
@@ -82,13 +89,20 @@ class DataQuality::Plugins::TradePress < DataQuality::Plugins::CompanyNewsrooms
       found = llm.structured(role: :extract, schema: names_schema, schema_name: "trade_press_names", crawl_run: run, reasoning_effort: "low",
         messages: [ { role: "system", content: NAMES_INSTRUCTIONS }, { role: "user", content: listing } ]).data
       Array(found["companies"]).each do |company|
-        item = items[company["item"].to_i - 1] or next
+        number = company["item"].to_i
+        next unless (1..items.size).cover?(number)
+
+        item = items[number - 1]
         name = company["name"].to_s.squish
         next if name.length < MIN_NAME || !"#{item.title} #{item.summary}".include?(name) || @directory.organization(name:)
 
         @directory.keep_lead(name:, key: "press:#{item.url}:#{name.downcase}", label: "#{publisher}: #{item.title.truncate(110)}", url: item.url)
       end
+      items.each { |item| @examined.write(examined_key(item), true, expires_in: (WINDOW_DAYS + 2).days) }
     end
+
+    # An item asked about once, companies found or not, isn't asked again.
+    def examined_key(item) = "trade_press:examined:#{Digest::SHA256.hexdigest(item.url.to_s)}"
 
     def names_schema
       { type: "object", additionalProperties: false, required: [ "companies" ], properties: { "companies" => { type: "array", items: {
