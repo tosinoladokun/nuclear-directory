@@ -179,7 +179,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
         @called = true
         status, body, retry_after = http.call(url, headers)
         if status == 429 && attempt.zero?
-          @sleeper.call([ retry_after.to_f, 1.0 ].max)
+          @sleeper.call(retry_after.to_f.clamp(1.0, 10.0))
           next
         end
         return (JSON.parse(body) if status == 200 && body)
