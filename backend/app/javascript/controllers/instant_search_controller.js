@@ -15,7 +15,7 @@ const INDEX_LIFETIME = 10 * 60 * 1000
 // there is no wait per keystroke. Until the index is there, or if it can't be fetched, typing loads /search as before.
 export default class extends Controller {
   static targets = ["input", "results", "frame", "status"]
-  static values = { url: String, indexUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, longPlaceholder: String }
+  static values = { url: String, indexUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, longPlaceholder: String, nameFull: { type: Number, default: 26 }, nameSmall: { type: Number, default: 31 } }
 
   // Below 380px the full placeholder doesn't fit at 16px (iOS zooms below
   // 16px), so a shorter one takes its place (one-line law, #365). Both come
@@ -102,6 +102,15 @@ export default class extends Controller {
       if (content !== undefined) element.textContent = content
       return element
     }
+    // One line, as every list row (DirectoryHelper#line_name): the full name, then 13px, then the short name, ellipsis last.
+    const nameElement = (name, shortName) => {
+      let text = name, small = name.length > this.nameFullValue
+      if (name.length > this.nameSmallValue && shortName && shortName.length <= this.nameSmallValue) text = shortName
+      const element = make("b", "type-body-strong", text)
+      element.title = name
+      if (small) element.dataset.fit = "small"
+      return element
+    }
     const panel = make("div", "nd-instant")
     panel.dataset.instantSearchCount = total
     if (found.fuzzy) {
@@ -122,8 +131,14 @@ export default class extends Controller {
         square.setAttribute("aria-hidden", "true")
         square.innerHTML = this.index.icons[item.i] || ""
         const label = make("span", "nd-instant__text")
-        label.append(make("b", "type-body-strong", item.n))
-        if (item.m) label.append(make("span", "type-small", item.m))
+        label.append(nameElement(item.n, item.sn))
+        if (item.m) {
+          const meta = make("span", "type-small", item.m)
+          meta.title = item.m
+          label.append(meta)
+        }
+        // The visible name may be the short one: the link's accessible name keeps the full name.
+        link.setAttribute("aria-label", item.m ? `${item.n}, ${item.m}` : item.n)
         link.append(square, label)
         row.append(link)
         list.append(row)
@@ -143,7 +158,7 @@ export default class extends Controller {
         square.setAttribute("aria-hidden", "true")
         square.innerHTML = this.index.icons[tag.i] || ""
         const label = make("span", "nd-instant__text")
-        label.append(make("b", "type-body-strong", tag.n))
+        label.append(nameElement(tag.n))
         if (tag.c) label.append(make("span", "type-small", `${tag.c} ${tag.c === 1 ? "company" : "companies"}`))
         link.append(square, label)
         row.append(link)
