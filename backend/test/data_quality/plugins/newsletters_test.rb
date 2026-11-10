@@ -62,7 +62,11 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
       { "name" => "Tracked Atom", "quote" => "Tracked Atom signed a fuel deal.", "website" => "https://links.smartbrief.com/click?u=tracked" },
       { "name" => "Acme Fission", "quote" => "Acme Fission raised money.", "website" => "https://www.acmefission.com" },
       { "name" => "Ghost Nuclear", "quote" => "Ghost Nuclear is new.", "website" => "https://ghostnuclear.com" } ] }
-    assert_empty plugin(found).extract(Source.find_by!(url: "https://resend.com/emails/receiving/m1"), nil)
+    newsletter = Source.find_by!(url: "https://resend.com/emails/receiving/m1")
+    assert_empty plugin(found).extract(newsletter, nil)
+    # Never a claim or evidence, so never on a public page, a source list or the dataset (sources reach those only through evidence).
+    assert_empty Candidate.where(source: newsletter)
+    assert_empty Evidence.where(source: newsletter)
     assert_equal({ "Fresh Fission" => "https://www.freshfission.com", "Tracked Atom" => nil },
       Lead.all.to_h { |lead| [ lead.name, lead.sources.sole["url"] ] }, "a tracker isn't a site; a company we have and a quote not in the email aren't leads")
   end
