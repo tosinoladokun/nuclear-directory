@@ -11,6 +11,7 @@
 class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
   INBOX = "leads@mail.nuclear-directory.org".freeze
   SEND_API = "https://api.resend.com/emails".freeze
+  class ReplyFailed < StandardError; end
   INSTRUCTIONS = <<~TEXT.freeze
     You read one email someone forwarded to suggest companies for a nuclear industry directory. List the companies it names
     that may work in the nuclear industry (reactors, fuel, enrichment, suppliers, utilities with nuclear plants, isotopes,
@@ -55,15 +56,21 @@ class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
       to = @forwarders.first or return
       lines = [ "Added #{added.size} #{'lead'.pluralize(added.size)}#{": #{added.join(', ')}" if added.any?}." ]
       lines << "Already listed: #{listed.join(', ')}." if listed.any?
-      sent = (@sender || method(:send_reply)).call(to:, subject: "Re: #{source.title.to_s.split(': ', 2).last}", text: lines.join("\n"))
-      source.update_columns(etag: "replied") if sent
+      # One Idempotency-Key per email, so a retry after a lost answer never sends a second reply (Copilot);
+      # a failed send raises, so the extraction isn't marked done and the next run tries again.
+      sent = (@sender || method(:send_reply)).call(to:, subject: "Re: #{source.title.to_s.split(': ', 2).last}", text: lines.join("\n"),
+        key: "lead-forwards-#{source.id}")
+      raise ReplyFailed, "Resend didn't take the reply for source #{source.id}" unless sent
+
+      source.update_columns(etag: "replied")
     end
 
-    def send_reply(to:, subject:, text:)
+    def send_reply(to:, subject:, text:, key:)
       uri = URI(SEND_API)
       response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 30) do |client|
         client.post(uri.path, { from: "Nuclear Directory <#{INBOX}>", to: [ to ], subject:, text: }.to_json,
-          { "Authorization" => "Bearer #{@api_key}", "Content-Type" => "application/json", "User-Agent" => DataQuality::Fetcher::USER_AGENT })
+          { "Authorization" => "Bearer #{@api_key}", "Content-Type" => "application/json", "Idempotency-Key" => key,
+            "User-Agent" => DataQuality::Fetcher::USER_AGENT })
       end
       response.is_a?(Net::HTTPSuccess)
     end

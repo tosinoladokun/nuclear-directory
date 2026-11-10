@@ -6,7 +6,7 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
   FakeLLM = Struct.new(:data) do
     def structured(**) = DataQuality::OpenRouter::Client::Response.new(data:, model: "fake", usage: {})
   end
-  TEXT = "Worth a look: Fresh Fission is building a microreactor. Acme Fission too. https://www.linkedin.com/company/fresh-fission"
+  TEXT = "Worth a look: Fresh Fission is building a microreactor. Acme Fission too. https://www.linkedin.com/company/fresh-fission\nhttps://example.com/x?token=secret"
 
   setup do
     Organization.create!(name: "Acme Fission", verification_status: "verified", verified_by: "human:tosin").aliases.find_or_create_by!(alias: "Acme Fission")
@@ -39,7 +39,24 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
 
     assert_equal [ "Fresh Fission" ], Lead.pluck(:name)
     assert_equal 1, @replies.size
-    assert_equal({ to: "owner@example.com", subject: "Re: Fwd: ideas", text: "Added 1 lead: Fresh Fission.\nAlready listed: Acme Fission." }, @replies.sole)
+    assert_equal({ to: "owner@example.com", subject: "Re: Fwd: ideas", text: "Added 1 lead: Fresh Fission.\nAlready listed: Acme Fission.",
+      key: "lead-forwards-#{source.id}" }, @replies.sole)
     assert_not_requested :get, /linkedin/
+  end
+
+  test "a text-only email's URLs are cleaned like links (Copilot)" do
+    plugin.crawl(nil)
+    kept = Source.find_by!(source_kind: "lead_forwards").content_text
+    refute_includes kept, "token=secret"
+    assert_includes kept, "https://example.com/x"
+  end
+
+  test "a failed reply raises, so the next run tries again with the same key (Copilot)" do
+    plugin.crawl(nil)
+    source = Source.find_by!(source_kind: "lead_forwards")
+    failing = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new({ "companies" => [] }), sleeper: ->(_) { }, forwarders: "owner@example.com",
+      sender: ->(**) { false })
+    assert_raises(Plugin::ReplyFailed) { failing.extract(source, nil) }
+    assert_nil source.reload.etag
   end
 end

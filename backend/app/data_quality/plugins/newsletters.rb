@@ -57,7 +57,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       email = api_get("#{API}/#{mail['id']}") or raise InboxError, "Resend: couldn't read received email #{mail['id']}"
       # DMARC pass: the From domain itself is authenticated (aligned SPF or DKIM),
       # not just some domain's signature; bot@ is a public address (Infra).
-      body = email["html"].presence || (ERB::Util.html_escape(email["text"]).gsub("\n", "<br>") if email["text"].present?)
+      body = email["html"].presence || plain_html(email["text"])
       valid = email.dig("authentication", "dmarc") == "pass" && body.present?
       # A rejected email is recorded too, so it never takes a later run's place.
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
@@ -126,8 +126,11 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
         uri = (URI.parse(link["href"].to_s.strip) rescue nil)
         if uri.is_a?(URI::HTTP) && uri.host.present? && !uri.host.match?(TRACKER)
           link["href"] = "#{uri.scheme}://#{uri.host}#{uri.path}"
+          # A bare URL as the link's text is cleaned too (a text-only email's links).
+          link.content = link["href"] if link.text.strip.match?(%r{\Ahttps?://}i)
         else
           link.remove_attribute("href")
+          link.content = "" if link.text.strip.match?(%r{\Ahttps?://}i)
         end
         link.attributes.each_key { |name| link.remove_attribute(name) unless name == "href" }
       end
@@ -138,6 +141,13 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       urls = doc.css("a[href]").map { |link| link["href"] }.grep(%r{\Ahttps?://}i).uniq
       text = "#{visible}#{LINKS}#{urls.join("\n")}"
       { content_text: text, content_sha256: Digest::SHA256.hexdigest(text) }
+    end
+
+    # A text-only email as HTML, its URLs as links, so they're cleaned like any other (Copilot).
+    def plain_html(text)
+      return if text.blank?
+
+      ERB::Util.html_escape(text).gsub(%r{https?://[^\s<>"']+}) { |url| %(<a href="#{url}">#{url}</a>) }.gsub("\n", "<br>")
     end
 
     def url_for(id) = "https://resend.com/emails/receiving/#{id}"
