@@ -23,6 +23,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Paid, no attribution credit (PM, 10 Nov): at most this many a day, ~$3 a month at $5 per 1,000.
   SEARCHES_PER_DAY = 20
   USAGE = "brave_searches".freeze
+  # Leads found a day, whatever asks (Infra, 10 Nov: a pasted long list can't spend the quotas).
+  FINDS_PER_DAY = 50
+  FINDS = "finds".freeze
   SEARCH_RESULTS = 5
   NUCLEAR = DataQuality::Plugins::WirePress::STRONG_NUCLEAR
   US = /\b(?:United States|U\.S\.A?\.?|USA)\b|\b(?:A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\s+\d{5}\b/
@@ -47,6 +50,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # input: what Tosin typed (#752), read in place of the lead's name.
   def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
+    if counted_today(FINDS) >= FINDS_PER_DAY
+      return unconfirmed(input.presence || lead.name, nil, "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", {})
+    end
+
+    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { FINDS => 1 })
     lead = lead.with(name: input) if input.present?
     found = {}
     name, links = read_input(lead)
@@ -184,7 +192,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
 
-    def searches_today = CrawlRun.where(source_kind:, stage: "crawl", started_at: Time.current.all_day).where("stats ? '#{USAGE}'").count
+    def searches_today = counted_today(USAGE)
+    def counted_today(key) = CrawlRun.where(source_kind:, stage: "crawl", started_at: Time.current.all_day).where("stats ? '#{key}'").count
 
     def brave(query)
       uri = URI("#{SEARCH_API}?#{URI.encode_www_form(q: query, count: SEARCH_RESULTS, country: 'us')}")
