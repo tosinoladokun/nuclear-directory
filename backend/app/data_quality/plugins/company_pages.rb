@@ -176,7 +176,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     run&.update!(prompt_version: PROMPT_VERSION)
     found = llm.structured(role: :extract, schema:, schema_name: "company_pages", crawl_run: run, reasoning_effort: "low",
       messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(company.name, text) } ]).data
-    claims = candidates(company.name, found, text, url: source.url)
+    claims = candidates(company.name, found, text, url: source.url, new_company: company.verification_status == "pending")
     # One description per company per read (DQ, 31 Oct): only from the page
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
@@ -276,7 +276,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     # Only what's in its quote, with a quote on the page; keys from the lists.
-    def candidates(name, found, text, url: nil)
+    def candidates(name, found, text, url: nil, new_company: false)
       page = text.downcase.squish
       quoted = ->(value, quote) { quote.present? && page.include?(quote.downcase.squish) && (value.nil? || quote.downcase.include?(value.to_s.downcase)) }
       choices = @directory.company_fact_choices.transform_values { |pairs| pairs.map(&:first) }
@@ -328,8 +328,11 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
-      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand (28 Oct), except for a
+      # new company not yet approved: proposed for Data Quality to read (PM, 10 Nov).
+      lists = { "technologies" => [ "organization_technology", "technology" ] }
+      lists = { "roles" => [ "organization_role", "role" ] }.merge(lists) if new_company
+      lists.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
 
