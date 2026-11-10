@@ -8,8 +8,8 @@
 # documents about operating plants are left alone. No model is asked.
 # - A company in the directory named as the document's author or addressee
 #   gets the document as evidence (a company claim that matches it).
-# - A name the directory doesn't have becomes a lead for Data Quality
-#   (LeadSync's NRC ADAMS feed), never a claim.
+# - A name the directory doesn't have, in a company form (Inc, LLC, Co…),
+#   is proposed as a new company with the document as its source (10 Nov).
 # - NRC's letter assigning a project number (a developer entering NRC
 #   pre-application) is one news item about that company, for a person,
 #   and its licensing stage: pre-application on that docket from the
@@ -82,7 +82,8 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
 
   INDEX_SOURCE_KIND = "nrc_adams_index"
   # What extract proposes from a document: a new version reads every document again.
-  EXTRACT_VERSION = "stages-1"
+  # stages-2: new companies proposed (10 Nov), so documents read before are extracted again.
+  EXTRACT_VERSION = "stages-2"
   NRC = "U.S. Nuclear Regulatory Commission"
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
@@ -99,8 +100,13 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
     news = 0
     taken = decided_urls
     self.class.developer_documents(source.content_text).flat_map do |line, doc|
-      known = self.class.organizations(doc).select { |name| @directory.organization(name:) }
-      claims = known.map { |name| { kind: "organization", payload: { "name" => name } } }
+      names = self.class.organizations(doc)
+      known = names.select { |name| @directory.organization(name:) }
+      # A developer the directory doesn't have, named in a company form on its
+      # own docket: a new company for a person to create (Tosin, 10 Nov), the
+      # NRC document as its source. Other names are never proposed.
+      fresh = names.reject { |name| known.include?(name) }.select { |name| self.class.lead_name?(name) }
+      claims = (known + fresh).map { |name| { kind: "organization", payload: { "name" => name } } }
       if doc["DocumentTitle"].to_s.match?(PROJECT_NUMBER) && known.any?
         # The letter opens the developer's pre-application project: its stage, from that date (#650).
         claims.concat(project_stages(doc, known))
@@ -142,7 +148,9 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # and addressees other than NRC's own offices (DQ, 29 Oct).
   def self.organizations(doc)
     titled = doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).then { |head, rest| head.to_s.squish.delete_suffix(".") if rest && head.to_s.match?(COMPANY_FORM) }
-    ([ titled ] + Array(doc["AuthorAffiliation"]) + Array(doc["AddresseeAffiliation"])).map { |name| name.to_s.squish }
+    # A title naming the company wins over the addressee's affiliation (DQ, 10 Nov: "The Leapfrog Group" isn't Leapfrog Nuclear Co).
+    addressees = titled ? [] : Array(doc["AddresseeAffiliation"])
+    ([ titled ] + Array(doc["AuthorAffiliation"]) + addressees).map { |name| name.to_s.squish }
       .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
   end
 

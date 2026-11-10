@@ -30,13 +30,18 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
       [ "nuclear_energy_rd", 2 ] => { "results" => [ NUSCALE, XENERGY ], "page_metadata" => { "page" => 2, "hasNext" => false } },
       [ "haleu_fuel_contracts", 1 ] => { "results" => CENTRUS, "page_metadata" => { "page" => 1, "hasNext" => false } },
       [ "fusion", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } },
-      [ "small_business", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } }
+      [ "small_business", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } },
+      [ "nuclear_contracts", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } },
+      [ "nuclear_grants", 1 ] => { "results" => [], "page_metadata" => { "page" => 1, "hasNext" => false } }
     }
     @requests = []
     stub_request(:post, Plugin::API_URL).to_return do |request|
       body = JSON.parse(request.body)
       @requests << body
-      search = Plugin::SEARCHES.find { |_, filters| filters.slice(:program_numbers, :keywords).all? { |key, value| body["filters"][key.to_s] == value } }.first
+      search = Plugin::SEARCHES.find do |_, filters|
+        filters.slice(:program_numbers, :keywords, :award_type_codes).all? { |key, value| body["filters"][key.to_s] == value } &&
+          filters.key?(:program_numbers) == body["filters"].key?("program_numbers")
+      end.first
       { body: @answers.fetch([ search, body["page"] ]).to_json, headers: { "Content-Type" => "application/json" } }
     end
   end
@@ -53,7 +58,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert_equal [ "category_business" ], first["filters"]["recipient_type_names"]
     assert_equal [ { "lower_bound" => 1_000_000 } ], first["filters"]["award_amounts"]
     assert_equal 5.years.ago.to_date.iso8601, first["filters"]["time_period"].first["start_date"]
-    assert_equal [ [ "81.121" ], [ "81.121" ], nil, [ "81.049" ], [ "81.049" ] ], @requests.map { |body| body["filters"]["program_numbers"] }
+    assert_equal [ [ "81.121" ], [ "81.121" ], nil, [ "81.049" ], [ "81.049" ], nil, nil ], @requests.map { |body| body["filters"]["program_numbers"] }
     assert_includes @requests.find { |body| body["filters"]["award_type_codes"] == Plugin::CONTRACTS }["fields"], "Award Amount"
   end
 
@@ -167,8 +172,9 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
 
     crawl!
 
-    assert_equal [ { "lower_bound" => 100_000 } ], @requests.last["filters"]["award_amounts"]
-    refute @requests.last["filters"].key?("min_amount")
+    small = @requests.find { |body| body["filters"]["keywords"]&.include?("TRISO") }
+    assert_equal [ { "lower_bound" => 100_000 } ], small["filters"]["award_amounts"]
+    refute small["filters"].key?("min_amount")
     kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).select { |row| row["search"] == "small_business" } }
     assert_equal SMALL_KEPT.sort, kept.map { |row| row["description"] }.sort
     small = Source.find_by!(url: "https://www.usaspending.gov/recipient/00000000-0000-0000-0000-000000000050-R/latest")
@@ -407,5 +413,27 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     open = awards.map { |claim| Candidate.create!(source:, kind: "deal_term", payload: claim[:payload], quote: claim[:quote], status: "new") }
     plugin.refresh_open_claims
     assert_equal awards.map { |claim| claim[:payload]["external_id"] }, open.map { |claim| claim.reload.payload["external_id"] }
+  end
+
+  test "any DOE nuclear contract or grant to a business, kept only when its description states nuclear work (10 Nov)" do
+    award = ->(n, description) { XENERGY.merge("Award ID" => "NC#{n}", "Recipient Name" => "NUCLEAR CO #{n}", "Description" => description,
+      "generated_internal_id" => "CONT_AWD_NC#{n}", "recipient_id" => "00000000-0000-0000-0000-#{(n + 80).to_s.rjust(12, '0')}-C") }
+    @answers[[ "nuclear_contracts", 1 ]] = { "results" => [ award.(1, "SPENT NUCLEAR FUEL CASK FABRICATION").merge("Awarding Sub Agency" => "Office of Environmental Management"), award.(2, "IT SUPPORT SERVICES FOR THE NUCLEAR FUEL PROGRAM OFFICE BUILDING JANITORIAL") ],
+      "page_metadata" => { "hasNext" => false } }
+    @answers[[ "nuclear_grants", 1 ]] = { "results" => [ award.(3, "GENERAL FACILITIES MAINTENANCE"), award.(4, "MICROREACTOR HEAT PIPE TESTING"), award.(5, "IT SERVICES FOR THE NUCLEAR FUEL PROGRAM"),
+      award.(6, "SECURITY SUPPORT FOR THE NUCLEAR WASTE PROGRAM OFFICE"), award.(7, "NUCLEAR REACTOR OPERATOR TRAINING COURSE DEVELOPMENT") ],
+      "page_metadata" => { "hasNext" => false } }
+
+    crawl!
+    kept = Source.where(source_kind: "usaspending_doe_awards").flat_map { |source| CSV.parse(source.content_text, headers: true).map { |row| row["description"] } }
+    assert_includes kept, "SPENT NUCLEAR FUEL CASK FABRICATION"
+    assert_includes kept, "MICROREACTOR HEAT PIPE TESTING"
+    refute_includes kept, "GENERAL FACILITIES MAINTENANCE"
+    %w[IT\ SERVICES SECURITY\ SUPPORT OPERATOR\ TRAINING].each { |words| refute(kept.any? { |d| d.include?(words) }, "#{words}: support, not nuclear work") }
+    cask = Source.where(source_kind: "usaspending_doe_awards").find { |source| source.content_text.include?("SPENT NUCLEAR FUEL CASK") }
+    claim = plugin.extract(cask, nil).find { |c| c[:kind] == "relationship" }
+    assert_includes claim[:quote], "Office of Environmental Management", "the quote names the awarding office and the nuclear subject"
+    assert_includes claim[:quote], "SPENT NUCLEAR FUEL CASK"
+    refute_includes kept, "IT SUPPORT SERVICES FOR THE NUCLEAR FUEL PROGRAM OFFICE BUILDING JANITORIAL", "a support service, not nuclear work"
   end
 end

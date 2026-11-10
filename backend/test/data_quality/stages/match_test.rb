@@ -4,6 +4,7 @@ require_relative "../support/dummy_plugin"
 # Match against the real directory with NRC-style names, since what matters
 # is how real names and dockets resolve.
 class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
   include ReviewHelpers
 
   setup do
@@ -569,17 +570,32 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
     assert_equal 1, run.stats["matched"]
   end
 
-  test "a match run refuses to overlap another match run" do
+  def other_match_run
     # A separate Postgres session plays the other run (tests share one pooled connection).
     config = ActiveRecord::Base.connection_db_config.configuration_hash
     other = PG.connect(host: config[:host], port: config[:port], user: config[:username], password: config[:password],
       dbname: config[:database])
-    other.exec("SELECT pg_advisory_lock(#{Zlib.crc32('data_quality:match')})")
-
-    error = assert_raises(RuntimeError) { match! }
-    assert_equal "Another match run is already in progress", error.message
+    other.exec("SELECT pg_advisory_lock(#{DataQuality::Stages::Match.lock_key})")
+    yield
   ensure
     other&.close
+  end
+
+  test "a match run refuses to overlap another: a quiet AlreadyRunning, no failed run left, its claims still new" do
+    c = candidate("organization", { "name" => "TerraPower" })
+    other_match_run do
+      runs = CrawlRun.count
+      error = assert_raises(DataQuality::Pipeline::AlreadyRunning) { match! }
+      assert_match "Another match run is already in progress", error.message
+      assert_equal runs, CrawlRun.count, "no failed run in the history"
+    end
+    assert_equal "new", c.reload.status, "nothing lost: the next run matches it"
+  end
+
+  test "RunJob retries an overlapping match later instead of failing" do
+    other_match_run do
+      assert_enqueued_with(job: DataQuality::RunJob) { DataQuality::RunJob.perform_now("nrc_reactor_list", only: "match") }
+    end
   end
 
   test "an explicit nil domain prevents website matching" do

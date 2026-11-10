@@ -351,7 +351,8 @@ module DataQuality::Matching
         plant = candidate.kind == "facility"
         type = plant ? "Facility" : "Organization"
         attributes = payload.slice(*(plant ? %w[name nrc_docket eia_plant_id facility_type status reactor_type capacity_mw thermal_power_kw city state] :
-          %w[name hq_city hq_state description website])).symbolize_keys
+          # Filled before Tosin's Create (PM, 9 Nov): one Create publishes a complete company.
+          %w[name hq_city hq_state description short_description website])).symbolize_keys
         result = directory.write_pending(candidate.kind, attributes, candidate:, crawl_run: candidate.crawl_run || CrawlRun.new(id: nil),
           verification: { status: "pending", by: BY, reason: })
         return "couldn't propose it: #{result.errors.to_sentence}" unless result.success?

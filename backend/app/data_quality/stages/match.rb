@@ -155,12 +155,17 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
     # Match runs can race when inserting similar records even across source
     # kinds, so only one runs at a time. A Postgres advisory lock, released
-    # when the run ends.
+    # when the run ends (per database, so parallel test databases don't share it).
+    # A second run (another source kind's job, often queued together by Data
+    # Quality's endpoint) stops with Pipeline::AlreadyRunning, which RunJob
+    # retries later: its claims stay new until then, so nothing is lost.
+    def self.lock_key = Zlib.crc32("data_quality:match:#{Candidate.connection.current_database}")
+
     def one_run_at_a_time
       connection = Candidate.connection
-      key = Zlib.crc32("data_quality:match")
+      key = self.class.lock_key
       locked = connection.select_value("SELECT pg_try_advisory_lock(#{key})")
-      raise "Another match run is already in progress" unless locked
+      raise DataQuality::Pipeline::AlreadyRunning, "Another match run is already in progress; try again when it finishes" unless locked
 
       yield
     ensure
