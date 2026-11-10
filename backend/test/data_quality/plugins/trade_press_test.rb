@@ -15,9 +15,9 @@ class DataQuality::Plugins::TradePressTest < ActiveSupport::TestCase
   def plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: { "World Nuclear News" => FEED }, today: -> { TODAY })
   def source = Source.find_by!(url: FEED)
 
-  test "is the plug-in for trade_press, reading WNN and ANS" do
+  test "is the plug-in for trade_press, reading WNN, ANS, NucNet and NEI magazine" do
     assert_instance_of Plugin, DataQuality::Plugin.for("trade_press")
-    assert_equal [ "World Nuclear News", "ANS Nuclear Newswire" ], Plugin::FEEDS.keys
+    assert_equal [ "World Nuclear News", "ANS Nuclear Newswire", "NucNet", "Nuclear Engineering International" ], Plugin::FEEDS.keys
   end
 
   test "only an item naming a company or plant in the directory becomes a lead, about what it names" do
@@ -59,5 +59,27 @@ class DataQuality::Plugins::TradePressTest < ActiveSupport::TestCase
     assert_equal [ DataQuality::Review::LEAD ], result.errors, "the form's lead field, sent back as text, changes nothing"
     assert_equal true, lead.reload.payload["lead"]
     assert_empty NewsItem.all
+  end
+
+  FakeLLM = Struct.new(:data, :asked) do
+    def structured(messages:, **)
+      asked << messages.last[:content]
+      DataQuality::OpenRouter::Client::Response.new(data:, model: "fake", usage: {})
+    end
+  end
+
+  test "the day's items naming nothing we have give their US companies as leads, in the item's own words (10 Nov)" do
+    DataQuality::Stages::Crawl.call(plugin:)
+    westinghouse = Organization.find_by(slug: "westinghouse") || Organization.create!(name: "Westinghouse")
+    westinghouse.update_columns(verification_status: "verified", verified_by: "human:tosin")
+    westinghouse.aliases.find_or_create_by!(alias: "Westinghouse")
+    llm = FakeLLM.new({ "companies" => [ { "name" => "Hot Testing Co", "item" => 1 }, { "name" => "US DOE", "item" => 9 },
+      { "name" => "Joint venture", "item" => 2 } ] }, [])
+    today = Date.new(2026, 10, 15)
+    Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), feeds: { "World Nuclear News" => FEED }, today: -> { today }, llm:).extract(source, nil)
+
+    refute_includes llm.asked.sole, "Westinghouse places initial orders", "an item naming a company we have isn't asked about"
+    assert_includes llm.asked.sole, "US DOE funding to accelerate molten salt reactor development"
+    assert_equal [ "Joint venture" ], Lead.pluck(:name), "only a name in its own item's words (item 1 doesn't say Hot Testing Co; no item 9)"
   end
 end
