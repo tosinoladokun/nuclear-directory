@@ -476,4 +476,25 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     @company.update_columns(verification_status: "pending", verified_by: nil)
     assert_equal [ { "organization" => { "name" => "Acme Fission" }, "role" => "reactor_vendor" } ], roles.call.map { |c| c[:payload] }
   end
+
+  test "both nightly budgets are read in the first run: 15 new and 15 backlog companies (Copilot)" do
+    Organization.update_all(enrich_requested_at: Time.current, enriched_at: Time.current)
+    role = Role.find_by!(key: "reactor_vendor")
+    ids = (1..30).map do |n|
+      site = "https://co#{n}.example"
+      stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
+      stub_request(:get, site).to_return(body: "<html><body><p>Company #{n}.</p></body></html>", headers: { "Content-Type" => "text/html" })
+      if n <= 15
+        Organization.create!(name: "New Co #{n}", website: site)
+      else
+        Organization.create!(name: "Old Co #{n}", website: site, verification_status: "verified", verified_by: "human:tosin").tap do |org|
+          OrganizationRole.create!(organization: org, role:).verify!(by: "human:tosin")
+        end
+      end.id
+    end
+    plugin = DataQuality::Plugins::CompanyPages.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+    stats = plugin.crawl(nil)
+    assert_equal 30, stats["gap_fill"]
+    assert_equal 30, Organization.where(id: ids).where.not(enriched_at: nil).count, "every requested company is read the same night"
+  end
 end
