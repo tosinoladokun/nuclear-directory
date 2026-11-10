@@ -18,6 +18,10 @@ export default class extends Controller {
 
   connect() {
     this.label = this.submitTarget.textContent
+    // With JavaScript the inline filters apply as they change, so their Apply button is hidden (CSS, data-live); in the
+    // phone sheet the button stays: it says how many results the choice shows.
+    this.formTarget.dataset.live = ""
+    this.restoreFocus()
     this.phone = window.matchMedia("(max-width: 560px)")
     this.leftPhone = () => { if (!this.phone.matches && this.isOpen) this.close() }
     this.phone.addEventListener("change", this.leftPhone)
@@ -31,6 +35,7 @@ export default class extends Controller {
   }
 
   disconnect() {
+    clearTimeout(this.submitTimer)
     this.phone?.removeEventListener("change", this.leftPhone)
     window.removeEventListener("resize", this.leftPhone)
   }
@@ -66,9 +71,39 @@ export default class extends Controller {
   // The contents go back to their inline home. Also bound to the dialog's
   // close event, which some browsers deliver late; safe to run twice.
   closed() {
+    // Choices made in the sheet and never applied go back to what the results show, so a rotation to the inline layout
+    // can't leave a filter on screen that the list doesn't reflect.
+    this.formTarget.reset()
     if (this.dialogTarget.children.length) this.sheetTarget.append(...this.dialogTarget.children)
     this.request = null
     this.show(this.label, "")
+  }
+
+  // A filter changed: in the sheet, count what it would show; inline, apply it.
+  // The submit waits a moment so arrowing through a closed select doesn't navigate on every option, and the focused
+  // control is remembered so the page that replaces this one can put focus back on it.
+  changed(event) {
+    if (this.isOpen) return this.count()
+    clearTimeout(this.submitTimer)
+    this.submitTimer = setTimeout(() => {
+      const name = event?.target?.name
+      // Storage can be blocked (some private modes): losing the focus hint must never break the filters.
+      try { if (name) sessionStorage.setItem("nd-filter-focus", name) } catch { /* ignore */ }
+      this.formTarget.requestSubmit()
+    }, 500)
+  }
+
+  restoreFocus() {
+    let name = null
+    try {
+      name = sessionStorage.getItem("nd-filter-focus")
+      sessionStorage.removeItem("nd-filter-focus")
+    } catch {
+      return
+    }
+    if (!name) return
+    const control = [...this.formTarget.elements].find((el) => el.name === name)
+    if (control && control.getClientRects().length) control.focus({ preventScroll: true })
   }
 
   // Ask how many results the current choices give, and say so.

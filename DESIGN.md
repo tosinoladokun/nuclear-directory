@@ -49,7 +49,7 @@ Build order: #558, #559, #560, then #556, #557, #561. Homepage: no change (kept 
   - Companies: **name · description · location**, in three columns on desktop (name 240px, description the rest, location 170px right-aligned), three lines on phones.
   - No mark, no tags, no connection count on the row. Most connected stays as the sort.
   - Plants: site ring, name, status mark and word, type, MW, location.
-- **Lists sit in a white panel with a header row** ("Company · Description · Location") on desktop; phones keep the panel and lines, with no header row.
+- **Lists sit in a white panel of rows, with no header row** (name, description, location; the filters and rows say what each is). Filters apply as they change (no Apply button; the phone sheet keeps its "Show N results" button).
 - **Short description** (#559):
   - 40 characters at most, measured to fit 330px at 14px (the phone line is the tightest place).
   - A description, not an action: "Uranium mining in Wyoming", not "Mines uranium in Wyoming".
@@ -230,8 +230,8 @@ Everyone in one part of the industry (e.g. fuel and materials), most connected f
 - **Sections, top to bottom (25 Oct, #560):**
   - **Desktop,** two columns:
     - **Left:** the category index (268px, sticky): All companies, then the ten categories with counts and their 16px icons. Short names where needed ("Plant operators", "Components").
-    - **Right:** the page head (category square, name, count, the one-line definition from the category's `about`); the toolbar (Sort, Technology, State); the list in a white panel with a header row "Company · Description · Location"; Show N more after 24; the quiet line "Missing a company? Report a correction".
-  - **Phones:** category chips scrolled to the current one (All companies first); page head; Filters and Sort; the list panel (no header row; name, description, location on three lines); Show N more after 12; the quiet line.
+    - **Right:** the page head (category square, name; no description, which stays in the meta description; no count on a category list, a bare number on search, tag and filtered lists); the toolbar (Sort, Technology, State), applying as they change; the list in a white panel with no header row; Show N more after 24; only the plants list has a quiet line, "Add a plant".
+  - **Phones:** category chips scrolled to the current one (All companies first); page head; Filters and Sort; the list panel (no header row; name, description, location on three lines); Show N more after 12; the plants list's quiet line.
   - **No About panel, on any size.**
 - **Above the fold:** at 390, header, chips, title, the definition line, Filters, the first 3 rows. At 1440, header through about 8 rows.
 - **Key facts and sources:** Category name and definition (Category model). Reactor developers' line keeps the model's scope: companies designing reactors or developing new nuclear plants (reactor vendors and project developers); engineering contractors sit in Services and engineering; Count; For Plants and sites: type, status, units, operating MW.

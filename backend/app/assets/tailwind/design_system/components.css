@@ -909,6 +909,8 @@
   .nd-filtersheet:is(:popover-open, [open]) .nd-filters { flex: 1; flex-direction: column; align-items: stretch; gap: var(--nd-space-4); }
   .nd-filtersheet:is(:popover-open, [open]) .nd-select { justify-content: space-between; }
   .nd-filtersheet:is(:popover-open, [open]) .nd-select select { max-width: 60%; }
+  .nd-filters[data-live] [type=submit] { display: none; }
+  .nd-filtersheet:is(:popover-open, [open]) .nd-filters[data-live] [type=submit] { display: inline-flex; }
   .nd-filtersheet:is(:popover-open, [open]) .nd-filters [type=submit] { margin-top: auto; width: 100%; justify-content: center; height: 48px; background: var(--nd-inverse); border-color: var(--nd-inverse); color: var(--nd-on-inverse); }
 
   @media (any-pointer: coarse) {
