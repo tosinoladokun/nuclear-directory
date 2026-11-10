@@ -92,6 +92,11 @@ module LeadFinding
     case outcome.to_s
     when "proposed"
       lead.update!(status: "added", note: nil, next_find_at: nil, candidate_id:)
+    when "not_us", "not_nuclear"
+      # Found, and not ours: closed at once, no retry.
+      why = outcome.to_s == "not_us" ? "not a US company" : "no nuclear work"
+      note = [ "#{CLOSED}: #{why}", reason.presence, ([ name, website ].compact_blank.join(", ").presence&.then { |found| "found #{found}" }) ].compact.join(": ")
+      lead.update!(status: "ignored", reason: note, note:, next_find_at: nil, decided_by: lead.decided_by || "agent:lead_finder", decided_at: now)
     when "duplicate"
       lead.update!(status: "added", note: "Already listed", next_find_at: nil,
         record_type: ("Organization" if organization_id), record_id: organization_id)

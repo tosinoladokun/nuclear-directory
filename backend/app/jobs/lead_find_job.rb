@@ -19,7 +19,7 @@ class LeadFindJob < ApplicationJob
   private
 
   def find(lead)
-    finder = self.finder || (->(l) { DataQuality::LeadFinder.call(l) } if defined?(DataQuality::LeadFinder))
+    finder = self.finder || (->(l) { DataQuality::LeadFinder.call(l.id) } if defined?(DataQuality::LeadFinder))
     # Before Crawl's finder ships, a lead waits untouched (no tries used up).
     return lead.update!(note: "Waiting for the finder") unless finder
 

@@ -87,4 +87,13 @@ class LeadFindJobTest < ActiveJob::TestCase
     assert_equal %w[company plant], LeadProposals.kinds(finder: false)
     assert_equal %w[plant], LeadProposals.kinds(finder: true)
   end
+
+  test "not US or not nuclear closes the lead at once with the reason, no retry" do
+    l = lead("Abroad Co")
+    LeadFindJob.finder = ->(*) { Found.new(outcome: :not_us, reason: "Toronto head office") }
+    LeadFindJob.perform_now(l.id)
+    assert_equal [ "ignored", nil ], l.reload.values_at(:status, :next_find_at)
+    assert_equal "Closed at check: not a US company: Toronto head office", l.reason
+    assert_equal l.reason, LeadFinding.state(l)
+  end
 end
