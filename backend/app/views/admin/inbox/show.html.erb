@@ -16,13 +16,15 @@
   <p class="type-body m-0"><%= total.zero? ? "Nothing to decide today." : "#{total} to decide. Nothing goes live until you say yes." %></p>
 </div>
 
-<%= form_with url: admin_inbox_suggest_path, class: "nd-row", aria: { label: "Add a lead" } do %>
-  <%= label_tag :suggestion, "Add a lead", class: "sr-only" %>
-  <%= text_field_tag :suggestion, nil, class: "nd-input type-input", placeholder: "Add a lead: company name, website or link", maxlength: CompanySuggestion::MAX, required: true %>
-  <%= submit_tag "Add", class: "nd-btn type-ui", name: nil %>
+<%= form_with url: admin_inbox_suggest_path, class: "nd-stack", aria: { label: "Add a lead" } do %>
+  <%= label_tag :suggestion, "Add a lead", class: "type-admin-h2 m-0" %>
+  <%= text_area_tag :suggestion, nil, class: "nd-input type-input", rows: 2, required: true,
+        placeholder: "A company name, website or link. One per line for several." %>
+  <div><%= submit_tag "Add", class: "nd-btn type-ui", name: nil %></div>
 <% end %>
 
-<% leads = CompanySuggestion.shown.to_a %>
+<%# One line each while it's in the pipeline; once Tosin decides it, it's in Recently decided instead. %>
+<% leads = CompanySuggestion.shown.to_a.reject { |lead| %w[Created Said\ no].include?(LeadFinding.state(lead)) } %>
 <% if leads.any? %>
   <section class="nd-stack" aria-labelledby="inbox-leads">
     <h2 id="inbox-leads" class="type-admin-h2 m-0">Your leads <span class="type-count"><%= leads.size %></span></h2>

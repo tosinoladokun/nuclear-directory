@@ -23,10 +23,18 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     assert_equal [ "company", "new", "human:tosin" ], lead.values_at(:kind, :status, :decided_by)
     follow_redirect!
     assert_select "label", text: "Add a lead"
+    assert_select "input[type=submit][value=Add]"
     assert_equal "Kairos Power Finding", line(lead)
 
     assert_no_enqueued_jobs { add(" ") }
     assert_no_enqueued_jobs { add("x" * 501) }
+    assert_no_enqueued_jobs { add((1..51).map { |n| "Company #{n}" }.join("\n")) }
+  end
+
+  test "several at once, one per line; blank and repeated lines skipped" do
+    assert_enqueued_jobs(3, only: LeadFindJob) { add("Alpha Fission\n\nhttps://betafusion.example\n Gamma Isotopes \nAlpha Fission") }
+    assert_equal [ "Alpha Fission", "betafusion.example", "Gamma Isotopes" ].sort, Lead.where(status: "new").pluck(:name).sort
+    assert_equal "Added 3 leads. They're being found now.", flash[:notice]
   end
 
   test "a link is kept as the lead's source, named by its site" do

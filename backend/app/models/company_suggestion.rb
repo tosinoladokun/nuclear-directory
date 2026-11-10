@@ -7,6 +7,16 @@ module CompanySuggestion
   KEY = "admin:suggest".freeze
   LABEL = "Added in the admin".freeze
   MAX = 500
+  # Several at once, one per line (PM, 10 Nov).
+  MAX_LINES = 50
+
+  # Each non-blank line is a lead; returns the leads made, or nil when none could be (empty, too long, too many).
+  def self.suggest_lines(text, by:)
+    lines = text.to_s.lines.map(&:squish).compact_blank.uniq
+    return if lines.empty? || lines.size > MAX_LINES || lines.any? { |line| line.length > MAX }
+
+    lines.filter_map { |line| suggest(line, by:) }.presence
+  end
   SHOWN_FOR = 14.days
 
   def self.suggest(input, by:)

@@ -36,10 +36,11 @@ class Admin::InboxController < Admin::BaseController
 
   # Add a lead (#752): found in the background; it comes back as a Create, or as couldn't confirm.
   def suggest
-    if CompanySuggestion.suggest(params[:suggestion], by: actor)
-      flash[:notice] = "Added. It's being found now."
+    if (leads = CompanySuggestion.suggest_lines(params[:suggestion], by: actor))
+      flash[:notice] = leads.one? ? "Added. It's being found now." : "Added #{leads.size} leads. They're being found now."
     else
-      flash[:alert] = "Type a company name, its website or a link (#{CompanySuggestion::MAX} characters at most)."
+      flash[:alert] = "Type a company name, website or link, one per line " \
+        "(#{CompanySuggestion::MAX_LINES} lines and #{CompanySuggestion::MAX} characters a line at most)."
     end
     redirect_to admin_inbox_path
   end
