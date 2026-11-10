@@ -494,25 +494,33 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
   end
 
   test "a click on Enrich reads deeper: up to #{DataQuality::Plugins::CompanyPages::DEEP_PAGES} own pages, news and partners first, and stored sources naming it again (#758)" do
-    links = (1..14).map { |n| %(<a href="/products/p#{n}">Product #{n}</a>) }.join + %(<a href="/news">News</a><a href="/partners">Partners</a>)
+    links = (1..14).map { |n| %(<a href="/products/p#{n}">Product #{n}</a>) }.join + %(<a href="/media">News</a><a href="/partners">Partners</a>)
     stub_request(:get, HOME).to_return(body: "<html><body>#{links}<p>Acme Fission Inc. designs small modular reactors.</p></body></html>", headers: { "Content-Type" => "text/html" })
-    stub_request(:get, %r{\Ahttps://www\.acmefission\.com/(products|news|partners)}).to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
+    stub_request(:get, %r{\Ahttps://www\.acmefission\.com/(products|media|partners)}).to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
     @company.aliases.find_or_create_by!(alias: "Acme Fission")
     naming = Source.create!(url: "https://www.prnewswire.com/news-releases/acme-1.html", source_kind: "wire_press", crawl_status: "ok",
-      content_text: "<p>Acme Fission signs a fuel deal.</p>", content_sha256: "a", extracted_sha256: "a")
+      content_text: "<p>Acme Fission signs a fuel deal.</p>", content_sha256: "a", extracted_sha256: "a", extracted_rows_sha256: "a")
+    @company.aliases.find_or_create_by!(alias: "AFX")
+    by_acronym = Source.create!(url: "https://www.prnewswire.com/news-releases/afx-1.html", source_kind: "wire_press", crawl_status: "ok",
+      content_text: "<p>AFX signs a deal.</p>", content_sha256: "c", extracted_sha256: "c", extracted_rows_sha256: "c")
+    lowercase = Source.create!(url: "https://www.prnewswire.com/news-releases/afx-2.html", source_kind: "wire_press", crawl_status: "ok",
+      content_text: "<p>The afx ratio.</p>", content_sha256: "d", extracted_sha256: "d")
     other = Source.create!(url: "https://www.prnewswire.com/news-releases/other-1.html", source_kind: "wire_press", crawl_status: "ok",
       content_text: "<p>Acme Fissionable Corp news.</p>", content_sha256: "b", extracted_sha256: "b")
     @company.update_columns(enrich_requested_at: Time.current)
 
     stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory: DeepDirectory.new).crawl(nil)
     assert_equal 1 + DataQuality::Plugins::CompanyPages::DEEP_PAGES, stats["pages"]
-    assert_requested :get, "https://www.acmefission.com/news"
+    assert_requested :get, "https://www.acmefission.com/media" # its link text says News: first
     assert_requested :get, "https://www.acmefission.com/partners"
-    assert_equal 1, stats["deep_sources"]
+    assert_equal 2, stats["deep_sources"]
     assert_nil naming.reload.extracted_sha256, "read again tonight"
+    assert_nil naming.extracted_rows_sha256, "both hashes, so Extract can't skip it as unchanged"
+    assert_nil by_acronym.reload.extracted_sha256, "a short capital alias, as written"
+    assert_equal "d", lowercase.reload.extracted_sha256, "not the alias in lower case"
     assert_equal "b", other.reload.extracted_sha256, "a longer name isn't this company"
 
-    naming.update_columns(extracted_sha256: "a")
+    naming.update_columns(extracted_sha256: "a", extracted_rows_sha256: "a")
     CrawlRun.create!(source_kind: "company_pages", stage: "crawl", status: "succeeded",
       stats: { "deep_sources" => DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY })
     @company.update_columns(enrich_requested_at: Time.current)

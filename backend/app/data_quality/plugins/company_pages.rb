@@ -157,7 +157,6 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         links = own_links(home, deep:)
-        links = links.sort_by { |url| url.match?(DEEP_LINK) ? 0 : 1 } if deep
         links.first(deep ? DEEP_PAGES : PAGES).each do |url|
           DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
@@ -287,15 +286,21 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # plants which name the company: their next extraction reads them again
     # (each in its own plug-in's way, with its own checks). Returns how many.
     def reread_sources_naming(id, limit: DEEP_SOURCES)
-      names = @directory.organization_names(id).select { |name| name.length >= 4 }
-      return 0 if names.empty? || limit <= 0
+      names = @directory.organization_names(id)
+      # Short all-capital aliases (TVA) count too, in capitals only, as the wire reads them (Copilot).
+      long = names.select { |name| name.length >= 4 }
+      short = names.select { |name| name.match?(/\A[A-Z0-9&]{2,3}\z/) }
+      return 0 if (long.empty? && short.empty?) || limit <= 0
 
       # Each name as a whole phrase (a POSIX regular expression, its special characters escaped).
-      pattern = names.map { |name| name.gsub(/[.*+?^${}()|\[\]\\]/) { |char| "\\#{char}" } }.join("|")
-      ids = Source.where(source_kind: DEEP_KINDS).where.not(extracted_sha256: nil)
-        .where("content_text ~* ?", "(^|[^[:alnum:]])(#{pattern})($|[^[:alnum:]])")
+      phrase = ->(list) { "(^|[^[:alnum:]])(#{list.map { |name| name.gsub(/[.*+?^${}()|\[\]\\]/) { |char| "\\#{char}" } }.join('|')})($|[^[:alnum:]])" }
+      matching = Source.none
+      matching = matching.or(Source.where("content_text ~* ?", phrase.(long))) if long.any?
+      matching = matching.or(Source.where("content_text ~ ?", phrase.(short))) if short.any?
+      ids = Source.where(source_kind: DEEP_KINDS).where.not(extracted_sha256: nil).merge(matching)
         .order(fetched_at: :desc).limit(limit).ids
-      Source.where(id: ids).update_all(extracted_sha256: nil)
+      # Both hashes, so Extract's unchanged-rows shortcut can't skip it (Copilot).
+      Source.where(id: ids).update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
       ids.size
     end
 
@@ -306,11 +311,18 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # Relative links are read against where the page ended (#525).
       base = home.final_url.presence || home.url
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
-      Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
+      found = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"]).to_s.split("#").first rescue next
         uri = URI(url)
-        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) && "#{uri.path} #{link.text}".match?(deep ? Regexp.union(LINK, DEEP_LINK) : LINK)
-      end.uniq
+        said = "#{uri.path} #{link.text}"
+        next unless uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) &&
+          said.match?(deep ? Regexp.union(LINK, DEEP_LINK) : LINK)
+
+        [ url, said.match?(DEEP_LINK) ]
+      end
+      # A deep read takes news, partners, investors… first, by address or link text (Copilot).
+      found = found.sort_by.with_index { |(_, first), index| [ first ? 0 : 1, index ] } if deep
+      found.map(&:first).uniq
     end
 
     def prompt(name, text)
