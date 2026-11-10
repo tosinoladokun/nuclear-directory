@@ -44,8 +44,18 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     # (NUCLEAR_ENERGY).
     "small_business" => { award_type_codes: ASSISTANCE, program_numbers: [ "81.049" ], min_amount: 100_000,
       keywords: [ "nuclear reactor", "advanced reactor", "nuclear fuel", "nuclear power", "spent fuel", "nuclear waste",
-        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt reactor", "uranium enrichment" ] }
+        "isotope production", "medical isotope", "HALEU", "TRISO", "molten salt reactor", "uranium enrichment" ] },
+    # More companies (Tosin, 10 Nov): any DOE contract or grant to a business
+    # whose description is about nuclear work, from any office (NE, NNSA, EM,
+    # Science). The keyword alone isn't enough: only awards whose own
+    # description states nuclear work (NUCLEAR_ENERGY) are kept, so a general
+    # DOE contractor isn't proposed for mentioning the word.
+    "nuclear_contracts" => { award_type_codes: CONTRACTS, keywords: NUCLEAR_KEYWORDS = [ "nuclear reactor", "advanced reactor", "nuclear fuel",
+      "spent fuel", "nuclear waste", "isotope production", "medical isotope", "uranium enrichment", "microreactor" ].freeze },
+    "nuclear_grants" => { award_type_codes: ASSISTANCE, keywords: NUCLEAR_KEYWORDS }
   }.freeze
+  # Searches whose awards must state nuclear work in their description.
+  NUCLEAR_ONLY = %w[small_business nuclear_contracts nuclear_grants].freeze
   # The fusion search's keyword also finds awards that only mention fusion:
   # data fusion, plastics, and software, simulation or quantum computing run
   # on fusion data. Only awards for fusion energy work itself are kept: its
@@ -291,7 +301,7 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
           data = JSON.parse(response.body)
           data["results"].to_a.each do |award|
             next if name == "fusion" && !fusion_energy?(award["Description"])
-            next if name == "small_business" && !award["Description"].to_s.match?(NUCLEAR_ENERGY)
+            next if NUCLEAR_ONLY.include?(name) && !nuclear_work?(award["Description"])
 
             row = row_for(award, name)
             rows[row["generated_award_id"]] ||= row # an award two searches find is kept once
@@ -305,6 +315,12 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
       [ rows.values, nil ]
     rescue JSON::ParserError => error
       [ nil, failure("USAspending answered with something that isn't JSON (#{error.message.truncate(80)})", status: 200) ]
+    end
+
+    # Nuclear work stated, and not a support service that only serves a nuclear office.
+    SUPPORT_SERVICE = /\b(?:IT support|information technology|janitorial|custodial|facilit(?:y|ies) (?:maintenance|support|services)|security (?:guards?|services)|staffing|administrative support|professional support services|technical support services|training services|records management)\b/i
+    def nuclear_work?(description)
+      description.to_s.match?(NUCLEAR_ENERGY) && !description.to_s.match?(SUPPORT_SERVICE)
     end
 
     def fusion_energy?(description)
