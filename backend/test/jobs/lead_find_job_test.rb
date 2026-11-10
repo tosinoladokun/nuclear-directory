@@ -109,4 +109,10 @@ class LeadFindJobTest < ActiveJob::TestCase
       assert_equal 1, l.reload.find_attempts
     end
   end
+
+  test "nightly, Tosin's own leads go first" do
+    lead("Older Co")
+    travel(1.minute) { Lead.sighted!(name: "His Co", kind: "company", key: "admin:suggest:his co", label: CompanySuggestion::LABEL) }
+    assert_equal "His Co", LeadFinding.due.first.name
+  end
 end

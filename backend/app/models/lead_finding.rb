@@ -11,7 +11,7 @@
 module LeadFinding
   RETRY_AFTER = 1.week
   TRIES = 4 # weekly for a month
-  PER_NIGHT = 20
+  PER_NIGHT = 30 # Crawl, 10 Nov
   # Finds a day at most, nightly and added ones together, so a pasted list can't use up the search quota (Infra).
   PER_DAY = 60
   WAITING = "Waiting: today's finds are used up; tried tonight".freeze
@@ -25,11 +25,12 @@ module LeadFinding
   FINDING = "Finding it".freeze
   UNCONFIRMED = "Couldn't confirm".freeze
 
-  # Leads due a find: waiting ones, and ones whose weekly retry has come. Oldest first.
+  # Leads due a find: waiting ones, and ones whose weekly retry has come. Tosin's own first, then oldest first.
   def self.due(now: Time.current)
+    his = "leads.sources @> #{Lead.connection.quote([ { 'label' => CompanySuggestion::LABEL } ].to_json)}"
     Lead.where(kind: "company").where(status: "new")
       .or(Lead.where(kind: "company", status: "researching").where(next_find_at: ..now))
-      .order(Arel.sql("COALESCE(leads.next_find_at, leads.updated_at)"))
+      .order(Arel.sql("(#{his}) DESC, COALESCE(leads.next_find_at, leads.updated_at)"))
   end
 
   # Marks the lead as being found, under its row lock, if it's still due; returns the attempt (the moment it
