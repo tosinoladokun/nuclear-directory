@@ -108,6 +108,11 @@ class LeadFindJobTest < ActiveJob::TestCase
       LeadFindJob.perform_now(l.id)
       assert_equal 1, l.reload.find_attempts
     end
+    travel(4.hours) do
+      LeadFindJob.finder = ->(*) { Found.new(outcome: :busy, reason: "another run held the lock") }
+      LeadFindJob.perform_now(l.id)
+      assert_equal [ 1, LeadFinding::BUSY ], l.reload.values_at(:find_attempts, :note)
+    end
   end
 
   test "nightly, Tosin's own leads go first" do

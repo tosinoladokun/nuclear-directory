@@ -98,7 +98,7 @@ module LeadFinding
     case outcome.to_s
     when "proposed"
       lead.update!(status: "added", note: nil, next_find_at: nil, candidate_id:)
-    when "retry"
+    when "retry", "busy"
       # Not a try (another run held the lock, a search limit): no attempt used, tried again in an hour.
       lead.update!(status: "researching", note: BUSY, next_find_at: now + 1.hour)
     when "not_us", "not_nuclear"
