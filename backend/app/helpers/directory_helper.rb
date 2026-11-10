@@ -401,13 +401,13 @@ module DirectoryHelper
   # Two sentences, with a full stop between them unless the first has one.
   # A plant's link preview and meta description (#246), from published facts
   # only, each left out when it isn't known:
-  #   "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 operating units, 4,536 MW.
+  #   "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 operating units, 4,536 MWe.
   #    Owned by Georgia Power and 3 others; operated by Southern Nuclear."
   # Kept under PREVIEW_LIMIT characters: a long owner list becomes "<first>
   # and <n> others", then the units and capacity go, then owners.
   PREVIEW_LIMIT = 160
 
-  # What a plant is and how big: ["Operating power plant in Waynesboro, GA", "4 units, 4,468 MW"] (either may be nil).
+  # What a plant is and how big: ["Operating power plant in Waynesboro, GA", "4 units, 4,468 MWe"] (either may be nil).
   def plant_what_and_size(profile)
     # "Not operating" reads after the place, not before the type: "Power plant in Covert, MI, not operating".
     idle = profile.status == "not_operating"
@@ -417,7 +417,7 @@ module DirectoryHelper
     where = full_place(profile.city, profile.state)
     what = kind ? [ kind, (where && "in #{where}") ].compact.join(" ") : (where && "In #{where}")
     what = what ? "#{what}, not operating" : "Not operating" if idle
-    capacity = "#{number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MW" if profile.capacity_mw
+    capacity = "#{number_with_precision(profile.capacity_mw, precision: 2, strip_insignificant_zeros: true, delimiter: ",")} MWe" if profile.capacity_mw && profile.try(:shows_capacity?) != false
     [ what, [ units_summary(profile.units.map(&:status), shown_status: profile.status), capacity ].compact.join(", ").presence ]
   end
 

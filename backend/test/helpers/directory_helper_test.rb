@@ -15,7 +15,7 @@ class DirectoryHelperTest < ActionView::TestCase
   end
 
   test "a plant's preview says what it is, where, how big, and who owns and runs it (#246)" do
-    assert_equal "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 units, 4,536 MW. Owned by Georgia Power; operated by Southern Nuclear.",
+    assert_equal "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 units, 4,536 MWe. Owned by Georgia Power; operated by Southern Nuclear.",
       plant_preview(profile)
   end
 
@@ -32,7 +32,7 @@ class DirectoryHelperTest < ActionView::TestCase
     owners = [ "Georgia Power", "Oglethorpe Power", "MEAG Power", "Dalton Utilities" ]
     line = plant_preview(profile(owners:))
 
-    assert_equal "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 units, 4,536 MW. " \
+    assert_equal "Plant Vogtle: Operating power plant in Waynesboro, Georgia. 4 units, 4,536 MWe. " \
       "Owned by Georgia Power and 3 others; operated by Southern Nuclear.", line
     assert_operator line.length, :<=, 160
   end
@@ -67,7 +67,7 @@ class DirectoryHelperTest < ActionView::TestCase
 
     dresden = profile(name: "Dresden", city: "Morris", state: "IL", units: units("operating", "operating", "decommissioning"),
       capacity_mw: BigDecimal("1845"), owners: [], operators: [ "Constellation" ])
-    assert_equal "Dresden: Operating power plant in Morris, Illinois. 2 operating units, 1 being decommissioned, 1,845 MW. " \
+    assert_equal "Dresden: Operating power plant in Morris, Illinois. 2 operating units, 1 being decommissioned, 1,845 MWe. " \
       "Operated by Constellation.", plant_preview(dresden)
   end
 

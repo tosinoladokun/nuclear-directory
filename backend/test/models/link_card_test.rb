@@ -50,10 +50,10 @@ class LinkCardTest < ActiveSupport::TestCase
 
     assert_equal "Power plant · Georgia", card.label
     assert_equal "Operated by Southern Nuclear · Owned by Georgia Power + 3", card.role_text
-    assert_equal "4 operating reactors · 4,530 MW", card.footer_right
+    assert_equal "4 operating reactors · 4,530 MWe", card.footer_right
     assert_equal [ LinkCard::CATEGORY_COLORS["plants"] ], card.squares
     assert_equal "Plant Vogtle: Power plant · Georgia. Operated by Southern Nuclear · Owned by Georgia Power, Oglethorpe Power, " \
-      "MEAG Power and Dalton Utilities. 4 operating reactors · 4,530 MW.", card.alt
+      "MEAG Power and Dalton Utilities. 4 operating reactors · 4,530 MWe.", card.alt
   end
 
   test "a role line too long even with one name each keeps its counts and shortens the longest name" do
@@ -67,9 +67,9 @@ class LinkCardTest < ActiveSupport::TestCase
     dresden = LinkCard.for_plant(vogtle(name: "Dresden", units: [ Unit.new("operating"), Unit.new("operating"), Unit.new("decommissioning") ],
       capacity_mw: BigDecimal("1845")))
 
-    assert_equal "2 operating reactors, 1 being decommissioned · 1,845 MW", dresden.footer_right
-    assert_equal "3 reactors, 2 operating · 1,845 MW", dresden.send(:footer_drawn).last, "never cut mid-status"
-    assert_includes dresden.alt, "2 operating reactors, 1 being decommissioned · 1,845 MW."
+    assert_equal "2 operating reactors, 1 being decommissioned · 1,845 MWe", dresden.footer_right
+    assert_equal "3 reactors, 2 operating · 1,845 MWe", dresden.send(:footer_drawn).last, "never cut mid-status"
+    assert_includes dresden.alt, "2 operating reactors, 1 being decommissioned · 1,845 MWe."
 
     shut = LinkCard.for_plant(vogtle(units: [ Unit.new("shut_down"), Unit.new("decommissioning") ], capacity_mw: nil))
     assert_equal "2 reactors", shut.send(:footer_drawn).last
@@ -122,7 +122,7 @@ class LinkCardTest < ActiveSupport::TestCase
 
     assert_equal "Operates 1 plant · Owns stakes in 2 plants", card.footer_right, "both facts, for the alt text"
     assert_equal "Operates 1 plant", card.send(:footer_drawn).last, "the second doesn't fit beside the wordmark"
-    assert_equal "4 operating reactors · 4,530 MW", LinkCard.for_plant(vogtle).send(:footer_drawn).last
+    assert_equal "4 operating reactors · 4,530 MWe", LinkCard.for_plant(vogtle).send(:footer_drawn).last
   end
 
   test "a company's HQ shows only when its page shows it (a source backs it)" do
