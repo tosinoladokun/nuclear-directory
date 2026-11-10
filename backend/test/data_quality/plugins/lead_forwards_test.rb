@@ -26,7 +26,7 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
   test "reads only the allow-listed sender's mail to leads@, and nothing without the list" do
     assert_equal 1, plugin.crawl(nil)["emails"]
     refute(@asked.any? { |url| url.end_with?("/f2", "/f3") }, "another sender or a spoofed display name is never opened")
-    assert_equal({ "skipped" => "no LEAD_FORWARDERS" }, Plugin.new(http:, api_key: "re_test", forwarders: "").crawl(nil))
+    assert_equal({ "skipped" => "no LEADS_ALLOWED_SENDERS" }, Plugin.new(http:, api_key: "re_test", forwarders: "").crawl(nil))
   end
 
   test "each company becomes a lead, listed ones are skipped, and one short reply goes back, once" do

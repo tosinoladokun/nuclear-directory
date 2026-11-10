@@ -3,7 +3,7 @@
 # companies become leads in the one lead pipeline (#752). The newsletter
 # reader's crawl, storage (visible text and cleaned links only) and model,
 # with three differences:
-# - only mail from LEAD_FORWARDERS (comma-separated, in the environment, never
+# - only mail from LEADS_ALLOWED_SENDERS (comma-separated, in the environment, never
 #   in the repo) with DMARC pass is read; anything else is dropped unread;
 # - any company the email names, not only US ones (the lead finder checks);
 # - one short reply to the sender: "Added N leads: A, B. Already listed: C."
@@ -19,14 +19,14 @@ class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
     email that is plainly the company's own site (its home page), else null. Report nothing else.
   TEXT
 
-  def initialize(forwarders: ENV["LEAD_FORWARDERS"], sender: nil, **options)
+  def initialize(forwarders: ENV["LEADS_ALLOWED_SENDERS"], sender: nil, **options)
     super(**options)
     @forwarders = forwarders.to_s.split(",").map { |address| address.strip.downcase }.reject(&:blank?)
     @sender = sender
   end
 
   def crawl(run)
-    return { "skipped" => "no LEAD_FORWARDERS" } if @forwarders.empty?
+    return { "skipped" => "no LEADS_ALLOWED_SENDERS" } if @forwarders.empty?
 
     super
   end
