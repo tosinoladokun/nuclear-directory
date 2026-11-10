@@ -74,7 +74,7 @@
 
   <% if listing.plants_list? %>
     <%# Status chips with their counts and the status mark (#614): one at a time, All is the default; one line, scrolling on phones. %>
-    <% base = { q: listing.query, from: ("suggestion" if listing.searching? && params[:from] == "suggestion"), type: listing.type, reactor: listing.reactor, state: listing.state, sort: (listing.sort unless listing.sort == listing.default_sort) } %>
+    <% base = { q: listing.query, type: listing.type, reactor: listing.reactor, state: listing.state, sort: (listing.sort unless listing.sort == listing.default_sort) } %>
     <div class="nd-chips nd-statuschips" role="navigation" aria-label="Status">
       <%= render "shared/chip", label: "All", href: directory_url_for(category: listing.category, **base), count: listing.status_counts["all"], current: listing.status.nil? %>
       <% DirectoryListing::STATUS_CHIPS.each_key do |key| %>
@@ -86,7 +86,7 @@
   <% end %>
 
   <% if listing.plants_list? && listing.filtered? %>
-    <p class="type-small m-0 mt-2"><%= link_to "Clear filters", directory_url_for(category: listing.category, q: listing.query, from: ("suggestion" if listing.searching? && params[:from] == "suggestion")), class: "nd-link nd-link--muted" %></p>
+    <p class="type-small m-0 mt-2"><%= link_to "Clear filters", directory_url_for(category: listing.category, q: listing.query), class: "nd-link nd-link--muted" %></p>
   <% end %>
 
   <div class="nd-listhead nd-listhead--bare">
@@ -129,8 +129,6 @@
           <%# A category's role (Reactor designer, Project developer) stays through the filters and their count. %>
           <%= hidden_field_tag :role, listing.role, id: nil if listing.role %>
           <%= hidden_field_tag :q, listing.query, id: nil if listing.searching? %>
-          <%# Filtering a suggested search is still that search (from=suggestion), not new typing. %>
-          <%= hidden_field_tag :from, "suggestion", id: nil if listing.searching? && params[:from] == "suggestion" %>
           <%= hidden_field_tag :status, listing.status, id: nil if listing.status %>
           <% if listing.plants_list? %>
             <label class="nd-select"><b>Type</b>
@@ -200,8 +198,7 @@
   <% end %>
   <% if more %>
     <p class="mt-6"><%= link_to "Show more", directory_url_for(category: listing.category, q: listing.query, tag: listing.tag&.key, technology: listing.technology,
-      state: listing.state, role: listing.role, status: listing.status, type: listing.type, reactor: listing.reactor, sort: (listing.sort unless listing.sort == listing.default_sort), shown: @shown / DirectoryController::PAGE + 1,
-      from: ("suggestion" if listing.searching? && params[:from] == "suggestion")),
+      state: listing.state, role: listing.role, status: listing.status, type: listing.type, reactor: listing.reactor, sort: (listing.sort unless listing.sort == listing.default_sort), shown: @shown / DirectoryController::PAGE + 1),
       class: "nd-btn nd-btn--outline type-ui", data: { turbo_frame: "directory-rows" } %></p>
   <% end %>
   </turbo-frame>

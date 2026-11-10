@@ -31,7 +31,7 @@ class HomeTest < ActionDispatch::IntegrationTest
     shown = HomeCategories::Card.new(category: Category.find("waste-decommissioning"), count: 1, records: [])
     long = HomeCategories::Card.new(category: Category.find("utilities"), count: 1, records: [])
     html = ApplicationController.render(partial: "shared/category_cards", locals: { cards: [ shown, long ] })
-    names = Nokogiri::HTML.fragment(html).css("a.nd-catcard__head .nd-catcard__name").map(&:text)
+    names = Nokogiri::HTML.fragment(html).css("a.nd-catcard__link .nd-catcard__name").map(&:text)
     assert_equal [ "Waste and decommissioning", "Power plant owners and operators" ], names
   end
 
@@ -53,37 +53,6 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_select "link[rel=canonical][href='http://www.example.com/']", 1
   end
 
-  test "five suggested searches from the pool, picked on the server, each leading to results" do
-    get root_path
-
-    labels = css_select(".nd-suggs a.nd-sugg").map { |link| link.text.strip }
-    assert_equal HomeSuggestions::SHOWN, labels.size
-    assert_empty labels - HomeSuggestions::POOL.map(&:label)
-    assert_equal labels, labels.sort_by { |label| HomeSuggestions::POOL.index { |s| s.label == label } }, "in pool order"
-    css_select(".nd-suggs a.nd-sugg").each { |link| assert_match(%r{\A/companies\?from=suggestion&q=}, link["href"]) }
-  end
-
-  test "a seeded pick is the same every load; different seeds show different pills" do
-    HomeController.suggestion_random = Random.new(1)
-    get root_path
-    first = css_select(".nd-suggs a.nd-sugg").map(&:text)
-    HomeController.suggestion_random = Random.new(1)
-    get root_path
-    assert_equal first, css_select(".nd-suggs a.nd-sugg").map(&:text)
-
-    picks = (1..30).map { |seed| HomeSuggestions.pick(random: Random.new(seed)).map(&:label) }
-    assert_operator picks.uniq.size, :>, 1, "the pills vary from load to load"
-  ensure
-    HomeController.suggestion_random = nil
-  end
-
-  test "the top searches are picked far more often than the rest" do
-    random = Random.new(42)
-    tally = 2000.times.flat_map { HomeSuggestions.pick(random:).map(&:label) }.tally
-    top, rest = HomeSuggestions::POOL.partition { |s| s.weight > 1 }.map { |group| group.sum { |s| tally.fetch(s.label, 0) } / group.size.to_f }
-    assert_operator top, :>, rest * 2
-  end
-
   test "a card for each bucket with companies, then Plants and sites last, naming at most three (#362)" do
     get root_path
 
@@ -91,20 +60,17 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_equal %w[reactor-developers power-buyers plants], css_select("section.nd-catcard").map { |card| card["data-key"] }
     assert_select "section.nd-catcard", 3
     assert_select "section[data-key=reactor-developers]" do
-      assert_select "a.nd-catcard__head[href=?][aria-label=?]", "/companies?category=reactor-developers", "Reactor developers, 4 companies"
-      assert_select "section[data-label=?]", "Reactor developers, 4 companies"
-      assert_select "h2.nd-catcard__head--toggle", /Reactor developers/, "the phone header, which shows no count"
+      assert_select "h2.nd-catcard__head a.nd-catcard__link[href=?][aria-label=?]", "/companies?category=reactor-developers", "Reactor developers, 4 companies"
+      assert_select "a.nd-catcard__link .nd-catcard__count[aria-hidden=true]", "4"
       assert_select "a.nd-catcard__row", 3
       assert_select "a.nd-catcard__row[href=?][title=?]", "/companies/kairos-power", "Kairos Power", text: /Kairos Power/
-      assert_select "a.nd-catcard__more[href=?][aria-label=?]", "/companies?category=reactor-developers", "See all 4 in Reactor developers", text: /\A\s*See all ›\s*\z/
-      assert_select "a.nd-catcard__head .nd-catcard__count[aria-hidden=true]", "4"
+      assert_select ".nd-catcard__more, .nd-catcard__chev", 0, "no See all link and no row chevrons: the title is the link"
     end
     assert_select "section[data-key=power-buyers]" do
       assert_select "a.nd-catcard__row", 1
       assert_select "li.nd-catcard__filler[aria-hidden=true]", 2
-      assert_select "a.nd-catcard__more[aria-label=?]", "Open the list of 1 company in Power buyers", text: /Open the list ›/
     end
-    assert_select "section[aria-label='Plants and sites'] a.nd-catcard__head[aria-label=?]", "Plants and sites, 0 plants and sites"
+    assert_select "section[aria-label='Plants and sites'] a.nd-catcard__link[aria-label=?]", "Plants and sites, 0 plants and sites"
     assert_select "details.nd-howpick", 0 # no explanation link (Tosin)
   end
 
