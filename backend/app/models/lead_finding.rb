@@ -13,7 +13,7 @@ module LeadFinding
   TRIES = 4 # weekly for a month
   PER_NIGHT = 30 # Crawl, 10 Nov
   # Finds a day at most, nightly and added ones together, so a pasted list can't use up the search quota (Infra).
-  PER_DAY = 60
+  PER_DAY = 50 # under the finder's own 50 (#762), so this gate, which uses no try, trips first (Infra)
   WAITING = "Waiting: today's finds are used up; tried tonight".freeze
   BUSY = "Waiting: busy, tried again soon".freeze
 
