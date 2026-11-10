@@ -17,6 +17,10 @@ class DataQuality::Stage
     run = CrawlRun.create!(stage: self.class.stage_name, source_kind: plugin.source_kind)
     run.finish!(stats: perform(run))
     run
+  rescue DataQuality::Pipeline::AlreadyRunning
+    # Not a run: another one held the lock, and the job tries again later (no failed row in the history).
+    run&.destroy
+    raise
   rescue => error
     run&.fail!("#{error.class}: #{error.message}")
     raise
