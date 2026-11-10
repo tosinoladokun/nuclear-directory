@@ -9,17 +9,17 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
 
   setup do
     sign_in_as users(:admin)
-    @finder = CompanySuggestionJob.finder
+    @finder = LeadFindJob.finder
   end
 
-  teardown { CompanySuggestionJob.finder = @finder }
+  teardown { LeadFindJob.finder = @finder }
 
   def suggest(text) = post(admin_inbox_suggest_path, params: { suggestion: text })
 
   test "Find queues the search and shows 'Finding it'; an empty or too long one is refused" do
-    assert_enqueued_with(job: CompanySuggestionJob) { suggest("  Kairos Power ") }
+    assert_enqueued_with(job: LeadFindJob) { suggest("  Kairos Power ") }
     lead = Lead.find_by!(normalized_name: "kairos power")
-    assert_equal [ "company", "researching", "Finding it", "human:tosin" ], lead.values_at(:kind, :status, :note, :decided_by)
+    assert_equal [ "company", "new", "Finding it", "human:tosin" ], lead.values_at(:kind, :status, :note, :decided_by)
     follow_redirect!
     assert_select "#suggestion-#{lead.id}", text: /Kairos Power.*Finding it/m
 
@@ -41,7 +41,7 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
       "Bakery Co" => Found.new(outcome: :unconfirmed, organization_id: nil, reason: "no nuclear work on its site", name: "Bakery Co",
         website: "https://bakery.example")
     }
-    CompanySuggestionJob.finder = ->(input, lead_id:) { results.fetch(input) }
+    LeadFindJob.finder = ->(lead) { results.fetch(lead.name) }
     perform_enqueued_jobs { results.each_key { |name| suggest(name) } }
 
     get admin_inbox_path
@@ -51,10 +51,13 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     assert_select "[id^=suggestion-]", text: /Bakery Co.*Couldn't confirm: no nuclear work on its site: found Bakery Co, https:\/\/bakery.example/m
   end
 
-  test "a finder that fails leaves 'couldn't confirm', not 'finding' forever" do
-    CompanySuggestionJob.finder = ->(*, **) { raise Timeout::Error }
+  test "a finder that fails leaves 'couldn't confirm' and a retry next week, not 'finding' forever" do
+    LeadFindJob.finder = ->(*) { raise Timeout::Error }
     suggest("Stuck Co")
-    assert_raises(Timeout::Error) { perform_enqueued_jobs }
-    assert_match "Couldn't confirm: the search stopped", Lead.find_by!(normalized_name: "stuck co").note
+    perform_enqueued_jobs
+    lead = Lead.find_by!(normalized_name: "stuck co")
+    assert_match "Couldn't confirm: the search stopped", lead.note
+    assert_equal [ "researching", 1 ], lead.values_at(:status, :find_attempts)
+    assert_in_delta 1.week.from_now, lead.next_find_at, 1.minute
   end
 end

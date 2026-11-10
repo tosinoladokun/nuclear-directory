@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_10_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -304,8 +304,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_120000) do
     t.datetime "decided_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "find_attempts", default: 0, null: false
+    t.datetime "next_find_at"
     t.index ["kind", "normalized_name"], name: "index_leads_on_kind_and_normalized_name", unique: true
     t.index ["status", "seen_count"], name: "index_leads_on_status_and_seen_count"
+    t.check_constraint "find_attempts >= 0", name: "leads_find_attempts_check"
     t.check_constraint "(record_type IS NULL) = (record_id IS NULL) AND (record_type IS NULL OR (record_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])))", name: "leads_record_check"
     t.check_constraint "kind::text = ANY (ARRAY['company'::character varying, 'plant'::character varying, 'other'::character varying]::text[])", name: "leads_kind_check"
     t.check_constraint "seen_count >= 1", name: "leads_seen_count_check"
