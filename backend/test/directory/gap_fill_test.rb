@@ -53,13 +53,27 @@ class Directory::GapFillTest < ActiveSupport::TestCase
   test "a published company with an SEC CIK and no HQ is asked for first, even without a category or website" do
     listed = company("Listed Fission", role: false, sec_cik: "0001018724")
     bare = company("Bare Fission", website: "https://bare.example")
-    with_hq = company("Listed With HQ", role: false, sec_cik: "0000000002", hq_city: "Seattle", hq_state: "WA")
+    with_hq = company("Listed With HQ", role: false, sec_cik: "0000000002", hq_city: "Seattle", hq_state: "WA", website: "https://withhq.example")
 
     Directory::Lookup.request_gap_fill(limit: 1)
     assert listed.reload.enrich_requested_at, "EDGAR states its address"
     assert_nil bare.reload.enrich_requested_at
     Directory::Lookup.request_gap_fill(limit: 10)
     assert bare.reload.enrich_requested_at
-    assert_nil with_hq.reload.enrich_requested_at, "has an HQ: not read for EDGAR"
+    assert_nil with_hq.reload.enrich_requested_at, "has an HQ and a website: not read for EDGAR"
+  end
+
+  test "headquarters first: a company missing only its HQ goes before one missing only its description (9 Nov)" do
+    no_description = company("No Description Fission", website: "https://nodesc.example", hq_city: "Austin", hq_state: "TX")
+    no_hq = company("No HQ Fission", website: "https://nohq.example", description: "Builds reactors.")
+    Directory::Lookup.request_gap_fill(limit: 1)
+    assert no_hq.reload.enrich_requested_at
+    assert_nil no_description.reload.enrich_requested_at
+  end
+
+  test "a CIK company with an HQ but no website is read too (EDGAR's website)" do
+    listed = company("Listed Siteless", role: false, sec_cik: "0000000003", hq_city: "Austin", hq_state: "TX")
+    Directory::Lookup.request_gap_fill(limit: 1)
+    assert listed.reload.enrich_requested_at
   end
 end
