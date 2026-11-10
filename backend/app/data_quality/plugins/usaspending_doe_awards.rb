@@ -63,7 +63,9 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   FUSION_ENERGY = /\b(?:fusion (?:energy|reactors?|magnets?|plasmas?|pilot plants?|program|facilit(?:y|ies))|inertial fusion|tokamaks?|stellarators?|burning plasma|for fusion\b)/i
   NUCLEAR_ENERGY = /\b(?:(?:nuclear|advanced|microreactors?|test) reactors?|microreactors?|nuclear (?:fuel|power|energy|plants?|waste)|spent (?:nuclear )?fuel|isotope production|medical isotopes?|HALEU|TRISO|molten salt (?:reactors?|fuel|coolant for (?:a |nuclear )?reactors?)|uranium enrichment)\b/i
   NOT_FUSION_ENERGY = /\b(?:data fusion|machine learning|data science|software|quantum|simulations?|meshing|computation)\b/i
-  FIELDS = [ "Award ID", "Recipient Name", "Award Amount", "Start Date", "End Date", "Description", "generated_internal_id", "recipient_id" ].freeze
+  # The awarding office (NE, NNSA, EM, Science…) shows in each row, so a reader sees who funded what (DQ, 10 Nov).
+  FIELDS = [ "Award ID", "Recipient Name", "Award Amount", "Start Date", "End Date", "Description", "generated_internal_id", "recipient_id",
+    "Awarding Sub Agency" ].freeze
   # USAspending's recipient hash and level, e.g. "1f4e2b…-C".
   RECIPIENT_ID = /\A[0-9a-f-]+-[A-Z]\z/i
   # Legal suffixes a display name leaves out (DATA.md D1), and words kept as written.
@@ -74,7 +76,7 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   # Line-of-business words a shared brand drops ("BWXT Nuclear" => "BWXT").
   GENERIC_WORDS = %w[nuclear energy power operations operating group services technologies technology holdings government].freeze
   COLUMNS = %w[award_id recipient_name amount_usd start_date end_date award_type assistance_listing search award_url
-    generated_award_id recipient_id description].freeze
+    generated_award_id recipient_id description awarding_office].freeze
 
   def initialize(fetcher: DataQuality::Fetcher.new)
     @fetcher = fetcher
@@ -199,7 +201,8 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
     "Each row is one award from the U.S. Department of Energy to the company named in it, from USAspending.gov's " \
       "award search: its award ID, amount in US dollars, start and end dates, and whether it's financial assistance " \
       "(a grant or cooperative agreement, with its Assistance Listing: 81.121 is Nuclear Energy research, development " \
-      "and demonstration, 81.049 is the Office of Science) or a contract."
+      "and demonstration, 81.049 is the Office of Science) or a contract, its description, and the DOE office that " \
+      "awarded it (awarding_office, e.g. Office of Nuclear Energy, National Nuclear Security Administration)."
   end
 
   # The link's total, award count and first year come from every row, so the
@@ -355,7 +358,8 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
         "award_type" => id.start_with?("CONT_") ? "contract" : "assistance", "assistance_listing" => award["CFDA Number"],
         "search" => search, "award_url" => "https://www.usaspending.gov/award/#{id}",
         "generated_award_id" => id, "recipient_id" => award["recipient_id"].to_s,
-        "description" => award["Description"].to_s.squish.truncate(200)
+        "description" => award["Description"].to_s.squish.truncate(200),
+        "awarding_office" => award["Awarding Sub Agency"].to_s.squish.presence
       }
     end
 

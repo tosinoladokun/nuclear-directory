@@ -418,7 +418,7 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
   test "any DOE nuclear contract or grant to a business, kept only when its description states nuclear work (10 Nov)" do
     award = ->(n, description) { XENERGY.merge("Award ID" => "NC#{n}", "Recipient Name" => "NUCLEAR CO #{n}", "Description" => description,
       "generated_internal_id" => "CONT_AWD_NC#{n}", "recipient_id" => "00000000-0000-0000-0000-#{(n + 80).to_s.rjust(12, '0')}-C") }
-    @answers[[ "nuclear_contracts", 1 ]] = { "results" => [ award.(1, "SPENT NUCLEAR FUEL CASK FABRICATION"), award.(2, "IT SUPPORT SERVICES FOR THE NUCLEAR FUEL PROGRAM OFFICE BUILDING JANITORIAL") ],
+    @answers[[ "nuclear_contracts", 1 ]] = { "results" => [ award.(1, "SPENT NUCLEAR FUEL CASK FABRICATION").merge("Awarding Sub Agency" => "Office of Environmental Management"), award.(2, "IT SUPPORT SERVICES FOR THE NUCLEAR FUEL PROGRAM OFFICE BUILDING JANITORIAL") ],
       "page_metadata" => { "hasNext" => false } }
     @answers[[ "nuclear_grants", 1 ]] = { "results" => [ award.(3, "GENERAL FACILITIES MAINTENANCE"), award.(4, "MICROREACTOR HEAT PIPE TESTING") ],
       "page_metadata" => { "hasNext" => false } }
@@ -428,6 +428,10 @@ class DataQuality::Plugins::UsaspendingDoeAwardsTest < ActiveSupport::TestCase
     assert_includes kept, "SPENT NUCLEAR FUEL CASK FABRICATION"
     assert_includes kept, "MICROREACTOR HEAT PIPE TESTING"
     refute_includes kept, "GENERAL FACILITIES MAINTENANCE"
+    cask = Source.where(source_kind: "usaspending_doe_awards").find { |source| source.content_text.include?("SPENT NUCLEAR FUEL CASK") }
+    claim = plugin.extract(cask, nil).find { |c| c[:kind] == "relationship" }
+    assert_includes claim[:quote], "Office of Environmental Management", "the quote names the awarding office and the nuclear subject"
+    assert_includes claim[:quote], "SPENT NUCLEAR FUEL CASK"
     refute_includes kept, "IT SUPPORT SERVICES FOR THE NUCLEAR FUEL PROGRAM OFFICE BUILDING JANITORIAL", "a support service, not nuclear work"
   end
 end
