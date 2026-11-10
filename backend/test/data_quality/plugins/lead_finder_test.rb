@@ -130,4 +130,9 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     result = DataQuality::CompanySuggestion.call(news, lead_id: lead("typed").id, finder: finder)
     assert_equal [ :proposed, "Fresh Fission" ], [ result.outcome, result.name ]
   end
+
+  test "DataQuality::LeadFinder.call(lead), as Backend's LeadFindJob calls it (#755)" do
+    result = DataQuality::LeadFinder.call(lead("Fresh Fission", url: HOME), finder: finder)
+    assert_equal :proposed, result.to_h[:outcome]
+  end
 end
