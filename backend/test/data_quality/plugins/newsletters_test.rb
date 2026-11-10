@@ -17,8 +17,11 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     Organization.create!(name: "Acme Fission", verification_status: "verified", verified_by: "human:tosin").aliases.find_or_create_by!(alias: "Acme Fission")
     @mail = { "id" => "m1", "to" => [ Plugin::INBOX ], "from" => "NEI SmartBrief <nei@smartbrief.com>", "subject" => "Today in nuclear" }
     @answers = {
-      "#{Plugin::API}?limit=100" => { "data" => [ @mail, @mail.merge("id" => "m2", "from" => "spam@example.com"),
-        @mail.merge("id" => "m3", "to" => [ "tosin@mail.nuclear-directory.org" ]) ] },
+      "#{Plugin::API}?limit=100" => { "has_more" => true, "data" => [ @mail, @mail.merge("id" => "m2", "from" => "spam@example.com"),
+        @mail.merge("id" => "m3", "to" => [ "tosin@mail.nuclear-directory.org" ]),
+        @mail.merge("id" => "m4", "from" => "\"News@smartbrief.com alert\" <attacker@example.net>") ] },
+      "#{Plugin::API}?limit=100&after=m4" => { "has_more" => false, "data" => [ @mail.merge("id" => "m5") ] },
+      "#{Plugin::API}/m5" => @mail.merge("id" => "m5", "html" => "<p>x</p>", "authentication" => { "dkim" => "fail" }),
       "#{Plugin::API}/m1" => @mail.merge("html" => HTML, "authentication" => { "dkim" => "pass" })
     }
     @asked = []
@@ -27,31 +30,31 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
   def http = ->(url, headers) { @asked << [ url, headers["Authorization"] ]; @answers[url]&.to_json }
   def plugin(found = {}) = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new(found))
 
-  test "reads only bot@'s mail from newsletter senders, each email once" do
-    assert_equal({ "emails" => 1 }, plugin.crawl(nil))
+  test "reads only bot@'s mail from newsletter senders, across pages, each email once (a rejected one too)" do
+    assert_equal({ "emails" => 1, "opened" => 2 }, plugin.crawl(nil))
     assert_equal [ "Bearer re_test" ], @asked.map(&:last).uniq
-    refute(@asked.any? { |url, _| url.end_with?("/m2", "/m3") }, "another sender or another inbox is never opened")
-    source = Source.find_by!(source_kind: "newsletters")
-    assert_includes source.title, "Today in nuclear"
-    assert_equal({ "emails" => 0 }, plugin.crawl(nil))
+    refute(@asked.any? { |url, _| url.end_with?("/m2", "/m3", "/m4") }, "another sender, another inbox or a spoofed display name is never opened")
+    assert_includes Source.find_by!(url: "https://resend.com/emails/receiving/m1").title, "Today in nuclear"
+    assert Source.find_by!(url: "https://resend.com/emails/receiving/m5").crawl_needs_human?, "DKIM failed: recorded, not stored"
+    assert_equal({ "emails" => 0, "opened" => 0 }, plugin.crawl(nil))
   end
 
-  test "an email whose DKIM failed isn't stored; without a key nothing is read" do
-    @answers["#{Plugin::API}/m1"]["authentication"] = { "dkim" => "fail" }
-    assert_equal({ "emails" => 0 }, plugin.crawl(nil))
+  test "without a key nothing is read; a failed listing with a key fails the crawl" do
     assert_equal({ "skipped" => "no RESEND_API_KEY" }, Plugin.new(http:, api_key: nil).crawl(nil))
+    @answers.delete("#{Plugin::API}?limit=100")
+    assert_raises(Plugin::InboxError) { plugin.crawl(nil) }
   end
 
-  test "proposes a new company only with its own site linked in the email" do
+  test "each new company becomes a lead (never a claim), with its own site only when the email links it" do
     plugin.crawl(nil)
     found = { "companies" => [
       { "name" => "Fresh Fission", "quote" => "Fresh Fission picked a site in Idaho for its first microreactor.", "website" => "https://www.freshfission.com/" },
       { "name" => "Tracked Atom", "quote" => "Tracked Atom signed a fuel deal.", "website" => "https://links.smartbrief.com/click?u=tracked" },
       { "name" => "Acme Fission", "quote" => "Acme Fission raised money.", "website" => "https://www.acmefission.com" },
       { "name" => "Ghost Nuclear", "quote" => "Ghost Nuclear is new.", "website" => "https://ghostnuclear.com" } ] }
-    claims = plugin(found).extract(Source.find_by!(source_kind: "newsletters"), nil)
-    assert_equal [ { "name" => "Fresh Fission", "website" => "https://www.freshfission.com" } ], claims.map { |c| c[:payload] },
-      "a tracker link, a company we have and a quote not in the email are never proposed"
+    assert_empty plugin(found).extract(Source.find_by!(url: "https://resend.com/emails/receiving/m1"), nil)
+    assert_equal({ "Fresh Fission" => "https://www.freshfission.com", "Tracked Atom" => nil },
+      Lead.all.to_h { |lead| [ lead.name, lead.sources.sole["url"] ] }, "a tracker isn't a site; a company we have and a quote not in the email aren't leads")
   end
 
   test "is a daily source" do

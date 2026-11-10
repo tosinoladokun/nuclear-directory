@@ -7,17 +7,21 @@
 # Mail from anyone else is never read.
 #
 # Extract: the model names the US nuclear companies a story is about that the
-# directory doesn't have. A company is proposed (a new-company claim, pending
-# for Data Quality) only with its own website, from a link in the email whose
-# host isn't the newsletter's or a tracker's; Enrich then reads that site the
-# same night (#751). A name with no such link isn't proposed. A newsletter is
-# never cited for a fact.
+# directory doesn't have. Each becomes a lead (the one lead pipeline, Tosin
+# 10 Nov), with its own website when the email links one whose host isn't the
+# newsletter's or a tracker's; the lead finder verifies and fills it. Never a
+# claim: a newsletter is never evidence for a fact, and its private inbox URL
+# is never cited.
 class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   API = "https://api.resend.com/emails/receiving".freeze
   INBOX = "bot@mail.nuclear-directory.org".freeze
   # Sender domains of the newsletters bot@ is subscribed to.
   SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org neutronbytes.com exchangemonitor.com].freeze
+  class InboxError < StandardError; end
   PER_RUN = 20
+  # Emails opened a run, stored or not, and listing pages read.
+  MAX_OPENED = 50
+  MAX_PAGES = 5
   PROMPT_VERSION = "newsletters-1".freeze
   # Newsletter, mail and social hosts: never a company's own site.
   NOT_OWN = /(?:\A|\.)(?:smartbrief|ans|nucnet|neimagazine|world-nuclear-news|world-nuclear|neutronbytes|exchangemonitor|resend|mailchimp|list-manage|
@@ -37,35 +41,46 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   def crawl(_run)
     return { "skipped" => "no RESEND_API_KEY" } if @api_key.blank?
 
-    listed = api_get(API + "?limit=100") or return { "error" => "list failed" }
-    fresh = Array(listed["data"]).select { |mail| Array(mail["to"]).map(&:downcase).include?(INBOX) && sender?(mail["from"]) }
+    fresh = listed_newsletters
     seen = Source.where(source_kind:, url: fresh.map { |mail| url_for(mail["id"]) }).pluck(:url)
-    stored = fresh.reject { |mail| seen.include?(url_for(mail["id"])) }.first(PER_RUN).count do |mail|
-      email = api_get("#{API}/#{mail['id']}") or next false
-      next false unless email.dig("authentication", "dkim") == "pass" && email["html"].present?
+    stored = opened = 0
+    fresh.reject { |mail| seen.include?(url_for(mail["id"])) }.each do |mail|
+      break if stored >= PER_RUN || opened >= MAX_OPENED
 
-      Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: "ok", fetched_at: Time.current, http_status: 200,
-        title: "#{mail['from'].to_s.truncate(80)}: #{email['subject'].to_s.truncate(150)}",
-        content_text: email["html"], content_sha256: Digest::SHA256.hexdigest(email["html"]))
+      opened += 1
+      email = api_get("#{API}/#{mail['id']}") or raise InboxError, "Resend: couldn't read received email #{mail['id']}"
+      valid = email.dig("authentication", "dkim") == "pass" && email["html"].present?
+      # A rejected email is recorded too, so it never takes a later run's place.
+      Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
+        http_status: 200, title: "#{mail['from'].to_s.truncate(80)}: #{email['subject'].to_s.truncate(150)}",
+        status_reason: (valid ? nil : "DKIM didn't pass, or no HTML"),
+        **(valid ? { content_text: email["html"], content_sha256: Digest::SHA256.hexdigest(email["html"]) } : {}))
+      stored += 1 if valid
     end
-    { "emails" => stored }
+    { "emails" => stored, "opened" => opened }
   end
 
+  # Leads only, never claims: returns [] and notes each company as a lead.
   def extract(source, run)
     text = visible_text(source)
     return [] if text.blank?
 
-    hosts = links(source).index_by { |url| URI.parse(url).host.to_s.downcase.delete_prefix("www.") rescue nil }.except(nil)
+    urls = links(source)
+    hosts = urls.index_by { |url| URI.parse(url).host.to_s.downcase.delete_prefix("www.") rescue nil }.except(nil)
     run&.update!(prompt_version: PROMPT_VERSION)
+    # The model sees the email's links too, so it can pick a company's own site.
+    input = "#{text.truncate(50_000)}\n\nLinks in the email:\n#{urls.uniq.first(300).join("\n")}"
     found = llm.structured(role: :extract, schema:, schema_name: "newsletters", crawl_run: run, reasoning_effort: "low",
-      messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: text.truncate(60_000) } ]).data
-    Array(found["companies"]).filter_map do |company|
+      messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: input } ]).data
+    id = source.url.split("/").last
+    Array(found["companies"]).each do |company|
       name, quote = company["name"].to_s.squish, company["quote"].to_s.squish
       next if name.blank? || !quote.include?(name) || !text.include?(quote) || @directory.organization(name:)
 
-      website = own_site(company["website"], hosts) or next
-      { kind: "organization", quote:, payload: { "name" => name, "website" => website } }
-    end.uniq { |claim| claim[:payload]["name"].downcase }
+      @directory.keep_lead(name:, key: "newsletter:#{id}:#{name.downcase.squish}",
+        label: "Newsletter: #{source.title.to_s.truncate(120)}", url: own_site(company["website"], hosts))
+    end
+    []
   end
 
   def source_facts(_source)
@@ -78,9 +93,27 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
 
     def url_for(id) = "https://resend.com/emails/receiving/#{id}"
 
+    # The From mailbox's own domain, never a display name's.
     def sender?(from)
-      domain = from.to_s[/@([^>\s]+)/, 1].to_s.downcase
-      SENDERS.any? { |sender| domain == sender || domain.end_with?(".#{sender}") }
+      domain = Mail::Address.new(from.to_s).domain.to_s.downcase
+      domain.present? && SENDERS.any? { |sender| domain == sender || domain.end_with?(".#{sender}") }
+    rescue Mail::Field::ParseError
+      false
+    end
+
+    # bot@'s newsletters across up to MAX_PAGES listing pages, newest first.
+    # A failed listing with a key set fails the crawl (a sending-only key, say).
+    def listed_newsletters
+      mails, after = [], nil
+      MAX_PAGES.times do
+        page = api_get("#{API}?limit=100#{"&after=#{after}" if after}") or raise InboxError, "Resend: couldn't list received emails"
+        data = Array(page["data"])
+        mails.concat(data.select { |mail| Array(mail["to"]).map(&:downcase).include?(INBOX) && sender?(mail["from"]) })
+        break unless page["has_more"] && data.any?
+
+        after = data.last["id"]
+      end
+      mails
     end
 
     def links(source) = Nokogiri::HTML(source.content_text).css("a[href]").map { |a| a["href"].to_s.strip }.grep(%r{\Ahttps?://}i)

@@ -58,7 +58,7 @@ class SourceCatalog
     "wire_press" => { name: "PR Newswire releases", note: "read every 3 hours", daily: true },
     "sec_ticker_ciks" => { name: "SEC ticker list (CIKs)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
-    "newsletters" => { name: "Nuclear newsletters (bot@ inbox)", note: "new companies with their own sites, never cited", daily: true },
+    "newsletters" => { name: "Nuclear newsletters (bot@ inbox)", note: "leads for the lead pipeline, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },
     "nrc_research_reactors" => { name: "NRC research and test reactors", daily: true },
