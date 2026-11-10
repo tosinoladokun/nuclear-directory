@@ -28,6 +28,8 @@ Rails.application.routes.draw do
   get "sitemap.xml" => "sitemaps#show", as: :sitemap, format: false, defaults: { format: :xml }
   get "robots.txt" => "sitemaps#robots", as: :robots, format: false
   get "llms.txt" => "sitemaps#llms", as: :llms, format: false
+  # IndexNow's key file (#742), only for the configured key.
+  get ":key.txt" => "index_now#key", as: :index_now_key, format: false, constraints: { key: /[a-zA-Z0-9-]{8,128}/ }
   # A public JSON summary for other sites (#193). GET only.
   get "api/snapshot.json" => "api/snapshots#show", as: :api_snapshot, format: false, defaults: { format: :json }
   # Data Quality's matching actions (#548): token only, 404 without one configured.
