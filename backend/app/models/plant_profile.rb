@@ -117,6 +117,16 @@ class PlantProfile
     [ (site.reactor_type if site_facts?), *units.map(&:reactor_type) ].compact_blank.uniq
   end
 
+  # Capacity is electric (EIA net summer): only power reactors have it. Research reactors are licensed in thermal power
+  # (thermal_power_kw) and fuel sites have none, so a stored figure on any other type is never shown under Capacity.
+  def shows_capacity? = site.facility_type == "power_reactor"
+
+  # Licensed thermal power of a research reactor, in kW as NRC states it (#721). Never converted, never mixed with capacity_mw.
+  # Shown only with evidence that backs this field: a quote scoped to it, or an older record-wide one (fields nil).
+  def thermal_power_kw
+    site.thermal_power_kw if site_facts? && site.evidence.any? { |e| e.fields.nil? || e.fields.include?("thermal_power_kw") }
+  end
+
   # Operating capacity only (PM, 16 Oct): a standalone reactor's own figure
   # while it's operating, or the sum of the operating units' when each is
   # known. Anything shut down, being decommissioned, not operating or of
@@ -175,7 +185,7 @@ class PlantProfile
     # the source list never starts with a source nothing points to.
     def site_fields_shown?
       site_facts? && [ site.facility_type, site.status, site.city, site.state, site.nrc_docket,
-                       site.technology_id, site.reactor_type, site.capacity_mw ].any?(&:present?)
+                       site.technology_id, site.reactor_type, site.capacity_mw, site.thermal_power_kw ].any?(&:present?)
     end
 
     def cite(fact)

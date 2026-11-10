@@ -57,7 +57,7 @@ module StructuredDataHelper
       property("Type", facility_type_label(profile.facility_type)), property("Status", facility_status_label(profile.status)),
       property("NRC docket", profile.nrc_docket), property("Technology", profile.technologies.join(", ").presence),
       property("Reactor type", profile.reactor_types.join(", ").presence),
-      property("Capacity", profile.capacity_mw&.then { |mw| { "@type" => "QuantitativeValue", "value" => mw.to_f, "unitText" => "MW" } })
+      property("Capacity", (profile.capacity_mw if profile.shows_capacity?)&.then { |mw| { "@type" => "QuantitativeValue", "value" => mw.to_f, "unitText" => "MWe" } })
     ].compact
     place = {
       "@type" => "Place", "@id" => "#{page_url}#place", "name" => profile.name,

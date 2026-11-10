@@ -72,4 +72,19 @@ class SearchTest < ActionDispatch::IntegrationTest
 
     assert_select "ul[aria-labelledby=instant-results-companies] li", SearchController::COMPANY_LIMIT
   end
+
+  test "full search results give a plant's capacity as MWe, for power reactors only (#724)" do
+    big = cite!(plant("Capsearch Power Station", facility_type: "power_reactor", status: "operating", city: "Athens", state: "AL"))
+    cite!(plant("Capsearch Power Station Unit 1", parent: big, capacity_mw: 1100, status: "operating"))
+    rig = cite!(plant("Capsearch Research Rig", facility_type: "research_reactor", status: "operating", city: "Athens", state: "AL"))
+    cite!(plant("Capsearch Research Rig Unit 1", parent: rig, capacity_mw: 5, status: "operating"))
+    get companies_path(q: "capsearch")
+
+    assert_select "a.nd-line", text: /Capsearch Power Station/ do
+      assert_select ".nd-line__cap", "1,100 MWe"
+    end
+    assert_select "a.nd-line", text: /Capsearch Research Rig/ do
+      assert_select ".nd-line__cap", 0
+    end
+  end
 end

@@ -32,7 +32,7 @@
       <% what = [ (facility_type_label(facility.facility_type) if own), units ].compact.join(" · ").presence %>
       <%= render "shared/line", href: plant_url_for(facility), name: facility.name, mark:,
             status: (facility.status if own && facility.status.present?), what:,
-            cap: (number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MW" if capacity.present?),
+            cap: (number_with_precision(capacity, precision: 2, strip_insignificant_zeros: true, delimiter: ",") + " MWe" if capacity.present? && facility.facility_type == "power_reactor"),
             place: (location(facility.city, facility.state) if own) %>
     <% end %>
   <% end %>
