@@ -85,6 +85,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       return propose(name, website, page, found)
     end
     return outcome(:retry, name:, reason: "The search service was busy; tried again later", found:) if @search_failed && !found["checked"]
+    # Today's searches used up: the lead waits for tomorrow, not one of its tries (Backend, 10 Nov).
+    return outcome(:retry, name:, reason: "Today's search limit of #{SEARCHES_PER_DAY} is reached; tried again tomorrow", found:) if @search_capped && !found["checked"]
 
     unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company" : "No website found", found)
   end
@@ -201,7 +203,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Brave Search API: at most SEARCHES_PER_DAY a day, top results' own hosts.
     def search(name)
       return [] if @search_key.blank? && @search.nil?
-      return [] unless reserve(USAGE, SEARCHES_PER_DAY)
+      unless reserve(USAGE, SEARCHES_PER_DAY)
+        @search_capped = true
+        return []
+      end
 
       Rails.logger.info("[lead_finder] Brave search #{counted_today(USAGE)}/#{SEARCHES_PER_DAY} today; " \
         "#{self.class.searches_in(Date.current)} this month")

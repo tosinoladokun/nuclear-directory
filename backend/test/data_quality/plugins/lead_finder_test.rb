@@ -83,7 +83,8 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
 
   test "at most #{Plugin::SEARCHES_PER_DAY} searches a day, each counted for the month's cost" do
     Plugin::SEARCHES_PER_DAY.times { |n| Plugin.call(lead("Ghost #{n} Nuclear").id, finder: finder) }
-    Plugin.call(lead("One More Nuclear").id, finder: finder)
+    over = Plugin.call(lead("One More Nuclear").id, finder: finder)
+    assert_equal [ :retry, true ], [ over.outcome, over.reason.include?("search limit") ], "past the cap: tomorrow, not a try"
     assert_equal Plugin::SEARCHES_PER_DAY, @searched.size
     assert_equal Plugin::SEARCHES_PER_DAY, Plugin.searches_in(Date.current)
   end
