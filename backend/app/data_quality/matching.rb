@@ -362,6 +362,9 @@ module DataQuality::Matching
         # needs_review, so it's in Tosin's inbox without a verifier's call (Review.check_ids).
         candidate.update!(status: "needs_review", subject_type: type, subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: a new #{plant ? 'plant' : 'company'}. #{reason}")
+        # Its field claims, each from its own source (#760), go on the same new company.
+        DataQuality::FieldEvidence.fields_of(candidate.id).where(subject_id: nil)
+          .update_all(status: "matched", subject_type: type, subject_id: result.ref.id, updated_at: Time.current)
         nil
       end
 

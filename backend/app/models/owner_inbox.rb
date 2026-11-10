@@ -27,7 +27,15 @@ class OwnerInbox
       firsts = DataQuality::Review.first_batches
       kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:) }
       mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
-      mine.group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
+      # A new company's field claims (#760) are decided with its Create, not on their own.
+      fields = DataQuality::FieldEvidence.fields_of(mine.select { |c| kinds[c] == "new_record" && c.kind_organization? }.map(&:id))
+        .where.not(subject_id: nil).to_a.group_by { |c| c.payload["field_of"].to_i }
+      field_ids = fields.values.flatten.map(&:id).to_set
+      grouped = mine.reject { |candidate| field_ids.include?(candidate.id) }
+        .group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
+      grouped.transform_values do |copies|
+        copies + copies.flat_map { |copy| fields.fetch(copy.id, []).select { |f| f.subject_id == copy.subject_id } }
+      end
     end
   end
 

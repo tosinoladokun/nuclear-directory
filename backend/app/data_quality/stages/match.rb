@@ -178,7 +178,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
       case candidate.kind
       when "facility" then payload.key?("identify") ? match_enrichment(candidate, payload["identify"]) : match_record(candidate, payload)
-      when "organization" then match_record(candidate, payload)
+      when "organization"
+        # Its per-field quotes become their own claims first (#760).
+        if (why = DataQuality::FieldEvidence.split!(candidate)) then review(candidate, why)
+        else
+          match_record(candidate, candidate.payload.to_h)
+          # Its field claims now find the company the main claim found or proposed.
+          DataQuality::FieldEvidence.fields_of(candidate.id).status_new.each { |field| match(field) }
+        end
       when *LINK_ENDS.keys then match_link(candidate, payload)
       when "news_item" then match_news(candidate, payload)
       else review(candidate, "#{candidate.kind} candidates aren't matched automatically yet")

@@ -54,6 +54,17 @@
               <summary class="type-small">Why, and the source</summary>
               <div class="nd-fold__body nd-stack">
                 <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
+                <%# Each field from its own source (#760), created with it. %>
+                <% if key == "new_record" %>
+                  <% DataQuality::FieldEvidence.fields_of(item.candidate_id).includes(:source).each do |field| %>
+                    <% values = field.payload.slice(*DataQuality::FieldEvidence::FIELDS) %>
+                    <div class="nd-stack" id="field-claim-<%= field.id %>">
+                      <p class="type-small m-0"><strong><%= values.map { |name, value| "#{DataQuality::Claim::LABELS.fetch(name, name.humanize).upcase_first}: #{value}" }.join(", ") %></strong>
+                        <% if (url = safe_url(field.source&.url)) %> · <%= link_to source_host(url), url, class: "nd-link", target: "_blank", rel: "noopener" %><% end %></p>
+                      <blockquote class="nd-quote m-0">“<%= field.quote %>”</blockquote>
+                    </div>
+                  <% end %>
+                <% end %>
                 <%# The checker's doubt and Data Quality's reason, side by side (PM, 27 Oct). %>
                 <% if item.ai_recommendation.present? && item.ai_recommendation != "recommend_publish" && item.ai_reason.present? %>
                   <p class="type-small m-0"><strong>The checker wasn't sure:</strong> <%= item.ai_reason %></p>

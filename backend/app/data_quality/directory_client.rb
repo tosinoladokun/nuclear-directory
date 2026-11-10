@@ -280,7 +280,7 @@ class DataQuality::DirectoryClient
   # it adds values to. Enrichment never creates records.
   ENRICHMENT_KEY = "identify"
   # Payload keys a write never stores as values.
-  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY ].freeze
+  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY, *DataQuality::FieldEvidence::KEYS ].freeze
 
   def enrichment?(candidate) = candidate.payload.to_h.key?(ENRICHMENT_KEY)
 
