@@ -71,7 +71,11 @@ module LeadFinding
     case claim.status
     when "merged" then "Created"
     when "rejected" then "Said no"
-    else %w[new_record new_fact change].include?(DataQuality::Review.inbox_kind(claim)) ? "In your inbox" : "Waiting for check"
+    else
+      # Still being filled in until its company has a sourced role (#638): Enrich adds it the same night or the next.
+      return "Finding" unless claim.subject_type == "Organization" && claim.subject_id && Directory::Lookup.sourced_role?(claim.subject_id)
+
+      %w[new_record new_fact change].include?(DataQuality::Review.inbox_kind(claim)) ? "In your inbox" : "Waiting for check"
     end
   end
 

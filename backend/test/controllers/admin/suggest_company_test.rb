@@ -57,7 +57,7 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     assert_not CompanySuggestion.shown.exists?(id: lead.id)
   end
 
-  test "states, one line each: waiting for check, in your inbox, already listed, couldn't confirm" do
+  test "states, one line each: finding until a sourced role, waiting for check, in your inbox, already listed, couldn't confirm" do
     known = Organization.create!(name: "Oklo", verification_status: "verified", verified_by: "human:tosin")
     page = Source.create!(url: "https://newfission.example", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
     claim = Candidate.create!(source: page, kind: "organization", status: "needs_review", payload: { "name" => "New Fission" }, quote: "q")
@@ -72,7 +72,13 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
 
     get admin_inbox_path
     leads = Lead.where(name: results.keys).index_by(&:name)
-    assert_equal "New Fission Waiting for check", line(leads["New Fission"])
+    assert_equal "New Fission Finding", line(leads["New Fission"]), "no company with a sourced role yet: still being filled in"
+    new_co = Organization.create!(name: "New Fission", verification_status: "pending")
+    claim.update!(status: "matched", subject_type: "Organization", subject_id: new_co.id, proposed_subject: true)
+    assert_equal "Finding", LeadFinding.state(leads["New Fission"].reload), "its company has no sourced role yet (#638)"
+    give_sourced_role(new_co)
+    get admin_inbox_path
+    assert_equal "New Fission In your inbox Show", line(leads["New Fission"]), "a sourced role and nothing for Data Quality to settle"
     assert_match "Oklo Already listed", line(leads["Oklo"])
     assert_select "#lead-#{leads['Oklo'].id} a[href=?]", admin_fact_path(type: "Organization", id: known.id)
     assert_equal "Bakery Co Couldn't confirm: no nuclear work on its site: found Bakery Co, https://bakery.example", line(leads["Bakery Co"])
@@ -80,8 +86,9 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     lead = leads["New Fission"]
     review = DataQuality::Review.singleton_class
     review.alias_method :real_inbox_kind, :inbox_kind
+    review.define_method(:inbox_kind) { |*, **| "dq" }
+    assert_equal "Waiting for check", LeadFinding.state(lead.reload), "Data Quality's to settle first"
     review.define_method(:inbox_kind) { |*, **| "new_record" }
-    assert_equal "In your inbox", LeadFinding.state(lead.reload)
     get admin_inbox_path
     assert_select "#lead-#{lead.id} a[href=?]", "#inbox-item-#{claim.id}"
   ensure
