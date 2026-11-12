@@ -19,11 +19,14 @@ class LeadProposals
 
   def self.run = new.run
 
+  # Once the lead finder is in (#752), company leads go through it (find, verify, fill); plants stay here.
+  def self.kinds(finder: defined?(DataQuality::Plugins::LeadFinder)) = finder ? %w[plant] : %w[company plant]
+
   # Returns how many leads became proposals.
   def run
     made = []
     # Every eligible lead in turn, so ineligible ones never block newer ones.
-    Lead.where(status: %w[triage new], kind: %w[company plant]).order(:last_seen_on, :id).find_each(batch_size: 200) do |lead|
+    Lead.where(status: %w[triage new], kind: self.class.kinds).order(:last_seen_on, :id).find_each(batch_size: 200) do |lead|
       break if made.size >= PER_NIGHT
 
       found = official_line(lead) or next

@@ -34,6 +34,17 @@ class Admin::InboxController < Admin::BaseController
     redirect_to admin_inbox_path
   end
 
+  # Add a lead (#752): found in the background; it comes back as a Create, or as couldn't confirm.
+  def suggest
+    if (leads = CompanySuggestion.suggest_lines(params[:suggestion], by: actor))
+      flash[:notice] = leads.one? ? "Added. It's being found now." : "Added #{leads.size} leads. They're being found now."
+    else
+      flash[:alert] = "Type a company name, website or link, one per line " \
+        "(#{CompanySuggestion::MAX_LINES} lines and #{CompanySuggestion::MAX} characters a line at most)."
+    end
+    redirect_to admin_inbox_path
+  end
+
   # Create or No on a pending company or plant that has no open claim.
   def decide_record
     type, id = params[:type], params[:id].to_i

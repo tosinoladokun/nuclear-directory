@@ -23,6 +23,11 @@ production:
   lead_proposals:
     class: LeadProposalsJob
     schedule: every day at 2am America/New_York
+  # The one lead pipeline (#752): due leads are found, checked and filled,
+  # after leads are brought up to date and before the daily crawl.
+  lead_find:
+    class: LeadFindJob
+    schedule: every day at 2:30am America/New_York
 
   # Marks runs cut off by a restart as failed, and queues the daily crawl
   # again (once a day per source) for a source whose run was cut off (#188).

@@ -2,10 +2,28 @@ require "test_helper"
 
 # #572: a lead an official source names becomes a proposal by itself.
 class LeadProposalsTest < ActiveSupport::TestCase
+  # These cover how a lead becomes a proposal; with the lead finder in (#752) company leads go to it instead
+  # (LeadProposals.kinds, tested in LeadFindJobTest), so they're tested here with companies switched back on.
+  setup do
+    @kinds = LeadProposals.method(:kinds)
+    LeadProposals.define_singleton_method(:kinds) { |**| %w[company plant] }
+  end
+
+  teardown do
+    kinds = @kinds
+    LeadProposals.define_singleton_method(:kinds) { |**options| kinds.call(**options) }
+  end
+
   setup do
     # Extracted already (past the recipients cap), so a lead from it may be proposed.
     @award = Source.create!(url: "https://api.usaspending.gov/award/1", source_kind: "usaspending_doe_awards", crawl_status: "ok", extracted_sha256: "x",
       content_text: "award_id,recipient_name,title\nA1,NEUTRON FORGE LLC,Advanced reactor fuel cladding\n")
+  end
+
+  test "with the lead finder in, company leads are left to it (plants stay here)" do
+    LeadProposals.define_singleton_method(:kinds) { |**| %w[plant] }
+    Lead.sighted!(name: "NEUTRON FORGE LLC", kind: "company", key: "awards:#{@award.id}", label: "DOE awards", url: @award.url)
+    assert_equal 0, LeadProposals.run
   end
 
   test "a lead an official source names becomes a claim quoting that line; the lead is marked researching" do

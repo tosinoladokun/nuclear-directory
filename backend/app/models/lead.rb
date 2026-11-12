@@ -16,6 +16,8 @@ class Lead < ApplicationRecord
   validates :kind, inclusion: { in: KINDS }
   validates :reason, presence: true, if: :status_ignored?
   validates :record_type, inclusion: { in: RECORD_TYPES }, allow_nil: true
+  # The new-company claim the lead became (#752), once the finder proposed it.
+  belongs_to :candidate, optional: true
 
   def self.normalize(name) = name.to_s.downcase.gsub(/[^\p{Alnum}]+/, " ").squish
 
@@ -76,8 +78,11 @@ class Lead < ApplicationRecord
 
   def record = (record_type.constantize.find_by(id: record_id) if record_type && RECORD_TYPES.include?(record_type))
 
+  # A person's decision. It ends any automatic find (#752): the finder's retry date is cleared, and a find
+  # running now won't overwrite it (LeadFinding.record checks).
   def decide!(status, by:, reason: nil, record: nil)
     update!(status:, reason: (reason if status == "ignored"), record_type: record&.class&.name || (record_type if status == "researching"),
-      record_id: record&.id || (record_id if status == "researching"), decided_by: by, decided_at: Time.current)
+      record_id: record&.id || (record_id if status == "researching"), decided_by: by, decided_at: Time.current,
+      next_find_at: nil, note: (note unless note == LeadFinding::FINDING))
   end
 end

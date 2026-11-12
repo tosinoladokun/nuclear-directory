@@ -304,8 +304,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_130000) do
     t.datetime "decided_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "find_attempts", default: 0, null: false
+    t.datetime "next_find_at"
+    t.bigint "candidate_id"
+    t.index ["candidate_id"], name: "index_leads_on_candidate_id"
     t.index ["kind", "normalized_name"], name: "index_leads_on_kind_and_normalized_name", unique: true
     t.index ["status", "seen_count"], name: "index_leads_on_status_and_seen_count"
+    t.check_constraint "find_attempts >= 0", name: "leads_find_attempts_check"
     t.check_constraint "(record_type IS NULL) = (record_id IS NULL) AND (record_type IS NULL OR (record_type::text = ANY (ARRAY['Organization'::character varying, 'Facility'::character varying]::text[])))", name: "leads_record_check"
     t.check_constraint "kind::text = ANY (ARRAY['company'::character varying, 'plant'::character varying, 'other'::character varying]::text[])", name: "leads_kind_check"
     t.check_constraint "seen_count >= 1", name: "leads_seen_count_check"
@@ -783,6 +788,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_130000) do
   add_foreign_key "candidates", "crawl_runs", column: "verify_run_id"
   add_foreign_key "candidates", "sources"
   add_foreign_key "dq_actions", "candidates"
+  add_foreign_key "leads", "candidates", on_delete: :nullify
   add_foreign_key "evidence", "crawl_runs"
   add_foreign_key "evidence", "sources"
   add_foreign_key "facilities", "facilities", column: "parent_id"
