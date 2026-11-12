@@ -53,14 +53,14 @@ class Admin::InboxController < Admin::BaseController
   # Quality's Accept, which checks it all again under the decision's locks.
   def yes_all
     items = OwnerInbox.new.checked_items
-    if params[:shown] != DataQuality::Recommendations.fingerprint(items)
+    if params[:shown] != OwnerInbox.new.yes_all_fingerprint
       return redirect_to(admin_inbox_path, alert: "The list changed since you opened it, so nothing was done. Check it and try again.")
     end
 
     results = DataQuality::Recommendations.accept(items, by: actor, first_hand: true)
     # A created company's field claims (#760) go with it, each checked again.
     created = items.map(&:candidate_id) & Candidate.where(id: items.map(&:candidate_id), status: "merged").pluck(:id)
-    field_ids = DataQuality::FieldEvidence.fields_of(created).where.not(subject_id: nil).pluck(:id)
+    field_ids = DataQuality::FieldEvidence.fields_of(created).where.not(subject_id: nil).pluck(:id) # each rechecked in approve
     results += DataQuality::Review.approve(field_ids, by: actor, reason: "With its Create") if field_ids.any?
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Done: #{helpers.pluralize(done.size, 'item')} live." if done.any?

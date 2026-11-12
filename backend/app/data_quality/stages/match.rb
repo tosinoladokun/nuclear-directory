@@ -179,13 +179,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       case candidate.kind
       when "facility" then payload.key?("identify") ? match_enrichment(candidate, payload["identify"]) : match_record(candidate, payload)
       when "organization"
-        # Its per-field quotes become their own claims first (#760).
-        if (why = DataQuality::FieldEvidence.split!(candidate)) then review(candidate, why)
-        else
-          match_record(candidate, candidate.payload.to_h)
-          # Its field claims now find the company the main claim found or proposed.
-          DataQuality::FieldEvidence.fields_of(candidate.id).status_new.each { |field| match(field) }
-        end
+        payload["field_of"].present? ? follow_its_claim(candidate, payload) : match_company(candidate, payload)
       when *LINK_ENDS.keys then match_link(candidate, payload)
       when "news_item" then match_news(candidate, payload)
       else review(candidate, "#{candidate.kind} candidates aren't matched automatically yet")
@@ -243,8 +237,33 @@ class DataQuality::Stages::Match < DataQuality::Stage
       attach(candidate, found.first, "About #{found.map(&:name).to_sentence}")
     end
 
-    def match_record(candidate, payload)
-      found = resolve(candidate.kind.to_sym, payload, closed: :found)
+    # A company claim with one quote per field (#760): the company is found with everything the claim says
+    # (its website too), then each field becomes its own claim on that company, checked against its own page.
+    def match_company(candidate, payload)
+      return match_record(candidate, payload) if payload["evidence"].blank?
+      problem = DataQuality::FieldEvidence.problem(candidate)
+      return review(candidate, problem) if problem
+
+      found = resolve(:organization, payload, closed: :found)
+      why, kinds = DataQuality::FieldEvidence.split!(candidate)
+      return review(candidate, why) if why
+
+      match_record(candidate, candidate.payload.to_h, found:)
+      DataQuality::FieldEvidence.follow!(candidate.reload)
+      # Each field's page is checked by its own source's verifier.
+      (kinds - [ plugin.source_kind ]).each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[verify]) }
+    end
+
+    # A field claim follows its claim's company; it never finds one by itself.
+    def follow_its_claim(candidate, payload)
+      claim = Candidate.find_by(id: payload["field_of"])
+      return review(candidate, DataQuality::FieldEvidence::WAITING) unless claim&.subject_id
+
+      DataQuality::FieldEvidence.follow!(claim)
+    end
+
+    def match_record(candidate, payload, found: nil)
+      found ||= resolve(candidate.kind.to_sym, payload, closed: :found)
       # Data Quality's proposal is for the company it named; if its CIK is
       # another's by now, it goes to review, never to that company (#693).
       if found.is_a?(Found) && (proposed = DqAction.where(candidate:, action: "propose_fields").pick(:target_id)) && proposed != found.record.id

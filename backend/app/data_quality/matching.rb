@@ -111,6 +111,13 @@ module DataQuality::Matching
         (OPEN.include?(candidate.status) && candidate.subject_id.nil?) || rematch
 
       before = candidate.slice(:status, :subject_type, :subject_id, :proposed_subject, :notes, :reviewed_by, :reviewed_at, :payload).as_json
+      # A claim with one quote per field (#760) that never went through matching is split first.
+      if candidate.kind == "organization" && candidate.payload["evidence"].present?
+        why, = DataQuality::FieldEvidence.split!(candidate)
+        raise Abort, why if why
+
+        before["payload"] = candidate.payload.as_json # Undo keeps it split; its field claims go back to waiting
+      end
       created = []
       record = nil
       if end_key
@@ -128,6 +135,8 @@ module DataQuality::Matching
       end
       raise Abort, error if error
 
+      # Its field claims (#760) follow it to its company (or close with it); Undo puts them back.
+      before["fields"] = DataQuality::FieldEvidence.follow!(candidate.reload) if candidate.kind == "organization"
       DqAction.create!(candidate:, action:, target_type: (record.type if record), target_id: record&.id, reason:, before:, created:,
         by: BY, request_key: key, after: stamp_of(candidate.reload))
       Row.new(id:, ok: true, error: nil, created_ids: ids_of(created))
@@ -170,13 +179,16 @@ module DataQuality::Matching
         type, id = ref["type"], ref["id"]
         directory.lock_fact(type:, id:)
         decided = directory.fact(type:, id:)&.verification_status != "pending" || directory.verification_history(type:, id:).size != ref["events"]
-        others = Candidate.where(subject_type: type, subject_id: id).where.not(id: ref["candidate_id"]).where.not(status: "rejected").exists?
+        # Its own field claims (#760) aren't others: they go back with it.
+        own_fields = Array(action.before["fields"]).map { |field| field["id"] }
+        others = Candidate.where(subject_type: type, subject_id: id).where.not(id: [ ref["candidate_id"], *own_fields ]).where.not(status: "rejected").exists?
         raise Abort, "#{type} ##{id} was decided or claimed since, so it can't be undone here" if decided || others
 
         Candidate.find_by(id: ref["candidate_id"])&.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Undone by Data Quality") if ref["link_claim"]
         errors = directory.decide_fact(ref["type"].underscore, id: ref["id"], status: "rejected", by: BY, reason: "Data Quality undid #{action.action}").errors
         raise Abort, errors.to_sentence if errors.any?
       end
+      DataQuality::FieldEvidence.restore!(action.before["fields"])
       if action.action == "recommend"
         candidate.update!(action.before.slice(*RECOMMEND_FIELDS))
       else
@@ -362,9 +374,6 @@ module DataQuality::Matching
         # needs_review, so it's in Tosin's inbox without a verifier's call (Review.check_ids).
         candidate.update!(status: "needs_review", subject_type: type, subject_id: result.ref.id, proposed_subject: true,
           notes: "Data Quality: a new #{plant ? 'plant' : 'company'}. #{reason}")
-        # Its field claims, each from its own source (#760), go on the same new company.
-        DataQuality::FieldEvidence.fields_of(candidate.id).where(subject_id: nil)
-          .update_all(status: "matched", subject_type: type, subject_id: result.ref.id, updated_at: Time.current)
         nil
       end
 

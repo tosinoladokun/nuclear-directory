@@ -261,7 +261,10 @@ class DataQuality::DirectoryClient
 
   # The fields a claim's quote is marked as stating (#721).
   def stated_fields(candidate)
-    [ "thermal_power_kw" ] if candidate.kind == "facility" && candidate.payload.to_h["thermal_power_kw"].present?
+    payload = candidate.payload.to_h
+    return [ "thermal_power_kw" ] if candidate.kind == "facility" && payload["thermal_power_kw"].present?
+    # A field claim's quote states just its fields (#760).
+    payload.slice(*DataQuality::FieldEvidence::FIELDS).compact_blank.keys.presence if candidate.kind == "organization" && payload["field_of"].present?
   end
 
   # A source read again with the same rows: all its evidence was checked at:.

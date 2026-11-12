@@ -114,7 +114,7 @@
     <% if key == batch_after %>
       <div class="nd-panel nd-stack">
         <p class="type-body m-0">Data Quality checked <%= checked.size %> of these <%= @inbox.checkable.size %>.</p>
-        <%= button_to "Yes to all #{checked.size} Data Quality checked", admin_inbox_yes_all_path, params: { shown: DataQuality::Recommendations.fingerprint(@inbox.checked_items) },
+        <%= button_to "Yes to all #{checked.size} Data Quality checked", admin_inbox_yes_all_path, params: { shown: @inbox.yes_all_fingerprint },
           class: "nd-btn nd-btn--primary type-ui nd-inbox__all", data: { turbo_confirm: "Approve all #{checked.size}? Each is checked once more before it goes live." } %>
       </div>
     <% end %>
