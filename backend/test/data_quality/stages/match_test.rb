@@ -618,4 +618,21 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
       assert_equal 0, match!.stats["candidates"]
     end
   end
+
+  test "a pending company (from an NRC document, no website) takes a later website claim by name; then claims find it by its website's domain (PM, 11 Nov)" do
+    first = candidate("organization", { "name" => "Thorium Atomics Inc" }, quote: "Thorium Atomics Inc")
+    match!
+    pending = Organization.find_by!(name: "Thorium Atomics Inc")
+    assert_equal "pending", pending.verification_status
+    assert_equal [ "Organization", pending.id ], first.reload.values_at(:subject_type, :subject_id)
+
+    site = candidate("organization", { "name" => "Thorium Atomics", "website" => "https://thoriumatomics.example" }, quote: "Thorium Atomics builds reactors.")
+    match!
+    assert_equal pending.id, site.reload.subject_id, "the same pending company, by name"
+
+    # Its website claim isn't approved yet, so the company has no domain: a third claim still finds it by that claim's website.
+    other = candidate("organization", { "name" => "TA Nuclear Systems", "website" => "https://www.thoriumatomics.example/about" }, quote: "TA Nuclear Systems")
+    match!
+    assert_equal pending.id, other.reload.subject_id, "a different name, the same website as its open claim: the same pending company"
+  end
 end

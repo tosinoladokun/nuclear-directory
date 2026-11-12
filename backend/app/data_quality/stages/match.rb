@@ -552,8 +552,25 @@ class DataQuality::Stages::Match < DataQuality::Stage
       end
       return Found.new(by_domain, "domain") if by_domain
       return Found.new(brand.first, "brand, a legal-entity variant of its name") if brand.one?
+      # A pending company whose website isn't written yet (its claim waits
+      # for a person) is still found by that claim's website (PM, 11 Nov).
+      if domain && (pending = pending_by_claimed_domain(domain))
+        return Found.new(pending, "domain of its open website claim")
+      end
 
       similar(directory.similar_organizations(name.to_s), name)
+    end
+
+    # The pending company an open organization claim with this website domain belongs to, if exactly one.
+    def pending_by_claimed_domain(domain)
+      wanted = directory.domain_from(domain) or return
+      ids = Candidate.where(kind: "organization", subject_type: "Organization", status: %w[new matched needs_review])
+        .where("candidates.payload ? 'website'").pluck(:subject_id, Arel.sql("candidates.payload->>'website'"))
+        .select { |_, website| directory.domain_from(website) == wanted }.map(&:first).uniq
+      return unless ids.one?
+
+      found = directory.organization(id: ids.first)
+      found if found&.verification_status == "pending"
     end
 
     def resolve_facility(payload)
