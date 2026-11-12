@@ -1052,6 +1052,10 @@ module DataQuality::Review
               !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
           end
+          # Rechecked under the lock: Data Quality may have said no since a bulk approval was queued (DQ, 12 Nov).
+          if only_recommended && DataQuality::Recommendations.says_no?(candidate.reload)
+            next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "Data Quality says no, so approve it on its own" ])
+          end
           # Checked again when a bulk approval runs: the record may have been
           # decided since the page loaded. Its row stays locked through the
           # write, so a person's approval can't land in between.

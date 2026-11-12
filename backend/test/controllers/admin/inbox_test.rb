@@ -57,7 +57,12 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_select "#dq-no-#{@change.id}", /Data Quality says no:\s*Rockville is a branch office, not the HQ/
     assert_select "#inbox-item-#{@change.id} form button[data-turbo-confirm]", 1
     assert_select "#inbox-item-#{@create.id} [data-turbo-confirm]", 0
-    assert_not_includes DataQuality::Review.safe_ids, @change.id, "Checks' Approve all leaves it"
+    assert_includes DataQuality::Review.safe_ids, @create.id, "eligible before Data Quality's no"
+    DataQuality::Recommendations.record("#{@create.id} reject: not a company", by: "human:dq")
+    assert_not_includes DataQuality::Review.safe_ids, @create.id, "Checks' Approve all leaves it"
+    queued = DataQuality::Review.approve([ @create.id ], by: "human:tosin", only_recommended: true).sole
+    assert_match "Data Quality says no", queued.errors.sole, "an Approve all queued before the no is refused under the lock"
+    assert DataQuality::Review.approve([ @create.id ], by: "human:tosin").sole.ok?, "his own click still decides"
   end
 
   test "Yes to all takes only what Data Quality checked, each checked again" do

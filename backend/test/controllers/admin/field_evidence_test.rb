@@ -115,6 +115,18 @@ class Admin::FieldEvidenceTest < ActionDispatch::IntegrationTest
     assert_match "isn't checked against its own page", result.errors.to_sentence
   end
 
+  test "a field Data Quality said no to stays out of its Create, but he can still approve it on its own" do
+    main = claim
+    match!
+    give_sourced_role(Organization.find(main.reload.subject_id))
+    field = field_of(main)
+    checked!(main, field)
+    DataQuality::Recommendations.record("#{field.id} reject: a branch office", by: "human:dq")
+    entry = OwnerInbox.new.sections["new_record"].find { |e| e.item.candidate_id == main.id }
+    assert_not_includes entry.ids, field.id
+    assert DataQuality::Review.approve([ field.id ], by: "human:tosin").sole.ok?, "his explicit approve still works"
+  end
+
   test "Yes to all creates the company with its checked fields, and a changed field invalidates what was shown" do
     main = claim
     match!
