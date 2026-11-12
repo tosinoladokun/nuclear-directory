@@ -82,7 +82,7 @@ module Directory
     # how many were asked for, and (at most 20) names of such companies
     # whose website is missing or can't be read, for Data Quality.
     GAP_REFILL_DAYS = 90
-    def request_gap_fill(limit: 10)
+    def request_gap_fill(limit: 10, new_limit: limit)
       gaps = Arel.sql(<<~SQL.squish)
         (CASE WHEN organizations.description IS NULL OR organizations.description = '' THEN 1 ELSE 0 END) +
         (CASE WHEN organizations.hq_city IS NULL OR organizations.hq_city = '' THEN 1 ELSE 0 END)
@@ -107,8 +107,9 @@ module Directory
       # read the same night, first, so it reaches Data Quality with its
       # description, HQ and category (PM, 10 Nov).
       fresh = Organization.where(verification_status: "pending", enrich_requested_at: nil).where("COALESCE(website, '') <> ''")
-        .order(:id).pluck(:id, :website).select { |_, website| Organization.readable_website?(website) }.map(&:first)
-      ids = (fresh + edgar.order(no_hq, no_description, :id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
+        .order(:id).pluck(:id, :website).select { |_, website| Organization.readable_website?(website) }.map(&:first).first(new_limit)
+      # Two budgets (PM, 10 Nov): new companies never take the backlog's places.
+      ids = fresh + (edgar.order(no_hq, no_description, :id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
       Organization.where(id: ids).update_all(enrich_requested_at: Time.current) if ids.any?
       { requested: ids.size, without_website: unreadable.map { |_, name, _| name }.sort.first(20) }
     end

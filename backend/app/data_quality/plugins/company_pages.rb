@@ -110,6 +110,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # their pages say goes through the usual claims, checks and approval.
   # 15 a night (DQ, 2 Nov: claims shrinking, settled in one daily pass); 20 if under ~30 claims a night.
   GAP_FILL_PER_NIGHT = 15
+  # New pending companies get their own nightly budget on top (PM, 10 Nov).
+  NEW_PER_NIGHT = 15
 
   def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
@@ -120,12 +122,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # Once a day, whatever starts the run (a manual Enrich runs this too):
     # the night's quota is kept in its crawl run's stats.
     if @gap_fill.positive? && !gap_filled_today?
-      gap = @directory.request_gap_fill(limit: @gap_fill)
+      gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
     read_for = {}
-    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+    @directory.enrich_queue(limit: @gap_fill + NEW_PER_NIGHT + 5).each do |id, _name, website, requested_at, sec_cik|
       # A website another queued company shares was read for it tonight: this
       # request waits for tomorrow, once that one's findings are extracted (#534).
       if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
