@@ -70,4 +70,19 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
     assert_equal "second@example.com", @replies.sole[:to]
     refute_includes Source.find_by!(source_kind: "lead_forwards").attributes.values.join(" "), "second@example.com", "no address stored"
   end
+
+  test "a whole-domain entry lets in that exact domain only, replies to the sender, and our own domain never (PM, 11 Nov)" do
+    domain = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new({ "companies" => [] }), sleeper: ->(_) { }, forwarders: "@example.org, @mail.nuclear-directory.org",
+      sender: ->(**reply) { @replies << reply; true })
+    assert domain.send(:sender?, "Someone <someone@example.org>")
+    refute domain.send(:sender?, "x@sub.example.org"), "no subdomains"
+    refute domain.send(:sender?, "x@example.org.evil.net")
+    refute domain.send(:sender?, "bot@mail.nuclear-directory.org"), "our own sender, even if listed"
+
+    @answers["#{API}?limit=100"]["data"].first["from"] = "Someone <someone@example.org>"
+    @answers["#{API}/f1"]["from"] = "Someone <someone@example.org>"
+    domain.crawl(nil)
+    domain.extract(Source.find_by!(source_kind: "lead_forwards"), nil)
+    assert_equal "someone@example.org", @replies.sole[:to]
+  end
 end

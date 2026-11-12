@@ -3,7 +3,8 @@
 # companies become leads in the one lead pipeline (#752). The newsletter
 # reader's crawl, storage (visible text and cleaned links only) and model,
 # with three differences:
-# - only mail from LEADS_ALLOWED_SENDERS (comma-separated, in the environment, never
+# - only mail from LEADS_ALLOWED_SENDERS (comma-separated addresses or "@domain"
+#   for exactly that domain; never mail.nuclear-directory.org; in the environment, never
 #   in the repo) with DMARC pass is read; anything else is dropped unread;
 # - any company the email names, not only US ones (the lead finder checks);
 # - one short reply to the allow-listed address that sent it: "Added N leads: A, B. Already listed: C."
@@ -43,19 +44,31 @@ class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
     def lead_label = "Forwarded"
 
     # Only the allow-listed addresses themselves, never a display name or another sender.
-    def sender?(from)
-      @forwarders.include?(Mail::Address.new(from.to_s).address.to_s.downcase)
+    # Our own sending domain is never read, so a reply can't loop (PM, 11 Nov).
+    OWN_DOMAIN = "mail.nuclear-directory.org".freeze
+
+    # An entry is a full address, or "@domain" for every address at exactly
+    # that domain (no subdomains). Returns the entry's place in the list.
+    def entry_for(from)
+      address = Mail::Address.new(from.to_s).address.to_s.downcase
+      domain = address.split("@", 2).last.to_s
+      return if address.blank? || domain.blank? || domain == OWN_DOMAIN
+
+      @forwarders.index(address) || @forwarders.index("@#{domain}")
     rescue Mail::Field::ParseError
-      false
+      nil
     end
 
+    def sender?(from) = !entry_for(from).nil?
+
     # Which allow-listed address sent it, by its place in the list (no address is stored).
+    # Which entry let it in: its place in the list, and for a whole-domain entry
+    # the mailbox's local part (so the reply goes back to the sender only).
     def sender_attributes(mail)
-      address = Mail::Address.new(mail["from"].to_s).address.to_s.downcase
-      index = @forwarders.index(address)
-      index ? { last_modified: "sender:#{index}" } : {}
-    rescue Mail::Field::ParseError
-      {}
+      index = entry_for(mail["from"]) or return {}
+      return { last_modified: "sender:#{index}" } unless @forwarders[index].start_with?("@")
+
+      { last_modified: "sender:#{index}:#{Mail::Address.new(mail['from'].to_s).local.to_s.downcase}" }
     end
 
     # One reply per email, to the forwarder, sent once (the source remembers it in its etag).
@@ -63,8 +76,10 @@ class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
       return if source.etag == "replied"
 
       # The allow-listed address that sent it (Infra), never another one.
-      index = source.last_modified.to_s[/\Asender:(\d+)\z/, 1] or return
-      to = @forwarders[index.to_i] or return
+      index, local = source.last_modified.to_s.match(/\Asender:(\d+)(?::([^@\s:]+))?\z/)&.captures
+      entry = index && @forwarders[index.to_i] or return
+      to = entry.start_with?("@") ? (local.present? ? "#{local}#{entry}" : nil) : entry
+      return unless to
       lines = [ "Added #{added.size} #{'lead'.pluralize(added.size)}#{": #{added.join(', ')}" if added.any?}." ]
       lines << "Already listed: #{listed.join(', ')}." if listed.any?
       # One Idempotency-Key per email, so a retry after a lost answer never sends a second reply (Copilot);
