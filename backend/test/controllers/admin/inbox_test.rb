@@ -154,4 +154,53 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     ids = OwnerInbox.new.pending_records("organization", limit: 2).map(&:id)
     assert_includes ids, eligible.id
   end
+
+  test "decide selected (#771): every row ticked is decided as if clicked on its own, and one that stops doesn't stop the rest" do
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@create.id} input[type=checkbox][form=inbox-selected][value=?]", "claim:#{@create.id}"
+    assert_select "form#inbox-selected button", /Create \/ Approve selected/
+
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id}", "claim:#{@change.id}", "record:Plant:1" ] }
+    assert @new_co.reload.verified?, "the Create"
+    assert_equal "Rockville", @decided.reload.hq_city, "the change takes the new value"
+    assert_match(/\ADone 2, 1 failed: unknown row\.\z/, flash[:alert])
+  end
+
+  test "No to selected says no to each, and the company names stay as leads" do
+    post admin_inbox_decide_selected_path, params: { decision: "no", selected: [ "claim:#{@create.id}", "claim:#{@change.id}" ] }
+    assert_equal "Done 2.", flash[:notice]
+    assert @create.reload.status_rejected?
+    assert @change.reload.status_rejected?
+    assert Lead.exists?(name: "Bluefield Fission")
+  end
+
+  test "at most SELECTED_MAX rows a request; the rest wait to be selected again" do
+    stub = Admin::InboxController.send(:remove_const, :SELECTED_MAX)
+    Admin::InboxController.const_set(:SELECTED_MAX, 1)
+    post admin_inbox_decide_selected_path, params: { decision: "no", selected: [ "claim:#{@create.id}", "claim:#{@change.id}" ] }
+    assert_equal "Done 1. 1 not done yet: select again for the rest.", flash[:notice]
+    assert @create.reload.status_rejected?
+    assert @change.reload.status_matched?
+  ensure
+    Admin::InboxController.send(:remove_const, :SELECTED_MAX)
+    Admin::InboxController.const_set(:SELECTED_MAX, stub)
+  end
+
+  test "a claim Data Quality said no to has no box and is never approved in a selection" do
+    @change.update_columns(dq_recommendation: "reject", dq_reason: "a branch office")
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@change.id} input[name='selected[]']", 0
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@change.id}" ] }
+    assert_match "Data Quality says no", flash[:alert]
+    assert @change.reload.status_matched?
+  end
+
+  test "an empty selection does nothing" do
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
+    assert_equal "Tick at least one row first.", flash[:alert]
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id},999999999" ] }
+    assert_equal "Done 0, 1 failed: no longer in the inbox.", flash[:alert], "a row gone since the page loaded isn't counted as done"
+    assert @create.reload.status_matched?
+    assert @create.reload.status_matched?
+  end
 end
