@@ -124,6 +124,7 @@ class Admin::InboxController < Admin::BaseController
         return [ "unknown row" ] if ids.empty?
         # Gone since the page loaded (decide and approve skip ids they can't find): not a success.
         return [ "no longer in the inbox" ] if Candidate.where(id: ids).count < ids.uniq.size
+        return [ "Data Quality says no, so it's decided on its own row" ] if yes && Candidate.where(id: ids, dq_recommendation: "reject").exists?
 
         results = yes ? DataQuality::Review.approve(ids, by: actor, reason: "Approved in Today") : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today")
         stopped = results.reject(&:ok?)

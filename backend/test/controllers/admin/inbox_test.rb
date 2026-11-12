@@ -186,6 +186,15 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     Admin::InboxController.const_set(:SELECTED_MAX, stub)
   end
 
+  test "a claim Data Quality said no to has no box and is never approved in a selection" do
+    @change.update_columns(dq_recommendation: "reject", dq_reason: "a branch office")
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@change.id} input[name='selected[]']", 0
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@change.id}" ] }
+    assert_match "Data Quality says no", flash[:alert]
+    assert @change.reload.status_matched?
+  end
+
   test "an empty selection does nothing" do
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
     assert_equal "Tick at least one row first.", flash[:alert]

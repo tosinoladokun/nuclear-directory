@@ -63,8 +63,13 @@
       <% entries.each do |entry| %>
         <% item = entry.item %>
         <li class="nd-wait nd-inbox__item" id="inbox-item-<%= item.candidate_id %>">
-          <input type="checkbox" class="nd-check" name="selected[]" value="claim:<%= entry.ids.join(",") %>" form="inbox-selected" data-section="<%= key %>"
-            data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select #<%= item.candidate_id %>">
+          <%# Data Quality said no: decided on its own row only (DQ, 12 Nov). %>
+          <% if Candidate.where(id: entry.ids, dq_recommendation: "reject").exists? %>
+            <span class="nd-check" aria-hidden="true"></span>
+          <% else %>
+            <input type="checkbox" class="nd-check" name="selected[]" value="claim:<%= entry.ids.join(",") %>" form="inbox-selected" data-section="<%= key %>"
+              data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select #<%= item.candidate_id %>">
+          <% end %>
           <div class="nd-wait__what">
             <% if key == "new_record" %>
               <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
