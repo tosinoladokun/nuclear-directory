@@ -74,6 +74,21 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_match "2 items live", flash[:notice]
   end
 
+  test "Yes to all creates a company with the other checked claims shown on its row (one Create per company)" do
+    site = claim({ "name" => "Bluefield Fission", "website" => "https://bluefield.example" }, subject: @new_co)
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    other = give_sourced_role(Organization.create!(name: "Second Fission", verification_status: "pending"))
+    second = claim({ "name" => "Second Fission" }, subject: other, proposed_subject: true)
+    DataQuality::Recommendations.record("#{second.id} approve: named on the NRC page", by: "human:dq")
+    get admin_inbox_path
+    assert_select "#inbox-item-#{site.id}", 0, "on the company's Create row, not its own"
+    shown = css_select("form[action='#{admin_inbox_yes_all_path}'] input[name=shown]").first["value"]
+    post admin_inbox_yes_all_path, params: { shown: }
+    assert @new_co.reload.verified?
+    assert site.reload.status_merged?, "decided with its Create"
+    assert_equal "https://bluefield.example", @new_co.website
+  end
+
   test "a No on a new company keeps it in Leads" do
     post admin_inbox_decide_path(@create.id, "no"), params: { ids: [ @create.id ] }
     assert @create.reload.status_rejected?

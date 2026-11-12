@@ -18,6 +18,7 @@ class OwnerInbox
 
   def initialize(directory: DataQuality::DirectoryClient.new)
     @directory = directory
+    @companions = {}
   end
 
   # { [kind, …] => [candidate, …] }: each fact's copies together, newest first.
@@ -140,9 +141,31 @@ class OwnerInbox
         snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
     end
   end
-  # What "Yes to all" was shown: its items, and the field claims (#760) going with them, as they were.
+  # A pending company's other checked claims shown with its Create (one Create per company), by the Create's claim id.
+  def companions_of(candidate_ids)
+    groups
+    candidate_ids.flat_map { |id| @companions.fetch(id, []) }
+  end
+
+  # Whether a company's other claim goes with its Create: the checker agreed, or Data Quality approved this very
+  # payload; its quote still in its page; nothing contradicts it. Checked again when it's decided.
+  def self.rides_along?(claim, company_id)
+    claim.subject_id == company_id && claim.status.in?(%w[new matched needs_review]) &&
+      (claim.ai_recommendation == "recommend_publish" || (claim.dq_recommendation == "approve" && DataQuality::Recommendations.current?(claim))) &&
+      !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
+  end
+
+  def self.quote_in_source?(candidate)
+    return false if candidate.quote.blank?
+
+    check = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
+    check.call(candidate.quote)
+  end
+
+  # What "Yes to all" was shown: its items, and the field claims (#760) and companions going with them, as they were.
   def yes_all_fingerprint
-    fields = DataQuality::FieldEvidence.fields_of(checked_items.map(&:candidate_id)).order(:id)
+    ids = checked_items.map(&:candidate_id)
+    fields = DataQuality::FieldEvidence.fields_of(ids).or(Candidate.where(id: companions_of(ids))).order(:id)
       .map { |f| [ f.id, f.status, f.subject_id, f.payload, f.quote, f.ai_recommendation ] }
     Digest::SHA256.hexdigest([ DataQuality::Recommendations.fingerprint(checked_items), fields ].to_json)
   end
@@ -162,21 +185,26 @@ class OwnerInbox
     # or Data Quality approved, quote still in its page, not contradicted) ride along; the rest wait.
     def one_create_per_company(grouped)
       creates = grouped.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
-      creates.group_by { |_, copies| copies.first.subject_id }.each_value do |rows|
+      by_company = creates.group_by { |_, copies| copies.first.subject_id }
+      # He said No to the company (its proposing claim is rejected): what's left on it stays with Data Quality.
+      declined = Candidate.where(subject_type: "Organization", subject_id: by_company.keys, proposed_subject: true, status: "rejected").distinct.pluck(:subject_id)
+      by_company.each do |company_id, rows|
+        primary = rows.find { |_, copies| copies.any?(&:proposed_subject) }
+        if primary.nil? && declined.include?(company_id)
+          rows.each { |key, _| grouped.delete(key) }
+          next
+        end
         next if rows.size < 2
 
-        primary = rows.find { |_, copies| copies.any?(&:proposed_subject) } || rows.min_by { |_, copies| copies.map(&:id).min }
+        primary ||= rows.min_by { |_, copies| copies.map(&:id).min }
         (rows - [ primary ]).each do |key, copies|
           grouped.delete(key)
-          primary.last.concat(copies.select { |claim| rides_along?(claim, primary.last.first.subject_id) })
+          riders = copies.select { |claim| self.class.rides_along?(claim, company_id) }
+          primary.last.concat(riders)
+          (@companions[primary.last.first.id] ||= []).concat(riders.map(&:id))
         end
       end
       grouped
-    end
-
-    def rides_along?(claim, company_id)
-      claim.subject_id == company_id && (claim.ai_recommendation == "recommend_publish" || claim.dq_recommendation == "approve") &&
-        !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
     end
 
     # Today's share of new companies, best-sourced first (most pages naming it), then newest; plants all.
@@ -207,10 +235,5 @@ class OwnerInbox
         !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate)
     end
 
-    def quote_in_source?(candidate)
-      return false if candidate.quote.blank?
-
-      check = DataQuality::Review.in_source(candidate) || ->(quote) { candidate.source.content_text.to_s.include?(quote.to_s) }
-      check.call(candidate.quote)
-    end
+    def quote_in_source?(candidate) = self.class.quote_in_source?(candidate)
 end

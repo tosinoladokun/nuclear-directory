@@ -21,12 +21,29 @@ class OneCreatePerCompanyTest < ActiveSupport::TestCase
 
   test "the company's checked website claim goes with its one Create; an unchecked one waits" do
     create = claim(source: @page, payload: {}, proposed_subject: true, ai_recommendation: "recommend_publish")
-    website = claim(source: @site, payload: { "website" => "https://leapfrog.example" }, quote: "Leapfrog builds reactors.", dq_recommendation: "approve")
+    website = claim(source: @site, payload: { "website" => "https://leapfrog.example" }, quote: "Leapfrog builds reactors.")
+    DataQuality::Recommendations.record("#{website.id} approve: its own site", by: "human:dq")
     unchecked = claim(source: @site, payload: { "description" => "Builds reactors." }, quote: "Leapfrog builds reactors.")
 
     entry = creates.sole
     assert_equal create.id, entry.item.candidate_id
     assert_includes entry.ids, website.id
     assert_not_includes entry.ids, unchecked.id
+  end
+
+  test "an approval made before the claim was edited no longer rides along" do
+    claim(source: @page, payload: {}, proposed_subject: true, ai_recommendation: "recommend_publish")
+    website = claim(source: @site, payload: { "website" => "https://leapfrog.example" }, quote: "Leapfrog builds reactors.")
+    DataQuality::Recommendations.record("#{website.id} approve: its own site", by: "human:dq")
+    website.update!(payload: website.payload.merge("website" => "https://elsewhere.example"))
+    assert_not_includes creates.sole.ids, website.id
+  end
+
+  test "after his No, what's left on the company stays with Data Quality, not as another Create" do
+    create = claim(source: @page, payload: {}, proposed_subject: true, ai_recommendation: "recommend_publish")
+    claim(source: @site, payload: { "description" => "Builds reactors." }, quote: "Leapfrog builds reactors.", status: "needs_review")
+    DataQuality::Review.reject(creates.sole.ids, by: "human:tosin", reason: "Said no in Today")
+    assert create.reload.status_rejected?
+    assert_empty creates
   end
 end
