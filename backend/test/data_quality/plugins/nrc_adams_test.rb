@@ -168,4 +168,12 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     DataQuality::Stages::Extract.call(plugin:)
     assert(Candidate.where(source: letter, kind: "organization").any? { |c| c.payload["name"] == "Leapfrog Nuclear Co" })
   end
+
+  test "a title's company is the company only, never the document's own name (DQ, 11 Nov)" do
+    company = ->(head) { DataQuality::Plugins::NrcAdams.company_in(head) }
+    assert_equal "Oklo, Inc", company.("Summary Report on the Regulatory Audit of Topical Report, Oklo, Inc")
+    assert_equal "AEP Nuclear Company", company.("Assignment of Project Number for AEP Nuclear Company")
+    assert_equal "Leapfrog Nuclear Co", company.("Leapfrog Nuclear Co")
+    assert_nil company.("Summary Report on the Regulatory Audit"), "no company named"
+  end
 end
