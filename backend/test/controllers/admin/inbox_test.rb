@@ -174,6 +174,18 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert Lead.exists?(name: "Bluefield Fission")
   end
 
+  test "at most SELECTED_MAX rows a request; the rest wait to be selected again" do
+    stub = Admin::InboxController.send(:remove_const, :SELECTED_MAX)
+    Admin::InboxController.const_set(:SELECTED_MAX, 1)
+    post admin_inbox_decide_selected_path, params: { decision: "no", selected: [ "claim:#{@create.id}", "claim:#{@change.id}" ] }
+    assert_equal "Done 1. 1 not done yet: select again for the rest.", flash[:notice]
+    assert @create.reload.status_rejected?
+    assert @change.reload.status_matched?
+  ensure
+    Admin::InboxController.send(:remove_const, :SELECTED_MAX)
+    Admin::InboxController.const_set(:SELECTED_MAX, stub)
+  end
+
   test "an empty selection does nothing" do
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
     assert_equal "Tick at least one row first.", flash[:alert]

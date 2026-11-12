@@ -3,6 +3,9 @@
 # Undo for an hour. Nothing goes live without his Yes; every decision is checked again
 # under its locks, as everywhere else.
 class Admin::InboxController < Admin::BaseController
+  # Rows one "selected" request decides, so it stays well under the web timeout (Infra).
+  SELECTED_MAX = 50
+
   def show
     @inbox = OwnerInbox.new
   end
@@ -86,6 +89,8 @@ class Admin::InboxController < Admin::BaseController
     picks = Array(params[:selected]).compact_blank.uniq
     return redirect_to(admin_inbox_path, alert: "Tick at least one row first.") if picks.empty?
 
+    rest = picks.size - SELECTED_MAX
+    picks = picks.first(SELECTED_MAX)
     failed = []
     picks.each do |pick|
       errors = decide_pick(pick, yes:)
@@ -94,6 +99,7 @@ class Admin::InboxController < Admin::BaseController
     done = picks.size - failed.size
     message = "Done #{done}"
     message += ", #{failed.size} failed: #{failed.uniq.to_sentence}" if failed.any?
+    message += ". #{rest} not done yet: select again for the rest" if rest.positive?
     flash[failed.any? ? :alert : :notice] = "#{message}."
     redirect_to admin_inbox_path
   end
