@@ -19,8 +19,8 @@ class HomeCardsTest < ApplicationSystemTestCase
 
   def cards = page.evaluate_script("[...document.querySelectorAll('section.nd-catcard')].map((c) => [c.dataset.key, c.querySelectorAll('a.nd-catcard__row').length])")
 
-  test "at 360 the search placeholder is a shorter one that fits; at 390 the full one" do
-    { 360 => "Search companies and plants", 390 => "Search a company, plant or site" }.each do |width, placeholder|
+  test "the search placeholder fits at every width: the full one from 380px, a shorter one down to 360px, \"Search\" below that (#735)" do
+    { 320 => "Search", 340 => "Search", 359 => "Search", 360 => "Search companies and plants", 390 => "Search a company, plant or site" }.each do |width, placeholder|
       resize_viewport(width, 800)
       visit root_path
       input = find(".nd-home input[type=search]")
