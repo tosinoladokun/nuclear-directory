@@ -116,6 +116,8 @@ class Admin::InboxController < Admin::BaseController
       when "claim"
         ids = rest.to_s.split(",").map(&:to_i).select(&:positive?)
         return [ "unknown row" ] if ids.empty?
+        # Gone since the page loaded (decide and approve skip ids they can't find): not a success.
+        return [ "no longer in the inbox" ] if Candidate.where(id: ids).count < ids.uniq.size
 
         results = yes ? DataQuality::Review.approve(ids, by: actor, reason: "Approved in Today") : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today")
         stopped = results.reject(&:ok?)

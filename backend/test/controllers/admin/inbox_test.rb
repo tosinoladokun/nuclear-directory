@@ -177,6 +177,9 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   test "an empty selection does nothing" do
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
     assert_equal "Tick at least one row first.", flash[:alert]
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id},999999999" ] }
+    assert_equal "Done 0, 1 failed: no longer in the inbox.", flash[:alert], "a row gone since the page loaded isn't counted as done"
+    assert @create.reload.status_matched?
     assert @create.reload.status_matched?
   end
 end
