@@ -9,6 +9,15 @@
 # Part 1: description, HQ, founded year, legal name, roles, technologies.
 class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   PAGES = 4
+  # A person's click on Enrich (#758): the deep look, more of its own pages,
+  # news, partners, investors and projects first, and the stored sources that
+  # name it read again for deals, partners, funding and plants.
+  DEEP_PAGES = 12
+  DEEP_LINK = /news|press|partners?|investors?|projects?|customers?|funding|announcements?/i
+  DEEP_KINDS = %w[wire_press company_newsrooms trade_press usaspending_doe_awards arpa_e_projects nrc_adams doe_loans doe_programs].freeze
+  DEEP_SOURCES = 50
+  # Re-read stored sources a day, all clicks together (Infra): the rest wait for tomorrow.
+  DEEP_SOURCES_PER_DAY = 100
   # Its own address for the same record: Form D (#504) saves that file's
   # filing rows under the plain URL, and Enrich keeps the raw JSON, so the
   # two never share one snapshot (the query is ignored by the SEC).
@@ -30,7 +39,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-6".freeze
+  PROMPT_VERSION = "company_pages-7".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
@@ -69,7 +78,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     - description: one neutral sentence of what the company as a whole is or does, copied from the page (no adjectives like leading or
       world-class; leave it null if the page only has marketing language, a mission or vision statement, or describes one division,
       subsidiary or product line rather than the company).
-    - hq_city and hq_state: where its headquarters are, only if the page says headquarters. An office is not headquarters unless the page says so.
+    - hq_city and hq_state: where its headquarters are. Only from (a) an address the page labels headquarters, head office, main office,
+      corporate office, "our office" or "our address", or (b) the only street address on the page, next to the company's own name.
+      Never when the page lists several offices, plants or sites without marking one as the main one, and never another or parent
+      company's address. The quote is the full address line with the company's name and the city, state and ZIP as written.
     - founded_year: only if the quote contains the year it was founded.
     - legal_name: only an exact legal name with its suffix (Inc., LLC, Corp.), as written.
     - roles: what the company does, from the role keys given; never from "plans to", "aims to" or "will".
@@ -107,6 +119,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # their pages say goes through the usual claims, checks and approval.
   # 15 a night (DQ, 2 Nov: claims shrinking, settled in one daily pass); 20 if under ~30 claims a night.
   GAP_FILL_PER_NIGHT = 15
+  # New pending companies get their own nightly budget on top (PM, 10 Nov).
+  NEW_PER_NIGHT = 15
 
   def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
@@ -117,12 +131,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # Once a day, whatever starts the run (a manual Enrich runs this too):
     # the night's quota is kept in its crawl run's stats.
     if @gap_fill.positive? && !gap_filled_today?
-      gap = @directory.request_gap_fill(limit: @gap_fill)
+      gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
     read_for = {}
-    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+    @directory.enrich_queue(limit: @gap_fill + NEW_PER_NIGHT + 5).each do |id, _name, website, requested_at, sec_cik, deep|
       # A website another queued company shares was read for it tonight: this
       # request waits for tomorrow, once that one's findings are extracted (#534).
       if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
@@ -144,10 +158,16 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       if @directory.readable_website?(website) && (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
-        own_links(home).first(PAGES).each do |url|
+        links = own_links(home, deep:)
+        links.first(deep ? DEEP_PAGES : PAGES).each do |url|
           DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
         end
+      end
+      if deep
+        stats["deep"] = stats.fetch("deep", 0) + 1
+        room = DEEP_SOURCES_PER_DAY - deep_sources_today - stats.fetch("deep_sources", 0)
+        stats["deep_sources"] = stats.fetch("deep_sources", 0) + reread_sources_naming(id, limit: [ room, DEEP_SOURCES ].min)
       end
       @directory.mark_enriched(id, requested_at)
       stats["companies"] += 1
@@ -176,7 +196,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     run&.update!(prompt_version: PROMPT_VERSION)
     found = llm.structured(role: :extract, schema:, schema_name: "company_pages", crawl_run: run, reasoning_effort: "low",
       messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(company.name, text) } ]).data
-    claims = candidates(company.name, found, text, url: source.url)
+    # A new company gets any role; a published one only its own published roles, as sightings, so a re-read
+    # never looks like a dropped role (Copilot) and never proposes a new one.
+    roles = company.verification_status == "pending" ? nil : @directory.role_keys(company.id)
+    claims = candidates(company.name, found, text, url: source.url, roles:)
     # One description per company per read (DQ, 31 Oct): only from the page
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
@@ -255,18 +278,53 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       source
     end
 
+    # Sources earlier runs re-queued today (their crawl stats).
+    def deep_sources_today
+      CrawlRun.where(source_kind:, stage: "crawl", started_at: Time.current.all_day).where("stats ? 'deep_sources'")
+        .sum(Arel.sql("(stats->>'deep_sources')::int"))
+    end
+
+    # Stored sources of the kinds that hold deals, partners, funding and
+    # plants which name the company: their next extraction reads them again
+    # (each in its own plug-in's way, with its own checks). Returns how many.
+    def reread_sources_naming(id, limit: DEEP_SOURCES)
+      names = @directory.organization_names(id)
+      # Short all-capital aliases (TVA) count too, in capitals only, as the wire reads them (Copilot).
+      long = names.select { |name| name.length >= 4 }
+      short = names.select { |name| name.match?(/\A[A-Z0-9&]{2,3}\z/) }
+      return 0 if (long.empty? && short.empty?) || limit <= 0
+
+      # Each name as a whole phrase (a POSIX regular expression, its special characters escaped).
+      phrase = ->(list) { "(^|[^[:alnum:]])(#{list.map { |name| name.gsub(/[.*+?^${}()|\[\]\\]/) { |char| "\\#{char}" } }.join('|')})($|[^[:alnum:]])" }
+      matching = Source.none
+      matching = matching.or(Source.where("content_text ~* ?", phrase.(long))) if long.any?
+      matching = matching.or(Source.where("content_text ~ ?", phrase.(short))) if short.any?
+      ids = Source.where(source_kind: DEEP_KINDS).where.not(extracted_sha256: nil).merge(matching)
+        .order(fetched_at: :desc).limit(limit).ids
+      # Both hashes, so Extract's unchanged-rows shortcut can't skip it (Copilot).
+      Source.where(id: ids).update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
+      ids.size
+    end
+
     # Links on the home page to the company's own pages worth reading.
-    def own_links(home)
+    def own_links(home, deep: false)
       return [] unless home.crawl_ok? && home.content_text.present?
 
       # Relative links are read against where the page ended (#525).
       base = home.final_url.presence || home.url
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
-      Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
+      found = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"]).to_s.split("#").first rescue next
         uri = URI(url)
-        url if uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) && "#{uri.path} #{link.text}".match?(LINK)
-      end.uniq
+        said = "#{uri.path} #{link.text}"
+        next unless uri.host.to_s.downcase.delete_prefix("www.") == host && uri.scheme == "https" && ![ home.url, base ].include?(url) &&
+          said.match?(deep ? Regexp.union(LINK, DEEP_LINK) : LINK)
+
+        [ url, said.match?(DEEP_LINK) ]
+      end
+      # A deep read takes news, partners, investors… first, by address or link text (Copilot).
+      found = found.sort_by.with_index { |(_, first), index| [ first ? 0 : 1, index ] } if deep
+      found.map(&:first).uniq
     end
 
     def prompt(name, text)
@@ -275,8 +333,27 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         "Technology keys: #{choices['technology'].map(&:first).join(', ')}\n\nPage text:\n#{text.first(12_000)}"
     end
 
+    HQ_LABEL = /\b(?:headquarter(?:s|ed)|head office|main office|corporate office|our office|our address)\b/i
+    # "1 MAIN ST, AUSTIN, TX 78701": its street number and ZIP.
+    STREET_ADDRESS = /\b(\d{1,6})\s+[A-Z0-9 .'#-]{2,60}?,\s*[A-Z .'-]{2,40},?\s+[A-Z]{2}\s+(\d{5})\b/
+    # A US street address's "ST 12345" (or ZIP+4).
+    US_ADDRESS = /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/
+
+    # A labelled headquarters line, or an address line when the page has exactly one address.
+    def hq_quote_allowed?(quote, page_text)
+      return true if quote.to_s.match?(HQ_LABEL)
+
+      return false unless quote.to_s.match?(US_ADDRESS)
+
+      # Distinct addresses by street number and ZIP, so two offices in one ZIP count as two;
+      # the same address repeated (header and footer) counts once.
+      page = page_text.upcase
+      streets = page.scan(STREET_ADDRESS).uniq
+      streets.any? ? streets.size == 1 : page.scan(US_ADDRESS).uniq.size == 1
+    end
+
     # Only what's in its quote, with a quote on the page; keys from the lists.
-    def candidates(name, found, text, url: nil)
+    def candidates(name, found, text, url: nil, roles: [])
       page = text.downcase.squish
       quoted = ->(value, quote) { quote.present? && page.include?(quote.downcase.squish) && (value.nil? || quote.downcase.include?(value.to_s.downcase)) }
       choices = @directory.company_fact_choices.transform_values { |pairs| pairs.map(&:first) }
@@ -284,6 +361,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         value, quote = found.dig(field, "value"), found.dig(field, "quote")
         # Every value inside its own quote, a description included (Data Quality).
         next if value.blank? || !quoted.(value, quote)
+
+        # An HQ only as Data Quality rules it (10 Nov): a labelled main address,
+        # or the page's one street address; never one of several unmarked.
+        next if %w[hq_city hq_state].include?(field) && !hq_quote_allowed?(quote, page)
 
         value = value.to_s.strip
         # The directory keeps a state as its two-letter code ("Texas" in the quote is TX).
@@ -328,10 +409,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
-      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand (28 Oct), except for a
+      # new company not yet approved: proposed for Data Quality to read (PM, 10 Nov).
+      # roles: nil for a new company (any role); else only these keys, already published.
+      { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
+          next if list == "roles" && roles && !roles.include?(item["key"])
 
           fields << { kind:, payload: { "organization" => { "name" => name }, key => item["key"] }, quote: item["quote"].strip }
         end

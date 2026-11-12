@@ -2,8 +2,9 @@
 # a stable key, so running it again only updates what changed:
 # - searches that found nothing (#483), as typed, counted per search;
 # - news (#137) about a company or plant the directory doesn't have;
-# (Trade-press items are headlines, not names: they stay in Data Quality's
-# news queue, never Leads; Tosin, 27 Oct.)
+# (Trade-press items stay in Data Quality's news queue (Tosin, 27 Oct); the
+# US companies the model names in items about nothing we have are kept as
+# leads by the plug-in itself, for the lead pipeline (10 Nov).)
 # - Enrich findings (#479) naming a company it couldn't find;
 # - DOE award recipients waiting for their night (#513's cap).
 # It only adds and updates leads; a lead's status is the admin's.
@@ -12,7 +13,7 @@ class LeadSync
 
   def run
     counts = Hash.new(0)
-    { "search" => searches, "news" => news, "enrich" => enrich, "awards" => awards, "adams" => adams }.each do |feed, sightings|
+    { "search" => searches, "news" => news, "enrich" => enrich, "awards" => awards }.each do |feed, sightings|
       sightings.each { |sighting| counts[feed] += 1 if Lead.sighted!(**sighting) }
     end
     counts
@@ -61,22 +62,6 @@ class LeadSync
           first: source.created_at.to_date }
       rescue CSV::MalformedCSVError
         nil
-      end
-    end
-
-    # A developer NRC's documents name that the directory doesn't have (NRC
-    # ADAMS, 29 Oct): keyed by the document and the name.
-    def adams
-      Source.where(source_kind: "nrc_adams_index").crawl_ok.where.not(content_text: [ nil, "" ]).flat_map do |source|
-        DataQuality::Plugins::NrcAdams.developer_documents(source.content_text).flat_map do |_line, doc|
-          DataQuality::Plugins::NrcAdams.organizations(doc).filter_map do |name|
-            next if !DataQuality::Plugins::NrcAdams.lead_name?(name) || Lead.junk?(name) || known?(name)
-
-            { name:, kind: "company", key: "adams:#{doc['AccessionNumber']}:#{Lead.normalize(name)}",
-              label: "NRC #{doc['AccessionNumber']}: #{doc['DocumentTitle'].to_s.truncate(110)}",
-              url: doc["Url"], first: (Date.iso8601(doc["DocumentDate"].to_s) rescue source.created_at.to_date) }
-          end
-        end
       end
     end
 

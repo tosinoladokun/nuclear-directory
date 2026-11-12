@@ -1043,6 +1043,10 @@ module DataQuality::Review
           lock_for_decision(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ already(candidate) ]) unless open?(candidate)
           next Result.new(candidate_id: candidate.id, ref: nil, errors: [ LEAD ]) if lead?(candidate)
+          # A field claim (#760) is written only once checked against its own page, rechecked here under its lock.
+          if candidate.payload["field_of"].present? && !DataQuality::FieldEvidence.ready?(candidate, candidate.subject_id)
+            next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "a field isn't checked against its own page yet" ])
+          end
           if only_recommended && !((source_held || (first_hand && !contradicted?(candidate))) && data_quality_reviewed) &&
               !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])

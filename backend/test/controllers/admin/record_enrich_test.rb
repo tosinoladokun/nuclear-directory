@@ -32,6 +32,7 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
 
     assert_enqueued_with(job: DataQuality::RunJob, args: [ "company_pages" ]) { post enrich_path }
     assert @company.reload.enrich_requested_at
+    assert @company.enrich_deep, "a click reads deep (#758); the nightly gap fill doesn't set it"
     follow_redirect!
     assert_select ".nd-panel", /Reading acmefission\.com now/
   end

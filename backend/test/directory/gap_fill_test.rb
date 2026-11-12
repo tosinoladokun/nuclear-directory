@@ -18,7 +18,7 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     full = company("Full Fission", website: "https://full.example", description: "x", hq_city: "Austin", hq_state: "TX")
     uncategorised = company("Loose Fission", role: false, website: "https://loose.example")
     company("Siteless Fission")
-    pending = Organization.create!(name: "Pending Fission", website: "https://pending.example")
+    pending = Organization.create!(name: "Pending Fission")
 
     company("Broken Site Fission", website: "https://bad host")
     first = Directory::Lookup.request_gap_fill(limit: 1)
@@ -31,7 +31,7 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     assert half.reload.enrich_requested_at
     assert_nil full.reload.enrich_requested_at, "no gaps, nothing to read"
     assert_nil uncategorised.reload.enrich_requested_at, "category is Data Quality's, by hand"
-    assert_nil pending.reload.enrich_requested_at, "unpublished companies aren't filled"
+    assert_nil pending.reload.enrich_requested_at, "an unpublished company without a website isn't read"
     requested = bare.reload.enrich_requested_at
     Directory::Lookup.request_gap_fill(limit: 5)
     assert_equal requested, bare.reload.enrich_requested_at, "a waiting request isn't renewed"
@@ -75,5 +75,18 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     listed = company("Listed Siteless", role: false, sec_cik: "0000000003", hq_city: "Austin", hq_state: "TX")
     Directory::Lookup.request_gap_fill(limit: 1)
     assert listed.reload.enrich_requested_at
+  end
+
+  test "new pending companies and the backlog each have their own budget; a new one is read once (PM, 10 Nov)" do
+    bare = company("Bare Fission", website: "https://bare.example")
+    fresh = Organization.create!(name: "Fresh Fission", website: "https://fresh.example")
+    later = Organization.create!(name: "Later Fission", website: "https://later.example")
+    assert_equal 2, Directory::Lookup.request_gap_fill(limit: 1, new_limit: 1)[:requested]
+    assert fresh.reload.enrich_requested_at
+    assert bare.reload.enrich_requested_at, "the backlog keeps its place"
+    assert_nil later.reload.enrich_requested_at, "new companies beyond their budget wait"
+    fresh.update_columns(enriched_at: Time.current)
+    Directory::Lookup.request_gap_fill(limit: 0, new_limit: 1)
+    assert later.reload.enrich_requested_at, "the next new one, not Fresh again"
   end
 end

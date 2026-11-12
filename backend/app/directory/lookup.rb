@@ -70,7 +70,7 @@ module Directory
     def enrich_queue(limit: 5)
       Organization.where("enrich_requested_at IS NOT NULL AND (enriched_at IS NULL OR enriched_at < enrich_requested_at)")
         .where("COALESCE(website, '') <> '' OR sec_cik IS NOT NULL").order(:enrich_requested_at).limit(limit)
-        .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik)
+        .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik, enrich_deep_column)
     end
 
     # Gap fill (Tosin, 29 Oct): asks Enrich to read the own site of up to
@@ -82,7 +82,7 @@ module Directory
     # how many were asked for, and (at most 20) names of such companies
     # whose website is missing or can't be read, for Data Quality.
     GAP_REFILL_DAYS = 90
-    def request_gap_fill(limit: 10)
+    def request_gap_fill(limit: 10, new_limit: limit)
       gaps = Arel.sql(<<~SQL.squish)
         (CASE WHEN organizations.description IS NULL OR organizations.description = '' THEN 1 ELSE 0 END) +
         (CASE WHEN organizations.hq_city IS NULL OR organizations.hq_city = '' THEN 1 ELSE 0 END)
@@ -103,7 +103,13 @@ module Directory
       edgar = Organization.where(verification_status: "verified").where.not(sec_cik: nil)
         .where("organizations.hq_city IS NULL OR organizations.hq_city = '' OR organizations.website IS NULL OR organizations.website = ''")
       edgar = edgar.where(enrich_requested_at: nil).or(edgar.where(enriched_at: ...GAP_REFILL_DAYS.days.ago).where("enriched_at >= enrich_requested_at"))
-      ids = (edgar.order(no_hq, no_description, :id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
+      # A new company a crawler proposed (pending) with a website, never read:
+      # read the same night, first, so it reaches Data Quality with its
+      # description, HQ and category (PM, 10 Nov).
+      fresh = Organization.where(verification_status: "pending", enrich_requested_at: nil).where("COALESCE(website, '') <> ''")
+        .order(:id).pluck(:id, :website).select { |_, website| Organization.readable_website?(website) }.map(&:first).first(new_limit)
+      # Two budgets (PM, 10 Nov): new companies never take the backlog's places.
+      ids = fresh + (edgar.order(no_hq, no_description, :id).pluck(:id) + readable.map(&:first)).uniq.first(limit)
       Organization.where(id: ids).update_all(enrich_requested_at: Time.current) if ids.any?
       { requested: ids.size, without_website: unreadable.map { |_, name, _| name }.sort.first(20) }
     end
@@ -115,7 +121,19 @@ module Directory
 
     # Enrich (#479): its pages were read for the request now.
     # A newer request made meanwhile (a new website, say) stays waiting.
-    def mark_enriched(id, requested_at) = Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current)
+    def mark_enriched(id, requested_at)
+      Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current, **(deep_column? ? { enrich_deep: false } : {}))
+    end
+
+    # #758: a person's click on Enrich asks for the deep look (Backend's
+    # enrich_deep flag); until that column exists, every read is the light one.
+    def deep_column? = Organization.column_names.include?("enrich_deep")
+    def enrich_deep_column = deep_column? ? :enrich_deep : Arel.sql("false")
+
+    # A company's name and aliases, for finding it in stored sources (#758).
+    def organization_names(id)
+      [ Organization.where(id:).pick(:name), *OrganizationAlias.where(organization_id: id).pluck(:alias) ].compact.uniq
+    end
 
     # A company's or plant's "Latest" (#137): its approved news, newest first.
     # A unit's news is its site's.

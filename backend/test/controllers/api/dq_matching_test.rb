@@ -115,6 +115,17 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "rejected", company.reload.verification_status
   end
 
+  test "new: the claim's website, description, short description and HQ are on the pending company, with its quote as evidence" do
+    quote = "Fresh Fission LLC, of Austin, Texas, designs microreactors."
+    c = claim("Fresh Fission LLC", quote:, "website" => "https://freshfission.example", "description" => "Designs microreactors.",
+      "short_description" => "Microreactor designer", "hq_city" => "Austin", "hq_state" => "TX")
+    act({ id: c.id, action: "new", reason: "A new licensee" })
+    company = Organization.find(results.sole["created_ids"].sole)
+    assert_equal [ "pending", "https://freshfission.example", "Designs microreactors.", "Microreactor designer", "Austin", "TX" ],
+      company.values_at(:verification_status, :website, :description, :short_description, :hq_city, :hq_state)
+    assert_includes company.evidence.pluck(:quote), quote
+  end
+
   test "subsidiary_of: a pending company and a pending link naming the parent" do
     c = claim("Child Fission")
     act({ id: c.id, action: "subsidiary_of", target: @holtec.id, reason: "Holtec's unit" })

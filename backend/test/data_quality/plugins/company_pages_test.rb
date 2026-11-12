@@ -72,7 +72,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     rules = DataQuality::Plugins::CompanyPages::INSTRUCTIONS
     assert_includes rules, "a menu heading, a navigation label or a list\nof links is not enough"
     assert_includes rules, "If the page is about another company"
-    assert_includes rules, "An office is not headquarters unless the page says so."
+    assert_includes rules, "Never when the page lists several offices, plants or sites without marking one as the main one"
   end
 
   test "part 2: a listing with its ticker in the quote, and links naming the other party, in the directory's verbs" do
@@ -462,5 +462,91 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     @company.update_columns(enrich_requested_at: Time.current)
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
     assert_nil edgar.reload.extracted_sha256
+  end
+
+  test "a new pending company gets its category proposed from its own page; a published one doesn't (PM, 10 Nov)" do
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+    found = { "roles" => [ { "key" => "reactor_vendor", "quote" => "designs small modular reactors" } ] }
+    roles = -> { DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: ABOUT), nil).select { |c| c[:kind] == "organization_role" } }
+    assert_empty roles.call, "a published company: no new role"
+    OrganizationRole.create!(organization: @company, role: Role.find_by!(key: "reactor_vendor")).verify!(by: "human:tosin")
+    assert_equal 1, roles.call.size, "its own published role is still sighted, so a re-read never drops it"
+    OrganizationRole.where(organization: @company).delete_all
+    @company.update_columns(verification_status: "pending", verified_by: nil)
+    assert_equal [ { "organization" => { "name" => "Acme Fission" }, "role" => "reactor_vendor" } ], roles.call.map { |c| c[:payload] }
+  end
+
+  test "both nightly budgets are read in the first run: 15 new and 15 backlog companies (Copilot)" do
+    Organization.update_all(enrich_requested_at: Time.current, enriched_at: Time.current)
+    role = Role.find_by!(key: "reactor_vendor")
+    ids = (1..30).map do |n|
+      site = "https://co#{n}.example"
+      stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
+      stub_request(:get, site).to_return(body: "<html><body><p>Company #{n}.</p></body></html>", headers: { "Content-Type" => "text/html" })
+      if n <= 15
+        Organization.create!(name: "New Co #{n}", website: site)
+      else
+        Organization.create!(name: "Old Co #{n}", website: site, verification_status: "verified", verified_by: "human:tosin").tap do |org|
+          OrganizationRole.create!(organization: org, role:).verify!(by: "human:tosin")
+        end
+      end.id
+    end
+    plugin = DataQuality::Plugins::CompanyPages.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+    stats = plugin.crawl(nil)
+    assert_equal 30, stats["gap_fill"]
+    assert_equal 30, Organization.where(id: ids).where.not(enriched_at: nil).count, "every requested company is read the same night"
+  end
+
+  test "an HQ from a contact page only when labelled main or the page's one address (DQ, 10 Nov)" do
+    plugin = DataQuality::Plugins::CompanyPages.new
+    allowed = ->(quote, page) { plugin.send(:hq_quote_allowed?, quote, page) }
+    assert allowed.("Corporate Office: Acme Fission, 1 Main St, Austin, TX 78701", "Corporate Office: Acme Fission, 1 Main St, Austin, TX 78701. Plant: Ely, NV 89301")
+    assert allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Contact us. Acme Fission, 1 Main St, Austin, TX 78701")
+    refute allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Offices: 1 Main St, Austin, TX 78701. 2 Elm St, Ely, NV 89301"), "one of several unmarked"
+    refute allowed.("Our team works in Austin", "Our team works in Austin"), "no address, no label"
+    refute allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Offices: 1 Main St, Austin, TX 78701. 2 Elm St, Austin, TX 78701"), "two streets, one ZIP"
+    assert allowed.("Acme Fission, 1 Main St, Austin, TX 78701", "Acme Fission, 1 Main St, Austin, TX 78701. Footer: 1 Main St, Austin, TX 78701"), "one address, repeated"
+  end
+
+  # A click on Enrich, as Backend's flag will say it (#758).
+  DeepDirectory = Class.new(DataQuality::DirectoryClient) do
+    def enrich_queue(**) = super.map { |row| row[0, 5] + [ true ] }
+  end
+
+  test "a click on Enrich reads deeper: up to #{DataQuality::Plugins::CompanyPages::DEEP_PAGES} own pages, news and partners first, and stored sources naming it again (#758)" do
+    links = (1..14).map { |n| %(<a href="/products/p#{n}">Product #{n}</a>) }.join + %(<a href="/media">News</a><a href="/partners">Partners</a>)
+    stub_request(:get, HOME).to_return(body: "<html><body>#{links}<p>Acme Fission Inc. designs small modular reactors.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, %r{\Ahttps://www\.acmefission\.com/(products|media|partners)}).to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
+    @company.aliases.find_or_create_by!(alias: "Acme Fission")
+    naming = Source.create!(url: "https://www.prnewswire.com/news-releases/acme-1.html", source_kind: "wire_press", crawl_status: "ok",
+      content_text: "<p>Acme Fission signs a fuel deal.</p>", content_sha256: "a", extracted_sha256: "a", extracted_rows_sha256: "a")
+    @company.aliases.find_or_create_by!(alias: "AFX")
+    by_acronym = Source.create!(url: "https://www.prnewswire.com/news-releases/afx-1.html", source_kind: "wire_press", crawl_status: "ok",
+      content_text: "<p>AFX signs a deal.</p>", content_sha256: "c", extracted_sha256: "c", extracted_rows_sha256: "c")
+    lowercase = Source.create!(url: "https://www.prnewswire.com/news-releases/afx-2.html", source_kind: "wire_press", crawl_status: "ok",
+      content_text: "<p>The afx ratio.</p>", content_sha256: "d", extracted_sha256: "d")
+    other = Source.create!(url: "https://www.prnewswire.com/news-releases/other-1.html", source_kind: "wire_press", crawl_status: "ok",
+      content_text: "<p>Acme Fissionable Corp news.</p>", content_sha256: "b", extracted_sha256: "b")
+    @company.update_columns(enrich_requested_at: Time.current)
+
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory: DeepDirectory.new).crawl(nil)
+    assert_equal 1 + DataQuality::Plugins::CompanyPages::DEEP_PAGES, stats["pages"]
+    assert_requested :get, "https://www.acmefission.com/media" # its link text says News: first
+    assert_requested :get, "https://www.acmefission.com/partners"
+    assert_equal 2, stats["deep_sources"]
+    assert_nil naming.reload.extracted_sha256, "read again tonight"
+    assert_nil naming.extracted_rows_sha256, "both hashes, so Extract can't skip it as unchanged"
+    assert_nil by_acronym.reload.extracted_sha256, "a short capital alias, as written"
+    assert_equal "d", lowercase.reload.extracted_sha256, "not the alias in lower case"
+    assert_equal "b", other.reload.extracted_sha256, "a longer name isn't this company"
+
+    naming.update_columns(extracted_sha256: "a", extracted_rows_sha256: "a")
+    CrawlRun.create!(source_kind: "company_pages", stage: "crawl", status: "succeeded",
+      stats: { "deep_sources" => DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY })
+    @company.update_columns(enrich_requested_at: Time.current)
+    again = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory: DeepDirectory.new).crawl(nil)
+    assert_equal 0, again["deep_sources"], "today's #{DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY} are used: tomorrow"
+    assert_equal "a", naming.reload.extracted_sha256
   end
 end
