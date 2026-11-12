@@ -59,6 +59,7 @@ class SourceCatalog
     "sec_ticker_ciks" => { name: "SEC ticker list (CIKs)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "lead_finder" => { name: "Lead finder (company home pages)", note: "read when a lead is checked" },
+    "newsletters" => { name: "Nuclear newsletters (bot@ inbox)", note: "leads for the lead pipeline, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },
     "nrc_research_reactors" => { name: "NRC research and test reactors", daily: true },

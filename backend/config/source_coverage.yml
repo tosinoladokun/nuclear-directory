@@ -111,4 +111,5 @@ general:
   - { name: PR Newswire energy and utilities releases, kind: wire_press, status: built, note: "companies whose own sites refuse our bot" }
   - { name: "Lead finder (a lead's own website, checked)", kind: lead_finder, status: built, issue: 752, note: "first-party site: given, About paragraph, EDGAR, then search" }
   - { name: "Trade press feeds (WNN, ANS, NucNet, NEI magazine)", kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
+  - { name: Nuclear newsletters by email (bot@), kind: newsletters, status: built, issue: 714, leads: true, note: "leads for the lead pipeline, never cited" }
   - { name: Daily lead researcher, status: planned, issue: 278, note: "leads for Data Quality, not facts" }
