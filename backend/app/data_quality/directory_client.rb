@@ -58,7 +58,7 @@ class DataQuality::DirectoryClient
   # Exact lookups. Pass one keyword; returns a Record or nil.
   # Enrich (#479): companies waiting for their pages to be read, and marking one read.
   def enrich_queue(limit: 5) = lookup.enrich_queue(limit:)
-  def request_gap_fill(limit: 10) = lookup.request_gap_fill(limit:)
+  def request_gap_fill(limit: 10, new_limit: limit) = lookup.request_gap_fill(limit:, new_limit:)
   def mark_enriched(id, requested_at) = lookup.mark_enriched(id, requested_at)
   def organization_names(id) = lookup.organization_names(id)
   def company_fact_choices = lookup.company_fact_choices

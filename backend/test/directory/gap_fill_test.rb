@@ -77,14 +77,16 @@ class Directory::GapFillTest < ActiveSupport::TestCase
     assert listed.reload.enrich_requested_at
   end
 
-  test "a new pending company with a website is read first, once (PM, 10 Nov)" do
+  test "new pending companies and the backlog each have their own budget; a new one is read once (PM, 10 Nov)" do
     bare = company("Bare Fission", website: "https://bare.example")
     fresh = Organization.create!(name: "Fresh Fission", website: "https://fresh.example")
-    assert_equal 1, Directory::Lookup.request_gap_fill(limit: 1)[:requested]
+    later = Organization.create!(name: "Later Fission", website: "https://later.example")
+    assert_equal 2, Directory::Lookup.request_gap_fill(limit: 1, new_limit: 1)[:requested]
     assert fresh.reload.enrich_requested_at
-    assert_nil bare.reload.enrich_requested_at
+    assert bare.reload.enrich_requested_at, "the backlog keeps its place"
+    assert_nil later.reload.enrich_requested_at, "new companies beyond their budget wait"
     fresh.update_columns(enriched_at: Time.current)
-    Directory::Lookup.request_gap_fill(limit: 1)
-    assert bare.reload.enrich_requested_at, "read once: not asked again"
+    Directory::Lookup.request_gap_fill(limit: 0, new_limit: 1)
+    assert later.reload.enrich_requested_at, "the next new one, not Fresh again"
   end
 end
