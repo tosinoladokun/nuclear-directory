@@ -99,6 +99,9 @@ module DataQuality::Recommendations
     # What the person saw: each claim, its call and reason, and the claim as Data Quality saw it.
     # Whether this claim's recommendation still stands: it has one, and the
     # claim is as Data Quality saw it (not changed or reopened since).
+    # Data Quality said no (DQ, 12 Nov): never in a bulk Yes, and the row says so; his own click still decides.
+    def says_no?(candidate) = candidate.dq_recommendation == "reject"
+
     def current?(candidate) = candidate.dq_recommendation.present? && candidate.dq_payload_sha256 == digest(candidate)
 
     def fingerprint(items, safe = [])
