@@ -100,4 +100,16 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     DirectorySnapshot.expire! # what the commit callback does
     assert_not_equal data, DataVersion.current
   end
+
+  test "after a data change the warmer sends the changed pages to IndexNow (#742)" do
+    key, sender = ENV["INDEXNOW_KEY"], IndexNow.sender
+    ENV["INDEXNOW_KEY"] = "a1b2c3d4e5f6a7b8"
+    sent = []
+    IndexNow.sender = ->(_uri, json) { sent << JSON.parse(json); true }
+    PageWarmJob.perform_now(pause: 0, debounce: false)
+    assert_includes sent.sole["urlList"], "https://www.example.com/companies/warm-co"
+  ensure
+    ENV["INDEXNOW_KEY"] = key
+    IndexNow.sender = sender
+  end
 end

@@ -30,7 +30,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     "district of columbia" => "DC" }.freeze
   # The company's own pages worth reading, by their address or link text.
   LINK = /about|company|who-we-are|mission|technolog|products?|solutions|reactor|contact|overview|investors?|partners?|projects?/i
-  PROMPT_VERSION = "company_pages-6".freeze
+  PROMPT_VERSION = "company_pages-7".freeze
   EXCHANGES = %w[NASDAQ NYSE NYSE\ American TSX TSXV LSE ASX OTC].freeze
   # Part 2 (#479): links in the directory's own verbs.
   COMPANY_VERBS = %w[supplies invests_in funds offtake_with subsidiary_of].freeze
@@ -69,7 +69,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     - description: one neutral sentence of what the company as a whole is or does, copied from the page (no adjectives like leading or
       world-class; leave it null if the page only has marketing language, a mission or vision statement, or describes one division,
       subsidiary or product line rather than the company).
-    - hq_city and hq_state: where its headquarters are, only if the page says headquarters. An office is not headquarters unless the page says so.
+    - hq_city and hq_state: where its headquarters are. Only from (a) an address the page labels headquarters, head office, main office,
+      corporate office, "our office" or "our address", or (b) the only street address on the page, next to the company's own name.
+      Never when the page lists several offices, plants or sites without marking one as the main one, and never another or parent
+      company's address. The quote is the full address line with the company's name and the city, state and ZIP as written.
     - founded_year: only if the quote contains the year it was founded.
     - legal_name: only an exact legal name with its suffix (Inc., LLC, Corp.), as written.
     - roles: what the company does, from the role keys given; never from "plans to", "aims to" or "will".
@@ -107,6 +110,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # their pages say goes through the usual claims, checks and approval.
   # 15 a night (DQ, 2 Nov: claims shrinking, settled in one daily pass); 20 if under ~30 claims a night.
   GAP_FILL_PER_NIGHT = 15
+  # New pending companies get their own nightly budget on top (PM, 10 Nov).
+  NEW_PER_NIGHT = 15
 
   def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
@@ -117,12 +122,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # Once a day, whatever starts the run (a manual Enrich runs this too):
     # the night's quota is kept in its crawl run's stats.
     if @gap_fill.positive? && !gap_filled_today?
-      gap = @directory.request_gap_fill(limit: @gap_fill)
+      gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
     read_for = {}
-    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+    @directory.enrich_queue(limit: @gap_fill + NEW_PER_NIGHT + 5).each do |id, _name, website, requested_at, sec_cik|
       # A website another queued company shares was read for it tonight: this
       # request waits for tomorrow, once that one's findings are extracted (#534).
       if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
@@ -176,7 +181,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     run&.update!(prompt_version: PROMPT_VERSION)
     found = llm.structured(role: :extract, schema:, schema_name: "company_pages", crawl_run: run, reasoning_effort: "low",
       messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(company.name, text) } ]).data
-    claims = candidates(company.name, found, text, url: source.url)
+    # A new company gets any role; a published one only its own published roles, as sightings, so a re-read
+    # never looks like a dropped role (Copilot) and never proposes a new one.
+    roles = company.verification_status == "pending" ? nil : @directory.role_keys(company.id)
+    claims = candidates(company.name, found, text, url: source.url, roles:)
     # One description per company per read (DQ, 31 Oct): only from the page
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
@@ -275,8 +283,27 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         "Technology keys: #{choices['technology'].map(&:first).join(', ')}\n\nPage text:\n#{text.first(12_000)}"
     end
 
+    HQ_LABEL = /\b(?:headquarter(?:s|ed)|head office|main office|corporate office|our office|our address)\b/i
+    # "1 MAIN ST, AUSTIN, TX 78701": its street number and ZIP.
+    STREET_ADDRESS = /\b(\d{1,6})\s+[A-Z0-9 .'#-]{2,60}?,\s*[A-Z .'-]{2,40},?\s+[A-Z]{2}\s+(\d{5})\b/
+    # A US street address's "ST 12345" (or ZIP+4).
+    US_ADDRESS = /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/
+
+    # A labelled headquarters line, or an address line when the page has exactly one address.
+    def hq_quote_allowed?(quote, page_text)
+      return true if quote.to_s.match?(HQ_LABEL)
+
+      return false unless quote.to_s.match?(US_ADDRESS)
+
+      # Distinct addresses by street number and ZIP, so two offices in one ZIP count as two;
+      # the same address repeated (header and footer) counts once.
+      page = page_text.upcase
+      streets = page.scan(STREET_ADDRESS).uniq
+      streets.any? ? streets.size == 1 : page.scan(US_ADDRESS).uniq.size == 1
+    end
+
     # Only what's in its quote, with a quote on the page; keys from the lists.
-    def candidates(name, found, text, url: nil)
+    def candidates(name, found, text, url: nil, roles: [])
       page = text.downcase.squish
       quoted = ->(value, quote) { quote.present? && page.include?(quote.downcase.squish) && (value.nil? || quote.downcase.include?(value.to_s.downcase)) }
       choices = @directory.company_fact_choices.transform_values { |pairs| pairs.map(&:first) }
@@ -284,6 +311,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         value, quote = found.dig(field, "value"), found.dig(field, "quote")
         # Every value inside its own quote, a description included (Data Quality).
         next if value.blank? || !quoted.(value, quote)
+
+        # An HQ only as Data Quality rules it (10 Nov): a labelled main address,
+        # or the page's one street address; never one of several unmarked.
+        next if %w[hq_city hq_state].include?(field) && !hq_quote_allowed?(quote, page)
 
         value = value.to_s.strip
         # The directory keeps a state as its two-letter code ("Texas" in the quote is TX).
@@ -328,10 +359,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
-      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand (28 Oct), except for a
+      # new company not yet approved: proposed for Data Quality to read (PM, 10 Nov).
+      # roles: nil for a new company (any role); else only these keys, already published.
+      { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
+          next if list == "roles" && roles && !roles.include?(item["key"])
 
           fields << { kind:, payload: { "organization" => { "name" => name }, key => item["key"] }, quote: item["quote"].strip }
         end

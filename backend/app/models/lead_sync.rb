@@ -2,8 +2,9 @@
 # a stable key, so running it again only updates what changed:
 # - searches that found nothing (#483), as typed, counted per search;
 # - news (#137) about a company or plant the directory doesn't have;
-# (Trade-press items are headlines, not names: they stay in Data Quality's
-# news queue, never Leads; Tosin, 27 Oct.)
+# (Trade-press items stay in Data Quality's news queue (Tosin, 27 Oct); the
+# US companies the model names in items about nothing we have are kept as
+# leads by the plug-in itself, for the lead pipeline (10 Nov).)
 # - Enrich findings (#479) naming a company it couldn't find;
 # - DOE award recipients waiting for their night (#513's cap).
 # It only adds and updates leads; a lead's status is the admin's.
