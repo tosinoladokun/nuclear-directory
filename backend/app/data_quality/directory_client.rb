@@ -262,7 +262,10 @@ class DataQuality::DirectoryClient
 
   # The fields a claim's quote is marked as stating (#721).
   def stated_fields(candidate)
-    [ "thermal_power_kw" ] if candidate.kind == "facility" && candidate.payload.to_h["thermal_power_kw"].present?
+    payload = candidate.payload.to_h
+    return [ "thermal_power_kw" ] if candidate.kind == "facility" && payload["thermal_power_kw"].present?
+    # A field claim's quote states just its fields (#760).
+    payload.slice(*DataQuality::FieldEvidence::FIELDS).compact_blank.keys.presence if candidate.kind == "organization" && payload["field_of"].present?
   end
 
   # A source read again with the same rows: all its evidence was checked at:.
@@ -281,7 +284,7 @@ class DataQuality::DirectoryClient
   # it adds values to. Enrichment never creates records.
   ENRICHMENT_KEY = "identify"
   # Payload keys a write never stores as values.
-  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY ].freeze
+  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY, *DataQuality::FieldEvidence::KEYS ].freeze
 
   def enrichment?(candidate) = candidate.payload.to_h.key?(ENRICHMENT_KEY)
 

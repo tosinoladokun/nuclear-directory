@@ -30,7 +30,16 @@ class OwnerInbox
       firsts = DataQuality::Review.first_batches
       kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:) }
       mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
-      mine.group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
+      # A new company's field claims (#760) are decided with its Create, not on their own.
+      fields = DataQuality::FieldEvidence.fields_of(mine.select { |c| kinds[c] == "new_record" && c.kind_organization? }.map(&:id))
+        .where.not(subject_id: nil).to_a.group_by { |c| c.payload["field_of"].to_i }
+      field_ids = fields.values.flatten.map(&:id).to_set
+      grouped = mine.reject { |candidate| field_ids.include?(candidate.id) }
+        .group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
+      # Only the fields checked against their own pages go with the Create; the rest wait (Review.approve_one rechecks).
+      grouped.transform_values do |copies|
+        copies + copies.flat_map { |copy| fields.fetch(copy.id, []).select { |f| DataQuality::FieldEvidence.ready?(f, copy.subject_id) } }
+      end
     end
   end
 
@@ -130,6 +139,13 @@ class OwnerInbox
         snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
     end
   end
+  # What "Yes to all" was shown: its items, and the field claims (#760) going with them, as they were.
+  def yes_all_fingerprint
+    fields = DataQuality::FieldEvidence.fields_of(checked_items.map(&:candidate_id)).order(:id)
+      .map { |f| [ f.id, f.status, f.subject_id, f.payload, f.quote, f.ai_recommendation ] }
+    Digest::SHA256.hexdigest([ DataQuality::Recommendations.fingerprint(checked_items), fields ].to_json)
+  end
+
   # New records and facts, and changes that only fill blanks (#676).
   def checkable = sections.values_at("new_record", "new_fact").flatten + sections["change"].select { |entry| entry.changes.present? && entry.changes.values.all? { |(stored, _)| stored.blank? } }
 
