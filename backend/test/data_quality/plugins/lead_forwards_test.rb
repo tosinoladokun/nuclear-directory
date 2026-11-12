@@ -78,11 +78,21 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
     refute domain.send(:sender?, "x@sub.example.org"), "no subdomains"
     refute domain.send(:sender?, "x@example.org.evil.net")
     refute domain.send(:sender?, "bot@mail.nuclear-directory.org"), "our own sender, even if listed"
+    refute domain.send(:sender?, "\"someone@example.org\" <attacker@example.net>"), "a display name never counts"
+    assert domain.send(:sender?, "Someone <SOMEONE@Example.ORG>"), "case-insensitive"
 
     @answers["#{API}?limit=100"]["data"].first["from"] = "Someone <someone@example.org>"
     @answers["#{API}/f1"]["from"] = "Someone <someone@example.org>"
     domain.crawl(nil)
     domain.extract(Source.find_by!(source_kind: "lead_forwards"), nil)
     assert_equal "someone@example.org", @replies.sole[:to]
+  end
+
+  test "a whole-domain sender whose DMARC failed is recorded, never read (PM)" do
+    @answers["#{API}?limit=100"]["data"].first["from"] = "Someone <someone@example.org>"
+    @answers["#{API}/f1"] = @answers["#{API}/f1"].merge("from" => "Someone <someone@example.org>", "authentication" => { "dmarc" => "fail" })
+    domain = Plugin.new(http:, api_key: "re_test", llm: FakeLLM.new({}), sleeper: ->(_) { }, forwarders: "@example.org", sender: ->(**) { true })
+    assert_equal 0, domain.crawl(nil)["emails"]
+    assert Source.find_by!(source_kind: "lead_forwards").crawl_needs_human?
   end
 end
