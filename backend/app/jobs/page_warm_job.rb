@@ -28,6 +28,8 @@ class PageWarmJob < ApplicationJob
   def perform(pause: PAUSE, debounce: true)
     return unless (host = self.class.host)
 
+    # Changed pages wait for IndexNow's next window (#742).
+    IndexNow.flush(host:)
     # A tick reads only the cheap DataVersion; the page stamps are computed
     # once per data change, after it goes quiet (Infra).
     data = DataVersion.current
@@ -39,6 +41,8 @@ class PageWarmJob < ApplicationJob
     return if debounce && seen != data
 
     now = state(data)
+    IndexNow.note_changes(PageStamps.map(data), host:)
+    IndexNow.flush(host:)
     warmed = Rails.cache.read(WARMED) || {}
     todo = pages(host).reject { |key, _| warmed[key] == now[key] }
     todo.each do |key, draw|

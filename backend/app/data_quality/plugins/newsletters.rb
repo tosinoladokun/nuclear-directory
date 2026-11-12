@@ -15,8 +15,8 @@
 class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   API = "https://api.resend.com/emails/receiving".freeze
   INBOX = "bot@mail.nuclear-directory.org".freeze
-  # Sender domains of the newsletters bot@ is subscribed to. Never Neutron Bytes: its robots.txt blocks AI crawlers, so its mail is never read either (PM, 10 Nov).
-  SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org exchangemonitor.com].freeze
+  # Sender domains of the newsletters bot@ is subscribed to (Nuclear Engineering International mails from businesstrademediainternational.com). Never Neutron Bytes: its robots.txt blocks AI crawlers, so its mail is never read either (PM, 10 Nov).
+  SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org exchangemonitor.com businesstrademediainternational.com].freeze
   class InboxError < StandardError; end
   PER_RUN = 20
   # Resend allows 2 requests a second: a pause between calls, one retry on 429.
