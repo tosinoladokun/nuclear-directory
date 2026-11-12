@@ -184,4 +184,12 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
     queued = enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }.map { |job| job["arguments"].first }
     assert_equal [ "web_page" ], queued, "not a running kind, not one with only fresh claims"
   end
+
+  test "a kind whose claims a match run already saw (and left new) isn't queued again every hour" do
+    page = Source.create!(url: "https://example.com/seen", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    Candidate.create!(source: page, kind: "organization", status: "new", payload: { "name" => "Seen Co" }, quote: "q", created_at: NOW - 2.days)
+    CrawlRun.create!(source_kind: "web_page", stage: "match", status: "succeeded", started_at: NOW - 1.day, finished_at: NOW - 1.day)
+    catch_up(at: NOW.change(hour: 1))
+    assert_empty enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }
+  end
 end

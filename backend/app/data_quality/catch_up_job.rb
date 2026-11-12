@@ -63,10 +63,13 @@ class DataQuality::CatchUpJob < ApplicationJob
   # Claims left "new" for over an hour (a match run that stopped, or a kind nothing queued again since)
   STUCK_AFTER = 1.hour
 
-  # Queues match and verify for each source kind with claims still "new" an hour on, unless that kind is running.
-  # Matching is idempotent, so a queued run that finds nothing to do costs little.
+  # Queues match and verify for each source kind with claims still "new" an hour on that no match run has
+  # looked at since (a run that saw one and left it "new" did so on purpose: it isn't queued again, Infra),
+  # unless that kind is running.
   def requeue_stuck_claims(now)
-    stuck = Candidate.where(status: "new", created_at: ...(now - STUCK_AFTER)).joins(:source).distinct.pluck("sources.source_kind")
+    newest = Candidate.where(status: "new", created_at: ...(now - STUCK_AFTER)).joins(:source).group("sources.source_kind").maximum(:created_at)
+    matched = CrawlRun.where(stage: "match", status: "succeeded", source_kind: newest.keys).group(:source_kind).maximum(:started_at)
+    stuck = newest.select { |kind, created| matched[kind].nil? || matched[kind] < created }.keys
     (stuck - CrawlRun.running.distinct.pluck(:source_kind)).each do |kind|
       DataQuality::Plugin.for(kind)
       DataQuality::RunJob.perform_later(kind, only: %w[match verify])
