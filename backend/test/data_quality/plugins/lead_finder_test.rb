@@ -161,4 +161,14 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     real = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { })
     assert_equal :retry, Plugin.call(lead("Ghost Nuclear").id, finder: real).outcome
   end
+
+  test "a foreign company a person added (US operations shown elsewhere) isn't refused as not US; a crawler's lead still is (PM, 11 Nov)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>Fresh Fission mines uranium for nuclear fuel. Saskatoon, Canada</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    crawled = Plugin.call(Lead.sighted!(name: "Fresh Fission", kind: "company", key: "newsletter:1:fresh", label: "Newsletter", url: HOME).id, finder: finder)
+    assert_equal "not_us", crawled.found["checked"].sole["verdict"]
+
+    added = Lead.sighted!(name: "Fresh Fission", kind: "company", key: "admin:suggest:fresh fission", label: "Added in the admin", url: HOME)
+    assert_equal :proposed, Plugin.call(added.id, finder: finder).outcome
+  end
 end
