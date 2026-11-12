@@ -111,6 +111,10 @@ services:
       # crawler, #628), pasted by Tosin. Unset, that crawler does nothing.
       - key: ADAMS_API_KEY
         sync: false
+      # Brave Search API key for the lead finder (#762): paid, at most 20
+      # searches a day, pasted by Tosin. Unset, the finder doesn't search.
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
       # Addresses whose mail to leads@ becomes leads (#757), comma-separated,
       # set by Tosin. Unset, leads@ isn't read.
       - key: LEADS_ALLOWED_SENDERS
