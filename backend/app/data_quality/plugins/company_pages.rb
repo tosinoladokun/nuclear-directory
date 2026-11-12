@@ -110,6 +110,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # their pages say goes through the usual claims, checks and approval.
   # 15 a night (DQ, 2 Nov: claims shrinking, settled in one daily pass); 20 if under ~30 claims a night.
   GAP_FILL_PER_NIGHT = 15
+  # New pending companies get their own nightly budget on top (PM, 10 Nov).
+  NEW_PER_NIGHT = 15
 
   def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
@@ -120,12 +122,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # Once a day, whatever starts the run (a manual Enrich runs this too):
     # the night's quota is kept in its crawl run's stats.
     if @gap_fill.positive? && !gap_filled_today?
-      gap = @directory.request_gap_fill(limit: @gap_fill)
+      gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
     end
     read_for = {}
-    @directory.enrich_queue(limit: @gap_fill + 5).each do |id, _name, website, requested_at, sec_cik|
+    @directory.enrich_queue(limit: @gap_fill + NEW_PER_NIGHT + 5).each do |id, _name, website, requested_at, sec_cik|
       # A website another queued company shares was read for it tonight: this
       # request waits for tomorrow, once that one's findings are extracted (#534).
       if (home_url = website.to_s.strip.presence) && read_for.key?(home_url) && read_for[home_url] != id
@@ -179,7 +181,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     run&.update!(prompt_version: PROMPT_VERSION)
     found = llm.structured(role: :extract, schema:, schema_name: "company_pages", crawl_run: run, reasoning_effort: "low",
       messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(company.name, text) } ]).data
-    claims = candidates(company.name, found, text, url: source.url)
+    # A new company gets any role; a published one only its own published roles, as sightings, so a re-read
+    # never looks like a dropped role (Copilot) and never proposes a new one.
+    roles = company.verification_status == "pending" ? nil : @directory.role_keys(company.id)
+    claims = candidates(company.name, found, text, url: source.url, roles:)
     # One description per company per read (DQ, 31 Oct): only from the page
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
@@ -298,7 +303,7 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     end
 
     # Only what's in its quote, with a quote on the page; keys from the lists.
-    def candidates(name, found, text, url: nil)
+    def candidates(name, found, text, url: nil, roles: [])
       page = text.downcase.squish
       quoted = ->(value, quote) { quote.present? && page.include?(quote.downcase.squish) && (value.nil? || quote.downcase.include?(value.to_s.downcase)) }
       choices = @directory.company_fact_choices.transform_values { |pairs| pairs.map(&:first) }
@@ -354,10 +359,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       Array(found["rounds"]).each do |item|
         round = funding_round(name, item, quoted, url) and fields << round
       end
-      # Categories (roles) are Data Quality's, by hand, for now (28 Oct): not proposed.
-      { "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
+      # Categories (roles) are Data Quality's, by hand (28 Oct), except for a
+      # new company not yet approved: proposed for Data Quality to read (PM, 10 Nov).
+      # roles: nil for a new company (any role); else only these keys, already published.
+      { "roles" => [ "organization_role", "role" ], "technologies" => [ "organization_technology", "technology" ] }.each do |list, (kind, key)|
         Array(found[list]).each do |item|
           next unless choices.fetch(key).include?(item["key"]) && quoted.(nil, item["quote"])
+          next if list == "roles" && roles && !roles.include?(item["key"])
 
           fields << { kind:, payload: { "organization" => { "name" => name }, key => item["key"] }, quote: item["quote"].strip }
         end
