@@ -27,6 +27,7 @@ class DataQuality::CatchUpJob < ApplicationJob
     DataQuality::Pipeline.sweep_all_abandoned
     # Claims a crawl attached mid-merge, if match didn't catch them (#325).
     DataQuality::DirectoryClient.new.repoint_merged_claims
+    requeue_stuck_claims(now)
 
     local = now.in_time_zone(ZONE)
     return if local.hour < CATCH_UP_AFTER
@@ -58,6 +59,21 @@ class DataQuality::CatchUpJob < ApplicationJob
   def self.mark(state, kind, date) = CACHE.write(key(state, kind, date), true, expires_in: 2.days)
   def self.marked?(state, kind, date) = CACHE.exist?(key(state, kind, date))
   def self.key(state, kind, date) = "data_quality:daily:#{state}:#{kind}:#{date.iso8601}"
+
+  # Claims left "new" for over an hour (a match run that stopped, or a kind nothing queued again since)
+  STUCK_AFTER = 1.hour
+
+  # Queues match and verify for each source kind with claims still "new" an hour on, unless that kind is running.
+  # Matching is idempotent, so a queued run that finds nothing to do costs little.
+  def requeue_stuck_claims(now)
+    stuck = Candidate.where(status: "new", created_at: ...(now - STUCK_AFTER)).joins(:source).distinct.pluck("sources.source_kind")
+    (stuck - CrawlRun.running.distinct.pluck(:source_kind)).each do |kind|
+      DataQuality::Plugin.for(kind)
+      DataQuality::RunJob.perform_later(kind, only: %w[match verify])
+    rescue DataQuality::Plugin::UnknownSourceKind
+      next
+    end
+  end
 
   private
     # Done today when it finished, whether it succeeded or stopped on an

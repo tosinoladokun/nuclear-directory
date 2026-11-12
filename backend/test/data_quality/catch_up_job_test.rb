@@ -170,4 +170,18 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
     assert recurring.valid?, recurring.errors.full_messages.to_sentence
     assert_equal "DataQuality::CatchUpJob", task["class"]
   end
+
+  test "claims left new for over an hour get their kind's match and verify queued, unless that kind is running" do
+    page = Source.create!(url: "https://example.com/stuck-hq", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    sec = Source.create!(url: "https://www.sec.gov/files/company_tickers.json", source_kind: "sec_submissions", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    fresh = Source.create!(url: "https://example.com/fresh", source_kind: "company_pages", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    Candidate.create!(source: page, kind: "organization", status: "new", payload: { "name" => "Stuck Co" }, quote: "q", created_at: NOW - 2.days)
+    Candidate.create!(source: sec, kind: "organization", status: "new", payload: { "name" => "Stuck Filer" }, quote: "q", created_at: NOW - 2.days)
+    Candidate.create!(source: fresh, kind: "organization", status: "new", payload: { "name" => "Just In" }, quote: "q", created_at: NOW - 10.minutes)
+    CrawlRun.create!(source_kind: "sec_submissions", stage: "match", status: "running", started_at: NOW - 1.minute)
+
+    catch_up(at: NOW.change(hour: 1))
+    queued = enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }.map { |job| job["arguments"].first }
+    assert_equal [ "web_page" ], queued, "not a running kind, not one with only fresh claims"
+  end
 end
