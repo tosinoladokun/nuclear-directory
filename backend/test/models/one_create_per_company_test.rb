@@ -46,4 +46,11 @@ class OneCreatePerCompanyTest < ActiveSupport::TestCase
     assert create.reload.status_rejected?
     assert_empty creates
   end
+
+  test "a claim Data Quality said no to never rides along, even when the verifier recommended it (DQ, 12 Nov)" do
+    claim(source: @page, payload: {}, proposed_subject: true, ai_recommendation: "recommend_publish")
+    website = claim(source: @site, payload: { "website" => "https://leapfrog.example" }, quote: "Leapfrog builds reactors.", ai_recommendation: "recommend_publish")
+    DataQuality::Recommendations.record("#{website.id} reject: not the company's site", by: "human:dq")
+    assert_not_includes creates.sole.ids, website.id
+  end
 end

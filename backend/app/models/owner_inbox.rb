@@ -147,11 +147,11 @@ class OwnerInbox
     candidate_ids.flat_map { |id| @companions.fetch(id, []) }
   end
 
-  # Whether a company's other claim goes with its Create: the checker agreed, or Data Quality approved this very
-  # payload; its quote still in its page; nothing contradicts it. Checked again when it's decided.
+  # Whether a company's other claim goes with its Create: Data Quality approved this very payload (only its approve,
+  # never the verifier's alone, and never one it said no to: DQ, 12 Nov); its quote still in its page; nothing contradicts it. Checked again when it's decided.
   def self.rides_along?(claim, company_id)
     claim.subject_id == company_id && claim.status.in?(%w[new matched needs_review]) &&
-      (claim.ai_recommendation == "recommend_publish" || (claim.dq_recommendation == "approve" && DataQuality::Recommendations.current?(claim))) &&
+      claim.dq_recommendation == "approve" && DataQuality::Recommendations.current?(claim) &&
       !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
   end
 

@@ -76,6 +76,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
 
   test "Yes to all creates a company with the other checked claims shown on its row (one Create per company)" do
     site = claim({ "name" => "Bluefield Fission", "website" => "https://bluefield.example" }, subject: @new_co)
+    DataQuality::Recommendations.record("#{site.id} approve: its own site", by: "human:dq")
     DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
     other = give_sourced_role(Organization.create!(name: "Second Fission", verification_status: "pending"))
     second = claim({ "name" => "Second Fission" }, subject: other, proposed_subject: true)
