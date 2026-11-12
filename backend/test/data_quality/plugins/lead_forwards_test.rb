@@ -95,4 +95,10 @@ class DataQuality::Plugins::LeadForwardsTest < ActiveSupport::TestCase
     assert_equal 0, domain.crawl(nil)["emails"]
     assert Source.find_by!(source_kind: "lead_forwards").crawl_needs_human?
   end
+
+  test "a whole public mail domain is never an entry (Infra)" do
+    listed = Plugin.new(http:, api_key: "re_test", forwarders: "@gmail.com, owner@gmail.com")
+    refute listed.send(:sender?, "someone@gmail.com"), "@gmail.com is ignored"
+    assert listed.send(:sender?, "owner@gmail.com"), "an exact address there still counts"
+  end
 end

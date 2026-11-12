@@ -12,6 +12,8 @@
 class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
   INBOX = "leads@mail.nuclear-directory.org".freeze
   SEND_API = "https://api.resend.com/emails".freeze
+  PUBLIC_MAIL = %w[gmail.com googlemail.com icloud.com me.com mac.com outlook.com hotmail.com live.com msn.com yahoo.com aol.com
+    proton.me protonmail.com].freeze
   class ReplyFailed < StandardError; end
   INSTRUCTIONS = <<~TEXT.freeze
     You read one email someone forwarded to suggest companies for a nuclear industry directory. List the companies it names
@@ -23,12 +25,16 @@ class DataQuality::Plugins::LeadForwards < DataQuality::Plugins::Newsletters
 
   def initialize(forwarders: ENV["LEADS_ALLOWED_SENDERS"], sender: nil, **options)
     super(**options)
-    @forwarders = forwarders.to_s.split(",").map { |address| address.strip.downcase }.reject(&:blank?)
+    entries = forwarders.to_s.split(",").map { |address| address.strip.downcase }.reject(&:blank?)
+    # A whole public mail provider is never a sender (Infra): such an entry is ignored, with a warning.
+    public = entries.select { |entry| PUBLIC_MAIL.include?(entry.delete_prefix("@")) && entry.start_with?("@") }
+    public.each { |entry| Rails.logger.warn("[lead_forwards] ignoring #{entry} in LEADS_ALLOWED_SENDERS: a public mail domain") }
+    @forwarders = entries.map { |entry| public.include?(entry) ? nil : entry }
     @sender = sender
   end
 
   def crawl(run)
-    return { "skipped" => "no LEADS_ALLOWED_SENDERS" } if @forwarders.empty?
+    return { "skipped" => "no LEADS_ALLOWED_SENDERS" } if @forwarders.compact.empty?
 
     super
   end
