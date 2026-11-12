@@ -18,7 +18,7 @@ class DqRejectsRepair < DeployData::Migration
       "\"Container Technologies Industries, LLC (CTI Fab) is your trusted partner\" (https://containertechnologies.com)" ]
   }.freeze
   NEWS_ID = 18
-  NEWS_TITLE = "Vistra highlights its 2026 summer internship program"
+  NEWS_TITLE = "Inside Vistra\u2019s 2026 Summer Internship Program"
 
   def up
     COMPANIES.each do |id, (wrong, right, why)|
