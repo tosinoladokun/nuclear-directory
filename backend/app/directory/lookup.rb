@@ -70,7 +70,7 @@ module Directory
     def enrich_queue(limit: 5)
       Organization.where("enrich_requested_at IS NOT NULL AND (enriched_at IS NULL OR enriched_at < enrich_requested_at)")
         .where("COALESCE(website, '') <> '' OR sec_cik IS NOT NULL").order(:enrich_requested_at).limit(limit)
-        .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik)
+        .pluck(:id, :name, :website, :enrich_requested_at, :sec_cik, enrich_deep_column)
     end
 
     # Gap fill (Tosin, 29 Oct): asks Enrich to read the own site of up to
@@ -121,7 +121,19 @@ module Directory
 
     # Enrich (#479): its pages were read for the request now.
     # A newer request made meanwhile (a new website, say) stays waiting.
-    def mark_enriched(id, requested_at) = Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current)
+    def mark_enriched(id, requested_at)
+      Organization.where(id:, enrich_requested_at: requested_at).update_all(enriched_at: Time.current, **(deep_column? ? { enrich_deep: false } : {}))
+    end
+
+    # #758: a person's click on Enrich asks for the deep look (Backend's
+    # enrich_deep flag); until that column exists, every read is the light one.
+    def deep_column? = Organization.column_names.include?("enrich_deep")
+    def enrich_deep_column = deep_column? ? :enrich_deep : Arel.sql("false")
+
+    # A company's name and aliases, for finding it in stored sources (#758).
+    def organization_names(id)
+      [ Organization.where(id:).pick(:name), *OrganizationAlias.where(organization_id: id).pluck(:alias) ].compact.uniq
+    end
 
     # A company's or plant's "Latest" (#137): its approved news, newest first.
     # A unit's news is its site's.
