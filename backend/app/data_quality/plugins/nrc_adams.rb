@@ -147,7 +147,7 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # ..."), first, when it's in a company form; then the document's authors
   # and addressees other than NRC's own offices (DQ, 29 Oct).
   def self.organizations(doc)
-    titled = doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).then { |head, rest| company_in(head) if rest }
+    titled = company_in(doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).first)
     # A title naming the company wins over the addressee's affiliation (DQ, 10 Nov: "The Leapfrog Group" isn't Leapfrog Nuclear Co).
     addressees = titled ? [] : Array(doc["AddresseeAffiliation"])
     ([ titled ] + Array(doc["AuthorAffiliation"]) + addressees).map { |name| name.to_s.squish }

@@ -176,4 +176,9 @@ class DataQuality::Plugins::NrcAdamsTest < ActiveSupport::TestCase
     assert_equal "Leapfrog Nuclear Co", company.("Leapfrog Nuclear Co")
     assert_nil company.("Summary Report on the Regulatory Audit"), "no company named"
   end
+
+  test "a title with no spaced hyphen still gives its company, ahead of the addressee (Copilot)" do
+    doc = { "DocumentTitle" => "Assignment of Project Number for AEP Nuclear Company", "AddresseeAffiliation" => [ "Other Group" ] }
+    assert_equal [ "AEP Nuclear Company" ], DataQuality::Plugins::NrcAdams.organizations(doc)
+  end
 end
