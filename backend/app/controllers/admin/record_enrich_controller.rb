@@ -46,7 +46,8 @@ class Admin::RecordEnrichController < Admin::BaseController
 
     failed = company.enriched_at && CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: company.enriched_at..)
       .order(:started_at).first&.failed?
-    company.update_columns(failed ? { enriched_at: nil } : { enrich_requested_at: Time.current })
+    # A person's click reads deep (#758); the nightly gap fill doesn't set this.
+    company.update_columns(failed ? { enriched_at: nil, enrich_deep: true } : { enrich_requested_at: Time.current, enrich_deep: true })
     DataQuality::RunJob.perform_later(SOURCE_KIND)
     nil
   end
