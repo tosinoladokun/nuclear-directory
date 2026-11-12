@@ -60,6 +60,7 @@ class DataQuality::DirectoryClient
   def enrich_queue(limit: 5) = lookup.enrich_queue(limit:)
   def request_gap_fill(limit: 10, new_limit: limit) = lookup.request_gap_fill(limit:, new_limit:)
   def mark_enriched(id, requested_at) = lookup.mark_enriched(id, requested_at)
+  def organization_names(id) = lookup.organization_names(id)
   def company_fact_choices = lookup.company_fact_choices
 
   def organization(id: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
@@ -261,7 +262,10 @@ class DataQuality::DirectoryClient
 
   # The fields a claim's quote is marked as stating (#721).
   def stated_fields(candidate)
-    [ "thermal_power_kw" ] if candidate.kind == "facility" && candidate.payload.to_h["thermal_power_kw"].present?
+    payload = candidate.payload.to_h
+    return [ "thermal_power_kw" ] if candidate.kind == "facility" && payload["thermal_power_kw"].present?
+    # A field claim's quote states just its fields (#760).
+    payload.slice(*DataQuality::FieldEvidence::FIELDS).compact_blank.keys.presence if candidate.kind == "organization" && payload["field_of"].present?
   end
 
   # A source read again with the same rows: all its evidence was checked at:.
@@ -280,7 +284,7 @@ class DataQuality::DirectoryClient
   # it adds values to. Enrichment never creates records.
   ENRICHMENT_KEY = "identify"
   # Payload keys a write never stores as values.
-  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY ].freeze
+  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY, *DataQuality::FieldEvidence::KEYS ].freeze
 
   def enrichment?(candidate) = candidate.payload.to_h.key?(ENRICHMENT_KEY)
 
@@ -346,6 +350,9 @@ class DataQuality::DirectoryClient
 
   # A company name kept as a lead, never thrown away (#548).
   def keep_lead(name:, key:, label:, url: nil) = Directory::Leads.keep(name:, key:, label:, url:)
+
+  # A lead for the lead finder: LeadRef (id, name, kind, urls), or nil.
+  def lead(id) = Directory::Leads.find(id)
 
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
