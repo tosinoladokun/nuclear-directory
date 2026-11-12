@@ -35,7 +35,9 @@ class DataQuality::Stage
       Source.where(source_kind: plugin.source_kind)
     end
 
+    # Its own sources' claims, plus claims cited to the index it reads through (SourceCoverage::COMPANIONS), such
+    # as Data Quality's CIK claims on the SEC filing lists: an index is never extracted, so nothing else matches them.
     def candidates
-      Candidate.where(source: sources)
+      Candidate.where(source: Source.where(source_kind: [ plugin.source_kind, *SourceCoverage::COMPANIONS.fetch(plugin.source_kind, []) ]))
     end
 end

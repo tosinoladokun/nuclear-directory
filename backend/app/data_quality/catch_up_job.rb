@@ -68,6 +68,7 @@ class DataQuality::CatchUpJob < ApplicationJob
   # unless that kind is running.
   def requeue_stuck_claims(now)
     newest = Candidate.where(status: "new", created_at: ...(now - STUCK_AFTER)).joins(:source).group("sources.source_kind").maximum(:created_at)
+      .group_by { |kind, _| index_owner(kind) }.transform_values { |pairs| pairs.map(&:last).max }
     matched = CrawlRun.where(stage: "match", status: "succeeded", source_kind: newest.keys).group(:source_kind).maximum(:started_at)
     stuck = newest.select { |kind, created| matched[kind].nil? || matched[kind] < created }.keys
     (stuck - CrawlRun.running.distinct.pluck(:source_kind)).each do |kind|
@@ -76,6 +77,11 @@ class DataQuality::CatchUpJob < ApplicationJob
     rescue DataQuality::Plugin::UnknownSourceKind
       next
     end
+  end
+
+  # An index source's claims are matched by the crawler that reads through it (sec_submissions: sec_form_d).
+  def index_owner(kind)
+    SourceCoverage::COMPANIONS.find { |_, indexes| indexes.include?(kind) }&.first || kind
   end
 
   private

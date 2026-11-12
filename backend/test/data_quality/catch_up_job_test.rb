@@ -173,16 +173,35 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
   test "claims left new for over an hour get their kind's match and verify queued, unless that kind is running" do
     page = Source.create!(url: "https://example.com/stuck-hq", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
-    sec = Source.create!(url: "https://www.sec.gov/files/company_tickers.json", source_kind: "sec_submissions", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    news = Source.create!(url: "https://www.nrc.gov/stuck-news", source_kind: "nrc_news", crawl_status: "ok", content_sha256: "s", content_text: "q")
     fresh = Source.create!(url: "https://example.com/fresh", source_kind: "company_pages", crawl_status: "ok", content_sha256: "s", content_text: "q")
     Candidate.create!(source: page, kind: "organization", status: "new", payload: { "name" => "Stuck Co" }, quote: "q", created_at: NOW - 2.days)
-    Candidate.create!(source: sec, kind: "organization", status: "new", payload: { "name" => "Stuck Filer" }, quote: "q", created_at: NOW - 2.days)
+    Candidate.create!(source: news, kind: "organization", status: "new", payload: { "name" => "Busy Co" }, quote: "q", created_at: NOW - 2.days)
     Candidate.create!(source: fresh, kind: "organization", status: "new", payload: { "name" => "Just In" }, quote: "q", created_at: NOW - 10.minutes)
-    CrawlRun.create!(source_kind: "sec_submissions", stage: "match", status: "running", started_at: NOW - 1.minute)
+    busy = CrawlRun.create!(source_kind: "nrc_news", stage: "match", status: "running", started_at: NOW - 1.minute)
+    other = hold_lock("nrc_news")
 
     catch_up(at: NOW.change(hour: 1))
     queued = enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }.map { |job| job["arguments"].first }
     assert_equal [ "web_page" ], queued, "not a running kind, not one with only fresh claims"
+    assert busy.reload.running?, "its lock is held, so it's working"
+  ensure
+    other&.exec("SELECT pg_advisory_unlock_all()")
+    other&.close
+  end
+
+  test "claims on an index source (the SEC filing lists) are matched by the crawler that reads through it" do
+    sec = Source.create!(url: "https://www.sec.gov/files/company_tickers.json", source_kind: "sec_submissions", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    claim = Candidate.create!(source: sec, kind: "organization", status: "new", payload: { "name" => "Stuck Filer" }, quote: "q", created_at: NOW - 2.days)
+    catch_up(at: NOW.change(hour: 1))
+    assert_equal [ "sec_form_d" ], enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }.map { |job| job["arguments"].first }
+    assert_includes DataQuality::Stages::Match.new(plugin: DataQuality::Plugin.for("sec_form_d")).send(:candidates), claim
+  end
+
+  def hold_lock(kind)
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    PG.connect(host: config[:host], port: config[:port], dbname: ActiveRecord::Base.connection_db_config.database, user: config[:username], password: config[:password])
+      .tap { |other| other.exec("SELECT pg_advisory_lock(#{Zlib.crc32("data_quality:#{kind}")})") }
   end
 
   test "a kind whose claims a match run already saw (and left new) isn't queued again every hour" do
