@@ -42,6 +42,12 @@
   </section>
 <% end %>
 
+<div class="nd-stack" data-controller="bulk-select">
+<%# Tick rows, then decide them together (#771). The boxes sit in each row and belong to this form. %>
+<%= form_with url: admin_inbox_decide_selected_path, id: "inbox-selected", class: "nd-row nd-inbox__bulk", data: { bulk_select_target: "bar" }, hidden: true do |form| %>
+  <%= form.button name: "decision", value: "yes", class: "nd-btn nd-btn--primary type-ui" do %><span>Create / Approve selected (<span data-bulk-select-target="count">0</span>)</span><% end %>
+  <%= form.button name: "decision", value: "no", class: "nd-btn nd-btn--outline type-ui" do %><span>No to selected (<span data-bulk-select-target="count">0</span>)</span><% end %>
+<% end %>
 <% OwnerInbox::SECTIONS.each do |key| %>
   <% entries = sections[key] %>
   <% records = key == "new_record" ? @inbox.records : [] %>
@@ -49,6 +55,7 @@
   <% next if entries.empty? && records.empty? && waiting.zero? %>
   <section class="nd-stack" aria-labelledby="inbox-<%= key %>">
     <h2 id="inbox-<%= key %>" class="type-admin-h2 m-0"><%= headings.fetch(key) %> <span class="type-count"><%= entries.size + records.size %></span></h2>
+    <label class="nd-row type-small"><input type="checkbox" class="nd-check" data-action="bulk-select#all" data-section="<%= key %>"> Select all</label>
     <% if waiting.positive? %>
       <p class="type-small text-ink-muted m-0"><%= pluralize(waiting, "more new company", plural: "more new companies") %> tomorrow. <%= OwnerInbox::CREATES_A_DAY %> a day, best-sourced first.</p>
     <% end %>
@@ -56,6 +63,8 @@
       <% entries.each do |entry| %>
         <% item = entry.item %>
         <li class="nd-wait nd-inbox__item" id="inbox-item-<%= item.candidate_id %>">
+          <input type="checkbox" class="nd-check" name="selected[]" value="claim:<%= entry.ids.join(",") %>" form="inbox-selected" data-section="<%= key %>"
+            data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select #<%= item.candidate_id %>">
           <div class="nd-wait__what">
             <% if key == "new_record" %>
               <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
@@ -121,6 +130,8 @@
         <% name = fact.attributes.to_h.with_indifferent_access[:name] %>
         <% quote = fact.evidence.first %>
         <li class="nd-wait nd-inbox__item" id="inbox-record-<%= fact.type.underscore %>-<%= fact.id %>">
+          <input type="checkbox" class="nd-check" name="selected[]" value="record:<%= fact.type %>:<%= fact.id %>" form="inbox-selected" data-section="<%= key %>"
+            data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select <%= name %>">
           <div class="nd-wait__what">
             <p class="m-0"><span class="nd-tag"><%= fact.type == "Facility" ? "Plant" : "Company" %></span></p>
             <p class="type-body m-0"><%= link_to name, admin_fact_path(type: fact.type, id: fact.id), class: "nd-link type-body-strong" %></p>
@@ -150,6 +161,8 @@
     <% end %>
   </section>
 <% end %>
+
+</div>
 
 <% recent = @inbox.recent.to_a %>
 <% if recent.any? %>

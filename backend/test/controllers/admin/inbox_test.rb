@@ -154,4 +154,29 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     ids = OwnerInbox.new.pending_records("organization", limit: 2).map(&:id)
     assert_includes ids, eligible.id
   end
+
+  test "decide selected (#771): every row ticked is decided as if clicked on its own, and one that stops doesn't stop the rest" do
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@create.id} input[type=checkbox][form=inbox-selected][value=?]", "claim:#{@create.id}"
+    assert_select "form#inbox-selected button", /Create \/ Approve selected/
+
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id}", "claim:#{@change.id}", "record:Plant:1" ] }
+    assert @new_co.reload.verified?, "the Create"
+    assert_equal "Rockville", @decided.reload.hq_city, "the change takes the new value"
+    assert_match(/\ADone 2, 1 failed: unknown row\.\z/, flash[:alert])
+  end
+
+  test "No to selected says no to each, and the company names stay as leads" do
+    post admin_inbox_decide_selected_path, params: { decision: "no", selected: [ "claim:#{@create.id}", "claim:#{@change.id}" ] }
+    assert_equal "Done 2.", flash[:notice]
+    assert @create.reload.status_rejected?
+    assert @change.reload.status_rejected?
+    assert Lead.exists?(name: "Bluefield Fission")
+  end
+
+  test "an empty selection does nothing" do
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
+    assert_equal "Tick at least one row first.", flash[:alert]
+    assert @create.reload.status_matched?
+  end
 end

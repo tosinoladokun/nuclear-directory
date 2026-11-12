@@ -79,6 +79,25 @@ class Admin::InboxController < Admin::BaseController
     redirect_to admin_inbox_path
   end
 
+  # Yes or No on the rows he ticked (#771): each decided exactly as if clicked on its own, one after another,
+  # so one that stops doesn't stop the rest. A change's Yes takes the new value, its No keeps his.
+  def decide_selected
+    yes = params[:decision] == "yes"
+    picks = Array(params[:selected]).compact_blank.uniq
+    return redirect_to(admin_inbox_path, alert: "Tick at least one row first.") if picks.empty?
+
+    failed = []
+    picks.each do |pick|
+      errors = decide_pick(pick, yes:)
+      failed << (errors.to_sentence.presence || "not done") if errors
+    end
+    done = picks.size - failed.size
+    message = "Done #{done}"
+    message += ", #{failed.size} failed: #{failed.uniq.to_sentence}" if failed.any?
+    flash[failed.any? ? :alert : :notice] = "#{message}."
+    redirect_to admin_inbox_path
+  end
+
   # Undo the last No, while nothing has changed it since.
   def undo
     state = undo_verifier.verified(params[:token].to_s)
@@ -90,6 +109,32 @@ class Admin::InboxController < Admin::BaseController
   end
 
   private
+    # "claim:<id>,<id>…" (a row and its copies) or "record:<Type>:<id>". Returns the errors, or nil when done.
+    def decide_pick(pick, yes:)
+      kind, rest = pick.split(":", 2)
+      result = case kind
+      when "claim"
+        ids = rest.to_s.split(",").map(&:to_i).select(&:positive?)
+        return [ "unknown row" ] if ids.empty?
+
+        results = yes ? DataQuality::Review.approve(ids, by: actor, reason: "Approved in Today") : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today")
+        stopped = results.reject(&:ok?)
+        return stopped.flat_map(&:errors).uniq if stopped.any?
+
+        keep_as_lead(ids.first) unless yes
+        return nil
+      when "record"
+        type, id = rest.to_s.split(":", 2)
+        return [ "unknown row" ] unless %w[Organization Facility].include?(type)
+
+        yes ? DataQuality::Review.approve_fact(type:, id: id.to_i, by: actor, reason: "Created in Today") : DataQuality::Review.reject_fact(type:, id: id.to_i, by: actor, reason: "Said no in Today")
+      else return [ "unknown row" ]
+      end
+      result.ok? ? nil : Array(result.errors)
+    rescue StandardError => e
+      [ e.message ]
+    end
+
     # A No on a new company or plant is never final (PM, 25 Oct): its name
     # goes to Leads, which are never thrown away.
     def keep_as_lead(candidate_id)
