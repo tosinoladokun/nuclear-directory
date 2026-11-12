@@ -102,7 +102,7 @@ module DataQuality::FieldEvidence
   # page (agreed), its quote still in that page, and not contradicted.
   def self.ready?(field, company_id)
     field.status_matched? && field.subject_id == company_id && field.ai_recommendation == "recommend_publish" &&
-      !DataQuality::Review.contradicted?(field) && quote_in_source?(field)
+      !DataQuality::Recommendations.says_no?(field) && !DataQuality::Review.contradicted?(field) && quote_in_source?(field)
   end
 
   def self.quote_in_source?(field)

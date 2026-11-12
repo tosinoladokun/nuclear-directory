@@ -181,7 +181,8 @@ module DataQuality::Review
       decided = claims.select(&:subject_id).group_by(&:subject_type).flat_map do |type, group|
         directory.human_decided_ids(type:, ids: group.map(&:subject_id)).map { |id| [ type, id ] }
       end.to_set
-      claims.reject { |candidate| held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ])) }
+      # Never one Data Quality said no to (DQ, 12 Nov); its Checks row still shows it as theirs to decide.
+      claims.reject { |candidate| DataQuality::Recommendations.says_no?(candidate) || held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ])) }
         .map(&:id)
     end
 
