@@ -348,6 +348,9 @@ class DataQuality::DirectoryClient
   # A company name kept as a lead, never thrown away (#548).
   def keep_lead(name:, key:, label:, url: nil) = Directory::Leads.keep(name:, key:, label:, url:)
 
+  # A lead for the lead finder: LeadRef (id, name, kind, urls), or nil.
+  def lead(id) = Directory::Leads.find(id)
+
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
     record(type, state, values: lookup.fact_attributes(type:, id:))

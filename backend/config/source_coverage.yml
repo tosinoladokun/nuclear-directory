@@ -109,5 +109,6 @@ general:
   - { name: "First reads (none now)", kind: first_read_pages, status: built }
   - { name: NASA nuclear news (fission power), kind: nasa_nuclear_news, status: built, note: "NASA's own announcements" }
   - { name: PR Newswire energy and utilities releases, kind: wire_press, status: built, note: "companies whose own sites refuse our bot" }
+  - { name: "Lead finder (a lead's own website, checked)", kind: lead_finder, status: built, issue: 752, note: "first-party site: given, About paragraph, EDGAR, then search" }
   - { name: "Trade press feeds (WNN, ANS, NucNet, NEI magazine)", kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
   - { name: Daily lead researcher, status: planned, issue: 278, note: "leads for Data Quality, not facts" }
