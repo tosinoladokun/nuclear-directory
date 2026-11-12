@@ -4,10 +4,10 @@ load Rails.root.join("db/data/20261112120000_dq_rejects_repair.rb")
 # Data Quality, 12 Nov 2026: three wrong company values back to their sources, and a non-nuclear news item off.
 class DqRejectsRepairTest < ActiveSupport::TestCase
   setup do
-    org = ->(name, **attrs) { Organization.create!(name:, verification_status: "verified", verified_by: "human:tosin", **attrs) }
-    @framatome = org.("Framatome", hq_city: "Lynchburg", hq_state: "VA", country_code: "FR")
-    @bwxt = org.("BWX Technologies", legal_name: "BWX Technologies. Inc.")
-    @cti = org.("Container Technologies Industries", legal_name: "Inc.")
+    org = ->(id, name, **attrs) { Organization.find_by(id:)&.delete; Organization.create!(id:, name:, verification_status: "verified", verified_by: "human:tosin", **attrs) }
+    @framatome = org.(13, "Framatome", hq_city: "Lynchburg", hq_state: "VA", country_code: "FR")
+    @bwxt = org.(98, "BWXT", legal_name: "BWX Technologies. Inc.")
+    @cti = org.(96, "Container Technologies Industries", legal_name: "Container Technologies Industries, Inc.")
     @news = NewsItem.create!(id: DqRejectsRepair::NEWS_ID, url: "https://vistra.example/interns", title: DqRejectsRepair::NEWS_TITLE,
       published_on: Date.new(2026, 11, 1), publisher: "Vistra", verification_status: "verified", verified_by: "human:tosin", verified_at: Time.current)
   end
