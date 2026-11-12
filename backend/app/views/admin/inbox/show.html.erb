@@ -84,11 +84,13 @@
               <summary class="type-small">Why, and the source</summary>
               <div class="nd-fold__body nd-stack">
                 <blockquote class="nd-quote m-0">“<%= item.quote %>”</blockquote>
-                <%# Each field from its own source (#760), created with it. %>
+                <%# What else goes with this Create: each field from its own source (#760), and the company's other checked
+                    claims, such as its website from its own page (one Create per company, 11 Nov). %>
                 <% if key == "new_record" %>
-                  <% DataQuality::FieldEvidence.fields_of(item.candidate_id).includes(:source).each do |field| %>
-                    <% values = field.payload.slice(*DataQuality::FieldEvidence::FIELDS) %>
-                    <div class="nd-stack" id="field-claim-<%= field.id %>">
+                  <% Candidate.where(id: entry.copy_ids).includes(:source).order(:id).reject { |c| c.payload.except(*DataQuality::FieldEvidence::KEYS) == item.payload.to_h }.each do |field| %>
+                    <% values = field.payload.except("name", "aliases", *DataQuality::FieldEvidence::KEYS) %>
+                    <% next if values.empty? %>
+                    <div class="nd-stack" id="<%= field.payload["field_of"] ? "field-claim" : "also-claim" %>-<%= field.id %>">
                       <p class="type-small m-0"><strong><%= values.map { |name, value| "#{DataQuality::Claim::LABELS.fetch(name, name.humanize).upcase_first}: #{value}" }.join(", ") %></strong>
                         <% if (url = safe_url(field.source&.url)) %> · <%= link_to source_host(url), url, class: "nd-link", target: "_blank", rel: "noopener" %><% end %></p>
                       <blockquote class="nd-quote m-0">“<%= field.quote %>”</blockquote>
