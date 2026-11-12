@@ -37,9 +37,10 @@ class OwnerInbox
       grouped = mine.reject { |candidate| field_ids.include?(candidate.id) }
         .group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
       # Only the fields checked against their own pages go with the Create; the rest wait (Review.approve_one rechecks).
-      grouped.transform_values do |copies|
+      grouped = grouped.transform_values do |copies|
         copies + copies.flat_map { |copy| fields.fetch(copy.id, []).select { |f| DataQuality::FieldEvidence.ready?(f, copy.subject_id) } }
       end
+      one_create_per_company(grouped)
     end
   end
 
@@ -156,6 +157,28 @@ class OwnerInbox
   end
 
   private
+    # A pending company is one Create (Data Quality, 11 Nov): its other claims (a website, a description, a
+    # role from its own page) go with that row, not as Creates of their own. Those checked (the checker agreed
+    # or Data Quality approved, quote still in its page, not contradicted) ride along; the rest wait.
+    def one_create_per_company(grouped)
+      creates = grouped.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
+      creates.group_by { |_, copies| copies.first.subject_id }.each_value do |rows|
+        next if rows.size < 2
+
+        primary = rows.find { |_, copies| copies.any?(&:proposed_subject) } || rows.min_by { |_, copies| copies.map(&:id).min }
+        (rows - [ primary ]).each do |key, copies|
+          grouped.delete(key)
+          primary.last.concat(copies.select { |claim| rides_along?(claim, primary.last.first.subject_id) })
+        end
+      end
+      grouped
+    end
+
+    def rides_along?(claim, company_id)
+      claim.subject_id == company_id && (claim.ai_recommendation == "recommend_publish" || claim.dq_recommendation == "approve") &&
+        !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
+    end
+
     # Today's share of new companies, best-sourced first (most pages naming it), then newest; plants all.
     def todays_share(new_records)
       subject = company_groups.to_h { |_, copies| [ copies.first.id, copies.first.subject_id ] }
