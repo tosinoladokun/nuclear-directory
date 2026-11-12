@@ -15,8 +15,9 @@
 class DataQuality::Plugins::Newsletters < DataQuality::Plugin
   API = "https://api.resend.com/emails/receiving".freeze
   INBOX = "bot@mail.nuclear-directory.org".freeze
-  # Sender domains of the newsletters bot@ is subscribed to. Never Neutron Bytes: its robots.txt blocks AI crawlers, so its mail is never read either (PM, 10 Nov).
-  SENDERS = %w[smartbrief.com ans.org nucnet.org neimagazine.com world-nuclear-news.org world-nuclear.org exchangemonitor.com].freeze
+  # Sender domains of the newsletters bot@ is subscribed to (Nuclear Engineering International mails from businesstrademediainternational.com). Never Neutron Bytes: its robots.txt blocks AI crawlers, so its mail is never read either (PM, 10 Nov).
+  # Tosin's final set (11 Nov): ANS Nuclear News Daily, World Nuclear News, NEI magazine.
+  SENDERS = %w[ans.org world-nuclear-news.org world-nuclear.org neimagazine.com businesstrademediainternational.com].freeze
   class InboxError < StandardError; end
   PER_RUN = 20
   # Resend allows 2 requests a second: a pause between calls, one retry on 429.
@@ -57,12 +58,13 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       email = api_get("#{API}/#{mail['id']}") or raise InboxError, "Resend: couldn't read received email #{mail['id']}"
       # DMARC pass: the From domain itself is authenticated (aligned SPF or DKIM),
       # not just some domain's signature; bot@ is a public address (Infra).
-      valid = email.dig("authentication", "dmarc") == "pass" && email["html"].present?
+      body = email["html"].presence || plain_html(email["text"])
+      valid = email.dig("authentication", "dmarc") == "pass" && body.present?
       # A rejected email is recorded too, so it never takes a later run's place.
       Source.create!(url: url_for(mail["id"]), source_kind:, crawl_status: valid ? "ok" : "needs_human", fetched_at: Time.current,
         http_status: 200, title: "#{sender_domain(mail['from'])}: #{email['subject'].to_s.gsub(EMAIL, '[email]').truncate(150)}",
         status_reason: (valid ? nil : "DMARC didn't pass, or no HTML"),
-        **(valid ? stored(email["html"]) : {}))
+        **sender_attributes(mail), **(valid ? stored(body) : {}))
       stored += 1 if valid
     end
     { "emails" => stored, "opened" => opened }
@@ -79,15 +81,19 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
     # The model sees the email's links too, so it can pick a company's own site.
     input = "#{text.truncate(50_000)}\n\nLinks in the email:\n#{urls.uniq.first(300).join("\n")}"
     found = llm.structured(role: :extract, schema:, schema_name: "newsletters", crawl_run: run, reasoning_effort: "low",
-      messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: input } ]).data
+      messages: [ { role: "system", content: instructions }, { role: "user", content: input } ]).data
     id = source.url.split("/").last
+    added, listed = [], []
     Array(found["companies"]).each do |company|
       name, quote = company["name"].to_s.squish, company["quote"].to_s.squish
-      next if name.blank? || !quote.include?(name) || !text.include?(quote) || @directory.organization(name:)
+      next if name.blank? || !quote.include?(name) || !text.include?(quote)
+      next listed << name if @directory.organization(name:)
 
-      @directory.keep_lead(name:, key: "newsletter:#{id}:#{name.downcase.squish}",
-        label: "Newsletter: #{source.title.to_s.truncate(120)}", url: own_site(company["website"], hosts))
+      @directory.keep_lead(name:, key: "#{lead_key}:#{id}:#{name.downcase.squish}",
+        label: "#{lead_label}: #{source.title.to_s.truncate(120)}", url: own_site(company["website"], hosts))
+      added << name
     end
+    after_leads(source, added.uniq, listed.uniq)
     []
   end
 
@@ -98,6 +104,14 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
 
   private
     def llm = @llm ||= DataQuality::OpenRouter::Client.new
+
+    # What a subclass (lead forwards, #757) changes.
+    def inbox = INBOX
+    def instructions = INSTRUCTIONS
+    def lead_key = "newsletter"
+    def lead_label = "Newsletter"
+    def after_leads(_source, _added, _listed) = nil
+    def sender_attributes(_mail) = {}
 
     # What's kept of an email (DQ, 10 Nov: the repo is public): no images
     # (tracking pixels), no unsubscribe, preferences or "you're receiving
@@ -114,8 +128,11 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
         uri = (URI.parse(link["href"].to_s.strip) rescue nil)
         if uri.is_a?(URI::HTTP) && uri.host.present? && !uri.host.match?(TRACKER)
           link["href"] = "#{uri.scheme}://#{uri.host}#{uri.path}"
+          # A bare URL as the link's text is cleaned too (a text-only email's links).
+          link.content = link["href"] if link.text.strip.match?(%r{\Ahttps?://}i)
         else
           link.remove_attribute("href")
+          link.content = "" if link.text.strip.match?(%r{\Ahttps?://}i)
         end
         link.attributes.each_key { |name| link.remove_attribute(name) unless name == "href" }
       end
@@ -126,6 +143,13 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       urls = doc.css("a[href]").map { |link| link["href"] }.grep(%r{\Ahttps?://}i).uniq
       text = "#{visible}#{LINKS}#{urls.join("\n")}"
       { content_text: text, content_sha256: Digest::SHA256.hexdigest(text) }
+    end
+
+    # A text-only email as HTML, its URLs as links, so they're cleaned like any other (Copilot).
+    def plain_html(text)
+      return if text.blank?
+
+      ERB::Util.html_escape(text).gsub(%r{https?://[^\s<>"']+}) { |url| %(<a href="#{url}">#{url}</a>) }.gsub("\n", "<br>")
     end
 
     def url_for(id) = "https://resend.com/emails/receiving/#{id}"
@@ -145,7 +169,7 @@ class DataQuality::Plugins::Newsletters < DataQuality::Plugin
       MAX_PAGES.times do
         page = api_get("#{API}?limit=100#{"&after=#{after}" if after}") or raise InboxError, "Resend: couldn't list received emails"
         data = Array(page["data"])
-        mails.concat(data.select { |mail| Array(mail["to"]).map(&:downcase).include?(INBOX) && sender?(mail["from"]) })
+        mails.concat(data.select { |mail| Array(mail["to"]).map(&:downcase).include?(inbox) && sender?(mail["from"]) })
         break unless page["has_more"] && data.any?
 
         after = data.last["id"]

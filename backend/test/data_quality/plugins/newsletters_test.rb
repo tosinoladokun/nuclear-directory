@@ -18,11 +18,11 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
 
   setup do
     Organization.create!(name: "Acme Fission", verification_status: "verified", verified_by: "human:tosin").aliases.find_or_create_by!(alias: "Acme Fission")
-    @mail = { "id" => "m1", "to" => [ Plugin::INBOX ], "from" => "NEI SmartBrief <nei@smartbrief.com>", "subject" => "Today in nuclear" }
+    @mail = { "id" => "m1", "to" => [ Plugin::INBOX ], "from" => "ANS Nuclear News Daily <news@ans.org>", "subject" => "Today in nuclear" }
     @answers = {
       "#{Plugin::API}?limit=100" => { "has_more" => true, "data" => [ @mail, @mail.merge("id" => "m2", "from" => "spam@example.com"),
         @mail.merge("id" => "m3", "to" => [ "tosin@mail.nuclear-directory.org" ]),
-        @mail.merge("id" => "m4", "from" => "\"News@smartbrief.com alert\" <attacker@example.net>") ] },
+        @mail.merge("id" => "m4", "from" => "\"news@ans.org alert\" <attacker@example.net>") ] },
       "#{Plugin::API}?limit=100&after=m4" => { "has_more" => false, "data" => [ @mail.merge("id" => "m5") ] },
       "#{Plugin::API}/m5" => @mail.merge("id" => "m5", "html" => "<p>x</p>", "authentication" => { "dkim" => "pass", "dmarc" => "fail" }),
       "#{Plugin::API}/m1" => @mail.merge("html" => HTML, "authentication" => { "dkim" => "pass", "dmarc" => "pass" })
@@ -44,7 +44,7 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     assert_includes kept, "https://www.freshfission.com/news"
     assert_includes kept, "Fresh Fission picked a site in Idaho"
     refute_includes kept, "<", "no markup kept"
-    assert_equal "smartbrief.com: Today in nuclear", Source.find_by!(url: "https://resend.com/emails/receiving/m1").title, "the sender's domain, not its full From header"
+    assert_equal "ans.org: Today in nuclear", Source.find_by!(url: "https://resend.com/emails/receiving/m1").title, "the sender's domain, not its full From header"
     assert Source.find_by!(url: "https://resend.com/emails/receiving/m5").crawl_needs_human?, "DMARC failed (a spoof with its own DKIM): recorded, not stored"
     assert_equal({ "emails" => 0, "opened" => 0 }, plugin.crawl(nil))
   end
@@ -88,5 +88,13 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     assert_equal 1, plugin({}, http:).crawl(nil)["emails"]
     assert_includes @slept, 2.0, "Retry-After honoured"
     assert(@slept.count(Plugin::PAUSE) >= 2, "a pause between calls")
+  end
+
+  test "only the final set's senders: not SmartBrief or ExchangeMonitor (11 Nov)" do
+    sender = ->(from) { plugin.send(:sender?, from) }
+    assert sender.("update@operational.businesstrademediainternational.com"), "NEI magazine"
+    assert sender.("news@world-nuclear-news.org")
+    refute sender.("nei@smartbrief.com")
+    refute sender.("weekly@exchangemonitor.com")
   end
 end
