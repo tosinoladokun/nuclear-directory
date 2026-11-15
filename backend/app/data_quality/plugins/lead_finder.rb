@@ -56,6 +56,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   def crawl(_run) = {}
 
   # input: what Tosin typed (#752), read in place of the lead's name.
+  # Leads a person put in (Tosin's Add a lead or list, DQ's Leads.md): their
+  # company may be foreign with US nuclear operations (Cameco, Framatome,
+  # Orano; PM, 11 Nov), so its home page needn't show a US address.
+  PERSON_KEYS = /\A(?:admin:|list:|leads-md:)/
+
   def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
     unless reserve(FINDS, FINDS_PER_DAY)
@@ -63,6 +68,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       return outcome(:retry, name: input.presence || lead.name, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", found: {})
     end
     lead = lead.with(name: input) if input.present?
+    @us_shown_elsewhere = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
     found = {}
     name, links = read_input(lead)
     # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
@@ -258,7 +264,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       text = visible_text(page)
       return [ :not_named, page, "The page doesn't name #{name}" ] unless text.downcase.include?(name.downcase)
       return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear?(text, name)
-      return [ :not_us, page, "The page shows no US address or 'United States'" ] unless text.match?(US)
+      return [ :not_us, page, "The page shows no US address or 'United States'" ] unless text.match?(US) || @us_shown_elsewhere
 
       [ :ok, page, nil ]
     end
