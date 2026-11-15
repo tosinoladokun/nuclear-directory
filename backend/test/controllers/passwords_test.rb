@@ -69,4 +69,26 @@ class PasswordsTest < ActionDispatch::IntegrationTest
     post passwords_path, params: { email_address: "nobody@example.com" }
     assert_match "Too many attempts", flash[:alert]
   end
+
+  test "a link is checked again under the account's lock: the second of two uses fails, and the first password stays" do
+    token = @user.password_reset_token
+    assert_equal :done, User.reset_password(token, { password: "first-long-password", password_confirmation: "first-long-password" })
+    assert_equal :expired, User.reset_password(token, { password: "second-long-password", password_confirmation: "second-long-password" })
+    assert @user.reload.authenticate("first-long-password")
+  end
+
+  test "asking for links and trying new passwords are counted apart" do
+    5.times { post passwords_path, params: { email_address: "nobody@example.com" } }
+    token = @user.password_reset_token
+    put password_path(token), params: { password: "reset-long-password", password_confirmation: "reset-long-password" }
+    assert_match "Password changed", flash[:notice]
+  end
+
+  test "changing the password allows a few tries of the current one per account" do
+    sign_in_as @user
+    5.times { patch admin_password_path, params: { current_password: "wrong", password: "a-new-long-password", password_confirmation: "a-new-long-password" } }
+    patch admin_password_path, params: { current_password: "correct horse battery staple", password: "a-new-long-password", password_confirmation: "a-new-long-password" }
+    assert_match "Too many attempts", flash[:alert]
+    assert_not @user.reload.authenticate("a-new-long-password")
+  end
 end

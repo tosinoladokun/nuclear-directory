@@ -4,9 +4,9 @@ class PasswordsController < ApplicationController
   include Authentication
   allow_unauthenticated_access
   RATE_LIMIT_STORE = SessionsController::RATE_LIMIT_STORE
-  rate_limit to: 5, within: 15.minutes, only: :create, store: RATE_LIMIT_STORE,
+  rate_limit to: 5, within: 15.minutes, only: :create, name: "reset-request", store: RATE_LIMIT_STORE,
     with: -> { redirect_to new_password_path, alert: "Too many attempts. Try again in a few minutes." }
-  rate_limit to: 10, within: 15.minutes, only: :update, store: RATE_LIMIT_STORE,
+  rate_limit to: 10, within: 15.minutes, only: :update, name: "reset-update", store: RATE_LIMIT_STORE,
     with: -> { redirect_to new_password_path, alert: "Too many attempts. Try again in a few minutes." }
   before_action :set_user_by_token, only: %i[edit update]
   layout "admin"
@@ -25,11 +25,10 @@ class PasswordsController < ApplicationController
   end
 
   def update
-    if params[:password].present? && @user.update(params.permit(:password, :password_confirmation))
-      @user.sessions.destroy_all
-      redirect_to new_session_path, notice: "Password changed. Sign in with the new one."
-    else
-      redirect_to edit_password_path(params[:token]), alert: @user.errors.full_messages.to_sentence.presence || "Type a new password."
+    case User.reset_password(params[:token], params.permit(:password, :password_confirmation))
+    in :done then redirect_to new_session_path, notice: "Password changed. Sign in with the new one."
+    in :expired then redirect_to new_password_path, alert: "That link has expired or was already used. Ask for a new one."
+    in errors then redirect_to edit_password_path(params[:token]), alert: errors.presence || "Type a new password."
     end
   end
 
