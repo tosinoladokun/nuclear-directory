@@ -288,4 +288,9 @@ class DataQuality::Plugins::EiaPlantsTest < ActiveSupport::TestCase
     assert_match "No row on the Plant sheet is a nuclear plant", source.reload.status_reason
     assert_equal good, source.content_text
   end
+
+  test "the daily crawl reads it, right after EIA-860M (#319)" do
+    kinds = DataQuality::DailyCrawlJob::SOURCE_KINDS
+    assert_equal kinds.index("eia_generators") + 1, kinds.index("eia_plants")
+  end
 end
