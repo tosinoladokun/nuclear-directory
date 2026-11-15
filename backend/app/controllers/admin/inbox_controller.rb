@@ -71,7 +71,8 @@ class Admin::InboxController < Admin::BaseController
     results = DataQuality::Recommendations.accept(items, by: actor, first_hand: true)
     # A created company's field claims (#760) go with it, each checked again.
     created = items.map(&:candidate_id) & Candidate.where(id: items.map(&:candidate_id), status: "merged").pluck(:id)
-    field_ids = DataQuality::FieldEvidence.fields_of(created).where.not(subject_id: nil).pluck(:id) # each rechecked in approve
+    field_ids = DataQuality::FieldEvidence.fields_of(created).where.not(subject_id: nil)
+      .where("candidates.dq_recommendation IS DISTINCT FROM 'reject'").pluck(:id) # each rechecked in approve
     results += DataQuality::Review.approve(field_ids, by: actor, reason: "With its Create") if field_ids.any?
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Done: #{helpers.pluralize(done.size, 'item')} live." if done.any?

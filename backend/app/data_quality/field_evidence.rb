@@ -105,6 +105,10 @@ module DataQuality::FieldEvidence
       !DataQuality::Review.contradicted?(field) && quote_in_source?(field)
   end
 
+  # Goes with its company's Create (shown on the row, and in Yes to all): ready, and not one Data Quality said no to.
+  # A person can still approve such a field on its own (ready? alone).
+  def self.rides_with_create?(field, company_id) = ready?(field, company_id) && !DataQuality::Recommendations.says_no?(field)
+
   def self.quote_in_source?(field)
     check = DataQuality::Review.in_source(field) || ->(quote) { field.source.content_text.to_s.include?(quote.to_s) }
     field.quote.present? && check.call(field.quote)

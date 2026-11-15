@@ -76,6 +76,9 @@
                 <p class="type-small text-ink-muted m-0">“<%= item.quote %>”</p>
               <% end %>
             <% end %>
+            <% if (no = Candidate.where(id: entry.ids, dq_recommendation: "reject").pluck(:dq_reason)).any? %>
+              <p class="type-small m-0 text-critical" id="dq-no-<%= item.candidate_id %>"><strong>Data Quality says no:</strong> <%= no.compact.first || "no reason given" %></p>
+            <% end %>
             <p class="type-small m-0">
               <% if (url = safe_url(item.source&.url)) %><%= link_to url, class: "nd-link whitespace-nowrap", target: "_blank", rel: "noopener" do %><%= source_host(url) %> <%= icon("arrow-square-out", size: 12) %><% end %> · <% end %>
               <span class="nd-num">#<%= item.candidate_id %></span>
@@ -107,7 +110,9 @@
           </div>
           <div class="nd-wait__actions nd-inbox__buttons type-ui">
             <% yes, no = key == "change" ? [ "Approve the change", nil ] : [ key == "new_record" ? "Create" : "Approve", "No" ] %>
-            <%= button_to yes, admin_inbox_decide_path(item.candidate_id, "yes"), params: { ids: entry.ids }, class: "nd-btn nd-btn--primary" %>
+            <% said_no = Candidate.where(id: entry.ids, dq_recommendation: "reject").exists? %>
+            <%= button_to yes, admin_inbox_decide_path(item.candidate_id, "yes"), params: { ids: entry.ids }, class: "nd-btn nd-btn--primary",
+              data: (said_no ? { turbo_confirm: "Data Quality says no to this. #{yes} anyway?" } : {}) %>
             <% if key == "change" %>
               <%= button_to admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids, kind: "change" }, class: "nd-btn nd-btn--outline" do %><span class="nd-inbox__long">Keep what I decided</span><span class="nd-inbox__short">Keep mine</span><% end %>
             <% else %>
