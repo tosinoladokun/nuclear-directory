@@ -2,6 +2,8 @@
 <% sections = @inbox.sections %>
 <% total = @inbox.size %>
 <% checked = @inbox.checked %>
+<%# Data Quality's no on any claim shown (#777), read once for the page: id => reason. %>
+<% said_no = Candidate.where(id: sections.values.flatten.flat_map(&:ids), dq_recommendation: "reject").pluck(:id, :dq_reason).to_h %>
 <% headings = { "new_record" => "New companies and plants", "new_fact" => "New facts and deals", "change" => "Changes to something you decided" } %>
 <%# One checked item needs no batch button: its own Yes does it (Design). %>
 <% batch_after = (%w[new_record new_fact change].find { |key| sections[key].any? { |entry| checked.include?(entry) } } if checked.size > 1) %>
@@ -64,7 +66,7 @@
         <% item = entry.item %>
         <li class="nd-wait nd-inbox__item" id="inbox-item-<%= item.candidate_id %>">
           <%# Data Quality said no: decided on its own row only (DQ, 12 Nov). %>
-          <% if Candidate.where(id: entry.ids, dq_recommendation: "reject").exists? %>
+          <% if entry.ids.any? { |id| said_no.key?(id) } %>
             <span class="nd-check" aria-hidden="true"></span>
           <% else %>
             <input type="checkbox" class="nd-check" name="selected[]" value="claim:<%= entry.ids.join(",") %>" form="inbox-selected" data-section="<%= key %>"
@@ -90,7 +92,7 @@
                 <p class="type-small text-ink-muted m-0">“<%= item.quote %>”</p>
               <% end %>
             <% end %>
-            <% if (no = Candidate.where(id: entry.ids, dq_recommendation: "reject").pluck(:dq_reason)).any? %>
+            <% if (no = entry.ids.select { |id| said_no.key?(id) }.map { |id| said_no[id] }).any? %>
               <p class="type-small m-0 text-critical" id="dq-no-<%= item.candidate_id %>"><strong>Data Quality says no:</strong> <%= no.compact.first || "no reason given" %></p>
             <% end %>
             <p class="type-small m-0">
@@ -124,9 +126,9 @@
           </div>
           <div class="nd-wait__actions nd-inbox__buttons type-ui">
             <% yes, no = key == "change" ? [ "Approve the change", nil ] : [ key == "new_record" ? "Create" : "Approve", "No" ] %>
-            <% said_no = Candidate.where(id: entry.ids, dq_recommendation: "reject").exists? %>
+            <% row_said_no = entry.ids.any? { |id| said_no.key?(id) } %>
             <%= button_to yes, admin_inbox_decide_path(item.candidate_id, "yes"), params: { ids: entry.ids }, class: "nd-btn nd-btn--primary",
-              data: (said_no ? { turbo_confirm: "Data Quality says no to this. #{yes} anyway?" } : {}) %>
+              data: (row_said_no ? { turbo_confirm: "Data Quality says no to this. #{yes} anyway?" } : {}) %>
             <% if key == "change" %>
               <%= button_to admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids, kind: "change" }, class: "nd-btn nd-btn--outline" do %><span class="nd-inbox__long">Keep what I decided</span><span class="nd-inbox__short">Keep mine</span><% end %>
             <% else %>
