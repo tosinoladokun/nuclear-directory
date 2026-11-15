@@ -35,4 +35,19 @@ class DataQuality::LinkResolutionTest < ActiveSupport::TestCase
     end
     assert_equal [ "matched", link.id ], [ claim.reload.status, claim.subject_id ], claim.notes
   end
+
+  test "a unit's ownership share is never matched to its site's owns link" do
+    site = Facility.create!(name: "Zephyr Point", facility_type: "power_reactor", verification_status: "verified", verified_by: "human:tosin")
+    Facility.create!(name: "Zephyr Point 1", facility_type: "power_reactor", parent: site, nrc_docket: "05099001", verification_status: "verified", verified_by: "human:tosin")
+    company = Organization.find(Directory::FactWriter.write(:organization, { name: "Zephyr Nuclear Co" }).id)
+    link = FacilityRelationship.create!(organization: company, facility: site, relationship_type: "owns", ownership_pct: 50)
+    link.verify!(by: "human:tosin")
+    claim = Candidate.create!(source: @source, kind: "facility_relationship", quote: "Zephyr Point 1 | Zephyr Nuclear Co | 30%", payload: {
+      "organization" => { "name" => "Zephyr Nuclear Co" }, "facility" => { "name" => "Zephyr Point 1", "nrc_docket" => "05099001" },
+      "relationship_type" => "owns", "ownership_pct" => 30 })
+
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_not_equal link.id, claim.reload.subject_id, "the unit's 30% is its own link, not the site's 50%"
+    assert_equal 50, link.reload.ownership_pct
+  end
 end

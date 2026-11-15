@@ -584,8 +584,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
 
     # A claim naming a unit whose decided link is on the unit's site (#244): that site's link with the same
     # company and verb, so it's confirmed against it instead of proposed as a new unit-level link. Reads only.
+    # Not ownership: a unit's share is its own (EIA owners give each unit its share), never the site's.
     def site_link(kind, attributes)
-      return unless kind == "facility_relationship" && attributes[:facility_id]
+      return unless kind == "facility_relationship" && attributes[:facility_id] && attributes[:relationship_type] != "owns"
 
       unit = directory.facility(id: attributes[:facility_id])
       directory.existing_fact(kind, attributes.merge(facility_id: unit.parent_id)) if unit&.parent_id
