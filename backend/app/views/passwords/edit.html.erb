@@ -1,0 +1,8 @@
+<% content_for :title, "New password" %>
+<div class="nd-signin">
+  <h1 class="type-title-md m-0">New password</h1>
+  <%= form_with url: password_path(params[:token]), method: :put, class: "nd-stack" do |form| %>
+    <%= render "admin/passwords/new_fields", form: %>
+    <div><%= form.submit "Save password", class: "nd-btn nd-btn--primary" %></div>
+  <% end %>
+</div>

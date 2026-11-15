@@ -51,7 +51,11 @@ Rails.application.routes.draw do
   # The admin (#86): one account, signed in at /admin/session/sign-in. Every
   # decision goes through DataQuality::Review.
   resource :session, only: %i[new create destroy], path: "admin/session", path_names: { new: "sign-in" }
+  # Forgot password (#783): a one-time, 15-minute link by email.
+  resources :passwords, only: %i[new create edit update], param: :token, path: "admin/session/password"
   namespace :admin do
+    # Change your password (#783).
+    resource :password, only: %i[edit update]
     # Admin v2 (#201): Overview, Sources, Checks (where claims and pending
     # facts are approved) and Correction requests. The actions underneath
     # are today's: candidates, pending facts, corrections, facts.

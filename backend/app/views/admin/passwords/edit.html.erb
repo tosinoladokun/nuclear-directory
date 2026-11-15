@@ -1,0 +1,13 @@
+<% content_for :title, "Change password" %>
+<div class="nd-stack max-w-prose">
+  <h1 class="type-admin-h1 m-0">Change password</h1>
+  <%= form_with url: admin_password_path, method: :patch, class: "nd-stack" do |form| %>
+    <div class="nd-field">
+      <%= form.label :current_password, "Current password", class: "type-body-strong" %>
+      <%= form.password_field :current_password, required: true, autocomplete: "current-password", maxlength: 72, class: "nd-input type-input" %>
+    </div>
+    <%= render "admin/passwords/new_fields", form: %>
+    <div><%= form.submit "Change password", class: "nd-btn nd-btn--primary" %></div>
+  <% end %>
+  <p class="type-small text-ink-muted m-0">Changing it signs you out everywhere else.</p>
+</div>
