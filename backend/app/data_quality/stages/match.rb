@@ -362,7 +362,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # A link a human rejected or unpublished, or one whose company or plant
       # was, isn't written to. The same claim again is confirmed (it stays as
       # decided); anything else goes to review (#240).
-      existing = directory.existing_fact(candidate.kind, attributes)
+      existing = directory.existing_fact(candidate.kind, attributes) || site_link(candidate.kind, attributes)
       if existing && (existing.closed? || closed_end)
         reason = closed_end&.reason || "#{existing.name.upcase_first} was #{existing.decision}. The same thing again?"
         return settle_closed(candidate, existing, reason)
@@ -580,6 +580,15 @@ class DataQuality::Stages::Match < DataQuality::Stage
       return Review.new("its website is claimed for several pending companies: #{pending.map(&:name).sort.join(' and ')}. Which one?") if pending.many?
 
       nil
+    end
+
+    # A claim naming a unit whose decided link is on the unit's site (#244): that site's link with the same
+    # company and verb, so it's confirmed against it instead of proposed as a new unit-level link. Reads only.
+    def site_link(kind, attributes)
+      return unless kind == "facility_relationship" && attributes[:facility_id]
+
+      unit = directory.facility(id: attributes[:facility_id])
+      directory.existing_fact(kind, attributes.merge(facility_id: unit.parent_id)) if unit&.parent_id
     end
 
     def resolve_facility(payload)

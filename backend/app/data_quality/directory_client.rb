@@ -571,14 +571,33 @@ class DataQuality::DirectoryClient
               (facility(eia_plant_id: named["eia_plant_id"]) if named["eia_plant_id"].present?) ||
               (facility(name: named["name"]) if named["name"].present?)
           else
-            # Government IDs first (the SEC's CIK, EIA's utility ID), as Match and FactWriter find a company.
-            (organization(sec_cik: named["sec_cik"]) if named["sec_cik"].present?) ||
-              (organization(eia_utility_id: named["eia_utility_id"]) if named["eia_utility_id"].present?) ||
-              (organization(name: named["name"]) if named["name"].present?) ||
-              (organization(domain: named["domain"]) if named["domain"].present?)
+            link_organization(named)
           end
         ids[:"#{key}_id"] = found&.id
       end
+    end
+
+    # A link's company as Match finds it (#244), so a link Match matched by brand or website is found again here:
+    # government IDs first (the SEC's CIK, EIA's utility ID), then its name or other names, its domain or
+    # website, and a brand that is exactly one company. Anything ambiguous (name and domain disagree, a shared
+    # brand) finds nothing, which reads as a difference, never a wrong confirmation (#226).
+    def link_organization(named)
+      by_id = (organization(sec_cik: named["sec_cik"]) if named["sec_cik"].present?) ||
+        (organization(eia_utility_id: named["eia_utility_id"]) if named["eia_utility_id"].present?)
+      return by_id if by_id
+
+      name = named["name"].presence
+      domain = named.key?("domain") ? named["domain"].presence : named["website"].presence
+      by_name = (organization(name:) if name) || Array(named["aliases"]).compact_blank.lazy.filter_map { |other| organization(name: other) }.first
+      by_domain = organization(domain:) if domain
+      return if by_name && by_domain && by_name.id != by_domain.id
+      return by_name if by_name
+
+      brand = name ? same_brand_organizations(name) : []
+      return if brand.many? || (by_domain && brand.one? && brand.first.id != by_domain.id)
+      return if by_domain && brand.empty? && (inferred = brand_name(name.to_s)) && brand_key(inferred) != brand_key(by_domain.name)
+
+      by_domain || brand.first
     end
 
     # Resolved lazily so the module has no load-time dependency on the directory.
