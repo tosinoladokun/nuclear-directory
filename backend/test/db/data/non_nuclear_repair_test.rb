@@ -13,15 +13,15 @@ class NonNuclearRepairTest < ActiveSupport::TestCase
       Organization.find_by(id: pin[:company_id])&.destroy!
       company = Organization.create!(id: pin[:company_id], name: pin[:company], verification_status: "pending")
       Relationship.find_by(id:)&.destroy!
-      link = Relationship.create!(id:, from_organization: @doe, to_organization: company, relationship_type: "funds", verification_status: "verified", verified_by: BY)
-      DealTerm.create!(id: pin[:term_id], link:, term_type: "award", external_id: "DE-#{id}", amount_usd: 1_000_000, starts_on: Date.new(2024, 9, 1), verification_status: "verified", verified_by: BY)
+      link = Relationship.create!(id:, from_organization: @doe, to_organization: company, relationship_type: "funds", verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 12))
+      DealTerm.create!(id: pin[:term_id], link:, term_type: "award", external_id: "DE-#{id}", amount_usd: 1_000_000, starts_on: Date.new(2024, 9, 1), verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 12))
       Evidence.find_by(id: pin[:evidence_id])&.destroy!
       Evidence.create!(id: pin[:evidence_id], subject: link, source: @page, quote: "award #{id}", found_by: "crawler")
       [ id, link ]
     end
     NewsItem.find_by(id: 37)&.destroy!
     @news = NewsItem.create!(id: 37, url: NonNuclearRepair::NEWS[:url], title: "Rubies on Mars?", headline: "Perseverance instruments study Mars\u2019s ancient rock record",
-      published_on: Date.new(2026, 11, 9), publisher: "NASA", verification_status: "verified", verified_by: BY, verified_at: Time.current)
+      published_on: Date.new(2026, 11, 9), publisher: "NASA", verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 12, 4, 22))
     @other = Relationship.create!(from_organization: @doe, to_organization: Organization.create!(name: "Deep Isolation"), relationship_type: "funds",
       verification_status: "verified", verified_by: BY)
   end
@@ -51,5 +51,11 @@ class NonNuclearRepairTest < ActiveSupport::TestCase
     @links[230].update_columns(to_organization_id: 269, verification_status: "rejected")
     error = assert_raises(RuntimeError) { run_it }
     assert_match "is rejected, not verified", error.message
+  end
+
+  test "a later decision that leaves a record published (taken off and put back) stops the step" do
+    @links[232].update_columns(verified_at: Time.utc(2026, 11, 16))
+    error = assert_raises(RuntimeError) { run_it }
+    assert_match "decided again", error.message
   end
 end

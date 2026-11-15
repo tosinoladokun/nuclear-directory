@@ -16,6 +16,9 @@ class NonNuclearRepair < DeployData::Migration
     232 => { company_id: 271, company: "Phoenix Tailings", term_id: 176, evidence_id: 3706 }
   }.freeze
   FUNDER = "U.S. Department of Energy"
+  # Data Quality's production read: each record was last decided before this (12 Nov). A decision after it,
+  # even one that leaves it published (an edit, or off and back on), stops the step (Copilot).
+  READ_AT = Time.utc(2026, 11, 15, 15)
 
   def up
     take_off("NewsItem", NEWS[:id]) do
@@ -52,6 +55,7 @@ class NonNuclearRepair < DeployData::Migration
       record = yield
       return record.tap { say("#{type} #{id} is already off") } if record.verification_status == "unpublished"
       raise "#{type} #{id} is #{record.verification_status}, not verified as on 15 Nov" unless record.verification_status == "verified"
+      raise "#{type} #{id} was decided again on #{record.verified_at}, after the 15 Nov read" if record.verified_at.nil? || record.verified_at >= READ_AT
 
       result = DataQuality::Review.unpublish(type:, id:, by: BY, reason: "#{REASON}; #{reason}")
       raise "taking off #{type} #{id} failed: #{Array(result.errors).join('; ')}" unless result.ok?
