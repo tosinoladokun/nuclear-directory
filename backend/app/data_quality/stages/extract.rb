@@ -9,12 +9,14 @@
 # itself sent to review. Candidates that moved on (matched, merged,
 # rejected, or sent to review by a later stage) are left alone.
 class DataQuality::Stages::Extract < DataQuality::Stage
+  BATCH = 25
   private
     def perform(run)
       stats = { "sources" => 0, "candidates" => 0, "unchanged" => 0, "empty" => 0 }
       deferred = deferred_new_sources
 
-      sources.crawl_ok.find_each do |source|
+      # Small batches: page bodies are large (Infra, 15 Nov: out of memory).
+      sources.crawl_ok.find_each(batch_size: BATCH) do |source|
         # Over the plug-in's nightly cap of new sources (#513): read on a later night.
         if deferred.include?(source.id)
           stats["deferred"] = stats.fetch("deferred", 0) + 1
