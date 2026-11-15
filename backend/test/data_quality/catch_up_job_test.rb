@@ -35,7 +35,7 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
     catch_up
 
     assert_equal DataQuality::Pipeline::ABANDONED, cut_off.reload.error
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
 
     clear_enqueued_jobs
     catch_up(at: NOW + 1.hour)
@@ -52,7 +52,7 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
     # NRC isn't fetched again today: it goes through data_quality:rerun, from its snapshot.
     assert_enqueued_jobs 1, only: DataQuality::DailyCrawlJob
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
   end
 
   test "a restart between stages, with no run left running, is caught up too" do
@@ -62,12 +62,13 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
     catch_up
 
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
   end
 
   test "a run started by hand is never taken for a cut-off daily crawl" do
     finished("nrc_reactor_list")
     finished("eia_generators")
+    finished("eia_plants")
     finished("usaspending_doe_awards")
     finished("usaspending_recipients")
     finished("nrc_decommissioning")
@@ -103,7 +104,7 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
     # Read at the same moment: the marks expire two days after they're written.
     travel_to(AT_3AM) do
-      %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters].each do |kind|
+      %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters].each do |kind|
         assert Job.marked?(:started, kind, AT_3AM.to_date), kind
         assert Job.marked?(:finished, kind, AT_3AM.to_date), "#{kind}: an ordinary failure counts as finished"
       end
@@ -142,7 +143,7 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
     catch_up(at: NOW + 1.hour)
 
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
   ensure
     failing.define_method(:perform_later, original)
   end
@@ -152,7 +153,7 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
     assert_no_enqueued_jobs only: DataQuality::DailyCrawlJob
 
     catch_up
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
   end
 
   test "yesterday's marks don't count for today" do
@@ -161,7 +162,7 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
     catch_up
 
-    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
+    assert_enqueued_with job: DataQuality::DailyCrawlJob, args: [ %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters] ]
   end
 
   test "runs hourly in production" do
@@ -170,5 +171,46 @@ class DataQuality::CatchUpJobTest < ActiveSupport::TestCase
 
     assert recurring.valid?, recurring.errors.full_messages.to_sentence
     assert_equal "DataQuality::CatchUpJob", task["class"]
+  end
+
+  test "claims left new for over an hour get their kind's match and verify queued, unless that kind is running" do
+    page = Source.create!(url: "https://example.com/stuck-hq", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    news = Source.create!(url: "https://www.nrc.gov/stuck-news", source_kind: "nrc_news", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    fresh = Source.create!(url: "https://example.com/fresh", source_kind: "company_pages", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    Candidate.create!(source: page, kind: "organization", status: "new", payload: { "name" => "Stuck Co" }, quote: "q", created_at: NOW - 2.days)
+    Candidate.create!(source: news, kind: "organization", status: "new", payload: { "name" => "Busy Co" }, quote: "q", created_at: NOW - 2.days)
+    Candidate.create!(source: fresh, kind: "organization", status: "new", payload: { "name" => "Just In" }, quote: "q", created_at: NOW - 10.minutes)
+    busy = CrawlRun.create!(source_kind: "nrc_news", stage: "match", status: "running", started_at: NOW - 1.minute)
+    other = hold_lock("nrc_news")
+
+    catch_up(at: NOW.change(hour: 1))
+    queued = enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }.map { |job| job["arguments"].first }
+    assert_equal [ "web_page" ], queued, "not a running kind, not one with only fresh claims"
+    assert busy.reload.running?, "its lock is held, so it's working"
+  ensure
+    other&.exec("SELECT pg_advisory_unlock_all()")
+    other&.close
+  end
+
+  test "claims on an index source (the SEC filing lists) are matched by the crawler that reads through it" do
+    sec = Source.create!(url: "https://www.sec.gov/files/company_tickers.json", source_kind: "sec_submissions", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    claim = Candidate.create!(source: sec, kind: "organization", status: "new", payload: { "name" => "Stuck Filer" }, quote: "q", created_at: NOW - 2.days)
+    catch_up(at: NOW.change(hour: 1))
+    assert_equal [ "sec_form_d" ], enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }.map { |job| job["arguments"].first }
+    assert_includes DataQuality::Stages::Match.new(plugin: DataQuality::Plugin.for("sec_form_d")).send(:candidates), claim
+  end
+
+  def hold_lock(kind)
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    PG.connect(host: config[:host], port: config[:port], dbname: ActiveRecord::Base.connection_db_config.database, user: config[:username], password: config[:password])
+      .tap { |other| other.exec("SELECT pg_advisory_lock(#{Zlib.crc32("data_quality:#{kind}")})") }
+  end
+
+  test "a kind whose claims a match run already saw (and left new) isn't queued again every hour" do
+    page = Source.create!(url: "https://example.com/seen", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "q")
+    Candidate.create!(source: page, kind: "organization", status: "new", payload: { "name" => "Seen Co" }, quote: "q", created_at: NOW - 2.days)
+    CrawlRun.create!(source_kind: "web_page", stage: "match", status: "succeeded", started_at: NOW - 1.day, finished_at: NOW - 1.day)
+    catch_up(at: NOW.change(hour: 1))
+    assert_empty enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }
   end
 end

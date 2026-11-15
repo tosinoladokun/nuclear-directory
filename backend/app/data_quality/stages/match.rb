@@ -552,8 +552,34 @@ class DataQuality::Stages::Match < DataQuality::Stage
       end
       return Found.new(by_domain, "domain") if by_domain
       return Found.new(brand.first, "brand, a legal-entity variant of its name") if brand.one?
+      # A pending company whose website isn't written yet (its claim waits
+      # for a person) is still found by that claim's website (PM, 11 Nov).
+      if domain && (pending = pending_by_claimed_domain(domain))
+        return pending if pending.is_a?(Review)
+        # The same guard as a stored domain: a per-plant name of another brand isn't this company (Copilot).
+        if (inferred = directory.brand_name(name.to_s)) && directory.brand_key(inferred) != directory.brand_key(pending.name)
+          return Review.new("name is a #{inferred} company but its website is claimed for pending #{pending.name}")
+        end
+        return Found.new(pending, "domain of its open website claim")
+      end
 
       similar(directory.similar_organizations(name.to_s), name)
+    end
+
+    # The pending company whose open organization claim has this domain
+    # (each claim's own domain rule: an explicit domain, nil included, wins
+    # over its website). Several pending owners: a review (Copilot).
+    def pending_by_claimed_domain(domain)
+      wanted = directory.domain_from(domain) or return
+      owners = Candidate.where(kind: "organization", subject_type: "Organization", status: %w[new matched needs_review])
+        .pluck(:subject_id, :payload)
+        .select { |_, payload| directory.domain_from(payload.key?("domain") ? payload["domain"] : payload["website"]) == wanted }
+        .map(&:first).uniq
+      pending = owners.filter_map { |id| directory.organization(id:) }.select { |org| org.verification_status == "pending" }
+      return pending.first if pending.one?
+      return Review.new("its website is claimed for several pending companies: #{pending.map(&:name).sort.join(' and ')}. Which one?") if pending.many?
+
+      nil
     end
 
     def resolve_facility(payload)

@@ -15,12 +15,13 @@ const INDEX_LIFETIME = 10 * 60 * 1000
 // there is no wait per keystroke. Until the index is there, or if it can't be fetched, typing loads /search as before.
 export default class extends Controller {
   static targets = ["input", "results", "frame", "status"]
-  static values = { url: String, indexUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, longPlaceholder: String, nameFull: { type: Number, default: 26 }, nameSmall: { type: Number, default: 31 } }
+  static values = { url: String, indexUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, tinyPlaceholder: String, longPlaceholder: String, nameFull: { type: Number, default: 26 }, nameSmall: { type: Number, default: 31 } }
 
   // Below 380px the full placeholder doesn't fit at 16px (iOS zooms below
   // 16px), so a shorter one takes its place (one-line law, #365). Both come
   // from the page, never from the field: after a reconnect (a Turbo snapshot)
-  // the field may already hold the short one.
+  // the field may already hold the short one. Below 360px even that is cut,
+  // so the tiny one ("Search") takes over.
   connect() {
     const entry = indexes[this.indexUrlValue]
     if (entry && (entry.failed || Date.now() - entry.at > INDEX_LIFETIME)) delete indexes[this.indexUrlValue]
@@ -29,14 +30,20 @@ export default class extends Controller {
     if (!this.shortPlaceholderValue || !this.longPlaceholderValue) return
     this.longPlaceholder = this.longPlaceholderValue
     this.narrow = window.matchMedia("(max-width: 379px)")
-    this.fitPlaceholder = () => { this.inputTarget.placeholder = this.narrow.matches ? this.shortPlaceholderValue : this.longPlaceholder }
+    this.tiny = window.matchMedia("(max-width: 359px)")
+    this.fitPlaceholder = () => {
+      const tiny = this.tiny.matches && this.tinyPlaceholderValue
+      this.inputTarget.placeholder = tiny || (this.narrow.matches ? this.shortPlaceholderValue : this.longPlaceholder)
+    }
     this.narrow.addEventListener("change", this.fitPlaceholder)
+    this.tiny.addEventListener("change", this.fitPlaceholder)
     this.fitPlaceholder()
   }
 
   disconnect() {
     clearTimeout(this.timer)
     this.narrow?.removeEventListener("change", this.fitPlaceholder)
+    this.tiny?.removeEventListener("change", this.fitPlaceholder)
   }
 
   search(event) {

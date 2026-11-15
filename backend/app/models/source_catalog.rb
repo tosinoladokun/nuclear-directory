@@ -59,6 +59,7 @@ class SourceCatalog
     "sec_ticker_ciks" => { name: "SEC ticker list (CIKs)", daily: true },
     "trade_press" => { name: "Trade press (leads)", note: "leads for Data Quality, never cited", daily: true },
     "lead_finder" => { name: "Lead finder (company home pages)", note: "read when a lead is checked" },
+    "lead_forwards" => { name: "Emails forwarded to leads@", note: "leads only, never cited; read every hour", daily: true },
     "newsletters" => { name: "Nuclear newsletters (bot@ inbox)", note: "leads for the lead pipeline, never cited", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },
@@ -66,10 +67,11 @@ class SourceCatalog
     "nrc_research_reactors_index" => { name: "NRC non-power reactor locations", note: "finds each reactor's page", daily: true },
     "nrc_fuel_cycle" => { name: "NRC fuel cycle facilities", daily: true },
     "nrc_fuel_cycle_index" => { name: "NRC fuel cycle locations", note: "finds each facility's page", daily: true },
-    # The annual plant file (#319): read once a year, not by the daily crawl.
-    "eia_plants" => { name: "EIA-860 plants" },
+    # The annual plant file (#319): checked by the daily crawl, fetched only
+    # when EIA publishes a new year.
+    "eia_plants" => { name: "EIA-860 plants", daily: true },
     "eia_owners" => { name: "EIA-860 owners" },
-    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file" },
+    "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file", daily: true },
     # Enrich (#479): read only when the admin asks, one company at a time.
     "company_pages" => { name: "Companies' own pages", note: "read on request (Enrich) and nightly gap fill", daily: true }
   }.freeze

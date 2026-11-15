@@ -27,6 +27,7 @@ class DataQuality::CatchUpJob < ApplicationJob
     DataQuality::Pipeline.sweep_all_abandoned
     # Claims a crawl attached mid-merge, if match didn't catch them (#325).
     DataQuality::DirectoryClient.new.repoint_merged_claims
+    requeue_stuck_claims(now)
 
     local = now.in_time_zone(ZONE)
     return if local.hour < CATCH_UP_AFTER
@@ -58,6 +59,30 @@ class DataQuality::CatchUpJob < ApplicationJob
   def self.mark(state, kind, date) = CACHE.write(key(state, kind, date), true, expires_in: 2.days)
   def self.marked?(state, kind, date) = CACHE.exist?(key(state, kind, date))
   def self.key(state, kind, date) = "data_quality:daily:#{state}:#{kind}:#{date.iso8601}"
+
+  # Claims left "new" for over an hour (a match run that stopped, or a kind nothing queued again since)
+  STUCK_AFTER = 1.hour
+
+  # Queues match and verify for each source kind with claims still "new" an hour on that no match run has
+  # looked at since (a run that saw one and left it "new" did so on purpose: it isn't queued again, Infra),
+  # unless that kind is running.
+  def requeue_stuck_claims(now)
+    newest = Candidate.where(status: "new", created_at: ...(now - STUCK_AFTER)).joins(:source).group("sources.source_kind").maximum(:created_at)
+      .group_by { |kind, _| index_owner(kind) }.transform_values { |pairs| pairs.map(&:last).max }
+    matched = CrawlRun.where(stage: "match", status: "succeeded", source_kind: newest.keys).group(:source_kind).maximum(:started_at)
+    stuck = newest.select { |kind, created| matched[kind].nil? || matched[kind] < created }.keys
+    (stuck - CrawlRun.running.distinct.pluck(:source_kind)).each do |kind|
+      DataQuality::Plugin.for(kind)
+      DataQuality::RunJob.perform_later(kind, only: %w[match verify])
+    rescue DataQuality::Plugin::UnknownSourceKind
+      next
+    end
+  end
+
+  # An index source's claims are matched by the crawler that reads through it (sec_submissions: sec_form_d).
+  def index_owner(kind)
+    SourceCoverage::COMPANIONS.find { |_, indexes| indexes.include?(kind) }&.first || kind
+  end
 
   private
     # Done today when it finished, whether it succeeded or stopped on an

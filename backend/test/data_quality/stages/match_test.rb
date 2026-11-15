@@ -618,4 +618,49 @@ class DataQuality::Stages::MatchTest < ActiveSupport::TestCase
       assert_equal 0, match!.stats["candidates"]
     end
   end
+
+  test "a pending company (from an NRC document, no website) takes a later website claim by name; then claims find it by its website's domain (PM, 11 Nov)" do
+    first = candidate("organization", { "name" => "Thorium Atomics Inc" }, quote: "Thorium Atomics Inc")
+    match!
+    pending = Organization.find_by!(name: "Thorium Atomics Inc")
+    assert_equal "pending", pending.verification_status
+    assert_equal [ "Organization", pending.id ], first.reload.values_at(:subject_type, :subject_id)
+
+    site = candidate("organization", { "name" => "Thorium Atomics", "website" => "https://thoriumatomics.example" }, quote: "Thorium Atomics builds reactors.")
+    match!
+    assert_equal pending.id, site.reload.subject_id, "the same pending company, by name"
+
+    # Its website claim isn't approved yet, so the company has no domain: a third claim still finds it by that claim's website.
+    other = candidate("organization", { "name" => "TA Nuclear Systems", "website" => "https://www.thoriumatomics.example/about" }, quote: "TA Nuclear Systems")
+    match!
+    assert_equal pending.id, other.reload.subject_id, "a different name, the same website as its open claim: the same pending company"
+  end
+
+  test "the open-website-claim fallback: several pending owners go to review; non-pending owners don't count; an explicit nil domain never matches (Copilot)" do
+    pending_with = lambda do |name, payload|
+      candidate("organization", { "name" => name }, quote: name)
+      match!
+      org = Organization.find_by!(name:)
+      candidate("organization", { "name" => name }.merge(payload), quote: name)
+      match!
+      org
+    end
+    first = pending_with.("Alpha Fission Inc", "website" => "https://shared.example")
+    verified = Organization.create!(name: "Gamma Fission", verification_status: "verified", verified_by: "human:tosin")
+    candidate("organization", { "name" => "Gamma Fission", "website" => "https://shared.example" }, quote: "Gamma").update!(subject: verified, status: "matched")
+
+    lone = candidate("organization", { "name" => "Different Name Co", "website" => "https://www.shared.example/x" }, quote: "Different Name Co")
+    match!
+    assert_equal first.id, lone.reload.subject_id, "the verified owner doesn't stop the one pending owner being found"
+
+    pending_with.("Beta Fission Inc", "website" => "https://shared.example")
+    two = candidate("organization", { "name" => "Third Name Co", "website" => "https://shared.example" }, quote: "Third Name Co")
+    match!
+    assert two.reload.status_needs_review?, "two pending owners: a person decides"
+
+    pending_with.("Delta Fission Inc", "website" => "https://nodomain.example", "domain" => nil)
+    none = candidate("organization", { "name" => "Epsilon Name Co", "website" => "https://nodomain.example" }, quote: "Epsilon Name Co")
+    match!
+    refute_equal Organization.find_by!(name: "Delta Fission Inc").id, none.reload.subject_id, "a claim that set domain: nil never lends its website"
+  end
 end

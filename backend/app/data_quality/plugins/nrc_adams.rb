@@ -82,8 +82,8 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
 
   INDEX_SOURCE_KIND = "nrc_adams_index"
   # What extract proposes from a document: a new version reads every document again.
-  # stages-2: new companies proposed (10 Nov), so documents read before are extracted again.
-  EXTRACT_VERSION = "stages-2"
+  # stages-3: company names without document-title words (DQ, 11 Nov); documents read before are extracted again.
+  EXTRACT_VERSION = "stages-3"
   NRC = "U.S. Nuclear Regulatory Commission"
   # A pre-application project (999...) or a new reactor's docket (052...).
   DEVELOPER_DOCKET = /\A(?:999|052)\d{5}\z/
@@ -147,11 +147,25 @@ class DataQuality::Plugins::NrcAdams < DataQuality::Plugin
   # ..."), first, when it's in a company form; then the document's authors
   # and addressees other than NRC's own offices (DQ, 29 Oct).
   def self.organizations(doc)
-    titled = doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).then { |head, rest| head.to_s.squish.delete_suffix(".") if rest && head.to_s.match?(COMPANY_FORM) }
+    titled = company_in(doc["DocumentTitle"].to_s.split(/\s+-\s+/, 2).first)
     # A title naming the company wins over the addressee's affiliation (DQ, 10 Nov: "The Leapfrog Group" isn't Leapfrog Nuclear Co).
     addressees = titled ? [] : Array(doc["AddresseeAffiliation"])
     ([ titled ] + Array(doc["AuthorAffiliation"]) + addressees).map { |name| name.to_s.squish }
       .reject { |name| name.empty? || name.start_with?("NRC") || name.casecmp?(NRC) }.uniq
+  end
+
+  # The words of a document's own name, never part of a company's.
+  DOCUMENT_WORDS = /\b(?:report|summary|audit|letter|assignment|project number|topical|plan|application|submittal|request|review|meeting|response|acceptance|approval|notice|safety evaluation)\b/i
+
+  # The company a title's head names: after its last "of/for/from/by/regarding",
+  # without leading document-name parts ("Summary Report on the Regulatory
+  # Audit of Topical Report, Oklo, Inc" is "Oklo, Inc"; DQ, 11 Nov).
+  def self.company_in(head)
+    name = head.to_s.squish.delete_suffix(".").split(/\s+(?:of|for|from|by|regarding|re:?)\s+(?:the\s+)?/i).last.to_s
+    parts = name.split(/,\s*/)
+    parts.shift while parts.size > 1 && parts.first.match?(DOCUMENT_WORDS)
+    name = parts.join(", ")
+    name if name.match?(COMPANY_FORM) && !name.match?(DOCUMENT_WORDS)
   end
 
   def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)

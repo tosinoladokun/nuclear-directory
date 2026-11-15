@@ -181,7 +181,8 @@ module DataQuality::Review
       decided = claims.select(&:subject_id).group_by(&:subject_type).flat_map do |type, group|
         directory.human_decided_ids(type:, ids: group.map(&:subject_id)).map { |id| [ type, id ] }
       end.to_set
-      claims.reject { |candidate| held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ])) }
+      # Never one Data Quality said no to (DQ, 12 Nov); its Checks row still shows it as theirs to decide.
+      claims.reject { |candidate| DataQuality::Recommendations.says_no?(candidate) || held_reason(candidate, directory:, firsts:, decided: decided.include?([ candidate.subject_type, candidate.subject_id ])) }
         .map(&:id)
     end
 
@@ -1050,6 +1051,10 @@ module DataQuality::Review
           if only_recommended && !((source_held || (first_hand && !contradicted?(candidate))) && data_quality_reviewed) &&
               !(candidate.ai_recommendation == "recommend_publish" && !candidate.status_needs_review?)
             next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "it isn't recommended, so approve it on its own" ])
+          end
+          # Rechecked under the lock: Data Quality may have said no since a bulk approval was queued (DQ, 12 Nov).
+          if only_recommended && DataQuality::Recommendations.says_no?(candidate.reload)
+            next Result.new(candidate_id: candidate.id, ref: nil, errors: [ "Data Quality says no, so approve it on its own" ])
           end
           # Checked again when a bulk approval runs: the record may have been
           # decided since the page loaded. Its row stays locked through the
