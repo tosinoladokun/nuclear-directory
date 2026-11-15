@@ -30,16 +30,17 @@ class DataQuality::Plugins::NasaNuclearNewsTest < ActiveSupport::TestCase
     assert claims.all? { |c| plugin.quote_in_source?(source, c[:quote]) }
   end
 
-  test "a story that only mentions a nuclear-powered rover isn't nuclear news (PM, 15 Nov)" do
-    mars = "<item><title>Perseverance instruments study Mars's ancient rock record</title><link>https://www.nasa.gov/mars-rock</link>" \
-      "<pubDate>Mon, 26 Oct 2026 12:00:00 +0000</pubDate><description><![CDATA[<p>The nuclear-powered rover, kept warm by its radioisotope " \
-      "power, studied layered rocks.</p>]]></description></item>"
-    rtg = "<item><title>NASA tests a new radioisotope power system</title><link>https://www.nasa.gov/rtg</link>" \
-      "<pubDate>Mon, 26 Oct 2026 12:00:00 +0000</pubDate><description><![CDATA[<p>A test of the next RTG.</p>]]></description></item>"
-    stub_request(:get, FEED).to_return(body: file_fixture("nasa/search.xml").read.sub("<item>", "#{mars}#{rtg}<item>"), headers: { "Content-Type" => "application/rss+xml" })
+  test "a story that only mentions a nuclear-powered rover isn't nuclear news; a summary about the nuclear work is (PM, 15 Nov; Copilot)" do
+    item = ->(n, title, summary) { "<item><title>#{title}</title><link>https://www.nasa.gov/n#{n}</link><pubDate>Mon, 26 Oct 2026 12:00:00 +0000</pubDate>" \
+      "<description><![CDATA[<p>#{summary}</p>]]></description></item>" }
+    rover = [ "The nuclear-powered rover studied layered rocks.", "The MMRTG-powered rover studied layered rocks.",
+      "The rover, powered by a radioisotope thermoelectric generator, studied layered rocks.", "Powered by its radioisotope power system, it tested a drill." ]
+    items = rover.each_with_index.map { |summary, n| item.(n, "Perseverance studies Mars rock #{n}", summary) }.join +
+      item.(9, "A new power source for the Moon", "NASA tested a radioisotope power system for lunar landers.")
+    stub_request(:get, FEED).to_return(body: file_fixture("nasa/search.xml").read.sub("<item>", "#{items}<item>"), headers: { "Content-Type" => "application/rss+xml" })
     DataQuality::Stages::Crawl.call(plugin:)
     quotes = plugin.extract(source, nil).map { |c| c[:quote] }
-    refute_includes quotes, "Perseverance instruments study Mars's ancient rock record"
-    assert_includes quotes, "NASA tests a new radioisotope power system"
+    assert_empty quotes.grep(/Perseverance/), "passing mentions of what powers the rover"
+    assert_includes quotes, "A new power source for the Moon", "no nuclear word in the title: the summary's subject decides"
   end
 end

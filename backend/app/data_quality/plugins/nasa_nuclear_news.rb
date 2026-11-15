@@ -31,13 +31,23 @@ class DataQuality::Plugins::NasaNuclearNews < DataQuality::Plugins::TradePress
     since = @today.call - WINDOW_DAYS
     taken = decided_urls(source)
     Array(items(source.content_text)).select { |item| item.published_on && item.published_on >= since && !taken.include?(item.url) }
-      .select { |item| item.title.to_s.match?(NUCLEAR) || item.summary.to_s.match?(NUCLEAR_WORK) }
+      .select { |item| item.title.to_s.match?(NUCLEAR) || about_nuclear_work?(item.summary) }
       .sort_by(&:published_on).reverse.map do |item|
         named = named_in("#{item.title} #{item.summary}").reject { |hit| hit["name"].casecmp?(NASA) }
         { kind: "news_item", quote: item.title, payload: {
           "url" => item.url, "title" => item.title, "publisher" => NASA, "published_on" => item.published_on.iso8601,
           "summary" => item.summary, "about" => [ { "name" => NASA, "type" => "organization" }, *named ] }.compact }
       end.first(PER_FEED)
+  end
+
+  # Work on the nuclear system itself (Copilot): a summary sentence naming it
+  # with what NASA does to it (tests, builds, fuels…), never one describing
+  # something it powers ("the MMRTG-powered rover", "powered by an RTG").
+  WORK = /\b(?:test(?:s|ed|ing)?|build(?:s|ing)?|buil[dt]|develop(?:s|ed|ing|ment)?|design(?:s|ed|ing)?|demonstrat\w*|fuel(?:s|ed|ing)?|deliver(?:s|ed|y)?|award(?:s|ed)?|contract\w*|select(?:s|ed)?|assembl\w*|advanc(?:e|es|ed|ing))\b/i
+  POWERED = /\b(?:[\w-]+-powered|powered by|kept warm by|heated by)\b/i
+
+  def about_nuclear_work?(summary)
+    summary.to_s.split(/(?<=[.!?])\s+/).any? { |sentence| sentence.match?(NUCLEAR_WORK) && sentence.match?(WORK) && !sentence.match?(POWERED) }
   end
 
   def source_facts(_source)
