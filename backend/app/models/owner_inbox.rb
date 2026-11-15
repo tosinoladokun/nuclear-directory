@@ -38,7 +38,7 @@ class OwnerInbox
         .group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
       # Only the fields checked against their own pages go with the Create; the rest wait (Review.approve_one rechecks).
       grouped.transform_values do |copies|
-        copies + copies.flat_map { |copy| fields.fetch(copy.id, []).select { |f| DataQuality::FieldEvidence.ready?(f, copy.subject_id) } }
+        copies + copies.flat_map { |copy| fields.fetch(copy.id, []).select { |f| DataQuality::FieldEvidence.rides_with_create?(f, copy.subject_id) } }
       end
     end
   end
