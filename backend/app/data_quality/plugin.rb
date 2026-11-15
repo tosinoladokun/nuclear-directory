@@ -105,9 +105,12 @@ class DataQuality::Plugin
     # script, style, template and noscript contents, which nobody reads), with a
     # space between pieces so table cells don't run together ("Vogtle 3",
     # "05200025", not "Vogtle 305200025"), spacing tidied. Cached per snapshot.
+    # Only the last source's text is kept (Infra, 15 Nov: an out-of-memory
+    # kill; a plug-in reading thousands of pages a night held every one).
     def visible_text(source)
-      @visible_text ||= {}
-      @visible_text[[ source.id, source.content_sha256 ]] ||= begin
+      key = [ source.id, source.content_sha256 ]
+      @visible_text = nil unless @visible_text&.key?(key)
+      (@visible_text ||= {})[key] ||= begin
         content = source.content_text.to_s
         if content.lstrip.first(200).match?(/<(!doctype html|html|head|body|table)\b/i)
           content = Nokogiri::HTML(content).xpath("//body//text()[not(ancestor::script or ancestor::style or " \

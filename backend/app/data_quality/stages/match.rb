@@ -87,7 +87,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
         # isn't taken for one its source dropped.
         repointed = directory.repoint_merged_claims
         @stats["repointed"] = repointed if repointed.positive?
-        sources.crawl_ok.find_each { |source| flag_dropped(source) }
+        # Without their stored bodies (only hashes and status are needed here; Infra, 15 Nov: out of memory).
+        sources.crawl_ok.select(Source.column_names - %w[content_text]).find_each(batch_size: 100) { |source| flag_dropped(source) }
       end
 
       @stats
@@ -847,7 +848,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # whose record was published since: each run closes this source's
     # waiting ones that would only add evidence, as match now does for new ones.
     def sweep_restatements
-      candidates.status_matched.where.not(subject_id: nil).includes(:source).find_each do |candidate|
+      candidates.status_matched.where.not(subject_id: nil).includes(:source).find_each(batch_size: 100) do |candidate|
         next unless DataQuality::Review.evidence_only?(candidate, directory:)
 
         # Locked as a decision locks it (source, then claim), and still
