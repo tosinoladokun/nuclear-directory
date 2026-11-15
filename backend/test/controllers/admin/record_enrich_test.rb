@@ -175,6 +175,9 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     Candidate.where(id: [ @agreed.id, @unsure.id ]).update_all(status: "rejected")
     show.call
     assert_select "#enrich-status", "Enrich: nothing waiting"
+    @company.update_columns(verification_status: "unpublished")
+    show.call
+    assert_select "#enrich-status", 0, "a record taken off has no Enrich page to link to"
   end
 
   test "a trade-press lead isn't a finding here" do
