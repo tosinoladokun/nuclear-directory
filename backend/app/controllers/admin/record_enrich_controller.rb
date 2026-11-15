@@ -52,6 +52,41 @@ class Admin::RecordEnrichController < Admin::BaseController
     nil
   end
 
+  # The open findings this company's latest Enrich request made.
+  def self.finding_ids(company)
+    domain = company.domain.presence
+    # Pages read for it (#534), and older pages on its domain read for no one in particular.
+    pages = Source.where(source_kind: SOURCE_KIND, enrich_organization_id: company.id)
+    pages = pages.or(Source.where(source_kind: SOURCE_KIND, enrich_organization_id: nil, domain: [ domain, "www.#{domain}" ])) if domain
+    # Its SEC record too (part 3), when it has a CIK.
+    pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, company.sec_cik.to_i))) if company.sec_cik.present?
+    # Only what this request found (since it was asked); older findings stay in Checks.
+    # A trade-press lead (#127) waits for Data Quality, never here.
+    # A "no longer listed" flag (review_origin dropped) is decided in Checks, with its reason.
+    scope = Candidate.where(source: pages, status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
+      .where("candidates.review_origin IS DISTINCT FROM 'dropped'")
+    scope = scope.where(created_at: company.enrich_requested_at..) if company.enrich_requested_at
+    # Only findings about it: a shared page may still hold another company's.
+    scope = scope.where(<<~SQL.squish, name: company.name)
+      :name IN (candidates.payload->>'name', candidates.payload->'organization'->>'name',
+        candidates.payload->'from_organization'->>'name', candidates.payload->'to_organization'->>'name')
+    SQL
+    scope.order(:id).ids
+  end
+
+  # Where the latest Enrich request is (#758), for the company's admin page: nil when never asked; else
+  # :queued, :looking (its pages are being read), :stopped (the read failed) or :done with its findings.
+  def self.status(company)
+    return if company.enrich_requested_at.nil?
+    return :queued if company.enriched_at.nil? || company.enriched_at < company.enrich_requested_at
+
+    extract = CrawlRun.where(source_kind: SOURCE_KIND, stage: "extract").where(started_at: company.enriched_at..).order(:started_at).first
+    return :looking if extract.nil? || extract.running?
+    return :stopped if extract.failed?
+
+    :done
+  end
+
   # The address's form only: its page may be a saved source already.
   def self.usable_website?(url) = Organization.readable_website?(url)
 
@@ -139,26 +174,5 @@ class Admin::RecordEnrichController < Admin::BaseController
     end
 
     # What its own pages stated, still waiting: the claims on its pages since it was asked.
-    def finding_ids
-      @finding_ids ||= begin
-        domain = @company.domain.presence
-        # Pages read for it (#534), and older pages on its domain read for no one in particular.
-        pages = Source.where(source_kind: SOURCE_KIND, enrich_organization_id: @company.id)
-        pages = pages.or(Source.where(source_kind: SOURCE_KIND, enrich_organization_id: nil, domain: [ domain, "www.#{domain}" ])) if domain
-        # Its SEC record too (part 3), when it has a CIK.
-        pages = pages.or(Source.where(source_kind: SOURCE_KIND, url: format(DataQuality::Plugins::CompanyPages::EDGAR, @company.sec_cik.to_i))) if @company.sec_cik.present?
-        # Only what this request found (since it was asked); older findings stay in Checks.
-        # A trade-press lead (#127) waits for Data Quality, never here.
-        # A "no longer listed" flag (review_origin dropped) is decided in Checks, with its reason.
-        scope = Candidate.where(source: pages, status: %w[new matched needs_review]).where("candidates.payload->>'lead' IS DISTINCT FROM 'true'")
-          .where("candidates.review_origin IS DISTINCT FROM 'dropped'")
-        scope = scope.where(created_at: @company.enrich_requested_at..) if @company.enrich_requested_at
-        # Only findings about it: a shared page may still hold another company's.
-        scope = scope.where(<<~SQL.squish, name: @company.name)
-          :name IN (candidates.payload->>'name', candidates.payload->'organization'->>'name',
-            candidates.payload->'from_organization'->>'name', candidates.payload->'to_organization'->>'name')
-        SQL
-        scope.order(:id).ids
-      end
-    end
+    def finding_ids = @finding_ids ||= self.class.finding_ids(@company)
 end

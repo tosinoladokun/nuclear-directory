@@ -155,6 +155,28 @@ class Admin::RecordEnrichTest < ActionDispatch::IntegrationTest
     assert_select "p", text: /Nothing waiting/, count: 0
   end
 
+  test "the company's admin page says where its Enrich is: queued, reading, stopped, then its findings (#758)" do
+    show = -> { get admin_record_path(type: "Organization", id: @company.id) }
+    show.call
+    assert_select "#enrich-status", 0, "never asked"
+    @company.update_columns(enrich_requested_at: 10.minutes.ago, enriched_at: nil)
+    show.call
+    assert_select "#enrich-status a[href=?]", enrich_path, text: "Enrich: queued"
+    @company.update_columns(enriched_at: 5.minutes.ago)
+    show.call
+    assert_select "#enrich-status", "Enrich: reading its pages"
+    run = CrawlRun.create!(stage: "extract", source_kind: "company_pages", status: "failed", error: "x", started_at: 4.minutes.ago)
+    show.call
+    assert_select "#enrich-status", "Enrich: stopped. Read again"
+    run.update!(status: "succeeded")
+    Candidate.where(id: [ @agreed.id, @unsure.id ]).update_all(created_at: 3.minutes.ago)
+    show.call
+    assert_select "#enrich-status", "Enrich: 2 findings to decide"
+    Candidate.where(id: [ @agreed.id, @unsure.id ]).update_all(status: "rejected")
+    show.call
+    assert_select "#enrich-status", "Enrich: nothing waiting"
+  end
+
   test "a trade-press lead isn't a finding here" do
     @agreed.update_columns(payload: @agreed.payload.merge("lead" => true))
     get enrich_path
