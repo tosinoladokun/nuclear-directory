@@ -119,9 +119,15 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     LEGAL_ENDING = /[,\s]+(?:inc|llc|l\.l\.c|corp|corporation|co|company|ltd|limited|plc|lp)\.?\z/i
     def brand(name) = name.to_s.squish.sub(LEGAL_ENDING, "").presence || name.to_s
 
+    # The full name as a whole word (any length: "GSE"), else the name
+    # without its legal ending, when that's at least 4 letters (Copilot).
     def names?(text, name)
+      whole = ->(wanted) { text.match?(/(?<![[:alnum:]])#{Regexp.escape(wanted)}(?![[:alnum:]])/i) }
+      full = name.to_s.squish
+      return true if full.present? && whole.(full)
+
       wanted = brand(name)
-      wanted.length >= 4 && text.match?(/(?<![[:alnum:]])#{Regexp.escape(wanted)}(?![[:alnum:]])/i)
+      wanted != full && wanted.length >= 4 && whole.(wanted)
     end
 
     # A home page with no address: its own contact or about page (at most two, robots and spacing as always) may show one.
@@ -132,7 +138,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       links = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"].to_s).to_s.split("#").first rescue next
         uri = URI(url)
-        url if uri.host.to_s.downcase.delete_prefix("www.") == host && "#{uri.path} #{link.text}".match?(CONTACT) && url != base
+        # The home page itself (a bare "/" link) never takes one of the two places (Copilot).
+        url if uri.host.to_s.downcase.delete_prefix("www.") == host && "#{uri.path} #{link.text}".match?(CONTACT) &&
+          Source.bare_homepage(url) != Source.bare_homepage(base)
       end.uniq.first(2)
       links.any? { |url| (page = snapshot(url)) && visible_text(page).match?(US) }
     rescue URI::Error

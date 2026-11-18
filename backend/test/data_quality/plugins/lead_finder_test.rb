@@ -182,4 +182,13 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_requested :get, "#{HOME}/contact"
     assert_equal "Fresh Fission designs microreactors for remote sites.", Candidate.find(result.candidate_id).quote
   end
+
+  test "a short full name still matches whole; the home page link never takes a contact place (Copilot)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>GSE provides nuclear engineering services.</p>" \
+      "<a href=\"/\">The Nuclear Company</a><a href=\"/about\">About</a><a href=\"/contact\">Contact</a></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "#{HOME}/about").to_return(body: "<html><body><p>Our story.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "#{HOME}/contact").to_return(body: "<html><body><p>1 Main St, Austin, TX 78701</p></body></html>", headers: { "Content-Type" => "text/html" })
+    crawled = Lead.sighted!(name: "GSE", kind: "company", key: "newsletter:3:gse", label: "Newsletter", url: HOME)
+    assert_equal :proposed, Plugin.call(crawled.id, finder: finder).outcome
+  end
 end
