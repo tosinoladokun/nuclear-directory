@@ -3,8 +3,9 @@
 class SocialPost < ApplicationRecord
   # sending: written before the API call; unknown: the call timed out or the platform errored, so it may have
   # gone out: a person checks, it's never sent again (Infra).
-  STATUSES = %w[drafted sending posted unknown blocked failed].freeze
-  SENT = %w[sending posted unknown].freeze
+  # queued: handed to the publisher, going out at posted_at; cancelled: taken back by the switch before then.
+  STATUSES = %w[drafted sending queued posted unknown cancelled blocked failed].freeze
+  SENT = %w[sending queued posted unknown].freeze
   # A post's subject: a news item (a deal or fact) or a newly added company.
   SUBJECT_TYPES = %w[NewsItem Organization].freeze
   # No fact or company again within this, on any platform (the cross-platform cooldown).

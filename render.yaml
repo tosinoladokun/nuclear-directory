@@ -119,6 +119,9 @@ services:
       # dashboard; blank or anything else, Live writes drafts only.
       - key: SOCIAL_POSTING_ENABLED
         sync: false
+      # Buffer's API key (#769): posts to X and the LinkedIn Page. Pasted by Tosin, never in the repo.
+      - key: BUFFER_API_KEY
+        sync: false
       # Addresses whose mail to leads@ becomes leads (#757), comma-separated,
       # set by Tosin. Unset, leads@ isn't read.
       - key: LEADS_ALLOWED_SENDERS

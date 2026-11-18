@@ -34,10 +34,10 @@ class CreateSocialPosts < ActiveRecord::Migration[8.1]
       t.index %i[subject_type subject_id]
       t.index %i[platform created_at]
       # One send per item and platform, ever: written before the API call, so no retry can post it twice.
-      t.index %i[platform subject_type subject_id], unique: true, where: "status IN ('sending', 'posted', 'unknown')",
+      t.index %i[platform subject_type subject_id], unique: true, where: "status IN ('sending', 'queued', 'posted', 'unknown')",
         name: "index_social_posts_one_send"
       t.check_constraint "platform IN ('x', 'linkedin')", name: "social_posts_platform_check"
-      t.check_constraint "status IN ('drafted', 'sending', 'posted', 'unknown', 'blocked', 'failed')", name: "social_posts_status_check"
+      t.check_constraint "status IN ('drafted', 'sending', 'queued', 'posted', 'unknown', 'cancelled', 'blocked', 'failed')", name: "social_posts_status_check"
     end
   end
 end

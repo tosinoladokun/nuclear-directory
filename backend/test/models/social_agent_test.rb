@@ -66,6 +66,7 @@ class SocialAgentTest < ActiveSupport::TestCase
 
   teardown do
     ENV.delete("SOCIAL_POSTING_ENABLED")
+    ENV.delete("SOCIAL_POST_COST_USD")
     SocialAgent.senders.delete("x")
   end
 
@@ -101,6 +102,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal [ "failed", 0 ], run_x(DRAFT).then { |failed| [ failed.status, failed.cost_usd ] }
 
     SocialPost.delete_all
+    ENV["SOCIAL_POST_COST_USD"] = "0.20"
     SocialPost.create!(platform: "x", status: "posted", subject: @company, cost_usd: SocialAgent.monthly_cap, created_at: MONDAY - 1.day)
     SocialAgent.senders["x"] = ->(*) { flunk "never called over the cap" }
     assert_match "cap", run_x(DRAFT).reason
@@ -127,5 +129,40 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "one send per item and platform, enforced by the database" do
     SocialPost.create!(platform: "x", status: "unknown", subject: @news)
     assert_raises(ActiveRecord::RecordNotUnique) { SocialPost.create!(platform: "x", status: "sending", subject: @news) }
+  end
+
+  # A publisher that schedules, cancels and reports, as Buffer does.
+  class FakePublisher
+    attr_reader :cancelled
+    attr_accessor :states
+    def initialize = (@cancelled, @states = [], {})
+    def call(_platform, _text, _link) = { id: "b1", due_at: MONDAY + 15.minutes }
+    def cancel(id) = @cancelled << id
+    def status(id) = states.fetch(id, { status: "scheduled" })
+  end
+
+  test "through a scheduling publisher: queued, then read back as posted with its link; switching off takes queued posts back" do
+    live!
+    publisher = FakePublisher.new
+    SocialAgent.define_singleton_method(:publisher) { publisher }
+    SocialAgent.instance_variable_set(:@senders, nil)
+    post = run_x(DRAFT)
+    assert_equal [ "queued", "b1", MONDAY + 15.minutes ], [ post.status, post.external_id, post.posted_at ]
+
+    travel_to(MONDAY - 1.minute) do
+      SocialChannel.for("x").update!(mode: "drafts")
+      SocialAgent.sync(publisher:)
+    end
+    assert_equal [ "cancelled", [ "b1" ] ], [ post.reload.status, publisher.cancelled ]
+
+    post.update!(status: "queued")
+    SocialChannel.for("x").update!(mode: "live")
+    publisher.states["b1"] = { status: "sent", link: "https://x.com/NuclearDir/status/7" }
+    travel_to(MONDAY + 20.minutes) { SocialAgent.sync(publisher:) }
+    assert_equal [ "posted", "https://x.com/NuclearDir/status/7" ], [ post.reload.status, post.permalink ]
+  ensure
+    SocialAgent.singleton_class.send(:remove_method, :publisher)
+    SocialAgent.define_singleton_method(:publisher) { SocialAgent::Buffer.new }
+    SocialAgent.instance_variable_set(:@senders, nil)
   end
 end

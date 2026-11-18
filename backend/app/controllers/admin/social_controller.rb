@@ -10,6 +10,7 @@ class Admin::SocialController < Admin::BaseController
   def update
     channel = SocialChannel.for(params[:platform])
     if channel.update(mode: params[:mode], paused_reason: nil)
+      SocialAgent.cancel_queued(platform: channel.platform, why: "switched off in the admin") unless channel.live?
       flash[:notice] = { "off" => "Switched off.", "drafts" => "Drafts only: written and checked, never sent.", "live" => "Live." }.fetch(channel.mode)
     else
       flash[:alert] = "Not changed: #{channel.errors.full_messages.to_sentence}."

@@ -5,13 +5,15 @@ module SocialAgent
   ZONE = "America/Los_Angeles"
   SITE = "https://nuclear-directory.org"
 
-  # Senders by platform; X arrives in phase 1b, LinkedIn through a partner scheduler in phase 2.
-  def self.senders = @senders ||= {}
+  # Publishers by platform, each ->(text, link) returning { id:, due_at: } (queued) or { id:, permalink: } (sent).
+  # Both go through Buffer (PM, 18 Nov); swap one here to change how a platform is published.
+  def self.senders = @senders ||= SocialChannel::PLATFORMS.to_h { |platform| [ platform, ->(text, link) { publisher.call(platform, text, link) } ] }
+  def self.publisher = SocialAgent::Buffer.new
 
   # Sending is on only when SOCIAL_POSTING_ENABLED is "on" (Render dashboard; Infra): otherwise Live drafts too.
   def self.sending_enabled? = ENV["SOCIAL_POSTING_ENABLED"] == "on"
-  # What one post costs (X charges $0.20 for a post with a link, which ours always have; Infra) and the most a month may cost. The X balance is the outer cap.
-  def self.post_cost = BigDecimal(ENV.fetch("X_POST_COST_USD", "0.20"))
+  # What one post costs us (Buffer's free plan: nothing; kept for a paid publisher) and the most a month may cost.
+  def self.post_cost = BigDecimal(ENV.fetch("SOCIAL_POST_COST_USD", "0"))
   def self.monthly_cap = BigDecimal(ENV.fetch("SOCIAL_MONTHLY_CAP_USD", "10"))
 
   # A send whose outcome isn't known (timeout, 5xx, 429): it may have gone out, so it's never sent again.
@@ -56,7 +58,11 @@ module SocialAgent
     end
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
     sent = sender.call(post.text, post.link)
-    post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
+    if sent[:permalink]
+      post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
+    else
+      post.tap { |queued| queued.update!(status: "queued", external_id: sent[:id], posted_at: sent[:due_at]) }
+    end
   rescue ActiveRecord::RecordNotUnique
     post.tap { |again| again.update!(status: "blocked", reason: "already sent once") }
   rescue Uncertain => error
@@ -67,10 +73,42 @@ module SocialAgent
       .tap { pause_after_errors(post.platform) }
   end
 
+  # Takes back every queued post not yet out, for the platform (or all): the kill switch (PM: it stops dispatch
+  # and cancels what's queued). A post the publisher won't take back stays queued and says why.
+  def self.cancel_queued(platform: nil, why: "switched off", publisher: self.publisher)
+    queued = SocialPost.where(status: "queued").where(posted_at: Time.current..)
+    queued = queued.where(platform:) if platform
+    queued.find_each do |post|
+      publisher.cancel(post.external_id)
+      post.update!(status: "cancelled", cost_usd: 0, reason: "taken back before it went out: #{why}")
+    rescue StandardError => error
+      post.update!(reason: "couldn't take it back (#{error.message.truncate(120)}): remove it in Buffer")
+    end
+  end
+
+  # Every few minutes: the switch is honoured (a platform not live, or sending off on the server, takes back what's
+  # queued), and queued posts that are due are read back: sent with their link, or an error.
+  def self.sync(publisher: self.publisher)
+    SocialChannel.where(platform: SocialChannel::PLATFORMS).find_each do |channel|
+      cancel_queued(platform: channel.platform, why: "switched off", publisher:) unless channel.live? && sending_enabled?
+    end
+    SocialPost.where(status: "queued").where(posted_at: ..2.minutes.ago).find_each do |post|
+      state = publisher.status(post.external_id)
+      case state[:status]
+      when "sent" then post.update!(status: "posted", permalink: state[:link])
+      when "error"
+        post.update!(status: "failed", reason: "the publisher couldn't post it")
+        pause_after_errors(post.platform)
+      end
+    rescue StandardError => error
+      Rails.logger.warn("[social] couldn't read post #{post.id} back: #{error.message}")
+    end
+  end
+
   # Two sends in a row that errored switch the platform off (Infra); a person looks, then turns it back on.
   PAUSE_AFTER = 2
   def self.pause_after_errors(platform)
-    last = SocialPost.where(platform:, status: %w[posted unknown failed]).order(id: :desc).limit(PAUSE_AFTER).pluck(:status)
+    last = SocialPost.where(platform:, status: %w[queued posted unknown failed]).order(id: :desc).limit(PAUSE_AFTER).pluck(:status)
     return unless last.size == PAUSE_AFTER && last.none?("posted")
 
     SocialChannel.for(platform).update!(mode: "off", paused_reason: "#{PAUSE_AFTER} sends in a row didn't go through")
