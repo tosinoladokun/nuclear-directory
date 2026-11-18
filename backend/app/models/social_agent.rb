@@ -5,8 +5,8 @@ module SocialAgent
   ZONE = "America/Los_Angeles"
   SITE = "https://nuclear-directory.org"
 
-  # Senders by platform; X arrives in phase 1b, LinkedIn through a partner scheduler in phase 2.
-  def self.senders = @senders ||= {}
+  # Senders by platform: X (part 2); LinkedIn later, through a partner scheduler.
+  def self.senders = @senders ||= { "x" => ->(text, link) { SocialAgent::XClient.new.call(text, link) } }
 
   # Sending is on only when SOCIAL_POSTING_ENABLED is "on" (Render dashboard; Infra): otherwise Live drafts too.
   def self.sending_enabled? = ENV["SOCIAL_POSTING_ENABLED"] == "on"

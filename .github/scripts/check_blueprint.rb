@@ -54,7 +54,8 @@ end
 
 # Tokens and the data deploy's kill switch are set in the dashboard only:
 # sync: false, never a value or a reference, wherever they appear.
-DASHBOARD_ONLY = %w[BACKUP_GITHUB_TOKEN DEPLOY_REPORT_GITHUB_TOKEN AUTO_DATA_DEPLOY DQ_AGENT_TOKEN_DIGEST SOCIAL_POSTING_ENABLED].freeze
+DASHBOARD_ONLY = %w[BACKUP_GITHUB_TOKEN DEPLOY_REPORT_GITHUB_TOKEN AUTO_DATA_DEPLOY DQ_AGENT_TOKEN_DIGEST SOCIAL_POSTING_ENABLED
+  X_API_KEY X_API_SECRET X_ACCESS_TOKEN X_ACCESS_TOKEN_SECRET].freeze
 blueprint["services"].each do |service|
   service.fetch("envVars", []).each do |var|
     next unless var.is_a?(Hash) && DASHBOARD_ONLY.include?(var["key"])

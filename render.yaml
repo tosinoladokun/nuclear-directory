@@ -119,6 +119,15 @@ services:
       # dashboard; blank or anything else, Live writes drafts only.
       - key: SOCIAL_POSTING_ENABLED
         sync: false
+      # X (OAuth 1.0a, the brand account's app): pasted by Tosin, never in the repo.
+      - key: X_API_KEY
+        sync: false
+      - key: X_API_SECRET
+        sync: false
+      - key: X_ACCESS_TOKEN
+        sync: false
+      - key: X_ACCESS_TOKEN_SECRET
+        sync: false
       # Addresses whose mail to leads@ becomes leads (#757), comma-separated,
       # set by Tosin. Unset, leads@ isn't read.
       - key: LEADS_ALLOWED_SENDERS
