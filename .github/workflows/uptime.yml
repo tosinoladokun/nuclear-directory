@@ -1,15 +1,15 @@
 name: uptime
 
 # Looks at the live site from outside Render, as a visitor would: the home page, the companies list and one
-# company page, not /up (which stayed 200 during the 18 Nov 502s). Every 5 minutes, and a few minutes after each
-# push to main, once the deploy should be live. A failure opens one "outage" issue (GitHub emails its watchers);
-# the first good check after that comments and closes it. No secrets, no accounts.
+# company page, not /up (which stayed 200 during the 18 Nov 502s). Every 5 minutes (not on push: Render deploys
+# only after the commit's checks pass, so a check on push would wait for, and could block, the deploy it watches).
+# A failure opens one "outage" issue (GitHub emails its watchers); the first good check after that comments and
+# closes it. The run itself always ends green, so it can never hold back a deploy that fixes an outage.
+# No secrets, no accounts.
 
 on:
   schedule:
     - cron: "*/5 * * * *"
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -28,10 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: After a push, wait for the deploy to go live
-        if: github.event_name == 'push'
-        run: sleep 420
-
       - name: Look at the pages
         id: pages
         run: |
@@ -48,10 +44,14 @@ jobs:
             if [ "$ok" = 1 ]; then echo "ok   $name ($url)"; else echo "FAIL $name ($url) -> HTTP $code"; failures="$failures- $name: HTTP $code ($url)"$'\n'; fi
           }
           company=$(curl -s --max-time 30 "$SITE/sitemap.xml" | grep -o "<loc>$SITE/companies/[^<]*</loc>" | head -1 | sed 's/<[^>]*>//g' || true)
-          [ -n "$company" ] || company="$SITE/companies"
           check "home page" "$SITE/" "Nuclear Directory"
           check "companies list" "$SITE/companies" "Nuclear Directory"
-          check "a company page" "$company" "Nuclear Directory"
+          if [ -n "$company" ]; then
+            check "a company page" "$company" "Nuclear Directory"
+          else
+            echo "FAIL a company page (no company URL in the sitemap)"
+            failures="$failures- a company page: no company URL found in $SITE/sitemap.xml"$'\n'
+          fi
           {
             echo 'failures<<EOF'
             printf '%s' "$failures"
@@ -72,10 +72,7 @@ jobs:
               gh issue create --repo "$GITHUB_REPOSITORY" --label outage --title "Site check failed: $(date -u +'%d %b %H:%M UTC')" \
                 --body "$(printf 'The live site failed the outside check (3 tries, 20 s apart):\n\n%s\nRun: %s\n\nInfrastructure restarts the service if the app is healthy but Render routing is broken (18 Nov).' "$FAILURES" "$run_url")"
             fi
-            echo "Site check failed"
-            # Red only on the first failure of an outage: while its issue is open the run stays green, so GitHub
-            # does not email a failed-run notice every five minutes.
-            [ -n "$open" ] || exit 1
+            echo "Site check failed (reported in the outage issue; this run stays green on purpose)"
           elif [ -n "$open" ]; then
             gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "Back: the home page, the companies list and a company page all answered 200 ($run_url)."
             gh issue close "$open" --repo "$GITHUB_REPOSITORY"
