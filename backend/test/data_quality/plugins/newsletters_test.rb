@@ -94,6 +94,8 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
     sender = ->(from) { plugin.send(:sender?, from) }
     assert sender.("update@operational.businesstrademediainternational.com"), "NEI magazine"
     assert sender.("news@world-nuclear-news.org")
+    assert sender.("noreply@interact.verdict.co.uk"), "NEI magazine's publisher (18 Nov)"
+    assert sender.("daily@news.ans.org"), "ANS Nuclear News Daily"
     refute sender.("nei@smartbrief.com")
     refute sender.("weekly@exchangemonitor.com")
   end
