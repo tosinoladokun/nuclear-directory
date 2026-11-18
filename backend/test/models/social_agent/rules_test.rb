@@ -31,6 +31,9 @@ class SocialAgent::RulesTest < ActiveSupport::TestCase
     assert_includes Rules.problems(text, item, platform: "x", fetcher: OK.new(200)), "it says \"approved\", which its source doesn't"
     assert_includes Rules.problems("Jane Doe said the NRC received Acme Fission's application.", item, platform: "x", fetcher: OK.new(200)),
       "it may name a person (Jane Doe)"
+    assert_includes Rules.problems("The NRC received Acme Fission's loan application.", item, platform: "x", fetcher: OK.new(200)),
+      "it says \"loan\", which its source doesn't"
+    assert_match "framework", Rules.problems("Acme Fission and the NRC signed a framework.", item, platform: "x", fetcher: OK.new(200)).join
     assert_match "largest", Rules.problems("Acme Fission filed the largest application.", item, platform: "x", fetcher: OK.new(200)).join
     assert_match "sensitive", Rules.problems("The NRC received Acme Fission's application after an incident.", item, platform: "x", fetcher: OK.new(200)).join
   end

@@ -6,6 +6,18 @@ module SocialAgent::Rules
   # A status word in the post must be the source's own (Founder 3.5): received isn't approved, a framework isn't signed.
   STATUS_WORDS = %w[received accepted approved approval signed signs executed announced awarded award issued granted licensed
     completed operating operational contract binding definitive].freeze
+  # DQ's deal and plant distinctions (DATA.md: a framework isn't a contract, a loan is a loan, a permit received isn't
+  # issued): a term in the post needs the same stem in the source. Term found in the post => stem looked for in the source.
+  STATUS_TERMS = {
+    /\bagreements?\b/i => /agree/i, /\bdeals?\b/i => /\bdeal/i, /\bpartner(ship)?s?\b/i => /partner/i, /\bframeworks?\b/i => /framework/i,
+    /\b(memorandum|MOU)\b/i => /memorandum|\bmou\b/i, /\b(letter of intent|LOI)\b/i => /letter of intent|\bloi\b/i,
+    /\boptions?\b/i => /\boption/i, /\bpre-?orders?\b/i => /pre-?order/i, /\bloans?\b/i => /\bloan/i,
+    /\bfund(ed|ing|s)?\b/i => /\bfund/i, /\binvest(ed|ment|ments|s)?\b/i => /invest/i, /\bacqui(red|res|sition)\b/i => /acqui/i,
+    /\bmerg(er|ed|es)\b/i => /merg/i, /\brestart(ed|s)?\b/i => /restart/i, /\bconstruct(ion|ed|ing)?\b/i => /construct/i,
+    /\bpermits?\b/i => /permit/i, /\bproduc(e|es|ed|ing|tion)\b/i => /produc/i, /\bonline\b/i => /online/i,
+    /\bconnected\b/i => /connect/i, /\bgrid\b/i => /\bgrid/i, /\bcapacity\b/i => /capacity/i, /\b(MW|MWe|MWt|GW)\b/ => /\b(MW|MWe|MWt|GW)\b/,
+    /\bshut( ?down)?\b/i => /shut/i, /\bdecommission(ed|ing)?\b/i => /decommission/i
+  }.freeze
   SUPERLATIVES = /\b(largest|biggest|first|only|smallest|fastest|most|record|unprecedented|leading|best|world's)\b/i
   SENSITIVE = /\b(incident|accident|injur\w*|casualt\w*|death|died|killed|fatal\w*|leak\w*|contaminat\w*|evacuat\w*|security|
     terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|export control\w*|lawsuit|litigation|indict\w*)\b/ix
@@ -52,12 +64,17 @@ module SocialAgent::Rules
 
   def status_words(text, item)
     source = item.source_text.downcase
-    STATUS_WORDS.filter_map do |word|
+    words = STATUS_WORDS.filter_map do |word|
       next unless text.match?(/\b#{word}\b/i)
 
       stem = word.sub(/(ed|s|al|ion)\z/, "")
       "it says #{word.inspect}, which its source doesn't" unless source.match?(/\b#{Regexp.escape(stem)}/)
     end
+    terms = STATUS_TERMS.filter_map do |term, stem|
+      said = text[term] or next
+      "it says #{said.downcase.inspect}, which its source doesn't" unless item.source_text.match?(stem)
+    end
+    (words + terms).uniq
   end
 
   # Two or more capitalised words in a row are a name: allowed only for a company, plant or place the directory knows,
