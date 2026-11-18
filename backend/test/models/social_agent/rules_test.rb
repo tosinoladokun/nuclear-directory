@@ -57,13 +57,12 @@ class SocialAgent::RulesTest < ActiveSupport::TestCase
 
   test "Buffer's allowance at 80% switches posting off and says so" do
     travel_to Time.find_zone(SocialAgent::ZONE).local(2026, 11, 16, 8, 30)
-    SocialAgent::Buffer::COUNTS.clear
     SocialChannel.for("x").update!(mode: "drafts")
-    SocialAgent::Buffer::COUNTS.write("buffer_requests:#{Date.current.iso8601}", SocialAgent::Buffer::MONTHLY_REQUESTS, raw: true)
+    (SocialAgent::Buffer::MONTHLY_REQUESTS * SocialAgent::Buffer::ALERT_AT / SocialAgent::Buffer::PER_POST).ceil.times do |n|
+      SocialPost.create!(platform: "linkedin", status: "failed", subject: @company, external_id: "b#{n}", created_at: 2.days.ago)
+    end
     assert_nil SocialAgent.run("x", writer: Object.new)
     channel = SocialChannel.for("x")
     assert_equal [ "off", "Buffer's 30-day request allowance is 80% used" ], [ channel.mode, channel.paused_reason ]
-  ensure
-    SocialAgent::Buffer::COUNTS.clear
   end
 end
