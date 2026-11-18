@@ -15,6 +15,8 @@ module SocialAgent
   # What one post costs us (Buffer's free plan: nothing; kept for a paid publisher) and the most a month may cost.
   def self.post_cost = BigDecimal(ENV.fetch("SOCIAL_POST_COST_USD", "0"))
   def self.monthly_cap = BigDecimal(ENV.fetch("SOCIAL_MONTHLY_CAP_USD", "10"))
+  # A backstop on the number of posts per platform a month (Infra): weekdays only make about 22.
+  def self.monthly_max = ENV.fetch("SOCIAL_MONTHLY_MAX", "25").to_i
 
   # A send whose outcome isn't known (timeout, 5xx, 429): it may have gone out, so it's never sent again.
   class Uncertain < StandardError; end
@@ -24,7 +26,7 @@ module SocialAgent
     channel = SocialChannel.for(platform)
     return if channel.off? || now.in_time_zone(ZONE).on_weekend?
     # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
-    return if SocialPost.where(platform:, status: [ *SocialPost::SENT, "drafted", "failed" ], created_at: now.in_time_zone(ZONE).all_day).exists?
+    return if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
 
     item = SocialAgent::Picker.new(platform:, now:).call or return
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,
@@ -46,7 +48,10 @@ module SocialAgent
   def self.send_post(post, now: Time.current)
     claimed = SocialChannel.transaction do
       SocialChannel.lock.find_by!(platform: post.platform)
-      spent = SocialPost.where(platform: post.platform, status: SocialPost::SENT, created_at: now.all_month).sum(:cost_usd)
+      month = SocialPost.where(platform: post.platform, status: SocialPost::SENT, created_at: now.all_month)
+      next post.tap { |over| over.update!(status: "blocked", reason: "this month's #{monthly_max} posts are done") } if month.count >= monthly_max
+
+      spent = month.sum(:cost_usd)
       next post.tap { |over| over.update!(status: "blocked", reason: "this month's cap of $#{monthly_cap.to_s('F')} is reached") } if spent + post_cost > monthly_cap
 
       post.update!(status: "sending", cost_usd: post_cost)

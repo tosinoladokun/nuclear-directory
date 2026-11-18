@@ -17,5 +17,6 @@ class SocialPost < ApplicationRecord
   validates :subject_type, inclusion: { in: SUBJECT_TYPES }
 
   # Posts that count as used: sent, or drafted in drafts mode (so a trial run behaves as the real one).
-  scope :used, -> { where(status: [ *SENT, "drafted" ]) }
+  # Used: sent, queued, drafted, or failed after the call started (it may have gone out; Infra, DQ).
+  scope :used, -> { where(status: [ *SENT, "drafted", "failed" ]) }
 end

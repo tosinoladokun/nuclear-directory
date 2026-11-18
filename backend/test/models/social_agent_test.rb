@@ -153,6 +153,16 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent.define_singleton_method(:run, original) if original
   end
 
+  test "a month's post count is a backstop" do
+    live!
+    ENV["SOCIAL_MONTHLY_MAX"] = "1"
+    SocialPost.create!(platform: "x", status: "posted", subject: @company, created_at: MONDAY - 3.days)
+    SocialAgent.senders["x"] = ->(*) { flunk "never called over the backstop" }
+    assert_match "this month's 1 posts are done", run_x(DRAFT).reason
+  ensure
+    ENV.delete("SOCIAL_MONTHLY_MAX")
+  end
+
   test "one send per item and platform, enforced by the database" do
     SocialPost.create!(platform: "x", status: "unknown", subject: @news)
     assert_raises(ActiveRecord::RecordNotUnique) { SocialPost.create!(platform: "x", status: "sending", subject: @news) }
