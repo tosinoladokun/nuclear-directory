@@ -95,4 +95,9 @@ class SearchTest < ActionDispatch::IntegrationTest
       assert_select ".nd-line__cap", 0
     end
   end
+
+  test "a format other than HTML is not found, never a server error" do
+    get "/search.json", params: { q: "aalo" }
+    assert_response :not_found
+  end
 end
