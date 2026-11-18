@@ -1,6 +1,6 @@
 # One matching action by Data Quality's agent (#548): see DataQuality::Matching.
 class DqAction < ApplicationRecord
-  ACTIONS = %w[same_as subsidiary_of new close recommend propose_role propose_fields].freeze
+  ACTIONS = %w[same_as subsidiary_of new close recommend propose_role propose_fields propose_link].freeze
   BY = "agent:data-quality"
 
   belongs_to :candidate

@@ -486,6 +486,34 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "2000 characters at most", results.second["error"]
   end
 
+  test "propose_fields takes a country (two capital letters) and a legal name" do
+    act({ action: "propose_fields", target: @holtec.id, fields: { country_code: "US", legal_name: "Holtec International Corporation" },
+      quote: "Licensee: Holtec.", source_url: @page.url, reason: "10-K cover" },
+      { action: "propose_fields", target: @holtec.id, fields: { country_code: "Canada" }, quote: "q", source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_equal "US", Candidate.find(results.first["id"]).payload["country_code"]
+    assert_match "two capital letters", results.second["error"]
+  end
+
+  test "propose_link: a sourced link between two companies becomes a link claim, decided like any other; undo closes it" do
+    westinghouse = Organization.create!(name: "Westinghouse Electric Company", verification_status: "verified", verified_by: "human:tosin")
+    @page.update!(content_text: "Holtec International holds a 49% interest in Westinghouse Electric Company.")
+    act({ action: "propose_link", target: @holtec.id, other: westinghouse.id, relationship_type: "invests_in", description: "49% interest",
+      quote: "Holtec International holds a 49% interest in Westinghouse Electric Company.", source_url: @page.url, reason: "their release" },
+      { action: "propose_link", target: @holtec.id, other: westinghouse.id, relationship_type: "owns", quote: "q", source_url: @page.url, reason: "r" },
+      { action: "propose_link", target: @holtec.id, other: @holtec.id, relationship_type: "funds", quote: "q", source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "relationship_type must be one of", results.second["error"]
+    assert_match "linked to itself", results.third["error"]
+    claim = Candidate.find(results.first["id"])
+    assert_equal [ "relationship", "Holtec International", "Westinghouse Electric Company", "invests_in", "49% interest" ],
+      [ claim.kind, claim.payload.dig("from_organization", "name"), claim.payload.dig("to_organization", "name"), claim.payload["relationship_type"], claim.payload["description"] ]
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert claim.reload.subject_id, claim.notes
+    assert_nil DataQuality::Matching.undo(DqAction.sole.id)
+    assert_equal "rejected", claim.reload.status
+  end
+
   test "propose_fields: a blank filled with Data Quality's approve goes through Yes to all; a changed value stays Tosin's own; a list of fields is refused" do
     @holtec.update!(verified_by: "human:tosin", description: "Spent fuel storage.")
     Evidence.create!(subject: @holtec, source: @page, quote: "Licensee: Holtec.", found_by: "human")

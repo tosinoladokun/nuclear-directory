@@ -28,7 +28,8 @@ module DataQuality::Matching
   DAILY_RECOMMENDS = 500
   DAILY_ROLES = 200
   # What Data Quality may fill on a published company (PM, 30 Oct: complete companies).
-  FIELDS = %w[website description short_description hq_city hq_state sec_cik].freeze
+  # Plus a legal name and the country (PM, 18 Nov: Cameco is Canadian), as two capital letters.
+  FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code].freeze
   # An SEC CIK is sourced to EDGAR only (PM, 31 Oct).
   EDGAR_HOSTS = %w[sec.gov www.sec.gov efts.sec.gov data.sec.gov].freeze
   MAX_DESCRIPTION = 2_000
@@ -49,11 +50,11 @@ module DataQuality::Matching
   end
 
   def self.apply_one(row, directory, requeue = Set.new)
-    return propose_role(row, directory, requeue) if %w[propose_role propose_fields].include?(row["action"].to_s)
+    return propose_role(row, directory, requeue) if PROPOSALS.include?(row["action"].to_s)
 
     id, action, reason = row["id"].to_i, row["action"].to_s, row["reason"].to_s.squish
     fail_with = ->(why) { Row.new(id:, ok: false, error: why, created_ids: []) }
-    return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless (DqAction::ACTIONS - %w[propose_role propose_fields]).include?(action)
+    return fail_with.call("action must be one of #{DqAction::ACTIONS.join(', ')}") unless (DqAction::ACTIONS - PROPOSALS).include?(action)
     return fail_with.call("give a reason") if reason.blank?
     return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
     if %w[new subsidiary_of].include?(action) && DqAction.where(action: %w[new subsidiary_of], created_at: Time.current.all_day).count >= DAILY_CREATES
@@ -154,7 +155,7 @@ module DataQuality::Matching
       raise Abort, "it was undone already" if action.undone_at
 
       candidate = Candidate.lock.find(action.candidate_id)
-      if %w[propose_role propose_fields].include?(action.action)
+      if PROPOSALS.include?(action.action)
         undo_role(action, candidate, directory)
         next nil
       end
@@ -226,6 +227,9 @@ module DataQuality::Matching
   # page only), as one company claim:
   #   { action: "propose_fields", target:, fields: { "hq_city" => "Austin", … }, quote:, source_url:, reason: }
   # It's matched to the company and shows as a Change (old → new) for Tosin.
+  # propose_link (PM, 18 Nov): a sourced link between two companies, as a claim matched and decided like any other:
+  #   { action: "propose_link", target: from company, other: to company, relationship_type: "invests_in",
+  #     description: "49% stake", quote:, source_url:, reason: }
   def self.propose_role(row, directory, requeue)
     action = row["action"].to_s
     reason, quote, role = row["reason"].to_s.squish, row["quote"].to_s.squish, row["role"].to_s
@@ -237,6 +241,11 @@ module DataQuality::Matching
     return fail_with.call("give the quote that states it") if quote.blank?
     if action == "propose_role"
       return fail_with.call("#{role.inspect} isn't a role") unless directory.role_key?(role)
+    elsif action == "propose_link"
+      verbs = DataQuality::Review::COMPANY_LINK_VERBS.keys
+      return fail_with.call("relationship_type must be one of #{verbs.join(', ')}") unless verbs.include?(row["relationship_type"].to_s)
+      return fail_with.call("give the other company: its id or slug") if row["other"].blank?
+      return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if row["description"].to_s.length > MAX_DESCRIPTION
     else
       return fail_with.call("give fields: one or more of #{FIELDS.join(', ')}") if fields.empty?
       return fail_with.call("only #{FIELDS.join(', ')} can be proposed") unless (fields.keys - FIELDS).empty?
@@ -245,6 +254,7 @@ module DataQuality::Matching
       return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if fields["description"].to_s.length > MAX_DESCRIPTION
       # Only a website people can open (https with a host): never a javascript: or broken link (Infra).
       return fail_with.call("the website must be a full https:// address") if fields.key?("website") && !directory.readable_website?(fields["website"])
+      return fail_with.call("a country is two capital letters (ISO 3166, e.g. CA)") if fields.key?("country_code") && !fields["country_code"].match?(/\A[A-Z]{2}\z/)
       if fields.key?("sec_cik")
         cik = directory.normalize_cik(fields["sec_cik"])
         return fail_with.call("an SEC CIK is up to 10 digits") unless cik.to_s.match?(/\A\d{10}\z/)
@@ -273,6 +283,13 @@ module DataQuality::Matching
 
       kind, payload = if action == "propose_role"
         [ "organization_role", { "organization" => { "name" => record.name }, "role" => role } ]
+      elsif action == "propose_link"
+        other, error = target({ "target" => row["other"] }, directory)
+        raise Abort, "other: #{error}" if error
+        raise Abort, "a company can't be linked to itself" if other.id == record.id
+
+        [ "relationship", { "from_organization" => { "name" => record.name }, "to_organization" => { "name" => other.name },
+                            "relationship_type" => row["relationship_type"].to_s, "description" => row["description"].to_s.squish.presence }.compact ]
       else
         [ "organization", { "name" => record.name }.merge(fields) ]
       end
@@ -292,13 +309,15 @@ module DataQuality::Matching
     Row.new(id: won.candidate_id, ok: true, error: nil, created_ids: [ won.candidate_id ])
   end
 
+  PROPOSALS = %w[propose_role propose_fields propose_link].freeze
+
   # Undoing a proposed role: the claim closes, and a pending role it
   # proposed is taken off, while no person has decided either.
   def self.undo_role(action, claim, directory)
     # Never decided or reopened by a person since (reopenings only grow).
     untouched = %w[new matched needs_review].include?(claim.status) && claim.reviewed_by.nil? &&
       claim.reopenings.to_a == action.after.to_h.fetch("reopenings", [])
-    raise Abort, "the role was decided since, so it can't be undone here" unless untouched
+    raise Abort, "it was decided since, so it can't be undone here" unless untouched
 
     if claim.proposed_subject && claim.subject_id
       directory.lock_fact(type: claim.subject_type, id: claim.subject_id)
@@ -306,7 +325,7 @@ module DataQuality::Matching
       others = Candidate.where(subject_type: claim.subject_type, subject_id: claim.subject_id).where.not(id: claim.id).where(status: %w[new matched needs_review merged]).exists?
       raise Abort, "another source supports this role now, so it stays; close this claim instead" if others
 
-      errors = directory.decide_fact("organization_role", id: claim.subject_id, status: "rejected", by: BY, reason: "Data Quality undid propose_role").errors
+      errors = directory.decide_fact(claim.kind, id: claim.subject_id, status: "rejected", by: BY, reason: "Data Quality undid #{action.action}").errors
       raise Abort, errors.to_sentence if errors.any?
     end
     claim.update!(status: "rejected", reviewed_by: BY, reviewed_at: Time.current, notes: "Undone by Data Quality")
