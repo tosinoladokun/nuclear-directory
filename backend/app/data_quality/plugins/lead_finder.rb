@@ -94,7 +94,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Today's searches used up: the lead waits for tomorrow, not one of its tries (Backend, 10 Nov).
     return outcome(:retry, name:, reason: "Today's search limit of #{SEARCHES_PER_DAY} is reached; tried again tomorrow", found:) if @search_capped && !found["checked"]
 
-    unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company" : "No website found", found)
+    unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company (#{checked_summary(found)})" : "No website found", found)
   end
 
   # The pending company, from the verified home page.
@@ -114,6 +114,17 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   end
 
   private
+    # Each checked site's verdict, for the lead's note (Backend keeps only the
+    # reason): "acme.com: not US; a search result: not named". A search
+    # result's address is never kept (Brave's terms), only its verdict.
+    VERDICTS = { "not_us" => "not US", "not_nuclear" => "no nuclear work", "not_named" => "not named", "not_found" => "unreadable" }.freeze
+    def checked_summary(found)
+      found["checked"].map do |check|
+        site = check["website"] ? URI(check["website"]).host.to_s.delete_prefix("www.") : "a search result"
+        "#{site}: #{VERDICTS.fetch(check['verdict'], check['verdict'])}"
+      end.join("; ")
+    end
+
     # Nuclear work stated beyond the company's own name ("Fresh Fission" alone isn't).
     def nuclear?(text, name) = text.gsub(/#{Regexp.escape(name)}/i, " ").match?(NUCLEAR)
 
