@@ -48,10 +48,13 @@ class SocialAgent::XClient
     def deliver(request)
       response = Net::HTTP.start(TWEETS.host, TWEETS.port, use_ssl: true, open_timeout: 10, read_timeout: 30) { |http| http.request(request) }
       code = response.code.to_i
-      raise SocialAgent::Uncertain, "X said #{code}" if code == 429 || code >= 500
-      raise Error, "X said #{code}: #{response.body.to_s.truncate(200)}" unless response.is_a?(Net::HTTPSuccess)
+      # Only a clear refusal (4xx other than 429) means it didn't go out; anything else may have.
+      raise Error, "X said #{code}: #{response.body.to_s.truncate(200)}" if code.between?(400, 499) && code != 429
+      raise SocialAgent::Uncertain, "X said #{code}" unless response.is_a?(Net::HTTPSuccess)
 
       JSON.parse(response.body)
+    rescue JSON::ParserError
+      raise SocialAgent::Uncertain, "X's reply wasn't readable"
     rescue Net::OpenTimeout => error
       raise Error, "couldn't reach X (#{error.class}), nothing sent"
     rescue Net::ReadTimeout, EOFError, Errno::ECONNRESET, OpenSSL::SSL::SSLError => error
