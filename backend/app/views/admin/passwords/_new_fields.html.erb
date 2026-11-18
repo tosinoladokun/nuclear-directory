@@ -1,0 +1,9 @@
+<div class="nd-field">
+  <%= form.label :password, "New password", class: "type-body-strong" %>
+  <%= form.password_field :password, required: true, minlength: 12, maxlength: 72, autocomplete: "new-password", class: "nd-input type-input" %>
+  <p class="type-small text-ink-muted m-0">At least 12 characters.</p>
+</div>
+<div class="nd-field">
+  <%= form.label :password_confirmation, "New password again", class: "type-body-strong" %>
+  <%= form.password_field :password_confirmation, required: true, minlength: 12, maxlength: 72, autocomplete: "new-password", class: "nd-input type-input" %>
+</div>
