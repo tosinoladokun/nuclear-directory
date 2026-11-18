@@ -28,6 +28,14 @@ production:
   lead_find:
     class: LeadFindJob
     schedule: every day at 2:30am America/New_York
+  # The social agent (#769): one post per platform each weekday morning, when switched on in the admin.
+  social_post:
+    class: SocialPostJob
+    schedule: "30 8 * * 1-5 America/Los_Angeles"
+  # Takes back queued posts when switched off, and reads back the ones that went out (#769).
+  social_sync:
+    class: SocialSyncJob
+    schedule: every 5 minutes
 
   # Marks runs cut off by a restart as failed, and queues the daily crawl
   # again (once a day per source) for a source whose run was cut off (#188).
