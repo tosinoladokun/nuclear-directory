@@ -10,8 +10,8 @@ module SocialAgent
 
   # Sending is on only when SOCIAL_POSTING_ENABLED is "on" (Render dashboard; Infra): otherwise Live drafts too.
   def self.sending_enabled? = ENV["SOCIAL_POSTING_ENABLED"] == "on"
-  # What one post costs and the most a month may cost (X pay-per-use; Infra). The X balance is the outer cap.
-  def self.post_cost = BigDecimal(ENV.fetch("X_POST_COST_USD", "0.05"))
+  # What one post costs (X charges $0.20 for a post with a link, which ours always have; Infra) and the most a month may cost. The X balance is the outer cap.
+  def self.post_cost = BigDecimal(ENV.fetch("X_POST_COST_USD", "0.20"))
   def self.monthly_cap = BigDecimal(ENV.fetch("SOCIAL_MONTHLY_CAP_USD", "10"))
 
   # A send whose outcome isn't known (timeout, 5xx, 429): it may have gone out, so it's never sent again.
