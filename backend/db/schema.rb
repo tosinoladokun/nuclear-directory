@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_10_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -530,6 +530,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_130000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_sessions_on_user_id"
+  end
+
+  create_table "social_channels", force: :cascade do |t|
+    t.string "platform", null: false
+    t.string "mode", default: "off", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["platform"], name: "index_social_channels_on_platform", unique: true
+    t.check_constraint "mode::text = ANY (ARRAY['off'::character varying, 'drafts'::character varying, 'live'::character varying]::text[])", name: "social_channels_mode_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_channels_platform_check"
+  end
+
+  create_table "social_posts", force: :cascade do |t|
+    t.string "platform", null: false
+    t.string "status", null: false
+    t.string "subject_type", null: false
+    t.bigint "subject_id", null: false
+    t.text "text"
+    t.string "link"
+    t.string "source_url"
+    t.text "source_quote"
+    t.bigint "organization_ids", default: [], null: false, array: true
+    t.string "reason"
+    t.string "external_id"
+    t.string "permalink"
+    t.datetime "posted_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["platform", "created_at"], name: "index_social_posts_on_platform_and_created_at"
+    t.index ["subject_type", "subject_id"], name: "index_social_posts_on_subject_type_and_subject_id"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_posts_platform_check"
+    t.check_constraint "status::text = ANY (ARRAY['drafted'::character varying, 'posted'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "social_posts_status_check"
   end
 
   create_table "solid_cable_messages", force: :cascade do |t|
