@@ -1,0 +1,52 @@
+<% content_for :title, "Posts" %>
+<div class="nd-stack">
+  <h1 class="type-admin-h1 m-0">Posts</h1>
+  <p class="type-body m-0">One post per platform each weekday morning, about something the directory published this week. Each is checked against its source before it goes out.</p>
+
+  <section class="nd-stack" aria-labelledby="social-switches">
+    <h2 id="social-switches" class="type-admin-h2 m-0">Switches</h2>
+    <% unless SocialAgent.sending_enabled? %>
+      <p class="type-small m-0" id="social-sending-off">Sending is off on the server (SOCIAL_POSTING_ENABLED), so Live writes drafts only.</p>
+    <% end %>
+    <% unless SocialAgent::Buffer.configured? %>
+      <p class="type-small m-0" id="social-buffer-key">Buffer isn't set up yet: BUFFER_API_KEY, BUFFER_X_CHANNEL_ID and BUFFER_LINKEDIN_CHANNEL_ID go on Render.</p>
+    <% end %>
+    <p class="type-small text-ink-muted m-0">This month: $<%= number_with_precision(@spent, precision: 2) %> of $<%= number_with_precision(SocialAgent.monthly_cap, precision: 2) %>.</p>
+    <% @channels.each do |channel| %>
+      <div class="nd-row" id="social-switch-<%= channel.platform %>">
+        <p class="type-body-strong m-0"><%= channel.platform == "x" ? "X" : "LinkedIn" %></p>
+        <% if channel.paused_reason %><p class="type-small text-critical m-0">Switched off by itself: <%= channel.paused_reason %>.</p><% end %>
+        <% { "off" => "Off", "drafts" => "Drafts only", "live" => "Live" }.each do |mode, label| %>
+          <%= button_to label, admin_social_channel_path(channel.platform), method: :patch, params: { mode: },
+            class: "nd-btn #{channel.mode == mode ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui", aria: { pressed: channel.mode == mode },
+            data: (mode == "live" ? { turbo_confirm: "Post to #{channel.platform == 'x' ? 'X' : 'LinkedIn'} automatically each weekday?" } : {}) %>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="nd-stack" aria-labelledby="social-log">
+    <h2 id="social-log" class="type-admin-h2 m-0">Log</h2>
+    <% if @posts.empty? %>
+      <p class="type-body text-ink-muted m-0">Nothing yet.</p>
+    <% end %>
+    <ol class="nd-waits">
+      <% @posts.each do |post| %>
+        <li class="nd-wait" id="social-post-<%= post.id %>">
+          <div class="nd-wait__what">
+            <p class="type-small m-0"><span class="nd-tag"><%= post.platform == "x" ? "X" : "LinkedIn" %></span>
+              <span class="type-data"><%= post.created_at.in_time_zone(SocialAgent::ZONE).strftime("%-d %b %H:%M") %></span> ·
+              <%= { "posted" => "Posted", "drafted" => "Draft", "sending" => "Sending", "queued" => "Queued to go out at #{post.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%H:%M')}", "cancelled" => "Taken back", "unknown" => "May have gone out: check the account",
+                    "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
+            <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
+            <% if post.reason.present? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <p class="type-small m-0">
+              <% if post.permalink %><%= link_to "See the post", post.permalink, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>
+              <% if (url = safe_url(post.source_url)) %><%= link_to "Source: #{source_host(url)}", url, class: "nd-link", target: "_blank", rel: "noopener" %><% end %>
+            </p>
+          </div>
+        </li>
+      <% end %>
+    </ol>
+  </section>
+</div>

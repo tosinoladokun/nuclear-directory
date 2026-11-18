@@ -54,6 +54,9 @@ Rails.application.routes.draw do
   # Forgot password (#783): a one-time, 15-minute link by email.
   resources :passwords, only: %i[new create edit update], param: :token, path: "admin/session/password"
   namespace :admin do
+    # The social agent (#769): each platform's switch, and every post it made.
+    get "social" => "social#show", as: :social
+    patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     # Change your password (#783).
     resource :password, only: %i[edit update]
     # Admin v2 (#201): Overview, Sources, Checks (where claims and pending
