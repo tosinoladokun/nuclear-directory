@@ -3,8 +3,10 @@
 # already in a post the same day. Social playbook: fresh data only; skip rather than post filler.
 class SocialAgent::Picker
   FRESH = 7.days
-  # An event older than this isn't news, however recently it was published.
-  EVENT_MAX_AGE = 30.days
+  # An event older than this isn't news, however recently it was published (DQ: GTM's rule is 7 to 9 days).
+  EVENT_MAX_AGE = 10.days
+  # Not deals or facts: people and event items (DQ).
+  NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|workshop|hiring|award ceremony|internship)\b/i
 
   def initialize(platform:, now: Time.current)
     @platform = platform
@@ -19,6 +21,8 @@ class SocialAgent::Picker
     def news
       NewsItem.published.where(verified_at: (@now - FRESH)..@now, published_on: (@now - EVENT_MAX_AGE).to_date..)
         .includes(:news_mentions).order(verified_at: :desc).filter_map do |news|
+          next if [ news.title, news.headline ].compact.any? { |text| text.match?(NOT_NEWS) }
+
           mentions = news.news_mentions.select { |mention| mention.subject_type == "Organization" }
           companies = Organization.published.where(id: mentions.map(&:subject_id)).to_a
           next if companies.empty?
@@ -32,7 +36,10 @@ class SocialAgent::Picker
     end
 
     def companies
-      Organization.published.where(verified_at: (@now - FRESH)..@now, created_at: (@now - EVENT_MAX_AGE)..)
+      # New means first approved this week (a later edit re-verifies an old company; DQ), as What's new counts it.
+      first = VerificationEvent.where(subject_type: "Organization", to_status: "verified").group(:subject_id)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
+      Organization.published.where(id: first)
         .where.not(description: [ nil, "" ]).order(verified_at: :desc).map do |company|
           evidence = Evidence.where(subject: company).includes(:source).order(:id).first
           SocialAgent::Item.new(subject: company, kind: "new_company",
@@ -44,7 +51,9 @@ class SocialAgent::Picker
     end
 
     def usable?(item)
-      used = SocialPost.used.where(created_at: (@now - SocialPost::COOLDOWN)..)
+      # Any attempt in the cooldown, even blocked or failed, so a rerun can never send it twice (Infra); a post the
+      # switch took back frees its item.
+      used = SocialPost.where.not(status: "cancelled").where(created_at: (@now - SocialPost::COOLDOWN)..)
       return false if used.exists?(subject: item.subject)
 
       today = @now.in_time_zone(SocialAgent::ZONE).all_day

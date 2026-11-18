@@ -4,10 +4,11 @@ require "net/http"
 # LinkedIn Page and X, connected as channels in Buffer's free plan. Each post is scheduled DELAY ahead, so the
 # kill switch can still cancel it; a later run reads back whether it went out and its link.
 #
-# Set up (Tosin): a Buffer account with the X account and the LinkedIn Page connected; Settings › API › new key.
+# Set up (Tosin): a Buffer account with only the X account and the LinkedIn Page connected; Settings › API › new key
+# as BUFFER_API_KEY; each channel's id as BUFFER_X_CHANNEL_ID and BUFFER_LINKEDIN_CHANNEL_ID (Infra sets them).
 class SocialAgent::Buffer
   ENDPOINT = URI("https://api.buffer.com")
-  SERVICES = { "x" => "twitter", "linkedin" => "linkedin" }.freeze
+  CHANNEL_KEYS = { "x" => "BUFFER_X_CHANNEL_ID", "linkedin" => "BUFFER_LINKEDIN_CHANNEL_ID" }.freeze
   # Time between handing a post to Buffer and its going out: the window in which the switch can stop it.
   DELAY = 15.minutes
   CREATE = <<~GQL.freeze
@@ -17,7 +18,7 @@ class SocialAgent::Buffer
 
   class Error < StandardError; end
 
-  def self.configured? = ENV["BUFFER_API_KEY"].present?
+  def self.configured? = ENV["BUFFER_API_KEY"].present? && CHANNEL_KEYS.values.all? { |key| ENV[key].present? }
 
   def initialize(http: method(:deliver), now: -> { Time.current })
     @http = http
@@ -29,7 +30,7 @@ class SocialAgent::Buffer
     due = @now.call + DELAY
     data = graphql(CREATE, { input: { text: "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic",
       mode: "customScheduled", dueAt: due.utc.iso8601 } })
-    result = data.fetch("createPost")
+    result = data["createPost"] or raise SocialAgent::Uncertain, "Buffer's reply had no createPost"
     raise Error, "Buffer said: #{result['message']}" if result["message"]
     id = result.dig("post", "id") or raise SocialAgent::Uncertain, "Buffer didn't return the post's id"
     { id:, due_at: Time.zone.parse(result.dig("post", "dueAt").to_s) || due }
@@ -45,24 +46,19 @@ class SocialAgent::Buffer
   end
 
   private
-    def channel_id(platform)
-      @channels ||= begin
-        organization = graphql("query { account { organizations { id } } }").dig("account", "organizations", 0, "id") or raise Error, "Buffer has no organization"
-        graphql("query($input: ChannelsInput!) { channels(input: $input) { id service } }", { input: { organizationId: organization } })
-          .fetch("channels").to_h { |channel| [ channel["service"], channel["id"] ] }
-      end
-      @channels[SERVICES.fetch(platform)] or raise Error, "#{platform == 'x' ? 'X' : 'LinkedIn'} isn't connected in Buffer"
-    end
+    # The brand channels by their Buffer ids (Infra): never found by service, so a personal profile or a second
+    # account on the same Buffer login can't get the post.
+    def channel_id(platform) = ENV[CHANNEL_KEYS.fetch(platform)].presence || raise(Error, "#{CHANNEL_KEYS.fetch(platform)} isn't set on Render")
 
     def graphql(query, variables = {})
-      raise Error, "Buffer isn't set up: BUFFER_API_KEY on Render" unless self.class.configured?
+      raise Error, "Buffer isn't set up: BUFFER_API_KEY on Render" if ENV["BUFFER_API_KEY"].blank?
 
       request = Net::HTTP::Post.new(ENDPOINT, "Content-Type" => "application/json", "Authorization" => "Bearer #{ENV.fetch('BUFFER_API_KEY')}")
       request.body = { query:, variables: }.to_json
       body = @http.call(request)
       raise Error, "Buffer said: #{Array(body['errors']).map { |error| error['message'] }.to_sentence}" if body["errors"].present?
 
-      body.fetch("data")
+      body["data"] or raise SocialAgent::Uncertain, "Buffer's reply had no data"
     end
 
     def deliver(request)

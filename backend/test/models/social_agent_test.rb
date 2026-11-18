@@ -42,6 +42,13 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match "hashtag", run_x("Acme Fission won a DOE award. #nuclear").reason
   end
 
+  test "people and event items aren't news; relative time is stopped" do
+    @news.update_columns(title: "Acme Fission engineer named to 40 Under 40")
+    assert_nil run_x("Acme Fission won a DOE award.")
+    @news.update_columns(title: "Acme Fission wins $1,404,253 DOE award for fuel cladding")
+    assert_match "\"today\" instead of a date", run_x("Today Acme Fission won a DOE award.").reason
+  end
+
   test "off, weekends and nothing fresh post nothing; a fact used in the last two weeks isn't used again" do
     SocialChannel.for("x").update!(mode: "off")
     assert_nil run_x("Acme Fission won a DOE award.")
@@ -54,9 +61,12 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "a newly added company is used when there's no fresh news" do
     @news.update_columns(verified_at: MONDAY - 20.days)
     company = Organization.create!(name: "Beta Reactors", slug: "beta-reactors", description: "Beta Reactors designs small reactors.",
-      verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day, created_at: MONDAY - 3.days)
+      verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
+    VerificationEvent.where(subject: company).update_all(created_at: MONDAY - 1.day)
+    VerificationEvent.where(subject: @company).update_all(created_at: MONDAY - 1.day)
+    VerificationEvent.create!(subject: @company, to_status: "verified", by: BY, created_at: MONDAY - 1.year)
     post = run_x("Beta Reactors designs small reactors.")
-    assert_equal [ "drafted", company ], [ post.status, post.subject ]
+    assert_equal [ "drafted", company ], [ post.status, post.subject ], "Acme, re-verified this week but first approved a year ago, isn't new"
   end
 
   def live!
@@ -124,6 +134,23 @@ class SocialAgentTest < ActiveSupport::TestCase
 
     assert_equal [ "it's empty or a placeholder" ], SocialAgent::Check.problems("[headline here]",
       SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, source_quote: "", path: "/", organization_ids: []), platform: "x")
+  end
+
+  test "a failed send uses up the day and its item (a rerun never sends it again); one platform failing doesn't stop the other" do
+    live!
+    SocialAgent.senders["x"] = ->(*) { raise "X said 403" }
+    assert_equal "failed", run_x(DRAFT).status
+    SocialAgent.senders["x"] = ->(*) { flunk "not again today" }
+    assert_nil run_x(DRAFT)
+    assert_nil SocialAgent.run("x", now: MONDAY + 1.day, writer: FakeWriter.new(DRAFT)), "nor its item tomorrow"
+
+    calls = []
+    original = SocialAgent.method(:run)
+    SocialAgent.define_singleton_method(:run) { |platform, **| calls << platform; raise "model down" if platform == "x" }
+    SocialPostJob.perform_now
+    assert_equal %w[x linkedin], calls
+  ensure
+    SocialAgent.define_singleton_method(:run, original) if original
   end
 
   test "one send per item and platform, enforced by the database" do

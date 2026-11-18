@@ -23,7 +23,8 @@ module SocialAgent
   def self.run(platform, now: Time.current, writer: SocialAgent::Writer.new)
     channel = SocialChannel.for(platform)
     return if channel.off? || now.in_time_zone(ZONE).on_weekend?
-    return if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
+    # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
+    return if SocialPost.where(platform:, status: [ *SocialPost::SENT, "drafted", "failed" ], created_at: now.in_time_zone(ZONE).all_day).exists?
 
     item = SocialAgent::Picker.new(platform:, now:).call or return
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,

@@ -9,7 +9,7 @@
       <p class="type-small m-0" id="social-sending-off">Sending is off on the server (SOCIAL_POSTING_ENABLED), so Live writes drafts only.</p>
     <% end %>
     <% unless SocialAgent::Buffer.configured? %>
-      <p class="type-small m-0" id="social-buffer-key">Buffer isn't set up yet: its API key goes on Render as BUFFER_API_KEY.</p>
+      <p class="type-small m-0" id="social-buffer-key">Buffer isn't set up yet: BUFFER_API_KEY, BUFFER_X_CHANNEL_ID and BUFFER_LINKEDIN_CHANNEL_ID go on Render.</p>
     <% end %>
     <p class="type-small text-ink-muted m-0">This month: $<%= number_with_precision(@spent, precision: 2) %> of $<%= number_with_precision(SocialAgent.monthly_cap, precision: 2) %>.</p>
     <% @channels.each do |channel| %>

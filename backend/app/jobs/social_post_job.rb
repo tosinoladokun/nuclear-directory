@@ -2,5 +2,12 @@
 class SocialPostJob < ApplicationJob
   queue_as :default
 
-  def perform = SocialChannel::PLATFORMS.each { |platform| SocialAgent.run(platform) }
+  # Each platform on its own: one failing (the model unreachable) never skips the other (Infra).
+  def perform
+    SocialChannel::PLATFORMS.each do |platform|
+      SocialAgent.run(platform)
+    rescue StandardError => error
+      Rails.error.report(error, context: { social_platform: platform })
+    end
+  end
 end

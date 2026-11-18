@@ -20,6 +20,8 @@ module SocialAgent::Check
     found << "it has its own link" if text.match?(%r{https?://|www\.}i)
     found << "it has a hashtag" if text.match?(/(^|\s)#\w/)
     found << "it has an emoji" if text.match?(/\p{Extended_Pictographic}/)
+    # A date, not relative time: the post may go out days after the event (DQ).
+    found << "it says #{$1.downcase.inspect} instead of a date" if text.match(/\b(today|yesterday|tonight|this week|last week|just|now)\b/i)
     found << "it's too long for #{platform == 'x' ? 'X' : 'LinkedIn'}" if too_long?(text, platform)
     found
   end

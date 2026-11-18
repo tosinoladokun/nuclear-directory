@@ -6,6 +6,8 @@ class SocialAgent::Writer
     Rules (the Social playbook and VOICE.md):
     - Lead with the useful fact: who did what, with the number, date and conditions the facts give. Nothing else.
     - Use only the facts given. Every number and name must come from them. No guesses, rankings or opinions.
+    - Give the event's date ("On 12 November") rather than "today", "this week" or "just". When the facts name a
+      publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,
       no emoji, no links, no exclamation marks, no "not X but Y", no lists of three for rhythm.
