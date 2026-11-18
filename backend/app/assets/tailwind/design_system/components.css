@@ -977,6 +977,10 @@
   /* Today as Tosin's inbox (#548). */
   .nd-shell__group { display: block; padding: var(--nd-space-4) var(--nd-space-4) var(--nd-space-1); }
   .nd-inbox__buttons { display: flex; gap: var(--nd-space-2); }
+  /* Multi-select (#771): the bar stays in view while he ticks rows. */
+  .nd-inbox__bulk { position: sticky; top: 0; z-index: 1; gap: var(--nd-space-2); padding: var(--nd-space-3) 0; background: var(--nd-paper); }
+  .nd-inbox__bulk[hidden] { display: none; }
+  .nd-inbox__item > .nd-check { flex: none; align-self: flex-start; margin-top: 4px; }
   .nd-inbox__short { display: none; }
   .nd-inbox__recent { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nd-space-2) var(--nd-space-3); }
   .nd-inbox__recent > .type-body { flex: 1 1 20rem; }

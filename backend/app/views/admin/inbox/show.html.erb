@@ -2,6 +2,8 @@
 <% sections = @inbox.sections %>
 <% total = @inbox.size %>
 <% checked = @inbox.checked %>
+<%# Data Quality's no on any claim shown (#777), read once for the page: id => reason. %>
+<% said_no = Candidate.where(id: sections.values.flatten.flat_map(&:ids), dq_recommendation: "reject").pluck(:id, :dq_reason).to_h %>
 <% headings = { "new_record" => "New companies and plants", "new_fact" => "New facts and deals", "change" => "Changes to something you decided" } %>
 <%# One checked item needs no batch button: its own Yes does it (Design). %>
 <% batch_after = (%w[new_record new_fact change].find { |key| sections[key].any? { |entry| checked.include?(entry) } } if checked.size > 1) %>
@@ -42,6 +44,12 @@
   </section>
 <% end %>
 
+<div class="nd-stack" data-controller="bulk-select">
+<%# Tick rows, then decide them together (#771). The boxes sit in each row and belong to this form. %>
+<%= form_with url: admin_inbox_decide_selected_path, id: "inbox-selected", class: "nd-row nd-inbox__bulk", data: { bulk_select_target: "bar" }, hidden: true do |form| %>
+  <%= form.button name: "decision", value: "yes", class: "nd-btn nd-btn--primary type-ui" do %><span>Create / Approve selected (<span data-bulk-select-target="count">0</span>)</span><% end %>
+  <%= form.button name: "decision", value: "no", class: "nd-btn nd-btn--outline type-ui" do %><span>No to selected (<span data-bulk-select-target="count">0</span>)</span><% end %>
+<% end %>
 <% OwnerInbox::SECTIONS.each do |key| %>
   <% entries = sections[key] %>
   <% records = key == "new_record" ? @inbox.records : [] %>
@@ -49,6 +57,7 @@
   <% next if entries.empty? && records.empty? && waiting.zero? %>
   <section class="nd-stack" aria-labelledby="inbox-<%= key %>">
     <h2 id="inbox-<%= key %>" class="type-admin-h2 m-0"><%= headings.fetch(key) %> <span class="type-count"><%= entries.size + records.size %></span></h2>
+    <label class="nd-row type-small"><input type="checkbox" class="nd-check" data-action="bulk-select#all" data-section="<%= key %>"> Select all</label>
     <% if waiting.positive? %>
       <p class="type-small text-ink-muted m-0"><%= pluralize(waiting, "more new company", plural: "more new companies") %> tomorrow. <%= OwnerInbox::CREATES_A_DAY %> a day, best-sourced first.</p>
     <% end %>
@@ -56,6 +65,13 @@
       <% entries.each do |entry| %>
         <% item = entry.item %>
         <li class="nd-wait nd-inbox__item" id="inbox-item-<%= item.candidate_id %>">
+          <%# Data Quality said no: decided on its own row only (DQ, 12 Nov). %>
+          <% if entry.ids.any? { |id| said_no.key?(id) } %>
+            <span class="nd-check" aria-hidden="true"></span>
+          <% else %>
+            <input type="checkbox" class="nd-check" name="selected[]" value="claim:<%= entry.ids.join(",") %>" form="inbox-selected" data-section="<%= key %>"
+              data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select #<%= item.candidate_id %>">
+          <% end %>
           <div class="nd-wait__what">
             <% if key == "new_record" %>
               <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
@@ -76,7 +92,7 @@
                 <p class="type-small text-ink-muted m-0">“<%= item.quote %>”</p>
               <% end %>
             <% end %>
-            <% if (no = Candidate.where(id: entry.ids, dq_recommendation: "reject").pluck(:dq_reason)).any? %>
+            <% if (no = entry.ids.select { |id| said_no.key?(id) }.map { |id| said_no[id] }).any? %>
               <p class="type-small m-0 text-critical" id="dq-no-<%= item.candidate_id %>"><strong>Data Quality says no:</strong> <%= no.compact.first || "no reason given" %></p>
             <% end %>
             <p class="type-small m-0">
@@ -112,9 +128,9 @@
           </div>
           <div class="nd-wait__actions nd-inbox__buttons type-ui">
             <% yes, no = key == "change" ? [ "Approve the change", nil ] : [ key == "new_record" ? "Create" : "Approve", "No" ] %>
-            <% said_no = Candidate.where(id: entry.ids, dq_recommendation: "reject").exists? %>
+            <% row_said_no = entry.ids.any? { |id| said_no.key?(id) } %>
             <%= button_to yes, admin_inbox_decide_path(item.candidate_id, "yes"), params: { ids: entry.ids }, class: "nd-btn nd-btn--primary",
-              data: (said_no ? { turbo_confirm: "Data Quality says no to this. #{yes} anyway?" } : {}) %>
+              data: (row_said_no ? { turbo_confirm: "Data Quality says no to this. #{yes} anyway?" } : {}) %>
             <% if key == "change" %>
               <%= button_to admin_inbox_decide_path(item.candidate_id, "no"), params: { ids: entry.ids, kind: "change" }, class: "nd-btn nd-btn--outline" do %><span class="nd-inbox__long">Keep what I decided</span><span class="nd-inbox__short">Keep mine</span><% end %>
             <% else %>
@@ -128,6 +144,8 @@
         <% name = fact.attributes.to_h.with_indifferent_access[:name] %>
         <% quote = fact.evidence.first %>
         <li class="nd-wait nd-inbox__item" id="inbox-record-<%= fact.type.underscore %>-<%= fact.id %>">
+          <input type="checkbox" class="nd-check" name="selected[]" value="record:<%= fact.type %>:<%= fact.id %>" form="inbox-selected" data-section="<%= key %>"
+            data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select <%= name %>">
           <div class="nd-wait__what">
             <p class="m-0"><span class="nd-tag"><%= fact.type == "Facility" ? "Plant" : "Company" %></span></p>
             <p class="type-body m-0"><%= link_to name, admin_fact_path(type: fact.type, id: fact.id), class: "nd-link type-body-strong" %></p>
@@ -157,6 +175,8 @@
     <% end %>
   </section>
 <% end %>
+
+</div>
 
 <% recent = @inbox.recent.to_a %>
 <% if recent.any? %>
