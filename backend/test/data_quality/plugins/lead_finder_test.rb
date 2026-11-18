@@ -70,6 +70,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: finder)
     assert_equal :unconfirmed, result.outcome
     assert_equal "not_nuclear", result.found["checked"].sole["verdict"]
+    assert_equal "No site checked out as this US nuclear company (freshfission.example: no nuclear work)", result.reason, "each site's verdict in the reason"
 
     result = Plugin.call(lead("Other Atom", url: HOME).id, finder: finder)
     assert_equal "not_named", result.found["checked"].sole["verdict"]
