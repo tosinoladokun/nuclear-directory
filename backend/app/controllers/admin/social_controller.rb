@@ -9,7 +9,7 @@ class Admin::SocialController < Admin::BaseController
 
   def update
     channel = SocialChannel.for(params[:platform])
-    if channel.update(mode: params[:mode])
+    if channel.update(mode: params[:mode], paused_reason: nil)
       flash[:notice] = { "off" => "Switched off.", "drafts" => "Drafts only: written and checked, never sent.", "live" => "Live." }.fetch(channel.mode)
     else
       flash[:alert] = "Not changed: #{channel.errors.full_messages.to_sentence}."

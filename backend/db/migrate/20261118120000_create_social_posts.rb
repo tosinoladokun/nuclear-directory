@@ -5,6 +5,8 @@ class CreateSocialPosts < ActiveRecord::Migration[8.1]
       t.string :platform, null: false
       # off: nothing runs; drafts: drafted and checked, never sent; live: sent.
       t.string :mode, null: false, default: "off"
+      # Why the agent switched it off itself (two errors in a row), until a person sets it again.
+      t.string :paused_reason
       t.timestamps
       t.index :platform, unique: true
       t.check_constraint "platform IN ('x', 'linkedin')", name: "social_channels_platform_check"

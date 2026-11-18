@@ -106,6 +106,24 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match "cap", run_x(DRAFT).reason
   end
 
+  test "two errors in a row switch the platform off and say so; a fact taken off since the pick isn't sent; placeholders stop" do
+    live!
+    SocialAgent.senders["x"] = ->(*) { raise "X said 403" }
+    SocialPost.create!(platform: "x", status: "failed", subject: @company, created_at: MONDAY - 3.days)
+    run_x(DRAFT)
+    channel = SocialChannel.for("x")
+    assert_equal [ "off", "2 sends in a row didn't go through" ], [ channel.mode, channel.paused_reason ]
+
+    SocialPost.delete_all
+    live!
+    SocialAgent.senders["x"] = ->(*) { flunk "never sent" }
+    @news.update_columns(verification_status: "unpublished")
+    assert_match "no longer published", SocialAgent.send_post(SocialPost.new(platform: "x", subject: @news, text: DRAFT, link: "l"), now: MONDAY).reason
+
+    assert_equal [ "it's empty or a placeholder" ], SocialAgent::Check.problems("[headline here]",
+      SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, source_quote: "", path: "/", organization_ids: []), platform: "x")
+  end
+
   test "one send per item and platform, enforced by the database" do
     SocialPost.create!(platform: "x", status: "unknown", subject: @news)
     assert_raises(ActiveRecord::RecordNotUnique) { SocialPost.create!(platform: "x", status: "sending", subject: @news) }

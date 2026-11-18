@@ -18,6 +18,10 @@
   <p class="type-body m-0"><%= total.zero? ? "Nothing to decide today." : "#{total} to decide. Nothing goes live until you say yes." %></p>
 </div>
 
+<%# The social agent switched itself off (#769): said here, where he looks every day. %>
+<% SocialChannel.where.not(paused_reason: nil).each do |channel| %>
+  <p class="nd-flash type-body" role="alert" id="social-paused-<%= channel.platform %>">Posting to <%= channel.platform == "x" ? "X" : "LinkedIn" %> stopped: <%= channel.paused_reason %>. <%= link_to "Check Posts", admin_social_path, class: "nd-link" %></p>
+<% end %>
 <%= form_with url: admin_inbox_suggest_path, class: "nd-stack", aria: { label: "Add a lead" } do %>
   <%= label_tag :suggestion, "Add a lead", class: "type-admin-h2 m-0" %>
   <%= text_area_tag :suggestion, nil, class: "nd-input type-input", rows: 2, required: true,

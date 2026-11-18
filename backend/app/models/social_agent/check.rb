@@ -14,6 +14,7 @@ module SocialAgent::Check
     source = normalize(item.source_text)
     stated = numbers(item.source_text)
     found = []
+    return [ "it's empty or a placeholder" ] if text.to_s.strip.length < 20 || text.match?(/\[[^\]]*\]|\{\{|TODO|lorem ipsum|placeholder/i)
     numbers(text).each { |number| found << "the number #{number} isn't in the source" unless stated.include?(number) }
     names(text).each { |name| found << "the name #{name.inspect} isn't in the source" unless allowed_name?(name, source) }
     found << "it has its own link" if text.match?(%r{https?://|www\.}i)

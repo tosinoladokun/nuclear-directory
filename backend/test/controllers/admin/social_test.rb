@@ -19,4 +19,12 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     patch admin_social_channel_path("x"), params: { mode: "loud" }
     assert_match "Not changed", flash[:alert]
   end
+
+  test "a platform the agent switched off itself is said in Today, and setting it again clears that" do
+    SocialChannel.for("x").update!(mode: "off", paused_reason: "2 sends in a row didn't go through")
+    get admin_inbox_path
+    assert_select "#social-paused-x", /Posting to X stopped: 2 sends in a row didn't go through/
+    patch admin_social_channel_path("x"), params: { mode: "drafts" }
+    assert_nil SocialChannel.for("x").paused_reason
+  end
 end

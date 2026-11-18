@@ -12,6 +12,7 @@
     <% @channels.each do |channel| %>
       <div class="nd-row" id="social-switch-<%= channel.platform %>">
         <p class="type-body-strong m-0"><%= channel.platform == "x" ? "X" : "LinkedIn" %></p>
+        <% if channel.paused_reason %><p class="type-small text-critical m-0">Switched off by itself: <%= channel.paused_reason %>.</p><% end %>
         <% { "off" => "Off", "drafts" => "Drafts only", "live" => "Live" }.each do |mode, label| %>
           <%= button_to label, admin_social_channel_path(channel.platform), method: :patch, params: { mode: },
             class: "nd-btn #{channel.mode == mode ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui", aria: { pressed: channel.mode == mode },

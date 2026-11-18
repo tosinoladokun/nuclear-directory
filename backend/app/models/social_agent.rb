@@ -50,6 +50,10 @@ module SocialAgent
     end
     return post unless claimed == true
 
+    # Its fact still published at send time (it may have been taken off since the pick).
+    unless post.subject.reload.verification_status == "verified"
+      return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{post.subject_type == 'NewsItem' ? 'news item' : 'company'} is no longer published") }
+    end
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
     sent = sender.call(post.text, post.link)
     post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
@@ -57,8 +61,19 @@ module SocialAgent
     post.tap { |again| again.update!(status: "blocked", reason: "already sent once") }
   rescue Uncertain => error
     post.tap { |unknown| unknown.update!(status: "unknown", reason: "may have gone out (#{error.message}); check the account, never resent".truncate(250)) }
+      .tap { pause_after_errors(post.platform) }
   rescue StandardError => error
     post.tap { |failed| failed.update!(status: "failed", cost_usd: 0, reason: "#{error.class}: #{error.message}".truncate(250)) }
+      .tap { pause_after_errors(post.platform) }
+  end
+
+  # Two sends in a row that errored switch the platform off (Infra); a person looks, then turns it back on.
+  PAUSE_AFTER = 2
+  def self.pause_after_errors(platform)
+    last = SocialPost.where(platform:, status: %w[posted unknown failed]).order(id: :desc).limit(PAUSE_AFTER).pluck(:status)
+    return unless last.size == PAUSE_AFTER && last.none?("posted")
+
+    SocialChannel.for(platform).update!(mode: "off", paused_reason: "#{PAUSE_AFTER} sends in a row didn't go through")
   end
 
   # The record's page, tracked (Social playbook: utm_source x or linkedin-page).
