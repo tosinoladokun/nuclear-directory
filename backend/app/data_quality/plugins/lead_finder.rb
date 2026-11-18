@@ -105,7 +105,16 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
     quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
       .find { |sentence| names?(sentence, name) && nuclear?(sentence, brand(name)) } or return []
-    [ { kind: "organization", quote: quote.strip, payload: { "name" => name, "website" => "https://#{URI(source.url).host}" } } ]
+    [ { kind: "organization", quote: quote.strip, payload: { "name" => page_name(quote, name), "website" => "https://#{URI(source.url).host}" } } ]
+  end
+
+  # The name as the company's own page writes it, from the quote: the brand in
+  # its own capitals and the capitalised words right after it ("cameco" typed
+  # is "Cameco"; "Fermi Inc." on a page saying "Fermi America" is "Fermi
+  # America"). Never the text someone typed (Backend, 18 Nov).
+  def page_name(quote, name)
+    quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(brand(name))})(?:\s+[A-Z][[:alnum:]&.'-]*){0,3}(?![[:alnum:]])/].to_s.squish
+      .sub(/\s+(?:The|A|An|Is|Are|Was|Has|Have|And|Of|In|For|To|At|On)\b.*\z/, "").presence || name
   end
 
   def source_facts(_source)

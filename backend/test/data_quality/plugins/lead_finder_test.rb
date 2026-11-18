@@ -182,4 +182,16 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_requested :get, "#{HOME}/contact"
     assert_equal "Fresh Fission designs microreactors for remote sites.", Candidate.find(result.candidate_id).quote
   end
+
+  test "the company is named as its own page writes it, never as typed (Backend, 18 Nov)" do
+    result = Plugin.call(lead("fresh fission", url: HOME).id, finder: finder)
+    assert_equal "Fresh Fission", Candidate.find(result.candidate_id).payload["name"]
+
+    other = "https://www.ffamerica.example"
+    stub_request(:get, "#{other}/robots.txt").to_return(status: 404)
+    stub_request(:get, other).to_return(body: "<html><body><p>Fresh Fission America designs microreactors. Austin, TX 78701</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    result = Plugin.call(lead("Fresh Fission Inc.", url: other).id, finder: finder)
+    assert_equal "Fresh Fission America", Candidate.find(result.candidate_id).payload["name"]
+  end
 end
