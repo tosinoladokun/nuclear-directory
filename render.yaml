@@ -115,6 +115,10 @@ services:
       # searches a day, pasted by Tosin. Unset, the finder doesn't search.
       - key: BRAVE_SEARCH_API_KEY
         sync: false
+      # The social agent (#769): it sends only when this is "on", set in the
+      # dashboard; blank or anything else, Live writes drafts only.
+      - key: SOCIAL_POSTING_ENABLED
+        sync: false
       # Addresses whose mail to leads@ becomes leads (#757), comma-separated,
       # set by Tosin. Unset, leads@ isn't read.
       - key: LEADS_ALLOWED_SENDERS

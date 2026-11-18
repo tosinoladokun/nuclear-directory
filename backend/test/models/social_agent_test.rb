@@ -59,18 +59,55 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal [ "drafted", company ], [ post.status, post.subject ]
   end
 
-  test "live sends through the platform's sender and logs the permalink; a failure is logged, not raised" do
+  def live!
     SocialChannel.for("x").update!(mode: "live")
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+  end
+
+  teardown do
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
+
+  DRAFT = "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
+
+  test "live sends once through the platform's sender, costed, and logs the permalink" do
+    live!
     sent = nil
-    SocialAgent.senders["x"] = ->(text, link) { sent = [ text, link ]; { id: "1", permalink: "https://x.com/NuclearDir/status/1" } }
-    post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.")
-    assert_equal [ "posted", "https://x.com/NuclearDir/status/1" ], [ post.status, post.permalink ]
+    SocialAgent.senders["x"] = ->(text, link) { sent = [ text, link ]; { id: "1", permalink: "https://x.com/i/web/status/1" } }
+    post = run_x(DRAFT)
+    assert_equal [ "posted", "https://x.com/i/web/status/1", SocialAgent.post_cost ], [ post.status, post.permalink, post.cost_usd ]
     assert_equal post.link, sent.last
+  end
+
+  test "Live with sending off on the server only drafts" do
+    SocialChannel.for("x").update!(mode: "live")
+    SocialAgent.senders["x"] = ->(*) { flunk "never called" }
+    assert_equal "drafted", run_x(DRAFT).status
+  end
+
+  test "a timeout is 'may have gone out' and never sent again; a definite error is logged; the cap stops it before the call" do
+    live!
+    SocialAgent.senders["x"] = ->(*) { raise SocialAgent::Uncertain, "timeout" }
+    assert_equal "unknown", (post = run_x(DRAFT)).status
+    assert_match "never resent", post.reason
+    calls = 0
+    SocialAgent.senders["x"] = ->(*) { calls += 1; { id: "2", permalink: "p" } }
+    assert_nil SocialAgent.run("x", now: MONDAY + 1.day, writer: FakeWriter.new(DRAFT)), "the same item is never picked again"
+    assert_equal 0, calls
 
     SocialPost.delete_all
     SocialAgent.senders["x"] = ->(*) { raise "X said 403" }
-    assert_match "X said 403", run_x("Acme Fission won a DOE award.").reason
-  ensure
-    SocialAgent.senders.delete("x")
+    assert_equal [ "failed", 0 ], run_x(DRAFT).then { |failed| [ failed.status, failed.cost_usd ] }
+
+    SocialPost.delete_all
+    SocialPost.create!(platform: "x", status: "posted", subject: @company, cost_usd: SocialAgent.monthly_cap, created_at: MONDAY - 1.day)
+    SocialAgent.senders["x"] = ->(*) { flunk "never called over the cap" }
+    assert_match "cap", run_x(DRAFT).reason
+  end
+
+  test "one send per item and platform, enforced by the database" do
+    SocialPost.create!(platform: "x", status: "unknown", subject: @news)
+    assert_raises(ActiveRecord::RecordNotUnique) { SocialPost.create!(platform: "x", status: "sending", subject: @news) }
   end
 end

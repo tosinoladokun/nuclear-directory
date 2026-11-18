@@ -5,6 +5,10 @@
 
   <section class="nd-stack" aria-labelledby="social-switches">
     <h2 id="social-switches" class="type-admin-h2 m-0">Switches</h2>
+    <% unless SocialAgent.sending_enabled? %>
+      <p class="type-small m-0" id="social-sending-off">Sending is off on the server (SOCIAL_POSTING_ENABLED), so Live writes drafts only.</p>
+    <% end %>
+    <p class="type-small text-ink-muted m-0">This month: $<%= number_with_precision(@spent, precision: 2) %> of $<%= number_with_precision(SocialAgent.monthly_cap, precision: 2) %>.</p>
     <% @channels.each do |channel| %>
       <div class="nd-row" id="social-switch-<%= channel.platform %>">
         <p class="type-body-strong m-0"><%= channel.platform == "x" ? "X" : "LinkedIn" %></p>
@@ -28,7 +32,8 @@
           <div class="nd-wait__what">
             <p class="type-small m-0"><span class="nd-tag"><%= post.platform == "x" ? "X" : "LinkedIn" %></span>
               <span class="type-data"><%= post.created_at.in_time_zone(SocialAgent::ZONE).strftime("%-d %b %H:%M") %></span> ·
-              <%= { "posted" => "Posted", "drafted" => "Draft", "blocked" => "Stopped by a check", "failed" => "Didn't send" }.fetch(post.status) %></p>
+              <%= { "posted" => "Posted", "drafted" => "Draft", "sending" => "Sending", "unknown" => "May have gone out: check the account",
+                    "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
             <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
             <% if post.reason.present? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
             <p class="type-small m-0">

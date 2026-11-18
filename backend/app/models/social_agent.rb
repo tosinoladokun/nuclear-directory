@@ -8,11 +8,20 @@ module SocialAgent
   # Senders by platform; X arrives in phase 1b, LinkedIn through a partner scheduler in phase 2.
   def self.senders = @senders ||= {}
 
+  # Sending is on only when SOCIAL_POSTING_ENABLED is "on" (Render dashboard; Infra): otherwise Live drafts too.
+  def self.sending_enabled? = ENV["SOCIAL_POSTING_ENABLED"] == "on"
+  # What one post costs and the most a month may cost (X pay-per-use; Infra). The X balance is the outer cap.
+  def self.post_cost = BigDecimal(ENV.fetch("X_POST_COST_USD", "0.05"))
+  def self.monthly_cap = BigDecimal(ENV.fetch("SOCIAL_MONTHLY_CAP_USD", "10"))
+
+  # A send whose outcome isn't known (timeout, 5xx, 429): it may have gone out, so it's never sent again.
+  class Uncertain < StandardError; end
+
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
   def self.run(platform, now: Time.current, writer: SocialAgent::Writer.new)
     channel = SocialChannel.for(platform)
     return if channel.off? || now.in_time_zone(ZONE).on_weekend?
-    return if SocialPost.where(platform:, status: %w[posted drafted], created_at: now.in_time_zone(ZONE).all_day).exists?
+    return if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
 
     item = SocialAgent::Picker.new(platform:, now:).call or return
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,
@@ -24,17 +33,32 @@ module SocialAgent
       problems << "voice check: #{why}" unless ok
     end
     return post.tap { |blocked| blocked.update!(status: "blocked", reason: problems.to_sentence) } if problems.any?
-    return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live?
+    return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled?
 
-    send_post(post)
+    send_post(post, now:)
   end
 
-  def self.send_post(post)
+  # Sends once: under the channel's lock, checks the month's spend, writes the post as sending (one per item and
+  # platform, ever), then calls the platform. No retry.
+  def self.send_post(post, now: Time.current)
+    claimed = SocialChannel.transaction do
+      SocialChannel.lock.find_by!(platform: post.platform)
+      spent = SocialPost.where(platform: post.platform, status: SocialPost::SENT, created_at: now.all_month).sum(:cost_usd)
+      next post.tap { |over| over.update!(status: "blocked", reason: "this month's cap of $#{monthly_cap.to_s('F')} is reached") } if spent + post_cost > monthly_cap
+
+      post.update!(status: "sending", cost_usd: post_cost)
+    end
+    return post unless claimed == true
+
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
     sent = sender.call(post.text, post.link)
     post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
+  rescue ActiveRecord::RecordNotUnique
+    post.tap { |again| again.update!(status: "blocked", reason: "already sent once") }
+  rescue Uncertain => error
+    post.tap { |unknown| unknown.update!(status: "unknown", reason: "may have gone out (#{error.message}); check the account, never resent".truncate(250)) }
   rescue StandardError => error
-    post.tap { |failed| failed.update!(status: "failed", reason: "#{error.class}: #{error.message}".truncate(250)) }
+    post.tap { |failed| failed.update!(status: "failed", cost_usd: 0, reason: "#{error.class}: #{error.message}".truncate(250)) }
   end
 
   # The record's page, tracked (Social playbook: utm_source x or linkedin-page).

@@ -555,13 +555,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_120000) do
     t.string "reason"
     t.string "external_id"
     t.string "permalink"
+    t.decimal "cost_usd", precision: 8, scale: 4, default: "0.0", null: false
     t.datetime "posted_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["platform", "created_at"], name: "index_social_posts_on_platform_and_created_at"
+    t.index ["platform", "subject_type", "subject_id"], name: "index_social_posts_one_send", unique: true, where: "((status)::text = ANY ((ARRAY['sending'::character varying, 'posted'::character varying, 'unknown'::character varying])::text[]))"
     t.index ["subject_type", "subject_id"], name: "index_social_posts_on_subject_type_and_subject_id"
     t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_posts_platform_check"
-    t.check_constraint "status::text = ANY (ARRAY['drafted'::character varying, 'posted'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "social_posts_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['drafted'::character varying, 'sending'::character varying, 'posted'::character varying, 'unknown'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "social_posts_status_check"
   end
 
   create_table "solid_cable_messages", force: :cascade do |t|
