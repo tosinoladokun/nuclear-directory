@@ -23,9 +23,11 @@ module CompanySuggestion
     text = input.to_s.squish
     return if text.blank? || text.length > MAX
 
-    url = text if text.match?(%r{\Ahttps?://\S+\z}i)
-    # A link is named by its site and path, so two LinkedIn pages or two articles are two leads.
-    name = url ? (link_name(url) || text) : text
+    url = text[%r{https?://\S+}i]
+    # "Name: link", "Name - link" or "Name link" (Infra, 18 Nov: Aalo): the words name it, the link is its site.
+    named = url && text.sub(url, "").squish.gsub(/\A[\s:,–—-]+|[\s:,–—-]+\z/, "").squish.presence
+    # A link alone is named by its site and path, so two LinkedIn pages or two articles are two leads.
+    name = named || (url ? (link_name(url) || text) : text)
     lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(text)}", label: LABEL, url:) or return
     # The same line again while it's being found: one find is enough (Infra).
     return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.updated_at > 5.minutes.ago

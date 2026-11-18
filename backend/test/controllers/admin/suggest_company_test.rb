@@ -17,6 +17,16 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
   def add(text) = post(admin_inbox_suggest_path, params: { suggestion: text })
   def line(lead) = css_select("#lead-#{lead.id}").text.squish
 
+  test "a name and its site on one line: the words name it, the link is its site" do
+    [ "Aalo Atomics: https://www.aalo.com/", "Aalo Atomics - https://www.aalo.com/", "Aalo Atomics https://www.aalo.com/" ].each do |line|
+      Lead.delete_all
+      add(line)
+      lead = Lead.sole
+      assert_equal "Aalo Atomics", lead.name, line
+      assert_equal "https://www.aalo.com/", lead.sources.sole["url"], line
+    end
+  end
+
   test "Add queues the find and shows Finding; an empty or too long one is refused" do
     assert_enqueued_with(job: LeadFindJob) { add("  Kairos Power ") }
     lead = Lead.find_by!(normalized_name: "kairos power")
