@@ -4,7 +4,7 @@ require "test_helper"
 # uses, no person, no unquoted superlative, no sensitive topic, no near-repeat, no federal holiday, Buffer's allowance.
 class SocialAgent::RulesTest < ActiveSupport::TestCase
   Rules = SocialAgent::Rules
-  OK = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :blocked, status:, body: "",
+  OK = Struct.new(:status, :body) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :blocked, status:, body: body.to_s,
     etag: nil, last_modified: nil, reason: "blocked", block_reference: nil, content_type: nil, truncated: false) }
 
   setup do
@@ -64,5 +64,19 @@ class SocialAgent::RulesTest < ActiveSupport::TestCase
     assert_nil SocialAgent.run("x", writer: Object.new)
     channel = SocialChannel.for("x")
     assert_equal [ "off", "Buffer's 30-day request allowance is 80% used" ], [ channel.mode, channel.paused_reason ]
+  end
+
+  test "every superlative, plural sensitive words, export controls, a leading article, plant aliases, and the page itself" do
+    src = item(quote: "The NRC received Acme Fission's first application.")
+    assert_includes Rules.problems("Acme Fission filed its first and largest application.", src, platform: "x", fetcher: OK.new(200)),
+      "it says \"largest\", which its source doesn't"
+    assert_match "lawsuits", Rules.problems("The NRC received two lawsuits about Acme Fission.", item, platform: "x", fetcher: OK.new(200)).join
+    assert_match "export controls", Rules.problems("Export controls apply to the NRC application.", item, platform: "x", fetcher: OK.new(200)).join
+    assert_includes Rules.problems("The Jane Doe statement covered the NRC application.", item, platform: "x", fetcher: OK.new(200)), "it may name a person (Jane Doe)"
+    plant = Facility.create!(name: "Crane Clean Energy Center", facility_type: "power_reactor")
+    plant.aliases.create!(alias: "Three Mile Island")
+    assert_empty Rules.people("Three Mile Island is near the NRC office.", item)
+    assert_match "source page touches a sensitive topic (contamination)",
+      Rules.problems("The NRC received Acme Fission's construction permit application.", item, platform: "x", fetcher: OK.new(200, "after contamination was found")).join
   end
 end

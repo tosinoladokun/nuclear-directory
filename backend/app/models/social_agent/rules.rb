@@ -19,15 +19,18 @@ module SocialAgent::Rules
     /\bshut( ?down)?\b/i => /shut/i, /\bdecommission(ed|ing)?\b/i => /decommission/i
   }.freeze
   SUPERLATIVES = /\b(largest|biggest|first|only|smallest|fastest|most|record|unprecedented|leading|best|world's)\b/i
-  SENSITIVE = /\b(incident|accident|injur\w*|casualt\w*|death|died|killed|fatal\w*|leak\w*|contaminat\w*|evacuat\w*|security|
-    terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|export control\w*|lawsuit|litigation|indict\w*)\b/ix
+  SENSITIVE = /\b(incidents?|accidents?|injur\w*|casualt\w*|deaths?|died|killed|fatal\w*|leak\w*|contaminat\w*|evacuat\w*|security|
+    terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|export\s+controls?|lawsuits?|litigation|indict\w*)\b/ix
+  # On the fetched page (menus included), a narrower list: a regulator's page always has "Security" in its menu.
+  PAGE_SENSITIVE = /\b(incidents?|accidents?|casualt\w*|killed|fatal\w*|contaminat\w*|evacuat\w*|sabotage|theft|stolen|weapons?)\b/i
   MONTHS = Date::MONTHNAMES.compact.freeze
   STATES = %w[Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho Illinois
     Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota Mississippi Missouri Montana Nebraska
     Nevada Hampshire Jersey Mexico York Carolina Dakota Ohio Oklahoma Oregon Pennsylvania Rhode Island Tennessee Texas Utah
     Vermont Virginia Washington Wisconsin Wyoming New North South West].freeze
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
-  NOT_PERSON = %w[The A An Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
+  ARTICLES = %w[The A An This That These Those].freeze
+  NOT_PERSON = %w[Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
     Authority University Institute Corporation Company Inc LLC Power Station Plant Unit Units Reactor Project Program Federal Register
     Fund Bank Group Energy Fuel Fuels Technologies Systems Services Holdings Partners Capital Industries Electric Utility Council
     Board Court Congress Senate House Army Navy Air Force Generating Clean Center Centre Site County City River Lake Valley].freeze
@@ -41,11 +44,11 @@ module SocialAgent::Rules
     found << "its source isn't a primary one (#{host(item.source_url).presence || 'none'})" unless primary?(item)
     found.concat(status_words(text, item))
     found.concat(people(text, item))
-    found << "it says #{text[SUPERLATIVES].downcase.inspect}, which its source doesn't" if superlative?(text, item)
-    found << "it touches a sensitive topic (#{(text + item.source_text)[SENSITIVE].downcase})" if (text + "\n" + item.source_text).match?(SENSITIVE)
+    unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
+    found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.source_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
-    found << source_unreachable(item.source_url, fetcher) if found.empty?
-    found.compact
+    found.concat(source_problems(item.source_url, fetcher)) if found.empty?
+    found
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
@@ -81,8 +84,12 @@ module SocialAgent::Rules
   # the facts' own companies and publisher, a month or a state; anything else may be a person (Founder 3.7).
   def people(text, item)
     known = [ item.facts["companies"], item.facts["name"], item.facts["publisher"] ].compact.join(" ").downcase
-    text.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/).uniq.filter_map do |phrase|
-      words = phrase.split
+    text.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/).uniq.filter_map do |found|
+      # An article isn't a name, nor evidence of an organisation (Copilot: "The Jane Doe statement").
+      words = found.split.drop_while { |word| ARTICLES.include?(word) }
+      next if words.size < 2
+
+      phrase = words.join(" ")
       next if words.all? { |word| MONTHS.include?(word) || STATES.include?(word) }
       next if words.any? { |word| NOT_PERSON.include?(word) }
       next if known.include?(phrase.downcase) || directory_name?(phrase)
@@ -94,12 +101,12 @@ module SocialAgent::Rules
   def directory_name?(phrase)
     pattern = "%#{ActiveRecord::Base.sanitize_sql_like(phrase.downcase)}%"
     Organization.where("lower(name) LIKE ?", pattern).exists? || Facility.where("lower(name) LIKE ?", pattern).exists? ||
-      OrganizationAlias.where("lower(alias) LIKE ?", pattern).exists?
+      OrganizationAlias.where("lower(alias) LIKE ?", pattern).exists? || FacilityAlias.where("lower(alias) LIKE ?", pattern).exists?
   end
 
-  def superlative?(text, item)
-    word = text[SUPERLATIVES] or return false
-    !item.source_text.match?(/\b#{Regexp.escape(word)}\b/i)
+  # Every superlative in the post, each needing the same word in its source (Copilot).
+  def unsupported_superlatives(text, item)
+    text.scan(SUPERLATIVES).flatten.map(&:downcase).uniq.reject { |word| item.source_text.match?(/\b#{Regexp.escape(word)}\b/i) }
   end
 
   def similar?(text, platform)
@@ -113,11 +120,15 @@ module SocialAgent::Rules
   def tokens(text) = text.downcase.scan(/[[:alnum:]]+/).uniq
 
   # The source must answer 200 now (Founder 3.1: fetched within the last day); a block is a block, never retried.
-  def source_unreachable(url, fetcher)
+  # Its page is checked for sensitive topics too, beyond the saved quote (Copilot).
+  def source_problems(url, fetcher)
     response = fetcher.get(url.to_s)
-    "its source didn't answer (#{response.status || response.reason})" unless response.kind == :ok && response.status == 200
+    return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
+
+    topic = ActionController::Base.helpers.strip_tags(response.body.to_s)[PAGE_SENSITIVE]
+    topic ? [ "its source page touches a sensitive topic (#{topic.downcase})" ] : []
   rescue StandardError => error
-    "its source didn't answer (#{error.class})"
+    [ "its source didn't answer (#{error.class})" ]
   end
 
   # US federal holidays (5 U.S.C. 6103), with Saturday ones observed Friday and Sunday ones Monday.
