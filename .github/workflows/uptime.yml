@@ -73,7 +73,9 @@ jobs:
                 --body "$(printf 'The live site failed the outside check (3 tries, 20 s apart):\n\n%s\nRun: %s\n\nInfrastructure restarts the service if the app is healthy but Render routing is broken (18 Nov).' "$FAILURES" "$run_url")"
             fi
             echo "Site check failed"
-            exit 1
+            # Red only on the first failure of an outage: while its issue is open the run stays green, so GitHub
+            # does not email a failed-run notice every five minutes.
+            [ -n "$open" ] || exit 1
           elif [ -n "$open" ]; then
             gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "Back: the home page, the companies list and a company page all answered 200 ($run_url)."
             gh issue close "$open" --repo "$GITHUB_REPOSITORY"
