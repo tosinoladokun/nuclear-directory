@@ -48,7 +48,8 @@ module AdminHelper
       { label: "Removed", path: admin_removed_path, count: counts[:removed], current: controller_name == "removed" },
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
-        current: controller_name == "corrections" }
+        current: controller_name == "corrections" },
+      { label: "Posts", path: admin_social_path, title: "The social agent", current: controller_name == "social" }
     ]
   end
 
