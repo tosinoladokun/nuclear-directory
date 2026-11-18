@@ -18,6 +18,16 @@ class SocialAgent::Buffer
 
   class Error < StandardError; end
 
+  # Buffer Free allows 1,000 requests a channel per 30 days (2 channels: 2,000); we stop at 80% and say so (PM).
+  MONTHLY_REQUESTS = ENV.fetch("BUFFER_MONTHLY_REQUESTS", "2000").to_i
+  ALERT_AT = 0.8
+  # Daily request counts. Database-backed in production (Solid Cache), so they survive a restart.
+  COUNTS = Rails.env.test? ? ActiveSupport::Cache::MemoryStore.new : Rails.cache
+
+  def self.count_request!(on: Date.current) = COUNTS.increment("buffer_requests:#{on.iso8601}", 1, expires_in: 32.days)
+  def self.requests_last_30_days(today: Date.current) = (0...30).sum { |back| COUNTS.read("buffer_requests:#{(today - back).iso8601}", raw: true).to_i }
+  def self.budget_spent? = requests_last_30_days >= MONTHLY_REQUESTS * ALERT_AT
+
   def self.configured? = ENV["BUFFER_API_KEY"].present? && CHANNEL_KEYS.values.all? { |key| ENV[key].present? }
 
   def initialize(http: method(:deliver), now: -> { Time.current })
@@ -55,6 +65,7 @@ class SocialAgent::Buffer
 
       request = Net::HTTP::Post.new(ENDPOINT, "Content-Type" => "application/json", "Authorization" => "Bearer #{ENV.fetch('BUFFER_API_KEY')}")
       request.body = { query:, variables: }.to_json
+      self.class.count_request!
       body = @http.call(request)
       raise Error, "Buffer said: #{Array(body['errors']).map { |error| error['message'] }.to_sentence}" if body["errors"].present?
 
