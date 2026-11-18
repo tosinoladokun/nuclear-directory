@@ -105,16 +105,31 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
     quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
       .find { |sentence| names?(sentence, name) && nuclear?(sentence, brand(name)) } or return []
-    [ { kind: "organization", quote: quote.strip, payload: { "name" => page_name(quote, name), "website" => "https://#{URI(source.url).host}" } } ]
+    [ { kind: "organization", quote: quote.strip, payload: { "name" => page_name(quote.strip, name, site_names(source)), "website" => "https://#{URI(source.url).host}" } } ]
   end
 
-  # The name as the company's own page writes it, from the quote: the brand in
-  # its own capitals and the capitalised words right after it ("cameco" typed
-  # is "Cameco"; "Fermi Inc." on a page saying "Fermi America" is "Fermi
-  # America"). Never the text someone typed (Backend, 18 Nov).
-  def page_name(quote, name)
-    quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(brand(name))})(?:\s+[A-Z][[:alnum:]&.'-]*){0,3}(?![[:alnum:]])/].to_s.squish
-      .sub(/\s+(?:The|A|An|Is|Are|Was|Has|Have|And|Of|In|For|To|At|On)\b.*\z/, "").presence || name
+  # The name as the company's own page writes it: the name as matched in
+  # its quote, in the page's own capitals ("cameco" typed is "Cameco"), plus
+  # following capitalised words only when the page's own title or site name
+  # carries the longer phrase ("Fresh Fission America"). Never the text
+  # someone typed (Backend, 18 Nov), never a heading's other words, a
+  # possessive or a full stop (Copilot).
+  def page_name(quote, name, site_names = [])
+    matched = quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(name.to_s.squish)})(?![[:alnum:]])/] ||
+      quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(brand(name))})(?![[:alnum:]])/] or return name
+    after = quote[(quote.index(matched) + matched.length)..].to_s
+    words = after.scan(/\A(?:\s+[A-Z][[:alnum:]&-]*)+/).first.to_s.split
+    words.each_index.reverse_each do |count|
+      longer = [ matched, *words.first(count + 1) ].join(" ")
+      return longer if site_names.any? { |site| site.match?(/(?<![[:alnum:]])#{Regexp.escape(longer)}(?![[:alnum:]])/i) }
+    end
+    matched
+  end
+
+  # The page's own names for itself: its og:site_name and its title.
+  def site_names(source)
+    doc = Nokogiri::HTML(source.content_text)
+    [ doc.at_css("meta[property='og:site_name']")&.[]("content"), doc.at_css("title")&.text ].compact.map(&:squish)
   end
 
   def source_facts(_source)
