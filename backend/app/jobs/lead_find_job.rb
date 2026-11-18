@@ -3,7 +3,9 @@
 # it takes up to PER_NIGHT due leads; "Suggest a company" runs one at once.
 class LeadFindJob < ApplicationJob
   queue_as :data_quality
-  limits_concurrency to: 1, key: "lead_find", duration: 2.hours if respond_to?(:limits_concurrency)
+  # The nightly batch one at a time; a lead from the admin box has its own key, so it never waits behind the batch or
+  # another box lead (PM, 18 Nov: Fluor waited). LeadFinding.start locks each lead, so one lead is never found twice.
+  limits_concurrency to: 1, key: ->(lead_id = nil) { lead_id ? "lead_find:#{lead_id}" : "lead_find" }, duration: 2.hours if respond_to?(:limits_concurrency)
 
   # (lead) => an object whose to_h has outcome, and maybe candidate_id (the claim it proposed), organization_id
   # (already listed), reason, name and website.
