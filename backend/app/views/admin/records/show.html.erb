@@ -40,6 +40,13 @@
       <% if @waiting.any? %>
         <p class="type-small"><%= link_to "#{@waiting.size} waiting in Checks", admin_fact_path(type: @fact.type, id: @fact.id, claim: @waiting.first.candidate_id, back: record_path_here), class: "nd-link" %></p>
       <% end %>
+      <%# Where its last Enrich is (#758). %>
+      <% if @record.is_a?(Organization) && %w[verified pending].include?(@fact.verification_status) && (enrich = Admin::RecordEnrichController.status(@record)) %>
+        <% found = Admin::RecordEnrichController.finding_ids(@record).size if enrich == :done %>
+        <p class="type-small" id="enrich-status"><%= link_to admin_record_enrich_path(type: "Organization", id: @record.id), class: "nd-link" do %><%= {
+          queued: "Enrich: queued", looking: "Enrich: reading its pages", stopped: "Enrich: stopped. Read again",
+          done: found&.positive? ? "Enrich: #{pluralize(found, 'finding')} to decide" : "Enrich: nothing waiting" }.fetch(enrich) %><% end %></p>
+      <% end %>
     </div>
 
     <% if %w[verified pending].include?(@fact.verification_status) %>
