@@ -22,7 +22,7 @@ module SocialAgent
   class Uncertain < StandardError; end
 
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
-  def self.run(platform, now: Time.current, writer: SocialAgent::Writer.new)
+  def self.run(platform, now: Time.current, writer: nil)
     channel = SocialChannel.for(platform)
     return if channel.off? || now.in_time_zone(ZONE).on_weekend?
     # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
@@ -31,16 +31,30 @@ module SocialAgent
     item = SocialAgent::Picker.new(platform:, now:).call or return
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,
       organization_ids: item.organization_ids, link: link(item, platform))
-    post.text = writer.draft(item, platform:)
-    problems = SocialAgent::Check.problems(post.text, item, platform:)
-    if problems.empty?
-      ok, why = writer.voice_ok?(post.text, item)
-      problems << "voice check: #{why}" unless ok
-    end
+    # Built only now (Copilot): a missing model setting never stops a day with nothing to post.
+    problems = write(post, item, platform, writer)
     return post.tap { |blocked| blocked.update!(status: "blocked", reason: problems.to_sentence) } if problems.any?
     return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled?
 
     send_post(post, now:)
+  end
+
+  # Drafts and checks the post; the problems, empty when it passes. A model or budget error stops this post, logged,
+  # and never the job (Copilot); its usage counts toward the DQ budget through its own run.
+  def self.write(post, item, platform, writer)
+    run = CrawlRun.create!(source_kind: "social_agent", stage: "verify", started_at: Time.current)
+    writer ||= SocialAgent::Writer.new
+    post.text = writer.draft(item, platform:, crawl_run: run)
+    problems = SocialAgent::Check.problems(post.text, item, platform:)
+    if problems.empty?
+      ok, why = writer.voice_ok?(post.text, item, crawl_run: run)
+      problems << "voice check: #{why}" unless ok
+    end
+    run.finish!
+    problems
+  rescue DataQuality::OpenRouter::Client::Error, DataQuality::Config::ConfigurationError, DataQuality::Budget::Exceeded => error
+    run&.fail!(error.message)
+    [ "couldn't write it: #{error.message.truncate(150)}" ]
   end
 
   # Sends once: under the channel's lock, checks the month's spend, writes the post as sending (one per item and

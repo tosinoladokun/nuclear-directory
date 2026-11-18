@@ -34,7 +34,7 @@ module SocialAgent::Check
 
   def names(text)
     text.split(/(?<=[.!?])\s+/).flat_map do |sentence|
-      words = sentence.scan(/[A-Z][\w&'’.-]*[\w&]|[A-Z]/)
+      words = sentence.scan(/[[:alnum:]][\w&'’.-]*[[:alnum:]&]|[[:alnum:]]/).select { |word| word.match?(/[A-Z]/) }
       words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && OPENERS.include?(word) }
     end.uniq
   end

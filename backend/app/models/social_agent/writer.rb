@@ -21,17 +21,17 @@ class SocialAgent::Writer
     @client = client
   end
 
-  def draft(item, platform:)
+  def draft(item, platform:, crawl_run: nil)
     facts = item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")
-    @client.structured(role: :extract, schema: DRAFT, schema_name: "post", messages: [
+    @client.structured(role: :extract, schema: DRAFT, schema_name: "post", crawl_run:, messages: [
       { role: "system", content: "#{RULES}\n#{LENGTH.fetch(platform)}" },
       { role: "user", content: "Facts:\n#{facts}\n\nSource's words:\n#{item.source_quote}" }
     ]).data.fetch("text").strip
   end
 
   # The automated Founder-style check: true with nil, or false with why.
-  def voice_ok?(text, item)
-    data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", messages: [
+  def voice_ok?(text, item, crawl_run: nil)
+    data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
         "states nothing the facts don't, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
       { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\nPost:\n#{text}" }

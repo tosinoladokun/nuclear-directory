@@ -35,19 +35,21 @@ class SocialAgent::Picker
         end
     end
 
+    # A new company with a description its own evidence states (Copilot); its headquarters only when a quote backs them.
     def companies
       # New means first approved this week (a later edit re-verifies an old company; DQ), as What's new counts it.
       first = VerificationEvent.where(subject_type: "Organization", to_status: "verified").group(:subject_id)
         .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
-      Organization.published.where(id: first)
-        .where.not(description: [ nil, "" ]).order(verified_at: :desc).map do |company|
-          evidence = Evidence.where(subject: company).includes(:source).order(:id).first
-          SocialAgent::Item.new(subject: company, kind: "new_company",
-            facts: { "name" => company.name, "description" => company.description,
-                     "headquarters" => [ company.hq_city, company.hq_state ].compact_blank.join(", ") }.compact_blank,
-            source_url: evidence&.source&.url, source_quote: evidence&.quote,
-            path: "/companies/#{company.slug}", organization_ids: [ company.id ])
-        end
+      Organization.published.where(id: first).where.not(description: [ nil, "" ]).order(verified_at: :desc).filter_map do |company|
+        evidence = Evidence.where(subject: company).includes(:source).order(:id).to_a
+        described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or next
+        located = evidence.find { |row| (Array(row.fields) & %w[hq_city hq_state]).any? }
+        facts = { "name" => company.name, "description" => company.description,
+                  "headquarters" => (located && [ company.hq_city, company.hq_state ].compact_blank.join(", ")) }.compact_blank
+        SocialAgent::Item.new(subject: company, kind: "new_company", facts:, source_url: described.source&.url,
+          source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}",
+          organization_ids: [ company.id ])
+      end
     end
 
     def usable?(item)

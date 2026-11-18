@@ -9,8 +9,8 @@ class SocialAgentTest < ActiveSupport::TestCase
   class FakeWriter
     attr_accessor :text, :voice
     def initialize(text, voice: [ true, nil ]) = (@text, @voice = text, voice)
-    def draft(_item, platform:) = text
-    def voice_ok?(_text, _item) = voice
+    def draft(_item, platform:, crawl_run: nil) = text.respond_to?(:call) ? text.call : text
+    def voice_ok?(_text, _item, crawl_run: nil) = voice
   end
 
   setup do
@@ -63,6 +63,8 @@ class SocialAgentTest < ActiveSupport::TestCase
     company = Organization.create!(name: "Beta Reactors", slug: "beta-reactors", description: "Beta Reactors designs small reactors.",
       verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     VerificationEvent.where(subject: company).update_all(created_at: MONDAY - 1.day)
+    page = Source.create!(url: "https://beta.example/about", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: company, source: page, quote: "Beta Reactors designs small reactors.", found_by: "crawler", fields: %w[description])
     VerificationEvent.where(subject: @company).update_all(created_at: MONDAY - 1.day)
     VerificationEvent.create!(subject: @company, to_status: "verified", by: BY, created_at: MONDAY - 1.year)
     post = run_x("Beta Reactors designs small reactors.")
@@ -151,6 +153,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal %w[x linkedin], calls
   ensure
     SocialAgent.define_singleton_method(:run, original) if original
+  end
+
+  test "a model error stops that post, logged, and never the job; a company without evidence for its description isn't picked" do
+    post = run_x(-> { raise DataQuality::OpenRouter::Client::RequestError, "model gone" })
+    assert_equal [ "blocked", "couldn't write it: model gone" ], [ post.status, post.reason ]
+    assert_equal "failed", CrawlRun.where(source_kind: "social_agent").last.status, "its usage has a run to count against"
+  end
+
+  test "mixed-case names are checked as whole words" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "The eVinci microreactor produces 250 kW.")
+    assert_empty SocialAgent::Check.problems("The eVinci microreactor produces 250 kW.", item, platform: "x")
   end
 
   test "a month's post count is a backstop" do
