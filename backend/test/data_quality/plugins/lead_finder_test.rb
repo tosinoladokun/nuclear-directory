@@ -271,4 +271,41 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     refute site_finder.find_sites.key?(junk.id)
     assert_empty @searched.grep(/Summary Report/)
   end
+
+  test "a Brave spend cap (402/403) or a used-up month (429, 0 left) stops searching for the day, across restarts; the lead is :retry (Infra)" do
+    { 402 => {}, 403 => {}, 429 => { "X-RateLimit-Remaining" => "1, 0" } }.each do |status, headers|
+      CrawlRun.where(source_kind: "lead_finder").delete_all
+      WebMock.reset_executed_requests!
+      Plugin.class_variable_set(:@@last_search, nil)
+      stub = stub_request(:get, %r{api\.search\.brave\.com}).to_return(status:, headers:)
+      first = Plugin.call(lead("Ghost #{status} A Nuclear").id, finder: Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { }))
+      assert_equal :retry, first.outcome
+      assert_match "search limit", first.reason, "what the health check counts (#821)"
+      restarted = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { })
+      assert_equal :retry, Plugin.call(lead("Ghost #{status} B Nuclear").id, finder: restarted).outcome
+      assert_requested stub, times: 1 # stopped for the day, in a new process too
+      remove_request_stub(stub)
+    end
+
+    travel 1.day do
+      WebMock.reset_executed_requests!
+      Plugin.class_variable_set(:@@last_search, nil)
+      stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 200, body: { web: { results: [] } }.to_json)
+      Plugin.call(lead("Ghost Tomorrow Nuclear").id, finder: Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { }))
+      assert_requested :get, %r{api\.search\.brave\.com}, times: 1 # searches resume the next day
+    end
+  end
+
+  test "a 429 with months left is a blip, not a stop; a 401 is a failure, not 'no website' (Copilot)" do
+    Plugin.class_variable_set(:@@last_search, nil)
+    stub = stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 429, headers: { "X-RateLimit-Remaining" => "0, 10" })
+    finder = -> { Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { }) }
+    assert_equal :retry, Plugin.call(lead("Ghost Blip A Nuclear").id, finder: finder.()).outcome
+    Plugin.call(lead("Ghost Blip B Nuclear").id, finder: finder.())
+    assert_requested stub, times: 2 # the month isn't used up: the next lead searches
+    remove_request_stub(stub)
+
+    stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 401)
+    assert_equal :retry, Plugin.call(lead("Ghost Key Nuclear").id, finder: finder.()).outcome, "a fresh finder: a key problem is a failure, not 'no website'"
+  end
 end

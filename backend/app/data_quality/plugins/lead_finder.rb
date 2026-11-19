@@ -24,6 +24,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Raised for the pending-company backlog (Tosin, 19 Nov): ~$8-10 a month at $5 per 1,000.
   SEARCHES_PER_DAY = 60
   USAGE = "brave_searches".freeze
+  # A day Brave said its limit is reached: no more searches that day.
+  STOPPED = "brave_stopped".freeze
   # Leads found a day, whatever asks (Infra, 10 Nov: a pasted long list can't spend the quotas).
   # Leads (Backend gates them at 50) plus the nightly pending-company sites (SITES_PER_NIGHT).
   FINDS_PER_DAY = 100
@@ -103,7 +105,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       break
     end
     result ||= if (@search_failed || @search_capped) && !found["checked"]
-      outcome(:retry, name:, reason: "No search today (limit or a busy service); tried again next run", found:)
+      outcome(:retry, name:, reason: @search_capped ? "Today's search limit is reached; tried again next run" : "The search service was busy; tried again next run", found:)
     else
       unconfirmed(name, nil, "No website found", found)
     end
@@ -143,9 +145,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
       return propose(name, website, page, found)
     end
+    # Today's searches used up, or Brave's limit hit: the lead waits for tomorrow, not one of its tries
+    # (Backend, 10 Nov). "search limit" in the reason is what the health check counts (#821).
+    return outcome(:retry, name:, reason: "Today's search limit is reached; tried again tomorrow", found:) if @search_capped && !found["checked"]
     return outcome(:retry, name:, reason: "The search service was busy; tried again later", found:) if @search_failed && !found["checked"]
-    # Today's searches used up: the lead waits for tomorrow, not one of its tries (Backend, 10 Nov).
-    return outcome(:retry, name:, reason: "Today's search limit of #{SEARCHES_PER_DAY} is reached; tried again tomorrow", found:) if @search_capped && !found["checked"]
 
     unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company (#{checked_summary(found)})" : "No website found", found)
   end
@@ -334,6 +337,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Brave Search API: at most SEARCHES_PER_DAY a day, top results' own hosts.
     def search(name)
       return [] if @search_key.blank? && @search.nil?
+      # Brave said the month's limit or the spend cap is reached: no more searches today (Infra).
+      if counted_today(STOPPED).positive?
+        @search_capped = true
+        return []
+      end
       unless reserve(USAGE, SEARCHES_PER_DAY)
         @search_capped = true
         return []
@@ -366,13 +374,29 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         http.get(uri.request_uri, { "X-Subscription-Token" => @search_key, "Accept" => "application/json",
           "User-Agent" => DataQuality::Fetcher::USER_AGENT })
       end
-      # A 429 or a server error is a blip: noted, so the lead is "busy" (not a try), never "no website" (Infra).
-      @search_failed = true unless response.is_a?(Net::HTTPSuccess) || response.code.to_i.between?(400, 428)
-      return [] unless response.is_a?(Net::HTTPSuccess)
+      return brave_failed(response) unless response.is_a?(Net::HTTPSuccess)
 
       Array(JSON.parse(response.body).dig("web", "results")).map { |result| result["url"].to_s }
     rescue JSON::ParserError, Net::OpenTimeout, Net::ReadTimeout
       @search_failed = true
+      []
+    end
+
+    # Any answer but a success (or a plain 404) is a failure, never "no
+    # website": the lead is :retry, not a try. A 402/403 (spend cap, key) or
+    # a 429 with the month used up stops searching for the rest of the day (Infra).
+    def brave_failed(response)
+      code = response.code.to_i
+      return [] if code == 404
+
+      @search_failed = true
+      month_left = response["X-RateLimit-Remaining"].to_s.split(",").map(&:strip)[1]
+      if [ 402, 403 ].include?(code) || (code == 429 && month_left == "0")
+        # Recorded in the database, so a restart doesn't search again today (Copilot).
+        CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { STOPPED => code })
+        @search_capped = true
+        Rails.logger.warn("[lead_finder] Brave: monthly limit reached (HTTP #{code}); no more searches today")
+      end
       []
     end
 
