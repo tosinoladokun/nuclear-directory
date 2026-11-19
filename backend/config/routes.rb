@@ -46,7 +46,8 @@ Rails.application.routes.draw do
   # of grouped results for the home and header search fields.
   root "home#show"
   get "search/index.json" => "search_indexes#show", as: :search_index, format: false, defaults: { format: :json }
-  get "search" => "search#index", as: :search
+  # HTML only: /search.json is a 404, not a missing-template 500.
+  get "search" => "search#index", as: :search, format: false
 
   # The admin (#86): one account, signed in at /admin/session/sign-in. Every
   # decision goes through DataQuality::Review.

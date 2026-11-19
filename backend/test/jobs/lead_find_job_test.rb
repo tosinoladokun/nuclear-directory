@@ -20,7 +20,7 @@ class LeadFindJobTest < ActiveJob::TestCase
     lead("Later Co", status: "researching", next_find_at: 3.days.from_now, find_attempts: 1)
     seen = []
     LeadFindJob.finder = ->(l) { seen << l.name; Found.new(outcome: :proposed, reason: nil) }
-    LeadFindJob.perform_now
+    perform_enqueued_jobs { LeadFindJob.perform_now }
     assert_equal [ "Waiting Co", "Due Co" ].sort, seen.sort
     assert_equal %w[added added], [ waiting, due ].map { |l| l.reload.status }
   end
@@ -126,5 +126,13 @@ class LeadFindJobTest < ActiveJob::TestCase
     LeadFindJob.finder = ->(*) { Found.new(outcome: :unconfirmed, reason: "Today's limit of 50 finds is reached; tried again tomorrow") }
     LeadFindJob.perform_now(l.id)
     assert_equal [ "researching", 0, LeadFinding::BUSY ], l.reload.values_at(:status, :find_attempts, :note)
+  end
+
+  test "the nightly run queues one find per lead behind a box lead: one key, lower priority" do
+    lead("Batch Co")
+    LeadFindJob.perform_now
+    job = enqueued_jobs.sole
+    assert_equal LeadFindJob::BATCH_PRIORITY, job["priority"]
+    assert_equal LeadFindJob.new.concurrency_key, LeadFindJob.new(1).concurrency_key, "a box lead and a batch lead share one key"
   end
 end

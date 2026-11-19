@@ -69,6 +69,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
     lead = lead.with(name: input) if input.present?
     @us_shown_elsewhere = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
+    # What a person said about it ("Austin microreactor startup"; Backend #806), for the search.
+    @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
     # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
@@ -104,8 +106,32 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
     quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
-      .find { |sentence| sentence.downcase.include?(name.downcase) && nuclear?(sentence, name) } or return []
-    [ { kind: "organization", quote: quote.strip, payload: { "name" => name, "website" => "https://#{URI(source.url).host}" } } ]
+      .find { |sentence| names?(sentence, name) && nuclear?(sentence, brand(name)) } or return []
+    [ { kind: "organization", quote: quote.strip, payload: { "name" => page_name(quote.strip, name, site_names(source)), "website" => "https://#{URI(source.url).host}" } } ]
+  end
+
+  # The name as the company's own page writes it: the name as matched in
+  # its quote, in the page's own capitals ("cameco" typed is "Cameco"), plus
+  # following capitalised words only when the page's own title or site name
+  # carries the longer phrase ("Fresh Fission America"). Never the text
+  # someone typed (Backend, 18 Nov), never a heading's other words, a
+  # possessive or a full stop (Copilot).
+  def page_name(quote, name, site_names = [])
+    matched = quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(name.to_s.squish)})(?![[:alnum:]])/] ||
+      quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(brand(name))})(?![[:alnum:]])/] or return name
+    after = quote[(quote.index(matched) + matched.length)..].to_s
+    words = after.scan(/\A(?:\s+[A-Z][[:alnum:]&-]*)+/).first.to_s.split
+    words.each_index.reverse_each do |count|
+      longer = [ matched, *words.first(count + 1) ].join(" ")
+      return longer if site_names.any? { |site| site.match?(/(?<![[:alnum:]])#{Regexp.escape(longer)}(?![[:alnum:]])/i) }
+    end
+    matched
+  end
+
+  # The page's own names for itself: its og:site_name and its title.
+  def site_names(source)
+    doc = Nokogiri::HTML(source.content_text)
+    [ doc.at_css("meta[property='og:site_name']")&.[]("content"), doc.at_css("title")&.text ].compact.map(&:squish)
   end
 
   def source_facts(_source)
@@ -114,6 +140,39 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   end
 
   private
+    # The name without its legal ending ("Fermi Inc." is "Fermi"), as a whole
+    # word, so a page that writes the brand alone still names it (Infra, 18 Nov).
+    LEGAL_ENDING = /[,\s]+(?:inc|llc|l\.l\.c|corp|corporation|co|company|ltd|limited|plc|lp)\.?\z/i
+    def brand(name) = name.to_s.squish.sub(LEGAL_ENDING, "").presence || name.to_s
+
+    # The full name as a whole word (any length: "GSE"), else the name
+    # without its legal ending, when that's at least 4 letters (Copilot).
+    def names?(text, name)
+      whole = ->(wanted) { text.match?(/(?<![[:alnum:]])#{Regexp.escape(wanted)}(?![[:alnum:]])/i) }
+      full = name.to_s.squish
+      return true if full.present? && whole.(full)
+
+      wanted = brand(name)
+      wanted != full && wanted.length >= 4 && whole.(wanted)
+    end
+
+    # A home page with no address: its own contact or about page (at most two, robots and spacing as always) may show one.
+    CONTACT = %r{contact|about|company|locations?|offices?}i
+    def us_on_own_pages?(home)
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
+      links = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
+        url = URI.join(base, link["href"].to_s).to_s.split("#").first rescue next
+        uri = URI(url)
+        # The home page itself (a bare "/" link) never takes one of the two places (Copilot).
+        url if uri.host.to_s.downcase.delete_prefix("www.") == host && "#{uri.path} #{link.text}".match?(CONTACT) &&
+          Source.bare_homepage(url) != Source.bare_homepage(base)
+      end.uniq.first(2)
+      links.any? { |url| (page = snapshot(url)) && visible_text(page).match?(US) }
+    rescue URI::Error
+      false
+    end
+
     # Each checked site's verdict, for the lead's note (Backend keeps only the
     # reason): "acme.com: not US; a search result: not named". A search
     # result's address is never kept (Brave's terms), only its verdict.
@@ -230,7 +289,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       wait = @@last_search && (SEARCH_GAP - (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @@last_search))
       @sleeper.call(wait) if wait&.positive?
       @@last_search = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      urls = (@search || method(:brave)).call("\"#{name}\" nuclear")
+      urls = (@search || method(:brave)).call([ "\"#{name}\"", @hints.presence, "nuclear" ].compact.join(" "))
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
 
@@ -273,9 +332,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     def verify(name, website)
       page = snapshot(website) or return [ :not_found, nil, "Couldn't read the site" ]
       text = visible_text(page)
-      return [ :not_named, page, "The page doesn't name #{name}" ] unless text.downcase.include?(name.downcase)
-      return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear?(text, name)
-      return [ :not_us, page, "The page shows no US address or 'United States'" ] unless text.match?(US) || @us_shown_elsewhere
+      return [ :not_named, page, "The page doesn't name #{name}" ] unless names?(text, name)
+      return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear?(text, brand(name))
+      unless text.match?(US) || @us_shown_elsewhere || us_on_own_pages?(page)
+        return [ :not_us, page, "Neither the home page nor its contact or about page shows a US address or 'United States'" ]
+      end
 
       [ :ok, page, nil ]
     end
