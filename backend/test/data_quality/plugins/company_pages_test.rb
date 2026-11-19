@@ -573,4 +573,23 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     claim = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(home, nil).find { |c| c[:payload].key?("hq_city") }
     assert_equal DataQuality::Plugins::CompanyPages::PAGE_DATA_NOTE, claim[:notes], "DQ can tell a page-data quote apart"
   end
+
+  test "thin pages: read again once for the new version; namespaced sitemaps; only https same-host sitemap pages; twitter:title (Copilot)" do
+    js = "<html><head><meta name=\"twitter:title\" content=\"Acme Fission builds reactors for remote sites\"></head><body><div id=\"root\"></div></body></html>"
+    stub_request(:get, HOME).to_return(body: js, headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://www.acmefission.com/sitemap.xml").to_return(body: "<?xml version=\"1.0\"?><sm:urlset xmlns:sm=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" \
+      "<sm:url><sm:loc>https://www.acmefission.com/about</sm:loc></sm:url><sm:url><sm:loc>//www.acmefission.com/company</sm:loc></sm:url>" \
+      "<sm:url><sm:loc>ftp://www.acmefission.com/about-us</sm:loc></sm:url></sm:urlset>", headers: { "Content-Type" => "application/xml" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    plugin = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+    plugin.crawl(nil)
+    assert_requested :get, ABOUT
+    home = Source.find_by!(url: HOME_KEY)
+    assert plugin.quote_in_source?(home, "Acme Fission builds reactors for remote sites")
+
+    home.update_columns(extracted_sha256: home.content_sha256, extracted_rows_sha256: home.content_sha256, fetched_at: 2.days.ago)
+    @company.update_columns(enrich_requested_at: Time.current)
+    plugin.crawl(nil)
+    assert_nil home.reload.extracted_sha256, "extracted before the page-data version: read again"
+  end
 end

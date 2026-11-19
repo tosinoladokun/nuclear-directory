@@ -142,7 +142,7 @@ class DataQuality::Plugin
     # characters, each value once.
     def page_data_text(doc)
       metas = doc.css("meta[name='description'], meta[property='og:description'], meta[name='twitter:description'], " \
-        "meta[property='og:title'], meta[property='og:site_name']").filter_map { |meta| meta["content"].to_s.squish.presence }
+        "meta[property='og:title'], meta[name='twitter:title'], meta[property='og:site_name']").filter_map { |meta| meta["content"].to_s.squish.presence }
       data = doc.css("script[type='application/ld+json'], script#__NEXT_DATA__, script#__NUXT_DATA__").flat_map do |script|
         text_values(JSON.parse(script.text))
       rescue JSON::ParserError

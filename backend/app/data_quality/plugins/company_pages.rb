@@ -157,12 +157,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # A malformed website (EDGAR-only companies may have one) is skipped, never stops the run.
       if @directory.readable_website?(website) && (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
+        read_again_if_new_version(home)
         stats["pages"] += 1
         links = own_links(home, deep:)
         # A home page that links little (a JavaScript menu): its sitemap names the About and Company pages (#802).
         links = (links + sitemap_links(home)).uniq if links.size < 2
         links.first(deep ? DEEP_PAGES : PAGES).each do |url|
-          DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
+          own = page(url, for_id: id) or next
+          DataQuality::Snapshot.take(own, fetcher: @fetcher)
+          read_again_if_new_version(own)
           stats["pages"] += 1
         end
       end
@@ -179,10 +182,17 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   # An SEC record with what extract proposes from it: a new version reads it again.
   EDGAR_VERSION = "edgar-website-1"
+  # A thin page (#802) read before its page data counted: a new version reads it again (Copilot).
+  THIN_VERSION = "thin-pages-1"
   def rows_sha256(source)
-    return super unless source.url.match?(EDGAR_URL)
+    if source.url.match?(EDGAR_URL)
+      return Digest::SHA256.hexdigest("#{EDGAR_VERSION}\n#{source.content_text}") if source.content_text.present?
 
-    Digest::SHA256.hexdigest("#{EDGAR_VERSION}\n#{source.content_text}") if source.content_text.present?
+      return
+    end
+    return super unless source.content_text.present? && body_text(source).length < THIN_PAGE
+
+    Digest::SHA256.hexdigest("#{THIN_VERSION}\n#{source.content_text}")
   end
 
   def extract(source, run)
@@ -322,13 +332,23 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       sitemap = page(URI.join(base, "/sitemap.xml").to_s) or return []
       DataQuality::Snapshot.take(sitemap, fetcher: @fetcher)
       sitemap.reload
-      return [] unless sitemap.crawl_ok? && sitemap.content_text.to_s.include?("<loc>")
+      return [] unless sitemap.crawl_ok? && sitemap.content_text.present?
 
       Nokogiri::XML(sitemap.content_text).remove_namespaces!.css("url > loc").map { |loc| loc.text.strip }
-        .select { |url| (URI(url).host.to_s.downcase.delete_prefix("www.") == host rescue false) && URI(url).path.match?(LINK) }
+        .select { |url| (uri = (URI(url) rescue nil)) && uri.scheme == "https" && uri.host.to_s.downcase.delete_prefix("www.") == host && uri.path.match?(LINK) }
         .sort_by { |url| URI(url).path.match?(/about|company|who-we-are/i) ? 0 : 1 }.first(4)
     rescue URI::Error, Nokogiri::XML::SyntaxError
       []
+    end
+
+    # A page extracted under an older version of what's read from it is extracted again.
+    def read_again_if_new_version(source)
+      source.reload
+      # Only thin pages have a new version; any other page is never sent to the model again for this.
+      return unless source.extracted_sha256.present? && source.content_text.present? && body_text(source).length < THIN_PAGE
+      return if source.extracted_rows_sha256 == rows_sha256(source)
+
+      source.update!(extracted_sha256: nil, extracted_rows_sha256: nil)
     end
 
     # Links on the home page to the company's own pages worth reading.
