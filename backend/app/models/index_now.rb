@@ -76,7 +76,12 @@ module IndexNow
     rest.any? ? Rails.cache.write(PENDING, rest) : Rails.cache.delete(PENDING)
     accepted = send_once(json) || send_once(json)
     # Kept, accepted or not, so a run of refusals is seen (#811).
-    IndexNowSubmission.create!(urls: batch.size, accepted:)
+    # Bookkeeping must never break the warmer (Infra).
+    begin
+      IndexNowSubmission.create!(urls: batch.size, accepted:)
+    rescue StandardError => e
+      Rails.logger.warn("IndexNow: result not kept (#{e.class})")
+    end
     if accepted
       Rails.logger.info("IndexNow: #{batch.size} URLs accepted")
     else
