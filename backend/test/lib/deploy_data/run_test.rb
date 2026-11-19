@@ -245,6 +245,28 @@ class DeployData::RunTest < ActiveSupport::TestCase
     assert_equal :nothing, run_step, "the one that worked isn't run again"
   end
 
+  test "a dry run still fails when a data migration fails, and goes on to the later ones (#811)" do
+    run_step
+    write "db/data/20261017120000_breaks.rb", <<~RUBY
+      class Breaks < DeployData::Migration
+        BY = "human:tosin"
+        def up = raise("the pinned quote is gone")
+      end
+    RUBY
+    write "db/data/20261017130000_fixes.rb", <<~RUBY
+      class Fixes < DeployData::Migration
+        BY = "human:tosin"
+        def up = Organization.find_by!(slug: "westinghouse").update!(name: "Fixed")
+      end
+    RUBY
+
+    assert_equal :failed, run_step(dry_run: true), "the rehearsal's exit code must show the failure"
+    assert_includes @output, "20261017120000 breaks: RuntimeError: the pinned quote is gone"
+    assert_includes @output, "20261017130000 fixes", "the later one was still tried"
+    assert_equal 0, DataMigration.count, "a dry run writes nothing"
+    assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name
+  end
+
   test "a data migration must name a human as BY" do
     run_step
     write "db/data/20261017120000_by_deploy.rb", <<~RUBY

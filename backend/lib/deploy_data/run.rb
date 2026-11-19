@@ -78,6 +78,9 @@ module DeployData
 
       held = @lock.hold { steps }
       stop!("stopped: the daily crawl is running, so nothing was written; it runs again on the next deploy") unless held
+      # A deploy goes on past a failed migration (fail-soft, #811), but a rehearsal must still fail loudly: its whole
+      # point is to find that before the merge.
+      @status = :failed if @dry_run && @report.failed_migrations.any?
       finish
     rescue Stop
       finish
