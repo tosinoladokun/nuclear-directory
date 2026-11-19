@@ -22,6 +22,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     Technology.create!(key: "smr", name: "Small modular reactor")
     @company = Organization.create!(name: "Acme Fission", website: HOME, domain: "acmefission.com", verification_status: "verified", verified_by: "human:tosin")
     stub_request(:get, "https://www.acmefission.com/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://www.acmefission.com/sitemap.xml").to_return(status: 404)
     stub_request(:get, HOME).to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
     stub_request(:get, ABOUT).to_return(body: PAGE, headers: { "Content-Type" => "text/html" })
   end
@@ -483,6 +484,7 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     ids = (1..30).map do |n|
       site = "https://co#{n}.example"
       stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
+      stub_request(:get, "#{site}/sitemap.xml").to_return(status: 404)
       stub_request(:get, site).to_return(body: "<html><body><p>Company #{n}.</p></body></html>", headers: { "Content-Type" => "text/html" })
       if n <= 15
         Organization.create!(name: "New Co #{n}", website: site)
@@ -548,6 +550,49 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     again = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory: DeepDirectory.new).crawl(nil)
     assert_equal 0, again["deep_sources"], "today's #{DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY} are used: tomorrow"
     assert_equal "a", naming.reload.extracted_sha256
+  end
+
+  test "a JavaScript home page: its page data is read, and its sitemap gives the About page (#802)" do
+    js = "<html><head><meta name=\"description\" content=\"Acme Fission Inc. designs small modular reactors.\">" \
+      "<script id=\"__NEXT_DATA__\" type=\"application/json\">{\"props\":{\"tagline\":\"Headquartered in Austin, Texas since 2019\"}}</script>" \
+      "</head><body><div id=\"root\"></div></body></html>"
+    stub_request(:get, HOME).to_return(body: js, headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://www.acmefission.com/sitemap.xml").to_return(body: "<?xml version=\"1.0\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" \
+      "<url><loc>https://www.acmefission.com/about</loc></url><url><loc>https://other.com/about</loc></url></urlset>", headers: { "Content-Type" => "application/xml" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { })).crawl(nil)
+    assert_requested :get, ABOUT
+
+    home = Source.find_by!(url: HOME_KEY)
+    plugin = DataQuality::Plugins::CompanyPages.new
+    assert plugin.quote_in_source?(home, "Acme Fission Inc. designs small modular reactors.")
+    assert plugin.quote_in_source?(home, "Headquartered in Austin, Texas since 2019")
+    assert_empty plugin.extract(Source.find_by!(url: "https://www.acmefission.com/sitemap.xml"), nil)
+    assert_equal "https://www.acmefission.com/about", Source.find_by!(url: "https://www.acmefission.com/sitemap.xml").content_text,
+      "only the kept addresses are stored, never the whole sitemap (Infra)"
+
+    found = { "hq_city" => { "value" => "Austin", "quote" => "Headquartered in Austin, Texas since 2019" } }
+    claim = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(home, nil).find { |c| c[:payload].key?("hq_city") }
+    assert_equal DataQuality::Plugins::CompanyPages::PAGE_DATA_NOTE, claim[:notes], "DQ can tell a page-data quote apart"
+  end
+
+  test "thin pages: read again once for the new version; namespaced sitemaps; only https same-host sitemap pages; twitter:title (Copilot)" do
+    js = "<html><head><meta name=\"twitter:title\" content=\"Acme Fission builds reactors for remote sites\"></head><body><div id=\"root\"></div></body></html>"
+    stub_request(:get, HOME).to_return(body: js, headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://www.acmefission.com/sitemap.xml").to_return(body: "<?xml version=\"1.0\"?><sm:urlset xmlns:sm=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" \
+      "<sm:url><sm:loc>https://www.acmefission.com/about</sm:loc></sm:url><sm:url><sm:loc>//www.acmefission.com/company</sm:loc></sm:url>" \
+      "<sm:url><sm:loc>ftp://www.acmefission.com/about-us</sm:loc></sm:url></sm:urlset>", headers: { "Content-Type" => "application/xml" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    plugin = DataQuality::Plugins::CompanyPages.new(gap_fill: 0, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+    plugin.crawl(nil)
+    assert_requested :get, ABOUT
+    home = Source.find_by!(url: HOME_KEY)
+    assert plugin.quote_in_source?(home, "Acme Fission builds reactors for remote sites")
+
+    home.update_columns(extracted_sha256: home.content_sha256, extracted_rows_sha256: home.content_sha256, fetched_at: 2.days.ago)
+    @company.update_columns(enrich_requested_at: Time.current)
+    plugin.crawl(nil)
+    assert_nil home.reload.extracted_sha256, "extracted before the page-data version: read again"
   end
 
   test "a pending company's site found tonight is read tonight, so its category is proposed before anyone approves the site (PM, 19 Nov)" do

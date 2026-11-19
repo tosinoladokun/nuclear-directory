@@ -171,10 +171,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # A malformed website (EDGAR-only companies may have one) is skipped, never stops the run.
       if @directory.readable_website?(website) && (home = page(website, for_id: id))
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
+        read_again_if_new_version(home)
         stats["pages"] += 1
         links = own_links(home, deep:)
+        # A home page that links little (a JavaScript menu): its sitemap names the About and Company pages (#802).
+        links = (links + sitemap_links(home)).uniq if links.size < 2
         links.first(deep ? DEEP_PAGES : PAGES).each do |url|
-          DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
+          own = page(url, for_id: id) or next
+          DataQuality::Snapshot.take(own, fetcher: @fetcher)
+          read_again_if_new_version(own)
           stats["pages"] += 1
         end
       end
@@ -191,14 +196,23 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   # An SEC record with what extract proposes from it: a new version reads it again.
   EDGAR_VERSION = "edgar-website-1"
+  # A thin page (#802) read before its page data counted: a new version reads it again (Copilot).
+  THIN_VERSION = "thin-pages-1"
   def rows_sha256(source)
-    return super unless source.url.match?(EDGAR_URL)
+    if source.url.match?(EDGAR_URL)
+      return Digest::SHA256.hexdigest("#{EDGAR_VERSION}\n#{source.content_text}") if source.content_text.present?
 
-    Digest::SHA256.hexdigest("#{EDGAR_VERSION}\n#{source.content_text}") if source.content_text.present?
+      return
+    end
+    return super unless source.content_text.present? && body_text(source).length < THIN_PAGE
+
+    Digest::SHA256.hexdigest("#{THIN_VERSION}\n#{source.content_text}")
   end
 
   def extract(source, run)
     return edgar_claims(source) if source.url.match?(EDGAR_URL)
+    # A sitemap is only read for its links, never for claims.
+    return [] if source.url.match?(%r{/sitemap\.xml\z})
 
     # The company the page was read for (#534), else the domain's owner.
     company = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id) ||
@@ -217,8 +231,13 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # One description per company per read (DQ, 31 Oct): only from the page
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
+    # A quote found only in the page's data (a thin JavaScript page, #802) says so, for DQ's review.
+    body = body_text(source) if claims.any?
+    claims.each { |claim| claim[:notes] = PAGE_DATA_NOTE if claim[:quote].present? && !body.include?(claim[:quote].squish) }
     claims
   end
+
+  PAGE_DATA_NOTE = "Quote from page data (meta, structured or embedded data), not the page's visible text".freeze
 
   private
     # The company's one description page, the same on every read and retry:
@@ -320,15 +339,52 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       ids.size
     end
 
+    SITEMAP_BYTES = 512.kilobytes
+
+    # The site's sitemap.xml (read like any page: robots, spacing, once a day),
+    # its own pages worth reading, About and Company first. At most 4.
+    def sitemap_links(home)
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
+      sitemap = page(URI.join(base, "/sitemap.xml").to_s) or return []
+      # A small sitemap only, and only the addresses kept (Infra: memory and a 1 GB database).
+      DataQuality::Snapshot.take(sitemap, fetcher: @fetcher, max_bytes: SITEMAP_BYTES)
+      sitemap.reload
+      return [] unless sitemap.crawl_ok? && sitemap.content_text.present?
+
+      urls = if sitemap.content_text.lstrip.start_with?("<")
+        found = Nokogiri::XML(sitemap.content_text).remove_namespaces!.css("url > loc").map { |loc| loc.text.strip }
+          .select { |url| (uri = (URI(url) rescue nil)) && uri.scheme == "https" && uri.host.to_s.downcase.delete_prefix("www.") == host && uri.path.match?(LINK) }
+        sitemap.update_columns(content_text: found.first(50).join("\n"))
+        found
+      else
+        sitemap.content_text.lines.map(&:strip)
+      end
+      urls.sort_by { |url| URI(url).path.match?(/about|company|who-we-are/i) ? 0 : 1 }.first(4)
+    rescue URI::Error, Nokogiri::XML::SyntaxError
+      []
+    end
+
+    # A page extracted under an older version of what's read from it is extracted again.
+    def read_again_if_new_version(source)
+      source.reload
+      # Only thin pages have a new version; any other page is never sent to the model again for this.
+      return unless source.extracted_sha256.present? && source.content_text.present? && body_text(source).length < THIN_PAGE
+      return if source.extracted_rows_sha256 == rows_sha256(source)
+
+      source.update!(extracted_sha256: nil, extracted_rows_sha256: nil)
+    end
+
     # A company's home page and up to PAGES of its own pages, read for it.
     def read_site(id, website, stats)
       home = page(website, for_id: id) or return
       DataQuality::Snapshot.take(home, fetcher: @fetcher)
       stats["pages"] += 1
       links = own_links(home)
-      links = (links + sitemap_links(home)).uniq if links.size < 2 && respond_to?(:sitemap_links, true)
+      links = (links + sitemap_links(home)).uniq if links.size < 2
       links.first(PAGES).each do |url|
-        DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
+        own = page(url, for_id: id) or next
+        DataQuality::Snapshot.take(own, fetcher: @fetcher)
         stats["pages"] += 1
       end
     end
