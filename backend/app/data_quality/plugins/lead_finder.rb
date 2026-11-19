@@ -24,6 +24,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Raised for the pending-company backlog (Tosin, 19 Nov): ~$8-10 a month at $5 per 1,000.
   SEARCHES_PER_DAY = 60
   USAGE = "brave_searches".freeze
+  # A day Brave said its limit is reached: no more searches that day.
+  STOPPED = "brave_stopped".freeze
   # Leads found a day, whatever asks (Infra, 10 Nov: a pasted long list can't spend the quotas).
   # Leads (Backend gates them at 50) plus the nightly pending-company sites (SITES_PER_NIGHT).
   FINDS_PER_DAY = 100
@@ -41,7 +43,6 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   NOT_OWN = /(?:\A|\.)(?:linkedin|twitter|x|facebook|youtube|instagram|wikipedia|crunchbase|bloomberg|google|sec|prnewswire|cision)\.[a-z.]+\z/
 
   @@last_search = nil
-  @@search_stopped_on = nil
 
   def self.call(lead_id, finder: new, input: nil) = finder.find(lead_id, input:)
 
@@ -337,7 +338,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     def search(name)
       return [] if @search_key.blank? && @search.nil?
       # Brave said the month's limit or the spend cap is reached: no more searches today (Infra).
-      if @@search_stopped_on == Date.current
+      if counted_today(STOPPED).positive?
         @search_capped = true
         return []
       end
@@ -391,7 +392,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       @search_failed = true
       month_left = response["X-RateLimit-Remaining"].to_s.split(",").map(&:strip)[1]
       if [ 402, 403 ].include?(code) || (code == 429 && month_left == "0")
-        @@search_stopped_on = Date.current
+        # Recorded in the database, so a restart doesn't search again today (Copilot).
+        CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { STOPPED => code })
         @search_capped = true
         Rails.logger.warn("[lead_finder] Brave: monthly limit reached (HTTP #{code}); no more searches today")
       end
