@@ -49,7 +49,8 @@ module AdminHelper
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,
         current: controller_name == "corrections" },
-      { label: "Posts", path: admin_social_path, title: "The social agent", current: controller_name == "social" }
+      { label: "Posts", path: admin_social_path, title: "The social agent", current: controller_name == "social" },
+      { label: "Health", path: admin_health_path, title: "Whether the pipeline runs alone", current: controller_name == "health" }
     ]
   end
 
