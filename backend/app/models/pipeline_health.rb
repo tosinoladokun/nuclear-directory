@@ -47,7 +47,8 @@ class PipelineHealth
         "searches_last_day" => CrawlRun.where(source_kind: "lead_finder", stage: "crawl", started_at: (@now - 1.day)..)
           .where("stats ? '#{DataQuality::Plugins::LeadFinder::USAGE}'").count,
         "searches_held_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..)
-          .where("note = ? OR note ILIKE ? OR note ILIKE ?", LeadFinding::BUSY, "%search limit%", "%no search today%").count
+          .where("note = ? OR note ILIKE ? OR note ILIKE ? OR note ILIKE ?", LeadFinding::BUSY, "%search limit%", "%no search today%",
+            "%search service was busy%").count
       }
     end
   end
