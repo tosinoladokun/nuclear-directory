@@ -5,7 +5,7 @@
 <%= @body %>
 
 Alert: <%= @key %>
-Pipeline health: <%= root_url.chomp("/") %>/admin/overview
+Pipeline health: <%= admin_health_url %>
 <% if @state.to_s == "raised" %>
 It says this once a day while it lasts, and once more when it's back to normal.
 <% end %>
