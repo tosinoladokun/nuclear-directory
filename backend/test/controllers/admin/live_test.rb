@@ -327,24 +327,40 @@ class Admin::LiveTest < ActionDispatch::IntegrationTest
   test "tag ids and tab counts are cached until the directory or a claim changes (Infra: 10 s, 800+ queries)" do
     store = Rails.cache
     Rails.cache = ActiveSupport::Cache::MemoryStore.new
-    queries = lambda do
-      count = 0
-      sub = ActiveSupport::Notifications.subscribe("sql.active_record") { |*, p| count += 1 unless p[:name] == "SCHEMA" }
+    load_page = lambda do
+      queries = reads = 0
+      sql = ActiveSupport::Notifications.subscribe("sql.active_record") { |*, p| queries += 1 unless p[:name] == "SCHEMA" }
+      cache = ActiveSupport::Notifications.subscribe("cache_read.active_support") { reads += 1 }
       get admin_live_path
-      ActiveSupport::Notifications.unsubscribe(sub)
-      count
+      ActiveSupport::Notifications.unsubscribe(sql)
+      ActiveSupport::Notifications.unsubscribe(cache)
+      [ queries, reads ]
     end
-    first = queries.call
+    first, = load_page.call
     tabs = -> { response.body[/<nav class="nd-fchips[\s\S]*?<\/nav>/] }
     body = tabs.call
-    second = queries.call
+    second, reads = load_page.call
     assert_operator second, :<, first * 0.7, "#{first} then #{second}"
+    assert_operator second, :<=, 90, "an absolute ceiling for a warm load"
+    assert_operator reads, :<=, 3, "the tag map and the tab counts: one cache read each (Solid Cache reads are queries)"
     assert_equal body, tabs.call, "same tab counts"
+
     Organization.create!(name: "New Live Co", verification_status: "verified", verified_by: "human:tosin")
     DataVersion.expire!
     get admin_live_path
     assert_not_equal body, tabs.call, "a change shows at once"
   ensure
     Rails.cache = store
+  end
+
+  test "the stamp changes with any claim change, even one committed with an older timestamp, and with a decision" do
+    page = Source.create!(url: "https://example.com/stamp", source_kind: "dummy", crawl_status: "ok")
+    claim = Candidate.create!(source: page, kind: "organization", payload: { "name" => "X" }, quote: "q", status: "new")
+    stamp = -> { Current.reset; Directory::LiveList.stamp }
+    before = stamp.call
+    claim.update_columns(status: "rejected", updated_at: 1.year.ago)
+    refute_equal before, (after = stamp.call), "an out-of-order write"
+    VerificationEvent.create!(subject: Organization.create!(name: "Y"), to_status: "unpublished", by: "human:tosin")
+    refute_equal after, stamp.call, "another process's decision, without waiting for DataVersion's memo"
   end
 end
