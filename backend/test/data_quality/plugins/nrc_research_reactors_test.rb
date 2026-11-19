@@ -115,17 +115,26 @@ class DataQuality::Plugins::NrcResearchReactorsTest < ActiveSupport::TestCase
     crawl
     claims = plugin.extract(mit, nil)
 
-    assert_equal %w[facility organization organization_role], claims.map { |c| c[:kind] }
+    assert_equal %w[facility organization organization_role facility_relationship], claims.map { |c| c[:kind] }
     assert_equal({ "name" => "Massachusetts Institute of Technology HWR Reflected reactor", "facility_type" => "research_reactor", "nrc_docket" => "05000020",
       "country_code" => "US", "city" => "Cambridge", "state" => "MA", "thermal_power_kw" => "6000" }, claims.first[:payload])
-    assert_equal "university", claims.last[:payload]["role"]
+    assert_equal "university", claims.find { |c| c[:kind] == "organization_role" }[:payload]["role"]
+    link = claims.last[:payload]
+    assert_equal [ "operates", "05000020" ], [ link["relationship_type"], link.dig("facility", "nrc_docket") ], "the licensee operates its reactor (DQ, 19 Nov)"
     dow = Source.find_by!(url: "https://www.nrc.gov/facilities-safety/facility-finder/nonpower/dcc-mi-triga")
-    assert_equal %w[facility organization], plugin.extract(dow, nil).map { |c| c[:kind] }, "a company gets no role from its name"
+    assert_equal %w[facility organization facility_relationship], plugin.extract(dow, nil).map { |c| c[:kind] }, "a company gets no role from its name"
   end
 
   test "only a well-formed positive power is proposed" do
     plugin = DataQuality::Plugins::NrcResearchReactors.new
     assert_equal [ "6000", "0.005", "1000000", nil, nil, nil ],
       [ "6,000", "0.005", "1,000,000", "1,2", "1,,000", "0" ].map { |text| plugin.send(:thermal_power_kw, text) }
+  end
+
+  test "a reactor extracted before the operates link is extracted again once" do
+    crawl
+    mit.update_columns(extracted_sha256: mit.content_sha256, extracted_rows_sha256: mit.content_sha256, fetched_at: 2.days.ago)
+    crawl
+    assert_nil mit.reload.extracted_sha256
   end
 end
