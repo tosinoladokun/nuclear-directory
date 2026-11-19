@@ -549,4 +549,18 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal 0, again["deep_sources"], "today's #{DataQuality::Plugins::CompanyPages::DEEP_SOURCES_PER_DAY} are used: tomorrow"
     assert_equal "a", naming.reload.extracted_sha256
   end
+
+  test "a pending company's site found tonight is read tonight, so its category is proposed before anyone approves the site (PM, 19 Nov)" do
+    pending = Organization.create!(name: "Acme Fission Two")
+    outcome = DataQuality::Plugins::LeadFinder::Outcome.new(outcome: :proposed, candidate_id: nil, organization_id: nil, name: "Acme Fission Two",
+      website: HOME, reason: nil, found: {})
+    finder = Object.new.tap { |f| f.define_singleton_method(:find_sites) { { pending.id => outcome } } }
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 1, site_finder: finder, fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { })).crawl(nil)
+    assert_equal 1, stats["sites_read"]
+    assert_equal pending.id, Source.find_by!(url: HOME_KEY).enrich_organization_id, "read for the pending company"
+
+    found = { "roles" => [ { "key" => "reactor_vendor", "quote" => "designs small modular reactors" } ] }
+    roles = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(Source.find_by!(url: ABOUT), nil).select { |c| c[:kind] == "organization_role" }
+    assert_equal [ "reactor_vendor" ], roles.map { |c| c[:payload]["role"] }, "its category, proposed the same night"
+  end
 end

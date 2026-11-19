@@ -228,7 +228,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     pending.aliases.find_or_create_by!(alias: "Fresh Fission")
     site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(query) { @searched << query; [ HOME ] },
       pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
-    assert_equal :proposed, site_finder.find_sites[pending.id]
+    assert_equal :proposed, site_finder.find_sites[pending.id].outcome
     claim = Candidate.where(kind: "organization", subject_id: pending.id).sole
     assert_equal [ "Organization", pending.id ], [ claim.subject_type, claim.subject_id ], "matched to the pending company by name"
     assert_equal "https://www.freshfission.example", claim.payload["website"]

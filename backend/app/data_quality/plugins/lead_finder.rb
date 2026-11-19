@@ -74,7 +74,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     tried = CrawlRun.where(source_kind:, stage: "crawl", started_at: 7.days.ago..).where("stats ? '#{SITE_FOR}'")
       .pluck(Arel.sql("(stats->>'#{SITE_FOR}')::bigint")).to_set
     due = @directory.pending_organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) }.first(limit)
-    due.to_h { |id, name| [ id, find_site(id, name).outcome ] }
+    due.to_h { |id, name| [ id, find_site(id, name) ] }
   end
 
   def find_site(id, name)

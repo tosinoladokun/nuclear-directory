@@ -136,6 +136,15 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # Pending companies with no website first get one looked for (DQ, 19 Nov).
       sites = @site_finder.find_sites
       stats["sites_looked_for"] = sites.size if sites.any?
+      # A site found is read the same night for that company (description,
+      # HQ, category), before anyone approves it as its website (PM, 19 Nov:
+      # leads to Creates run alone); DQ checks every claim as usual.
+      sites.each do |id, found|
+        next unless found.outcome == :proposed && found.website
+
+        read_site(id, found.website, stats)
+        stats["sites_read"] = stats.fetch("sites_read", 0) + 1
+      end
       gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
@@ -309,6 +318,19 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # Both hashes, so Extract's unchanged-rows shortcut can't skip it (Copilot).
       Source.where(id: ids).update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
       ids.size
+    end
+
+    # A company's home page and up to PAGES of its own pages, read for it.
+    def read_site(id, website, stats)
+      home = page(website, for_id: id) or return
+      DataQuality::Snapshot.take(home, fetcher: @fetcher)
+      stats["pages"] += 1
+      links = own_links(home)
+      links = (links + sitemap_links(home)).uniq if links.size < 2 && respond_to?(:sitemap_links, true)
+      links.first(PAGES).each do |url|
+        DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
+        stats["pages"] += 1
+      end
     end
 
     # Links on the home page to the company's own pages worth reading.
