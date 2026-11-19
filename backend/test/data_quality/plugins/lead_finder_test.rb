@@ -192,4 +192,13 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     crawled = Lead.sighted!(name: "GSE", kind: "company", key: "newsletter:3:gse", label: "Newsletter", url: HOME)
     assert_equal :proposed, Plugin.call(crawled.id, finder: finder).outcome
   end
+
+  test "what a person said about the lead goes into the search (Backend #806)" do
+    with_hints = Data.define(:id, :name, :kind, :urls, :keys, :hints)
+    directory = DataQuality::DirectoryClient.new
+    directory.define_singleton_method(:lead) { |id| with_hints.new(id:, name: "Ghost Nuclear", kind: "company", urls: [], keys: [], hints: [ "Austin microreactor startup" ]) }
+    finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory:, search_key: nil, search: ->(query) { @searched << query; [] })
+    Plugin.call(1, finder:)
+    assert_equal [ "\"Ghost Nuclear\" Austin microreactor startup nuclear" ], @searched
+  end
 end
