@@ -31,4 +31,9 @@ class LeadReaderTest < ActiveSupport::TestCase
     items = LeadReader.new(client:).call("Aalo, the Austin microreactor startup; kairospower.com")
     assert_equal [ "Aalo Atomics", "Kairos Power" ], items.map(&:name), "first word typed; site typed; Westinghouse never was"
   end
+
+  test "its model call is one short try: 15 s at most, then the hand reading (it holds a web thread)" do
+    config = LeadReader.quick_config
+    assert_equal [ 5, 15, 1 ], [ config.open_timeout, config.read_timeout, config.max_attempts ]
+  end
 end

@@ -22,6 +22,13 @@ class LeadReader
   # Tests set their own model client; nil uses OpenRouter.
   class_attribute :default_client, default: nil
 
+  # It runs inside the admin's request (one of Puma's three threads): one short try, then the hand reading (Infra).
+  def self.quick_config
+    env = DataQuality::Config.from_env
+    DataQuality::Config.new(api_key: env.api_key, extract_model: env.extract_model, verify_model: env.verify_model,
+      monthly_budget: env.monthly_budget, open_timeout: 5, read_timeout: 15, max_attempts: 1)
+  end
+
   def initialize(client: nil)
     @client = client || default_client
   end
@@ -43,7 +50,7 @@ class LeadReader
   private
     def read_with_model(text)
       run = CrawlRun.create!(source_kind: "add_a_lead", stage: "extract", started_at: Time.current)
-      client = @client || DataQuality::OpenRouter::Client.new
+      client = @client || DataQuality::OpenRouter::Client.new(config: self.class.quick_config)
       data = client.structured(role: :extract, schema: SCHEMA, schema_name: "leads", crawl_run: run, messages: [
         { role: "system", content: INSTRUCTIONS }, { role: "user", content: text.to_s.truncate(5_000) }
       ]).data
