@@ -93,4 +93,41 @@ class IndexNowTest < ActionDispatch::IntegrationTest
       assert_nil Rails.cache.read(IndexNow::PENDING)
     end
   end
+
+  test "each sent batch is kept once with its URL count and final result; throttled or keyless flushes keep nothing (#811)" do
+    flush = ->(answers) do
+      IndexNow.sender = ->(*) { answers.shift }
+      IndexNow.note_changes(map(company: { @company.id => "rev/#{SecureRandom.hex(4)}" }), host: "nuclear-directory.org")
+      IndexNow.flush(host: "nuclear-directory.org")
+    end
+    assert_difference -> { IndexNowSubmission.count }, 1 do
+      assert flush.call([ true ])
+    end
+    first = IndexNowSubmission.last
+    assert first.accepted
+    assert first.urls.positive?
+
+    assert_no_difference -> { IndexNowSubmission.count }, "throttled" do
+      assert_nil flush.call([ true ])
+    end
+    travel 11.minutes do
+      assert_difference -> { IndexNowSubmission.count }, 1 do
+        assert flush.call([ false, true ])
+      end
+      assert IndexNowSubmission.last.accepted, "accepted on the retry"
+    end
+    travel 22.minutes do
+      assert_difference -> { IndexNowSubmission.count }, 1 do
+        assert_equal false, flush.call([ false, false ])
+      end
+      assert_not IndexNowSubmission.last.accepted
+    end
+
+    ENV["INDEXNOW_KEY"] = nil
+    travel 33.minutes do
+      assert_no_difference -> { IndexNowSubmission.count }, "no key" do
+        assert_nil flush.call([ true ])
+      end
+    end
+  end
 end
