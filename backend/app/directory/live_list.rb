@@ -51,7 +51,21 @@ class Directory::LiveList
 
   # This tab's records with the chosen status only (its count on the tab).
   # Within a source (within), the count of what that source backs in the tab.
-  def self.tab_count(tab, status: DEFAULT_STATUS, within: nil) = new(tab:, chosen: { "status" => [ status ] }, within:).total
+  # Cached until the directory or a claim changes (Infra, 18 Nov: five tab counts ran a heavy count each, every load).
+  def self.tab_count(tab, status: DEFAULT_STATUS, within: nil)
+    Rails.cache.fetch([ "live-tab-count", stamp, tab, status, within ], expires_in: 10.minutes) do
+      new(tab:, chosen: { "status" => [ status ] }, within:).total
+    end
+  end
+
+  # What the counts and tags rest on: the directory (DataVersion) and the claims Data Quality's tags read.
+  # Read once per request (CurrentAttributes resets it), not once per tag.
+  def self.stamp = (Current.live_stamp ||= [ DataVersion.current, Candidate.maximum(:updated_at)&.to_f ].join("/"))
+
+  # A tag's ids for a model, shared by every list in this and later requests until something changes (Infra).
+  def self.tag_ids(tag, type)
+    Rails.cache.fetch([ "live-tag-ids", stamp, tag.key, type ], expires_in: 10.minutes) { tag.ids(type.constantize) }.to_set
+  end
 
   # [type, id] of every record shown, in order (newest change first).
   def keys
@@ -110,7 +124,7 @@ class Directory::LiveList
 
     def tag_ids(tag, type)
       @tag_ids ||= {}
-      @tag_ids[[ tag.key, type ]] ||= tag.ids(type.constantize).to_set
+      @tag_ids[[ tag.key, type ]] ||= self.class.tag_ids(tag, type)
     end
 
     # Only what a Sources row's or document's sources back (within).
