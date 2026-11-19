@@ -38,6 +38,8 @@ Rails.application.routes.draw do
     post "matching" => "matching#create"
     post "matching/undo" => "matching#undo", as: :api_dq_matching_undo
     get "completeness" => "completeness#show", as: :api_dq_completeness
+    # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
+    get "social_posts" => "social_posts#index", as: :api_dq_social_posts
     # The pipeline's health (#811): today's counts and problems, and the last two weeks.
     get "health" => "health#show", as: :api_dq_health
   end
