@@ -3,6 +3,7 @@ load Rails.root.join("db/data/20261118160000_aalo_lead.rb")
 
 # Infra, 18 Nov 2026: lead 105's name was the whole pasted line; it becomes Aalo Atomics with aalo.com, found again.
 class AaloLeadTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
   setup do
     Lead.find_by(id: 105)&.destroy!
     @lead = Lead.create!(id: 105, name: AaloLead::LINE, normalized_name: Lead.normalize(AaloLead::LINE), kind: "company", status: "researching",
@@ -13,8 +14,8 @@ class AaloLeadTest < ActiveSupport::TestCase
 
   def run_it = AaloLead.new(reason: "deploy abc1234, PR #1").tap(&:up)
 
-  test "renamed with its site, due tonight with its tries reset; a rerun says so" do
-    run_it
+  test "renamed with its site, found again now with its tries reset; a rerun says so" do
+    assert_enqueued_with(job: LeadFindJob, args: [ 105 ]) { run_it }
     @lead.reload
     assert_equal [ "Aalo Atomics", "new", 0, nil, "https://www.aalo.com/" ], [ @lead.name, @lead.status, @lead.find_attempts, @lead.next_find_at, @lead.sources.sole["url"] ]
     assert_includes LeadFinding.due, @lead

@@ -18,13 +18,20 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
   def line(lead) = css_select("#lead-#{lead.id}").text.squish
 
   test "a name and its site on one line: the words name it, the link is its site" do
-    [ "Aalo Atomics: https://www.aalo.com/", "Aalo Atomics - https://www.aalo.com/", "Aalo Atomics https://www.aalo.com/" ].each do |line|
+    [ "Aalo Atomics: https://www.aalo.com/", "Aalo Atomics - https://www.aalo.com/", "Aalo Atomics, https://www.aalo.com/",
+      "Aalo Atomics https://www.aalo.com/" ].each do |line|
       Lead.delete_all
       add(line)
       lead = Lead.sole
       assert_equal "Aalo Atomics", lead.name, line
       assert_equal "https://www.aalo.com/", lead.sources.sole["url"], line
     end
+    Lead.delete_all
+    add("https://www.aalo.com/")
+    assert_equal [ "aalo.com", "https://www.aalo.com/" ], [ Lead.sole.name, Lead.sole.sources.sole["url"] ], "a link alone"
+    Lead.delete_all
+    add("Aalo Atomics")
+    assert_equal [ "Aalo Atomics", nil ], [ Lead.sole.name, Lead.sole.sources.sole["url"] ], "a name alone"
   end
 
   test "Add queues the find and shows Finding; an empty or too long one is refused" do

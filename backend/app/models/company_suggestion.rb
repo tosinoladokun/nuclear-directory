@@ -29,8 +29,9 @@ module CompanySuggestion
     # A link alone is named by its site and path, so two LinkedIn pages or two articles are two leads.
     name = named || (url ? (link_name(url) || text) : text)
     lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(text)}", label: LABEL, url:) or return
-    # The same line again while it's being found: one find is enough (Infra).
-    return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.updated_at > 5.minutes.ago
+    # The same line again while it's being found: one find is enough (Infra). By when it was queued (decided_at), not
+    # updated_at, which the sighting itself moves when the date changes.
+    return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.decided_at.to_i > 5.minutes.ago.to_i
 
     lead.update!(status: "new", note: LeadFinding::FINDING, decided_by: by, decided_at: Time.current, reason: nil,
       record_type: nil, record_id: nil, find_attempts: 0, next_find_at: nil)
