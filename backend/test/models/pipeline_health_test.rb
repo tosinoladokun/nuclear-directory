@@ -116,4 +116,18 @@ class PipelineHealthTest < ActiveSupport::TestCase
     CrawlRun.where(source_kind: "nrc_news").update_all(started_at: NOW - 4.days)
     assert_equal "1 sources haven't run in three days: nrc_news", PipelineHealth.new(now: NOW).checks["sources-silent"]
   end
+
+  test "sources Crawl marks as not scheduled (a Hash of kind => why) are skipped, never a crash" do
+    daily = DataQuality::DailyCrawlJob
+    had = daily.const_defined?(:NOT_SCHEDULED, false) && daily::NOT_SCHEDULED
+    daily.send(:remove_const, :NOT_SCHEDULED) if had
+    daily.const_set(:NOT_SCHEDULED, { "nrc_news" => "read by its own job" })
+    (daily::SOURCE_KINDS + PipelineHealth::RECURRING_SOURCES - [ "nrc_news" ]).each do |kind|
+      CrawlRun.create!(source_kind: kind, stage: "crawl", status: "succeeded", started_at: NOW - 1.hour)
+    end
+    assert_nil PipelineHealth.new(now: NOW).checks["sources-silent"]
+  ensure
+    daily.send(:remove_const, :NOT_SCHEDULED)
+    daily.const_set(:NOT_SCHEDULED, had) if had
+  end
 end

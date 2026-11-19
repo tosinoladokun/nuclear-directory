@@ -145,7 +145,9 @@ class PipelineHealth
     # Each scheduled source must have crawled within three days (PM via Crawl).
     def sources_silent
       daily = DataQuality::DailyCrawlJob
-      kinds = daily::SOURCE_KINDS + RECURRING_SOURCES - (daily.const_defined?(:NOT_SCHEDULED) ? daily::NOT_SCHEDULED : [])
+      # NOT_SCHEDULED is a Hash of kind => why (Crawl's #822); a list works too (Infra).
+      skipped = daily.const_defined?(:NOT_SCHEDULED) ? daily::NOT_SCHEDULED : []
+      kinds = daily::SOURCE_KINDS + RECURRING_SOURCES - (skipped.respond_to?(:keys) ? skipped.keys : Array(skipped))
       last = CrawlRun.where(stage: "crawl", source_kind: kinds).group(:source_kind).maximum(:started_at)
       silent = kinds.select { |kind| last[kind].nil? || last[kind] < @now - SOURCE_SILENT_AFTER }
       "#{silent.size} sources haven't run in three days: #{silent.sort.join(', ')}" if silent.any?
