@@ -40,6 +40,8 @@ Rails.application.routes.draw do
     get "completeness" => "completeness#show", as: :api_dq_completeness
     # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
+    # The pipeline's health (#811): today's counts and problems, and the last two weeks.
+    get "health" => "health#show", as: :api_dq_health
   end
   # The browser's PostHog traffic, through our site with the visitor's country (#205).
   match "relay/*path" => "relay#forward", via: %i[get post], format: false
@@ -59,6 +61,8 @@ Rails.application.routes.draw do
   namespace :admin do
     # The social agent (#769): each platform's switch, and every post it made.
     get "social" => "social#show", as: :social
+    # Whether the pipeline runs alone (#811).
+    get "health" => "health#show", as: :health
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     # Change your password (#783).
     resource :password, only: %i[edit update]
