@@ -12,7 +12,7 @@ class LeadReaderTest < ActiveSupport::TestCase
       { "name" => "Cameco", "website" => nil, "hint" => nil },
       { "name" => "Bad Site Co", "website" => "javascript:alert(1)", "hint" => nil }
     ])
-    items = LeadReader.new(client:).call("Aalo, the Austin microreactor startup, aalo.com\nCameco")
+    items = LeadReader.new(client:).call("Aalo, the Austin microreactor startup, aalo.com\nCameco\nBad Site Co")
     assert_equal [ [ "Aalo Atomics", "https://aalo.com", "Austin microreactor startup" ], [ "Cameco", nil, nil ], [ "Bad Site Co", nil, nil ] ],
       items.map { |item| [ item.name, item.website, item.hint ] }
     assert_equal "succeeded", CrawlRun.where(source_kind: "add_a_lead").last.status, "its model use counts in the budget"
@@ -23,5 +23,12 @@ class LeadReaderTest < ActiveSupport::TestCase
     items = LeadReader.new(client:).call("Aalo Atomics: https://www.aalo.com/\nCameco\nhttps://www.oklo.com/")
     assert_equal [ [ "Aalo Atomics", "https://www.aalo.com/" ], [ "Cameco", nil ], [ "oklo.com", "https://www.oklo.com/" ] ],
       items.map { |item| [ item.name, item.website ] }
+  end
+
+  test "a company he didn't type is dropped, so the model can't invent one" do
+    client = FakeClient.new([ { "name" => "Aalo Atomics", "website" => nil, "hint" => nil },
+      { "name" => "Westinghouse", "website" => nil, "hint" => nil }, { "name" => "Kairos Power", "website" => "kairospower.com", "hint" => nil } ])
+    items = LeadReader.new(client:).call("Aalo, the Austin microreactor startup; kairospower.com")
+    assert_equal [ "Aalo Atomics", "Kairos Power" ], items.map(&:name), "first word typed; site typed; Westinghouse never was"
   end
 end

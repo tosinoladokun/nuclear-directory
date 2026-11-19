@@ -48,9 +48,12 @@ class LeadReader
         { role: "system", content: INSTRUCTIONS }, { role: "user", content: text.to_s.truncate(5_000) }
       ]).data
       run.finish!
+      typed = text.to_s.downcase
       items = Array(data["companies"]).filter_map do |company|
         name = company["name"].to_s.squish.first(CompanySuggestion::MAX)
         next if name.blank?
+        # Never a company he didn't name (DQ): its name, or its first word, or its site must be in what he typed.
+        next unless typed?(typed, name, company["website"])
 
         Item.new(name:, website: website(company["website"]), hint: company["hint"].to_s.squish.first(300).presence)
       end
@@ -58,6 +61,13 @@ class LeadReader
     rescue DataQuality::OpenRouter::Client::Error, DataQuality::Config::ConfigurationError, DataQuality::Budget::Exceeded => error
       run&.fail!(error.message)
       nil
+    end
+
+    def typed?(typed, name, site)
+      first = name.split.first.to_s.downcase
+      host = (URI.parse(website(site).to_s).host.to_s.downcase.delete_prefix("www.") rescue "")
+      typed.include?(name.downcase) || (first.length >= 3 && typed.match?(/\b#{Regexp.escape(first)}\b/)) ||
+        (host.present? && typed.include?(host))
     end
 
     # Only a plain https site: a bare domain gets https://; anything else is dropped.
