@@ -1,8 +1,9 @@
 # Crawl, #257 and #805 (PM-approved discovery): company leads from two lists, for the finder to find, check (US,
 # nuclear) and propose like any other lead. A list is never a source: only each company's own pages are.
-# - GAIN (DOE/INL, Aug 2026): 110 company websites missing from the directory, the sites only (none of the list's text);
+# - GAIN (DOE/INL, Aug 2026): 109 company websites missing from the directory, the sites only (none of the list's text);
 #   aalo.com is left out: it is lead 105 (Aalo Atomics), whatever order this and #806 deploy in; and the list's
-#   misspelt rockewllautomation.com (Rockwell Automation is listed rightly above it).
+#   misspelt rockewllautomation.com (Rockwell Automation is listed rightly above it), and mpact.lanl.gov (a 404).
+#   The list's efinemetals.com is corrected to efineametals.com (EFINEA Metals; Data Quality checked every host).
 # - NEA SMR Dashboard (3rd edition, 2025): 9 developers missing from the directory, by name.
 #
 # Idempotent: a lead seen again only updates its own sighting.
@@ -48,7 +49,7 @@ class GainNeaLeads < DeployData::Migration
     https://dbdinternational.com
     https://dcfab.com
     https://dubosenes.com
-    https://efinemetals.com
+    https://efineametals.com
     https://empyreanonline.com
     https://emc-sq.com
     https://epm-inc.com
@@ -120,7 +121,6 @@ class GainNeaLeads < DeployData::Migration
     https://srnl.gov
     https://ammt.anl.gov
     https://energy.sandia.gov
-    https://mpact.lanl.gov
   ].freeze
   NEA = [ "Deep Fission", "Flibe Energy", "MobileNuclear Energy", "NANO Nuclear Energy", "ThorCon International", "Terrestrial Energy", "Blue Capsule Technology", "Stratek Global", "Otrera New Energy" ].freeze
 
