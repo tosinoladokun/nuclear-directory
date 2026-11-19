@@ -104,7 +104,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       break
     end
     result ||= if (@search_failed || @search_capped) && !found["checked"]
-      outcome(:retry, name:, reason: "No search today (limit or a busy service); tried again next run", found:)
+      outcome(:retry, name:, reason: @search_capped ? "Today's search limit is reached; tried again next run" : "The search service was busy; tried again next run", found:)
     else
       unconfirmed(name, nil, "No website found", found)
     end
@@ -144,9 +144,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
       return propose(name, website, page, found)
     end
+    # Today's searches used up, or Brave's limit hit: the lead waits for tomorrow, not one of its tries
+    # (Backend, 10 Nov). "search limit" in the reason is what the health check counts (#821).
+    return outcome(:retry, name:, reason: "Today's search limit is reached; tried again tomorrow", found:) if @search_capped && !found["checked"]
     return outcome(:retry, name:, reason: "The search service was busy; tried again later", found:) if @search_failed && !found["checked"]
-    # Today's searches used up: the lead waits for tomorrow, not one of its tries (Backend, 10 Nov).
-    return outcome(:retry, name:, reason: "Today's search limit of #{SEARCHES_PER_DAY} is reached; tried again tomorrow", found:) if @search_capped && !found["checked"]
 
     unconfirmed(name, nil, found["checked"] ? "No site checked out as this US nuclear company (#{checked_summary(found)})" : "No website found", found)
   end

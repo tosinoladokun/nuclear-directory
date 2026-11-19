@@ -277,7 +277,9 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     Plugin.class_variable_set(:@@search_stopped_on, nil)
     stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 402)
     real = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { })
-    assert_equal :retry, Plugin.call(lead("Ghost One Nuclear").id, finder: real).outcome
+    first = Plugin.call(lead("Ghost One Nuclear").id, finder: real)
+    assert_equal :retry, first.outcome
+    assert_match "search limit", first.reason, "what the health check counts (#821)"
     assert_equal :retry, Plugin.call(lead("Ghost Two Nuclear").id, finder: real).outcome
     assert_requested :get, %r{api\.search\.brave\.com}, times: 1
 
