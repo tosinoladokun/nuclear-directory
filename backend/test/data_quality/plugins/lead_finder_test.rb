@@ -262,4 +262,13 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal :retry, capped.find_site(lonely.id, "Ghost Atomics").outcome
     refute_includes CrawlRun.where("stats ? 'site_for'").pluck(Arel.sql("(stats->>'site_for')::bigint")), lonely.id, "no week's rest for a blocked try"
   end
+
+  test "a pending company whose proposing claim DQ rejected is never searched for (DQ, 19 Nov)" do
+    junk = Organization.create!(name: "Summary Report Co")
+    Candidate.create!(source: Source.create!(url: "https://www.nrc.gov/junk", source_kind: "nrc_adams", crawl_status: "ok"), kind: "organization",
+      payload: { "name" => "Summary Report Co" }, quote: "Summary Report Co", subject: junk, status: "matched", dq_recommendation: "reject", dq_reason: "a document title")
+    site_finder = Plugin.new(search_key: nil, search: ->(query) { @searched << query; [] })
+    refute site_finder.find_sites.key?(junk.id)
+    assert_empty @searched.grep(/Summary Report/)
+  end
 end

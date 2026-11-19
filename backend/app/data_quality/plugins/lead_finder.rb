@@ -75,7 +75,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   def find_sites(limit: SITES_PER_NIGHT)
     tried = CrawlRun.where(source_kind:, stage: "crawl", started_at: 7.days.ago..).where("stats ? '#{SITE_FOR}'")
       .pluck(Arel.sql("(stats->>'#{SITE_FOR}')::bigint")).to_set
-    due = @directory.pending_organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) }.first(limit)
+    # A pending company whose proposing claim DQ rejected is junk: never searched for (DQ, 19 Nov).
+    rejected = Candidate.where(kind: "organization", subject_type: "Organization", dq_recommendation: "reject").pluck(:subject_id).to_set
+    due = @directory.pending_organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) || rejected.include?(id) }.first(limit)
     due.to_h { |id, name| [ id, find_site(id, name) ] }
   end
 
