@@ -28,6 +28,10 @@ production:
   lead_find:
     class: LeadFindJob
     schedule: every day at 2:30am America/New_York
+  # The pipeline's health (#811): counts kept daily, problems to Sentry. After the night's crawl and finds.
+  pipeline_health:
+    class: PipelineHealthJob
+    schedule: every day at 7am America/Los_Angeles
   # The social agent (#769): one post per platform each weekday morning, when switched on in the admin.
   social_post:
     class: SocialPostJob
