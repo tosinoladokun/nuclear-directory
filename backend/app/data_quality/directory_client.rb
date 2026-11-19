@@ -354,6 +354,9 @@ class DataQuality::DirectoryClient
   # A lead for the lead finder: LeadRef (id, name, kind, urls), or nil.
   def lead(id) = Directory::Leads.find(id)
 
+  # Pending companies with no website: [[id, name]].
+  def pending_organizations_without_website(limit: 50) = lookup.pending_organizations_without_website(limit:)
+
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
     record(type, state, values: lookup.fact_attributes(type:, id:))
