@@ -124,12 +124,39 @@ class GainNeaLeads < DeployData::Migration
   ].freeze
   NEA = [ "Deep Fission", "Flibe Energy", "MobileNuclear Energy", "NANO Nuclear Energy", "ThorCon International", "Terrestrial Energy", "Blue Capsule Technology", "Stratek Global", "Otrera New Energy" ].freeze
 
+  # NEA developers GAIN's list already has by their site (Data Quality): the site's lead covers them.
+  NEA_IN_GAIN = [ "Deep Fission", "MobileNuclear Energy", "NANO Nuclear Energy", "Terrestrial Energy", "ThorCon International" ].freeze
+
+  # No duplicates (Data Quality): a site a company or another lead already has, or a name the directory or a lead
+  # already has, is skipped and named.
   def up
-    gain = GAIN.count do |url|
+    gain, skipped = 0, []
+    GAIN.each do |url|
       host = URI.parse(url).host.to_s.delete_prefix("www.")
-      Lead.sighted!(name: url, kind: "company", key: "gain-2026-08:#{host}", label: GAIN_LABEL, url:)
+      next skipped << host if known_site?(host)
+
+      gain += 1 if Lead.sighted!(name: url, kind: "company", key: "gain-2026-08:#{host}", label: GAIN_LABEL, url:)
     end
-    nea = NEA.count { |name| Lead.sighted!(name:, kind: "company", key: "nea-smr-3:#{Lead.normalize(name)}", label: NEA_LABEL) }
-    say "Leads: #{gain} from GAIN's list, #{nea} from NEA's"
+    nea = 0
+    NEA.each do |name|
+      next skipped << name if NEA_IN_GAIN.include?(name) || known_name?(name)
+
+      nea += 1 if Lead.sighted!(name:, kind: "company", key: "nea-smr-3:#{Lead.normalize(name)}", label: NEA_LABEL)
+    end
+    say "Leads: #{gain} from GAIN's list, #{nea} from NEA's; skipped as already known: #{skipped.join(', ').presence || 'none'}"
   end
+
+  private
+    def known_site?(host)
+      Organization.where(domain: [ host, "www.#{host}" ]).or(Organization.where("website ILIKE ?", "%://#{host}%"))
+        .or(Organization.where("website ILIKE ?", "%://www.#{host}%")).exists? ||
+        Lead.where.not("leads.sources::text LIKE ?", "%gain-2026-08:#{host}%").where("leads.sources::text ILIKE ?", "%://#{host}%")
+          .or(Lead.where.not("leads.sources::text LIKE ?", "%gain-2026-08:#{host}%").where("leads.sources::text ILIKE ?", "%://www.#{host}%")).exists?
+    end
+
+    def known_name?(name)
+      normalized = Lead.normalize(name)
+      Organization.where("lower(name) = ?", name.downcase).exists? ||
+        Lead.where(normalized_name: normalized).where.not("leads.sources::text LIKE ?", "%nea-smr-3:%").exists?
+    end
 end
