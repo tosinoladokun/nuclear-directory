@@ -69,6 +69,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
     lead = lead.with(name: input) if input.present?
     @us_shown_elsewhere = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
+    # What a person said about it ("Austin microreactor startup"; Backend #806), for the search.
+    @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
     # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
@@ -287,7 +289,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       wait = @@last_search && (SEARCH_GAP - (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @@last_search))
       @sleeper.call(wait) if wait&.positive?
       @@last_search = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      urls = (@search || method(:brave)).call("\"#{name}\" nuclear")
+      urls = (@search || method(:brave)).call([ "\"#{name}\"", @hints.presence, "nuclear" ].compact.join(" "))
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
 
