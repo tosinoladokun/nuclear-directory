@@ -3,6 +3,7 @@ require "test_helper"
 # #811: the pipeline's daily health: per-stage counts, and each problem a person must hear about.
 class PipelineHealthTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
+  include ActionMailer::TestHelper
 
   NOW = Time.find_zone("America/Los_Angeles").local(2026, 11, 19, 7)
 
@@ -35,9 +36,17 @@ class PipelineHealthTest < ActiveSupport::TestCase
 
   test "the daily job keeps the day's row and reports each problem" do
     Organization.create!(name: "No Role Co", verification_status: "pending", created_at: 2.days.ago)
+    ENV["RESEND_API_KEY"] = "dummy"
     assert_difference("PipelineHealthSnapshot.count", 1) do
-      assert_error_reported(PipelineHealthJob::Stalled) { PipelineHealthJob.perform_now }
+      assert_error_reported(PipelineHealthJob::Stalled) do
+        assert_enqueued_email_with(HealthMailer, :stalled, params: ->(params) { params[:problems].any? }) { PipelineHealthJob.perform_now }
+      end
     end
+    mail = HealthMailer.with(problems: [ "1 pending companies have had no role for over a day" ]).stalled
+    assert_equal [ "hello@nuclear-directory.org" ], mail.to
+    assert_match "/admin/health", mail.body.encoded
+  ensure
+    ENV.delete("RESEND_API_KEY")
   end
 
   test "a pending company Data Quality said no to isn't counted; no website for two days, unjudged claims and stuck leads are problems" do

@@ -1,0 +1,5 @@
+The morning check found <%= @problems.one? ? "one thing" : "#{@problems.size} things" %> stalled:
+
+<% @problems.each do |problem| %>- <%= problem.upcase_first %>
+<% end %>
+Details: <%= admin_health_url %>

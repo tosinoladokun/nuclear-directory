@@ -1,5 +1,5 @@
-# Daily (config/recurring.yml): the pipeline's health is kept, and each problem goes to Sentry so a person hears of
-# it (#811). Infra wires the alert from there.
+# Daily (config/recurring.yml): the pipeline's health is kept; its problems go out in one email to hello@ (PM) and
+# each to Sentry (#811). Once a day, so at most one email per stalled stage per day.
 class PipelineHealthJob < ApplicationJob
   queue_as :default
 
@@ -7,6 +7,7 @@ class PipelineHealthJob < ApplicationJob
 
   def perform
     row = PipelineHealth.new.record!
+    HealthMailer.notify(row.problems)
     row.problems.each do |problem|
       Rails.error.report(Stalled.new(problem), handled: true, severity: :warning, context: { pipeline_health: row.counts })
     end
