@@ -124,6 +124,15 @@ class DataQuality::Plugin
       end
     end
 
+    # A page's visible body text alone, without its page data.
+    def body_text(source)
+      content = source.content_text.to_s
+      return content.squish unless content.lstrip.first(200).match?(/<(!doctype html|html|head|body|table)\b/i)
+
+      Nokogiri::HTML(content).xpath("//body//text()[not(ancestor::script or ancestor::style or " \
+        "ancestor::template or ancestor::noscript)]").map(&:text).join(" ").squish
+    end
+
     # Pages with less visible text than this also read their page data.
     THIN_PAGE = 600
 

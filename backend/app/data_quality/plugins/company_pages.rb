@@ -207,8 +207,12 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # One description per company per read (DQ, 31 Oct): only from the page
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
+    # A quote found only in the page's data (a thin JavaScript page, #802) says so, for DQ's review.
+    claims.each { |claim| claim[:notes] = PAGE_DATA_NOTE if claim[:quote].present? && !body_text(source).include?(claim[:quote].squish) }
     claims
   end
+
+  PAGE_DATA_NOTE = "Quote from page data (meta, structured or embedded data), not the page's visible text".freeze
 
   private
     # The company's one description page, the same on every read and retry:
