@@ -20,11 +20,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   Outcome = Data.define(:outcome, :candidate_id, :organization_id, :name, :website, :reason, :found)
 
   SEARCH_API = "https://api.search.brave.com/res/v1/web/search".freeze
-  # Paid, no attribution credit (PM, 10 Nov): at most this many a day, ~$3 a month at $5 per 1,000.
-  SEARCHES_PER_DAY = 20
+  # Paid, no attribution credit (PM, 10 Nov).
+  # Raised for the pending-company backlog (Tosin, 19 Nov): ~$8-10 a month at $5 per 1,000.
+  SEARCHES_PER_DAY = 60
   USAGE = "brave_searches".freeze
   # Leads found a day, whatever asks (Infra, 10 Nov: a pasted long list can't spend the quotas).
-  FINDS_PER_DAY = 50
+  # Leads (Backend gates them at 50) plus the nightly pending-company sites (SITES_PER_NIGHT).
+  FINDS_PER_DAY = 100
   FINDS = "finds".freeze
   LEAD_MARK = "#lead-finder".freeze
   # Brave's plan allows 1 request a second (Infra): this much between our calls.
@@ -67,7 +69,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # a lead (named, nuclear, US), each at most once a week; a site that checks
   # out is proposed as their website claim (matched to them by name). The
   # finds and searches count toward the same daily limits.
-  SITES_PER_NIGHT = 10
+  SITES_PER_NIGHT = 50
   SITE_FOR = "site_for".freeze
 
   def find_sites(limit: SITES_PER_NIGHT)
