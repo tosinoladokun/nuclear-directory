@@ -70,7 +70,7 @@ class SourceCatalog
     # The annual plant file (#319): checked by the daily crawl, fetched only
     # when EIA publishes a new year.
     "eia_plants" => { name: "EIA-860 plants", daily: true },
-    "eia_owners" => { name: "EIA-860 owners" },
+    "eia_owners" => { name: "EIA-860 owners", daily: true },
     "eia_860_index" => { name: "EIA-860 index", note: "finds the yearly file", daily: true },
     # Enrich (#479): read only when the admin asks, one company at a time.
     "company_pages" => { name: "Companies' own pages", note: "read on request (Enrich) and nightly gap fill", daily: true }

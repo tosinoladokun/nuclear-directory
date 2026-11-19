@@ -336,4 +336,16 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
   def owner_row(plant, name, generator, owner_name, owner_id, pct)
     [ "1", "Utility", plant, name, "XX", generator, "OP", owner_name, "", "", "", "", owner_id, pct ]
   end
+
+  test "a first read adds at most plants_per_night new plants a night; the rest come on later nights (DQ, 19 Nov)" do
+    @plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), plants_per_night: 1)
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    first = Candidate.where(kind: "facility_relationship").pluck(Arel.sql("payload->'facility'->>'eia_plant_id'")).compact.uniq
+    assert_equal 1, first.size
+
+    source.update_columns(fetched_at: 2.days.ago)
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    second = Candidate.where(kind: "facility_relationship").pluck(Arel.sql("payload->'facility'->>'eia_plant_id'")).compact.uniq
+    assert_equal 2, second.size, "the next plant the next night, the first one kept"
+  end
 end

@@ -22,10 +22,15 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # The shares at a plant may add up to this much off 100% and still be
   # published without a person (rounding in EIA's file).
   TOLERANCE = BigDecimal("1")
+  # A first read would bring every plant's owners at once: at most this many
+  # plants not proposed before are added a night (DQ, 19 Nov), the next ones
+  # on later nights; plants proposed before are always read again.
+  PLANTS_PER_NIGHT = 25
 
-  def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new)
+  def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, plants_per_night: PLANTS_PER_NIGHT)
     @fetcher = fetcher
     @directory = directory
+    @plants_per_night = plants_per_night
   end
 
   def crawl(run)
@@ -46,8 +51,14 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true, max_bytes: Plants::MAX_BYTES) do |bytes|
       OwnerFile.to_csv(OwnerFile.rows(bytes))
     end
-    { "index" => index_read, "file" => file, "snapshot" => result.to_s, "rows" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
+    stats = { "index" => index_read, "file" => file, "snapshot" => result.to_s, "rows" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
       "superseded" => (supersede_older_files(source) if source.crawl_ok?) }.compact
+    # Plants still waiting for their first night: read again tomorrow.
+    if source.crawl_ok? && source.extracted_sha256.present? && (shares(source).keys - proposed_plants.to_a).any?
+      source.update!(extracted_sha256: nil, extracted_rows_sha256: nil)
+      stats["plants_waiting"] = (shares(source).keys - proposed_plants.to_a).size
+    end
+    stats
   rescue OwnerFile::Unreadable => error
     source.update!(crawl_status: "needs_human", status_reason: "Couldn't read EIA-860's ownership: #{error.message}")
     { "index" => index_read, "file" => file, "snapshot" => "needs_human" }
@@ -65,7 +76,9 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   end
 
   def extract(source, _run)
-    plants = shares(source)
+    all = shares(source)
+    done = proposed_plants
+    plants = all.select { |id, _| done.include?(id) }.merge(all.reject { |id, _| done.include?(id) }.sort_by { |id, _| id.to_i }.first(@plants_per_night).to_h)
     owners = plants.values.flat_map { |plant| plant[:rows] }.group_by { |row| row["owner_eia_utility_id"] }
     owners.map { |_, rows| owner_candidate(rows.first) } + plants.values.flat_map { |plant| link_candidates(plant) }
   end
@@ -121,6 +134,12 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     # Each plant in the source's rows: { plant id => { eia_plant_id:, name:,
     # rows:, owners: [{ id:, name:, pct:, rows: }], total:, per_unit:,
     # units: { "Catawba 1" => [{ id:, name:, pct:, row: }] } } }. Cached per snapshot.
+    # EIA plant IDs this kind has already proposed owners for.
+    def proposed_plants
+      Candidate.joins(:source).where(sources: { source_kind: }, kind: "facility_relationship")
+        .pluck(Arel.sql("COALESCE(candidates.payload->'facility'->>'eia_plant_id', candidates.payload->'facility'->'identify'->>'eia_plant_id')")).compact.to_set
+    end
+
     def shares(source)
       @shares ||= {}
       @shares[[ source.id, source.content_sha256 ]] ||= begin
