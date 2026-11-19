@@ -47,11 +47,13 @@ class PipelineHealth
         "claims_unchecked" => unchecked.count,
         "leads_stuck" => stuck_leads.count,
         "budget_spent" => DataQuality::Budget.spent_this_month(now: @now).to_f.round(2),
-        "searches_last_day" => CrawlRun.where(source_kind: "lead_finder", stage: "crawl", started_at: (@now - 1.day)..)
-          .where("stats ? '#{DataQuality::Plugins::LeadFinder::USAGE}'").count,
+        # Finds that reached an answer (added, or checked and couldn't confirm a site), whatever the search did:
+        # a reserved search row is written before the call, so it doesn't prove Brave answered (Copilot).
+        "finds_answered_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..)
+          .where("status = 'added' OR note LIKE ?", "#{LeadFinding::UNCONFIRMED}%").count,
+        # Held for the search itself only (not the pipeline lock or the day's find quota, which share BUSY; Copilot).
         "searches_held_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..)
-          .where("note = ? OR note ILIKE ? OR note ILIKE ? OR note ILIKE ?", LeadFinding::BUSY, "%search limit%", "%no search today%",
-            "%search service was busy%").count
+          .where("note ILIKE ? OR note ILIKE ? OR note ILIKE ?", "%search limit%", "%no search today%", "%search service was busy%").count
       }
     end
   end
@@ -151,7 +153,7 @@ class PipelineHealth
 
     # Brave refused every search for a day (its monthly limit or the key; Infra): leads wait instead of being found.
     def search_limit
-      held, done = counts.values_at("searches_held_last_day", "searches_last_day")
+      held, done = counts.values_at("searches_held_last_day", "finds_answered_last_day")
       "#{held} lead finds waited a day because the search didn't answer (its monthly limit or key)" if held.positive? && done.zero?
     end
 

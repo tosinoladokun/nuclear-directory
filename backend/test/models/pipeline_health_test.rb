@@ -95,12 +95,18 @@ class PipelineHealthTest < ActiveSupport::TestCase
     assert_equal before, PipelineHealth.new(now: NOW).counts["pending_without_role"], "no evidence: still blocks its Create"
   end
 
-  test "finds held for a day with no search answering is the search limit; one search answering clears it" do
-    Lead.sighted!(name: "Held Co", kind: "company", key: "news:h", label: "news").update!(status: "researching", note: LeadFinding::BUSY)
-    assert_includes PipelineHealth.new(now: NOW).checks["search-limit"].to_s, "the search didn't answer"
+  test "finds held for the search itself with none answered is the search limit; a reserved but failed search doesn't hide it" do
+    Lead.sighted!(name: "Held Co", kind: "company", key: "news:h", label: "news")
+      .update!(status: "researching", note: "Waiting: Today's search limit is reached; tried again tomorrow")
     CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", started_at: NOW - 1.hour,
-      stats: { DataQuality::Plugins::LeadFinder::USAGE => 1 })
-    assert_nil PipelineHealth.new(now: NOW).checks["search-limit"]
+      stats: { DataQuality::Plugins::LeadFinder::USAGE => 1 }) # reserved before a request that then failed
+    assert_includes PipelineHealth.new(now: NOW).checks["search-limit"].to_s, "the search didn't answer"
+
+    Lead.sighted!(name: "Lock Co", kind: "company", key: "news:l", label: "news").update!(status: "researching", note: LeadFinding::BUSY)
+    assert_equal 1, PipelineHealth.new(now: NOW).counts["searches_held_last_day"], "the pipeline lock's BUSY isn't the search"
+
+    Lead.sighted!(name: "Found Co", kind: "company", key: "news:f", label: "news").update!(status: "added")
+    assert_nil PipelineHealth.new(now: NOW).checks["search-limit"], "a find that got an answer clears it"
   end
 
   test "a scheduled source that hasn't crawled in three days is named" do

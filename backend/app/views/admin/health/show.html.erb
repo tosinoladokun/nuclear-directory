@@ -23,7 +23,7 @@
              "Without a description" => "pending_without_description", "Without an HQ" => "pending_without_hq", "Creates in Today" => "creates_shown",
              "Finds in the last day" => "finds_last_day", "Couldn't confirm" => "finds_unconfirmed_last_day", "Last data deploy" => "data_deploy",
              "Posts that may have gone out" => "posts_unknown", "Company claims with no verdict" => "claims_unchecked", "Stuck leads" => "leads_stuck",
-             "Model spend this month ($)" => "budget_spent", "Searches in the last day" => "searches_last_day",
+             "Model spend this month ($)" => "budget_spent", "Finds answered in the last day" => "finds_answered_last_day",
              "Finds held (search not answering)" => "searches_held_last_day" }.each do |label, key| %>
           <tr><th scope="row" class="type-body"><%= label %></th><td class="type-data" id="health-<%= key.dasherize %>"><%= @health.counts[key] || "none" %></td></tr>
         <% end %>
