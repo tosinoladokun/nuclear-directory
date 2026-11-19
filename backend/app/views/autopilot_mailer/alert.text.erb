@@ -1,0 +1,11 @@
+<%= @state.to_s == "resolved" ? "Back to normal." : "Something in the pipeline needs a look." %>
+
+<%= @title %>
+
+<%= @body %>
+
+Alert: <%= @key %>
+Pipeline health: <%= admin_health_url %>
+<% if @state.to_s == "raised" %>
+It says this once a day while it lasts, and once more when it's back to normal.
+<% end %>

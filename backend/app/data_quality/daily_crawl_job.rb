@@ -11,7 +11,14 @@
 # repeats a source that already ran, and still fails for any that failed.
 # Each source gets its own ATTEMPTS.
 class DataQuality::DailyCrawlJob < ApplicationJob
-  SOURCE_KINDS = %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters].freeze
+  SOURCE_KINDS = %w[nrc_reactor_list eia_generators eia_plants usaspending_doe_awards usaspending_recipients nrc_decommissioning doe_isotope_sites nrc_uranium_recovery company_newsrooms nrc_reactor_vendors nrc_fuel_cycle nrc_research_reactors doe_programs federal_register_nrc trade_press sec_form_d nasa_nuclear_news first_read_pages doe_nuclear_news arpa_e_projects doe_loans nrc_adams nrc_news company_pages sec_ticker_ciks newsletters eia_owners].freeze
+  # Plug-ins never run by the nightly crawl or a recurring job, each with the
+  # reason (a test fails for any other plug-in left off both: eia_owners was
+  # merged but never run, 19 Nov).
+  NOT_SCHEDULED = {
+    "lead_finder" => "runs per lead, from Backend's LeadFindJob and the company_pages crawl",
+    "web_page" => "pages people cited by hand; nothing to crawl or extract"
+  }.freeze
   RETRY_WAIT = 10.minutes
   ATTEMPTS = 30
 

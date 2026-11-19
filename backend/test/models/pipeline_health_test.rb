@@ -39,6 +39,7 @@ class PipelineHealthTest < ActiveSupport::TestCase
   test "the daily job keeps the day's row and emails the problems (Sentry is captured directly, outside tests)" do
     Organization.create!(name: "No Role Co", verification_status: "pending", created_at: 2.days.ago)
     ENV["RESEND_API_KEY"] = "dummy"
+    PipelineHealthJob.alerts = false # no Autopilot::Alert: the fallback email
     assert_difference("PipelineHealthSnapshot.count", 1) do
       assert_enqueued_email_with(HealthMailer, :stalled, params: ->(params) { params[:problems].any? }) { PipelineHealthJob.perform_now }
     end
@@ -46,6 +47,7 @@ class PipelineHealthTest < ActiveSupport::TestCase
     assert_equal [ "hello@nuclear-directory.org" ], mail.to
     assert_match "/admin/health", mail.body.encoded
   ensure
+    PipelineHealthJob.alerts = nil
     ENV.delete("RESEND_API_KEY")
   end
 
@@ -72,14 +74,13 @@ class PipelineHealthTest < ActiveSupport::TestCase
     alert = Module.new
     alert.define_singleton_method(:raise!) { |key, **| calls << [ :raise, key ] }
     alert.define_singleton_method(:resolve!) { |key, **| calls << [ :resolve, key ] }
-    Object.const_set(:Autopilot, Module.new) unless defined?(Autopilot)
-    Autopilot.const_set(:Alert, alert) unless defined?(Autopilot::Alert)
+    PipelineHealthJob.alerts = alert
     PipelineHealthJob.perform_now
     assert_includes calls, [ :raise, "pending-without-role" ]
     assert_includes calls, [ :resolve, "posts-unknown" ]
     assert_equal PipelineHealth.new.checks.keys.size, calls.size, "every key, once"
   ensure
-    Autopilot.send(:remove_const, :Alert) if defined?(Autopilot::Alert) && Autopilot::Alert == alert
+    PipelineHealthJob.alerts = nil
   end
 
   test "the finder's own rows mark it alive; a role without a source still counts as no role; hourly feeds don't hide the crawl" do
@@ -93,5 +94,41 @@ class PipelineHealthTest < ActiveSupport::TestCase
     before = PipelineHealth.new(now: NOW).counts["pending_without_role"]
     OrganizationRole.create!(organization: company, role: Role.first || Role.create!(key: "fuel", name: "Fuel"), verification_status: "pending")
     assert_equal before, PipelineHealth.new(now: NOW).counts["pending_without_role"], "no evidence: still blocks its Create"
+  end
+
+  test "finds held for the search itself with none answered is the search limit; a reserved but failed search doesn't hide it" do
+    Lead.sighted!(name: "Held Co", kind: "company", key: "news:h", label: "news")
+      .update!(status: "researching", note: "Waiting: Today's search limit is reached; tried again tomorrow")
+    CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", started_at: NOW - 1.hour,
+      stats: { DataQuality::Plugins::LeadFinder::USAGE => 1 }) # reserved before a request that then failed
+    assert_includes PipelineHealth.new(now: NOW).checks["search-limit"].to_s, "the search didn't answer"
+
+    Lead.sighted!(name: "Lock Co", kind: "company", key: "news:l", label: "news").update!(status: "researching", note: LeadFinding::BUSY)
+    assert_equal 1, PipelineHealth.new(now: NOW).counts["searches_held_last_day"], "the pipeline lock's BUSY isn't the search"
+
+    Lead.sighted!(name: "Found Co", kind: "company", key: "news:f", label: "news").update!(status: "added")
+    assert_nil PipelineHealth.new(now: NOW).checks["search-limit"], "a find that got an answer clears it"
+  end
+
+  test "a scheduled source that hasn't crawled in three days is named" do
+    kinds = DataQuality::DailyCrawlJob::SOURCE_KINDS + PipelineHealth::RECURRING_SOURCES
+    kinds.each { |kind| CrawlRun.create!(source_kind: kind, stage: "crawl", status: "succeeded", started_at: NOW - 1.hour) }
+    assert_nil PipelineHealth.new(now: NOW).checks["sources-silent"]
+    CrawlRun.where(source_kind: "nrc_news").update_all(started_at: NOW - 4.days)
+    assert_equal "1 sources haven't run in three days: nrc_news", PipelineHealth.new(now: NOW).checks["sources-silent"]
+  end
+
+  test "sources Crawl marks as not scheduled (a Hash of kind => why) are skipped, never a crash" do
+    daily = DataQuality::DailyCrawlJob
+    had = daily.const_defined?(:NOT_SCHEDULED, false) && daily::NOT_SCHEDULED
+    daily.send(:remove_const, :NOT_SCHEDULED) if had
+    daily.const_set(:NOT_SCHEDULED, { "nrc_news" => "read by its own job" })
+    (daily::SOURCE_KINDS + PipelineHealth::RECURRING_SOURCES - [ "nrc_news" ]).each do |kind|
+      CrawlRun.create!(source_kind: kind, stage: "crawl", status: "succeeded", started_at: NOW - 1.hour)
+    end
+    assert_nil PipelineHealth.new(now: NOW).checks["sources-silent"]
+  ensure
+    daily.send(:remove_const, :NOT_SCHEDULED)
+    daily.const_set(:NOT_SCHEDULED, had) if had
   end
 end

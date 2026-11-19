@@ -6,16 +6,20 @@ class PipelineHealthJob < ApplicationJob
 
   class Stalled < StandardError; end
 
+  # nil: Autopilot::Alert when it exists; tests set a stand-in, or false for "no helper" (the fallback below).
+  class_attribute :alerts, default: nil
+
   def perform
     health = PipelineHealth.new
     row = health.record!
-    return fallback(row.problems) unless defined?(Autopilot::Alert)
+    helper = alerts.nil? ? (Autopilot::Alert if defined?(Autopilot::Alert)) : alerts.presence
+    return fallback(row.problems) unless helper
 
     health.checks.each do |key, problem|
       if problem
-        Autopilot::Alert.raise!(key, title: problem.upcase_first.truncate(120), body: "#{problem.upcase_first}.\n\nSee Admin > Health.")
+        helper.raise!(key, title: problem.upcase_first.truncate(120), body: "#{problem.upcase_first}.\n\nSee Admin > Health.")
       else
-        Autopilot::Alert.resolve!(key, note: "Back to normal.")
+        helper.resolve!(key, note: "Back to normal.")
       end
     end
   end
