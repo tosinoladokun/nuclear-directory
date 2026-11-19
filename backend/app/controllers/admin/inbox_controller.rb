@@ -40,7 +40,8 @@ class Admin::InboxController < Admin::BaseController
   # Add a lead (#752): found in the background; it comes back as a Create, or as couldn't confirm.
   def suggest
     if (leads = CompanySuggestion.suggest_lines(params[:suggestion], by: actor))
-      flash[:notice] = leads.one? ? "Added. It's being found now." : "Added #{leads.size} leads. They're being found now."
+      # What it understood, so he can see it read him right (PM).
+      flash[:notice] = "Added: #{leads.map { |lead| lead_label(lead) }.to_sentence}. #{leads.one? ? "It's" : "They're"} being found now."
     else
       flash[:alert] = "Type a company name, website or link, one per line " \
         "(#{CompanySuggestion::MAX_LINES} lines and #{CompanySuggestion::MAX} characters a line at most)."
@@ -122,6 +123,12 @@ class Admin::InboxController < Admin::BaseController
   end
 
   private
+    def lead_label(lead)
+      site = lead.sources.reverse.find { |source| source["key"].to_s.start_with?(CompanySuggestion::KEY) }&.dig("url")
+      host = site && (URI.parse(site).host.to_s.delete_prefix("www.") rescue nil)
+      host.present? && !lead.name.include?(host) ? "#{lead.name} (#{host})" : lead.name
+    end
+
     # "claim:<id>,<id>…" (a row and its copies) or "record:<Type>:<id>". Returns the errors, or nil when done.
     def decide_pick(pick, yes:)
       kind, rest = pick.split(":", 2)

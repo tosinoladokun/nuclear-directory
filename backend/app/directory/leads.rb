@@ -3,11 +3,12 @@
 module Directory::Leads
   def self.keep(name:, key:, label:, url: nil) = Lead.sighted!(name:, kind: "company", key:, label:, url:)
 
-  LeadRef = Data.define(:id, :name, :kind, :urls, :keys)
+  # hints: what a person said about it when adding it, for the finder (PM, 18 Nov).
+  LeadRef = Data.define(:id, :name, :kind, :urls, :keys, :hints)
   # A lead as the lead finder reads it: its name, its sightings' links and keys.
   def self.find(id)
     lead = Lead.find_by(id:) or return
     LeadRef.new(id: lead.id, name: lead.name, kind: lead.kind, urls: lead.sources.filter_map { |source| source["url"].presence },
-      keys: lead.sources.filter_map { |source| source["key"].presence })
+      keys: lead.sources.filter_map { |source| source["key"].presence }, hints: lead.sources.filter_map { |source| source["hint"].presence })
   end
 end

@@ -7,12 +7,19 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
 
   Found = Data.define(:outcome, :organization_id, :candidate_id, :reason, :name, :website)
 
+  # No model in these tests: each line is read by hand (LeadReaderTest covers the model).
+  NoModel = Class.new { def structured(**) = raise(DataQuality::OpenRouter::Client::RequestError, "no model in tests") }
+
   setup do
     sign_in_as users(:admin)
     @finder = LeadFindJob.finder
+    LeadReader.default_client = NoModel.new
   end
 
-  teardown { LeadFindJob.finder = @finder }
+  teardown do
+    LeadFindJob.finder = @finder
+    LeadReader.default_client = nil
+  end
 
   def add(text) = post(admin_inbox_suggest_path, params: { suggestion: text })
   def line(lead) = css_select("#lead-#{lead.id}").text.squish
@@ -34,6 +41,21 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
     assert_equal [ "Aalo Atomics", nil ], [ Lead.sole.name, Lead.sole.sources.sole["url"] ], "a name alone"
   end
 
+  test "free text is read as a prompt: each company a lead with its site and hint, and he sees what it understood" do
+    reader = Struct.new(:items) { def call(_text) = items }.new([
+      LeadReader::Item.new(name: "Aalo Atomics", website: "https://aalo.com", hint: "Austin microreactor startup"),
+      LeadReader::Item.new(name: "Cameco", website: nil, hint: nil) ])
+    original = LeadReader.method(:new)
+    LeadReader.define_singleton_method(:new) { |**| reader }
+    assert_enqueued_jobs(2, only: LeadFindJob) { add("Aalo, the Austin microreactor startup, aalo.com, and Cameco") }
+    assert_equal "Added: Aalo Atomics (aalo.com) and Cameco. They're being found now.", flash[:notice]
+    aalo = Lead.find_by!(normalized_name: "aalo atomics")
+    assert_equal [ "https://aalo.com", "Austin microreactor startup" ], aalo.sources.sole.values_at("url", "hint")
+    assert_equal [ "Austin microreactor startup" ], Directory::Leads.find(aalo.id).hints, "the finder gets the hint"
+  ensure
+    LeadReader.define_singleton_method(:new, original) if original
+  end
+
   test "Add queues the find and shows Finding; an empty or too long one is refused" do
     assert_enqueued_with(job: LeadFindJob) { add("  Kairos Power ") }
     lead = Lead.find_by!(normalized_name: "kairos power")
@@ -51,7 +73,7 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
   test "several at once, one per line; blank and repeated lines skipped" do
     assert_enqueued_jobs(3, only: LeadFindJob) { add("Alpha Fission\n\nhttps://betafusion.example\n Gamma Isotopes \nAlpha Fission") }
     assert_equal [ "Alpha Fission", "betafusion.example", "Gamma Isotopes" ].sort, Lead.where(status: "new").pluck(:name).sort
-    assert_equal "Added 3 leads. They're being found now.", flash[:notice]
+    assert_equal "Added: Alpha Fission, betafusion.example, and Gamma Isotopes. They're being found now.", flash[:notice]
   end
 
   test "the same lead again while it's being found isn't queued twice" do

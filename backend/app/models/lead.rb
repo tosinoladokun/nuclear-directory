@@ -23,7 +23,8 @@ class Lead < ApplicationRecord
 
   # Notes one sighting from a source (by its key), adding the lead if new.
   # A sighting seen before only updates its own entry. Returns the lead.
-  def self.sighted!(name:, kind:, key:, label:, url: nil, times: 1, first: Date.current, last: first)
+  # hint: what the person adding it said about it ("the Austin microreactor startup"), for the finder.
+  def self.sighted!(name:, kind:, key:, label:, url: nil, hint: nil, times: 1, first: Date.current, last: first)
     name = name.to_s.squish.first(200)
     normalized = normalize(name)
     return if normalized.length < 2
@@ -40,7 +41,7 @@ class Lead < ApplicationRecord
       # A source seen before keeps its earliest first and latest last date.
       first = [ first, (Date.parse(seen["first"]) if seen) ].compact.min
       last = [ last, (Date.parse(seen["last"]) if seen) ].compact.max
-      entry = { "key" => key, "label" => label, "url" => url, "times" => [ times.to_i, 1 ].max, "first" => first.to_s, "last" => last.to_s }.compact
+      entry = { "key" => key, "label" => label, "url" => url, "hint" => hint.presence, "times" => [ times.to_i, 1 ].max, "first" => first.to_s, "last" => last.to_s }.compact
       # A lead first seen in a search waits in triage.
       lead.status = "triage" if lead.new_record? && key.start_with?("search:")
       lead.sources = lead.sources.reject { |source| source["key"] == key } + [ entry ]
