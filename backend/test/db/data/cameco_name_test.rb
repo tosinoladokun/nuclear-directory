@@ -17,4 +17,10 @@ class CamecoNameTest < ActiveSupport::TestCase
     @company.update_columns(name: "cameco", verification_status: "rejected")
     assert_raises(RuntimeError) { run_it }
   end
+
+  test "already created by Tosin before the deploy: renamed and set to Canada, still verified" do
+    @company.update_columns(verification_status: "verified", verified_by: "human:tosin")
+    run_it
+    assert_equal [ "Cameco", "CA", "verified" ], @company.reload.values_at(:name, :country_code, :verification_status)
+  end
 end
