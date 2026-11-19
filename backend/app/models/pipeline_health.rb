@@ -14,7 +14,7 @@ class PipelineHealth
   UNCHECKED_MAX = 100
   UNCHECKED_OLDEST = 3.days
   NEW_LEAD_AFTER = 48.hours
-  STALE_AFTER = 30.hours
+  STALE_AFTER = 26.hours
   UNCONFIRMED_SHARE = 0.5
   BUDGET_SHARE = 0.8
 
