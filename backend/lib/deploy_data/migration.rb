@@ -20,8 +20,15 @@ module DeployData
   #   longer true, rather than guess.
   # - Rehearsed with `bin/deploy-data --dry-run` on a restored backup before
   #   merge; `say` what it changes so the rehearsal and deploy logs match.
+  # - Never stop the deploy on a record a person may decide first (#811):
+  #   accept the decided state, or skip and `say` why.
+  # - Never rescue a database error inside `up`: let it raise. A swallowed
+  #   error leaves Postgres' transaction aborted, so the step's savepoint can't
+  #   roll back cleanly and every later statement fails (Backend's review, #813).
   # It runs in the deploy's transaction with the seed and the other new
-  # migrations, recorded as run only if they all succeed. Never
+  # migrations, each in its own savepoint (#811): one that raises is rolled
+  # back alone, reported and tried again at the next deploy; the others and
+  # the seed commit, and each is recorded as run only when it succeeds. Never
   # from db:prepare, db:schema:load or tests: only bin/deploy-data runs it.
   class Migration
     HUMAN = /\Ahuman:[a-z0-9_.-]+\z/

@@ -23,8 +23,9 @@ module DeployData
       []
     end
 
-    # Runs one, in a transaction with its record (part of the caller's, when
-    # there is one). Raises on any error; rolled back, it runs again on the
+    # Runs one, in a transaction with its record (a savepoint inside the
+    # caller's, when there is one, so a failure rolls back only this one and
+    # not the others). Raises on any error; rolled back, it runs again on the
     # next deploy.
     def run(pending, reason:, commit:)
       klass = load_class(pending)
@@ -33,7 +34,7 @@ module DeployData
       raise Invalid, "db/data/#{File.basename(pending.path)}: BY must name the human who approved it, like \"human:tosin\" (got #{by.inspect})" unless by.match?(Migration::HUMAN)
 
       puts "Data migration #{pending.version} #{pending.name} (by #{by}):"
-      ActiveRecord::Base.transaction do
+      ActiveRecord::Base.transaction(requires_new: true) do
         migration.up
         DataMigration.create!(version: pending.version, name: pending.name, by:, reason:, commit:,
           output: migration.output.join("\n"), ran_at: Time.current)

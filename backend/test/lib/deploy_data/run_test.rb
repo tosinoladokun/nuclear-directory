@@ -194,7 +194,7 @@ class DeployData::RunTest < ActiveSupport::TestCase
     assert_equal :nothing, run_step
   end
 
-  test "a failing data migration is rolled back and runs again next time" do
+  test "a failing data migration is rolled back alone, reported, and runs again next time" do
     run_step
     write "db/data/20261017120000_breaks.rb", <<~RUBY
       class Breaks < DeployData::Migration
@@ -207,10 +207,64 @@ class DeployData::RunTest < ActiveSupport::TestCase
       end
     RUBY
 
-    assert_equal :failed, run_step
+    assert_equal :applied, run_step, "a failing step never stops the deploy's data step"
     assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name
     assert_equal 0, DataMigration.count
-    assert_includes @github.posts.last[:body], "failed: MigrationFailed: data migration 20261017120000 breaks: RuntimeError: the pinned quote is gone"
+    body = @github.posts.last[:body]
+    assert_includes body, "Needs a look"
+    assert_includes body, "1 data migration failed and was skipped"
+    assert_includes body, "20261017120000 breaks: RuntimeError: the pinned quote is gone"
+
+    assert_equal :applied, run_step, "it is tried again at the next deploy"
+    assert_includes @github.posts.last[:body], "the pinned quote is gone"
+    assert_equal 0, DataMigration.count
+  end
+
+  test "a failing data migration doesn't block the later ones (#811)" do
+    run_step
+    write "db/data/20261017120000_breaks.rb", <<~RUBY
+      class Breaks < DeployData::Migration
+        BY = "human:tosin"
+        def up = raise("pinned on a record someone decided first")
+      end
+    RUBY
+    write "db/data/20261017130000_fixes.rb", <<~RUBY
+      class Fixes < DeployData::Migration
+        BY = "human:tosin"
+        def up = Organization.find_by!(slug: "westinghouse").update!(name: "Fixed")
+      end
+    RUBY
+
+    assert_equal :applied, run_step
+    assert_equal "Fixed", organizations(:westinghouse).reload.name
+    assert_equal %w[20261017130000], DataMigration.pluck(:version), "only the one that worked is recorded"
+    assert_includes @github.posts.last[:body], "20261017120000 breaks: RuntimeError: pinned on a record someone decided first"
+    assert_includes @github.posts.last[:body], "20261017130000 fixes (by human:tosin)"
+
+    File.delete(@root.join("db/data/20261017120000_breaks.rb"))
+    assert_equal :nothing, run_step, "the one that worked isn't run again"
+  end
+
+  test "a dry run still fails when a data migration fails, and goes on to the later ones (#811)" do
+    run_step
+    write "db/data/20261017120000_breaks.rb", <<~RUBY
+      class Breaks < DeployData::Migration
+        BY = "human:tosin"
+        def up = raise("the pinned quote is gone")
+      end
+    RUBY
+    write "db/data/20261017130000_fixes.rb", <<~RUBY
+      class Fixes < DeployData::Migration
+        BY = "human:tosin"
+        def up = Organization.find_by!(slug: "westinghouse").update!(name: "Fixed")
+      end
+    RUBY
+
+    assert_equal :failed, run_step(dry_run: true), "the rehearsal's exit code must show the failure"
+    assert_includes @output, "20261017120000 breaks: RuntimeError: the pinned quote is gone"
+    assert_includes @output, "20261017130000 fixes", "the later one was still tried"
+    assert_equal 0, DataMigration.count, "a dry run writes nothing"
+    assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name
   end
 
   test "a data migration must name a human as BY" do
@@ -222,7 +276,7 @@ class DeployData::RunTest < ActiveSupport::TestCase
       end
     RUBY
 
-    assert_equal :failed, run_step
+    assert_equal :applied, run_step
     assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name
     assert_includes @github.posts.last[:body], "BY must name the human who approved it"
   end
@@ -260,7 +314,7 @@ class DeployData::RunTest < ActiveSupport::TestCase
     assert_includes @output, "organization", "still printed to the deploy log"
   end
 
-  test "if a later data migration fails, the seed and earlier migrations are rolled back too" do
+  test "if a later data migration fails, the seed and the earlier migrations still stand (#811)" do
     run_step
     write "db/seeds/organizations/terrapower.yml", "name: TerraPower Inc\n"
     write "db/data/20261017120000_fix_after_seed.rb", <<~RUBY
@@ -277,13 +331,10 @@ class DeployData::RunTest < ActiveSupport::TestCase
     RUBY
     seeder = -> { Organization.find_by!(slug: "westinghouse").update!(name: "Seeded") }
 
-    assert_equal :failed, run_step(seeder:)
-    assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name
-    assert_equal 0, DataMigration.count
-
-    File.delete(@root.join("db/data/20261017130000_breaks.rb"))
-    assert_equal :applied, run_step(seeder:), "the next deploy runs the seed and both fixes again"
+    assert_equal :applied, run_step(seeder:)
     assert_equal "Fixed", organizations(:westinghouse).reload.name, "the fix lands after the re-seed"
+    assert_equal %w[20261017120000], DataMigration.pluck(:version)
+    assert_includes @github.posts.last[:body], "20261017130000 breaks: RuntimeError: the pinned quote is gone"
   end
 
   test "a data migration that won't load or has no up is reported, not missed" do
@@ -293,14 +344,14 @@ class DeployData::RunTest < ActiveSupport::TestCase
         BY = "human:tosin"
       end
     RUBY
-    assert_equal :failed, run_step
+    assert_equal :applied, run_step
     assert_includes @github.posts.last[:body], "NotImplementedError"
 
     File.delete(@root.join("db/data/20261017120000_no_up.rb"))
     write "db/data/20261017120000_broken.rb", "class Broken < DeployData::Migration\n  def up(\nend\n"
-    assert_equal :failed, run_step
+    assert_equal :applied, run_step
     assert_includes @github.posts.last[:body], "SyntaxError"
-    assert_equal 2, DataDeploy.failed.count
+    assert_equal 0, DataMigration.count
   end
 
   test "if the applied record can't be saved, the data it describes is rolled back too" do

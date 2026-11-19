@@ -8,9 +8,9 @@ module DeployData
   # 3. Take a fresh encrypted backup; stop if it fails.
   # 4. seed:check; stop on any collision.
   # 5. db:seed, then
-  # 6. each new data migration, all in one transaction: if any fails,
-  #    nothing from 5 or 6 is written and the next deploy runs them all
-  #    again (so a migration's fix is never left out after a re-seed).
+  # 6. each new data migration, in the same transaction as the seed but each in
+  #    its own savepoint (#811): one that fails is rolled back alone, reported
+  #    and retried at the next deploy; the seed and the other migrations commit.
   # 7. Report: deploy log, a comment on the PR, and Sentry when it needs a look.
   #
   # "Stop" writes nothing, alerts, and lets the code deploy go on.
@@ -29,7 +29,6 @@ module DeployData
     # Not a StandardError, so no recoverable-error rescue (a GitHub lookup, a
     # migration) can swallow it and let the run go on past its deadline.
     class TimedOut < Interrupt; end
-    class MigrationFailed < StandardError; end
 
     MODES = %w[on report].freeze
     SEED_COUNTS = "tmp/seed_counts.json".freeze
@@ -79,6 +78,9 @@ module DeployData
 
       held = @lock.hold { steps }
       stop!("stopped: the daily crawl is running, so nothing was written; it runs again on the next deploy") unless held
+      # A deploy goes on past a failed migration (fail-soft, #811), but a rehearsal must still fail loudly: its whole
+      # point is to find that before the merge.
+      @status = :failed if @dry_run && @report.failed_migrations.any?
       finish
     rescue Stop
       finish
@@ -125,7 +127,7 @@ module DeployData
           migrate
           @report.rows_after = Census.rows
           @report.totals_after = Census.public_totals
-          @report.outcome = rolled_back? ? "would apply" : "applied"
+          @report.outcome = outcome_text
           # The applied record is the next run's baseline, so it commits with
           # the data it describes or not at all (a failed insert rolls the
           # data back too, and the next deploy runs it all again).
@@ -193,7 +195,11 @@ module DeployData
         @pending.each do |pending|
           @report.migrations << @migrations.run(pending, reason: @reason, commit: @commit)
         rescue StandardError, ScriptError => error
-          raise MigrationFailed, "data migration #{pending.version} #{pending.name}: #{error.class.name}: #{error.message}"
+          # Fail-soft (#811): only this migration is rolled back (its own savepoint); the others still run, and it runs
+          # again at the next deploy. The report says so and alerts, so a stuck step never goes unseen.
+          first = error.message.lines.first.to_s.strip
+          @report.failed_migrations << "#{pending.version} #{pending.name}: #{error.class.name.demodulize}: #{first}"
+          warn "deploy-data: data migration #{pending.version} #{pending.name} failed and was skipped: #{error.class.name}: #{first}"
         end
         @report.migration_events = VerificationEvent.where("id > ?", first_event).pluck(:subject_type).tally if @pending.any?
       end
@@ -210,6 +216,14 @@ module DeployData
           yield
           raise ActiveRecord::Rollback if rolled_back?
         end
+      end
+
+      def outcome_text
+        base = rolled_back? ? "would apply" : "applied"
+        failed = @report.failed_migrations.size
+        return base if failed.zero?
+
+        "#{base}, but #{failed} data #{'migration'.pluralize(failed)} failed and #{failed == 1 ? 'was' : 'were'} skipped (run again at the next deploy)"
       end
 
       def stop!(outcome)
@@ -259,7 +273,7 @@ module DeployData
 
         problem = @report.alert? ? @report.outcome : "#{@report.outcome}, but the report wasn't posted on GitHub"
         problem += " (the report wasn't posted on GitHub)" if @report.alert? && !posted
-        Sentry.capture_message("Data deploy needs a look: #{problem}", level: @status == :failed || @status == :stopped ? :error : :warning,
+        Sentry.capture_message("Data deploy needs a look: #{problem}", level: @status == :failed || @status == :stopped || @report.failed_migrations.any? ? :error : :warning,
           extra: { report: @report.to_s })
       end
   end
