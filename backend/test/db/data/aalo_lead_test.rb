@@ -20,5 +20,6 @@ class AaloLeadTest < ActiveSupport::TestCase
     assert_equal [ "Aalo Atomics", "new", 0, nil, "https://www.aalo.com/" ], [ @lead.name, @lead.status, @lead.find_attempts, @lead.next_find_at, @lead.sources.sole["url"] ]
     assert_includes LeadFinding.due, @lead
     assert_match "already", run_it.output.sole
+    assert_equal "human:tosin", AaloLead.new(reason: "x").by, "the deploy runner reads it before up"
   end
 end

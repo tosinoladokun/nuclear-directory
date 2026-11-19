@@ -4,6 +4,7 @@
 #
 # Pinned: only while lead 105 still has that whole line as its name; anything else is left and named.
 class AaloLead < DeployData::Migration
+  BY = "human:tosin"
   ID = 105
   LINE = "Aalo Atomics: https://www.aalo.com/"
 
