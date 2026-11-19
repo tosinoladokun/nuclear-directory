@@ -70,6 +70,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     result = Plugin.call(lead("Fresh Fission", url: HOME).id, finder: finder)
     assert_equal :unconfirmed, result.outcome
     assert_equal "not_nuclear", result.found["checked"].sole["verdict"]
+    assert_equal "No site checked out as this US nuclear company (freshfission.example: no nuclear work)", result.reason, "each site's verdict in the reason"
 
     result = Plugin.call(lead("Other Atom", url: HOME).id, finder: finder)
     assert_equal "not_named", result.found["checked"].sole["verdict"]
@@ -170,5 +171,25 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
 
     added = Lead.sighted!(name: "Fresh Fission", kind: "company", key: "admin:suggest:fresh fission", label: "Added in the admin", url: HOME)
     assert_equal :proposed, Plugin.call(added.id, finder: finder).outcome
+  end
+
+  test "a home page with no address: its contact page's US address counts; a legal ending isn't needed on the page (Infra, 18 Nov)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>Fresh Fission designs microreactors for remote sites.</p><a href=\"/contact\">Contact</a></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "#{HOME}/contact").to_return(body: "<html><body><p>1 Main St, Austin, TX 78701</p></body></html>", headers: { "Content-Type" => "text/html" })
+    crawled = Lead.sighted!(name: "Fresh Fission Inc.", kind: "company", key: "newsletter:2:fresh", label: "Newsletter", url: HOME)
+    result = Plugin.call(crawled.id, finder: finder)
+    assert_equal :proposed, result.outcome
+    assert_requested :get, "#{HOME}/contact"
+    assert_equal "Fresh Fission designs microreactors for remote sites.", Candidate.find(result.candidate_id).quote
+  end
+
+  test "a short full name still matches whole; the home page link never takes a contact place (Copilot)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>GSE provides nuclear engineering services.</p>" \
+      "<a href=\"/\">The Nuclear Company</a><a href=\"/about\">About</a><a href=\"/contact\">Contact</a></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "#{HOME}/about").to_return(body: "<html><body><p>Our story.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "#{HOME}/contact").to_return(body: "<html><body><p>1 Main St, Austin, TX 78701</p></body></html>", headers: { "Content-Type" => "text/html" })
+    crawled = Lead.sighted!(name: "GSE", kind: "company", key: "newsletter:3:gse", label: "Newsletter", url: HOME)
+    assert_equal :proposed, Plugin.call(crawled.id, finder: finder).outcome
   end
 end
