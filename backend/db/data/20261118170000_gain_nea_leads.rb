@@ -1,6 +1,7 @@
 # Crawl, #257 and #805 (PM-approved discovery): company leads from two lists, for the finder to find, check (US,
 # nuclear) and propose like any other lead. A list is never a source: only each company's own pages are.
-# - GAIN (DOE/INL, Aug 2026): 112 company websites missing from the directory, the sites only (none of the list's text).
+# - GAIN (DOE/INL, Aug 2026): 111 company websites missing from the directory, the sites only (none of the list's text);
+#   aalo.com is left out: it is lead 105 (Aalo Atomics), whatever order this and #806 deploy in.
 # - NEA SMR Dashboard (3rd edition, 2025): 9 developers missing from the directory, by name.
 #
 # Idempotent: a lead seen again only updates its own sighting.
@@ -9,7 +10,6 @@ class GainNeaLeads < DeployData::Migration
   GAIN_LABEL = "Lead list (Aug 2026), not a source"
   NEA_LABEL = "Lead list (NEA 2025), not a source"
   GAIN = %w[
-    https://aalo.com
     https://alphatechresearchcorp.com
     https://deepfission.com
     https://exodysenergy.com
