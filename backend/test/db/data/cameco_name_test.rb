@@ -10,12 +10,13 @@ class CamecoNameTest < ActiveSupport::TestCase
 
   def run_it = CamecoName.new(reason: "deploy abc1234, PR #1").tap(&:up)
 
-  test "renames it, sets Canada, keeps it pending; a rerun changes nothing; a decided one stops it" do
+  test "renames it, sets Canada, keeps it pending; a rerun changes nothing; a rejected one is left and named" do
     run_it
     assert_equal [ "Cameco", "CA", "pending" ], @company.reload.values_at(:name, :country_code, :verification_status)
     assert_match "already", run_it.output.sole
     @company.update_columns(name: "cameco", verification_status: "rejected")
-    assert_raises(RuntimeError) { run_it }
+    assert_match "left as it is", run_it.output.sole
+    assert_equal "cameco", @company.reload.name
   end
 
   test "already created by Tosin before the deploy: renamed and set to Canada, still verified" do

@@ -2,19 +2,20 @@
 # by the lead; fixed in this PR). Its name becomes "Cameco" and its country Canada (HQ Saskatoon, from Cameco's own
 # pages, Data Quality). It stays pending for his Create. Merging this PR is Tosin's approval.
 #
-# Pinned: only while company 312 is still named "cameco", pending or verified (its status kept); already fixed is
-# skipped; anything else stops.
+# Pinned: only while company 312 is still named "cameco", pending or verified (its status kept); already fixed or
+# anything else is skipped and named, so the data deploy never stops here.
 class CamecoName < DeployData::Migration
   BY = "human:tosin"
   ID = 312
 
   def up
-    company = Organization.find_by(id: ID) or raise "company #{ID} is gone"
+    company = Organization.find_by(id: ID) or return say("Company #{ID} is gone; nothing to do")
     return say("Company #{ID} is already Cameco, CA") if company.name == "Cameco" && company.country_code == "CA"
     # Pending, or already created by Tosin before this deployed (Infra, 19 Nov: the pin stopped every later step):
     # the same intent either way, and its status is kept.
+    # Anything else was decided by a person since: left as it is and named, never a stopped deploy (Infra, PM).
     unless company.name.casecmp?("cameco") && %w[pending verified].include?(company.verification_status)
-      raise "company #{ID} is no longer the open 'cameco': #{company.name.inspect}, #{company.verification_status}"
+      return say("Company #{ID} left as it is: #{company.name.inspect}, #{company.verification_status}")
     end
 
     result = Directory::FactWriter.write("organization", { id: ID, name: "Cameco", country_code: "CA" },
