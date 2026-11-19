@@ -242,4 +242,24 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
       pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
     assert_equal :proposed, site_finder.find_sites[pending.id].outcome
   end
+
+  test "a pending company's site is claimed for that company, never another; a blocked search comes back next run (Copilot)" do
+    stub_request(:get, HOME).to_return(body: "<html><head><title>Fresh Fission America</title></head><body><p>Fresh Fission America designs microreactors.</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    other = Organization.create!(name: "Fresh Fission America")
+    other.aliases.find_or_create_by!(alias: "Fresh Fission America")
+    pending = Organization.create!(name: "Fresh Fission")
+    pending.aliases.find_or_create_by!(alias: "Fresh Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(_) { [ HOME ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    assert_equal :proposed, site_finder.find_site(pending.id, "Fresh Fission").outcome
+    claim = Candidate.where(kind: "organization").order(:id).last
+    assert_equal [ "Fresh Fission", pending.id ], [ claim.payload["name"], claim.subject_id ]
+
+    capped = Plugin.new(search_key: nil, search: ->(_) { [] })
+    Plugin::SEARCHES_PER_DAY.times { CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", stats: { "brave_searches" => 1 }) }
+    lonely = Organization.create!(name: "Ghost Atomics")
+    assert_equal :retry, capped.find_site(lonely.id, "Ghost Atomics").outcome
+    refute_includes CrawlRun.where("stats ? 'site_for'").pluck(Arel.sql("(stats->>'site_for')::bigint")), lonely.id, "no week's rest for a blocked try"
+  end
 end

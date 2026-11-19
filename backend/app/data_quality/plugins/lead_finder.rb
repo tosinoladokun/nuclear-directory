@@ -82,20 +82,32 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   def find_site(id, name)
     return outcome(:retry, name:, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached", found: {}) unless reserve(FINDS, FINDS_PER_DAY)
 
-    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { SITE_FOR => id })
     # Already in the directory from a US official source (an NRC docket, a DOE
     # award), which shows its US operations: its own site needn't (DQ, 19 Nov:
     # Rolls-Royce SMR, Moltex, Candu, Blykalla).
     @us_shown_elsewhere, @hints, found = true, "", { "name" => name }
+    @search_failed = @search_capped = false
+    result = nil
     candidates_for(name, [], found).each do |website|
       # Another company's site is never this one's.
       next if @directory.organization(domain: URI(website).host)
 
       verdict, page, why = verify(name, website)
       (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
-      return propose(name, website, page, found) if verdict == :ok
+      next unless verdict == :ok
+
+      # The claim is for this company itself, whatever name the page uses (Copilot).
+      result = propose(name, website, page, found, organization_id: id)
+      break
     end
-    unconfirmed(name, nil, "No website found", found)
+    result ||= if (@search_failed || @search_capped) && !found["checked"]
+      outcome(:retry, name:, reason: "No search today (limit or a busy service); tried again next run", found:)
+    else
+      unconfirmed(name, nil, "No website found", found)
+    end
+    # A week's rest only after a completed attempt: a blocked one comes back next run (Copilot).
+    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { SITE_FOR => id }) unless result.outcome == :retry
+    result
   end
 
   def find(lead_id, input: nil)
@@ -144,7 +156,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
     quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
       .find { |sentence| names?(sentence, name) && nuclear?(sentence, brand(name)) } or return []
-    [ { kind: "organization", quote: quote.strip, payload: { "name" => page_name(quote.strip, name, site_names(source)), "website" => "https://#{URI(source.url).host}" } } ]
+    # A site found for a company already listed (a pending one) is claimed for
+    # that company by its own name, so Match can't give it to another (Copilot).
+    target = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id)
+    claimed = target ? target.name : page_name(quote.strip, name, site_names(source))
+    [ { kind: "organization", quote: quote.strip, payload: { "name" => claimed, "website" => "https://#{URI(source.url).host}" } } ]
   end
 
   # The name as the company's own page writes it: the name as matched in
@@ -387,12 +403,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       source if source.crawl_ok? && source.content_text.present?
     end
 
-    def propose(name, website, page, found)
+    def propose(name, website, page, found, organization_id: nil)
       # The verified home page, copied as this kind's own source (its URL marked): only
       # a page that passed verify is ever extracted here (Copilot).
       verified = Source.find_or_initialize_by(url: "#{page.final_url.presence || page.url}#{LEAD_MARK}")
       verified.update!(source_kind:, title: name, crawl_status: "ok", fetched_at: page.fetched_at, http_status: page.http_status,
-        content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil)
+        content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil, enrich_organization_id: organization_id)
       BUSY_TRIES.times do |attempt|
         @pipeline.call(self)
         break
