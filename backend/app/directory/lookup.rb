@@ -257,6 +257,12 @@ module Directory
     # A company's headquarters city, or nil (gap fill only adds a missing one).
     def organization_hq_city(id) = Organization.where(id:).pick(:hq_city).presence
 
+    # Pending companies with no website, oldest first, as [[id, name]] (the
+    # lead finder looks for their sites so Enrich can read them; DQ, 19 Nov).
+    def pending_organizations_without_website(limit: 50)
+      Organization.where(verification_status: "pending").where("COALESCE(website, '') = ''").order(:id).limit(limit).pluck(:id, :name)
+    end
+
     # A company's website, or nil (a source only adds a missing one).
     def organization_website(id) = Organization.where(id:).pick(:website).presence
 

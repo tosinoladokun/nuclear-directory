@@ -122,8 +122,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # New pending companies get their own nightly budget on top (PM, 10 Nov).
   NEW_PER_NIGHT = 15
 
-  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
+  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT,
+    site_finder: nil)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
+    @site_finder = site_finder || DataQuality::Plugins::LeadFinder.new(fetcher:, directory:)
   end
 
   def crawl(_run)
@@ -131,6 +133,18 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # Once a day, whatever starts the run (a manual Enrich runs this too):
     # the night's quota is kept in its crawl run's stats.
     if @gap_fill.positive? && !gap_filled_today?
+      # Pending companies with no website first get one looked for (DQ, 19 Nov).
+      sites = @site_finder.find_sites
+      stats["sites_looked_for"] = sites.size if sites.any?
+      # A site found is read the same night for that company (description,
+      # HQ, category), before anyone approves it as its website (PM, 19 Nov:
+      # leads to Creates run alone); DQ checks every claim as usual.
+      sites.each do |id, found|
+        next unless found.outcome == :proposed && found.website
+
+        read_site(id, found.website, stats)
+        stats["sites_read"] = stats.fetch("sites_read", 0) + 1
+      end
       gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?
@@ -349,6 +363,20 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       return if source.extracted_rows_sha256 == rows_sha256(source)
 
       source.update!(extracted_sha256: nil, extracted_rows_sha256: nil)
+    end
+
+    # A company's home page and up to PAGES of its own pages, read for it.
+    def read_site(id, website, stats)
+      home = page(website, for_id: id) or return
+      DataQuality::Snapshot.take(home, fetcher: @fetcher)
+      stats["pages"] += 1
+      links = own_links(home)
+      links = (links + sitemap_links(home)).uniq if links.size < 2
+      links.first(PAGES).each do |url|
+        own = page(url, for_id: id) or next
+        DataQuality::Snapshot.take(own, fetcher: @fetcher)
+        stats["pages"] += 1
+      end
     end
 
     # Links on the home page to the company's own pages worth reading.
