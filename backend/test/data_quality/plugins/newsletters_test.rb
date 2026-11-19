@@ -93,7 +93,7 @@ class DataQuality::Plugins::NewslettersTest < ActiveSupport::TestCase
   test "only the final set's senders: not SmartBrief or ExchangeMonitor (11 Nov)" do
     sender = ->(from) { plugin.send(:sender?, from) }
     assert sender.("update@operational.businesstrademediainternational.com"), "NEI magazine"
-    assert sender.("news@world-nuclear-news.org")
+    refute sender.("wnn@world-nuclear-news.org"), "World Nuclear News comes through its RSS feed (its mail never passes DMARC)"
     assert sender.("noreply@interact.verdict.co.uk"), "NEI magazine's publisher (18 Nov)"
     assert sender.("daily@news.ans.org"), "ANS Nuclear News Daily"
     refute sender.("nei@smartbrief.com")
