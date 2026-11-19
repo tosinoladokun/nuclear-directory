@@ -94,4 +94,12 @@ class PipelineHealthTest < ActiveSupport::TestCase
     OrganizationRole.create!(organization: company, role: Role.first || Role.create!(key: "fuel", name: "Fuel"), verification_status: "pending")
     assert_equal before, PipelineHealth.new(now: NOW).counts["pending_without_role"], "no evidence: still blocks its Create"
   end
+
+  test "finds held for a day with no search answering is the search limit; one search answering clears it" do
+    Lead.sighted!(name: "Held Co", kind: "company", key: "news:h", label: "news").update!(status: "researching", note: LeadFinding::BUSY)
+    assert_includes PipelineHealth.new(now: NOW).checks["search-limit"].to_s, "the search didn't answer"
+    CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", started_at: NOW - 1.hour,
+      stats: { DataQuality::Plugins::LeadFinder::USAGE => 1 })
+    assert_nil PipelineHealth.new(now: NOW).checks["search-limit"]
+  end
 end

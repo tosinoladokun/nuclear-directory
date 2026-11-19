@@ -43,7 +43,11 @@ class PipelineHealth
         "posts_unknown" => SocialPost.where(status: "unknown").count,
         "claims_unchecked" => unchecked.count,
         "leads_stuck" => stuck_leads.count,
-        "budget_spent" => DataQuality::Budget.spent_this_month(now: @now).to_f.round(2)
+        "budget_spent" => DataQuality::Budget.spent_this_month(now: @now).to_f.round(2),
+        "searches_last_day" => CrawlRun.where(source_kind: "lead_finder", stage: "crawl", started_at: (@now - 1.day)..)
+          .where("stats ? '#{DataQuality::Plugins::LeadFinder::USAGE}'").count,
+        "searches_held_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..)
+          .where("note = ? OR note ILIKE ?", LeadFinding::BUSY, "%search limit%").count
       }
     end
   end
@@ -64,7 +68,8 @@ class PipelineHealth
       "company-pages-failing" => company_pages_failing,
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
-      "budget" => budget
+      "budget" => budget,
+      "search-limit" => search_limit
     }
   end
 
@@ -128,6 +133,12 @@ class PipelineHealth
     def company_pages_failing
       last_two = CrawlRun.where(source_kind: "company_pages").order(started_at: :desc).limit(2).pluck(:status)
       "the company pages read failed twice in a row" if last_two.size == 2 && last_two.all?("failed")
+    end
+
+    # Brave refused every search for a day (its monthly limit or the key; Infra): leads wait instead of being found.
+    def search_limit
+      held, done = counts.values_at("searches_held_last_day", "searches_last_day")
+      "#{held} lead finds waited a day because the search didn't answer (its monthly limit or key)" if held.positive? && done.zero?
     end
 
     def budget
