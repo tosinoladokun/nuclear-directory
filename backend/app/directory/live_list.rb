@@ -51,7 +51,40 @@ class Directory::LiveList
 
   # This tab's records with the chosen status only (its count on the tab).
   # Within a source (within), the count of what that source backs in the tab.
-  def self.tab_count(tab, status: DEFAULT_STATUS, within: nil) = new(tab:, chosen: { "status" => [ status ] }, within:).total
+  def self.tab_count(tab, status: DEFAULT_STATUS, within: nil) = tab_counts(status:, within:).fetch(tab)
+
+  # Every tab's count at once, cached until the directory or a claim changes (Infra, 18 Nov: five tab counts ran a
+  # heavy count each, every load). One cache read, not five (Copilot).
+  def self.tab_counts(status: DEFAULT_STATUS, within: nil)
+    Rails.cache.fetch([ "live-tab-counts", stamp, status, within ], expires_in: 10.minutes) do
+      TABS.keys.index_with { |tab| new(tab:, chosen: { "status" => [ status ] }, within:).total }
+    end
+  end
+
+  # What the counts and tags rest on, read once per request (Current resets it), fresh in every process (Copilot):
+  # the directory (DataVersion, plus the newest decision, which any process's publish or take-off writes at once)
+  # and a fingerprint of every claim's state, so an out-of-order commit, a bulk write or a deletion changes it too.
+  def self.stamp
+    Current.live_stamp ||= begin
+      claims = Candidate.pick(Arel.sql("COUNT(*)"), Arel.sql("SUM(hashtext(concat_ws('|', id, status, subject_type, subject_id, " \
+        "ai_recommendation, dq_recommendation, review_origin)))"))
+      [ DataVersion.current, VerificationEvent.maximum(:id), *claims ].join("/")
+    end
+  end
+
+  # Every tag's ids for every kind of record, in one cache entry (one read when warm; Copilot), until a change.
+  def self.tag_map
+    Current.live_tag_map ||= Rails.cache.fetch([ "live-tag-map", stamp ], expires_in: 10.minutes) do
+      Directory::Checks::FACT_MODELS.flat_map do |model|
+        Directory::Checks.all.filter_map do |tag|
+          [ "#{tag.key}|#{model.name}", tag.ids(model) ] if tag.applies_to?(model)
+        end
+      end.to_h
+    end
+  end
+
+  # A tag's ids for a model, from the shared map.
+  def self.tag_ids(tag, type) = tag_map.fetch("#{tag.key}|#{type}", []).to_set
 
   # [type, id] of every record shown, in order (newest change first).
   def keys
@@ -110,7 +143,7 @@ class Directory::LiveList
 
     def tag_ids(tag, type)
       @tag_ids ||= {}
-      @tag_ids[[ tag.key, type ]] ||= tag.ids(type.constantize).to_set
+      @tag_ids[[ tag.key, type ]] ||= self.class.tag_ids(tag, type)
     end
 
     # Only what a Sources row's or document's sources back (within).

@@ -20,11 +20,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   Outcome = Data.define(:outcome, :candidate_id, :organization_id, :name, :website, :reason, :found)
 
   SEARCH_API = "https://api.search.brave.com/res/v1/web/search".freeze
-  # Paid, no attribution credit (PM, 10 Nov): at most this many a day, ~$3 a month at $5 per 1,000.
-  SEARCHES_PER_DAY = 20
+  # Paid, no attribution credit (PM, 10 Nov).
+  # Raised for the pending-company backlog (Tosin, 19 Nov): ~$8-10 a month at $5 per 1,000.
+  SEARCHES_PER_DAY = 60
   USAGE = "brave_searches".freeze
   # Leads found a day, whatever asks (Infra, 10 Nov: a pasted long list can't spend the quotas).
-  FINDS_PER_DAY = 50
+  # Leads (Backend gates them at 50) plus the nightly pending-company sites (SITES_PER_NIGHT).
+  FINDS_PER_DAY = 100
   FINDS = "finds".freeze
   LEAD_MARK = "#lead-finder".freeze
   # Brave's plan allows 1 request a second (Infra): this much between our calls.
@@ -61,6 +63,55 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Orano; PM, 11 Nov), so its home page needn't show a US address.
   PERSON_KEYS = /\A(?:admin:|list:|leads-md:)/
 
+  # Pending companies created from a name alone (NRC, DOE, ARPA-E) have no
+  # website, so Enrich can't read them for a category (DQ, 19 Nov: 50 of 50).
+  # Each night up to SITES_PER_NIGHT of them get the same search and check as
+  # a lead (named, nuclear, US), each at most once a week; a site that checks
+  # out is proposed as their website claim (matched to them by name). The
+  # finds and searches count toward the same daily limits.
+  SITES_PER_NIGHT = 50
+  SITE_FOR = "site_for".freeze
+
+  def find_sites(limit: SITES_PER_NIGHT)
+    tried = CrawlRun.where(source_kind:, stage: "crawl", started_at: 7.days.ago..).where("stats ? '#{SITE_FOR}'")
+      .pluck(Arel.sql("(stats->>'#{SITE_FOR}')::bigint")).to_set
+    # A pending company whose proposing claim DQ rejected is junk: never searched for (DQ, 19 Nov).
+    rejected = Candidate.where(kind: "organization", subject_type: "Organization", dq_recommendation: "reject").pluck(:subject_id).to_set
+    due = @directory.pending_organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) || rejected.include?(id) }.first(limit)
+    due.to_h { |id, name| [ id, find_site(id, name) ] }
+  end
+
+  def find_site(id, name)
+    return outcome(:retry, name:, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached", found: {}) unless reserve(FINDS, FINDS_PER_DAY)
+
+    # Already in the directory from a US official source (an NRC docket, a DOE
+    # award), which shows its US operations: its own site needn't (DQ, 19 Nov:
+    # Rolls-Royce SMR, Moltex, Candu, Blykalla).
+    @us_shown_elsewhere, @hints, found = true, "", { "name" => name }
+    @search_failed = @search_capped = false
+    result = nil
+    candidates_for(name, [], found).each do |website|
+      # Another company's site is never this one's.
+      next if @directory.organization(domain: URI(website).host)
+
+      verdict, page, why = verify(name, website)
+      (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
+      next unless verdict == :ok
+
+      # The claim is for this company itself, whatever name the page uses (Copilot).
+      result = propose(name, website, page, found, organization_id: id)
+      break
+    end
+    result ||= if (@search_failed || @search_capped) && !found["checked"]
+      outcome(:retry, name:, reason: "No search today (limit or a busy service); tried again next run", found:)
+    else
+      unconfirmed(name, nil, "No website found", found)
+    end
+    # A week's rest only after a completed attempt: a blocked one comes back next run (Copilot).
+    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { SITE_FOR => id }) unless result.outcome == :retry
+    result
+  end
+
   def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
     unless reserve(FINDS, FINDS_PER_DAY)
@@ -69,6 +120,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
     lead = lead.with(name: input) if input.present?
     @us_shown_elsewhere = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
+    # What a person said about it ("Austin microreactor startup"; Backend #806), for the search.
+    @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
     # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
@@ -105,7 +158,35 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
     quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
       .find { |sentence| names?(sentence, name) && nuclear?(sentence, brand(name)) } or return []
-    [ { kind: "organization", quote: quote.strip, payload: { "name" => name, "website" => "https://#{URI(source.url).host}" } } ]
+    # A site found for a company already listed (a pending one) is claimed for
+    # that company by its own name, so Match can't give it to another (Copilot).
+    target = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id)
+    claimed = target ? target.name : page_name(quote.strip, name, site_names(source))
+    [ { kind: "organization", quote: quote.strip, payload: { "name" => claimed, "website" => "https://#{URI(source.url).host}" } } ]
+  end
+
+  # The name as the company's own page writes it: the name as matched in
+  # its quote, in the page's own capitals ("cameco" typed is "Cameco"), plus
+  # following capitalised words only when the page's own title or site name
+  # carries the longer phrase ("Fresh Fission America"). Never the text
+  # someone typed (Backend, 18 Nov), never a heading's other words, a
+  # possessive or a full stop (Copilot).
+  def page_name(quote, name, site_names = [])
+    matched = quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(name.to_s.squish)})(?![[:alnum:]])/] ||
+      quote[/(?<![[:alnum:]])(?i:#{Regexp.escape(brand(name))})(?![[:alnum:]])/] or return name
+    after = quote[(quote.index(matched) + matched.length)..].to_s
+    words = after.scan(/\A(?:\s+[A-Z][[:alnum:]&-]*)+/).first.to_s.split
+    words.each_index.reverse_each do |count|
+      longer = [ matched, *words.first(count + 1) ].join(" ")
+      return longer if site_names.any? { |site| site.match?(/(?<![[:alnum:]])#{Regexp.escape(longer)}(?![[:alnum:]])/i) }
+    end
+    matched
+  end
+
+  # The page's own names for itself: its og:site_name and its title.
+  def site_names(source)
+    doc = Nokogiri::HTML(source.content_text)
+    [ doc.at_css("meta[property='og:site_name']")&.[]("content"), doc.at_css("title")&.text ].compact.map(&:squish)
   end
 
   def source_facts(_source)
@@ -263,7 +344,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       wait = @@last_search && (SEARCH_GAP - (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @@last_search))
       @sleeper.call(wait) if wait&.positive?
       @@last_search = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      urls = (@search || method(:brave)).call("\"#{name}\" nuclear")
+      urls = (@search || method(:brave)).call([ "\"#{name}\"", @hints.presence, "nuclear" ].compact.join(" "))
       urls.first(SEARCH_RESULTS).filter_map { |url| own_host(url) }.uniq
     end
 
@@ -324,12 +405,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       source if source.crawl_ok? && source.content_text.present?
     end
 
-    def propose(name, website, page, found)
+    def propose(name, website, page, found, organization_id: nil)
       # The verified home page, copied as this kind's own source (its URL marked): only
       # a page that passed verify is ever extracted here (Copilot).
       verified = Source.find_or_initialize_by(url: "#{page.final_url.presence || page.url}#{LEAD_MARK}")
       verified.update!(source_kind:, title: name, crawl_status: "ok", fetched_at: page.fetched_at, http_status: page.http_status,
-        content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil)
+        content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil, enrich_organization_id: organization_id)
       BUSY_TRIES.times do |attempt|
         @pipeline.call(self)
         break

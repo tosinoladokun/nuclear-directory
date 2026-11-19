@@ -10,12 +10,22 @@ module CompanySuggestion
   # Several at once, one per line (PM, 10 Nov).
   MAX_LINES = 50
 
-  # Each non-blank line is a lead; returns the leads made, or nil when none could be (empty, too long, too many).
-  def self.suggest_lines(text, by:)
-    lines = text.to_s.lines.map(&:squish).compact_blank.uniq
+  # What he typed, read as a prompt (PM, 18 Nov): each company it names becomes a lead, with its site and a hint for
+  # the finder. Returns the leads made, or nil when none could be (empty, too long, nothing named).
+  def self.suggest_lines(text, by:, reader: LeadReader.new)
+    lines = text.to_s.lines.map(&:squish).compact_blank
     return if lines.empty? || lines.size > MAX_LINES || lines.any? { |line| line.length > MAX }
 
-    lines.filter_map { |line| suggest(line, by:) }.presence
+    reader.call(text).filter_map { |item| suggest_item(item, by:) }.presence
+  end
+
+  # One company as the reader understood it.
+  def self.suggest_item(item, by:)
+    name = item.name.to_s.squish
+    return if name.blank?
+
+    lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(name)}", label: LABEL, url: item.website, hint: item.hint) or return
+    queue(lead, name:, by:)
   end
   SHOWN_FOR = 14.days
 
@@ -23,14 +33,22 @@ module CompanySuggestion
     text = input.to_s.squish
     return if text.blank? || text.length > MAX
 
-    url = text if text.match?(%r{\Ahttps?://\S+\z}i)
-    # A link is named by its site and path, so two LinkedIn pages or two articles are two leads.
-    name = url ? (link_name(url) || text) : text
+    url = text[%r{https?://\S+}i]
+    # "Name: link", "Name - link" or "Name link" (Infra, 18 Nov: Aalo): the words name it, the link is its site.
+    named = url && text.sub(url, "").squish.gsub(/\A[\s:,–—-]+|[\s:,–—-]+\z/, "").squish.presence
+    # A link alone is named by its site and path, so two LinkedIn pages or two articles are two leads.
+    name = named || (url ? (link_name(url) || text) : text)
     lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(text)}", label: LABEL, url:) or return
-    # The same line again while it's being found: one find is enough (Infra).
-    return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.updated_at > 5.minutes.ago
+    queue(lead, name:, by:)
+  end
 
-    lead.update!(status: "new", note: LeadFinding::FINDING, decided_by: by, decided_at: Time.current, reason: nil,
+  def self.queue(lead, name:, by:)
+    # The same line again while it's being found: one find is enough (Infra). By when it was queued (decided_at), not
+    # updated_at, which the sighting itself moves when the date changes.
+    return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.decided_at.to_i > 5.minutes.ago.to_i
+
+    # His words name it, even a lead first seen in a site search (PM: "cameco").
+    lead.update!(name:, status: "new", note: LeadFinding::FINDING, decided_by: by, decided_at: Time.current, reason: nil,
       record_type: nil, record_id: nil, find_attempts: 0, next_find_at: nil)
     LeadFindJob.perform_later(lead.id)
     lead

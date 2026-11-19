@@ -184,6 +184,18 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal "Fresh Fission designs microreactors for remote sites.", Candidate.find(result.candidate_id).quote
   end
 
+  test "the company is named as its own page writes it, never as typed (Backend, 18 Nov)" do
+    result = Plugin.call(lead("fresh fission", url: HOME).id, finder: finder)
+    assert_equal "Fresh Fission", Candidate.find(result.candidate_id).payload["name"]
+
+    other = "https://www.ffamerica.example"
+    stub_request(:get, "#{other}/robots.txt").to_return(status: 404)
+    stub_request(:get, other).to_return(body: "<html><head><title>Fresh Fission America | Home</title></head><body><p>Fresh Fission America designs microreactors. Austin, TX 78701</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    result = Plugin.call(lead("Fresh Fission Inc.", url: other).id, finder: finder)
+    assert_equal "Fresh Fission America", Candidate.find(result.candidate_id).payload["name"]
+  end
+
   test "a short full name still matches whole; the home page link never takes a contact place (Copilot)" do
     stub_request(:get, HOME).to_return(body: "<html><body><p>GSE provides nuclear engineering services.</p>" \
       "<a href=\"/\">The Nuclear Company</a><a href=\"/about\">About</a><a href=\"/contact\">Contact</a></body></html>", headers: { "Content-Type" => "text/html" })
@@ -191,5 +203,72 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     stub_request(:get, "#{HOME}/contact").to_return(body: "<html><body><p>1 Main St, Austin, TX 78701</p></body></html>", headers: { "Content-Type" => "text/html" })
     crawled = Lead.sighted!(name: "GSE", kind: "company", key: "newsletter:3:gse", label: "Newsletter", url: HOME)
     assert_equal :proposed, Plugin.call(crawled.id, finder: finder).outcome
+  end
+
+  test "what a person said about the lead goes into the search (Backend #806)" do
+    with_hints = Data.define(:id, :name, :kind, :urls, :keys, :hints)
+    directory = DataQuality::DirectoryClient.new
+    directory.define_singleton_method(:lead) { |id| with_hints.new(id:, name: "Ghost Nuclear", kind: "company", urls: [], keys: [], hints: [ "Austin microreactor startup" ]) }
+    finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), directory:, search_key: nil, search: ->(query) { @searched << query; [] })
+    Plugin.call(1, finder:)
+    assert_equal [ "\"Ghost Nuclear\" Austin microreactor startup nuclear" ], @searched
+  end
+
+  test "the page's name: never a heading's other words, a possessive, a full stop, or a cut-down full name (Copilot)" do
+    plugin = Plugin.new
+    name = ->(quote, lead, sites = []) { plugin.send(:page_name, quote, lead, sites) }
+    assert_equal "Fresh Fission", name.("Fresh Fission Builds Nuclear Reactors", "fresh fission")
+    assert_equal "Fresh Fission America", name.("Fresh Fission America's microreactors power remote sites.", "Fresh Fission", [ "Fresh Fission America" ])
+    assert_equal "Fresh Fission America", name.("Reactors built by Fresh Fission America.", "Fresh Fission", [ "Fresh Fission America | Home" ])
+    assert_equal "Power To Hydrogen", name.("Power To Hydrogen supplies equipment for nuclear facilities.", "power to hydrogen")
+  end
+
+  test "a pending company with no website gets one looked for, proposed as its website claim, at most once a week (DQ, 19 Nov)" do
+    pending = Organization.create!(name: "Fresh Fission")
+    pending.aliases.find_or_create_by!(alias: "Fresh Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(query) { @searched << query; [ HOME ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    assert_equal :proposed, site_finder.find_sites[pending.id].outcome
+    claim = Candidate.where(kind: "organization", subject_id: pending.id).sole
+    assert_equal [ "Organization", pending.id ], [ claim.subject_type, claim.subject_id ], "matched to the pending company by name"
+    assert_equal "https://www.freshfission.example", claim.payload["website"]
+    assert_empty site_finder.find_sites, "not again within a week"
+  end
+
+  test "a pending company's site needn't show a US address: the official source that created it does (DQ, 19 Nov)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>Fresh Fission designs microreactors. Saskatoon, Canada</p></body></html>", headers: { "Content-Type" => "text/html" })
+    pending = Organization.create!(name: "Fresh Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(_) { [ HOME ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    assert_equal :proposed, site_finder.find_sites[pending.id].outcome
+  end
+
+  test "a pending company's site is claimed for that company, never another; a blocked search comes back next run (Copilot)" do
+    stub_request(:get, HOME).to_return(body: "<html><head><title>Fresh Fission America</title></head><body><p>Fresh Fission America designs microreactors.</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    other = Organization.create!(name: "Fresh Fission America")
+    other.aliases.find_or_create_by!(alias: "Fresh Fission America")
+    pending = Organization.create!(name: "Fresh Fission")
+    pending.aliases.find_or_create_by!(alias: "Fresh Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(_) { [ HOME ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    assert_equal :proposed, site_finder.find_site(pending.id, "Fresh Fission").outcome
+    claim = Candidate.where(kind: "organization").order(:id).last
+    assert_equal [ "Fresh Fission", pending.id ], [ claim.payload["name"], claim.subject_id ]
+
+    capped = Plugin.new(search_key: nil, search: ->(_) { [] })
+    Plugin::SEARCHES_PER_DAY.times { CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", stats: { "brave_searches" => 1 }) }
+    lonely = Organization.create!(name: "Ghost Atomics")
+    assert_equal :retry, capped.find_site(lonely.id, "Ghost Atomics").outcome
+    refute_includes CrawlRun.where("stats ? 'site_for'").pluck(Arel.sql("(stats->>'site_for')::bigint")), lonely.id, "no week's rest for a blocked try"
+  end
+
+  test "a pending company whose proposing claim DQ rejected is never searched for (DQ, 19 Nov)" do
+    junk = Organization.create!(name: "Summary Report Co")
+    Candidate.create!(source: Source.create!(url: "https://www.nrc.gov/junk", source_kind: "nrc_adams", crawl_status: "ok"), kind: "organization",
+      payload: { "name" => "Summary Report Co" }, quote: "Summary Report Co", subject: junk, status: "matched", dq_recommendation: "reject", dq_reason: "a document title")
+    site_finder = Plugin.new(search_key: nil, search: ->(query) { @searched << query; [] })
+    refute site_finder.find_sites.key?(junk.id)
+    assert_empty @searched.grep(/Summary Report/)
   end
 end

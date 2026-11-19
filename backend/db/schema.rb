@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_19_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -467,6 +467,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_150000) do
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying::text, 'acquired'::character varying::text, 'defunct'::character varying::text])", name: "organizations_status_check"
     t.check_constraint "verification_status::text = ANY (ARRAY['pending'::character varying::text, 'verified'::character varying::text, 'rejected'::character varying::text, 'unpublished'::character varying::text])", name: "organizations_verification_status_check"
     t.check_constraint "char_length(short_description::text) <= 40", name: "organizations_short_description_length"
+  end
+
+  create_table "pipeline_health_snapshots", force: :cascade do |t|
+    t.date "on", null: false
+    t.jsonb "counts", default: {}, null: false
+    t.jsonb "problems", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["on"], name: "index_pipeline_health_snapshots_on_on", unique: true
   end
 
   create_table "relationships", force: :cascade do |t|

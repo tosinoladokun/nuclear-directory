@@ -38,6 +38,8 @@ Rails.application.routes.draw do
     post "matching" => "matching#create"
     post "matching/undo" => "matching#undo", as: :api_dq_matching_undo
     get "completeness" => "completeness#show", as: :api_dq_completeness
+    # The pipeline's health (#811): today's counts and problems, and the last two weeks.
+    get "health" => "health#show", as: :api_dq_health
   end
   # The browser's PostHog traffic, through our site with the visitor's country (#205).
   match "relay/*path" => "relay#forward", via: %i[get post], format: false
@@ -46,7 +48,8 @@ Rails.application.routes.draw do
   # of grouped results for the home and header search fields.
   root "home#show"
   get "search/index.json" => "search_indexes#show", as: :search_index, format: false, defaults: { format: :json }
-  get "search" => "search#index", as: :search
+  # HTML only: /search.json is a 404, not a missing-template 500.
+  get "search" => "search#index", as: :search, format: false
 
   # The admin (#86): one account, signed in at /admin/session/sign-in. Every
   # decision goes through DataQuality::Review.
@@ -56,6 +59,8 @@ Rails.application.routes.draw do
   namespace :admin do
     # The social agent (#769): each platform's switch, and every post it made.
     get "social" => "social#show", as: :social
+    # Whether the pipeline runs alone (#811).
+    get "health" => "health#show", as: :health
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     # Change your password (#783).
     resource :password, only: %i[edit update]

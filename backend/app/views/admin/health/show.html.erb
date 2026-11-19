@@ -1,0 +1,50 @@
+<% content_for :title, "Health" %>
+<div class="nd-stack">
+  <h1 class="type-admin-h1 m-0">Health</h1>
+  <p class="type-body m-0">Whether leads become Creates on their own. Checked every morning; anything below goes to Sentry.</p>
+
+  <section class="nd-stack" aria-labelledby="health-problems">
+    <h2 id="health-problems" class="type-admin-h2 m-0">Problems</h2>
+    <% if @health.problems.empty? %>
+      <p class="type-body m-0" id="health-ok">None. Everything ran.</p>
+    <% else %>
+      <ul class="nd-stack m-0" id="health-list">
+        <% @health.problems.each do |problem| %><li class="type-body text-critical"><%= problem.upcase_first %></li><% end %>
+      </ul>
+    <% end %>
+  </section>
+
+  <section class="nd-stack" aria-labelledby="health-counts">
+    <h2 id="health-counts" class="type-admin-h2 m-0">Now</h2>
+    <table class="nd-numtable">
+      <tbody>
+        <% { "Leads waiting" => "leads_new", "Leads being found" => "leads_researching", "Leads added" => "leads_added", "Leads closed" => "leads_ignored",
+             "Pending companies" => "pending_companies", "Without a role" => "pending_without_role", "Without a website" => "pending_without_website",
+             "Without a description" => "pending_without_description", "Without an HQ" => "pending_without_hq", "Creates in Today" => "creates_shown",
+             "Finds in the last day" => "finds_last_day", "Couldn't confirm" => "finds_unconfirmed_last_day", "Last data deploy" => "data_deploy",
+             "Posts that may have gone out" => "posts_unknown", "Company claims with no verdict" => "claims_unchecked", "Stuck leads" => "leads_stuck",
+             "Model spend this month ($)" => "budget_spent" }.each do |label, key| %>
+          <tr><th scope="row" class="type-body"><%= label %></th><td class="type-data" id="health-<%= key.dasherize %>"><%= @health.counts[key] || "none" %></td></tr>
+        <% end %>
+        <% { "Last crawl" => "last_crawl_at", "Last find" => "last_find_at" }.each do |label, key| %>
+          <tr><th scope="row" class="type-body"><%= label %></th><td class="type-data"><%= (at = @health.counts[key]) ? Time.zone.parse(at).in_time_zone(PipelineHealth::ZONE).strftime("%-d %b %H:%M") : "never" %></td></tr>
+        <% end %>
+      </tbody>
+    </table>
+  </section>
+
+  <% if @history.any? %>
+    <section class="nd-stack" aria-labelledby="health-history">
+      <h2 id="health-history" class="type-admin-h2 m-0">Last two weeks</h2>
+      <table class="nd-numtable">
+        <thead><tr><th scope="col">Day</th><th scope="col">Pending</th><th scope="col">Creates</th><th scope="col">Problems</th></tr></thead>
+        <tbody>
+          <% @history.each do |row| %>
+            <tr><td class="type-data"><%= row.on.strftime("%a %-d %b") %></td><td class="type-data"><%= row.counts["pending_companies"] %></td>
+              <td class="type-data"><%= row.counts["creates_shown"] %></td><td class="type-body"><%= row.problems.size %></td></tr>
+          <% end %>
+        </tbody>
+      </table>
+    </section>
+  <% end %>
+</div>

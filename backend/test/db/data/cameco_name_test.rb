@@ -1,0 +1,27 @@
+require "test_helper"
+load Rails.root.join("db/data/20261118140000_cameco_name.rb")
+
+# PM, 18 Nov 2026: pending company 312 "cameco" becomes "Cameco", Canada, still pending.
+class CamecoNameTest < ActiveSupport::TestCase
+  setup do
+    Organization.find_by(id: 312)&.destroy!
+    @company = Organization.create!(id: 312, name: "cameco", verification_status: "pending")
+  end
+
+  def run_it = CamecoName.new(reason: "deploy abc1234, PR #1").tap(&:up)
+
+  test "renames it, sets Canada, keeps it pending; a rerun changes nothing; a rejected one is left and named" do
+    run_it
+    assert_equal [ "Cameco", "CA", "pending" ], @company.reload.values_at(:name, :country_code, :verification_status)
+    assert_match "already", run_it.output.sole
+    @company.update_columns(name: "cameco", verification_status: "rejected")
+    assert_match "left as it is", run_it.output.sole
+    assert_equal "cameco", @company.reload.name
+  end
+
+  test "already created by Tosin before the deploy: renamed and set to Canada, still verified" do
+    @company.update_columns(verification_status: "verified", verified_by: "human:tosin")
+    run_it
+    assert_equal [ "Cameco", "CA", "verified" ], @company.reload.values_at(:name, :country_code, :verification_status)
+  end
+end
