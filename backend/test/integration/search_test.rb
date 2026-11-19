@@ -99,5 +99,9 @@ class SearchTest < ActionDispatch::IntegrationTest
   test "a format other than HTML is not found, never a server error" do
     get "/search.json", params: { q: "aalo" }
     assert_response :not_found
+    get "/search", params: { q: "aalo", format: "json" }
+    assert_response :not_found
+    get "/search", params: { q: "aalo" }, headers: { "Accept" => "application/json" }
+    assert_response :not_found
   end
 end

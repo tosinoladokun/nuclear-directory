@@ -9,6 +9,9 @@ class SearchController < ApplicationController
   PLANT_LIMIT = 4
 
   def index
+    # HTML only (a Turbo Frame): ?format=json or an Accept of JSON is a 404, not a missing-template 500 (Copilot).
+    return head(:not_found) unless request.format.html?
+
     listing = DirectoryListing.new(q: params[:q])
     @query = listing.query if listing.query.to_s.length >= MINIMUM_LENGTH
 
