@@ -74,10 +74,15 @@ module IndexNow
     json = { host:, key:, keyLocation: "https://#{host}/#{key}.txt", urlList: batch }.to_json
     Rails.cache.write(LAST_SENT, Time.current.to_f)
     rest.any? ? Rails.cache.write(PENDING, rest) : Rails.cache.delete(PENDING)
-    return true if send_once(json) || send_once(json)
-
-    Rails.logger.warn("IndexNow: #{batch.size} URLs not accepted after a retry")
-    false
+    accepted = send_once(json) || send_once(json)
+    # Kept, accepted or not, so a run of refusals is seen (#811).
+    IndexNowSubmission.create!(urls: batch.size, accepted:)
+    if accepted
+      Rails.logger.info("IndexNow: #{batch.size} URLs accepted")
+    else
+      Rails.logger.warn("IndexNow: #{batch.size} URLs not accepted after a retry")
+    end
+    accepted
   end
 
   def self.send_once(json)

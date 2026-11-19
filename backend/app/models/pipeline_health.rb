@@ -75,6 +75,7 @@ class PipelineHealth
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
       "budget" => budget,
+      "indexnow-refused" => ("IndexNow refused the last two batches (check INDEXNOW_KEY and its key file)" if IndexNowSubmission.refused_twice?),
       "search-limit" => search_limit,
       "sources-silent" => sources_silent
     }

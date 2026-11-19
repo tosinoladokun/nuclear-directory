@@ -131,4 +131,13 @@ class PipelineHealthTest < ActiveSupport::TestCase
     daily.send(:remove_const, :NOT_SCHEDULED)
     daily.const_set(:NOT_SCHEDULED, had) if had
   end
+
+  test "IndexNow refused twice in a row alerts; an accepted batch clears it" do
+    IndexNowSubmission.create!(urls: 3, accepted: false)
+    assert_nil PipelineHealth.new(now: NOW).checks["indexnow-refused"], "one refusal is not enough"
+    IndexNowSubmission.create!(urls: 3, accepted: false)
+    assert_includes PipelineHealth.new(now: NOW).checks["indexnow-refused"].to_s, "refused the last two"
+    IndexNowSubmission.create!(urls: 3, accepted: true)
+    assert_nil PipelineHealth.new(now: NOW).checks["indexnow-refused"]
+  end
 end
