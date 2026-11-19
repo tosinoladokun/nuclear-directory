@@ -17,6 +17,9 @@ class PipelineHealth
   STALE_AFTER = 26.hours
   UNCONFIRMED_SHARE = 0.5
   BUDGET_SHARE = 0.8
+  SOURCE_SILENT_AFTER = 72.hours
+  # Run by their own schedules, not the daily crawl (config/recurring.yml).
+  RECURRING_SOURCES = %w[wire_press lead_forwards].freeze
 
   def initialize(now: Time.current)
     @now = now
@@ -43,7 +46,14 @@ class PipelineHealth
         "posts_unknown" => SocialPost.where(status: "unknown").count,
         "claims_unchecked" => unchecked.count,
         "leads_stuck" => stuck_leads.count,
-        "budget_spent" => DataQuality::Budget.spent_this_month(now: @now).to_f.round(2)
+        "budget_spent" => DataQuality::Budget.spent_this_month(now: @now).to_f.round(2),
+        # Finds that reached an answer (added, or checked and couldn't confirm a site), whatever the search did:
+        # a reserved search row is written before the call, so it doesn't prove Brave answered (Copilot).
+        "finds_answered_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..)
+          .where("status = 'added' OR note LIKE ?", "#{LeadFinding::UNCONFIRMED}%").count,
+        # Held for the search itself only (not the pipeline lock or the day's find quota, which share BUSY; Copilot).
+        "searches_held_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..)
+          .where("note ILIKE ? OR note ILIKE ? OR note ILIKE ?", "%search limit%", "%no search today%", "%search service was busy%").count
       }
     end
   end
@@ -64,7 +74,9 @@ class PipelineHealth
       "company-pages-failing" => company_pages_failing,
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
-      "budget" => budget
+      "budget" => budget,
+      "search-limit" => search_limit,
+      "sources-silent" => sources_silent
     }
   end
 
@@ -128,6 +140,23 @@ class PipelineHealth
     def company_pages_failing
       last_two = CrawlRun.where(source_kind: "company_pages").order(started_at: :desc).limit(2).pluck(:status)
       "the company pages read failed twice in a row" if last_two.size == 2 && last_two.all?("failed")
+    end
+
+    # Each scheduled source must have crawled within three days (PM via Crawl).
+    def sources_silent
+      daily = DataQuality::DailyCrawlJob
+      # NOT_SCHEDULED is a Hash of kind => why (Crawl's #822); a list works too (Infra).
+      skipped = daily.const_defined?(:NOT_SCHEDULED) ? daily::NOT_SCHEDULED : []
+      kinds = daily::SOURCE_KINDS + RECURRING_SOURCES - (skipped.respond_to?(:keys) ? skipped.keys : Array(skipped))
+      last = CrawlRun.where(stage: "crawl", source_kind: kinds).group(:source_kind).maximum(:started_at)
+      silent = kinds.select { |kind| last[kind].nil? || last[kind] < @now - SOURCE_SILENT_AFTER }
+      "#{silent.size} sources haven't run in three days: #{silent.sort.join(', ')}" if silent.any?
+    end
+
+    # Brave refused every search for a day (its monthly limit or the key; Infra): leads wait instead of being found.
+    def search_limit
+      held, done = counts.values_at("searches_held_last_day", "finds_answered_last_day")
+      "#{held} lead finds waited a day because the search didn't answer (its monthly limit or key)" if held.positive? && done.zero?
     end
 
     def budget
