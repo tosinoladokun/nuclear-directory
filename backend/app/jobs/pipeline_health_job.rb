@@ -23,6 +23,7 @@ class PipelineHealthJob < ApplicationJob
   private
     def fallback(problems)
       HealthMailer.notify(problems)
-      problems.each { |problem| Rails.error.report(Stalled.new(problem), handled: true, severity: :warning) }
+      # Captured directly: Rails.error.report doesn't reach Sentry here (its error subscriber is off; Copilot).
+      problems.each { |problem| Sentry.capture_message("Pipeline: #{problem}", level: :warning) if defined?(Sentry) && Sentry.initialized? }
     end
 end

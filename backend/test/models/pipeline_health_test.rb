@@ -31,16 +31,16 @@ class PipelineHealthTest < ActiveSupport::TestCase
   test "no Creates for two weekdays while companies wait" do
     6.times { |n| Organization.create!(name: "Pending #{n}", verification_status: "pending") }
     [ Date.new(2026, 11, 17), Date.new(2026, 11, 18) ].each { |on| PipelineHealthSnapshot.create!(on:, counts: { "creates_shown" => 0 }) }
-    assert(health.problems.any? { |problem| problem.start_with?("no Creates in Today for 2 weekdays") })
+    today = health
+    today.define_singleton_method(:creates_shown) { 0 } # none in Today now (its own selection)
+    assert(today.problems.any? { |problem| problem.start_with?("no Creates in Today for 2 weekdays") })
   end
 
-  test "the daily job keeps the day's row and reports each problem" do
+  test "the daily job keeps the day's row and emails the problems (Sentry is captured directly, outside tests)" do
     Organization.create!(name: "No Role Co", verification_status: "pending", created_at: 2.days.ago)
     ENV["RESEND_API_KEY"] = "dummy"
     assert_difference("PipelineHealthSnapshot.count", 1) do
-      assert_error_reported(PipelineHealthJob::Stalled) do
-        assert_enqueued_email_with(HealthMailer, :stalled, params: ->(params) { params[:problems].any? }) { PipelineHealthJob.perform_now }
-      end
+      assert_enqueued_email_with(HealthMailer, :stalled, params: ->(params) { params[:problems].any? }) { PipelineHealthJob.perform_now }
     end
     mail = HealthMailer.with(problems: [ "1 pending companies have had no role for over a day" ]).stalled
     assert_equal [ "hello@nuclear-directory.org" ], mail.to
@@ -80,5 +80,18 @@ class PipelineHealthTest < ActiveSupport::TestCase
     assert_equal PipelineHealth.new.checks.keys.size, calls.size, "every key, once"
   ensure
     Autopilot.send(:remove_const, :Alert) if defined?(Autopilot::Alert) && Autopilot::Alert == alert
+  end
+
+  test "the finder's own rows mark it alive; a role without a source still counts as no role; hourly feeds don't hide the crawl" do
+    CrawlRun.delete_all
+    CrawlRun.create!(source_kind: "lead_forwards", stage: "crawl", status: "succeeded", started_at: NOW - 1.hour)
+    assert_nil health.counts["last_crawl_at"], "an hourly feed isn't the nightly crawl"
+    CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", started_at: NOW - 2.hours, stats: { "finds" => 1 })
+    assert_equal 1, PipelineHealth.new(now: NOW).counts["finds_last_day"]
+
+    company = Organization.create!(name: "Unsourced Role Co", verification_status: "pending", created_at: NOW - 2.days)
+    before = PipelineHealth.new(now: NOW).counts["pending_without_role"]
+    OrganizationRole.create!(organization: company, role: Role.first || Role.create!(key: "fuel", name: "Fuel"), verification_status: "pending")
+    assert_equal before, PipelineHealth.new(now: NOW).counts["pending_without_role"], "no evidence: still blocks its Create"
   end
 end

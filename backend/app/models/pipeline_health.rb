@@ -30,14 +30,14 @@ class PipelineHealth
         "leads_new" => leads.fetch("new", 0), "leads_researching" => leads.fetch("researching", 0),
         "leads_added" => leads.fetch("added", 0), "leads_ignored" => leads.fetch("ignored", 0),
         "pending_companies" => pending.count,
-        "pending_without_role" => pending.where.not(id: OrganizationRole.select(:organization_id)).count,
+        "pending_without_role" => pending.where.not(id: sourced_role_scope).count,
         "pending_without_website" => pending.where(website: [ nil, "" ]).count,
         "pending_without_description" => pending.where(description: [ nil, "" ]).count,
         "pending_without_hq" => pending.where(hq_city: [ nil, "" ]).count,
         "creates_shown" => creates_shown,
-        "finds_last_day" => finds.count,
-        "finds_unconfirmed_last_day" => finds.where("note LIKE ?", "#{LeadFinding::UNCONFIRMED}%").count,
-        "last_crawl_at" => CrawlRun.where(stage: "crawl").maximum(:started_at)&.iso8601,
+        "finds_last_day" => finds_last_day,
+        "finds_unconfirmed_last_day" => Lead.where(kind: "company", updated_at: (@now - 1.day)..).where("note LIKE ?", "#{LeadFinding::UNCONFIRMED}%").count,
+        "last_crawl_at" => last_crawl&.iso8601,
         "last_find_at" => last_find&.iso8601,
         "data_deploy" => last_deploy&.status,
         "posts_unknown" => SocialPost.where(status: "unknown").count,
@@ -59,8 +59,8 @@ class PipelineHealth
       "unchecked-claims" => unchecked_claims,
       "stuck-leads" => ("#{counts['leads_stuck']} leads are stuck (used their four tries, or waiting over two days)" if counts["leads_stuck"].positive?),
       "data-deploy-failed" => ("the last data deploy failed (see the deploy report)" if last_deploy&.status == "failed"),
-      "crawl-silent" => stale("the nightly crawl", CrawlRun.where(stage: "crawl").maximum(:started_at)),
-      "finder-silent" => stale("the lead finder", last_find, only_if: counts["leads_new"].positive?),
+      "crawl-silent" => stale("the nightly crawl", last_crawl),
+      "finder-silent" => stale("the lead finder", last_find, only_if: LeadFinding.due(now: @now).exists?),
       "company-pages-failing" => company_pages_failing,
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
@@ -76,13 +76,22 @@ class PipelineHealth
   end
 
   private
-    # A new company's Create shown today is a pending company with an open claim that proposed it.
-    def creates_shown
-      Candidate.where(status: %w[new matched needs_review], proposed_subject: true, kind: "organization", subject_type: "Organization").distinct.count(:subject_id)
-    end
+    # The Creates Today actually shows (its own selection, roles, checks and daily limit; Copilot).
+    def creates_shown = OwnerInbox.new.then { |inbox| inbox.sections["new_record"].size + inbox.records.size }
 
-    def finds = Lead.where(kind: "company", updated_at: (@now - 1.day)..).where.not(status: "new").where.not(decided_by: nil)
-    def last_find = Lead.where(kind: "company").where.not(status: %w[new triage]).maximum(:updated_at)
+    # The nightly crawl's own sources (DailyCrawlJob), so hourly feeds can't hide it stopping (Copilot).
+    def last_crawl = @last_crawl ||= CrawlRun.where(stage: "crawl", source_kind: DataQuality::DailyCrawlJob::SOURCE_KINDS).maximum(:started_at)
+
+    # The finder's own record: each find reserves a lead_finder row (Copilot), not a lead's updated_at.
+    def finder_rows = CrawlRun.where(source_kind: "lead_finder", stage: "crawl").where("stats ? 'finds'")
+    def finds_last_day = finder_rows.where(started_at: (@now - 1.day)..).count
+    def last_find = @last_find ||= finder_rows.maximum(:started_at)
+
+    # A role that lets a Create show: pending or verified, with evidence (Directory::Lookup.sourced_role_ids; Copilot).
+    def sourced_role_scope
+      OrganizationRole.where(verification_status: %w[pending verified])
+        .where(id: Evidence.where(subject_type: "OrganizationRole").select(:subject_id)).select(:organization_id)
+    end
     def last_deploy = @last_deploy ||= DataDeploy.order(:id).last
 
     # Pending companies that aren't junk: none whose new-company claim Data Quality said no to (DQ, 19 Nov).
@@ -92,7 +101,7 @@ class PipelineHealth
     end
 
     def roleless
-      old = real_pending.where(created_at: ..(@now - ROLELESS_AFTER)).where.not(id: OrganizationRole.select(:organization_id)).count
+      old = real_pending.where(created_at: ..(@now - ROLELESS_AFTER)).where.not(id: sourced_role_scope).count
       "#{old} pending companies have had no role for over a day" if old.positive?
     end
 
