@@ -122,8 +122,10 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
   # New pending companies get their own nightly budget on top (PM, 10 Nov).
   NEW_PER_NIGHT = 15
 
-  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT)
+  def initialize(fetcher: DataQuality::Fetcher.new, llm: nil, directory: DataQuality::DirectoryClient.new, gap_fill: GAP_FILL_PER_NIGHT,
+    site_finder: nil)
     @fetcher, @llm, @directory, @gap_fill = fetcher, llm, directory, gap_fill
+    @site_finder = site_finder || DataQuality::Plugins::LeadFinder.new(fetcher:, directory:)
   end
 
   def crawl(_run)
@@ -131,6 +133,9 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # Once a day, whatever starts the run (a manual Enrich runs this too):
     # the night's quota is kept in its crawl run's stats.
     if @gap_fill.positive? && !gap_filled_today?
+      # Pending companies with no website first get one looked for (DQ, 19 Nov).
+      sites = @site_finder.find_sites
+      stats["sites_looked_for"] = sites.size if sites.any?
       gap = @directory.request_gap_fill(limit: @gap_fill, new_limit: NEW_PER_NIGHT)
       stats["gap_fill"] = gap[:requested]
       stats["gaps_without_website"] = gap[:without_website] if gap[:without_website].any?

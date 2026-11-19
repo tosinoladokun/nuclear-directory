@@ -222,4 +222,16 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal "Fresh Fission America", name.("Reactors built by Fresh Fission America.", "Fresh Fission", [ "Fresh Fission America | Home" ])
     assert_equal "Power To Hydrogen", name.("Power To Hydrogen supplies equipment for nuclear facilities.", "power to hydrogen")
   end
+
+  test "a pending company with no website gets one looked for, proposed as its website claim, at most once a week (DQ, 19 Nov)" do
+    pending = Organization.create!(name: "Fresh Fission")
+    pending.aliases.find_or_create_by!(alias: "Fresh Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(query) { @searched << query; [ HOME ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    assert_equal :proposed, site_finder.find_sites[pending.id]
+    claim = Candidate.where(kind: "organization", subject_id: pending.id).sole
+    assert_equal [ "Organization", pending.id ], [ claim.subject_type, claim.subject_id ], "matched to the pending company by name"
+    assert_equal "https://www.freshfission.example", claim.payload["website"]
+    assert_empty site_finder.find_sites, "not again within a week"
+  end
 end

@@ -61,6 +61,38 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Orano; PM, 11 Nov), so its home page needn't show a US address.
   PERSON_KEYS = /\A(?:admin:|list:|leads-md:)/
 
+  # Pending companies created from a name alone (NRC, DOE, ARPA-E) have no
+  # website, so Enrich can't read them for a category (DQ, 19 Nov: 50 of 50).
+  # Each night up to SITES_PER_NIGHT of them get the same search and check as
+  # a lead (named, nuclear, US), each at most once a week; a site that checks
+  # out is proposed as their website claim (matched to them by name). The
+  # finds and searches count toward the same daily limits.
+  SITES_PER_NIGHT = 10
+  SITE_FOR = "site_for".freeze
+
+  def find_sites(limit: SITES_PER_NIGHT)
+    tried = CrawlRun.where(source_kind:, stage: "crawl", started_at: 7.days.ago..).where("stats ? '#{SITE_FOR}'")
+      .pluck(Arel.sql("(stats->>'#{SITE_FOR}')::bigint")).to_set
+    due = @directory.pending_organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) }.first(limit)
+    due.to_h { |id, name| [ id, find_site(id, name).outcome ] }
+  end
+
+  def find_site(id, name)
+    return outcome(:retry, name:, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached", found: {}) unless reserve(FINDS, FINDS_PER_DAY)
+
+    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { SITE_FOR => id })
+    @us_shown_elsewhere, @hints, found = false, "", { "name" => name }
+    candidates_for(name, [], found).each do |website|
+      # Another company's site is never this one's.
+      next if @directory.organization(domain: URI(website).host)
+
+      verdict, page, why = verify(name, website)
+      (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
+      return propose(name, website, page, found) if verdict == :ok
+    end
+    unconfirmed(name, nil, "No website found", found)
+  end
+
   def find(lead_id, input: nil)
     lead = @directory.lead(lead_id) or raise ArgumentError, "No lead #{lead_id}"
     unless reserve(FINDS, FINDS_PER_DAY)
