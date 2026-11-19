@@ -271,4 +271,20 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     refute site_finder.find_sites.key?(junk.id)
     assert_empty @searched.grep(/Summary Report/)
   end
+
+  test "a Brave spend cap (402/403) or a used-up month (429, 0 left) stops searching for the day; the lead is :retry (Infra)" do
+    Plugin.class_variable_set(:@@last_search, nil)
+    Plugin.class_variable_set(:@@search_stopped_on, nil)
+    stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 402)
+    real = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: "k", sleeper: ->(_) { })
+    assert_equal :retry, Plugin.call(lead("Ghost One Nuclear").id, finder: real).outcome
+    assert_equal :retry, Plugin.call(lead("Ghost Two Nuclear").id, finder: real).outcome
+    assert_requested :get, %r{api\.search\.brave\.com}, times: 1
+
+    Plugin.class_variable_set(:@@search_stopped_on, nil)
+    stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 401)
+    assert_equal :retry, Plugin.call(lead("Ghost Three Nuclear").id, finder: real).outcome, "a key problem is a failure, not 'no website'"
+  ensure
+    Plugin.class_variable_set(:@@search_stopped_on, nil)
+  end
 end
