@@ -12,24 +12,33 @@ module DataQuality::BlankSites
     "js_only" => "Too little text (JavaScript-only page)"
   }.freeze
 
+  BATCH = 25
+
+  # Cached until a crawl fetches a page again, so a page load never re-parses
+  # every home page; only BATCH page bodies are in memory at once (Infra).
   def self.list(directory: DataQuality::DirectoryClient.new)
     homes = directory.organizations_with_website.to_h { |name, website| [ Source.bare_homepage(website.to_s.strip), name ] }
-    reader = DataQuality::Plugins::CompanyPages.new
     sources = Source.where(source_kind: "company_pages", url: homes.keys + homes.keys.map { |url| "#{url}/" })
-    sources.filter_map do |source|
-      reason = reason(source, reader)
-      next unless reason
+    key = [ "blank_sites", Digest::SHA256.hexdigest(homes.to_a.sort.to_s), sources.maximum(:updated_at)&.to_i ]
+    Rails.cache.fetch(key, expires_in: 1.day) { build(homes, sources) }
+  end
 
-      Site.new(company: homes[Source.bare_homepage(source.url)], url: source.url, reason: REASONS.fetch(reason), checked_on: source.fetched_at&.to_date)
-    end.sort_by { |site| site.company.to_s.downcase }
+  def self.build(homes, sources)
+    reader = DataQuality::Plugins::CompanyPages.new
+    site = ->(source, reason) { Site.new(company: homes[Source.bare_homepage(source.url)], url: source.url, reason: REASONS.fetch(reason), checked_on: source.fetched_at&.to_date) }
+    failed = sources.where(crawl_status: %w[blocked needs_human]).select(:id, :url, :crawl_status, :fetched_at)
+      .map { |source| site.(source, source.crawl_status == "blocked" ? "blocked" : "unreadable") }
+    thin = []
+    sources.where(crawl_status: "ok").find_each(batch_size: BATCH) do |source|
+      reason = reason(source, reader)
+      thin << site.(source, reason) if reason
+    end
+    (failed + thin).sort_by { |entry| entry.company.to_s.downcase }
   end
 
   def self.count(...) = list(...).size
 
   def self.reason(source, reader)
-    return "blocked" if source.crawl_status == "blocked"
-    return "unreadable" if source.crawl_status == "needs_human"
-    return unless source.crawl_status == "ok"
     return "empty" if source.content_text.blank?
 
     "js_only" if reader.send(:body_text, source).length < DataQuality::Plugin::THIN_PAGE
