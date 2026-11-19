@@ -7,15 +7,54 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
 
   Found = Data.define(:outcome, :organization_id, :candidate_id, :reason, :name, :website)
 
+  # No model in these tests: each line is read by hand (LeadReaderTest covers the model).
+  NoModel = Class.new { def structured(**) = raise(DataQuality::OpenRouter::Client::RequestError, "no model in tests") }
+
   setup do
     sign_in_as users(:admin)
     @finder = LeadFindJob.finder
+    LeadReader.default_client = NoModel.new
   end
 
-  teardown { LeadFindJob.finder = @finder }
+  teardown do
+    LeadFindJob.finder = @finder
+    LeadReader.default_client = nil
+  end
 
   def add(text) = post(admin_inbox_suggest_path, params: { suggestion: text })
   def line(lead) = css_select("#lead-#{lead.id}").text.squish
+
+  test "a name and its site on one line: the words name it, the link is its site" do
+    [ "Aalo Atomics: https://www.aalo.com/", "Aalo Atomics - https://www.aalo.com/", "Aalo Atomics, https://www.aalo.com/",
+      "Aalo Atomics https://www.aalo.com/" ].each do |line|
+      Lead.delete_all
+      add(line)
+      lead = Lead.sole
+      assert_equal "Aalo Atomics", lead.name, line
+      assert_equal "https://www.aalo.com/", lead.sources.sole["url"], line
+    end
+    Lead.delete_all
+    add("https://www.aalo.com/")
+    assert_equal [ "aalo.com", "https://www.aalo.com/" ], [ Lead.sole.name, Lead.sole.sources.sole["url"] ], "a link alone"
+    Lead.delete_all
+    add("Aalo Atomics")
+    assert_equal [ "Aalo Atomics", nil ], [ Lead.sole.name, Lead.sole.sources.sole["url"] ], "a name alone"
+  end
+
+  test "free text is read as a prompt: each company a lead with its site and hint, and he sees what it understood" do
+    reader = Struct.new(:items) { def call(_text) = items }.new([
+      LeadReader::Item.new(name: "Aalo Atomics", website: "https://aalo.com", hint: "Austin microreactor startup"),
+      LeadReader::Item.new(name: "Cameco", website: nil, hint: nil) ])
+    original = LeadReader.method(:new)
+    LeadReader.define_singleton_method(:new) { |**| reader }
+    assert_enqueued_jobs(2, only: LeadFindJob) { add("Aalo, the Austin microreactor startup, aalo.com, and Cameco") }
+    assert_equal "Added: Aalo Atomics (aalo.com) and Cameco. They're being found now.", flash[:notice]
+    aalo = Lead.find_by!(normalized_name: "aalo atomics")
+    assert_equal [ "https://aalo.com", "Austin microreactor startup" ], aalo.sources.sole.values_at("url", "hint")
+    assert_equal [ "Austin microreactor startup" ], Directory::Leads.find(aalo.id).hints, "the finder gets the hint"
+  ensure
+    LeadReader.define_singleton_method(:new, original) if original
+  end
 
   test "his spelling names the lead, even one first seen in a site search" do
     Lead.sighted!(name: "cameco", kind: "company", key: "search:cameco", label: "Site search")
@@ -41,7 +80,7 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
   test "several at once, one per line; blank and repeated lines skipped" do
     assert_enqueued_jobs(3, only: LeadFindJob) { add("Alpha Fission\n\nhttps://betafusion.example\n Gamma Isotopes \nAlpha Fission") }
     assert_equal [ "Alpha Fission", "betafusion.example", "Gamma Isotopes" ].sort, Lead.where(status: "new").pluck(:name).sort
-    assert_equal "Added 3 leads. They're being found now.", flash[:notice]
+    assert_equal "Added: Alpha Fission, betafusion.example, and Gamma Isotopes. They're being found now.", flash[:notice]
   end
 
   test "the same lead again while it's being found isn't queued twice" do
