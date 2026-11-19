@@ -17,6 +17,13 @@ class Admin::SuggestCompanyTest < ActionDispatch::IntegrationTest
   def add(text) = post(admin_inbox_suggest_path, params: { suggestion: text })
   def line(lead) = css_select("#lead-#{lead.id}").text.squish
 
+  test "his spelling names the lead, even one first seen in a site search" do
+    Lead.sighted!(name: "cameco", kind: "company", key: "search:cameco", label: "Site search")
+    add("Cameco")
+    lead = Lead.find_by!(normalized_name: "cameco")
+    assert_equal "Cameco", lead.name
+  end
+
   test "Add queues the find and shows Finding; an empty or too long one is refused" do
     assert_enqueued_with(job: LeadFindJob) { add("  Kairos Power ") }
     lead = Lead.find_by!(normalized_name: "kairos power")

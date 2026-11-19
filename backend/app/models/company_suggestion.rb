@@ -27,6 +27,8 @@ module CompanySuggestion
     # A link is named by its site and path, so two LinkedIn pages or two articles are two leads.
     name = url ? (link_name(url) || text) : text
     lead = Lead.sighted!(name:, kind: "company", key: "#{KEY}:#{Lead.normalize(text)}", label: LABEL, url:) or return
+    # His words name it (PM, 18 Nov): a lead first seen in a site search keeps the searcher's spelling ("cameco") otherwise.
+    lead.update!(name:) if url.nil? && lead.name != name
     # The same line again while it's being found: one find is enough (Infra).
     return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.updated_at > 5.minutes.ago
 

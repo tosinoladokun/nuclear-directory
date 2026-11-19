@@ -3,7 +3,11 @@
 # it takes up to PER_NIGHT due leads; "Suggest a company" runs one at once.
 class LeadFindJob < ApplicationJob
   queue_as :data_quality
-  limits_concurrency to: 1, key: "lead_find", duration: 2.hours if respond_to?(:limits_concurrency)
+  # One find at a time (the finder's search and daily quota are shared; Copilot). The nightly run only queues one job
+  # per lead at a lower priority, so a lead from the admin box (priority 0) is next, never behind the whole batch
+  # (PM, 18 Nov: Fluor waited).
+  limits_concurrency to: 1, key: "lead_find", duration: 30.minutes if respond_to?(:limits_concurrency)
+  BATCH_PRIORITY = 10
 
   # (lead) => an object whose to_h has outcome, and maybe candidate_id (the claim it proposed), organization_id
   # (already listed), reason, name and website.
@@ -11,9 +15,13 @@ class LeadFindJob < ApplicationJob
   class_attribute :finder, default: nil
 
   def perform(lead_id = nil)
+    unless lead_id
+      LeadFinding.due.limit(LeadFinding::PER_NIGHT).pluck(:id).each { |id| self.class.set(priority: BATCH_PRIORITY).perform_later(id) }
+      return
+    end
+
     # A queued find for one lead still has to be due: a lead found meanwhile, or ignored by a person, is left alone.
-    leads = (lead_id ? LeadFinding.due.where(id: lead_id) : LeadFinding.due.limit(LeadFinding::PER_NIGHT)).to_a
-    leads.each { |lead| find(lead) }
+    LeadFinding.due.where(id: lead_id).each { |lead| find(lead) }
   end
 
   private
