@@ -184,6 +184,18 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal "Fresh Fission designs microreactors for remote sites.", Candidate.find(result.candidate_id).quote
   end
 
+  test "the company is named as its own page writes it, never as typed (Backend, 18 Nov)" do
+    result = Plugin.call(lead("fresh fission", url: HOME).id, finder: finder)
+    assert_equal "Fresh Fission", Candidate.find(result.candidate_id).payload["name"]
+
+    other = "https://www.ffamerica.example"
+    stub_request(:get, "#{other}/robots.txt").to_return(status: 404)
+    stub_request(:get, other).to_return(body: "<html><head><title>Fresh Fission America | Home</title></head><body><p>Fresh Fission America designs microreactors. Austin, TX 78701</p></body></html>",
+      headers: { "Content-Type" => "text/html" })
+    result = Plugin.call(lead("Fresh Fission Inc.", url: other).id, finder: finder)
+    assert_equal "Fresh Fission America", Candidate.find(result.candidate_id).payload["name"]
+  end
+
   test "a short full name still matches whole; the home page link never takes a contact place (Copilot)" do
     stub_request(:get, HOME).to_return(body: "<html><body><p>GSE provides nuclear engineering services.</p>" \
       "<a href=\"/\">The Nuclear Company</a><a href=\"/about\">About</a><a href=\"/contact\">Contact</a></body></html>", headers: { "Content-Type" => "text/html" })
@@ -191,5 +203,14 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     stub_request(:get, "#{HOME}/contact").to_return(body: "<html><body><p>1 Main St, Austin, TX 78701</p></body></html>", headers: { "Content-Type" => "text/html" })
     crawled = Lead.sighted!(name: "GSE", kind: "company", key: "newsletter:3:gse", label: "Newsletter", url: HOME)
     assert_equal :proposed, Plugin.call(crawled.id, finder: finder).outcome
+  end
+
+  test "the page's name: never a heading's other words, a possessive, a full stop, or a cut-down full name (Copilot)" do
+    plugin = Plugin.new
+    name = ->(quote, lead, sites = []) { plugin.send(:page_name, quote, lead, sites) }
+    assert_equal "Fresh Fission", name.("Fresh Fission Builds Nuclear Reactors", "fresh fission")
+    assert_equal "Fresh Fission America", name.("Fresh Fission America's microreactors power remote sites.", "Fresh Fission", [ "Fresh Fission America" ])
+    assert_equal "Fresh Fission America", name.("Reactors built by Fresh Fission America.", "Fresh Fission", [ "Fresh Fission America | Home" ])
+    assert_equal "Power To Hydrogen", name.("Power To Hydrogen supplies equipment for nuclear facilities.", "power to hydrogen")
   end
 end
