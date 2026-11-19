@@ -7,7 +7,7 @@ class Admin::LiveController < Admin::BaseController
     @list = live_list(params)
     @page = [ params[:page].to_i, 1 ].max
     @rows = @list.page(@page)
-    @tab_counts = Directory::LiveList::TABS.keys.index_with { |tab| Directory::LiveList.tab_count(tab, status: @list.chosen["status"].first, within: @list.within) }
+    @tab_counts = Directory::LiveList.tab_counts(status: @list.chosen["status"].first, within: @list.within)
   end
 
   # The list described by a Live URL's parameters (also for Previous and
