@@ -48,21 +48,24 @@ class PipelineHealth
     end
   end
 
-  def problems
-    @problems ||= [
-      roleless,
-      siteless,
-      no_creates,
-      unchecked_claims,
-      ("#{counts['leads_stuck']} leads are stuck (used their four tries, or waiting over two days)" if counts["leads_stuck"].positive?),
-      ("the last data deploy failed: #{last_deploy.error.to_s.truncate(200)}" if last_deploy&.status == "failed"),
-      stale("the nightly crawl", CrawlRun.where(stage: "crawl").maximum(:started_at)),
-      stale("the lead finder", last_find, only_if: counts["leads_new"].positive?),
-      company_pages_failing,
-      ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
-      unconfirmed,
-      budget
-    ].compact
+  def problems = checks.values.compact
+
+  # Every check by its stable alert key (Infra's Autopilot::Alert dedupes on it): the problem, or nil when fine.
+  def checks
+    @checks ||= {
+      "pending-without-role" => roleless,
+      "pending-without-website" => siteless,
+      "no-creates" => no_creates,
+      "unchecked-claims" => unchecked_claims,
+      "stuck-leads" => ("#{counts['leads_stuck']} leads are stuck (used their four tries, or waiting over two days)" if counts["leads_stuck"].positive?),
+      "data-deploy-failed" => ("the last data deploy failed (see the deploy report)" if last_deploy&.status == "failed"),
+      "crawl-silent" => stale("the nightly crawl", CrawlRun.where(stage: "crawl").maximum(:started_at)),
+      "finder-silent" => stale("the lead finder", last_find, only_if: counts["leads_new"].positive?),
+      "company-pages-failing" => company_pages_failing,
+      "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
+      "finds-unconfirmed" => unconfirmed,
+      "budget" => budget
+    }
   end
 
   # Today's row, kept (one a day), for the history and the "2 weekdays" rule.

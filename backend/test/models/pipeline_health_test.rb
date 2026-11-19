@@ -24,7 +24,7 @@ class PipelineHealthTest < ActiveSupport::TestCase
     Lead.sighted!(name: "Waiting Co", kind: "company", key: "news:w", label: "news")
     problems = health.problems
     assert(problems.any? { |problem| problem.end_with?("pending companies have had no role for over a day") })
-    assert(problems.any? { |problem| problem.start_with?("the last data deploy failed: company 312") })
+    assert_includes problems, "the last data deploy failed (see the deploy report)"
     assert_includes problems, "the lead finder has never run"
   end
 
@@ -64,5 +64,21 @@ class PipelineHealthTest < ActiveSupport::TestCase
     assert(problems.any? { |problem| problem.include?("no website for over two days") })
     assert(problems.any? { |problem| problem.include?("company claims have no verdict yet") })
     assert(problems.any? { |problem| problem.include?("leads are stuck") })
+  end
+
+  test "each check has a stable key; the job raises the stalled ones and resolves the rest through Autopilot::Alert" do
+    Organization.create!(name: "No Role Co", verification_status: "pending", created_at: 2.days.ago)
+    calls = []
+    alert = Module.new
+    alert.define_singleton_method(:raise!) { |key, **| calls << [ :raise, key ] }
+    alert.define_singleton_method(:resolve!) { |key, **| calls << [ :resolve, key ] }
+    Object.const_set(:Autopilot, Module.new) unless defined?(Autopilot)
+    Autopilot.const_set(:Alert, alert) unless defined?(Autopilot::Alert)
+    PipelineHealthJob.perform_now
+    assert_includes calls, [ :raise, "pending-without-role" ]
+    assert_includes calls, [ :resolve, "posts-unknown" ]
+    assert_equal PipelineHealth.new.checks.keys.size, calls.size, "every key, once"
+  ensure
+    Autopilot.send(:remove_const, :Alert) if defined?(Autopilot::Alert) && Autopilot::Alert == alert
   end
 end
