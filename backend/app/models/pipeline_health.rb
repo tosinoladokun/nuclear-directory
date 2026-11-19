@@ -17,6 +17,9 @@ class PipelineHealth
   STALE_AFTER = 26.hours
   UNCONFIRMED_SHARE = 0.5
   BUDGET_SHARE = 0.8
+  SOURCE_SILENT_AFTER = 72.hours
+  # Run by their own schedules, not the daily crawl (config/recurring.yml).
+  RECURRING_SOURCES = %w[wire_press lead_forwards].freeze
 
   def initialize(now: Time.current)
     @now = now
@@ -70,7 +73,8 @@ class PipelineHealth
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
       "budget" => budget,
-      "search-limit" => search_limit
+      "search-limit" => search_limit,
+      "sources-silent" => sources_silent
     }
   end
 
@@ -134,6 +138,15 @@ class PipelineHealth
     def company_pages_failing
       last_two = CrawlRun.where(source_kind: "company_pages").order(started_at: :desc).limit(2).pluck(:status)
       "the company pages read failed twice in a row" if last_two.size == 2 && last_two.all?("failed")
+    end
+
+    # Each scheduled source must have crawled within three days (PM via Crawl).
+    def sources_silent
+      daily = DataQuality::DailyCrawlJob
+      kinds = daily::SOURCE_KINDS + RECURRING_SOURCES - (daily.const_defined?(:NOT_SCHEDULED) ? daily::NOT_SCHEDULED : [])
+      last = CrawlRun.where(stage: "crawl", source_kind: kinds).group(:source_kind).maximum(:started_at)
+      silent = kinds.select { |kind| last[kind].nil? || last[kind] < @now - SOURCE_SILENT_AFTER }
+      "#{silent.size} sources haven't run in three days: #{silent.sort.join(', ')}" if silent.any?
     end
 
     # Brave refused every search for a day (its monthly limit or the key; Infra): leads wait instead of being found.

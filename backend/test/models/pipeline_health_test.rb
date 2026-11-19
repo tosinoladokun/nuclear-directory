@@ -102,4 +102,12 @@ class PipelineHealthTest < ActiveSupport::TestCase
       stats: { DataQuality::Plugins::LeadFinder::USAGE => 1 })
     assert_nil PipelineHealth.new(now: NOW).checks["search-limit"]
   end
+
+  test "a scheduled source that hasn't crawled in three days is named" do
+    kinds = DataQuality::DailyCrawlJob::SOURCE_KINDS + PipelineHealth::RECURRING_SOURCES
+    kinds.each { |kind| CrawlRun.create!(source_kind: kind, stage: "crawl", status: "succeeded", started_at: NOW - 1.hour) }
+    assert_nil PipelineHealth.new(now: NOW).checks["sources-silent"]
+    CrawlRun.where(source_kind: "nrc_news").update_all(started_at: NOW - 4.days)
+    assert_equal "1 sources haven't run in three days: nrc_news", PipelineHealth.new(now: NOW).checks["sources-silent"]
+  end
 end
