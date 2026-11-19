@@ -15,8 +15,9 @@
 #
 # Extract proposes the reactor (research_reactor, docket, city, state) and
 # its licensee, and university or national_lab only where the licensee's own
-# name says so. No operates link and no power level: the page doesn't state
-# that the reactor runs, and where thermal power goes is undecided (#387).
+# name says so. The licensee operates the reactor it's licensed for (DQ's gap
+# audit, 19 Nov: 36 research reactors with no licensee link): an operates
+# link, quoting NRC's line. Never owns: the page doesn't say who owns it.
 class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
   include DataQuality::UnlistedPages
 
@@ -91,8 +92,14 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
     licensee = { "name" => reactor.facts["Licensee"] }
     claims = [ { kind: "facility", quote: reactor.line, payload: site }, { kind: "organization", quote: reactor.line, payload: licensee } ]
     claims << { kind: "organization_role", quote: reactor.line, payload: { "organization" => licensee, "role" => reactor.kind_role } } if reactor.kind_role
+    claims << { kind: "facility_relationship", quote: reactor.line, payload: {
+      "organization" => licensee, "facility" => site.slice("name", "nrc_docket"), "relationship_type" => "operates" } }
     claims
   end
+
+  # Extracted before the operates link: a new version reads each reactor again once.
+  EXTRACT_VERSION = "operates-1"
+  def rows_sha256(source) = (Digest::SHA256.hexdigest("#{EXTRACT_VERSION}\n#{source.content_text}") if source.content_text.present?)
 
   # One reactor per page: anything it stops stating goes to a person.
   # Pages never read before, at most 15 reactor pages a night (about 40 claims), so Data Quality reads
@@ -142,7 +149,11 @@ class DataQuality::Plugins::NrcResearchReactors < DataQuality::Plugin
         source.update!(etag: nil, last_modified: nil, content_sha256: nil)
       end
 
-      [ DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s, source.reload ]
+      result = DataQuality::Snapshot.take(source, fetcher: @fetcher) { |html| stored_line(html, row) }.to_s
+      source.reload
+      # Read before this version of extract (the operates link): extracted again.
+      source.update!(extracted_sha256: nil) if source.extracted_sha256.present? && source.extracted_rows_sha256 != rows_sha256(source)
+      [ result, source ]
     rescue Unreadable
       source.update!(crawl_status: "needs_human", status_reason: NO_FACTS)
       hold_open(source, NO_FACTS)
