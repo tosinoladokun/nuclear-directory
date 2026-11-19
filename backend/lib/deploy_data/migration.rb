@@ -22,6 +22,9 @@ module DeployData
   #   merge; `say` what it changes so the rehearsal and deploy logs match.
   # - Never stop the deploy on a record a person may decide first (#811):
   #   accept the decided state, or skip and `say` why.
+  # - Never rescue a database error inside `up`: let it raise. A swallowed
+  #   error leaves Postgres' transaction aborted, so the step's savepoint can't
+  #   roll back cleanly and every later statement fails (Backend's review, #813).
   # It runs in the deploy's transaction with the seed and the other new
   # migrations, each in its own savepoint (#811): one that raises is rolled
   # back alone, reported and tried again at the next deploy; the others and
