@@ -234,4 +234,12 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal "https://www.freshfission.example", claim.payload["website"]
     assert_empty site_finder.find_sites, "not again within a week"
   end
+
+  test "a pending company's site needn't show a US address: the official source that created it does (DQ, 19 Nov)" do
+    stub_request(:get, HOME).to_return(body: "<html><body><p>Fresh Fission designs microreactors. Saskatoon, Canada</p></body></html>", headers: { "Content-Type" => "text/html" })
+    pending = Organization.create!(name: "Fresh Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(_) { [ HOME ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    assert_equal :proposed, site_finder.find_sites[pending.id].outcome
+  end
 end

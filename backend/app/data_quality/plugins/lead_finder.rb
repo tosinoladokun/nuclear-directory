@@ -81,7 +81,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     return outcome(:retry, name:, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached", found: {}) unless reserve(FINDS, FINDS_PER_DAY)
 
     CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { SITE_FOR => id })
-    @us_shown_elsewhere, @hints, found = false, "", { "name" => name }
+    # Already in the directory from a US official source (an NRC docket, a DOE
+    # award), which shows its US operations: its own site needn't (DQ, 19 Nov:
+    # Rolls-Royce SMR, Moltex, Candu, Blykalla).
+    @us_shown_elsewhere, @hints, found = true, "", { "name" => name }
     candidates_for(name, [], found).each do |website|
       # Another company's site is never this one's.
       next if @directory.organization(domain: URI(website).host)
