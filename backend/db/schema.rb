@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_20_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -297,6 +297,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_180000) do
     t.datetime "updated_at", null: false
     t.index ["sluggable_type", "slug"], name: "index_former_slugs_on_sluggable_type_and_slug", unique: true
     t.index ["sluggable_type", "sluggable_id"], name: "index_former_slugs_on_sluggable"
+  end
+
+  create_table "index_now_submissions", force: :cascade do |t|
+    t.boolean "accepted", null: false
+    t.datetime "created_at", null: false
+    t.integer "urls", null: false
+    t.index ["created_at"], name: "index_index_now_submissions_on_created_at"
   end
 
   create_table "leads", force: :cascade do |t|
