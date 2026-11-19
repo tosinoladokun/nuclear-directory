@@ -39,4 +39,21 @@ class PipelineHealthTest < ActiveSupport::TestCase
       assert_error_reported(PipelineHealthJob::Stalled) { PipelineHealthJob.perform_now }
     end
   end
+
+  test "a pending company Data Quality said no to isn't counted; no website for two days, unjudged claims and stuck leads are problems" do
+    before = health.counts["pending_companies"]
+    junk = Organization.create!(name: "Junk Co", verification_status: "pending", created_at: NOW - 3.days)
+    page = Source.create!(url: "https://example.com/junk", source_kind: "dummy", crawl_status: "ok")
+    Candidate.create!(source: page, kind: "organization", payload: { "name" => "Junk Co" }, quote: "q", status: "matched", proposed_subject: true,
+      subject_type: "Organization", subject_id: junk.id, dq_recommendation: "reject", dq_reason: "not nuclear")
+    assert_equal before, health.counts["pending_companies"]
+
+    Organization.create!(name: "No Site Co", verification_status: "pending", created_at: NOW - 3.days)
+    Candidate.create!(source: page, kind: "organization", payload: { "name" => "Old Claim" }, quote: "q", status: "new", created_at: NOW - 5.days)
+    Lead.sighted!(name: "Old Lead Co", kind: "company", key: "news:o", label: "news").update_columns(created_at: NOW - 3.days)
+    problems = PipelineHealth.new(now: NOW).problems
+    assert(problems.any? { |problem| problem.include?("no website for over two days") })
+    assert(problems.any? { |problem| problem.include?("company claims have no verdict yet") })
+    assert(problems.any? { |problem| problem.include?("leads are stuck") })
+  end
 end
