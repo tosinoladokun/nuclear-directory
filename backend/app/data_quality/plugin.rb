@@ -133,6 +133,9 @@ class DataQuality::Plugin
         "ancestor::template or ancestor::noscript)]").map(&:text).join(" ").squish
     end
 
+    PAGE_DATA_CHARS = 20_000
+    PAGE_DATA_SCRIPT_BYTES = 1.megabyte
+
     # Pages with less visible text than this also read their page data.
     THIN_PAGE = 600
 
@@ -143,19 +146,24 @@ class DataQuality::Plugin
     def page_data_text(doc)
       metas = doc.css("meta[name='description'], meta[property='og:description'], meta[name='twitter:description'], " \
         "meta[property='og:title'], meta[name='twitter:title'], meta[property='og:site_name']").filter_map { |meta| meta["content"].to_s.squish.presence }
-      data = doc.css("script[type='application/ld+json'], script#__NEXT_DATA__, script#__NUXT_DATA__").flat_map do |script|
-        text_values(JSON.parse(script.text))
+      data = []
+      doc.css("script[type='application/ld+json'], script#__NEXT_DATA__, script#__NUXT_DATA__").each do |script|
+        # Never a huge one (Infra: memory), and no more once there's enough.
+        break if data.sum(&:length) >= PAGE_DATA_CHARS
+        next if script.text.bytesize > PAGE_DATA_SCRIPT_BYTES
+
+        text_values(JSON.parse(script.text), data)
       rescue JSON::ParserError
-        []
+        next
       end
-      (metas + data).uniq.join(" ").first(20_000).split(" ")
+      (metas + data).uniq.join(" ").first(PAGE_DATA_CHARS).split(" ")
     end
 
     # Human-readable strings in parsed JSON: a few words or more, never code, URLs or ids.
     def text_values(value, out = [])
       case value
-      when Hash then value.each_value { |each| text_values(each, out) }
-      when Array then value.each { |each| text_values(each, out) }
+      when Hash then value.each_value { |each| break if out.sum(&:length) >= PAGE_DATA_CHARS; text_values(each, out) }
+      when Array then value.each { |each| break if out.sum(&:length) >= PAGE_DATA_CHARS; text_values(each, out) }
       when String
         text = value.squish
         out << text if text.length.between?(12, 2_000) && text.count(" ") >= 2 && !text.match?(/\A(?:https?:|\/|[\[{<])/) && !text.include?("function")

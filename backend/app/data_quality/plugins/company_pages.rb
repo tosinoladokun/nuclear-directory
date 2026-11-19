@@ -232,7 +232,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
     # that says what the company is (its About page, else its home page).
     claims.reject! { |claim| claim[:kind] == "organization" && claim[:payload].key?("description") } unless description_page?(source, company)
     # A quote found only in the page's data (a thin JavaScript page, #802) says so, for DQ's review.
-    claims.each { |claim| claim[:notes] = PAGE_DATA_NOTE if claim[:quote].present? && !body_text(source).include?(claim[:quote].squish) }
+    body = body_text(source) if claims.any?
+    claims.each { |claim| claim[:notes] = PAGE_DATA_NOTE if claim[:quote].present? && !body.include?(claim[:quote].squish) }
     claims
   end
 
@@ -338,19 +339,28 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       ids.size
     end
 
+    SITEMAP_BYTES = 512.kilobytes
+
     # The site's sitemap.xml (read like any page: robots, spacing, once a day),
     # its own pages worth reading, About and Company first. At most 4.
     def sitemap_links(home)
       base = home.final_url.presence || home.url
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
       sitemap = page(URI.join(base, "/sitemap.xml").to_s) or return []
-      DataQuality::Snapshot.take(sitemap, fetcher: @fetcher)
+      # A small sitemap only, and only the addresses kept (Infra: memory and a 1 GB database).
+      DataQuality::Snapshot.take(sitemap, fetcher: @fetcher, max_bytes: SITEMAP_BYTES)
       sitemap.reload
       return [] unless sitemap.crawl_ok? && sitemap.content_text.present?
 
-      Nokogiri::XML(sitemap.content_text).remove_namespaces!.css("url > loc").map { |loc| loc.text.strip }
-        .select { |url| (uri = (URI(url) rescue nil)) && uri.scheme == "https" && uri.host.to_s.downcase.delete_prefix("www.") == host && uri.path.match?(LINK) }
-        .sort_by { |url| URI(url).path.match?(/about|company|who-we-are/i) ? 0 : 1 }.first(4)
+      urls = if sitemap.content_text.lstrip.start_with?("<")
+        found = Nokogiri::XML(sitemap.content_text).remove_namespaces!.css("url > loc").map { |loc| loc.text.strip }
+          .select { |url| (uri = (URI(url) rescue nil)) && uri.scheme == "https" && uri.host.to_s.downcase.delete_prefix("www.") == host && uri.path.match?(LINK) }
+        sitemap.update_columns(content_text: found.first(50).join("\n"))
+        found
+      else
+        sitemap.content_text.lines.map(&:strip)
+      end
+      urls.sort_by { |url| URI(url).path.match?(/about|company|who-we-are/i) ? 0 : 1 }.first(4)
     rescue URI::Error, Nokogiri::XML::SyntaxError
       []
     end

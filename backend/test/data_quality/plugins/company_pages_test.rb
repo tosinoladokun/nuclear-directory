@@ -568,6 +568,8 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert plugin.quote_in_source?(home, "Acme Fission Inc. designs small modular reactors.")
     assert plugin.quote_in_source?(home, "Headquartered in Austin, Texas since 2019")
     assert_empty plugin.extract(Source.find_by!(url: "https://www.acmefission.com/sitemap.xml"), nil)
+    assert_equal "https://www.acmefission.com/about", Source.find_by!(url: "https://www.acmefission.com/sitemap.xml").content_text,
+      "only the kept addresses are stored, never the whole sitemap (Infra)"
 
     found = { "hq_city" => { "value" => "Austin", "quote" => "Headquartered in Austin, Texas since 2019" } }
     claim = DataQuality::Plugins::CompanyPages.new(llm: FakeLLM.new(found)).extract(home, nil).find { |c| c[:payload].key?("hq_city") }
