@@ -39,6 +39,7 @@ class PipelineHealthTest < ActiveSupport::TestCase
   test "the daily job keeps the day's row and emails the problems (Sentry is captured directly, outside tests)" do
     Organization.create!(name: "No Role Co", verification_status: "pending", created_at: 2.days.ago)
     ENV["RESEND_API_KEY"] = "dummy"
+    PipelineHealthJob.alerts = false # no Autopilot::Alert: the fallback email
     assert_difference("PipelineHealthSnapshot.count", 1) do
       assert_enqueued_email_with(HealthMailer, :stalled, params: ->(params) { params[:problems].any? }) { PipelineHealthJob.perform_now }
     end
@@ -46,6 +47,7 @@ class PipelineHealthTest < ActiveSupport::TestCase
     assert_equal [ "hello@nuclear-directory.org" ], mail.to
     assert_match "/admin/health", mail.body.encoded
   ensure
+    PipelineHealthJob.alerts = nil
     ENV.delete("RESEND_API_KEY")
   end
 
@@ -72,14 +74,13 @@ class PipelineHealthTest < ActiveSupport::TestCase
     alert = Module.new
     alert.define_singleton_method(:raise!) { |key, **| calls << [ :raise, key ] }
     alert.define_singleton_method(:resolve!) { |key, **| calls << [ :resolve, key ] }
-    Object.const_set(:Autopilot, Module.new) unless defined?(Autopilot)
-    Autopilot.const_set(:Alert, alert) unless defined?(Autopilot::Alert)
+    PipelineHealthJob.alerts = alert
     PipelineHealthJob.perform_now
     assert_includes calls, [ :raise, "pending-without-role" ]
     assert_includes calls, [ :resolve, "posts-unknown" ]
     assert_equal PipelineHealth.new.checks.keys.size, calls.size, "every key, once"
   ensure
-    Autopilot.send(:remove_const, :Alert) if defined?(Autopilot::Alert) && Autopilot::Alert == alert
+    PipelineHealthJob.alerts = nil
   end
 
   test "the finder's own rows mark it alive; a role without a source still counts as no role; hourly feeds don't hide the crawl" do
