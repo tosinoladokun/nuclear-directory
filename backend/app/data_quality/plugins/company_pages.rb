@@ -159,6 +159,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
         DataQuality::Snapshot.take(home, fetcher: @fetcher)
         stats["pages"] += 1
         links = own_links(home, deep:)
+        # A home page that links little (a JavaScript menu): its sitemap names the About and Company pages (#802).
+        links = (links + sitemap_links(home)).uniq if links.size < 2
         links.first(deep ? DEEP_PAGES : PAGES).each do |url|
           DataQuality::Snapshot.take(page(url, for_id: id), fetcher: @fetcher)
           stats["pages"] += 1
@@ -185,6 +187,8 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
 
   def extract(source, run)
     return edgar_claims(source) if source.url.match?(EDGAR_URL)
+    # A sitemap is only read for its links, never for claims.
+    return [] if source.url.match?(%r{/sitemap\.xml\z})
 
     # The company the page was read for (#534), else the domain's owner.
     company = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id) ||
@@ -304,6 +308,23 @@ class DataQuality::Plugins::CompanyPages < DataQuality::Plugin
       # Both hashes, so Extract's unchanged-rows shortcut can't skip it (Copilot).
       Source.where(id: ids).update_all(extracted_sha256: nil, extracted_rows_sha256: nil)
       ids.size
+    end
+
+    # The site's sitemap.xml (read like any page: robots, spacing, once a day),
+    # its own pages worth reading, About and Company first. At most 4.
+    def sitemap_links(home)
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
+      sitemap = page(URI.join(base, "/sitemap.xml").to_s) or return []
+      DataQuality::Snapshot.take(sitemap, fetcher: @fetcher)
+      sitemap.reload
+      return [] unless sitemap.crawl_ok? && sitemap.content_text.to_s.include?("<loc>")
+
+      Nokogiri::XML(sitemap.content_text).remove_namespaces!.css("url > loc").map { |loc| loc.text.strip }
+        .select { |url| (URI(url).host.to_s.downcase.delete_prefix("www.") == host rescue false) && URI(url).path.match?(LINK) }
+        .sort_by { |url| URI(url).path.match?(/about|company|who-we-are/i) ? 0 : 1 }.first(4)
+    rescue URI::Error, Nokogiri::XML::SyntaxError
+      []
     end
 
     # Links on the home page to the company's own pages worth reading.
