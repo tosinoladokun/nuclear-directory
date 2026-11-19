@@ -22,9 +22,14 @@ module SocialAgent
   class Uncertain < StandardError; end
 
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
-  def self.run(platform, now: Time.current, writer: nil)
+  def self.run(platform, now: Time.current, writer: nil, fetcher: nil)
     channel = SocialChannel.for(platform)
-    return if channel.off? || now.in_time_zone(ZONE).on_weekend?
+    return if channel.off? || now.in_time_zone(ZONE).on_weekend? || SocialAgent::Rules.holiday?(now.in_time_zone(ZONE).to_date)
+    if SocialAgent::Buffer.budget_spent?
+      reason = "Buffer's 30-day request allowance is #{(SocialAgent::Buffer::ALERT_AT * 100).round}% used"
+      SocialChannel.where(platform: SocialChannel::PLATFORMS).find_each { |each| each.update!(mode: "off", paused_reason: reason) }
+      return
+    end
     # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
     return if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
 
@@ -32,7 +37,7 @@ module SocialAgent
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,
       organization_ids: item.organization_ids, link: link(item, platform))
     # Built only now (Copilot): a missing model setting never stops a day with nothing to post.
-    problems = write(post, item, platform, writer)
+    problems = write(post, item, platform, writer, fetcher: fetcher || DataQuality::Fetcher.new)
     return post.tap { |blocked| blocked.update!(status: "blocked", reason: problems.to_sentence) } if problems.any?
     return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled?
 
@@ -41,11 +46,12 @@ module SocialAgent
 
   # Drafts and checks the post; the problems, empty when it passes. A model or budget error stops this post, logged,
   # and never the job (Copilot); its usage counts toward the DQ budget through its own run.
-  def self.write(post, item, platform, writer)
+  def self.write(post, item, platform, writer, fetcher:)
     run = CrawlRun.create!(source_kind: "social_agent", stage: "verify", started_at: Time.current)
     writer ||= SocialAgent::Writer.new
     post.text = writer.draft(item, platform:, crawl_run: run)
     problems = SocialAgent::Check.problems(post.text, item, platform:)
+    problems = SocialAgent::Rules.problems(post.text, item, platform:, fetcher:) if problems.empty?
     if problems.empty?
       ok, why = writer.voice_ok?(post.text, item, crawl_run: run)
       problems << "voice check: #{why}" unless ok

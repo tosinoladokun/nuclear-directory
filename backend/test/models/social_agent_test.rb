@@ -15,20 +15,24 @@ class SocialAgentTest < ActiveSupport::TestCase
 
   setup do
     @company = Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
-    @news = NewsItem.create!(url: "https://example.com/acme-award", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding",
+    @news = NewsItem.create!(url: "https://www.energy.gov/acme-award", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding",
       summary: "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", publisher: "DOE",
       published_on: Date.new(2026, 11, 12), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     @news.news_mentions.create!(subject: @company)
     SocialChannel.for("x").update!(mode: "drafts")
   end
 
-  def run_x(text, **options) = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(text, **options))
+  # The source answers 200 (no network in tests).
+  OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "", etag: nil,
+    last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+
+  def run_x(text, fetcher: OK_FETCHER.new(200), **options) = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(text, **options), fetcher:)
 
   test "drafts one checked post on the freshest published news, linked to its company with tracking" do
     post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.")
     assert_equal [ "drafted", @news ], [ post.status, post.subject ]
     assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=news", post.link
-    assert_equal "https://example.com/acme-award", post.source_url
+    assert_equal "https://www.energy.gov/acme-award", post.source_url
     assert_nil run_x("Again."), "one a day per platform"
   end
 
@@ -53,14 +57,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialChannel.for("x").update!(mode: "off")
     assert_nil run_x("Acme Fission won a DOE award.")
     SocialChannel.for("x").update!(mode: "drafts")
-    assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("Acme Fission won a DOE award.")), "Saturday"
+    assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("Acme Fission won a DOE award."), fetcher: OK_FETCHER.new(200)), "Saturday"
     SocialPost.create!(platform: "linkedin", status: "posted", subject: @news, created_at: MONDAY - 10.days)
     assert_nil run_x("Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
   end
 
   test "a newly added company is used when there's no fresh news" do
     @news.update_columns(verified_at: MONDAY - 20.days)
-    company = Organization.create!(name: "Beta Reactors", slug: "beta-reactors", description: "Beta Reactors designs small reactors.",
+    company = Organization.create!(name: "Beta Reactors", slug: "beta-reactors", domain: "beta.example", description: "Beta Reactors designs small reactors.",
       verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     VerificationEvent.where(subject: company).update_all(created_at: MONDAY - 1.day)
     page = Source.create!(url: "https://beta.example/about", source_kind: "web_page", crawl_status: "ok")
@@ -106,7 +110,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match "never resent", post.reason
     calls = 0
     SocialAgent.senders["x"] = ->(*) { calls += 1; { id: "2", permalink: "p" } }
-    assert_nil SocialAgent.run("x", now: MONDAY + 1.day, writer: FakeWriter.new(DRAFT)), "the same item is never picked again"
+    assert_nil SocialAgent.run("x", now: MONDAY + 1.day, writer: FakeWriter.new(DRAFT), fetcher: OK_FETCHER.new(200)), "the same item is never picked again"
     assert_equal 0, calls
 
     SocialPost.delete_all
@@ -144,7 +148,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "failed", run_x(DRAFT).status
     SocialAgent.senders["x"] = ->(*) { flunk "not again today" }
     assert_nil run_x(DRAFT)
-    assert_nil SocialAgent.run("x", now: MONDAY + 1.day, writer: FakeWriter.new(DRAFT)), "nor its item tomorrow"
+    assert_nil SocialAgent.run("x", now: MONDAY + 1.day, writer: FakeWriter.new(DRAFT), fetcher: OK_FETCHER.new(200)), "nor its item tomorrow"
 
     calls = []
     original = SocialAgent.method(:run)

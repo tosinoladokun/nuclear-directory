@@ -18,6 +18,16 @@ class SocialAgent::Buffer
 
   class Error < StandardError; end
 
+  # Buffer Free allows 1,000 requests a channel per 30 days (2 channels: 2,000); we stop at 80% and say so (PM).
+  MONTHLY_REQUESTS = ENV.fetch("BUFFER_MONTHLY_REQUESTS", "2000").to_i
+  ALERT_AT = 0.8
+  # Requests a post costs at most: create, a read or two, a cancel (Infra). Counted from the posts table, which keeps
+  # them (the cache keeps a day).
+  PER_POST = 4
+
+  def self.requests_last_30_days(now: Time.current) = SocialPost.where.not(external_id: nil).where(created_at: (now - 30.days)..).count * PER_POST
+  def self.budget_spent? = requests_last_30_days >= MONTHLY_REQUESTS * ALERT_AT
+
   def self.configured? = ENV["BUFFER_API_KEY"].present? && CHANNEL_KEYS.values.all? { |key| ENV[key].present? }
 
   def initialize(http: method(:deliver), now: -> { Time.current })
