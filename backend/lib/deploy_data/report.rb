@@ -4,7 +4,8 @@ module DeployData
   # Quality can compare the two line for line.
   class Report
     attr_accessor :outcome, :backup, :seed_check, :seed, :seed_counts, :rows_before, :rows_after,
-      :seed_events, :migration_events, :totals_before, :totals_after, :migrations, :flags, :notes
+      :seed_events, :migration_events, :totals_before, :totals_after, :migrations, :flags, :notes,
+      :failed_migrations
     attr_reader :pull_request
     # An error after the data committed: the outcome stands, but it alerts.
     attr_accessor :after_commit_error
@@ -15,11 +16,12 @@ module DeployData
       @pull_request = pull_request
       @label = label
       @migrations = []
+      @failed_migrations = []
       @flags = []
       @notes = []
     end
 
-    def alert? = outcome.to_s.start_with?("stopped", "failed") || flags.any? || after_commit_error.present?
+    def alert? = outcome.to_s.start_with?("stopped", "failed") || failed_migrations.any? || flags.any? || after_commit_error.present?
 
     def title = "#{@label} #{@commit.to_s[0, 7].presence || 'unknown commit'}: #{outcome}"
 
@@ -51,6 +53,10 @@ module DeployData
           lines << "  #{ran.version} #{ran.name} (by #{ran.by})"
           ran.output.each { |line| lines << "    #{line}" }
         end
+      end
+      unless failed_migrations.empty?
+        lines << "Data migrations that failed (rolled back one by one; they run again at the next deploy):"
+        failed_migrations.each { |failure| lines << "  #{failure}" }
       end
       unless flags.empty?
         lines << "Flag: events for records whose files didn't change (#{flags.size}):"
