@@ -15,6 +15,7 @@ class Api::DqSocialPostsTest < ActionDispatch::IntegrationTest
     assert_response :success
     post = response.parsed_body["posts"].sole
     assert_equal [ "x", "drafted", "Acme Fission won a DOE award.", "https://www.energy.gov/a" ], post.values_at("platform", "status", "text", "source_url")
+    assert_includes post["checks"], "primary source answering 200", "a draft passed every check"
 
     get api_dq_social_posts_path
     assert_response :unauthorized
