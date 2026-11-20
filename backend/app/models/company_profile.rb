@@ -40,8 +40,13 @@ class CompanyProfile
     define_method(field) { organization.public_send(field) if sourced? }
   end
 
-  # A public company's listing, shown only with a ticker, its exchange and its SEC CIK, all on a sourced record (#874).
-  def listing? = exchange.present? && ticker.present? && sec_cik.present?
+  # A public company's listing (#874), shown only with a ticker, its exchange and its SEC CIK, each backed by evidence that covers
+  # that field: a quote scoped to it, or an older record-wide one (fields nil). Evidence about another fact (an HQ, a description)
+  # doesn't support a listing.
+  LISTING_FIELDS = %w[exchange ticker sec_cik].freeze
+  def listing? = LISTING_FIELDS.all? { |field| public_send(field).present? && field_sourced?(field) }
+
+  def field_sourced?(field) = organization.evidence.any? { |row| row.fields.nil? || row.fields.include?(field) }
 
   # [[number, source], ...] for a fact on this page.
   def citations_for(fact) = @cited.fetch(fact) { [] }

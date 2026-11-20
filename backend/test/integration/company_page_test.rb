@@ -584,4 +584,30 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "kairos-power")
     assert_select ".nd-glance dt", text: /\ATicker/, count: 0
   end
+
+  test "each of ticker, exchange and CIK needs evidence that covers it: another fact's quote doesn't support a listing (#874, Copilot)" do
+    @kairos.update!(exchange: "NASDAQ", ticker: "KRSP", sec_cik: "0001234567")
+    @kairos.evidence.destroy_all
+    source = Source.first || Source.create!(url: "https://example.com/10k", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "t")
+    evidence = ->(*fields) { @kairos.evidence.create!(source:, quote: "q", found_by: "human", fields: fields.presence) }
+
+    evidence.("hq_city")
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0
+    assert_no_match "tickerSymbol", response.body, "an HQ quote isn't a listing's source"
+
+    evidence.("ticker", "exchange")
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0 # no evidence for the CIK yet
+
+    evidence.("sec_cik")
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance a", text: "NASDAQ: KRSP"
+    assert_match "tickerSymbol", response.body
+
+    @kairos.evidence.destroy_all
+    evidence.()
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance a", text: "NASDAQ: KRSP", count: 1 # an older record-wide quote still counts
+  end
 end
