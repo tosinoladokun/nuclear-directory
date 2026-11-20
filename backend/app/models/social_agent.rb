@@ -28,6 +28,25 @@ module SocialAgent
     SocialAgent::Picker.current_links(Relationship.published.where(id: subject.id), Date.current).exists?
   end
 
+  TRIES = 5
+  EXCERPT = 6_000
+
+  # The item with its source page's own words added (about EXCERPT characters from where its title starts, else the
+  # page's start), and the page's problems (no answer, sensitive, date not on it). [item, problems]
+  def self.prepare(item, fetcher)
+    return [ item, [ "its source isn't a primary one (#{SocialAgent::Rules.host(item.source_url).presence || 'none'})" ] ] unless SocialAgent::Rules.primary?(item)
+
+    problems = SocialAgent::Rules.source_problems(item.source_url, fetcher, item:)
+    return [ item, problems ] if problems.any?
+
+    text = SocialAgent::Rules.article_text(fetcher.get(item.source_url.to_s).body)
+    title = item.facts["headline"].to_s.downcase.first(30).presence
+    at = (title && text.downcase.index(title)) || 0
+    [ item.with(page_text: text[at, EXCERPT].presence), [] ]
+  rescue StandardError => error
+    [ item, [ "its source didn't answer (#{error.class})" ] ]
+  end
+
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
   # Why a run today would write no post, from the cheap checks only (no picking): nil when it would try. For Draft now's
   # notice (DQ, 20 Nov); the same checks as the start of run.
@@ -55,11 +74,24 @@ module SocialAgent
     # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
     return stopped(platform, now, "today's post is done") if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
 
-    item = SocialAgent::Picker.new(platform:, now:).call or return stopped(platform, now, "no fresh item")
+    fetcher ||= DataQuality::Fetcher.new
+    # The first usable item whose source page answers, isn't sensitive and carries its date; its page's words go to the
+    # writer and the checks (rehearsal, 20 Nov: a title alone hid an MOU). A few at most, so a bad page never ends the day.
+    skipped = []
+    item = nil
+    SocialAgent::Picker.new(platform:, now:).usable.first(TRIES).each do |candidate|
+      ready, problems = prepare(candidate, fetcher)
+      if problems.empty?
+        item = ready
+        break
+      end
+      skipped << problems.first
+    end
+    return stopped(platform, now, skipped.any? ? "no usable item (#{skipped.uniq.to_sentence})" : "no fresh item") unless item
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,
       organization_ids: item.organization_ids, link: link(item, platform))
     # Built only now (Copilot): a missing model setting never stops a day with nothing to post.
-    problems = write(post, item, platform, writer, fetcher: fetcher || DataQuality::Fetcher.new)
+    problems = write(post, item, platform, writer, fetcher:)
     return post.tap { |blocked| blocked.update!(status: "blocked", reason: problems.to_sentence) } if problems.any?
     return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled? && !drafts_only
 

@@ -12,7 +12,9 @@ class SocialAgent::Picker
   # About the nuclear industry, by its own words (Founder, GTM: a feed can let a pulsar story through).
   NUCLEAR = /\b(nuclear|reactors?|microreactors?|SMRs?|uranium|fission|fusion|isotopes?|radioisotopes?|radioactive|radiation|
     radiological|enrich\w*|HALEU|TRISO|plutonium|thorium|tritium|spent fuel|fuel cycle|NRC|decommission\w*|nuclides?|neutrons?)\b/ix
-  NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|workshop|hiring|award ceremony|internship)\b/i
+  NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|webcast|explains?|how [\w-]+(?: [\w-]+){0,3} works|asks why|conference call|earnings call|business update|workshop|hiring|award ceremony|internship)\b/i
+  # Link verbs worth a post (DQ, #839): a standing "funds" award row isn't news.
+  LINK_VERBS = %w[supplies invests_in offtake_with subsidiary_of].freeze
 
   # fresh: how far back counts as new (a rehearsal looks back further; social:rehearse).
   def initialize(platform:, now: Time.current, fresh: FRESH)
@@ -22,6 +24,9 @@ class SocialAgent::Picker
   end
 
   def call = candidates.find { |item| usable?(item) }
+
+  # Every usable candidate, best first.
+  def usable = candidates.select { |item| usable?(item) }
 
   def candidates = news + links + companies
 
@@ -57,7 +62,7 @@ class SocialAgent::Picker
     def links
       first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
         .having("MIN(created_at) BETWEEN ? AND ?", @now - @fresh, @now).select(:subject_id)
-      fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first), @now.to_date)
+      fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first, relationship_type: LINK_VERBS), @now.to_date)
       bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
       fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).limit(20).filter_map do |link|
           from, to = link.from_organization, link.to_organization

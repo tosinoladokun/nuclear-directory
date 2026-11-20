@@ -26,7 +26,8 @@ class SocialAgent::Rehearsal
       items = fixtures + SocialAgent::Picker.new(platform:, now: @now, fresh: @days.days).candidates.map { |item| [ label(item), item ] }
       items.first(@per_platform + fixtures.size).map do |label, item|
         post = SocialPost.new(platform:)
-        problems = SocialAgent.write(post, item, platform, @writer, fetcher: @fetcher)
+        item, problems = SocialAgent.prepare(item, @fetcher)
+        problems = SocialAgent.write(post, item, platform, @writer, fetcher: @fetcher) if problems.empty?
         Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url)
       end
     end
