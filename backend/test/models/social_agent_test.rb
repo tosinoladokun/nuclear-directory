@@ -259,6 +259,15 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.primary?(item.("https://news.boreholeco.example/release", "Someone Else"))
   end
 
+  test "a region or country is a place, not a person; a person's name still stops it (shadow day 20 Nov)" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "companies" => "Acme Fission" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: "Acme Fission will work in Southeast Asia and South Korea.")
+    assert_empty SocialAgent::Rules.people("Acme Fission will work in Southeast Asia and South Korea.", item)
+    assert_equal [ "it may name a person (Jane Doe)" ], SocialAgent::Rules.people("Jane Doe leads Acme Fission in Southeast Asia.", item)
+    assert_equal [ "it may name a person (Chad Jordan)" ], SocialAgent::Rules.people("Chad Jordan leads Acme Fission.", item),
+      "country words alone never clear a name"
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"

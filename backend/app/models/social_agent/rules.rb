@@ -28,6 +28,16 @@ module SocialAgent::Rules
     Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota Mississippi Missouri Montana Nebraska
     Nevada Hampshire Jersey Mexico York Carolina Dakota Ohio Oklahoma Oregon Pennsylvania Rhode Island Tennessee Texas Utah
     Vermont Virginia Washington Wisconsin Wyoming New North South West].freeze
+  # A place, not a person (shadow day 20 Nov: "Southeast Asia" was taken for one): only region and compass words
+  # ("Southeast Asia", "Middle East"), or region words before one country ("South Korea", "South Africa"). A country
+  # alone never clears a run, so "Chad Jordan" is still a name.
+  REGIONS = %w[Asia Europe Africa America Americas Pacific Atlantic Arctic Antarctica Middle East Southeast Northeast
+    Southwest Northwest Central Eastern Western Northern Southern North South West Gulf Caribbean Latin Baltic Nordic
+    Scandinavia Oceania].to_set.freeze
+  COUNTRIES = TZInfo::Country.all.map { |country| country.name[/\A[A-Z][a-z]+/] }.compact.to_set.freeze
+
+  def self.place?(words) = words.all? { |word| REGIONS.include?(word) } ||
+    (COUNTRIES.include?(words.last) && words[0...-1].all? { |word| REGIONS.include?(word) })
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
   ARTICLES = %w[The A An This That These Those].freeze
   NOT_PERSON = %w[Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
@@ -121,7 +131,7 @@ module SocialAgent::Rules
       next if words.size < 2
 
       phrase = words.join(" ")
-      next if words.all? { |word| MONTHS.include?(word) || STATES.include?(word) }
+      next if words.all? { |word| MONTHS.include?(word) || STATES.include?(word) } || place?(words)
       next if words.any? { |word| NOT_PERSON.include?(word) }
       next if known.include?(phrase.downcase) || directory_name?(phrase)
 
