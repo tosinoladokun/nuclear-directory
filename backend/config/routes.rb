@@ -40,6 +40,7 @@ Rails.application.routes.draw do
     get "completeness" => "completeness#show", as: :api_dq_completeness
     # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
+    get "checker" => "checker#index", as: :api_dq_checker
     # The pipeline's health (#811): today's counts and problems, and the last two weeks.
     get "health" => "health#show", as: :api_dq_health
   end

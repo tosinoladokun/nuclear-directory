@@ -24,8 +24,13 @@ class PageWarmJob < ApplicationJob
   SEEN = "page_warm/seen"
   PAUSE = 0.1
   REST = 3
+  # Gentler on the 256 MB database (PM, 19 Nov): at most PER_TICK pages a tick (the next tick goes on where
+  # this one stopped), in batches of BATCH with a BATCH_REST pause and a GC between them.
+  PER_TICK = 40
+  BATCH = 10
+  BATCH_REST = 2
 
-  def perform(pause: PAUSE, debounce: true)
+  def perform(pause: PAUSE, debounce: true, per_tick: PER_TICK)
     return unless (host = self.class.host)
 
     # Changed pages wait for IndexNow's next window (#742).
@@ -45,8 +50,13 @@ class PageWarmJob < ApplicationJob
     IndexNow.flush(host:)
     warmed = Rails.cache.read(WARMED) || {}
     todo = pages(host).reject { |key, _| warmed[key] == now[key] }
-    todo.each do |key, draw|
+    todo.first(per_tick).each_with_index do |(key, draw), index|
       return unless DataVersion.current == data
+
+      if index.positive? && (index % BATCH).zero?
+        GC.start
+        sleep BATCH_REST if pause.positive?
+      end
 
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       draw.call
@@ -54,7 +64,8 @@ class PageWarmJob < ApplicationJob
       Rails.cache.write(WARMED, warmed)
       sleep [ pause, REST * (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) ].max if pause.positive?
     end
-    Rails.cache.write(WARMED_DATA, data)
+    # Done only when nothing is left; otherwise the next tick takes the next PER_TICK.
+    Rails.cache.write(WARMED_DATA, data) if todo.size <= per_tick
   end
 
   def self.host = ENV["WARM_HOST"].presence || AppHosts.from_env(ENV).first

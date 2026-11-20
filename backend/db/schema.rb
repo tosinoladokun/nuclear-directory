@@ -68,6 +68,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_160000) do
     t.check_constraint "status::text = ANY (ARRAY['new'::character varying::text, 'matched'::character varying::text, 'merged'::character varying::text, 'rejected'::character varying::text, 'needs_review'::character varying::text, 'confirmed'::character varying::text])", name: "candidates_status_check"
   end
 
+  create_table "checker_verdicts", force: :cascade do |t|
+    t.bigint "candidate_id", null: false
+    t.decimal "confidence", precision: 3, scale: 2
+    t.bigint "crawl_run_id"
+    t.datetime "created_at", null: false
+    t.boolean "escalated", default: false, null: false
+    t.string "field", null: false
+    t.string "model"
+    t.string "prompt_version", null: false
+    t.string "reason", null: false
+    t.string "verdict", null: false
+    t.index ["candidate_id", "prompt_version"], name: "index_checker_verdicts_on_candidate_id_and_prompt_version", unique: true
+    t.index ["created_at"], name: "index_checker_verdicts_on_created_at"
+    t.check_constraint "verdict::text = ANY (ARRAY['approve'::character varying::text, 'reject'::character varying::text, 'unsure'::character varying::text])", name: "checker_verdicts_verdict_check"
+  end
+
   create_table "correction_reports", force: :cascade do |t|
     t.string "subject", null: false
     t.string "page_path", null: false
@@ -850,6 +866,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_160000) do
   add_foreign_key "candidates", "crawl_runs"
   add_foreign_key "candidates", "crawl_runs", column: "verify_run_id"
   add_foreign_key "candidates", "sources"
+  add_foreign_key "checker_verdicts", "candidates", on_delete: :cascade
   add_foreign_key "dq_actions", "candidates"
   add_foreign_key "evidence", "crawl_runs"
   add_foreign_key "evidence", "sources"

@@ -267,6 +267,38 @@ class DeployData::RunTest < ActiveSupport::TestCase
     assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name
   end
 
+  test "a step that declares AFTER waits for its predecessor, and runs once it has (#811)" do
+    run_step
+    write "db/data/20261017120000_first.rb", <<~RUBY
+      class First < DeployData::Migration
+        BY = "human:tosin"
+        def up = raise("the pinned quote is gone")
+      end
+    RUBY
+    write "db/data/20261017130000_second.rb", <<~RUBY
+      class Second < DeployData::Migration
+        BY = "human:tosin"
+        AFTER = %w[20261017120000].freeze
+        def up = Organization.find_by!(slug: "westinghouse").update!(name: "Builds on first")
+      end
+    RUBY
+
+    assert_equal :applied, run_step
+    assert_equal "Westinghouse Electric Company", organizations(:westinghouse).reload.name, "the dependent step did not run without its predecessor"
+    assert_equal 0, DataMigration.count
+    assert_includes @github.posts.last[:body], "20261017130000 second: Waiting: waiting for 20261017120000 to run first"
+
+    write "db/data/20261017120000_first.rb", <<~RUBY
+      class First < DeployData::Migration
+        BY = "human:tosin"
+        def up = say("fixed")
+      end
+    RUBY
+    assert_equal :applied, run_step
+    assert_equal %w[20261017120000 20261017130000], DataMigration.order(:version).pluck(:version), "both ran, in order, in the same deploy"
+    assert_equal "Builds on first", organizations(:westinghouse).reload.name
+  end
+
   test "a data migration must name a human as BY" do
     run_step
     write "db/data/20261017120000_by_deploy.rb", <<~RUBY

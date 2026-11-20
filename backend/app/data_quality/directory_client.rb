@@ -337,6 +337,7 @@ class DataQuality::DirectoryClient
   # Any fact (links included) with its decision and stored values, or nil.
   def organization_by_slug(slug) = lookup.organization(slug:)
   def facility_by_slug(slug) = lookup.facility(slug:)
+  def former_slug_id(type:, slug:) = lookup.former_slug_id(type:, slug:)
   def evidence_rows(type:, id:) = lookup.evidence_rows(type:, id:)
   def role_key?(key) = lookup.role_key?(key)
   def readable_website?(url) = lookup.readable_website?(url)

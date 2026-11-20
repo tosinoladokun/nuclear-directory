@@ -228,6 +228,7 @@ module DataQuality::Matching
   #   { action: "propose_fields", target:, fields: { "hq_city" => "Austin", … }, quote:, source_url:, reason: }
   # It's matched to the company and shows as a Change (old → new) for Tosin.
   # propose_link (PM, 18 Nov): a sourced link between two companies, as a claim matched and decided like any other:
+  # A company is its id, its slug, a former slug or its page's address (https://nuclear-directory.org/companies/oklo).
   #   { action: "propose_link", target: from company, other: to company, relationship_type: "invests_in",
   #     description: "49% stake", quote:, source_url:, reason: }
   def self.propose_role(row, directory, requeue)
@@ -339,15 +340,23 @@ module DataQuality::Matching
     private
       # target: a company's (or plant's) id or slug (Infra: never a name).
       def target(row, directory, type: "Organization")
-        value = row["target"].to_s
+        value = row["target"].to_s.strip
         noun = type == "Facility" ? "plant" : "company"
         return [ nil, "give the #{noun}: its id or slug" ] if value.blank?
 
+        # Its page's address works too (PM, 19 Nov): https://nuclear-directory.org/companies/oklo => oklo.
+        value = value[%r{/#{type == "Facility" ? "plants" : "companies"}/([a-z0-9-]+)/?(?:[?#].*)?\z}, 1] || value if value.include?("/")
         ref = if value.match?(/\A\d+\z/) then directory.fact(type:, id: value.to_i)
         elsif type == "Organization" then directory.organization_by_slug(value)
         else directory.facility_by_slug(value)
         end
         record = ref && directory.fact(type:, id: ref.id)
+        # A slug from before a rename or merge finds the company it now belongs to, also when the merged-away row
+        # still holds it (Copilot); a closed id is never redirected.
+        unless value.match?(/\A\d+\z/) || (record && %w[verified pending].include?(record.verification_status))
+          id = directory.former_slug_id(type:, slug: value)
+          record = directory.fact(type:, id:) if id
+        end
         return [ nil, "no open #{noun} #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
 
         [ record, nil ]
