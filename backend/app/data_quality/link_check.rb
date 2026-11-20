@@ -49,7 +49,8 @@ class DataQuality::LinkCheck
   private
 
     def check(source)
-      response = @fetcher.get(source.url, max_bytes: MAX_BYTES)
+      # A Federal Register page is asked through its API (#860).
+      response = DataQuality::FederalRegister::Fetcher.new(@fetcher).get(source.url, max_bytes: MAX_BYTES)
       failures = source.link_failures
       status =
         case response.kind
