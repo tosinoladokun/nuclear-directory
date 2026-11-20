@@ -104,4 +104,20 @@ class QueueWatchdogTest < ActiveSupport::TestCase
   ensure
     Autopilot::Alert.singleton_class.alias_method(:raise!, :original_raise!)
   end
+
+  test "a daily job that missed its run time is queued once; a frequent one, the nightly crawl or one already run isn't (#811)" do
+    adapter = PageWarmJob.queue_adapter
+    PageWarmJob.queue_adapter = :solid_queue # as in production, where each run time is recorded once
+    travel_to NOW do
+      worker(NOW - 1.minute)
+      SolidQueue::RecurringTask.create!(key: "daily_test", class_name: "PageWarmJob", schedule: "every day at 9am UTC", static: true)
+      SolidQueue::RecurringTask.create!(key: "often_test", class_name: "PageWarmJob", schedule: "every 5 minutes", static: true)
+      SolidQueue::RecurringTask.create!(key: "daily_crawl", class_name: "PageWarmJob", schedule: "every day at 9am UTC", static: true)
+      watchdog = QueueWatchdog.new(booted: NOW - 1.hour, now: NOW)
+      assert_equal [ "daily_test" ], watchdog.catch_up
+      assert_empty watchdog.catch_up, "never twice for the same run time"
+    end
+  ensure
+    PageWarmJob.queue_adapter = adapter
+  end
 end
