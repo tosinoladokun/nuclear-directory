@@ -80,10 +80,14 @@ class DataQuality::Fetcher
     # (link check, newsletter stories, the social agent) gets the document from
     # the official API instead, as a small page, under the page's address (#860).
     if !binary && (number = DataQuality::FederalRegister.document_number(url))
+      # The page's own address must be one we'd fetch (https, port 443) before it's rewritten (Copilot).
+      check_url!(URI.parse(url), first_host: nil)
       response = get(DataQuality::FederalRegister.api_url(number), etag:, last_modified:, max_bytes:)
       return response.with(url:) unless response.kind == :ok && !response.truncated
 
-      return response.with(url:, body: DataQuality::FederalRegister.page(response.body), content_type: "text/html")
+      # An unreadable answer is a failed fetch, so the last good copy is kept (Copilot).
+      page = DataQuality::FederalRegister.page(response.body) or return response(url, :error, reason: "The Federal Register API's answer wasn't a document")
+      return response.with(url:, body: page, content_type: "text/html")
     end
 
     redirects = 0
