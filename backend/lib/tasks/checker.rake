@@ -9,6 +9,10 @@ namespace :checker do
     out = "#{path}.report-#{set}.md"
     File.write(out, report)
     puts report.split("\n## ").first
+    # Each disagreement with its field (DQ), from the report's table.
+    disagreements = report.split("## Every disagreement").last.split("\n## ").first.lines.grep(/\A\| \d/)
+    puts "", "Disagreements (claim, field, DQ, checker):"
+    disagreements.each { |line| puts "  #{line.split('|').map(&:strip).values_at(1, 2, 3, 4).join(', ')}" }
     puts "Report: #{out}"
   end
 end

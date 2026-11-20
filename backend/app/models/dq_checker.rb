@@ -63,7 +63,8 @@ class DqChecker
       agent's registered address is not the HQ; several unmarked offices never are.
     - Description: says what the company does (nuclear work first for a broad company); no mission or vision
       lines, no division or product-line text, no praise.
-    - Website: the https home page of this company itself.
+    - Website: the https home page on the company's own domain only, never a parent's, a list's or a profile site's.
+    - No person names: never approve a value that names a person (a founder, an employee, a contact).
     - Role: from the company's own words.
     - News: the item must be about nuclear.
     Reject when the page says something different, names another company, the company isn't nuclear, the fact
