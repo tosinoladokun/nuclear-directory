@@ -178,6 +178,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Check.problems("The eVinci microreactor produces 250 kW.", item, platform: "x")
   end
 
+  test "a sentence's opening word and a possessive aren't new names; a made-up name still is (shadow day 20 Nov)" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "Georgia Power filed its plan for Vogtle with state regulators.")
+    assert_empty SocialAgent::Check.problems("Those plans came from Georgia Power. Georgia Power’s plan covers Vogtle.", item, platform: "x")
+    assert_equal [ "the name \"Westinghouse\" isn't in the source" ],
+      SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
