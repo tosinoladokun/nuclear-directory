@@ -16,7 +16,9 @@ class UnpublishPulsarNewsTitleTest < ActiveSupport::TestCase
   test "takes it off as Tosin's decision with the reason; a rerun says it's already off" do
     run_it
     assert_equal "unpublished", @news.reload.verification_status
-    assert_match "Not nuclear", VerificationEvent.where(subject: @news).order(:id).last.reason.to_s
+    event = VerificationEvent.where(subject: @news).order(:id).last.reason.to_s
+    assert_match "Not nuclear", event
+    assert_match "deploy abc1234, PR #1", event
     assert_nothing_raised { run_it }
   end
 
