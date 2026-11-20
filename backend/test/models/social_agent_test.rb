@@ -268,10 +268,11 @@ class SocialAgentTest < ActiveSupport::TestCase
       "country words alone never clear a name"
   end
 
-  test "a name written in the source isn't an unknown person; a news date must be the item's own; elsewhere it must be in the source (PM)" do
+  test "a person's name in the source is still stopped; a news date must be the item's own; elsewhere it must be in the source (PM)" do
     news = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: nil, path: "/",
       organization_ids: [], source_quote: "Acme Fission and SJ Group will work with Mary Lane on reactors.")
-    assert_empty SocialAgent::Rules.people("Acme Fission works with Mary Lane.", news), "in the source as written"
+    assert_equal [ "it may name a person (Mary Lane)" ], SocialAgent::Rules.people("Acme Fission works with Mary Lane.", news),
+      "a person's name stays stopped even when the source has it (GTM)"
     assert_empty SocialAgent::Rules.dates("On 19 November 2026, Acme Fission said so.", news)
     assert_equal [ "the date 18 November isn't the item's own (19 November 2026)" ], SocialAgent::Rules.dates("On November 18, Acme Fission said so.", news)
     link = SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [],
@@ -302,6 +303,15 @@ class SocialAgentTest < ActiveSupport::TestCase
       etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
     post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200))
     assert_equal [ "blocked", "its date (12 November 2026) isn't on the source page" ], [ post.status, post.reason ]
+  end
+
+  test "a post never says what its source doesn't, and keeps the source's qualifier on a deal (GTM)" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "Acme Fission signed a non-binding memorandum of understanding with SJ Group.")
+    assert_equal [ "it says \"no further details\", which its source doesn't", "it leaves out the source's qualifier (MOU)",
+      "it leaves out the source's qualifier (non-binding)" ],
+      SocialAgent::Rules.qualifiers("Acme Fission agreed to work with SJ Group; the announcement provides no further details.", item)
+    assert_empty SocialAgent::Rules.qualifiers("Acme Fission signed a non-binding MOU with SJ Group.", item)
   end
 
   test "a month's post count is a backstop" do

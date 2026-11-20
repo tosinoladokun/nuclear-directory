@@ -8,7 +8,9 @@ class SocialAgent::Writer
     - Use only the facts given. Every number and name must come from them. No guesses, rankings or opinions.
     - Give the event's date ("On 12 November") rather than "today", "this week" or "just". When the facts name a
       publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
-    - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output.
+    - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output. Keep the
+      source's own qualifier on a deal (an MOU, non-binding, a letter of intent, a framework agreement).
+    - Never say what the source doesn't say: no "no further details", "undisclosed" or "did not say".
     - Say each thing once. When the facts are short, the post is short: never pad, restate the fact in other words,
       or repeat a name, label or purpose in an extra sentence.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,

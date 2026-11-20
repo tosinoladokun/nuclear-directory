@@ -55,6 +55,7 @@ module SocialAgent::Rules
     found.concat(status_words(text, item))
     found.concat(people(text, item))
     found.concat(dates(text, item))
+    found.concat(qualifiers(text, item))
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.source_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
@@ -86,6 +87,20 @@ module SocialAgent::Rules
     forms = [ date.strftime("%B %-d, %Y"), date.strftime("%-d %B %Y"), date.strftime("%b %-d, %Y"), date.strftime("%b. %-d, %Y"),
       date.iso8601, date.strftime("%m/%d/%Y"), date.strftime("%-m/%-d/%Y") ]
     meta.include?(date.iso8601) || forms.any? { |form| text.include?(form) }
+  end
+
+  # What the source doesn't say isn't said (GTM, 20 Nov: "provides no further details" was false), and a qualifier the
+  # source puts on the deal stays on it (an MOU, a non-binding framework, a letter of intent).
+  ABSENCE = /\b(no further details|did not disclose|didn't disclose|were not disclosed|weren't disclosed|undisclosed|gave no details|no details (were|was) (given|provided))\b/i
+  QUALIFIERS = { /memorandum of understanding|\bMOU\b/i => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
+                 /framework agreement/i => "framework agreement" }.freeze
+  def qualifiers(text, item)
+    found = []
+    found << "it says #{$1.downcase.inspect}, which its source doesn't" if text =~ ABSENCE && !item.source_text.match?(ABSENCE)
+    QUALIFIERS.each do |pattern, name|
+      found << "it leaves out the source's qualifier (#{name})" if item.source_text.match?(pattern) && !text.match?(pattern)
+    end
+    found
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
@@ -161,8 +176,6 @@ module SocialAgent::Rules
       next if words.all? { |word| MONTHS.include?(word) || STATES.include?(word) } || place?(words)
       next if words.any? { |word| NOT_PERSON.include?(word) }
       next if known.include?(phrase.downcase) || directory_name?(phrase)
-      # Written exactly so in the source, its title included, it isn't an unknown person (PM, 20 Nov).
-      next if item.source_text.include?(phrase)
 
       "it may name a person (#{phrase})"
     end
