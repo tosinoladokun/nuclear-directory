@@ -314,4 +314,20 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     sites = plugin.send(:candidates_for, "Caltech", [ "https://krl.caltech.edu/about", "https://www.mines.edu/x", "https://nuclear.mines.edu/" ], {})
     assert_equal [ "https://caltech.edu", "https://mines.edu" ], sites.uniq
   end
+
+  test "a pending company's site needn't state nuclear work, only name it; each search's verdicts are kept for the misses breakdown (PM, 20 Nov)" do
+    stub_request(:get, "https://mines.edu/").to_return(body: "<html><body><p>Colorado School of Mines, Golden. Admissions and research.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://other.example/").to_return(body: "<html><body><p>Unrelated shop.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, %r{\Ahttps://(mines\.edu|other\.example)/robots\.txt}).to_return(status: 404)
+    mines = Organization.create!(name: "Colorado School of Mines")
+    ghost = Organization.create!(name: "Ghost Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil,
+      search: ->(query) { query.include?("Mines") ? [ "https://nuclear.mines.edu/x" ] : [ "https://other.example/" ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    found = site_finder.find_sites
+    assert_equal :proposed, found[mines.id].outcome, found[mines.id].found.inspect
+    assert_equal :unconfirmed, found[ghost.id].outcome
+    miss = CrawlRun.where("stats->>'site_for' = ?", ghost.id.to_s).sole.stats
+    assert_equal [ "unconfirmed", [ { "verdict" => "not_named" } ] ], miss.values_at("site_outcome", "checked")
+  end
 end
