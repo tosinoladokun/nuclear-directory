@@ -46,7 +46,7 @@ class SocialAgent::Picker
       published = Organization.published.select(:id)
       fresh = Relationship.where(id: first, verification_status: "verified", ended_on: nil, from_organization_id: published, to_organization_id: published)
       bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
-      fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).filter_map do |link|
+      fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).limit(20).filter_map do |link|
           evidence = Evidence.where(subject: link).includes(:source).where.not(quote: [ nil, "" ]).order(:id).first or next
           from, to = link.from_organization, link.to_organization
           verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(link.relationship_type, link.relationship_type.humanize(capitalize: false))
