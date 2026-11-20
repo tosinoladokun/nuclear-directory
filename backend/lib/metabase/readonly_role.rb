@@ -32,6 +32,23 @@ module Metabase
     # keep views, so a database loaded from it has none until migrated; only
     # views that exist are granted.
     READABLE_VIEWS = %w[metabase_leads].freeze
+    # A sighting from what a visitor searched: a search's own key, or a lead
+    # list's row whose label says it came from a search (Leads.md imports).
+    SEARCH_SIGHTING = "(s->>'key' LIKE 'search:%' OR lower(coalesce(s->>'label', '')) LIKE '%search%')".freeze
+    # Leads some other source named, without the search sightings. A security
+    # barrier, so a reader's own conditions (a cast that errors on a hidden
+    # name, say) run only after the view's filter, never on a hidden row.
+    VIEW_SQL = {
+      "metabase_leads" => <<~SQL
+        CREATE OR REPLACE VIEW metabase_leads WITH (security_barrier = true) AS
+        SELECT l.id, l.name, l.normalized_name, l.kind,
+               (SELECT jsonb_agg(s) FROM jsonb_array_elements(l.sources) s WHERE NOT #{SEARCH_SIGHTING}) AS sources,
+               l.first_seen_on, l.last_seen_on, l.seen_count, l.status, l.reason, l.record_type, l.record_id, l.note,
+               l.decided_by, l.decided_at, l.find_attempts, l.next_find_at, l.candidate_id, l.created_at, l.updated_at
+        FROM leads l
+        WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(l.sources) s WHERE NOT #{SEARCH_SIGHTING})
+      SQL
+    }.freeze
     # Never readable through Metabase: sign-in data, visitors' correction
     # messages and contacts, the deploy's own records (their reports and
     # errors), and the admin's Today steps (who marked them). Rails' Solid
@@ -72,6 +89,7 @@ module Metabase
         connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
         readable = connection.tables & READABLE_TABLES
         connection.execute("GRANT SELECT ON #{readable.map { |t| connection.quote_table_name(t) }.join(', ')} TO #{role}") if readable.any?
+        create_views!(connection:)
         views = connection.views & READABLE_VIEWS
         connection.execute("GRANT SELECT ON #{views.map { |v| connection.quote_table_name(v) }.join(', ')} TO #{role}") if views.any?
       end
@@ -114,6 +132,12 @@ module Metabase
       role = connection.quote_column_name(name)
       tables.each { |table| connection.execute("GRANT SELECT ON #{connection.quote_table_name(table)} TO #{role}") }
       tables
+    end
+
+    # (Re)creates the views, so a database loaded from schema.rb (which
+    # doesn't keep views) has them too. Safe to rerun.
+    def create_views!(connection: ActiveRecord::Base.connection)
+      VIEW_SQL.each_value { |sql| connection.execute(sql) }
     end
 
     def private_tables(connection)

@@ -162,22 +162,24 @@ class Metabase::ReadonlyRoleTest < ActiveSupport::TestCase
   end
 
   test "it reads leads only through metabase_leads, which leaves out what visitors searched (PM, 20 Nov)" do
-    load Rails.root.join("db/migrate/20261120160000_create_metabase_leads_view.rb")
-    connection = ActiveRecord::Base.connection
-    connection.execute("DROP VIEW IF EXISTS metabase_leads")
-    CreateMetabaseLeadsView.new.migrate(:up)
+    ActiveRecord::Base.connection.execute("DROP VIEW IF EXISTS metabase_leads")
     sighting = ->(key) { { "key" => key, "label" => key, "times" => 1, "first" => "2026-11-20", "last" => "2026-11-20" } }
     seen = { first_seen_on: Date.new(2026, 11, 20), last_seen_on: Date.new(2026, 11, 20) }
     named = Lead.create!(name: "Acme Fission", normalized_name: "acme fission", kind: "company", status: "new", seen_count: 2,
       sources: [ sighting.("news:1"), sighting.("search:acme fission") ], **seen)
     Lead.create!(name: "someone's private search", normalized_name: "someones private search", kind: "other", status: "triage",
       sources: [ sighting.("search:someone's private search") ], **seen)
+    Lead.create!(name: "zentra fusion", normalized_name: "zentra fusion", kind: "other", status: "new",
+      sources: [ sighting.("leads-md:zentra fusion").merge("label" => "zero-result search (PostHog, 21 Oct)") ], **seen)
     Metabase::ReadonlyRole.apply!(name: @name, password: PASSWORD)
+    assert_includes ActiveRecord::Base.connection.views, "metabase_leads", "apply! makes the view where schema.rb didn't"
 
     rows = session.exec("SELECT id, sources::text AS sources FROM metabase_leads").to_a
     assert_equal [ named.id.to_s ], rows.map { |row| row["id"] }, "a lead only searched for isn't there"
     assert_not_includes rows.sole["sources"], "search:", "nor are the search sightings of the others"
     assert_match "permission denied", refused("SELECT name FROM leads").message, "the table stays private"
+    assert_equal "1", session.exec("SELECT count(*) FROM metabase_leads WHERE (CASE WHEN name LIKE 'someone%' THEN name::integer ELSE 0 END) = 0").getvalue(0, 0),
+      "a cast that would fail on a hidden name never sees one (security barrier)"
   ensure
     Lead.delete_all
     ActiveRecord::Base.connection.execute("DROP VIEW IF EXISTS metabase_leads")
