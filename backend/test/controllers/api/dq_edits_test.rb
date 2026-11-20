@@ -86,10 +86,25 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
     assert_match "item's own site", response.parsed_body["results"].sole["error"]
     edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://ir.example.org/releases/2")
     assert response.parsed_body["results"].sole["ok"], "the same registrable domain (an IR subdomain) counts (DQ)"
-    edit(values: { summary: "x" * 401 }, reason: "r", source_url: "https://example.org/news/2")
-    assert_match "at most 400", response.parsed_body["results"].sole["error"]
+    edit(values: { summary: "x" * 501 }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "at most 500", response.parsed_body["results"].sole["error"]
     edit(values: { headline: "y" * 81 }, reason: "r", source_url: "https://example.org/news/2")
     assert_match "at most 80", response.parsed_body["results"].sole["error"]
+    assert_equal "Acme gets an exemption", @item.reload.headline
+  end
+
+  test "a source may also be a company the item is about or a .gov/.mil/.edu site; one news item per request (PM)" do
+    company = Organization.create!(name: "Acme Fission", website: "https://www.acmefission.example", verification_status: "verified", verified_by: "human:tosin")
+    NewsMention.create!(news_item: @item, subject: company)
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://ir.acmefission.example/release")
+    assert response.parsed_body["results"].sole["ok"], "the company's site"
+    edit(values: { summary: "Exemption granted." }, reason: "From the NRC", source_url: "https://www.nrc.gov/reading-rm/x")
+    assert response.parsed_body["results"].sole["ok"], "a .gov site"
+    edit(values: { summary: "Other." }, reason: "r", source_url: "https://wire.example/acme")
+    assert_match "a company it's about", response.parsed_body["results"].sole["error"]
+
+    post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: 2.times.map { { action: "edit_news", id: @item.id, values: { headline: "Z" }, reason: "r", source_url: "https://www.nrc.gov/x" } } }
+    assert_response :unprocessable_content
     assert_equal "Acme gets an exemption", @item.reload.headline
   end
 end

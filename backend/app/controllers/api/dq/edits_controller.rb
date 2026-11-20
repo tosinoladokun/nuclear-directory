@@ -19,7 +19,7 @@ class Api::Dq::EditsController < ActionController::API
   # Edits and proposals a day (DQ's own ask, 20 Nov).
   PER_DAY = 30
   # Text lengths (Infra): a headline fits Latest; a summary is a line or two.
-  SUMMARY_MAX = 400
+  SUMMARY_MAX = 500
 
   def create
     rows = params.permit!.to_h.then { |all| all["actions"] || all["_json"] || [] }
@@ -28,6 +28,11 @@ class Api::Dq::EditsController < ActionController::API
 
     # One request's take-off proposals are one set in Today.
     @batch = "dq-#{Time.current.strftime('%Y%m%d%H%M%S')}-#{SecureRandom.hex(3)}"
+    # One news item per request (PM): a script bug can't rewrite many at once.
+    if rows.count { |row| row["action"] == "edit_news" } > 1
+      return render(json: { error: "edit one news item per request" }, status: :unprocessable_content)
+    end
+
     render json: { results: rows.map { |row| apply(row) } }
   end
 
@@ -52,6 +57,14 @@ class Api::Dq::EditsController < ActionController::API
       labels.last(keep).join(".")
     end
 
+    def allowed_source?(source, item)
+      return false if site(source).blank?
+      return true if site(source) == site(item.url) || host(source).match?(/\.(?:gov|mil|edu)\z/)
+
+      companies = Organization.where(id: item.news_mentions.where(subject_type: "Organization").select(:subject_id)).where.not(website: [ nil, "" ]).pluck(:website)
+      companies.any? { |website| site(website) == site(source) }
+    end
+
     def done_today
       VerificationEvent.where(subject_type: "NewsItem", by: BY, created_at: Time.current.all_day).count +
         TakeoffProposal.where(proposed_by: BY, created_at: Time.current.all_day).count
@@ -73,9 +86,9 @@ class Api::Dq::EditsController < ActionController::API
 
       # The right text comes from the item's own page: the source is on its site (Infra).
       item = NewsItem.find_by(id:) or return { id:, ok: false, error: "no news item #{id}" }
-      # The same registrable domain: a release on the company's IR subdomain counts (DQ).
-      unless site(source).present? && site(source) == site(item.url)
-        return { id:, ok: false, error: "source_url must be on the item's own site (#{site(item.url)})" }
+      # The item's own site (an IR subdomain counts, DQ), a company it's about, or a government or university site (PM).
+      unless allowed_source?(source, item)
+        return { id:, ok: false, error: "source_url must be on the item's own site (#{site(item.url)}), a company it's about, or a .gov, .mil or .edu site" }
       end
 
       result = DataQuality::Review.edit_news(id:, by: BY, reason: row["reason"].to_s.strip, attributes: row["values"].to_h, context: { "source_url" => source })
