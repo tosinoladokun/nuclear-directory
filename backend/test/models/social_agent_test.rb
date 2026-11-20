@@ -446,7 +446,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     writer.draft(item, platform: "x")
     writer.voice_ok?("Acme signed a non-binding MOU.", item)
 
-    assert_match(/legal suffix\s+\(Pte\. Ltd\./, seen.first, "the writer may leave a legal suffix off")
+    assert_match(/legal ending\s+such as Inc\., Ltd\. or Pte\. Ltd\./, seen.first, "the writer may leave a legal ending off")
     assert_match(/Do not fail a post for these/, seen.last)
     assert_match(/non-binding MOU/, seen.last)
     assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
