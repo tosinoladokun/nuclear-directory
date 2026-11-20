@@ -58,11 +58,29 @@ class QueueWatchdog
       :stuck
     else
       Autopilot::Alert.resolve!(KEY, note: "Jobs are running again.")
+      catch_up
       :ok
     end
   rescue ActiveRecord::ActiveRecordError => error
     Rails.logger.warn("[queue_watchdog] the database didn't answer (#{error.class}); waiting")
     nil
+  end
+
+  # A daily (or rarer) scheduled job whose last run time passed LATE ago without being queued (the dispatcher was
+  # down) is queued once, for that run time (#811 auto-fix; Solid Queue records each run time once, so never twice).
+  LATE = 15.minutes
+  MAX_LATE = 1.day
+
+  def catch_up
+    SolidQueue::RecurringTask.static.filter_map do |task|
+      due = task.previous_time
+      next if due > @now - LATE || due < @now - MAX_LATE
+      next if task.next_time_after(due) - due < 1.hour
+      next if SolidQueue::RecurringExecution.exists?(task_key: task.key, run_at: due)
+
+      Rails.logger.warn("[queue_watchdog] #{task.key} missed its #{due.iso8601} run; queued once now")
+      task.key if task.enqueue(at: due)
+    end
   end
 
   private
