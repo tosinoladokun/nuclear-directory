@@ -358,8 +358,9 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
   test "a lead a person typed may show its nuclear work on another page of its site; a found one may not (DQ, 20 Nov: Fluor)" do
     home = "https://www.fluor.example"
     stub_request(:get, "#{home}/robots.txt").to_return(status: 404)
-    stub_request(:get, "#{home}/").to_return(body: %(<html><body><p>Fluor builds plants for energy and chemicals.</p><a href="/markets/nuclear">Nuclear power</a><a href="/careers">Careers</a></body></html>),
+    stub_request(:get, "#{home}/").to_return(body: %(<html><body><p>Fluor builds plants for energy and chemicals.</p><a href="/">Nuclear engineering</a><a href="/nuclear-a">Nuclear A</a><a href="/nuclear-b">Nuclear B</a><a href="/markets/nuclear">Nuclear power</a><a href="/careers">Careers</a></body></html>),
       headers: { "Content-Type" => "text/html" })
+    %w[nuclear-a nuclear-b].each { |path| stub_request(:get, "#{home}/#{path}").to_return(body: "<html><body><p>Nuclear news.</p></body></html>", headers: { "Content-Type" => "text/html" }) }
     stub_request(:get, "#{home}/markets/nuclear").to_return(body: "<html><body><p>Fluor has built nuclear reactors for decades.</p></body></html>", headers: { "Content-Type" => "text/html" })
     typed = Plugin.call(lead("fluor", url: home).id, finder: finder)
     assert_equal :proposed, typed.outcome, typed.reason
@@ -367,8 +368,17 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_not_requested :get, "#{home}/careers"
 
     Candidate.delete_all
+    Lead.delete_all # a found-only lead, not the person's one sighted again (Copilot)
     found = Plugin.call(Lead.sighted!(name: "Fluor", kind: "company", key: "trade_press:fluor", label: "Trade press", url: home).id, finder: finder)
     assert_equal :unconfirmed, found.outcome, "only person-added leads look past the home page"
-    assert_match "nuclear work", found.reason
+  end
+
+  test "the extra pages for person-added leads stop at NUCLEAR_PAGES_PER_DAY (Infra)" do
+    Plugin::NUCLEAR_PAGES_PER_DAY.times { CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", stats: { Plugin::NUCLEAR_PAGES => 1 }) }
+    home = "https://www.capped.example"
+    stub_request(:get, "#{home}/robots.txt").to_return(status: 404)
+    stub_request(:get, "#{home}/").to_return(body: %(<html><body><p>Capped builds plants.</p><a href="/nuclear">Nuclear</a></body></html>), headers: { "Content-Type" => "text/html" })
+    assert_equal :unconfirmed, Plugin.call(lead("Capped", url: home).id, finder: finder).outcome
+    assert_not_requested :get, "#{home}/nuclear"
   end
 end

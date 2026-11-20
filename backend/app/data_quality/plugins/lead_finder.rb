@@ -30,6 +30,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Leads (Backend gates them at 50) plus the nightly pending-company sites (SITES_PER_NIGHT).
   FINDS_PER_DAY = 100
   FINDS = "finds".freeze
+  # Extra same-site pages read for person-added leads, a day (Infra: a big batch can't spike the crawl).
+  NUCLEAR_PAGES = "nuclear_pages".freeze
+  NUCLEAR_PAGES_PER_DAY = 30
   LEAD_MARK = "#lead-finder".freeze
   # Brave's plan allows 1 request a second (Infra): this much between our calls.
   SEARCH_GAP = 1.1
@@ -246,9 +249,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
       links = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"].to_s).to_s.split("#").first rescue next
-        url if URI(url).host.to_s.downcase.delete_prefix("www.") == host && "#{URI(url).path} #{link.text}".match?(NUCLEAR_LINK)
+        # The page already checked never takes one of the three places (Copilot).
+        url if URI(url).host.to_s.downcase.delete_prefix("www.") == host && "#{URI(url).path} #{link.text}".match?(NUCLEAR_LINK) &&
+          Source.bare_homepage(url) != Source.bare_homepage(base)
       end.uniq.first(3)
       links.each do |url|
+        break unless reserve(NUCLEAR_PAGES, NUCLEAR_PAGES_PER_DAY)
+
         page = snapshot(url) or next
         return page if nuclear_sentence?(page, name)
       end
