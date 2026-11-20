@@ -604,4 +604,13 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.act_problems("DOE approved a construction permit for Long Mott.", item)
     assert_empty SocialAgent::Rules.act_problems("Dow and X-energy received a construction permit.", item), "no act verb, nothing to check"
   end
+
+  test "an unsupported negative can't ride on 'Neither': it is an absence claim like 'no further details' (DQ, #868)" do
+    item = rules_item(quote: "Acme Fission signed a fuel supply agreement with Westinghouse.")
+    [ "Neither side gave a figure.", "Acme Fission declined to give a price.", "Acme did not give a date.", "Westinghouse has not said when it starts." ].each do |sentence|
+      assert SocialAgent::Rules.qualifiers(sentence, item).any? { |problem| problem.start_with?("it says") }, sentence
+    end
+    said = rules_item(quote: "Neither side gave a figure for the agreement.")
+    assert_empty SocialAgent::Rules.qualifiers("Neither side gave a figure.", said).select { |problem| problem.start_with?("it says") }, "when the source says it"
+  end
 end
