@@ -16,6 +16,8 @@ class Api::Dq::EditsController < ActionController::API
   BY = "agent:data-quality".freeze
   MAX_ROWS = 50
   ACTIONS = %w[edit_news propose_takeoff].freeze
+  # Edits and proposals a day (DQ's own ask, 20 Nov).
+  PER_DAY = 30
 
   def create
     rows = params.permit!.to_h.then { |all| all["actions"] || all["_json"] || [] }
@@ -38,8 +40,15 @@ class Api::Dq::EditsController < ActionController::API
   end
 
   private
+    def done_today
+      VerificationEvent.where(subject_type: "NewsItem", by: BY, created_at: Time.current.all_day).count +
+        TakeoffProposal.where(proposed_by: BY, created_at: Time.current.all_day).count
+    end
+
     def apply(row)
       id = row["id"].to_i
+      return { id:, ok: false, error: "today's limit of #{PER_DAY} edits and proposals is reached" } if done_today >= PER_DAY
+
       return { id:, ok: false, error: "action must be one of #{ACTIONS.join(', ')}" } unless ACTIONS.include?(row["action"])
 
       source = row["source_url"].to_s.strip

@@ -73,4 +73,11 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
     assert_equal "taken_off", TakeoffProposal.find_by!(subject_id: wrong.last.id).status
     assert_equal 2, OrganizationRole.where(id: wrong.map(&:id)).count, "never deleted"
   end
+
+  test "at most PER_DAY edits and proposals a day (DQ)" do
+    Api::Dq::EditsController::PER_DAY.times { |n| @item.verification_events.create!(from_status: "verified", to_status: "verified", by: "agent:data-quality", reason: "r#{n}") }
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://www.nrc.gov/x")
+    assert_match "limit", response.parsed_body["results"].sole["error"]
+    assert_equal "Acme gets an exemtpion", @item.reload.headline
+  end
 end
