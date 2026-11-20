@@ -486,6 +486,22 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "2000 characters at most", results.second["error"]
   end
 
+  test "propose_fields takes a ticker with its exchange, together, in their formats (#874)" do
+    @page.update!(content_text: "Holtec International: Trading Symbol HOLT, Name of each exchange: NYSE.")
+    quote = "Holtec International: Trading Symbol HOLT, Name of each exchange: NYSE."
+    act({ action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT", exchange: "NYSE" }, quote:, source_url: @page.url, reason: "Its 10-K cover" },
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT" }, quote:, source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { exchange: "NYSE" }, quote:, source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "holt", exchange: "NYSE" }, quote:, source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT", exchange: "the big board 123" }, quote:, source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_equal({ "name" => "Holtec International", "ticker" => "HOLT", "exchange" => "NYSE" }.except("name"), Candidate.find(results.first["id"]).payload.slice("ticker", "exchange"))
+    assert_match "go together", results.second["error"]
+    assert_match "go together", results.third["error"]
+    assert_match "capital letters or digits", results.fourth["error"]
+    assert_match "short name", results.fifth["error"]
+  end
+
   test "propose_fields takes a country (two capital letters) and a legal name" do
     act({ action: "propose_fields", target: @holtec.id, fields: { country_code: "US", legal_name: "Holtec International Corporation" },
       quote: "Licensee: Holtec.", source_url: @page.url, reason: "10-K cover" },

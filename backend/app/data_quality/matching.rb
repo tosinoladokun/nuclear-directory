@@ -29,7 +29,10 @@ module DataQuality::Matching
   DAILY_ROLES = 200
   # What Data Quality may fill on a published company (PM, 30 Oct: complete companies).
   # Plus a legal name and the country (PM, 18 Nov: Cameco is Canadian), as two capital letters.
-  FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code].freeze
+  # Plus a public company's ticker and its exchange (#874; a 10-K or annual-report cover), always together: the table needs both or neither.
+  FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code ticker exchange].freeze
+  TICKER = /\A[A-Z0-9][A-Z0-9.\-]{0,7}\z/
+  EXCHANGE = /\A[A-Za-z][A-Za-z .&-]{1,19}\z/
   # An SEC CIK is sourced to EDGAR only (PM, 31 Oct).
   EDGAR_HOSTS = %w[sec.gov www.sec.gov efts.sec.gov data.sec.gov].freeze
   MAX_DESCRIPTION = 2_000
@@ -256,6 +259,9 @@ module DataQuality::Matching
       # Only a website people can open (https with a host): never a javascript: or broken link (Infra).
       return fail_with.call("the website must be a full https:// address") if fields.key?("website") && !directory.readable_website?(fields["website"])
       return fail_with.call("a country is two capital letters (ISO 3166, e.g. CA)") if fields.key?("country_code") && !fields["country_code"].match?(/\A[A-Z]{2}\z/)
+      return fail_with.call("a ticker and its exchange go together: give both") if fields.key?("ticker") != fields.key?("exchange")
+      return fail_with.call("a ticker is capital letters or digits (e.g. NNE, BRK.B)") if fields.key?("ticker") && !fields["ticker"].match?(TICKER)
+      return fail_with.call("an exchange is its short name (e.g. NYSE, NASDAQ, TSX)") if fields.key?("exchange") && !fields["exchange"].match?(EXCHANGE)
       if fields.key?("sec_cik")
         cik = directory.normalize_cik(fields["sec_cik"])
         return fail_with.call("an SEC CIK is up to 10 digits") unless cik.to_s.match?(/\A\d{10}\z/)
