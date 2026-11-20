@@ -149,17 +149,25 @@ class OwnerInbox
 
   # Whether a company's other claim goes with its Create: Data Quality approved this very payload (only its approve,
   # never the verifier's alone, and never one it said no to: DQ, 12 Nov); its quote still in its page; nothing contradicts it. Checked again when it's decided.
-  def self.rides_along?(claim, company_id)
-    company_of(claim) == company_id && claim.status.in?(%w[new matched needs_review]) &&
+  # company: the claim's company when the caller already has it (batched; Infra).
+  def self.rides_along?(claim, company_id, company: company_of(claim))
+    company == company_id && claim.status.in?(%w[new matched needs_review]) &&
       claim.dq_recommendation == "approve" && DataQuality::Recommendations.current?(claim) &&
       !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
   end
 
   # The company a claim is on: its subject, or a role claim's company (#811: the role rides with the Create).
   def self.company_of(claim)
-    case claim.subject_type
-    when "Organization" then claim.subject_id
-    when "OrganizationRole" then OrganizationRole.where(id: claim.subject_id).pick(:organization_id)
+    return claim.subject_id if claim.subject_type == "Organization"
+
+    companies_of([ claim ])[claim.id]
+  end
+
+  # { claim id => company id } for many claims, one query for their roles' companies.
+  def self.companies_of(claims)
+    roles = OrganizationRole.where(id: claims.select { |claim| claim.subject_type == "OrganizationRole" }.map(&:subject_id)).pluck(:id, :organization_id).to_h
+    claims.to_h do |claim|
+      [ claim.id, claim.subject_type == "Organization" ? claim.subject_id : (roles[claim.subject_id] if claim.subject_type == "OrganizationRole") ]
     end
   end
 
@@ -214,7 +222,7 @@ class OwnerInbox
         primary ||= rows.select { |(_, candidate_kind), _| candidate_kind == "organization" }.min_by { |_, copies| copies.map(&:id).min }
         (rows - [ primary ]).each do |key, copies|
           grouped.delete(key)
-          riders = copies.select { |claim| self.class.rides_along?(claim, company_id) }
+          riders = copies.select { |claim| self.class.rides_along?(claim, company_id, company: key[2] == "OrganizationRole" ? role_company[key[3]] : claim.subject_id) }
           primary.last.concat(riders)
           (@companions[primary.last.first.id] ||= []).concat(riders.map(&:id))
         end

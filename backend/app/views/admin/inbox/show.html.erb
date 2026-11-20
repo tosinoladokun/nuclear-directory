@@ -113,7 +113,7 @@
                   <% Candidate.where(id: entry.copy_ids).includes(:source).order(:id).reject { |c| c.payload.except(*DataQuality::FieldEvidence::KEYS) == item.payload.to_h }.each do |field| %>
                     <%# A role from its own page shows as its name (#811). %>
                     <% values = if field.kind == "organization_role"
-                         { "role" => Role.find_by(key: field.payload["role"])&.name || field.payload["role"] }
+                         { "role" => (@role_names ||= Role.pluck(:key, :name).to_h)[field.payload["role"]] || field.payload["role"] }
                        else
                          field.payload.except("name", "aliases", *DataQuality::FieldEvidence::KEYS)
                        end %>
