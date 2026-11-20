@@ -350,9 +350,13 @@ module DataQuality::Matching
         elsif type == "Organization" then directory.organization_by_slug(value)
         else directory.facility_by_slug(value)
         end
-        # A slug from before a rename or merge still finds the company it now belongs to.
-        id = ref&.id || (directory.former_slug_id(type:, slug: value) unless value.match?(/\A\d+\z/))
-        record = id && directory.fact(type:, id:)
+        record = ref && directory.fact(type:, id: ref.id)
+        # A slug from before a rename or merge finds the company it now belongs to, also when the merged-away row
+        # still holds it (Copilot); a closed id is never redirected.
+        unless value.match?(/\A\d+\z/) || (record && %w[verified pending].include?(record.verification_status))
+          id = directory.former_slug_id(type:, slug: value)
+          record = directory.fact(type:, id:) if id
+        end
         return [ nil, "no open #{noun} #{value.inspect}" ] unless record && %w[verified pending].include?(record.verification_status)
 
         [ record, nil ]

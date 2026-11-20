@@ -583,4 +583,16 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_equal "Westinghouse Electric Company", Candidate.find(results.second["id"]).payload.dig("to_organization", "name"), "the former slug found it"
     assert_match 'no open company "nobody"', results.third["error"]
   end
+
+  test "after a real merge, the merged company's slug and page address find the company it went into; its id doesn't (Copilot)" do
+    gone = Organization.create!(name: "Holtec Old Name", slug: "holtec-old-name", verification_status: "verified", verified_by: "human:tosin")
+    Directory::FactWriter.merge_organization(from_id: gone.id, into_id: @holtec.id, by: "human:tosin", reason: "same company")
+    @page.update!(content_text: "Holtec is in Camden.")
+    act({ action: "propose_fields", target: "https://nuclear-directory.org/companies/holtec-old-name", fields: { hq_city: "Camden" },
+          quote: "Holtec is in Camden.", source_url: @page.url, reason: "their page" },
+      { action: "propose_fields", target: gone.id, fields: { hq_city: "Camden" }, quote: "Holtec is in Camden.", source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_equal @holtec.id, DqAction.sole.target_id
+    assert_match "no open company", results.second["error"]
+  end
 end
