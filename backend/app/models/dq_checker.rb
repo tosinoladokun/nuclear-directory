@@ -198,7 +198,7 @@ class DqChecker
   # (Infra); the first WINDOW characters when the quote's start isn't found. Markup is dropped from the window only.
   def window(candidate)
     needle = candidate.quote.to_s.squish.first(60).downcase
-    sql = ActiveRecord::Base.sanitize_sql_array([ "substring(content_text from greatest(position(? in lower(content_text)) - ?, 1) for ?)",
+    sql = ActiveRecord::Base.sanitize_sql_array([ "substring(content_text from greatest(position(? in lower(left(content_text, 1000000))) - ?, 1) for ?)",
       needle, WINDOW / 2, WINDOW ])
     text = Source.where(id: candidate.source_id).pick(Arel.sql(sql)).to_s
     text = Nokogiri::HTML.fragment(text).text if text.match?(/<\/?[a-z][^>]*>/i)
