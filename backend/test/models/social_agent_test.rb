@@ -555,4 +555,15 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert SocialAgent::Rules.attributed?("The award was listed in a Federal Register notice.")
     assert_not SocialAgent::Rules.attributed?("Acme Fission won a DOE award.")
   end
+
+  test "a company's own site is a primary source; a wire or outlet never is, whoever it covers (PM, 20 Nov)" do
+    gle = Organization.create!(name: "Global Laser Enrichment", slug: "global-laser-enrichment", website: "https://www.gle-us.com",
+      verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    on = ->(url) { rules_item(facts: { "publisher" => "Global Laser Enrichment" }).with(source_url: url, organization_ids: [ gle.id ]) }
+
+    assert SocialAgent::Rules.primary?(on.("https://www.gle-us.com/wp-content/uploads/2026/10/NRC-Issues-GLE-FEIS.pdf")), "GLE's own site"
+    assert_not SocialAgent::Rules.primary?(on.("https://www.prnewswire.com/news-releases/gle-feis.html")), "a wire"
+    assert_not SocialAgent::Rules.primary?(on.("https://www.globenewswire.com/news-release/gle"))
+    assert_not SocialAgent::Rules.primary?(on.("https://www.businesswire.com/news/home/gle"))
+  end
 end

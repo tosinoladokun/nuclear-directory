@@ -100,7 +100,9 @@ module SocialRehearsal
         Organization.find_by(slug:) || begin
           html = get(page).to_s
           name = html[/og:title" content="([^"]+)"/, 1] || slug.titleize
-          Organization.create!(name: CGI.unescapeHTML(name), slug:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          # Its website as the public page shows it: a company's own site is a primary source (a press release on gle-us.com).
+          site = Nokogiri::HTML(html).at_css("a[data-outbound='company_website']")&.[]("href").to_s.sub(/\?.*\z/, "").presence
+          Organization.create!(name: CGI.unescapeHTML(name), slug:, website: site, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
         end
       end
 
