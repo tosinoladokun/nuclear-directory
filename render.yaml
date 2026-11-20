@@ -103,6 +103,9 @@ services:
       # endpoint is off; a new digest rotates the token without a deploy.
       - key: DQ_AGENT_TOKEN_DIGEST
         sync: false
+      # The autopilot alerts endpoint's read-only token digest (#811), for the Mac poller; set in the dashboard.
+      - key: AUTOPILOT_READ_TOKEN_DIGEST
+        sync: false
       # IndexNow's key (#742), served publicly at /<key>.txt; set in the
       # dashboard so a blueprint sync never wipes it. Unset: IndexNow is off.
       - key: INDEXNOW_KEY
@@ -250,8 +253,10 @@ services:
 
 databases:
   - name: nuclear-directory-db
-    # 0.1 CPU / 256 MB, Render's "Basic-256mb". Move to 0.5c-1g if needed.
-    plan: 0.1c-256mb
+    # 0.5 CPU / 1 GB (Render's "Basic-1gb", $19/mo), upgraded 20 Nov after the 256 MB plan crashed three times.
+    # Keep this in step with the dashboard: a Blueprint sync applies this value (20 Nov: merging a render.yaml
+    # change put the database back on 256 MB until it was upgraded again by hand).
+    plan: 0.5c-1g
     region: oregon
     postgresMajorVersion: "16"
     databaseName: nuclear_directory_production

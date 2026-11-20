@@ -308,4 +308,50 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 401)
     assert_equal :retry, Plugin.call(lead("Ghost Key Nuclear").id, finder: finder.()).outcome, "a fresh finder: a key problem is a failure, not 'no website'"
   end
+
+  test "a lab's .edu subdomain is reduced to the university's home page (DQ, 20 Nov)" do
+    plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil)
+    sites = plugin.send(:candidates_for, "Caltech", [ "https://krl.caltech.edu/about", "https://www.mines.edu/x", "https://nuclear.mines.edu/" ], {})
+    assert_equal [ "https://caltech.edu", "https://mines.edu" ], sites.uniq
+  end
+
+  test "a pending company's site needn't state nuclear work, only name it; each search's verdicts are kept for the misses breakdown (PM, 20 Nov)" do
+    stub_request(:get, "https://mines.edu/").to_return(body: "<html><body><p>Colorado School of Mines, Golden. Admissions and research.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://other.example/").to_return(body: "<html><body><p>Unrelated shop.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, %r{\Ahttps://(mines\.edu|other\.example)/robots\.txt}).to_return(status: 404)
+    mines = Organization.create!(name: "Colorado School of Mines")
+    ghost = Organization.create!(name: "Ghost Fission")
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil,
+      search: ->(query) { query.include?("Mines") ? [ "https://nuclear.mines.edu/x" ] : [ "https://other.example/" ] },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    found = site_finder.find_sites
+    assert_equal :proposed, found[mines.id].outcome, found[mines.id].found.inspect
+    assert_equal :unconfirmed, found[ghost.id].outcome
+    miss = CrawlRun.where("stats->>'site_for' = ?", ghost.id.to_s).sole.stats
+    assert_equal [ "unconfirmed", [ { "verdict" => "not_named" } ] ], miss.values_at("site_outcome", "checked")
+  end
+
+  test "only a university, a national lab or a power buyer may skip 'nuclear on the page'; a startup is still refused (Tosin, 20 Nov)" do
+    page = ->(url, text) do
+      stub_request(:get, "#{url}/").to_return(body: "<html><body><p>#{text}</p></body></html>", headers: { "Content-Type" => "text/html" })
+      stub_request(:get, "#{url}/robots.txt").to_return(status: 404)
+    end
+    page.("https://ornl.gov", "Oak Ridge National Laboratory delivers science.")
+    page.("https://bigcloud.example", "Big Cloud Inc runs data centers.")
+    page.("https://quietstart.example", "Quiet Start Inc builds the future.")
+    lab = Organization.create!(name: "Oak Ridge National Laboratory")
+    buyer = Organization.create!(name: "Big Cloud Inc")
+    startup = Organization.create!(name: "Quiet Start Inc")
+    Candidate.create!(source: Source.create!(url: "https://news.example/ppa", source_kind: "wire_press"), kind: "relationship",
+      payload: { "from_organization" => { "name" => "Big Cloud Inc" }, "to_organization" => { "name" => "Fission Co" }, "relationship_type" => "offtake_with" })
+    sites = { "Oak Ridge" => "https://ornl.gov", "Big Cloud" => "https://bigcloud.example", "Quiet Start" => "https://quietstart.example" }
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil,
+      search: ->(query) { Array(sites.find { |key, _| query.include?(key) }&.last) },
+      pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+    found = site_finder.find_sites
+    assert_equal :proposed, found[lab.id].outcome, "a national lab's .gov root"
+    assert_equal :proposed, found[buyer.id].outcome, "the buyer in a power deal"
+    assert_equal :unconfirmed, found[startup.id].outcome, "a startup must state nuclear work"
+    assert_equal [ { "verdict" => "not_nuclear" } ], CrawlRun.where("stats->>'site_for' = ?", startup.id.to_s).sole.stats["checked"]
+  end
 end

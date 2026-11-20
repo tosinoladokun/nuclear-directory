@@ -89,8 +89,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Already in the directory from a US official source (an NRC docket, a DOE
     # award), which shows its US operations: its own site needn't (DQ, 19 Nov:
     # Rolls-Royce SMR, Moltex, Candu, Blykalla).
+    # A university's or national lab's home page, or a power buyer's, rarely
+    # says nuclear: for those only, the page need only name it (Tosin, 20 Nov).
     @us_shown_elsewhere, @hints, found = true, "", { "name" => name }
+    @power_buyer = power_buyer?(id, name)
     @search_failed = @search_capped = false
+    @site_for_pending = true
     result = nil
     candidates_for(name, [], found).each do |website|
       # Another company's site is never this one's.
@@ -110,7 +114,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       unconfirmed(name, nil, "No website found", found)
     end
     # A week's rest only after a completed attempt: a blocked one comes back next run (Copilot).
-    CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current, stats: { SITE_FOR => id }) unless result.outcome == :retry
+    # What each search came to, for the misses breakdown (PM, 20 Nov): the
+    # verdicts, with the host only for a site not from Brave (its terms: results are never kept).
+    unless result.outcome == :retry
+      checked = Array(found["checked"]).map { |check| { "host" => (URI(check["website"]).host if check["website"]), "verdict" => check["verdict"] }.compact }
+      CrawlRun.create!(source_kind:, stage: "crawl", status: "succeeded", finished_at: Time.current,
+        stats: { SITE_FOR => id, "site_outcome" => result.outcome.to_s, "searched" => found["searched"], "checked" => checked }.compact)
+    end
     result
   end
 
@@ -121,6 +131,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       return outcome(:retry, name: input.presence || lead.name, reason: "Today's limit of #{FINDS_PER_DAY} finds is reached; tried again tomorrow", found: {})
     end
     lead = lead.with(name: input) if input.present?
+    @power_buyer = @site_for_pending = false
     @us_shown_elsewhere = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
     # What a person said about it ("Austin microreactor startup"; Backend #806), for the search.
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
@@ -159,11 +170,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     return [] if !source.url.end_with?(LEAD_MARK) || name.blank? || source.content_text.blank?
 
     blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
-    quote = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }
-      .find { |sentence| names?(sentence, name) && nuclear?(sentence, brand(name)) } or return []
     # A site found for a company already listed (a pending one) is claimed for
-    # that company by its own name, so Match can't give it to another (Copilot).
+    # that company by its own name, so Match can't give it to another (Copilot);
+    # for a university, national lab or power buyer the sentence need only name it (Tosin, 20 Nov).
     target = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id)
+    sentences = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }.select { |sentence| names?(sentence, name) }
+    quote = (sentences.find { |sentence| nuclear?(sentence, brand(name)) } || (sentences.first if target && (institution?(source.url.delete_suffix(LEAD_MARK)) || power_buyer?(target.id, target.name)))) or return []
     claimed = target ? target.name : page_name(quote.strip, name, site_names(source))
     [ { kind: "organization", quote: quote.strip, payload: { "name" => claimed, "website" => "https://#{URI(source.url).host}" } } ]
   end
@@ -309,7 +321,38 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         found["searched"] = results.size if results.any?
         sites.concat(results)
       end
-      sites.uniq
+      sites.map { |site| university_home(site) }.uniq
+    end
+
+    # DOE's national labs' own domains (a .gov root).
+    NATIONAL_LABS = %w[anl.gov bnl.gov fnal.gov inl.gov lanl.gov lbl.gov llnl.gov nrel.gov ornl.gov pnnl.gov sandia.gov
+      srnl.gov netl.doe.gov ameslab.gov pppl.gov slac.stanford.edu jlab.org].freeze
+
+    # Only a pending company's search, and only a university or national lab
+    # (by the site's domain) or a power buyer (by its claims) (Tosin, 20 Nov).
+    def nuclear_exempt?(website)
+      @site_for_pending && (@power_buyer || institution?(website))
+    end
+
+    def institution?(website)
+      host = URI(website).host.to_s.downcase.delete_prefix("www.")
+      host.end_with?(".edu") || NATIONAL_LABS.include?(host)
+    end
+
+    # A claim naming it as the buyer in a power deal: offtake_with's from end,
+    # offtakes_from a plant, or the power-buyer role; never a rejected one.
+    def power_buyer?(id, name)
+      claims = Candidate.where.not(status: "rejected").where(dq_recommendation: [ nil, "approve" ])
+      claims.where(kind: "organization_role", subject_type: "Organization", subject_id: id).where("payload->>'role' = 'data_center_offtaker'")
+        .or(claims.where(kind: "relationship").where("payload->>'relationship_type' = 'offtake_with' AND lower(payload->'from_organization'->>'name') = ?", name.downcase))
+        .or(claims.where(kind: "facility_relationship").where("payload->>'relationship_type' = 'offtakes_from' AND lower(payload->'organization'->>'name') = ?", name.downcase))
+        .exists?
+    end
+
+    # A lab's or program's .edu subdomain isn't the university's site: its home page is (DQ, 20 Nov).
+    def university_home(site)
+      host = (URI.parse(site).host.to_s rescue "")
+      host.end_with?(".edu") && host.count(".") > 1 ? "https://#{host.split('.').last(2).join('.')}" : site
     end
 
     # The "About <name>" paragraph's own links on a news page.
@@ -412,7 +455,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       page = snapshot(website) or return [ :not_found, nil, "Couldn't read the site" ]
       text = visible_text(page)
       return [ :not_named, page, "The page doesn't name #{name}" ] unless names?(text, name)
-      return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear?(text, brand(name))
+      return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear_exempt?(website) || nuclear?(text, brand(name))
       unless text.match?(US) || @us_shown_elsewhere || us_on_own_pages?(page)
         return [ :not_us, page, "Neither the home page nor its contact or about page shows a US address or 'United States'" ]
       end
