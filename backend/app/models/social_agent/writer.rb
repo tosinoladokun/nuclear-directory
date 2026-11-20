@@ -9,10 +9,12 @@ class SocialAgent::Writer
     - Give the event's date ("On 12 November") rather than "today", "this week" or "just". When the facts name a
       publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output.
+    - Say each thing once. When the facts are short, the post is short: never pad, restate the fact in other words,
+      or repeat a name, label or purpose in an extra sentence.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,
       no emoji, no links, no exclamation marks, no "not X but Y", no lists of three for rhythm.
   TEXT
-  LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "Two short paragraphs, 60 to 120 words." }.freeze
+  LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "One or two short paragraphs, at most 120 words; as short as the facts allow." }.freeze
   DRAFT = { type: "object", additionalProperties: false, required: %w[text], properties: { text: { type: "string" } } }.freeze
   JUDGE = { type: "object", additionalProperties: false, required: %w[pass reason],
             properties: { pass: { type: "boolean" }, reason: { type: "string" } } }.freeze
@@ -33,7 +35,7 @@ class SocialAgent::Writer
   def voice_ok?(text, item, crawl_run: nil)
     data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
-        "states nothing the facts don't, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
+        "states nothing the facts don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
       { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\nPost:\n#{text}" }
     ]).data
     [ data["pass"] == true, data["reason"] ]
