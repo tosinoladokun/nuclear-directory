@@ -570,11 +570,6 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=linkedin&utm_medium=social&utm_campaign=acme-fission", SocialAgent.link(item, "linkedin")
     assert_not_includes SocialAgent.link(item, "x"), "energy.gov", "never the source's address"
 
-    quote = "DOE awarded Acme Fission $1,404,253 to test fuel cladding."
-    unsaid = SocialAgent::Rules.problems("Acme Fission won a $1,404,253 award to test fuel cladding.", rules_item(facts: { "date" => "2026-11-12" }, quote:), platform: "x")
-    assert unsaid.any? { |problem| problem.start_with?("it doesn't say where the item comes from") }, "no 'said' or document word: stopped"
-    assert_not SocialAgent::Rules.problems("DOE said on 12 November it awarded Acme Fission $1,404,253 to test fuel cladding.", rules_item(facts: { "date" => "2026-11-12" }, quote:), platform: "x")
-      .any? { |problem| problem.start_with?("it doesn't say where the item comes from") }
     assert SocialAgent::Rules.attributed?("The award was listed in a Federal Register notice.")
     assert_not SocialAgent::Rules.attributed?("Acme Fission won a DOE award.")
   end

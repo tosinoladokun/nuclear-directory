@@ -65,7 +65,6 @@ module SocialAgent::Rules
     found.concat(people(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
-    found << "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" unless attributed?(text)
     found.concat(speaker_problems(text, item))
     found.concat(act_problems(text, item))
     found.concat(tense_problems(text))
@@ -76,6 +75,8 @@ module SocialAgent::Rules
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.own_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
     found.concat(source_problems(item.source_url, fetcher, item:, text:)) if found.empty?
+    # Last, so the source's own problems (it didn't answer, a sensitive page) are what a post that has them is told.
+    found << "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" if found.empty? && !attributed?(text)
     found
   end
 
