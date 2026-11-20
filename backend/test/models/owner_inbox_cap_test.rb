@@ -79,4 +79,22 @@ class OwnerInboxCapTest < ActiveSupport::TestCase
     complete.update_columns(website: "https://complete.example", description: "Builds reactors.", hq_city: "Austin")
     assert_equal [ complete.id, well_sourced.id ], OwnerInbox.new.ranked_companies.first(2)
   end
+
+  test "a role riding with its Create is ranked under its company, never as a company of its own; a proposed role never takes the Create (Copilot)" do
+    company = new_company("Role Rider Co")
+    # A company without a proposing claim of its own (pending already), so a proposed role could have taken the Create.
+    Candidate.where(subject_type: "Organization", subject_id: company.id).update_all(proposed_subject: false)
+    role = OrganizationRole.create!(organization: company, role: Role.find_or_create_by!(key: "fuel") { |r| r.name = "Fuel" }, verification_status: "pending")
+    claim = Candidate.create!(source: @page, crawl_run: @run, kind: "organization_role", payload: { "organization" => { "name" => company.name }, "role" => "fuel" },
+      quote: "q", status: "matched", subject_type: "OrganizationRole", subject_id: role.id, proposed_subject: true,
+      ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    DataQuality::Recommendations.record("#{claim.id} approve: its own page", by: "human:dq")
+
+    inbox = OwnerInbox.new
+    assert_equal [ company.id ], inbox.ranked_companies & [ company.id, role.id ], "ranked by its company only"
+    assert_not_includes inbox.ranked_companies, role.id
+    create = inbox.sections["new_record"].find { |entry| Candidate.find(entry.item.candidate_id).payload["name"] == company.name }
+    assert_equal "organization", Candidate.find(create.item.candidate_id).kind, "the Create stays the company's"
+    assert_includes create.copy_ids, claim.id, "the role rides with it"
+  end
 end

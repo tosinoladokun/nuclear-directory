@@ -84,7 +84,8 @@ class OwnerInbox
   # record or in its claims), then best-sourced (most distinct pages naming it), then newest.
   def ranked_companies
     @ranked_companies ||= begin
-      by_company = company_groups.flat_map { |_, copies| copies }.group_by(&:subject_id)
+      # By the Create's company (its first claim), riders included: a role rider's subject is its OrganizationRole (Copilot).
+      by_company = company_groups.group_by { |_, copies| copies.first.subject_id }.transform_values { |rows| rows.flat_map(&:last) }
       stored = Organization.where(id: by_company.keys).pluck(:id, *COMPLETE).to_h { |id, *values| [ id, COMPLETE.zip(values).to_h ] }
       complete = ->(id, claims) { COMPLETE.count { |field| stored.dig(id, field).present? || claims.any? { |c| c.payload[field].present? } } }
       by_company.sort_by { |id, claims| [ -complete.call(id, claims), -claims.map(&:source_id).uniq.size, -claims.map(&:id).max ] }.map(&:first)
@@ -149,10 +150,26 @@ class OwnerInbox
 
   # Whether a company's other claim goes with its Create: Data Quality approved this very payload (only its approve,
   # never the verifier's alone, and never one it said no to: DQ, 12 Nov); its quote still in its page; nothing contradicts it. Checked again when it's decided.
-  def self.rides_along?(claim, company_id)
-    claim.subject_id == company_id && claim.status.in?(%w[new matched needs_review]) &&
+  # company: the claim's company when the caller already has it (batched; Infra).
+  def self.rides_along?(claim, company_id, company: company_of(claim))
+    company == company_id && claim.status.in?(%w[new matched needs_review]) &&
       claim.dq_recommendation == "approve" && DataQuality::Recommendations.current?(claim) &&
       !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
+  end
+
+  # The company a claim is on: its subject, or a role claim's company (#811: the role rides with the Create).
+  def self.company_of(claim)
+    return claim.subject_id if claim.subject_type == "Organization"
+
+    companies_of([ claim ])[claim.id]
+  end
+
+  # { claim id => company id } for many claims, one query for their roles' companies.
+  def self.companies_of(claims)
+    roles = OrganizationRole.where(id: claims.select { |claim| claim.subject_type == "OrganizationRole" }.map(&:subject_id)).pluck(:id, :organization_id).to_h
+    claims.to_h do |claim|
+      [ claim.id, claim.subject_type == "Organization" ? claim.subject_id : (roles[claim.subject_id] if claim.subject_type == "OrganizationRole") ]
+    end
   end
 
   def self.quote_in_source?(candidate)
@@ -186,20 +203,28 @@ class OwnerInbox
     def one_create_per_company(grouped)
       creates = grouped.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
       by_company = creates.group_by { |_, copies| copies.first.subject_id }
+      # A role from its own page goes with the Create too (#811 end-to-end test: it was a row of its own).
+      role_rows = grouped.select { |(_, candidate_kind, subject_type), _| candidate_kind == "organization_role" && subject_type == "OrganizationRole" }
+      role_company = OrganizationRole.where(id: role_rows.map { |(*, subject_id, _), _| subject_id }).pluck(:id, :organization_id).to_h
+      role_rows.each do |key, copies|
+        company_id = role_company[key[3]]
+        by_company[company_id] << [ key, copies ] if by_company.key?(company_id)
+      end
       # He said No to the company (its proposing claim is rejected): what's left on it stays with Data Quality.
       declined = Candidate.where(subject_type: "Organization", subject_id: by_company.keys, proposed_subject: true, status: "rejected").distinct.pluck(:subject_id)
       by_company.each do |company_id, rows|
-        primary = rows.find { |_, copies| copies.any?(&:proposed_subject) }
+        # Only a company row can be the Create: a newly proposed role never takes its place (Copilot).
+        primary = rows.find { |(_, candidate_kind), copies| candidate_kind == "organization" && copies.any?(&:proposed_subject) }
         if primary.nil? && declined.include?(company_id)
           rows.each { |key, _| grouped.delete(key) }
           next
         end
         next if rows.size < 2
 
-        primary ||= rows.min_by { |_, copies| copies.map(&:id).min }
+        primary ||= rows.select { |(_, candidate_kind), _| candidate_kind == "organization" }.min_by { |_, copies| copies.map(&:id).min }
         (rows - [ primary ]).each do |key, copies|
           grouped.delete(key)
-          riders = copies.select { |claim| self.class.rides_along?(claim, company_id) }
+          riders = copies.select { |claim| self.class.rides_along?(claim, company_id, company: key[2] == "OrganizationRole" ? role_company[key[3]] : claim.subject_id) }
           primary.last.concat(riders)
           (@companions[primary.last.first.id] ||= []).concat(riders.map(&:id))
         end
