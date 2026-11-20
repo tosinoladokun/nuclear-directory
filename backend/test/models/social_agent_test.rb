@@ -23,7 +23,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   end
 
   # The source answers 200 (no network in tests).
-  OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "", etag: nil,
+  OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "<p>Published November 12, 2026</p>", etag: nil,
     last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
 
   def run_x(text, fetcher: OK_FETCHER.new(200), **options) = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(text, **options), fetcher:)
@@ -291,6 +291,17 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "DQ said no"
   ensure
     ENV.delete("SOCIAL_SKIP_FEEDS")
+  end
+
+  test "a news post's date must be on its source page, in its text or datePublished (DQ)" do
+    assert SocialAgent::Rules.page_dated?("<p>November 19, 2026</p>", "19 November 2026")
+    assert SocialAgent::Rules.page_dated?(%(<script type="application/ld+json">{"datePublished":"2026-11-19T10:00:00Z"}</script>), "19 November 2026")
+    assert SocialAgent::Rules.page_dated?("<p>Posted 11/19/2026</p>", "19 November 2026")
+    assert_not SocialAgent::Rules.page_dated?("<p>Pulsars, found faster.</p>", "19 November 2026")
+    undated = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>No date here</p>",
+      etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+    post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200))
+    assert_equal [ "blocked", "its date (12 November 2026) isn't on the source page" ], [ post.status, post.reason ]
   end
 
   test "a month's post count is a backstop" do

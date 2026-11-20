@@ -58,7 +58,7 @@ module SocialAgent::Rules
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.source_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
-    found.concat(source_problems(item.source_url, fetcher)) if found.empty?
+    found.concat(source_problems(item.source_url, fetcher, item:)) if found.empty?
     found
   end
 
@@ -75,6 +75,17 @@ module SocialAgent::Rules
         "the date #{day} #{Date::MONTHNAMES[month]} isn't in the source"
       end
     end
+  end
+
+  # The page states the date, in its text or its datePublished/published_time: "November 19, 2026", "19 November 2026",
+  # "Nov 19, 2026", "2026-11-19" or "11/19/2026".
+  def page_dated?(body, date_text)
+    date = Date.parse(date_text.to_s) rescue (return true) # no date to check
+    text = ActionController::Base.helpers.strip_tags(body).squish
+    meta = body.scan(/(?:datePublished|published_time|article:published|pubdate)[^0-9]{0,40}(\d{4}-\d{2}-\d{2})/i).flatten
+    forms = [ date.strftime("%B %-d, %Y"), date.strftime("%-d %B %Y"), date.strftime("%b %-d, %Y"), date.strftime("%b. %-d, %Y"),
+      date.iso8601, date.strftime("%m/%d/%Y"), date.strftime("%-m/%-d/%Y") ]
+    meta.include?(date.iso8601) || forms.any? { |form| text.include?(form) }
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
@@ -180,12 +191,16 @@ module SocialAgent::Rules
 
   # The source must answer 200 now (Founder 3.1: fetched within the last day); a block is a block, never retried.
   # Its page is checked for sensitive topics too, beyond the saved quote (Copilot).
-  def source_problems(url, fetcher)
+  def source_problems(url, fetcher, item: nil)
     response = fetcher.get(url.to_s)
     return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
 
     topic = ActionController::Base.helpers.strip_tags(response.body.to_s)[PAGE_SENSITIVE]
-    topic ? [ "its source page touches a sensitive topic (#{topic.downcase})" ] : []
+    return [ "its source page touches a sensitive topic (#{topic.downcase})" ] if topic
+    # A news post's date must be the page's own (DQ, 20 Nov: NASA's pulsar item showed a date the page didn't).
+    return [ "its date (#{item.facts['date']}) isn't on the source page" ] if item&.kind == "news" && !page_dated?(response.body.to_s, item.facts["date"])
+
+    []
   rescue StandardError => error
     [ "its source didn't answer (#{error.class})" ]
   end
