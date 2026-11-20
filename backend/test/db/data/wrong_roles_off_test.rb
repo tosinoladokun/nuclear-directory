@@ -52,4 +52,16 @@ class WrongRolesOffTest < ActiveSupport::TestCase
     assert_nothing_raised { run_it }
     assert_equal "unpublished", @rows[508].reload.verification_status
   end
+
+  test "a later verification event with an unchanged verified_at (a same-reviewer edit) also counts as decided again" do
+    VerificationEvent.create!(subject: @rows[509], to_status: "verified", by: BY, reason: "his own later edit", created_at: Time.utc(2026, 11, 20, 22))
+    assert_equal BEFORE, @rows[509].reload.verified_at, "verified_at is unchanged"
+    output = nil
+    assert_no_difference -> { VerificationEvent.where(subject: @rows[509]).count } do
+      output = run_it.output
+    end
+    assert_equal "verified", @rows[509].reload.verification_status
+    assert output.any? { |line| line.include?("was decided again") && line.include?("509") }, output.inspect
+    assert_equal "unpublished", @rows[508].reload.verification_status, "the other rows still come off"
+  end
 end
