@@ -3,6 +3,7 @@
 # Undo for an hour. Nothing goes live without his Yes; every decision is checked again
 # under its locks, as everywhere else.
 class Admin::InboxController < Admin::BaseController
+  SELECTED_YES = "Approved in Today (selected)".freeze
   # Rows one "selected" request decides, so it stays well under the web timeout (Infra).
   SELECTED_MAX = 50
 
@@ -146,7 +147,8 @@ class Admin::InboxController < Admin::BaseController
         # Only what Data Quality checked goes in a bulk Yes (#777); the row's other claims ride as on its Create.
         return [ "Data Quality hasn't checked it, so it's decided on its own row" ] if yes && !OwnerInbox.judged?(Candidate.includes(:source).find(ids.first))
 
-        results = yes ? DataQuality::Review.approve(ids, by: actor, reason: "Approved in Today") : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today")
+        # Its own reason, so a selection is told apart from a row's own button in the history (#777 audit).
+        results = yes ? DataQuality::Review.approve(ids, by: actor, reason: SELECTED_YES) : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today (selected)")
         stopped = results.reject(&:ok?)
         return stopped.flat_map(&:errors).uniq if stopped.any?
 

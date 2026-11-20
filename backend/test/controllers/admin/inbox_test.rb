@@ -239,6 +239,21 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_select "#inbox-item-#{@create.id} input[name='selected[]']", 1, "checked: it can be selected"
   end
 
+  test "the #777 audit case: a selection of unchecked, unconfirmed and contradicted claims approves none; a selection is told apart in the history" do
+    unconfirmed = claim({ "name" => "Bluefield Fission", "website" => "https://bluefield.example" }, subject: @new_co, ai_recommendation: "needs_review",
+      ai_reason: "The verifier couldn't confirm this from the source")
+    contradicted = claim({ "name" => "Rockville Nuclear", "hq_city" => "Annapolis" }, subject: @decided, ai_recommendation: "needs_review",
+      ai_reason: "#{DataQuality::Verifiers::Agent::CONTRADICTS} (the source gives Rockville): no")
+    picks = [ @create, @change, unconfirmed, contradicted ].map { |row| "claim:#{row.id}" }
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: picks }
+    assert_match(/Done 0, 4 failed: Data Quality hasn't checked it/, flash[:alert])
+    assert [ @create, @change, unconfirmed, contradicted ].none? { |row| row.reload.status_merged? }
+
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id}" ] }
+    assert_equal Admin::InboxController::SELECTED_YES, VerificationEvent.where(subject: @new_co, to_status: "verified").last&.reason
+  end
+
   test "an empty selection does nothing" do
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
     assert_equal "Tick at least one row first.", flash[:alert]
