@@ -9,7 +9,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   class FakeWriter
     attr_accessor :text, :voice
     def initialize(text, voice: [ true, nil ]) = (@text, @voice = text, voice)
-    def draft(_item, platform:, crawl_run: nil) = text.respond_to?(:call) ? text.call : text
+    def draft(_item, platform:, crawl_run: nil, feedback: nil, previous: nil) = text.respond_to?(:call) ? text.call : text
     def voice_ok?(_text, _item, crawl_run: nil) = voice
   end
 
@@ -274,7 +274,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal [ "it may name a person (Mary Lane)" ], SocialAgent::Rules.people("Acme Fission works with Mary Lane.", news),
       "a person's name stays stopped even when the source has it (GTM)"
     assert_empty SocialAgent::Rules.dates("On 19 November 2026, Acme Fission said so.", news)
-    assert_equal [ "the date 18 November isn't the item's own (19 November 2026)" ], SocialAgent::Rules.dates("On November 18, Acme Fission said so.", news)
+    assert_equal [ "the date 18 November isn't the item's own (19 November 2026) or in the source" ], SocialAgent::Rules.dates("On November 18, Acme Fission said so.", news)
     link = SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [],
       source_quote: "The deal closed on 7 November 2023.")
     assert_empty SocialAgent::Rules.dates("It closed on 7 November 2023.", link)
@@ -301,8 +301,10 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.page_dated?("<p>Pulsars, found faster.</p>", "19 November 2026")
     undated = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>No date here</p>",
       etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
-    post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200))
-    assert_equal [ "blocked", "its date (12 November 2026) isn't on the source page" ], [ post.status, post.reason ]
+    assert_nil run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200)),
+      "an item whose page lacks its date is skipped before drafting"
+    assert_equal "no usable item (its date (12 November 2026) isn't on the source page)",
+      CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
   end
 
   test "a post never says what its source doesn't, and keeps the source's qualifier on a deal (GTM)" do
@@ -357,6 +359,36 @@ class SocialAgentTest < ActiveSupport::TestCase
     item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: "q")
     assert_equal [ "it may name a person (Mary Lane)" ], SocialAgent::Rules.people("Mary Lane leads Acme Fission.", item)
     assert_empty SocialAgent::Rules.people("Mary Lane Engineering works with Acme Fission.", item)
+  end
+
+  test "the source page's own qualifier counts too: an MOU only the page body names must be in the post (rehearsal)" do
+    page = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200,
+      body: "<p>November 19, 2026</p><p>NANO signed a non-binding MOU with Surbana Jurong Infrastructure Pte. Ltd.</p>", etag: nil,
+      last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: "https://nanonuclearenergy.com/x",
+      path: "/", organization_ids: [], source_quote: "NANO Nuclear and SJ Group establish Southeast Asia collaboration")
+    problems = SocialAgent::Rules.source_problems(item.source_url, page.new(200), item:, text: "NANO Nuclear and SJ Group set up a collaboration.")
+    assert_includes problems, "it leaves out the source's qualifier (MOU)"
+    assert_empty SocialAgent::Rules.people("NANO Nuclear signed with Surbana Jurong Infrastructure Pte. Ltd.", item), "a legal name isn't a person"
+  end
+
+  test "a stopped draft gets one revision with what stopped it, then every check again (rehearsal)" do
+    drafts = [ "Acme Fission won 2 DOE awards.", DRAFT ]
+    seen = []
+    writer = FakeWriter.new(-> { drafts.shift })
+    writer.define_singleton_method(:draft) { |_item, platform:, crawl_run: nil, feedback: nil, previous: nil| seen << feedback; drafts.shift }
+    post = SocialAgent.run("x", now: MONDAY, writer:, fetcher: OK_FETCHER.new(200))
+    assert_equal "drafted", post.status
+    assert_equal [ nil, "the number 2 isn't in the source" ], seen
+  end
+
+  test "a sensitive word in passing deep in a page isn't its subject; in its opening it is (rehearsal)" do
+    page = ->(body) { Struct.new(:body) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body:, etag: nil,
+      last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }.new(body) }
+    filler = "<p>#{'The reactor design moves ahead with its partners and suppliers. ' * 20}</p>"
+    assert_empty SocialAgent::Rules.source_problems("https://x.example", page.("<article>#{filler}<p>It holds up beyond any credible accident scenario.</p></article>"))
+    assert_equal [ "its source page touches a sensitive topic (accident)" ],
+      SocialAgent::Rules.source_problems("https://x.example", page.("<article><p>An accident at the plant injured two workers.</p>#{filler}</article>"))
   end
 
   test "a month's post count is a backstop" do

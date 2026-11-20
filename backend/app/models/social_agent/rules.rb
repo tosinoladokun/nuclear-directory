@@ -20,8 +20,9 @@ module SocialAgent::Rules
   }.freeze
   SUPERLATIVES = /\b(largest|biggest|first|only|smallest|fastest|most|record|unprecedented|leading|best|world's)\b/i
   SENSITIVE = /\b(incidents?|accidents?|injur\w*|casualt\w*|deaths?|died|killed|fatal\w*|leak\w*|contaminat\w*|evacuat\w*|security|
-    terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|export\s+controls?|lawsuits?|litigation|indict\w*)\b/ix
+    terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|warheads?|pit\s+production|export\s+controls?|lawsuits?|litigation|indict\w*)\b/ix
   # On the fetched page (menus included), a narrower list: a regulator's page always has "Security" in its menu.
+  LEDE = 800
   PAGE_SENSITIVE = /\b(incidents?|accidents?|casualt\w*|killed|fatal\w*|contaminat\w*|evacuat\w*|sabotage|theft|stolen|weapons?)\b/i
   MONTHS = Date::MONTHNAMES.compact.freeze
   STATES = %w[Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho Illinois
@@ -40,7 +41,8 @@ module SocialAgent::Rules
     (COUNTRIES.include?(words.last) && words[0...-1].all? { |word| REGIONS.include?(word) })
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
   ARTICLES = %w[The A An This That These Those].freeze
-  NOT_PERSON = %w[Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
+  NOT_PERSON = %w[Pte Ltd Limited GmbH AG PLC SA Inc Corp Infrastructure Challenge Summit Prize Award Conference Forum Initiative
+    Mission Facility Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
     Authority University Institute Corporation Company Inc LLC Power Station Plant Unit Units Reactor Project Program Federal Register
     Fund Bank Group Energy Fuel Fuels Technologies Systems Services Holdings Partners Capital Industries Electric Utility Council
     Board Court Congress Senate House Army Navy Air Force Generating Clean Center Centre Site County City River Lake Valley].freeze
@@ -57,10 +59,11 @@ module SocialAgent::Rules
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found << "it says the same thing twice" if repeats?(text)
+    found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
-    found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.source_text}" =~ SENSITIVE
+    found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.own_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
-    found.concat(source_problems(item.source_url, fetcher, item:)) if found.empty?
+    found.concat(source_problems(item.source_url, fetcher, item:, text:)) if found.empty?
     found
   end
 
@@ -71,12 +74,19 @@ module SocialAgent::Rules
     own = Date.parse(item.facts["date"].to_s) rescue nil
     text.scan(DATE).filter_map do |day_first, month_a, month_b, day_last|
       day, month = (day_first || day_last).to_i, Date::MONTHNAMES.index(month_a || month_b)
-      if item.kind == "news" && own
-        "the date #{day} #{Date::MONTHNAMES[month]} isn't the item's own (#{item.facts['date']})" unless own.day == day && own.month == month
-      elsif !item.source_quote.to_s.match?(/\b(#{day}\s+#{Date::MONTHNAMES[month]}|#{Date::MONTHNAMES[month]}\s+#{day})\b/i)
-        "the date #{day} #{Date::MONTHNAMES[month]} isn't in the source"
-      end
+      # The item's own date, or another date its source states (a deadline, a closing date).
+      stated = [ item.source_quote, item.page_text ].compact.join("\n").match?(/\b(#{day}\s+#{Date::MONTHNAMES[month]}|#{Date::MONTHNAMES[month]}\s+#{day})\b/i)
+      next if stated || (item.kind == "news" && own && own.day == day && own.month == month)
+
+      item.kind == "news" && own ? "the date #{day} #{Date::MONTHNAMES[month]} isn't the item's own (#{item.facts['date']}) or in the source" : "the date #{day} #{Date::MONTHNAMES[month]} isn't in the source"
     end
+  end
+
+  # A page's main text: its article or main element, without scripts, menus, headers and footers.
+  def article_text(body)
+    doc = Nokogiri::HTML(body.to_s)
+    doc.css("script, style, nav, header, footer, noscript, aside").remove
+    (doc.at_css("article, main") || doc.at_css("body") || doc).text.squish
   end
 
   # The page states the date, in its text or its datePublished/published_time: "November 19, 2026", "19 November 2026",
@@ -108,7 +118,9 @@ module SocialAgent::Rules
       found << "it calls it #{name}, which its source doesn't" if text.match?(pattern) && !item.source_text.match?(pattern)
     end
     QUALIFIERS.each do |pattern, name|
-      found << "it leaves out the source's qualifier (#{name})" if item.source_text.match?(pattern) && !text.match?(pattern)
+      # "Proposed" and "planned" count only in the item's own words: a page's other stories have their own plans.
+      said = %w[proposed planned].include?(name) ? item.own_text : item.source_text
+      found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
     end
     found
   end
@@ -223,16 +235,23 @@ module SocialAgent::Rules
 
   # The source must answer 200 now (Founder 3.1: fetched within the last day); a block is a block, never retried.
   # Its page is checked for sensitive topics too, beyond the saved quote (Copilot).
-  def source_problems(url, fetcher, item: nil)
+  def source_problems(url, fetcher, item: nil, text: nil)
     response = fetcher.get(url.to_s)
     return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
 
-    topic = ActionController::Base.helpers.strip_tags(response.body.to_s)[PAGE_SENSITIVE]
+    # The article's subject, not a word in passing (rehearsal: "beyond any credible accident scenario" in a permit story,
+    # "safety incident rates improved"): in its opening, or three times or more.
+    article = article_text(response.body.to_s)
+    hits = article.scan(PAGE_SENSITIVE).flatten
+    topic = article.first(LEDE)[PAGE_SENSITIVE] || (hits.first if hits.size >= 3)
     return [ "its source page touches a sensitive topic (#{topic.downcase})" ] if topic
     # A news post's date must be the page's own (DQ, 20 Nov: NASA's pulsar item showed a date the page didn't).
     return [ "its date (#{item.facts['date']}) isn't on the source page" ] if item&.kind == "news" && !page_dated?(response.body.to_s, item.facts["date"])
+    # The page's own words too: an MOU the title doesn't mention is still an MOU (rehearsal, 20 Nov).
+    return [] unless item && text
 
-    []
+    page = item.with(source_quote: [ item.source_quote, ActionController::Base.helpers.strip_tags(response.body.to_s).squish.first(20_000) ].join("\n"))
+    qualifiers(text, page).reject { |problem| problem.start_with?("it calls it", "it says") }
   rescue StandardError => error
     [ "its source didn't answer (#{error.class})" ]
   end

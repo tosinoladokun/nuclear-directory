@@ -10,9 +10,17 @@ class SocialAgent::Writer
       publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output. Keep the
       source's own qualifier on a deal (an MOU, non-binding, a letter of intent, a framework agreement).
+    - Say what the source says it did, with its own verb and tense ("DOE announced a conditional commitment" when the
+      source says announced). Never a status word the source doesn't use, and never stack verbs ("said it announced").
+    - Write whole sentences: no fragments after a semicolon.
+    - The date in the facts is when the source published the item: write "<publisher> said on <date> that ...",
+      and give any other date only as the source states it (a deadline, a closing date).
+    - Keep the conditions the source puts on what it reports (subject to approvals, does not commit to a project). A
+      condition is its own fact, not a repetition: "non-binding" and "commits neither party to a project" can both stay.
     - Never say what the source doesn't say: no "no further details", "undisclosed" or "did not say".
     - Call the deal what the source calls it (an MOU is an MOU, not "a collaboration"), and name each party as the source
-      names it, with the relationship it states ("Surbana Jurong Infrastructure, an SJ Group affiliate").
+      names it, with the relationship it states ("Surbana Jurong Infrastructure, an SJ Group affiliate"); a legal ending
+      such as Inc., Ltd. or Pte. Ltd. may be left off.
     - Say each thing once. When the facts are short, the post is short: never pad, restate the fact in other words,
       or repeat a name, label or purpose in an extra sentence.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,
@@ -27,11 +35,13 @@ class SocialAgent::Writer
     @client = client
   end
 
-  def draft(item, platform:, crawl_run: nil)
+  # feedback/previous: a revision of a draft the checks stopped, with what stopped it.
+  def draft(item, platform:, crawl_run: nil, feedback: nil, previous: nil)
     facts = item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")
+    revise = "\n\nYour earlier draft:\n#{previous}\n\nIt was stopped because: #{feedback}\nWrite it again, fixing that." if feedback
     @client.structured(role: :extract, schema: DRAFT, schema_name: "post", crawl_run:, messages: [
       { role: "system", content: "#{RULES}\n#{LENGTH.fetch(platform)}" },
-      { role: "user", content: "Facts:\n#{facts}\n\nSource's words:\n#{item.source_quote}" }
+      { role: "user", content: "Facts:\n#{facts}\n\nSource's words:\n#{item.source_quote}\n#{item.page_text}#{revise}" }
     ]).data.fetch("text").strip
   end
 
@@ -39,8 +49,9 @@ class SocialAgent::Writer
   def voice_ok?(text, item, crawl_run: nil)
     data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
-        "states nothing the facts don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
-      { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\nPost:\n#{text}" }
+        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
+      { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\n" \
+        "Source's words:\n#{item.source_quote}\n#{item.page_text}\n\nPost:\n#{text}" }
     ]).data
     [ data["pass"] == true, data["reason"] ]
   end
