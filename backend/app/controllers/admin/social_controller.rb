@@ -19,6 +19,30 @@ class Admin::SocialController < Admin::BaseController
     redirect_to admin_social_path, notice:
   end
 
+  # A post Tosin made by hand (#877): one "posted" row per platform for the item, so the agent's 14-day cooldown and its one-send
+  # index keep it from posting the same item again. The item is a news item by id or by its source URL.
+  def by_hand
+    item = params[:item].to_s.strip
+    news = (NewsItem.find_by(id: item) if item.match?(/\A\d+\z/)) || NewsItem.find_by(url: item)
+    platforms = Array(params[:platforms]) & SocialChannel::PLATFORMS
+    permalink = params[:permalink].to_s.strip.presence
+    if news.nil? || platforms.empty? || (permalink && !permalink.match?(%r{\Ahttps?://\S+\z}))
+      redirect_to admin_social_path, alert: "Not recorded: give a news item's id or source URL, at least one platform, and a link that starts with https:// if you add one." and return
+    end
+
+    orgs = news.news_mentions.where(subject_type: "Organization").pluck(:subject_id)
+    saved, already = platforms.partition do |platform|
+      SocialPost.create!(platform:, status: "posted", subject: news, text: "Posted by hand.", source_url: news.url, organization_ids: orgs,
+        permalink:, posted_at: Time.current)
+      true
+    rescue ActiveRecord::RecordNotUnique
+      false
+    end
+    notice = "Recorded for #{saved.map { |p| p == 'x' ? 'X' : 'LinkedIn' }.to_sentence}: the agent won't post it again." if saved.any?
+    notice = [ notice, "#{already.map { |p| p == 'x' ? 'X' : 'LinkedIn' }.to_sentence} already had it." ].compact.join(" ") if already.any?
+    redirect_to admin_social_path, notice:
+  end
+
   def update
     channel = SocialChannel.for(params[:platform])
     if channel.update(mode: params[:mode], paused_reason: nil)

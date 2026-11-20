@@ -26,6 +26,24 @@
     <% end %>
   </section>
 
+  <section class="nd-stack" aria-labelledby="social-by-hand">
+    <h2 id="social-by-hand" class="type-admin-h2 m-0">Posted by hand</h2>
+    <p class="type-small m-0">Made a post yourself? Record it here so the agent doesn't post the same item within two weeks.</p>
+    <%= form_with url: admin_social_by_hand_path, class: "nd-stack", id: "social-by-hand-form" do %>
+      <label class="type-small" for="by-hand-item">News item (its id, or its source link)</label>
+      <%= text_field_tag :item, nil, id: "by-hand-item", class: "nd-input type-input", required: true %>
+      <fieldset class="m-0 p-0 border-0">
+        <legend class="type-small">Where you posted it</legend>
+        <% SocialChannel::PLATFORMS.each do |platform| %>
+          <label class="type-body"><%= check_box_tag "platforms[]", platform, true, id: "by-hand-#{platform}" %> <%= platform == "x" ? "X" : "LinkedIn" %></label>
+        <% end %>
+      </fieldset>
+      <label class="type-small" for="by-hand-permalink">Link to your post (optional)</label>
+      <%= text_field_tag :permalink, nil, id: "by-hand-permalink", class: "nd-input type-input", placeholder: "https://" %>
+      <%= submit_tag "Record it", class: "nd-btn nd-btn--outline type-ui" %>
+    <% end %>
+  </section>
+
   <section class="nd-stack" aria-labelledby="social-log">
     <h2 id="social-log" class="type-admin-h2 m-0">Log</h2>
     <% if @posts.empty? %>

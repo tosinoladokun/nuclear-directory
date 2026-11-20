@@ -44,4 +44,36 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
       assert_equal "No draft. Why: X: it's a weekend; LinkedIn: switched off.", flash[:notice]
     end
   end
+
+  test "a post made by hand is recorded per platform, so the agent won't post the item again (#877)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou", title: "NANO and SJ Group sign a non-binding MOU", publisher: "NANO Nuclear Energy", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    company = Organization.create!(name: "NANO Nuclear Energy", slug: "nano-nuclear-energy", verification_status: "verified", verified_by: "human:tosin")
+    news.news_mentions.create!(subject: company)
+
+    assert_difference -> { SocialPost.count }, 2 do
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x linkedin], permalink: "https://x.com/NuclearDir/status/1" }
+    end
+    assert_redirected_to admin_social_path
+    rows = SocialPost.where(subject: news).order(:platform)
+    assert_equal %w[linkedin x], rows.map(&:platform)
+    assert rows.all? { |row| row.status == "posted" && row.organization_ids == [ company.id ] && row.permalink == "https://x.com/NuclearDir/status/1" }
+    assert SocialPost.used.exists?(subject: news), "counts as used: the picker's cooldown sees it"
+
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: news.url, platforms: %w[x] }
+    end
+    assert_match(/already had it/, flash[:notice], "the one-send index: a second record is a no-op")
+
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: "999999", platforms: %w[x] }
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: [] }
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x], permalink: "javascript:alert(1)" }
+    end
+    assert_match(/Not recorded/, flash[:alert])
+
+    get admin_social_path
+    assert_select "form#social-by-hand-form input[name='platforms[]']", 2
+    assert_select ".nd-wait__what", text: /Posted by hand/
+  end
 end
