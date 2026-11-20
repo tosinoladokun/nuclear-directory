@@ -17,4 +17,9 @@ class AiCrawlerRangesTest < ActiveSupport::TestCase
     AiCrawlerRanges.refresh!(get: ->(_url) { "not json" })
     assert AiCrawlerRanges.verified?("20.171.206.10", "GPTBot/1.4"), "a failed fetch keeps the last ranges"
   end
+
+  test "a dropped connection on one list keeps the others (Copilot)" do
+    AiCrawlerRanges.refresh!(get: ->(url) { raise EOFError if url.include?("gptbot"); { prefixes: [ { ipv4Prefix: "216.73.216.0/22" } ] }.to_json })
+    assert AiCrawlerRanges.verified?("216.73.216.5", "ClaudeBot/1.0")
+  end
 end

@@ -24,7 +24,7 @@ module AiCrawlerRanges
     LISTS.each_value.uniq.each do |url|
       prefixes = JSON.parse(get.call(url).to_s).fetch("prefixes", []).filter_map { |row| row["ipv4Prefix"] || row["ipv6Prefix"] }
       ranges[url] = prefixes if prefixes.any?
-    rescue JSON::ParserError, KeyError, SocketError, Timeout::Error, SystemCallError, OpenSSL::SSL::SSLError, Net::HTTPError => error
+    rescue JSON::ParserError, KeyError, SocketError, Timeout::Error, SystemCallError, EOFError, OpenSSL::SSL::SSLError, Net::HTTPError => error
       Rails.logger.warn("[ai-crawlers] #{url}: #{error.class}")
     end
     store.write(CACHE_KEY, ranges, expires_in: KEEP)
@@ -40,10 +40,18 @@ module AiCrawlerRanges
     false
   end
 
+  # Read once into a local, replaced only when the new copy is ready, so a
+  # thread never sees it half-cleared (Copilot). Parsed once per hourly copy (Infra).
   def self.lists
-    self.local = nil if local && local[:at] < 1.hour.ago
-    # Parsed once per hourly copy, not per request (Infra).
-    (self.local ||= { at: Time.current, ranges: (store.read(CACHE_KEY) || {}).transform_values { |prefixes| prefixes.filter_map { |p| IPAddr.new(p) rescue nil } } })[:ranges]
+    copy = local
+    return copy[:ranges] if copy && copy[:at] > 1.hour.ago
+
+    saved = store.read(CACHE_KEY)
+    # The page cache may drop it after a day (Solid Cache max_age): fetch again, at most once an hour here (Copilot).
+    AiCrawlerRangesJob.perform_later if saved.nil? && !Rails.env.test?
+    ranges = (saved || {}).transform_values { |prefixes| prefixes.filter_map { |p| IPAddr.new(p) rescue nil } }
+    self.local = { at: Time.current, ranges: }
+    ranges
   end
 
   def self.fetch(url)
