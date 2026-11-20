@@ -406,6 +406,21 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match SocialAgent::Picker::NUCLEAR, "Holtec expands spent fuel storage"
   end
 
+  test "a draft still stopped after the last revision stays blocked with its reason; a revision gets only the reason, no new facts (DQ)" do
+    calls = []
+    writer = FakeWriter.new("x")
+    writer.define_singleton_method(:draft) do |item, platform:, crawl_run: nil, feedback: nil, previous: nil|
+      calls << [ item.facts, feedback ]
+      "Acme Fission won 2 DOE awards."
+    end
+    post = SocialAgent.run("x", now: MONDAY, writer:, fetcher: OK_FETCHER.new(200))
+    assert_equal [ "blocked", "the number 2 isn't in the source" ], [ post.status, post.reason ]
+    assert_equal 3, calls.size, "the first draft and two revisions"
+    assert_equal 1, calls.map(&:first).uniq.size, "every revision gets the same facts, nothing new"
+    assert_equal [ nil, "the number 2 isn't in the source", "the number 2 isn't in the source" ], calls.map(&:last)
+    assert_not SocialPost.where(status: SocialPost::SENT).exists?, "never posted"
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
