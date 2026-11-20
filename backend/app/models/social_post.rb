@@ -7,7 +7,7 @@ class SocialPost < ApplicationRecord
   STATUSES = %w[drafted sending queued posted unknown cancelled blocked failed].freeze
   SENT = %w[sending queued posted unknown].freeze
   # A post's subject: a news item (a deal or fact) or a newly added company.
-  SUBJECT_TYPES = %w[NewsItem Organization].freeze
+  SUBJECT_TYPES = %w[NewsItem Organization Relationship].freeze
   # No fact or company again within this, on any platform (the cross-platform cooldown).
   COOLDOWN = 14.days
 

@@ -1,5 +1,5 @@
 # Picks the day's item for a platform (#769): something the directory published in the last week (a news deal
-# or fact, then a newly added company), never one used on any platform in the last two weeks, nor a company
+# or fact, a new link between two companies, then a newly added company), never one used on any platform in the last two weeks, nor a company
 # already in a post the same day. Social playbook: fresh data only; skip rather than post filler.
 class SocialAgent::Picker
   FRESH = 7.days
@@ -15,7 +15,7 @@ class SocialAgent::Picker
 
   def call = candidates.find { |item| usable?(item) }
 
-  def candidates = news + companies
+  def candidates = news + links + companies
 
   private
     def news
@@ -32,6 +32,23 @@ class SocialAgent::Picker
                      "date" => news.published_on.strftime("%-d %B %Y"), "companies" => companies.map(&:name).join(", ") }.compact_blank,
             source_url: news.url, source_quote: [ news.title, news.summary ].compact.join("\n"),
             path: "/companies/#{companies.first.slug}", organization_ids: companies.map(&:id))
+        end
+    end
+
+    # A link between two published companies first approved this week, with its own quote and source (PM, 20 Nov:
+    # Cameco and Westinghouse weren't news to the picker).
+    def links
+      first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
+      published = Organization.published.select(:id)
+      Relationship.where(id: first, verification_status: "verified", ended_on: nil, from_organization_id: published, to_organization_id: published)
+        .includes(:from_organization, :to_organization).order(verified_at: :desc).filter_map do |link|
+          evidence = Evidence.where(subject: link).includes(:source).where.not(quote: [ nil, "" ]).order(:id).first or next
+          from, to = link.from_organization, link.to_organization
+          verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(link.relationship_type, link.relationship_type.humanize(capitalize: false))
+          SocialAgent::Item.new(subject: link, kind: "link",
+            facts: { "link" => "#{from.name} #{verb} #{to.name}", "detail" => link.description, "companies" => "#{from.name}, #{to.name}" }.compact_blank,
+            source_url: evidence.source&.url, source_quote: evidence.quote, path: "/companies/#{from.slug}", organization_ids: [ from.id, to.id ])
         end
     end
 

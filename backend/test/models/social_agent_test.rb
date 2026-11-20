@@ -62,6 +62,23 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_nil run_x("Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
   end
 
+  test "a link between two published companies, approved this week with its quote, is picked after news (PM)" do
+    @news.update_columns(verified_at: MONDAY - 20.days)
+    westinghouse = Organization.create!(name: "Westinghouse", slug: "westinghouse-test", verification_status: "verified", verified_by: BY)
+    acme = Organization.find_by!(slug: "acme-fission")
+    link = Relationship.create!(from_organization: acme, to_organization: westinghouse, relationship_type: "invests_in",
+      description: "49% stake", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
+    VerificationEvent.where(subject: link).update_all(created_at: MONDAY - 1.day)
+    VerificationEvent.create!(subject: link, to_status: "verified", by: BY, created_at: MONDAY - 1.day) unless VerificationEvent.exists?(subject: link, to_status: "verified")
+    page = Source.create!(url: "https://acme.example/news", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: link, source: page, quote: "Acme Fission holds a 49% stake in Westinghouse.", found_by: "human")
+
+    item = SocialAgent::Picker.new(platform: "x", now: MONDAY).call
+    assert_equal [ "link", link ], [ item.kind, item.subject ]
+    assert_equal "Acme Fission invests in Westinghouse", item.facts["link"]
+    assert_equal "https://acme.example/news", item.source_url
+  end
+
   test "a newly added company is used when there's no fresh news" do
     @news.update_columns(verified_at: MONDAY - 20.days)
     company = Organization.create!(name: "Beta Reactors", slug: "beta-reactors", domain: "beta.example", description: "Beta Reactors designs small reactors.",

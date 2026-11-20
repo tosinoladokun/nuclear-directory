@@ -80,7 +80,7 @@ module SocialAgent
 
     # Its fact still published at send time (it may have been taken off since the pick).
     unless post.subject.reload.verification_status == "verified"
-      return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{post.subject_type == 'NewsItem' ? 'news item' : 'company'} is no longer published") }
+      return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{{ 'NewsItem' => 'news item', 'Relationship' => 'link' }.fetch(post.subject_type, 'company')} is no longer published") }
     end
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
     sent = sender.call(post.text, post.link)
