@@ -45,4 +45,17 @@ class DataQuality::Plugins::NewsletterStoriesTest < ActiveSupport::TestCase
     assert_empty plugin.extract(source.(page("Google Opens Data Center", "2026-11-18", "Google opens a data center near a nuclear plant.")), nil), "broad: nuclear once in passing"
     assert_equal 1, plugin.extract(source.(page("Google Signs Nuclear Power Deal", "2026-11-18", "Google signs a nuclear power deal.")), nil).size, "broad: nuclear in the title"
   end
+
+  test "the quote is the page title even when only the head has it; an acronym-only page names its company (Copilot)" do
+    Organization.create!(name: "TVA", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "TVA")
+    @plugin = nil
+    body = "The utility plans new reactors at Clinch River. " * 15
+    html = %(<html><head><meta property="og:title" content="TVA Files Reactor Permit"><title>Home</title><meta property="article:published_time" content="2026-11-18"></head><body><p>#{body}</p></body></html>)
+    source = Source.create!(url: "https://www.tva.gov/news/tva-files", source_kind: "newsletter_stories", crawl_status: "ok", content_text: html)
+    claim = plugin.extract(source, nil).sole
+    assert_equal "TVA Files Reactor Permit", claim[:quote]
+    assert_includes claim[:payload]["about"].map { |hit| hit["name"] }, "TVA"
+    assert plugin.quote_in_source?(source, claim[:quote]), "the head-only title counts as in the source"
+    assert_includes plugin.verification_context(source, claim[:quote]), "Page title: TVA Files Reactor Permit"
+  end
 end

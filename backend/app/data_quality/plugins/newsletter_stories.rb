@@ -39,7 +39,7 @@ class DataQuality::Plugins::NewsletterStories < DataQuality::Plugin
     return [] unless source.crawl_ok? && source.content_text.present?
 
     doc = Nokogiri::HTML(source.content_text)
-    title = (doc.at("meta[property='og:title']")&.[]("content") || doc.at("title")&.text).to_s.squish
+    title = page_title(doc)
     text = visible_text(source)
     published = published_on(doc)
     return [] if title.blank? || published.nil? || published < @today.call - WINDOW_DAYS || published > @today.call
@@ -56,12 +56,23 @@ class DataQuality::Plugins::NewsletterStories < DataQuality::Plugin
       "published_on" => published.iso8601, "about" => named.first(5) } } ]
   end
 
+  # The quote is the page's own title, which may sit only in its <head> (Copilot).
+  def quote_in_source?(source, quote)
+    quote.present? && (page_title(Nokogiri::HTML(source.content_text.to_s)) == quote.squish || super)
+  end
+
+  def verification_context(source, quote)
+    "Page title: #{page_title(Nokogiri::HTML(source.content_text.to_s))}\n#{visible_text(source).first(3_000)}"
+  end
+
   def source_facts(_source)
     "This is the primary source a nuclear newsletter story linked to: the page itself (a company's own site or a US " \
       "government page), with its own title and date. The newsletter is never cited."
   end
 
   private
+    def page_title(doc) = (doc.at("meta[property='og:title']")&.[]("content") || doc.at("title")&.text).to_s.squish
+
     # Primary-source links from recent newsletter emails, newest email first.
     def story_links
       @story_links ||= begin
@@ -113,6 +124,12 @@ class DataQuality::Plugins::NewsletterStories < DataQuality::Plugin
       @patterns ||= @directory.published_names.flat_map do |type, names|
         names.select { |name| name.length >= MIN_NAME }.map { |name| [ type, name, /(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/i ] }
       end
-      @patterns.filter_map { |type, name, pattern| { "name" => name, "type" => type } if text.match?(pattern) }.uniq { |hit| hit["name"].downcase }
+      # A short all-capitals name (TVA) only as a whole word in capitals, as wire_press reads it (Copilot).
+      @acronyms ||= @directory.published_names.flat_map do |type, names|
+        names.select { |name| name.length < MIN_NAME && name.match?(/\A[A-Z0-9&]{2,3}\z/) }.map { |name| [ type, name ] }
+      end
+      long = @patterns.filter_map { |type, name, pattern| { "name" => name, "type" => type } if text.match?(pattern) }
+      short = @acronyms.filter_map { |type, name| { "name" => name, "type" => type } if text.match?(/(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/) }
+      (long + short).uniq { |hit| hit["name"].downcase }
     end
 end
