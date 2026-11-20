@@ -41,6 +41,8 @@ plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"]
 # the forks used about half the memory before any job ran. SOLID_QUEUE_MODE=fork
 # restores the default.
 solid_queue_mode ENV.fetch("SOLID_QUEUE_MODE", "async").to_sym if ENV["SOLID_QUEUE_IN_PUMA"]
+# Restarts this process if its job worker dies, and alerts when the queue is stuck (QueueWatchdog, P0 after 19 Nov).
+after_booted { QueueWatchdog.start } if ENV["SOLID_QUEUE_IN_PUMA"]
 
 # Specify the PID file. Defaults to tmp/pids/server.pid in development.
 # In other environments, only set the PID file if requested.

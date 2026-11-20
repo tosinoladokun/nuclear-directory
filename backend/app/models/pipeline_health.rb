@@ -77,6 +77,8 @@ class PipelineHealth
       "budget" => budget,
       "social-silent" => social_silent,
       "db-restarted" => db_restarted,
+      # The watchdog checks every minute; the daily check shows it on Admin > Health too.
+      QueueWatchdog::KEY => QueueHealth.new(now: @now).problem,
       "indexnow-refused" => ("IndexNow refused the last two batches (check INDEXNOW_KEY and its key file)" if IndexNowSubmission.refused_twice?),
       "search-limit" => search_limit,
       "sources-silent" => sources_silent

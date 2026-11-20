@@ -7,10 +7,11 @@ class AutopilotMailer < ApplicationMailer
   FROM = CorrectionMailer::FROM
   TO = "hello@nuclear-directory.org".freeze
 
-  def self.notify(key:, title:, body:, state:)
+  def self.notify(key:, title:, body:, state:, deliver_now: false)
     return Rails.logger.info("[autopilot] no email for #{key}: RESEND_API_KEY not set") if ENV["RESEND_API_KEY"].blank?
 
-    with(key:, title:, body:, state:).alert.deliver_later
+    mail = with(key:, title:, body:, state:).alert
+    deliver_now ? mail.deliver_now : mail.deliver_later
   end
 
   def alert

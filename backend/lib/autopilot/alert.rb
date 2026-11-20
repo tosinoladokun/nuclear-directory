@@ -23,7 +23,8 @@ module Autopilot
     end
 
     # :sent (something went out), :already (open, and said recently), or :failed (nothing could be said).
-    def self.raise!(key, title:, body:)
+    # deliver_now: the email goes at once, not through the job queue (the queue-stuck alert can't wait on the queue).
+    def self.raise!(key, title:, body:, deliver_now: false)
       now = Time.current
       alert = AutopilotAlert.find_or_initialize_by(key: key.to_s)
       alert.assign_attributes(title:, opened_at: now, last_emailed_at: nil, last_reported_at: nil, resolved_at: nil) unless alert.persisted? && alert.open?
@@ -32,7 +33,7 @@ module Autopilot
       Rails.logger.warn("[autopilot] #{key}: #{title}")
 
       sent = [ channel(alert, :last_reported_at, now) { reporter.call(key, title, body) },
-               channel(alert, :last_emailed_at, now) { AutopilotMailer.notify(key:, title:, body:, state: :raised) } ]
+               channel(alert, :last_emailed_at, now) { AutopilotMailer.notify(key:, title:, body:, state: :raised, deliver_now:) } ]
       sent.any? ? :sent : (sent.all?(&:nil?) ? :already : :failed)
     rescue StandardError => error
       Rails.logger.error("[autopilot] couldn't raise #{key}: #{error.class}: #{error.message}")
