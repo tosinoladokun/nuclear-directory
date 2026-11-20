@@ -566,4 +566,21 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_nil late.reload.subject_id
     assert_match "but it matches Late Filer (by SEC CIK)", late.notes
   end
+
+  test "propose_fields and propose_link take a company's slug, a former slug or its page's address, not only an id" do
+    westinghouse = Organization.create!(name: "Westinghouse Electric Company", slug: "wec-test", verification_status: "verified", verified_by: "human:tosin")
+    FormerSlug.create!(sluggable: westinghouse, slug: "wec-old")
+    @page.update!(content_text: "Holtec International holds a 49% interest in Westinghouse Electric Company. Holtec is in Camden.")
+    act({ action: "propose_fields", target: "https://nuclear-directory.org/companies/#{@holtec.slug}", fields: { hq_city: "Camden" },
+          quote: "Holtec is in Camden.", source_url: @page.url, reason: "their page" },
+      { action: "propose_link", target: @holtec.slug, other: "wec-old", relationship_type: "invests_in",
+        quote: "Holtec International holds a 49% interest in Westinghouse Electric Company.", source_url: @page.url, reason: "their release" },
+      { action: "propose_link", target: @holtec.slug, other: "https://nuclear-directory.org/companies/nobody", relationship_type: "funds",
+        quote: "q", source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert results.second["ok"], results.inspect
+    assert_equal [ @holtec.id ] * 2, DqAction.order(:id).pluck(:target_id)
+    assert_equal "Westinghouse Electric Company", Candidate.find(results.second["id"]).payload.dig("to_organization", "name"), "the former slug found it"
+    assert_match 'no open company "nobody"', results.third["error"]
+  end
 end
