@@ -268,6 +268,31 @@ class SocialAgentTest < ActiveSupport::TestCase
       "country words alone never clear a name"
   end
 
+  test "a name written in the source isn't an unknown person; a news date must be the item's own; elsewhere it must be in the source (PM)" do
+    news = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: "Acme Fission and SJ Group will work with Mary Lane on reactors.")
+    assert_empty SocialAgent::Rules.people("Acme Fission works with Mary Lane.", news), "in the source as written"
+    assert_empty SocialAgent::Rules.dates("On 19 November 2026, Acme Fission said so.", news)
+    assert_equal [ "the date 18 November isn't the item's own (19 November 2026)" ], SocialAgent::Rules.dates("On November 18, Acme Fission said so.", news)
+    link = SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "The deal closed on 7 November 2023.")
+    assert_empty SocialAgent::Rules.dates("It closed on 7 November 2023.", link)
+    assert_equal [ "the date 8 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 8 November.", link)
+  end
+
+  test "the picker skips news Data Quality said no to, and news only an off-topic feed gives (PM)" do
+    assert SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }
+    feed = Source.create!(url: "https://science.example/feed", source_kind: "nasa_nuclear_news", crawl_status: "ok")
+    claim = Candidate.create!(source: feed, kind: "news_item", payload: {}, quote: "q", status: "merged", subject: @news)
+    ENV["SOCIAL_SKIP_FEEDS"] = "nasa_nuclear_news"
+    assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "only that feed gives it"
+    ENV.delete("SOCIAL_SKIP_FEEDS")
+    claim.update_columns(dq_recommendation: "reject")
+    assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "DQ said no"
+  ensure
+    ENV.delete("SOCIAL_SKIP_FEEDS")
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"

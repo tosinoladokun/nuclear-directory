@@ -25,6 +25,8 @@ class SocialAgent::Picker
       NewsItem.published.where(verified_at: (@now - FRESH)..@now, published_on: (@now - EVENT_MAX_AGE).to_date..)
         .includes(:news_mentions).order(verified_at: :desc).filter_map do |news|
           next if [ news.title, news.headline ].compact.any? { |text| text.match?(NOT_NEWS) }
+          # Never one Data Quality said no to, nor one only a feed it flagged off-topic gives (PM, 20 Nov).
+          next if rejected_news.include?(news.id) || off_topic?(news)
 
           mentions = news.news_mentions.select { |mention| mention.subject_type == "Organization" }
           companies = Organization.published.where(id: mentions.map(&:subject_id)).to_a
@@ -82,6 +84,20 @@ class SocialAgent::Picker
           source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}",
           organization_ids: [ company.id ])
       end
+    end
+
+    def rejected_news
+      @rejected_news ||= Candidate.where(subject_type: "NewsItem", dq_recommendation: "reject").distinct.pluck(:subject_id).to_set
+    end
+
+    # Feeds Data Quality flags as off-topic, by source kind (SOCIAL_SKIP_FEEDS, comma-separated on Render).
+    def off_topic?(news)
+      feeds = ENV["SOCIAL_SKIP_FEEDS"].to_s.split(",").map(&:strip).compact_blank
+      return false if feeds.empty?
+
+      kinds = (Evidence.where(subject: news).joins(:source).distinct.pluck("sources.source_kind") +
+        Candidate.where(subject_type: "NewsItem", subject_id: news.id).joins(:source).distinct.pluck("sources.source_kind")).uniq
+      kinds.any? && (kinds - feeds).empty?
     end
 
     def usable?(item)

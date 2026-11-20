@@ -54,11 +54,27 @@ module SocialAgent::Rules
     found << "its source isn't a primary one (#{host(item.source_url).presence || 'none'})" unless primary?(item)
     found.concat(status_words(text, item))
     found.concat(people(text, item))
+    found.concat(dates(text, item))
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.source_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
     found.concat(source_problems(item.source_url, fetcher)) if found.empty?
     found
+  end
+
+  # A date in a news post must be its item's own date (PM, 20 Nov: the page's published date); in any other post it must
+  # be written in the source. "19 November", "November 19" and "19 November 2026" all count.
+  DATE = /\b(?:(\d{1,2})\s+(#{Date::MONTHNAMES.compact.join('|')})|(#{Date::MONTHNAMES.compact.join('|')})\s+(\d{1,2}))\b/
+  def dates(text, item)
+    own = Date.parse(item.facts["date"].to_s) rescue nil
+    text.scan(DATE).filter_map do |day_first, month_a, month_b, day_last|
+      day, month = (day_first || day_last).to_i, Date::MONTHNAMES.index(month_a || month_b)
+      if item.kind == "news" && own
+        "the date #{day} #{Date::MONTHNAMES[month]} isn't the item's own (#{item.facts['date']})" unless own.day == day && own.month == month
+      elsif !item.source_quote.to_s.match?(/\b(#{day}\s+#{Date::MONTHNAMES[month]}|#{Date::MONTHNAMES[month]}\s+#{day})\b/i)
+        "the date #{day} #{Date::MONTHNAMES[month]} isn't in the source"
+      end
+    end
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
@@ -134,6 +150,8 @@ module SocialAgent::Rules
       next if words.all? { |word| MONTHS.include?(word) || STATES.include?(word) } || place?(words)
       next if words.any? { |word| NOT_PERSON.include?(word) }
       next if known.include?(phrase.downcase) || directory_name?(phrase)
+      # Written exactly so in the source, its title included, it isn't an unknown person (PM, 20 Nov).
+      next if item.source_text.include?(phrase)
 
       "it may name a person (#{phrase})"
     end
