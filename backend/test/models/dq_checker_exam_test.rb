@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "../test_helpers/fake_checker_llm"
 
 # #776: the exam freezes its stratified set once and reports per field, with every disagreement.
 class DqCheckerExamTest < ActiveSupport::TestCase
@@ -10,7 +11,7 @@ class DqCheckerExamTest < ActiveSupport::TestCase
         quote: "Co #{id} Inc. is a nuclear company", verdict: id % 5 == 0 ? "reject" : "approve", reason: "dq #{id}" }
     end
     File.write(path, rows.map(&:to_json).join("\n"))
-    llm = DqCheckerTest::FakeLlm.new(extract: Array.new(20) { |i| [ i.zero? ? "approve" : "reject", "model #{i}" ] })
+    llm = FakeCheckerLlm.new(extract: Array.new(20) { |i| [ i.zero? ? "approve" : "reject", "model #{i}" ] })
     exam = DqChecker::Exam.new(path, checker: DqChecker.new(llm:))
 
     frozen = exam.frozen_ids
@@ -24,5 +25,12 @@ class DqCheckerExamTest < ActiveSupport::TestCase
     assert_equal 20, llm.asked.size
   ensure
     FileUtils.rm_rf(dir)
+  end
+
+  test "the frozen places are exactly the total, at least one per stratum (Copilot)" do
+    places = DqChecker::Exam.allocate({ a: 349, b: 349, c: 1, d: 1 }, 150)
+    assert_equal 150, places.values.sum
+    assert_equal [ 1, 1 ], places.values_at(:c, :d)
+    assert_equal 5, DqChecker::Exam.allocate({ a: 3, b: 2 }, 10).values.sum, "never more than the rows"
   end
 end

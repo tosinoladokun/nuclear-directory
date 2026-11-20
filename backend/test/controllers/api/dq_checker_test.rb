@@ -16,7 +16,24 @@ class Api::DqCheckerTest < ActionDispatch::IntegrationTest
     assert_equal({ "website" => { "unsure" => 1 } }, response.parsed_body["counts"])
     assert_equal [ claim.id, "unsure", "thin page" ], response.parsed_body["verdicts"].sole.values_at("candidate_id", "verdict", "reason")
 
+    assert_nil response.parsed_body["next_after"]
+
+    stub_const = Api::Dq::CheckerController::MAX
+    2.times { CheckerVerdict.create!(candidate: claim, field: "website", verdict: "approve", reason: "r", prompt_version: "v#{_1}") }
+    Api::Dq::CheckerController.send(:remove_const, :MAX)
+    Api::Dq::CheckerController.const_set(:MAX, 2)
+    get api_dq_checker_path, params: { since: Date.current.iso8601 }, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    first = response.parsed_body
+    assert_equal 2, first["verdicts"].size
+    get api_dq_checker_path, params: { since: Date.current.iso8601, after: first["next_after"] }, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    assert_equal 1, response.parsed_body["verdicts"].size, "the rest on the next page"
+    assert_nil response.parsed_body["next_after"]
+    assert_equal 3, response.parsed_body["counts"]["website"].values.sum
+
     get api_dq_checker_path
     assert_response :unauthorized
+  ensure
+    Api::Dq::CheckerController.send(:remove_const, :MAX)
+    Api::Dq::CheckerController.const_set(:MAX, stub_const || 500)
   end
 end

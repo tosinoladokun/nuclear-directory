@@ -1,30 +1,11 @@
 require "test_helper"
+require_relative "../test_helpers/fake_checker_llm"
 
 # #776: the nightly checker in shadow: code holds first, the cheap model, the verify model on unsure,
 # the hard rules after an approve, and its limits counted from the database.
 class DqCheckerTest < ActiveSupport::TestCase
   BY = "human:tosin".freeze
   NOW = Time.utc(2026, 11, 21, 9, 30)
-
-  # Answers by role from a list; records what it was asked.
-  class FakeLlm
-    attr_reader :asked
-
-    def initialize(extract: [], verify: [], error: nil)
-      @answers = { extract:, verify: }
-      @error = error
-      @asked = []
-    end
-
-    def structured(role:, messages:, crawl_run: nil, **)
-      @asked << [ role, messages.last[:content] ]
-      raise @error if @error
-
-      crawl_run&.update!(stats: crawl_run.stats.merge("llm" => { "cost" => crawl_run.stats.dig("llm", "cost").to_f + 0.01 }))
-      verdict, reason = @answers.fetch(role).shift || [ "unsure", "no more answers" ]
-      DataQuality::OpenRouter::Client::Response.new(data: { "verdict" => verdict, "reason" => reason, "confidence" => 0.9 }, model: "fake-#{role}", usage: {})
-    end
-  end
 
   setup do
     @page = Source.create!(url: "https://acmefission.com/", source_kind: "dummy", crawl_status: "ok", content_sha256: "s",
@@ -41,7 +22,7 @@ class DqCheckerTest < ActiveSupport::TestCase
 
   test "the cheap model's unsure goes to the verify model; the verdict is kept, nothing else changes" do
     claim = website_claim
-    llm = FakeLlm.new(extract: [ [ "unsure", "thin" ] ], verify: [ [ "approve", "Its own home page names it and its reactors" ] ])
+    llm = FakeCheckerLlm.new(extract: [ [ "unsure", "thin" ] ], verify: [ [ "approve", "Its own home page names it and its reactors" ] ])
     assert_equal({ "approve" => 1 }, checker(llm).run)
 
     verdict = CheckerVerdict.sole
@@ -61,7 +42,7 @@ class DqCheckerTest < ActiveSupport::TestCase
     gone = website_claim(company: Organization.create!(name: "Gone Co", verification_status: "rejected", verified_by: BY))
     misquoted = website_claim(quote: "Acme Fission makes fusion magnets")
     Candidate.create!(source: @page, kind: "relationship", payload: {}, quote: "q", status: "needs_review")
-    llm = FakeLlm.new
+    llm = FakeCheckerLlm.new
 
     assert_equal({ "unsure" => 4 }, checker(llm).run)
     assert_empty llm.asked
@@ -79,7 +60,7 @@ class DqCheckerTest < ActiveSupport::TestCase
     taken = website_claim(website: "https://othersite.com")
     deep = website_claim(website: "https://acmefission.com/about")
     rejected = website_claim
-    llm = FakeLlm.new(extract: [ [ "approve", "ok" ], [ "approve", "ok" ], [ "approve", "ok" ], [ "reject", "names another company" ] ])
+    llm = FakeCheckerLlm.new(extract: [ [ "approve", "ok" ], [ "approve", "ok" ], [ "approve", "ok" ], [ "reject", "names another company" ] ])
 
     checker(llm).run
     reasons = CheckerVerdict.pluck(:candidate_id, :verdict, :reason).to_h { |id, *rest| [ id, rest ] }
@@ -91,17 +72,17 @@ class DqCheckerTest < ActiveSupport::TestCase
 
   test "an error or the spent budget is unsure, never an approve; the day's limits come from the database" do
     website_claim
-    checker(FakeLlm.new(error: DataQuality::OpenRouter::Client::Error.new("down"))).run
+    checker(FakeCheckerLlm.new(error: DataQuality::OpenRouter::Client::Error.new("down"))).run
     assert_equal [ "unsure", "Needs a human: the model didn't answer (Error)" ], CheckerVerdict.sole.values_at(:verdict, :reason)
 
     CheckerVerdict.delete_all
     CrawlRun.create!(source_kind: "dq_checker", stage: "verify", started_at: NOW - 1.hour, stats: { "llm" => { "cost" => 1.0 } })
-    assert_equal 1, checker(FakeLlm.new).run["stopped_for_budget"]
+    assert_equal 1, checker(FakeCheckerLlm.new).run["stopped_for_budget"]
     assert_equal 0, CheckerVerdict.count
 
     CrawlRun.where(source_kind: "dq_checker").delete_all
     DqChecker::LIMIT.times { |i| CheckerVerdict.create!(candidate: website_claim, field: "website", verdict: "unsure", reason: "r", prompt_version: "old#{i}", created_at: NOW) }
-    assert_match "done", checker(FakeLlm.new).run["skipped"]
+    assert_match "done", checker(FakeCheckerLlm.new).run["skipped"]
   end
 
   test "fields by what a claim fills; anything else is never judged" do
@@ -115,11 +96,11 @@ class DqCheckerTest < ActiveSupport::TestCase
 
   test "the page window is read in SQL around the quote, markup dropped; the start when the quote isn't found (Infra)" do
     @page.update!(content_text: "<p>#{'filler ' * 20_000}</p><p>Acme Fission builds small fission reactors in Ohio.</p>#{'tail ' * 5_000}")
-    window = checker(FakeLlm.new).window(website_claim)
+    window = checker(FakeCheckerLlm.new).window(website_claim)
     assert_includes window, "Acme Fission builds small fission reactors in Ohio"
     assert_operator window.length, :<=, DqChecker::WINDOW
     assert_not_includes window, "<p>"
-    assert checker(FakeLlm.new).window(website_claim(quote: "nowhere on it")).start_with?("filler")
+    assert checker(FakeCheckerLlm.new).window(website_claim(quote: "nowhere on it")).start_with?("filler")
   end
 
   test "news is approved only about companies we hold; a new company or role from an award or NRC row alone is unsure (DQ)" do
@@ -130,11 +111,39 @@ class DqCheckerTest < ActiveSupport::TestCase
     row = Source.create!(url: "https://www.usaspending.gov/recipient/x", source_kind: "usaspending_doe_awards", crawl_status: "ok", content_sha256: "u",
       content_text: "DE123,ACME FUSION INC,100000")
     award = Candidate.create!(source: row, kind: "organization", payload: { "name" => "Acme Fusion" }, quote: "DE123,ACME FUSION INC,100000", status: "new")
-    checker(FakeLlm.new(extract: Array.new(3) { [ "approve", "ok" ] })).run
+    checker(FakeCheckerLlm.new(extract: Array.new(3) { [ "approve", "ok" ] })).run
 
     verdicts = CheckerVerdict.pluck(:candidate_id, :verdict, :reason).to_h { |id, *rest| [ id, rest ] }
     assert_equal "approve", verdicts[held.id].first
     assert_equal [ "unsure", "News only for companies we hold; this one isn't in the directory" ], verdicts[not_held.id]
     assert_equal [ "unsure", "Only an award or register row names it; nuclear work needs its own page" ], verdicts[award.id]
+  end
+
+  test "Copilot: split claims' field_of is ignored; a role's company and an unmatched claim are found or held; budget checked before each call" do
+    assert_equal "hq", DqChecker.field_for("organization", { "name" => "A", "hq_city" => "Reno", "field_of" => 7 })
+
+    gone = Organization.create!(name: "Gone Role Co", verification_status: "rejected", verified_by: BY)
+    role = Candidate.create!(source: @page, kind: "organization_role", payload: { "organization" => { "name" => "Gone Role Co" }, "role" => "fuel" },
+      quote: "Acme Fission builds small fission reactors in Ohio", status: "new")
+    unmatched = Candidate.create!(source: @page, kind: "organization", payload: { "name" => "Nobody Here", "website" => "https://nobody.example" },
+      quote: "Acme Fission builds small fission reactors in Ohio", status: "new")
+    llm = FakeCheckerLlm.new
+    checker(llm).run
+    reasons = CheckerVerdict.pluck(:candidate_id, :reason).to_h
+    assert_match "rejected", reasons[role.id], "found #{gone.name} by name"
+    assert_equal "Not matched to one company yet", reasons[unmatched.id]
+    assert_empty llm.asked
+
+    CheckerVerdict.delete_all
+    claim = website_claim
+    spend = FakeCheckerLlm.new(extract: [ [ "unsure", "thin" ] ])
+    spend.define_singleton_method(:structured) do |**args|
+      result = super(**args)
+      args[:crawl_run].update!(stats: { "llm" => { "cost" => 1.0 } })
+      result
+    end
+    checker(spend).run
+    assert_equal [ :extract ], spend.asked.map(&:first), "no verify call once the day's budget is spent"
+    assert_match "budget", CheckerVerdict.find_by!(candidate_id: claim.id).reason
   end
 end

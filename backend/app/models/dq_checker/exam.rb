@@ -24,14 +24,32 @@ class DqChecker::Exam
     return JSON.parse(File.read(file)) if File.exist?(file)
 
     random = Random.new(SEED)
-    strata = @rows.group_by { |row| [ row["kind"], row["verdict"] ] }
-    ids = strata.sort.flat_map do |_, rows|
-      take = [ (rows.size * FROZEN.to_f / @rows.size).round, 1 ].max
-      rows.sort_by { |row| row["candidate_id"] }.shuffle(random: random).first(take).map { |row| row["candidate_id"] }
-    end
-    ids = ids.first(FROZEN).sort
+    strata = @rows.group_by { |row| [ row["kind"], row["verdict"] ] }.sort.to_h
+    ids = self.class.allocate(strata.transform_values(&:size), [ FROZEN, @rows.size ].min).flat_map do |key, take|
+      strata[key].sort_by { |row| row["candidate_id"] }.shuffle(random: random).first(take).map { |row| row["candidate_id"] }
+    end.sort
     File.write(file, JSON.generate(ids))
     ids
+  end
+
+  # Exactly total places across the strata ({ key => size }): one each first while places allow (largest
+  # strata first), the rest by largest remainder of their share (Copilot).
+  def self.allocate(sizes, total)
+    total = [ total, sizes.values.sum ].min
+    places = sizes.transform_values { 0 }
+    sizes.sort_by { |key, size| [ -size, key.to_s ] }.first(total).each { |key, _| places[key] = 1 }
+    left = total - places.values.sum
+    whole = sizes.values.sum.to_f
+    shares = sizes.to_h { |key, size| [ key, [ size * total / whole - places[key], 0 ].max ] }
+    shares.each { |key, share| extra = [ share.floor, sizes[key] - places[key], left ].min; places[key] += extra; left -= extra }
+    shares.sort_by { |key, share| [ -(share % 1), key.to_s ] }.cycle.each do |key, _|
+      break if left.zero?
+      next if places[key] >= sizes[key]
+
+      places[key] += 1
+      left -= 1
+    end
+    places
   end
 
   def run(set)
@@ -46,21 +64,24 @@ class DqChecker::Exam
     report(results, set, run.reload.stats.dig("llm", "cost").to_f)
   end
 
+  # A claim held locally goes through the nightly path (its holds and page); otherwise only its quote is read,
+  # and the report keeps the two apart (Copilot).
   def claim_for(row)
     candidate = Candidate.find_by(id: row["candidate_id"], kind: row["kind"])
-    stored = candidate && @checker.window(candidate)
-    org = candidate&.subject if candidate&.subject_type == "Organization"
-    page = stored.presence || row["quote"]
+    return [ @checker.claim_for(candidate), "page" ] if candidate && @checker.window(candidate).present?
+
     claim = DqChecker::Claim.new(id: row["candidate_id"], kind: row["kind"], payload: row["payload"], quote: row["quote"], source_kind: row["source_kind"],
-      page:, holding: @checker.holding(org), hold: nil)
-    [ claim, stored.present? ? "page" : "quote only" ]
+      page: row["quote"], holding: {}, hold: nil)
+    [ claim, "quote only" ]
   end
 
   def report(results, set, cost)
     lines = [ "# Checker exam (#{set}, #{results.size} claims, #{DqChecker::PROMPT_VERSION}), cost $#{cost.round(4)}", "" ]
     lines << "| Field | Claims | DQ approves kept (approve or unsure) | Approvals of DQ rejects | Unsure |"
     lines << "| --- | --- | --- | --- | --- |"
-    results.group_by(&:field).sort.push([ "all", results ]).each do |field, rows|
+    groups = results.group_by(&:field).sort + [ [ "all", results ] ] +
+      results.group_by(&:page).sort.map { |page, rows| [ "all, #{page}", rows ] }
+    groups.each do |field, rows|
       approves = rows.select { |row| row.dq == "approve" }
       kept = approves.count { |row| row.answer.verdict != "reject" }
       bad = rows.count { |row| row.dq == "reject" && row.answer.verdict == "approve" }

@@ -81,7 +81,7 @@ class DqChecker
     when "organization_role" then "role"
     when "news_item" then "news"
     when "organization"
-      keys = payload.keys - %w[name aliases]
+      keys = payload.keys - %w[name aliases field_of]
       return "new_company" if keys.empty?
 
       fields = keys.map { |key| FIELDS[key] }
@@ -134,14 +134,44 @@ class DqChecker
   end
 
   def claim_for(candidate)
-    org = candidate.subject if candidate.subject_type == "Organization"
+    org = company_of(candidate)
+    source_kind = Source.where(id: candidate.source_id).pick(:source_kind)
     hold = hold_for(candidate, org)
     page = (window(candidate) unless hold)
     hold ||= "There's no stored page to read" if page.blank?
-    hold ||= "The quote isn't on the stored page" unless DqChecker.quoted?(candidate.quote, page)
-    Claim.new(id: candidate.id, kind: candidate.kind, payload: candidate.payload, quote: candidate.quote,
-      source_kind: Source.where(id: candidate.source_id).pick(:source_kind),
+    hold ||= quote_hold(candidate, source_kind, page)
+    Claim.new(id: candidate.id, kind: candidate.kind, payload: candidate.payload, quote: candidate.quote, source_kind:,
       page:, holding: holding(org), hold:)
+  end
+
+  # The company a claim is about: its subject, a role's company, or (not matched yet) the one open or closed
+  # company with exactly its name; nil when there's none or more than one.
+  def company_of(candidate)
+    case candidate.subject_type
+    when "Organization" then return candidate.subject
+    when "OrganizationRole" then return candidate.subject&.organization
+    end
+    name = (candidate.kind == "organization_role" ? candidate.payload.dig("organization", "name") : candidate.payload["name"]).to_s.squish
+    return if name.blank?
+
+    found = Organization.where("lower(name) = ?", name.downcase).limit(2).to_a
+    found.first if found.one?
+  end
+
+  # The plug-in's own quote check when it has one (several read rows, not text), on pages up to MAX_CHECKED;
+  # otherwise the quote must be in the window read from the stored page (Copilot, Infra).
+  MAX_CHECKED = 1.megabyte
+
+  def quote_hold(candidate, source_kind, page)
+    plugin = (DataQuality::Plugin.for(source_kind) rescue nil)
+    if plugin && plugin.method(:quote_in_source?).owner != DataQuality::Plugin
+      size = Source.where(id: candidate.source_id).pick(Arel.sql("octet_length(content_text)")).to_i
+      return "The page is too large to check its quote here" if size > MAX_CHECKED
+      return if plugin.quote_in_source?(Source.find(candidate.source_id), candidate.quote)
+    elsif DqChecker.quoted?(candidate.quote, page)
+      return
+    end
+    "The quote isn't on the stored page"
   end
 
   # The checker's answer for one claim: code, then the models, then code.
@@ -185,6 +215,8 @@ class DqChecker
   private
     def hold_for(candidate, org)
       return "The verifier says the source contradicts this" if candidate.ai_reason.to_s.start_with?(DataQuality::Verifiers::Agent::CONTRADICTS)
+      field = DqChecker.field_for(candidate.kind, candidate.payload)
+      return "Not matched to one company yet" if org.nil? && !field.in?(%w[new_company news])
       return unless org
       return "A person rejected or unpublished this company" if org.verification_status.in?(%w[rejected unpublished])
 
@@ -201,6 +233,9 @@ class DqChecker
     end
 
     def llm_call(role, claim)
+      # Before every call, the verify call after an unsure too (Copilot).
+      raise DataQuality::Budget::Exceeded, "the day's checker budget is used" if spent_today >= DAILY_BUDGET
+
       llm.structured(role:, schema: SCHEMA, schema_name: "checker_verdict", crawl_run: @run, reasoning_effort: "low",
         messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(claim) } ])
     end
