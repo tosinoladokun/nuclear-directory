@@ -199,7 +199,7 @@ module DeployData
           # again at the next deploy. The report says so and alerts, so a stuck step never goes unseen.
           first = error.message.lines.first.to_s.strip
           @report.failed_migrations << "#{pending.version} #{pending.name}: #{error.class.name.demodulize}: #{first}"
-          warn "deploy-data: data migration #{pending.version} #{pending.name} failed and was skipped: #{error.class.name}: #{first}"
+          warn "deploy-data: data migration #{pending.version} #{pending.name} #{error.is_a?(Migrations::Waiting) ? 'is waiting' : 'failed and was skipped'}: #{error.class.name}: #{first}"
         end
         @report.migration_events = VerificationEvent.where("id > ?", first_event).pluck(:subject_type).tally if @pending.any?
       end
