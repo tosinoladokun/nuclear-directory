@@ -10,8 +10,13 @@ class Admin::SocialController < Admin::BaseController
   # Draft now (PM, 20 Nov: admin UI over console): today's drafts for the platforms that are on, never sent.
   # The usual rules hold: one a day, weekdays, something fresh.
   def draft_now
-    SocialPostJob.perform_later(drafts_only: true)
-    redirect_to admin_social_path, notice: "Drafting now. Reload in a minute to see it in the log."
+    reasons = SocialChannel::PLATFORMS.to_h { |platform| [ platform, SocialAgent.no_draft_reason(platform) ] }
+    trying = reasons.select { |_, why| why.nil? }.keys
+    skipped = reasons.compact.map { |platform, why| "#{platform == 'x' ? 'X' : 'LinkedIn'}: #{why}" }
+    SocialPostJob.perform_later(drafts_only: true) if trying.any?
+    notice = trying.any? ? "Drafting now. Reload in a minute to see it in the log." : "No draft."
+    notice += " #{trying.any? ? 'Not drafting' : 'Why'}: #{skipped.join('; ')}." if skipped.any?
+    redirect_to admin_social_path, notice:
   end
 
   def update
