@@ -17,7 +17,9 @@ class PipelineHealthJob < ApplicationJob
 
     health.checks.each do |key, problem|
       if problem
-        helper.raise!(key, title: problem.upcase_first.truncate(120), body: "#{problem.upcase_first}.\n\nSee Admin > Health.")
+        # A stuck queue's email can't wait on the queue, or it would mark itself sent and hold the watchdog's (Copilot).
+        now = key == QueueWatchdog::KEY ? { deliver_now: true } : {}
+        helper.raise!(key, title: problem.upcase_first.truncate(120), body: "#{problem.upcase_first}.\n\nSee Admin > Health.", **now)
       else
         helper.resolve!(key, note: "Back to normal.")
       end

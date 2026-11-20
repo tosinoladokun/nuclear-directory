@@ -60,7 +60,9 @@ class QueueWatchdog
   end
 
   private
+    # Only when the worker runs in this process (async, the default): in fork mode it has its own pid (Copilot).
     def restart?
+      return false if ENV.fetch("SOLID_QUEUE_MODE", "async") != "async"
       return false if @now - @booted < GRACE
 
       last = QueueHealth.own_worker_heartbeat

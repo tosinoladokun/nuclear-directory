@@ -3,6 +3,7 @@ require "test_helper"
 # P0 after 19 Nov: a dead job worker or a stuck queue alerts (email now, not via the queue) and a dead in-process
 # worker restarts the process; a database blip is waited out.
 class QueueWatchdogTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
   NOW = Time.utc(2026, 11, 20, 18, 0)
 
   setup do
@@ -59,5 +60,38 @@ class QueueWatchdogTest < ActiveSupport::TestCase
     def down.problem = raise(ActiveRecord::ConnectionNotEstablished, "down")
     assert_nil QueueWatchdog.new(booted: NOW - 1.hour, now: NOW, health: down).tick
     assert_equal 0, @stopped
+  end
+
+  test "in fork mode the worker has its own pid: no restart, the stuck check still runs (Copilot)" do
+    ENV["SOLID_QUEUE_MODE"] = "fork"
+    worker(NOW - 1.minute, pid: Process.pid + 1)
+    assert_equal :ok, tick
+    assert_equal 0, @stopped
+  ensure
+    ENV.delete("SOLID_QUEUE_MODE")
+  end
+
+  test "the stuck alert's email is sent during the call, not queued (Copilot)" do
+    ENV["RESEND_API_KEY"] = "test"
+    ActionMailer::Base.deliveries.clear
+    assert_no_enqueued_jobs(only: ActionMailer::MailDeliveryJob) do
+      assert_equal :stuck, tick(booted: NOW - 1.minute)
+    end
+    assert_equal 1, ActionMailer::Base.deliveries.size
+    assert_match "[autopilot] The job queue is stuck", ActionMailer::Base.deliveries.last.subject
+  ensure
+    ENV.delete("RESEND_API_KEY")
+  end
+
+  test "the daily health job sends the queue-stuck email now too (Copilot)" do
+    calls = []
+    alert = Module.new
+    alert.define_singleton_method(:raise!) { |key, **options| calls << [ key, options[:deliver_now] ] }
+    alert.define_singleton_method(:resolve!) { |*, **| }
+    PipelineHealthJob.alerts = alert
+    PipelineHealthJob.perform_now
+    assert_includes calls, [ QueueWatchdog::KEY, true ]
+  ensure
+    PipelineHealthJob.alerts = nil
   end
 end
