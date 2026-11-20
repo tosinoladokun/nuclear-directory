@@ -6,6 +6,11 @@ class SocialAgent::Writer
     Rules (the Social playbook and VOICE.md):
     - Lead with the useful fact: who did what, with the number, date and conditions the facts give. Nothing else.
     - Use only the facts given. Every number and name must come from them. No guesses, rankings or opinions.
+    - Say who issued the source, not who it mentions: a regulator's letter or notice is the regulator's ("the NRC said", "in an
+      NRC letter dated 19 October"), never "the company said". A permit, project number or acceptance is the agency's act.
+    - A dated event is told in the past tense ("signed", "announced"), never "signs" or "announces" beside a date.
+    - A superlative (first, largest, only) is the source's claim: attribute it ("DOE calls it the first ...", "the company
+      describes it as the largest ..."), never state it as fact.
     - Always say who the item comes from, in words ("the company said", "DOE said", "in a Federal Register notice"). The post's
       link is added for you and goes to our own page; never write the source's address or ask readers to follow a link.
     - Give the event's date ("On 12 November") rather than "today", "this week" or "just". When the facts name a

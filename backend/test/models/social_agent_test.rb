@@ -566,4 +566,26 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.primary?(on.("https://www.globenewswire.com/news-release/gle"))
     assert_not SocialAgent::Rules.primary?(on.("https://www.businesswire.com/news/home/gle"))
   end
+
+  test "GTM and DQ round 17: a government document is its agency's, a dated event is past tense, a superlative is attributed, the report shows our link" do
+    nrc = rules_item(facts: { "companies" => "Leapfrog Nuclear", "date" => "2026-10-19" }, quote: "NRC assigned project number 99902187.").with(source_url: "https://www.nrc.gov/docs/ML2628/ML26281A396.pdf")
+    wrong = SocialAgent::Rules.speaker_problems("Leapfrog Nuclear said on 19 October 2026 that NRC assigned it project number 99902187.", nrc)
+    assert_equal 1, wrong.size
+    assert_match(/but its source is a government document/, wrong.first)
+    assert_empty SocialAgent::Rules.speaker_problems("The NRC said on 19 October 2026 it assigned Leapfrog Nuclear project number 99902187.", nrc), "the agency speaks"
+    company_page = rules_item(facts: { "companies" => "Leapfrog Nuclear" }).with(source_url: "https://leapfrog.example/news")
+    assert_empty SocialAgent::Rules.speaker_problems("Leapfrog Nuclear said it signed.", company_page), "a company's own release is its own"
+
+    assert_equal 1, SocialAgent::Rules.tense_problems("BWXT said on 27 October 2026 it signs a TRISO fuel agreement with Antares.").size
+    assert_empty SocialAgent::Rules.tense_problems("BWXT said on 27 October 2026 it signed a TRISO fuel agreement with Antares.")
+    assert_empty SocialAgent::Rules.tense_problems("BWXT signs agreements with fuel makers."), "no date, no tense rule"
+
+    assert_equal 1, SocialAgent::Rules.unattributed_superlatives("The Long Mott project is the first advanced facility at a US industrial site.").size
+    assert_empty SocialAgent::Rules.unattributed_superlatives("DOE calls the Long Mott project the first advanced facility at a US industrial site.")
+    assert_empty SocialAgent::Rules.unattributed_superlatives("Dow said it is the largest site it operates.")
+
+    row = SocialAgent::Rehearsal::Result.new(platform: "x", label: "news", kind: "news", text: "DOE said on 12 November it awarded Acme.", problems: [], source_url: "https://www.energy.gov/a",
+      date: "2026-11-12", quote: "q", link: "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission")
+    assert_includes SocialAgent::Rehearsal.report([ row ]), "our page (the post's link): https://nuclear-directory.org/companies/acme-fission?utm_source=x"
+  end
 end

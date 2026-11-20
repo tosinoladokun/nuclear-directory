@@ -9,7 +9,7 @@ class SocialAgent::Rehearsal
   DAYS = 30
   FIXTURES = Rails.root.join("test/fixtures/files/social_rehearsal.yml")
 
-  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date, :quote) do
+  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date, :quote, :link) do
     def hash_hex = Digest::SHA256.hexdigest(text.to_s)
     def passed? = problems.empty?
   end
@@ -30,7 +30,7 @@ class SocialAgent::Rehearsal
         item, problems = SocialAgent.prepare(item, @fetcher)
         problems = SocialAgent.write(post, item, platform, @writer, fetcher: @fetcher) if problems.empty?
         Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url, date: item.facts["date"],
-          quote: [ item.source_quote, item.page_text ].compact.join("\n").first(1_500))
+          quote: [ item.source_quote, item.page_text ].compact.join("\n").first(1_500), link: SocialAgent.link(item, platform))
       end
     end
   end
@@ -52,7 +52,7 @@ class SocialAgent::Rehearsal
       lines << "## #{platform == 'x' ? 'X' : 'LinkedIn'}: #{rows.count(&:passed?)} of #{rows.size} passed" << ""
       rows.each_with_index do |row, index|
         lines << "### #{run}-#{platform}-#{index + 1} #{platform} #{row.passed? ? 'PASS' : 'BLOCK'}: #{row.label}"
-        lines << "run: #{run}" << "hash: #{row.hash_hex}" << "source: #{row.source_url}" << "item date: #{row.date || 'none'}"
+        lines << "run: #{run}" << "hash: #{row.hash_hex}" << "source: #{row.source_url}" << "our page (the post's link): #{row.link}" << "item date: #{row.date || 'none'}"
         lines << "source words (first 1,500 characters):" << row.quote.to_s.lines.map { |line| ">> #{line.chomp}" }.join("\n")
         lines << "why: #{row.problems.to_sentence}" unless row.passed?
         lines << "" << row.text.to_s.lines.map { |line| "> #{line.chomp}" }.join("\n") << ""

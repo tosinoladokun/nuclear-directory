@@ -66,6 +66,9 @@ module SocialAgent::Rules
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found << "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" unless attributed?(text)
+    found.concat(speaker_problems(text, item))
+    found.concat(tense_problems(text))
+    found.concat(unattributed_superlatives(text))
     found << "it says the same thing twice" if repeats?(text)
     found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
@@ -163,6 +166,40 @@ module SocialAgent::Rules
   ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according to|told|issued|released|published|filed|
     (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
   def attributed?(text) = text.match?(ATTRIBUTION)
+
+  # A government document is its agency's, not the company's (GTM, round 17: an NRC letter assigning a project number was
+  # "Leapfrog said"). On a government page, a company named in the facts doesn't "say" or "announce" it.
+  SPEECH = /\b(said|says|announced|announces|stated|states|reported|reports|confirmed|filed|told|unveiled|revealed)\b/i
+  def speaker_problems(text, item)
+    return [] unless host(item.source_url).delete_prefix("www.").match?(PRIMARY_HOSTS)
+
+    names = item.facts["companies"].to_s.split(", ").compact_blank + item.organization_ids.then { |ids| Organization.where(id: ids).pluck(:name) }
+    names.uniq.filter_map do |name|
+      next unless text.match?(/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}#{SPEECH}/i)
+
+      "it says #{name} #{text[/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}(#{SPEECH.source})/i, 1].to_s.downcase}, but its source is a government document: say who issued it (\"the NRC said\", \"in an NRC letter\")"
+    end
+  end
+
+  # A dated event is told in the past tense (GTM, round 17: "said on 27 October ... signs" was blocked).
+  PRESENT_NEWS = /\b(signs|announces|launches|awards|receives|closes|opens|names|issues|starts|unveils|completes|secures|selects|expands|enters|establishes)\b/i
+  def tense_problems(text)
+    return [] unless text.match?(DATE) && (verb = text[PRESENT_NEWS, 1])
+
+    [ "it dates the event but writes \"#{verb.downcase}\" in the present tense: use the past (signed, announced)" ]
+  end
+
+  # A superlative the source claims is attributed to it, not stated as fact (DQ, round 17: "DOE calls it the first ...").
+  CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?)\b/i
+  def unattributed_superlatives(text)
+    text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
+      word = sentence[SUPERLATIVES, 1]
+      next unless word
+      next if sentence.match?(CLAIM_CUE)
+
+      "it states \"#{word.downcase}\" as fact: attribute the claim to its source (\"DOE calls it the first ...\")"
+    end.uniq
+  end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
 
