@@ -9,7 +9,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   class FakeWriter
     attr_accessor :text, :voice
     def initialize(text, voice: [ true, nil ]) = (@text, @voice = text, voice)
-    def draft(_item, platform:, crawl_run: nil) = text.respond_to?(:call) ? text.call : text
+    def draft(_item, platform:, crawl_run: nil, feedback: nil, previous: nil) = text.respond_to?(:call) ? text.call : text
     def voice_ok?(_text, _item, crawl_run: nil) = voice
   end
 
@@ -363,6 +363,25 @@ class SocialAgentTest < ActiveSupport::TestCase
     problems = SocialAgent::Rules.source_problems(item.source_url, page.new(200), item:, text: "NANO Nuclear and SJ Group set up a collaboration.")
     assert_includes problems, "it leaves out the source's qualifier (MOU)"
     assert_empty SocialAgent::Rules.people("NANO Nuclear signed with Surbana Jurong Infrastructure Pte. Ltd.", item), "a legal name isn't a person"
+  end
+
+  test "a stopped draft gets one revision with what stopped it, then every check again (rehearsal)" do
+    drafts = [ "Acme Fission won 2 DOE awards.", DRAFT ]
+    seen = []
+    writer = FakeWriter.new(-> { drafts.shift })
+    writer.define_singleton_method(:draft) { |_item, platform:, crawl_run: nil, feedback: nil, previous: nil| seen << feedback; drafts.shift }
+    post = SocialAgent.run("x", now: MONDAY, writer:, fetcher: OK_FETCHER.new(200))
+    assert_equal "drafted", post.status
+    assert_equal [ nil, "the number 2 isn't in the source" ], seen
+  end
+
+  test "a sensitive word in passing deep in a page isn't its subject; in its opening it is (rehearsal)" do
+    page = ->(body) { Struct.new(:body) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body:, etag: nil,
+      last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }.new(body) }
+    filler = "<p>#{'The reactor design moves ahead with its partners and suppliers. ' * 20}</p>"
+    assert_empty SocialAgent::Rules.source_problems("https://x.example", page.("<article>#{filler}<p>It holds up beyond any credible accident scenario.</p></article>"))
+    assert_equal [ "its source page touches a sensitive topic (accident)" ],
+      SocialAgent::Rules.source_problems("https://x.example", page.("<article><p>An accident at the plant injured two workers.</p>#{filler}</article>"))
   end
 
   test "a month's post count is a backstop" do
