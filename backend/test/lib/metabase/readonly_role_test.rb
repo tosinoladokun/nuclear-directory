@@ -160,4 +160,26 @@ class Metabase::ReadonlyRoleTest < ActiveSupport::TestCase
     connection.execute("REVOKE #{other} FROM #{connection.quote_column_name(@name)}")
     connection.execute("DROP ROLE IF EXISTS #{other}")
   end
+
+  test "it reads leads only through metabase_leads, which leaves out what visitors searched (PM, 20 Nov)" do
+    load Rails.root.join("db/migrate/20261120160000_create_metabase_leads_view.rb")
+    connection = ActiveRecord::Base.connection
+    connection.execute("DROP VIEW IF EXISTS metabase_leads")
+    CreateMetabaseLeadsView.new.migrate(:up)
+    sighting = ->(key) { { "key" => key, "label" => key, "times" => 1, "first" => "2026-11-20", "last" => "2026-11-20" } }
+    seen = { first_seen_on: Date.new(2026, 11, 20), last_seen_on: Date.new(2026, 11, 20) }
+    named = Lead.create!(name: "Acme Fission", normalized_name: "acme fission", kind: "company", status: "new", seen_count: 2,
+      sources: [ sighting.("news:1"), sighting.("search:acme fission") ], **seen)
+    Lead.create!(name: "someone's private search", normalized_name: "someones private search", kind: "other", status: "triage",
+      sources: [ sighting.("search:someone's private search") ], **seen)
+    Metabase::ReadonlyRole.apply!(name: @name, password: PASSWORD)
+
+    rows = session.exec("SELECT id, sources::text AS sources FROM metabase_leads").to_a
+    assert_equal [ named.id.to_s ], rows.map { |row| row["id"] }, "a lead only searched for isn't there"
+    assert_not_includes rows.sole["sources"], "search:", "nor are the search sightings of the others"
+    assert_match "permission denied", refused("SELECT name FROM leads").message, "the table stays private"
+  ensure
+    Lead.delete_all
+    ActiveRecord::Base.connection.execute("DROP VIEW IF EXISTS metabase_leads")
+  end
 end

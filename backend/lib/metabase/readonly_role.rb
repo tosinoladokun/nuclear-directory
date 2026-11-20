@@ -26,6 +26,12 @@ module Metabase
       facilities facility_aliases facility_relationships relationships deal_terms news_items news_mentions licensing_stages
       roles technologies sources evidence former_slugs verification_events candidates crawl_runs
     ].freeze
+    # Views it may read, made for it: a private table's safe part (PM, 20
+    # Nov: leads without visitors' searches). A view reads its table with its
+    # owner's rights, so the table itself stays private. schema.rb doesn't
+    # keep views, so a database loaded from it has none until migrated; only
+    # views that exist are granted.
+    READABLE_VIEWS = %w[metabase_leads].freeze
     # Never readable through Metabase: sign-in data, visitors' correction
     # messages and contacts, the deploy's own records (their reports and
     # errors), and the admin's Today steps (who marked them). Rails' Solid
@@ -66,6 +72,8 @@ module Metabase
         connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
         readable = connection.tables & READABLE_TABLES
         connection.execute("GRANT SELECT ON #{readable.map { |t| connection.quote_table_name(t) }.join(', ')} TO #{role}") if readable.any?
+        views = connection.views & READABLE_VIEWS
+        connection.execute("GRANT SELECT ON #{views.map { |v| connection.quote_table_name(v) }.join(', ')} TO #{role}") if views.any?
       end
     end
 
@@ -99,7 +107,7 @@ module Metabase
     # role, so it does nothing. Only tables on the allow-list. Returns what
     # it granted.
     def grant!(tables, name: NAME, connection: ActiveRecord::Base.connection)
-      unknown = tables - READABLE_TABLES
+      unknown = tables - READABLE_TABLES - READABLE_VIEWS
       raise ArgumentError, "not on the read-only allow-list: #{unknown.join(', ')}" if unknown.any?
       return [] unless connection.select_value("SELECT 1 FROM pg_roles WHERE rolname = #{connection.quote(name)}")
 
