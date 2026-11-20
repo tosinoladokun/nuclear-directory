@@ -14,6 +14,14 @@ namespace :social do
 end
 
 namespace :social do
+  desc "Per-item PASS/BLOCK history across rehearsal rounds: social:consistency[dir] reads dir/*.json (default tmp/rehearsal)"
+  task :consistency, [ :dir ] => :environment do |_, args|
+    dir = Pathname(args[:dir].presence || Rails.root.join("tmp/rehearsal"))
+    puts SocialAgent::Rehearsal.consistency(Dir[dir.join("*.json")])
+  end
+end
+
+namespace :social do
   desc "Load the directory's public updates feed into this (empty, local) database for social:rehearse"
   task load_public: :environment do
     abort "Local only: never in production" if Rails.env.production?

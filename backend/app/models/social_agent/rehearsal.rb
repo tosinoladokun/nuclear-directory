@@ -55,6 +55,27 @@ class SocialAgent::Rehearsal
     lines.join("\n")
   end
 
+  # Each item's history across rounds (PM, 20 Nov: an item must pass 3 of 3 runs, not once). Rounds are the *.json files of
+  # past reports, oldest first by name; an item is its source URL (or label for a fixture) on one platform. P passed, B
+  # blocked, . not drawn that round. Flaky = both passed and blocked at least once; ready = passed its last 3 rounds.
+  def self.consistency(files)
+    rounds = files.sort.map { |file| JSON.parse(File.read(file)) }
+    keys = rounds.flatten.map { |row| [ row["platform"], row["source_url"].presence || row["label"] ] }.uniq
+    rows = keys.map do |platform, key|
+      history = rounds.map do |round|
+        hit = round.find { |row| row["platform"] == platform && (row["source_url"].presence || row["label"]) == key }
+        hit ? (hit["problems"].empty? ? "P" : "B") : "."
+      end.join
+      drawn = history.delete(".")
+      [ platform, key, history, (drawn.include?("P") && drawn.include?("B")) ? "flaky" : "", drawn.last(3) == "PPP" ? "ready" : "" ]
+    end
+    lines = [ "# Per-item consistency (#{rounds.size} rounds)", "", "| platform | item | history | flaky | ready (3/3) |", "|---|---|---|---|---|" ]
+    rows.sort_by { |platform, key, history, flaky, ready| [ platform, ready.empty? ? 1 : 0, flaky.empty? ? 1 : 0, key ] }.each do |platform, key, history, flaky, ready|
+      lines << "| #{platform} | #{key.to_s.truncate(90)} | #{history} | #{flaky} | #{ready} |"
+    end
+    lines.join("\n")
+  end
+
   private
     def label(item) = "#{item.kind} #{item.subject&.class&.name} #{item.subject&.id}: #{item.facts.values.first.to_s.truncate(80)}"
 end

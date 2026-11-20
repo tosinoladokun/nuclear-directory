@@ -452,4 +452,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match(/non-binding MOU/, seen.last)
     assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
   end
+
+  test "the consistency table shows each item's PASS/BLOCK history, flags the flaky and marks only 3 straight passes ready (PM, 20 Nov)" do
+    row = ->(url, ok) { { "platform" => "x", "label" => "news #{url}", "problems" => ok ? [] : [ "voice check" ], "source_url" => url } }
+    Dir.mktmpdir do |dir|
+      [ [ true, false, true ], [ true, true, true ], [ true, true, true ], [ false, true, true ] ].each_with_index do |states, round|
+        File.write(File.join(dir, "round-#{round + 1}.json"), JSON.generate(states.each_with_index.map { |ok, index| row.("https://a.example/#{index}", ok) }))
+      end
+      table = SocialAgent::Rehearsal.consistency(Dir[File.join(dir, "*.json")])
+
+      assert_includes table, "| x | https://a.example/0 | PPPB | flaky |  |"
+      assert_includes table, "| x | https://a.example/1 | BPPP | flaky | ready |", "passed its last three rounds, but a block earlier"
+      assert_includes table, "| x | https://a.example/2 | PPPP |  | ready |"
+    end
+  end
 end
