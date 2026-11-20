@@ -49,7 +49,7 @@ module SocialAgent::Rules
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
   ARTICLES = %w[The A An This That These Those].freeze
   NOT_PERSON = %w[Pte Ltd Limited GmbH AG PLC SA Inc Corp Infrastructure Challenge Summit Prize Award Conference Forum Initiative
-    Mission Facility Operations Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
+    Mission Facility Operations Asset Management Investment Investments Ventures Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
     Authority University Institute Corporation Company Inc LLC Power Station Plant Unit Units Reactor Project Program Federal Register
     Fund Bank Group Energy Fuel Fuels Technologies Systems Services Holdings Partners Capital Industries Electric Utility Council
     Board Court Congress Senate House Army Navy Air Force Generating Clean Center Centre Site County City River Lake Valley].freeze
@@ -208,7 +208,7 @@ module SocialAgent::Rules
   end
 
   # A dated event is told in the past tense (GTM, round 17: "said on 27 October ... signs" was blocked).
-  PRESENT_NEWS = /\b(signs|announces|launches|awards|receives|closes|opens|names|issues|starts|unveils|completes|secures|selects|expands|enters|establishes)\b/i
+  PRESENT_NEWS = /\b(signs|announces|launches|awards|receives|closes|issues|unveils|completes|secures|establishes)\b/i
   def tense_problems(text)
     return [] unless text.match?(DATE) && (verb = text[PRESENT_NEWS, 1])
 

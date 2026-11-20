@@ -523,12 +523,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match(/legal ending\s+such as Inc\., Ltd\. or Pte\. Ltd\./, seen.first, "the writer may leave a legal ending off")
     assert_match(/Do not fail a post for these/, seen.last)
     assert_match(/non-binding MOU/, seen.last)
-    assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
+    assert_match(/Fail it when it reverses who did what for whom, or changes what the source says/, seen.last, "real changes still fail")
     assert_match(/A word that is in the post\s+\("nearly"/, seen.last, "a qualifier that is present isn't missing (GTM, 20 Nov)")
     assert_match(/future wording for what the source says will happen/, seen.last)
     assert_match(/Quote the post's own offending words/, seen.last)
     assert_match(/"said that" is not a required template/, seen.last)
     assert_match(/Say what a deal or event covers/, seen.first)
+    assert_match(/Keep who did what for whom/, seen.first, "Founder: STS supported ORS, not the reverse")
+    assert_match(/reverses who did what for whom/, seen.last)
   end
 
   test "the consistency table shows each item's PASS/BLOCK history, flags the flaky and marks only 3 straight passes ready (PM, 20 Nov)" do
@@ -586,6 +588,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.speaker_problems("Leapfrog Nuclear said it signed.", company_page), "a company's own release is its own"
 
     assert_equal 1, SocialAgent::Rules.tense_problems("BWXT said on 27 October 2026 it signs a TRISO fuel agreement with Antares.").size
+    assert_empty SocialAgent::Rules.tense_problems("DOE said on 18 November 2026 the work enters a new phase."), "'enters' is too ambiguous to block on (round 21)"
     assert_empty SocialAgent::Rules.tense_problems("BWXT said on 27 October 2026 it signed a TRISO fuel agreement with Antares.")
     assert_empty SocialAgent::Rules.tense_problems("BWXT signs agreements with fuel makers."), "no date, no tense rule"
 
