@@ -184,6 +184,8 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Check.problems("Those plans came from Georgia Power. Georgia Power’s plan covers Vogtle.", item, platform: "x")
     assert_equal [ "the name \"Westinghouse\" isn't in the source" ],
       SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
+    assert_equal [ "the name \"Two\" isn't in the source" ], SocialAgent::Check.problems("Two plans came from Georgia Power.", item, platform: "x"),
+      "a spelled-out number is still checked (Copilot)"
   end
 
   test "a news item's publisher on its own site is a primary source; a look-alike isn't (DQ, shadow day)" do

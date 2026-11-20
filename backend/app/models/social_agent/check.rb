@@ -34,7 +34,7 @@ module SocialAgent::Check
   OPENERS = %w[The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
     Several Few Other Another Such In On At For With Under After Before By From Since As Over About Across Along Among
     Between During Through Into Upon Within Without While When Where Which Who What Why How If Once Unlike Like Also
-    And But Or So Yet Still Meanwhile Separately Together One Two Three Four Five].freeze
+    And But Or So Yet Still Meanwhile Separately Together].freeze
 
   def names(text)
     text.split(/(?<=[.!?])\s+/).flat_map do |sentence|
