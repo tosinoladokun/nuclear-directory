@@ -26,11 +26,34 @@ module Metabase
       facilities facility_aliases facility_relationships relationships deal_terms news_items news_mentions licensing_stages
       roles technologies sources evidence former_slugs verification_events candidates crawl_runs
     ].freeze
+    # Views it may read, made for it: a private table's safe part (PM, 20
+    # Nov: leads without visitors' searches). A view reads its table with its
+    # owner's rights, so the table itself stays private. schema.rb doesn't
+    # keep views, so a database loaded from it has none until migrated; only
+    # views that exist are granted.
+    READABLE_VIEWS = %w[metabase_leads].freeze
+    # A sighting from what a visitor searched: a search's own key, or a lead
+    # list's row whose label says it came from a search (Leads.md imports).
+    SEARCH_SIGHTING = "(s->>'key' LIKE 'search:%' OR lower(coalesce(s->>'label', '')) LIKE '%search%')".freeze
+    # Leads some other source named, without the search sightings. A security
+    # barrier, so a reader's own conditions (a cast that errors on a hidden
+    # name, say) run only after the view's filter, never on a hidden row.
+    VIEW_SQL = {
+      "metabase_leads" => <<~SQL
+        CREATE OR REPLACE VIEW metabase_leads WITH (security_barrier = true) AS
+        SELECT l.id, l.name, l.normalized_name, l.kind,
+               (SELECT jsonb_agg(s) FROM jsonb_array_elements(l.sources) s WHERE NOT #{SEARCH_SIGHTING}) AS sources,
+               l.first_seen_on, l.last_seen_on, l.seen_count, l.status, l.reason, l.record_type, l.record_id, l.note,
+               l.decided_by, l.decided_at, l.find_attempts, l.next_find_at, l.candidate_id, l.created_at, l.updated_at
+        FROM leads l
+        WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(l.sources) s WHERE NOT #{SEARCH_SIGHTING})
+      SQL
+    }.freeze
     # Never readable through Metabase: sign-in data, visitors' correction
     # messages and contacts, the deploy's own records (their reports and
     # errors), and the admin's Today steps (who marked them). Rails' Solid
     # tables too (PRIVATE_PREFIXES).
-    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations today_steps search_gaps leads dq_actions social_channels social_posts pipeline_health_snapshots autopilot_alerts index_now_submissions].freeze
+    PRIVATE_TABLES = %w[users sessions correction_reports data_deploys data_migrations today_steps search_gaps leads dq_actions social_channels social_posts pipeline_health_snapshots autopilot_alerts index_now_submissions checker_verdicts].freeze
     # Rails' own Solid Queue, Cache and Cable tables (job arguments can hold
     # an email address).
     PRIVATE_PREFIXES = %w[solid_].freeze
@@ -66,6 +89,9 @@ module Metabase
         connection.execute("GRANT USAGE ON SCHEMA public TO #{role}")
         readable = connection.tables & READABLE_TABLES
         connection.execute("GRANT SELECT ON #{readable.map { |t| connection.quote_table_name(t) }.join(', ')} TO #{role}") if readable.any?
+        create_views!(connection:)
+        views = connection.views & READABLE_VIEWS
+        connection.execute("GRANT SELECT ON #{views.map { |v| connection.quote_table_name(v) }.join(', ')} TO #{role}") if views.any?
       end
     end
 
@@ -99,13 +125,19 @@ module Metabase
     # role, so it does nothing. Only tables on the allow-list. Returns what
     # it granted.
     def grant!(tables, name: NAME, connection: ActiveRecord::Base.connection)
-      unknown = tables - READABLE_TABLES
+      unknown = tables - READABLE_TABLES - READABLE_VIEWS
       raise ArgumentError, "not on the read-only allow-list: #{unknown.join(', ')}" if unknown.any?
       return [] unless connection.select_value("SELECT 1 FROM pg_roles WHERE rolname = #{connection.quote(name)}")
 
       role = connection.quote_column_name(name)
       tables.each { |table| connection.execute("GRANT SELECT ON #{connection.quote_table_name(table)} TO #{role}") }
       tables
+    end
+
+    # (Re)creates the views, so a database loaded from schema.rb (which
+    # doesn't keep views) has them too. Safe to rerun.
+    def create_views!(connection: ActiveRecord::Base.connection)
+      VIEW_SQL.each_value { |sql| connection.execute(sql) }
     end
 
     def private_tables(connection)

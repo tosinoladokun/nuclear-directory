@@ -76,6 +76,7 @@ class PipelineHealth
       "finds-unconfirmed" => unconfirmed,
       "budget" => budget,
       "social-silent" => social_silent,
+      "db-restarted" => db_restarted,
       "indexnow-refused" => ("IndexNow refused the last two batches (check INDEXNOW_KEY and its key file)" if IndexNowSubmission.refused_twice?),
       "search-limit" => search_limit,
       "sources-silent" => sources_silent
@@ -171,6 +172,13 @@ class PipelineHealth
       why = CrawlRun.where(source_kind: SocialAgent::STOPPED, started_at: range).where("stats ? 'stopped'")
         .order(:started_at).to_h { |run| [ run.stats["platform"], run.stats["stopped"] ] }
       "No social draft on #{day.strftime('%a %-d %b')}: " + quiet.sort.map { |platform| "#{platform} (#{why[platform] || 'no run recorded'})" }.join(", ")
+    end
+
+    # Postgres' own start time (Infra): a crash, an out-of-memory kill or a plan change restarts it.
+    def db_restarted
+      started = ActiveRecord::Base.connection.select_value("select pg_postmaster_start_time()")
+      started = Time.zone.parse(started.to_s) unless started.respond_to?(:utc)
+      "The database restarted at #{started.utc.strftime('%H:%M UTC on %-d %b')} (crash or plan change)" if started && started > @now - 24.hours
     end
 
     def search_limit

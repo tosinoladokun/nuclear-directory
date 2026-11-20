@@ -6,3 +6,10 @@ defining one `DeployData::Migration` subclass. The rules and an example are
 in `backend/lib/deploy_data/migration.rb`. In short: `BY` names the human who
 approved it, it's idempotent, it pins what the decision rests on, and it's
 rehearsed with `bin/deploy-data --dry-run` on a restored backup before merge.
+
+A step that depends on another (it assumes the other already ran) declares
+`AFTER = %w[<the other's 14-digit version>]`: until that version is recorded
+as run, the step is skipped, reported as waiting, and tried again at the next
+deploy (#811). A step that fails never blocks the later ones; it is rolled back
+alone, reported and retried. So accept a record a person may have decided
+first, or skip and `say` why, rather than raising.

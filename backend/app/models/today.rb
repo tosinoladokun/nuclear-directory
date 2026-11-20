@@ -163,9 +163,12 @@ class Today
   # Step 4's items, oldest first.
   def left_items = CorrectionReport.where(status: %w[open reviewed]).order(:created_at, :id)
 
+  # Verify-stage runs that aren't the directory's verifier: the social agent and the nightly checker (Copilot).
+  NOT_THE_VERIFIER = %w[social_agent dq_checker dq_checker_exam].freeze
+
   # When Joy (the verify stage) last finished a run last night, or nil.
   def checker_ran_at
-    CrawlRun.where(stage: "verify", status: "succeeded", started_at: crawl_window).maximum(:finished_at)
+    CrawlRun.where(stage: "verify", status: "succeeded", started_at: crawl_window).where.not(source_kind: NOT_THE_VERIFIER).maximum(:finished_at)
   end
 
   # The daily crawl (config/recurring.yml): every day at 3am Eastern.

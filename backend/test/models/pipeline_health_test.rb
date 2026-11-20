@@ -155,4 +155,11 @@ class PipelineHealthTest < ActiveSupport::TestCase
     SocialPost.create!(platform: "x", status: "drafted", subject: company, text: "t", created_at: friday)
     assert_nil PipelineHealth.new(now: monday_7am).checks["social-silent"]
   end
+
+  test "a database restart in the last day is named with its time; older is fine (Infra)" do
+    started = ActiveRecord::Base.connection.select_value("select pg_postmaster_start_time()")
+    started = Time.zone.parse(started.to_s) unless started.respond_to?(:utc)
+    assert_match(/\AThe database restarted at \d\d:\d\d UTC/, PipelineHealth.new(now: started + 1.hour).checks["db-restarted"])
+    assert_nil PipelineHealth.new(now: started + 25.hours).checks["db-restarted"]
+  end
 end

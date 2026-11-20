@@ -5,9 +5,10 @@ class SocialPostJob < ApplicationJob
   limits_concurrency to: 1, key: "social_agent", duration: 1.hour if respond_to?(:limits_concurrency)
 
   # Each platform on its own: one failing (the model unreachable) never skips the other (Infra).
-  def perform
+  # drafts_only: Admin > Posts' Draft now (PM, 20 Nov): today's draft, never sent.
+  def perform(drafts_only: false)
     SocialChannel::PLATFORMS.each do |platform|
-      SocialAgent.run(platform)
+      SocialAgent.run(platform, drafts_only:)
     rescue StandardError => error
       Rails.error.report(error, context: { social_platform: platform })
     end

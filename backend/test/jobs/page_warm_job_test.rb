@@ -73,6 +73,22 @@ class PageWarmJobTest < ActionDispatch::IntegrationTest
     assert_operator queries_for("/companies/other-warm-co"), :<=, 4
   end
 
+  test "gentler on the database: at most per_tick pages a tick; the next tick goes on where it stopped (PM)" do
+    Organization.create!(name: "Third Warm Co", slug: "third-warm-co", description: "Makes fuel.", verification_status: "verified", verified_by: BY)
+    DataVersion.expire!
+    pages = (DirectoryListing.new.companies.size + DirectoryListing.new(category: "plants").plants.size + 1)
+    drawn = 0
+    counter = ->(*, payload) { drawn += 1 if payload[:identifier].to_s.match?(%r{views/(home|companies|plants)/show}) }
+    ActiveSupport::Notifications.subscribed(counter, "render_template.action_view") do
+      PageWarmJob.perform_now(pause: 0, debounce: false, per_tick: 1)
+      assert_equal 1, drawn
+      assert_nil Rails.cache.read(PageWarmJob::WARMED_DATA), "not done yet"
+      (pages - 1).times { PageWarmJob.perform_now(pause: 0, debounce: false, per_tick: 1) }
+    end
+    assert_equal pages, drawn, "each page once over the ticks"
+    assert_equal DataVersion.current, Rails.cache.read(PageWarmJob::WARMED_DATA)
+  end
+
   def stamp_queries
     count = 0
     counter = ->(*, payload) { count += 1 if payload[:sql].to_s.include?("md5(concat_ws") }

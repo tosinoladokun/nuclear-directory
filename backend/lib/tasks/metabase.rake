@@ -19,3 +19,7 @@ namespace :metabase do
       "#{Metabase::ReadonlyRole::PRIVATE_TABLES.join(' or ')}."
   end
 end
+
+# schema.rb keeps no views, so a database loaded from it (db:prepare on a
+# fresh database, db:schema:load) gets them here, as migrating would have.
+Rake::Task["db:schema:load"].enhance { Metabase::ReadonlyRole.create_views! } if Rake::Task.task_defined?("db:schema:load")

@@ -27,4 +27,21 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     patch admin_social_channel_path("x"), params: { mode: "drafts" }
     assert_nil SocialChannel.for("x").paused_reason
   end
+
+  test "Draft now queues today's drafts, never a send (PM)" do
+    get admin_social_path
+    assert_select "form#social-draft-now button", "Draft now"
+    SocialChannel.for("x").update!(mode: "drafts")
+    travel_to Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 9, 0) do
+      assert_enqueued_with(job: SocialPostJob, args: [ { drafts_only: true } ]) { post admin_social_draft_now_path }
+      assert_redirected_to admin_social_path
+      assert_equal "Drafting now. Reload in a minute to see it in the log. Not drafting: LinkedIn: switched off.", flash[:notice]
+    end
+
+    # A weekend says so, and nothing is queued (DQ).
+    travel_to Time.find_zone(SocialAgent::ZONE).local(2026, 11, 21, 9, 0) do
+      assert_no_enqueued_jobs(only: SocialPostJob) { post admin_social_draft_now_path }
+      assert_equal "No draft. Why: X: it's a weekend; LinkedIn: switched off.", flash[:notice]
+    end
+  end
 end

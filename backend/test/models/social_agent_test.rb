@@ -62,6 +62,12 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_nil run_x("Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
     stopped = CrawlRun.where(source_kind: SocialAgent::STOPPED).where("stats ? 'stopped'").order(:id).map { |run| run.stats.values_at("platform", "stopped") }
     assert_equal [ [ "x", "switched off in Admin > Posts" ], [ "x", "a weekend" ], [ "x", "no fresh item" ] ], stopped, "every silent run says why (PM)"
+
+    SocialChannel.for("x").update!(mode: "off", paused_reason: "Buffer's 30-day request allowance is 80% used")
+    run_x("Acme Fission won a DOE award.")
+    assert_equal "Buffer's 30-day request allowance is 80% used", CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
+    today = Today.new(on: MONDAY.in_time_zone(Today::ZONE).to_date, now: MONDAY + 1.hour)
+    assert_nil today.checker_ran_at, "a social run is never Joy's check (Copilot)"
   end
 
   test "a newly added company is used when there's no fresh news" do
@@ -97,6 +103,13 @@ class SocialAgentTest < ActiveSupport::TestCase
     post = run_x(DRAFT)
     assert_equal [ "posted", "https://x.com/i/web/status/1", SocialAgent.post_cost ], [ post.status, post.permalink, post.cost_usd ]
     assert_equal post.link, sent.last
+  end
+
+  test "Draft now never sends, even when the switch is Live (PM)" do
+    live!
+    SocialAgent.senders["x"] = ->(*) { flunk "sent" }
+    post = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(DRAFT), fetcher: OK_FETCHER.new(200), drafts_only: true)
+    assert_equal "drafted", post.status
   end
 
   test "Live with sending off on the server only drafts" do
