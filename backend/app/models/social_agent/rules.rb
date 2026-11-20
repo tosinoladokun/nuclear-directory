@@ -56,6 +56,7 @@ module SocialAgent::Rules
     found.concat(people(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
+    found << "it says the same thing twice" if repeats?(text)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.source_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
@@ -101,6 +102,14 @@ module SocialAgent::Rules
       found << "it leaves out the source's qualifier (#{name})" if item.source_text.match?(pattern) && !text.match?(pattern)
     end
     found
+  end
+
+  # Two sentences sharing most of the shorter one's words say the same thing (GTM: a second paragraph restating the first).
+  REPEAT = 0.6
+  STOP = %w[the a an and or of to in on for with by at as is are was were its it that this from be will has have said].to_set.freeze
+  def repeats?(text)
+    sentences = text.split(/(?<=[.!?])\s+/).map { |sentence| sentence.downcase.scan(/[a-z0-9]+/).to_set - STOP }.select { |words| words.size >= 4 }
+    sentences.combination(2).any? { |a, b| (a & b).size.to_f / [ a.size, b.size ].min >= REPEAT }
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")

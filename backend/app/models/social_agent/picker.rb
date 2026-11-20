@@ -9,6 +9,9 @@ class SocialAgent::Picker
   # An event older than this isn't news, however recently it was published (DQ: GTM's rule is 7 to 9 days).
   EVENT_MAX_AGE = 10.days
   # Not deals or facts: people and event items (DQ).
+  # About the nuclear industry, by its own words (Founder, GTM: a feed can let a pulsar story through).
+  NUCLEAR = /\b(nuclear|reactors?|microreactors?|SMRs?|uranium|fission|fusion|isotopes?|radioisotopes?|radioactive|radiation|
+    radiological|enrich\w*|HALEU|TRISO|plutonium|thorium|tritium|spent fuel|fuel cycle|NRC|decommission\w*|nuclides?|neutrons?)\b/ix
   NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|workshop|hiring|award ceremony|internship)\b/i
 
   def initialize(platform:, now: Time.current)
@@ -25,6 +28,7 @@ class SocialAgent::Picker
       NewsItem.published.where(verified_at: (@now - FRESH)..@now, published_on: (@now - EVENT_MAX_AGE).to_date..)
         .includes(:news_mentions).order(verified_at: :desc).filter_map do |news|
           next if [ news.title, news.headline ].compact.any? { |text| text.match?(NOT_NEWS) }
+          next unless [ news.title, news.headline, news.summary ].compact.any? { |text| text.match?(NUCLEAR) }
           # Never one Data Quality said no to, nor one only a feed it flagged off-topic gives (PM, 20 Nov).
           next if rejected_news.include?(news.id) || off_topic?(news)
 

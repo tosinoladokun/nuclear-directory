@@ -314,6 +314,29 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.qualifiers("Acme Fission signed a non-binding MOU with SJ Group.", item)
   end
 
+  # Today's two shadow drafts (20 Nov), as written.
+  PULSAR_TITLE = "NASA Fermi data helps team develop faster pulsar search method".freeze
+  NANO_SOURCE = "NANO Nuclear Energy and SJ Group establish collaboration to advance knowledge exchange and capability building in " \
+    "advanced nuclear energy across Southeast Asia. The non-binding memorandum of understanding sets a phased technical exchange.".freeze
+  NANO_DRAFT = "On 19 November 2026, NANO Nuclear Energy and SJ Group established a collaboration to advance knowledge exchange and " \
+    "capability building in advanced nuclear energy across Southeast Asia, NANO Nuclear Energy said.\n\nThe stated focus is knowledge " \
+    "exchange and capability building, with advanced nuclear energy as the subject and Southeast Asia as the region. The announcement " \
+    "names the two organizations but provides no further details about the collaboration.".freeze
+
+  test "today's drafts: a pulsar story is never picked; the NANO post is stopped for its absence claim, missing qualifiers and repetition, not for a person" do
+    @news.update_columns(title: PULSAR_TITLE, headline: nil, summary: "Open data from Fermi helped find pulsars faster.")
+    assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "not nuclear (Founder, GTM)"
+
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "companies" => "NANO Nuclear Energy" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: NANO_SOURCE)
+    assert_empty SocialAgent::Rules.people(NANO_DRAFT, item), "Southeast Asia is a place"
+    problems = SocialAgent::Rules.qualifiers(NANO_DRAFT, item)
+    assert_includes problems, "it says \"no further details\", which its source doesn't"
+    assert_includes problems, "it leaves out the source's qualifier (MOU)"
+    assert SocialAgent::Rules.repeats?(NANO_DRAFT), "the second paragraph restates the first"
+    assert_not SocialAgent::Rules.repeats?("Acme Fission won a DOE award for fuel cladding. The work starts in Idaho next spring with two partners.")
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
