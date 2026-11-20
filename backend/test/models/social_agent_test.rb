@@ -352,6 +352,13 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not_nil run_x(DRAFT), "the day's slot is still free"
   end
 
+  test "a person's name inside a company's name is still a person; the company's whole name isn't (DQ)" do
+    Organization.create!(name: "Mary Lane Engineering", verification_status: "verified", verified_by: BY)
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: "q")
+    assert_equal [ "it may name a person (Mary Lane)" ], SocialAgent::Rules.people("Mary Lane leads Acme Fission.", item)
+    assert_empty SocialAgent::Rules.people("Mary Lane Engineering works with Acme Fission.", item)
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"

@@ -200,9 +200,10 @@ module SocialAgent::Rules
   end
 
   def directory_name?(phrase)
-    pattern = "%#{ActiveRecord::Base.sanitize_sql_like(phrase.downcase)}%"
-    Organization.where("lower(name) LIKE ?", pattern).exists? || Facility.where("lower(name) LIKE ?", pattern).exists? ||
-      OrganizationAlias.where("lower(alias) LIKE ?", pattern).exists? || FacilityAlias.where("lower(alias) LIKE ?", pattern).exists?
+    # The whole name or another name, never a part of one: "Jane Doe" inside "Jane Doe Engineering" is still a person (DQ).
+    name = phrase.downcase
+    Organization.where("lower(name) = ?", name).exists? || Facility.where("lower(name) = ?", name).exists? ||
+      OrganizationAlias.where("lower(alias) = ?", name).exists? || FacilityAlias.where("lower(alias) = ?", name).exists?
   end
 
   # Every superlative in the post, each needing the same word in its source (Copilot).
