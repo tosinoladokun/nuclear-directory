@@ -5,8 +5,8 @@ module Autopilot
     MAP = {
       "queue-stuck" => "Infra", "db-restarted" => "Infra", "data-deploy-failed" => "Infra", "indexnow-refused" => "Infra",
       "crawl-silent" => "Crawl", "sources-silent" => "Crawl", "finder-silent" => "Crawl", "search-limit" => "Crawl",
-      "company-pages-failing" => "Crawl", "pending-without-website" => "Crawl",
-      "pending-without-role" => "DQ", "unchecked-claims" => "DQ", "stuck-leads" => "DQ", "finds-unconfirmed" => "DQ",
+      "company-pages-failing" => "Crawl",
+      "pending-without-role" => "DQ", "pending-without-website" => "DQ", "unchecked-claims" => "DQ", "stuck-leads" => "DQ", "finds-unconfirmed" => "DQ",
       "no-creates" => "DQ",
       "social-silent" => "Backend", "posts-unknown" => "Backend",
       "budget" => "PM"

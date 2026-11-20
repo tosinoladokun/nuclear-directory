@@ -78,7 +78,8 @@ class QueueWatchdog
     missed = SolidQueue::RecurringTask.static.where.not(key: NO_CATCH_UP).filter_map do |task|
       due = task.previous_time
       next if due > @now - LATE || due < @now - MAX_LATE
-      next if task.next_time_after(due) - due < 1.hour
+      # Daily or rarer only: 20 hours allows a DST day of 23 (Copilot: hourly and 3-hourly tasks stay out).
+      next if task.next_time_after(due) - due < 20.hours
       next if SolidQueue::RecurringExecution.exists?(task_key: task.key, run_at: due)
       # A paused queue would only pile up (Infra).
       next if paused.include?(task.queue_name.presence || task.class_name.safe_constantize&.queue_name.to_s)
