@@ -38,21 +38,32 @@ class SocialAgent::Picker
         end
     end
 
+    # In effect on the day: started (where it says) and not ended (Copilot; as ConnectionsMap#current).
+    def self.current_links(scope, day)
+      scope.where("relationships.started_on IS NULL OR relationships.started_on <= ?", day)
+        .where("relationships.ended_on IS NULL OR relationships.ended_on > ?", day)
+    end
+
     # A link between two published companies first approved this week, with its own quote and source (PM, 20 Nov:
     # Cameco and Westinghouse weren't news to the picker).
     def links
       first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
         .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
-      published = Organization.published.select(:id)
-      fresh = Relationship.where(id: first, verification_status: "verified", ended_on: nil, from_organization_id: published, to_organization_id: published)
+      fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first), @now.to_date)
       bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
       fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).limit(20).filter_map do |link|
-          evidence = Evidence.where(subject: link).includes(:source).where.not(quote: [ nil, "" ]).order(:id).first or next
           from, to = link.from_organization, link.to_organization
           verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(link.relationship_type, link.relationship_type.humanize(capitalize: false))
-          SocialAgent::Item.new(subject: link, kind: "link",
-            facts: { "link" => "#{from.name} #{verb} #{to.name}", "detail" => link.description, "companies" => "#{from.name}, #{to.name}" }.compact_blank,
-            source_url: evidence.source&.url, source_quote: evidence.quote, path: "/companies/#{from.slug}", organization_ids: [ from.id, to.id ])
+          # A quote from a primary source (an older trade-press one would only be blocked; Copilot); none, no item.
+          Evidence.where(subject: link).includes(:source).where.not(quote: [ nil, "" ]).order(:id).filter_map do |evidence|
+            # Its detail only when this quote states it (Copilot: "49%" must be in the saved quote).
+            detail = link.description if link.description.present? &&
+              (Array(evidence.fields).include?("description") || evidence.quote.include?(link.description))
+            item = SocialAgent::Item.new(subject: link, kind: "link",
+              facts: { "link" => "#{from.name} #{verb} #{to.name}", "detail" => detail, "companies" => "#{from.name}, #{to.name}" }.compact_blank,
+              source_url: evidence.source&.url, source_quote: evidence.quote, path: "/companies/#{from.slug}", organization_ids: [ from.id, to.id ])
+            item if SocialAgent::Rules.primary?(item)
+          end.first
         end
     end
 
