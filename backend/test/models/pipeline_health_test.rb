@@ -140,4 +140,19 @@ class PipelineHealthTest < ActiveSupport::TestCase
     IndexNowSubmission.create!(urls: 3, accepted: true)
     assert_nil PipelineHealth.new(now: NOW).checks["indexnow-refused"]
   end
+
+  test "a weekday with no social draft on a platform that's on is named, with the run's reason (DQ)" do
+    friday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 8, 30)
+    monday_7am = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 7, 0)
+    SocialChannel.for("x").update!(mode: "drafts")
+    SocialChannel.for("linkedin").update!(mode: "off")
+    assert_equal "No social draft on Fri 20 Nov: x (no run recorded)", PipelineHealth.new(now: monday_7am).checks["social-silent"]
+
+    SocialAgent.stopped("x", friday, "no fresh item")
+    assert_equal "No social draft on Fri 20 Nov: x (no fresh item)", PipelineHealth.new(now: monday_7am).checks["social-silent"]
+
+    company = Organization.create!(name: "Acme Fission", verification_status: "verified", verified_by: "human:tosin")
+    SocialPost.create!(platform: "x", status: "drafted", subject: company, text: "t", created_at: friday)
+    assert_nil PipelineHealth.new(now: monday_7am).checks["social-silent"]
+  end
 end

@@ -75,6 +75,7 @@ class PipelineHealth
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
       "budget" => budget,
+      "social-silent" => social_silent,
       "indexnow-refused" => ("IndexNow refused the last two batches (check INDEXNOW_KEY and its key file)" if IndexNowSubmission.refused_twice?),
       "search-limit" => search_limit,
       "sources-silent" => sources_silent
@@ -155,6 +156,23 @@ class PipelineHealth
     end
 
     # Brave refused every search for a day (its monthly limit or the key; Infra): leads wait instead of being found.
+    # The last weekday, a platform that wasn't off wrote no post (DQ, shadow day 20 Nov): named with the run's
+    # reason when it gave one (SocialAgent.stopped), so "no fresh item" reads differently from silence.
+    def social_silent
+      zone = Time.find_zone(SocialAgent::ZONE)
+      day = @now.in_time_zone(zone).to_date.prev_day
+      day = day.prev_day while day.on_weekend?
+      return if SocialAgent::Rules.holiday?(day)
+
+      range = zone.local(day.year, day.month, day.day).all_day
+      quiet = SocialChannel.where.not(mode: "off").pluck(:platform).reject { |platform| SocialPost.where(platform:, created_at: range).exists? }
+      return if quiet.empty?
+
+      why = CrawlRun.where(source_kind: SocialAgent::STOPPED, started_at: range).where("stats ? 'stopped'")
+        .order(:started_at).to_h { |run| [ run.stats["platform"], run.stats["stopped"] ] }
+      "No social draft on #{day.strftime('%a %-d %b')}: " + quiet.sort.map { |platform| "#{platform} (#{why[platform] || 'no run recorded'})" }.join(", ")
+    end
+
     def search_limit
       held, done = counts.values_at("searches_held_last_day", "finds_answered_last_day")
       "#{held} lead finds waited a day because the search didn't answer (its monthly limit or key)" if held.positive? && done.zero?
