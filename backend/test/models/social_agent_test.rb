@@ -391,6 +391,21 @@ class SocialAgentTest < ActiveSupport::TestCase
       SocialAgent::Rules.source_problems("https://x.example", page.("<article><p>An accident at the plant injured two workers.</p>#{filler}</article>"))
   end
 
+  test "Copilot on #842: whole country names, years in dates, whole date forms, each absence phrase, quantities, spaced keywords" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: "Acme Fission signed in 2023. The amount was not disclosed.")
+    assert_equal [ "it may name a person (Asia Cook)" ], SocialAgent::Rules.people("Asia Cook leads Acme Fission.", item)
+    assert_empty SocialAgent::Rules.people("Acme Fission works in South Korea and the United Kingdom.", item)
+    assert_equal [ "the date 19 November isn't the item's own (19 November 2026) or in the source" ],
+      SocialAgent::Rules.dates("On 19 November 2023, Acme Fission said so.", item)
+    assert_empty SocialAgent::Rules.dates("On 19 November 2026, Acme Fission said so.", item)
+    assert_not SocialAgent::Rules.page_dated?("<p>19 November 2026</p>", "9 November 2026")
+    assert_equal [ "it says \"no further details\", which its source doesn't" ],
+      SocialAgent::Rules.qualifiers("The amount was not disclosed; there are no further details.", item).grep(/says/)
+    assert_not SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. It produces 100 MW of heat at full power.")
+    assert_match SocialAgent::Picker::NUCLEAR, "Holtec expands spent fuel storage"
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
