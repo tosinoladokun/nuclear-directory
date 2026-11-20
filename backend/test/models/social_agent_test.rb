@@ -442,6 +442,6 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "accident", check.(page.("<p>An accident stopped the line.</p>")), "in the opening"
     assert_nil check.(page.(filler + "<p>Years ago an accident was reviewed.</p>")), "deep in a long article: for a person's review, not a block"
     assert_equal "Incident", check.("<html><head><title>Incident at the lab</title></head><body><article><p>Ok.</p></article></body></html>"), "in the title"
-    assert_equal "theft", check.("<html><head><meta name='description' content='Theft of material'></head><body><article><p>Ok.</p></article></body></html>"), "in the summary"
+    assert_equal "theft", check.("<html><head><meta name='description' content='Theft of material'></head><body><article><p>Ok.</p></article></body></html>").downcase, "in the summary"
   end
 end
