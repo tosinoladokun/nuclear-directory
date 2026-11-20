@@ -230,6 +230,35 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Check.problems("The eVinci microreactor produces 250 kW.", item, platform: "x")
   end
 
+  test "a sentence's opening word and a possessive aren't new names; a made-up name still is (shadow day 20 Nov)" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "Georgia Power filed its plan for Vogtle with state regulators.")
+    assert_empty SocialAgent::Check.problems("Those plans came from Georgia Power. Georgia Power’s plan covers Vogtle.", item, platform: "x")
+    assert_equal [ "the name \"Westinghouse\" isn't in the source" ],
+      SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
+    assert_equal [ "the name \"Two\" isn't in the source" ], SocialAgent::Check.problems("Two plans came from Georgia Power.", item, platform: "x"),
+      "a spelled-out number is still checked (Copilot)"
+  end
+
+  test "a news item's publisher on its own site is a primary source; a look-alike isn't (DQ, shadow day)" do
+    item = ->(url, publisher) { SocialAgent::Item.new(subject: @news, kind: "news", facts: { "publisher" => publisher }, source_url: url, path: "/",
+      organization_ids: [], source_quote: "q") }
+    assert SocialAgent::Rules.primary?(item.("https://deepisolation.com/press/otcqx", "Deep Isolation"))
+    assert SocialAgent::Rules.primary?(item.("https://www.nuscalepower.com/news/1", "NuScale Power, Inc."))
+    assert_not SocialAgent::Rules.primary?(item.("https://deepisolation-news.example/x", "Deep Isolation"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.prnewswire.com/news/x", "Deep Isolation"))
+    # An outlet or wire named as its own publisher is still not primary (DQ).
+    assert_not SocialAgent::Rules.primary?(item.("https://www.prnewswire.com/news/x", "PR Newswire"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.world-nuclear-news.org/articles/x", "World Nuclear News"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.reuters.com/x", "Reuters"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.ans.org/news/x", "ANS"))
+
+    # A company the directory knows (pending too), named as the publisher, on its recorded website (PM).
+    Organization.create!(name: "Borehole Energy", website: "https://www.boreholeco.example", verification_status: "pending")
+    assert SocialAgent::Rules.primary?(item.("https://news.boreholeco.example/release", "Borehole Energy"))
+    assert_not SocialAgent::Rules.primary?(item.("https://news.boreholeco.example/release", "Someone Else"))
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"

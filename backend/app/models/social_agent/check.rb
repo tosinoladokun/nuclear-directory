@@ -30,11 +30,16 @@ module SocialAgent::Check
   def numbers(text) = text.scan(/\d[\d,.]*\d|\d/).map { |number| number.delete(",").sub(/\.\z/, "") }.uniq
 
   # Capitalised words (names), each of which must be a word in the source. A sentence may start with a plain word.
-  OPENERS = %w[The A An It Its This That These In On At For With Under After Before By From Since As].freeze
+  # Words that only start a sentence (shadow day 20 Nov: "Those" was taken for a name).
+  OPENERS = %w[The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
+    Several Few Other Another Such In On At For With Under After Before By From Since As Over About Across Along Among
+    Between During Through Into Upon Within Without While When Where Which Who What Why How If Once Unlike Like Also
+    And But Or So Yet Still Meanwhile Separately Together].freeze
 
   def names(text)
     text.split(/(?<=[.!?])\s+/).flat_map do |sentence|
-      words = sentence.scan(/[[:alnum:]][\w&'’.-]*[[:alnum:]&]|[[:alnum:]]/).select { |word| word.match?(/[A-Z]/) }
+      # A possessive is its name: "Power's" checks "Power" (shadow day 20 Nov).
+      words = sentence.scan(/[[:alnum:]][\w&'’.-]*[[:alnum:]&]|[[:alnum:]]/).map { |word| word.sub(/['’]s\z/i, "") }.select { |word| word.match?(/[A-Z]/) }
       words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && OPENERS.include?(word) }
     end.uniq
   end
