@@ -1,0 +1,16 @@
+# Fixed cases for social:rehearse (PM, 20 Nov): today's shadow drafts. Each must draft a post that passes every check,
+# or be stopped for a reason the report shows.
+- name: "#35 NANO Nuclear Energy and SJ Group MOU (20 Nov)"
+  kind: news
+  source_url: https://nanonuclearenergy.com/nano-nuclear-energy-and-sj-group-establish-collaboration-to-advance-knowledge-exchange-and-capability-building-in-advanced-nuclear-energy-across-southeast-asia/
+  path: /companies/nano-nuclear-energy
+  facts:
+    headline: NANO Nuclear Energy and SJ Group establish collaboration to advance knowledge exchange and capability building in advanced nuclear energy across Southeast Asia
+    publisher: NANO Nuclear Energy
+    date: 19 November 2026
+    companies: NANO Nuclear Energy
+  source_quote: >-
+    NANO Nuclear Energy Inc. signed a Memorandum of Understanding (MOU) with Surbana Jurong Infrastructure Pte. Ltd., an affiliate of
+    SJ Group, to advance knowledge exchange and capability building in advanced nuclear energy across Southeast Asia. The MOU
+    establishes a non-binding framework for cooperation and does not commit either party to a specific project, investment or
+    deployment. It sets a phased approach, beginning with knowledge sharing, technology assessment and capability development.

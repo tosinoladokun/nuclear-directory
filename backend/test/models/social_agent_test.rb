@@ -340,6 +340,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.repeats?("Acme Fission won a DOE award for fuel cladding. The work starts in Idaho next spring with two partners.")
   end
 
+  test "a rehearsal drafts and checks every candidate and the fixed cases, saves no post and uses no day's slot (PM)" do
+    SocialChannel.for("x").update!(mode: "drafts")
+    results = SocialAgent::Rehearsal.new(per_platform: 5, now: MONDAY, writer: FakeWriter.new(DRAFT), fetcher: OK_FETCHER.new(200)).run
+    assert_equal 0, SocialPost.count, "nothing saved"
+    assert_equal %w[linkedin x], results.map(&:platform).uniq.sort
+    assert(results.any? { |row| row.label.start_with?("fixture: #35") }, "today's fixed cases are in")
+    assert(results.any? { |row| row.kind == "news" && row.passed? }, "the real news item drafts and passes")
+    report = SocialAgent::Rehearsal.report(results)
+    assert_match(/## X: \d+ of \d+ passed/, report)
+    assert_not_nil run_x(DRAFT), "the day's slot is still free"
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"

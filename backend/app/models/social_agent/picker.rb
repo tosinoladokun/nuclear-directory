@@ -14,9 +14,11 @@ class SocialAgent::Picker
     radiological|enrich\w*|HALEU|TRISO|plutonium|thorium|tritium|spent fuel|fuel cycle|NRC|decommission\w*|nuclides?|neutrons?)\b/ix
   NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|workshop|hiring|award ceremony|internship)\b/i
 
-  def initialize(platform:, now: Time.current)
+  # fresh: how far back counts as new (a rehearsal looks back further; social:rehearse).
+  def initialize(platform:, now: Time.current, fresh: FRESH)
     @platform = platform
     @now = now
+    @fresh = fresh
   end
 
   def call = candidates.find { |item| usable?(item) }
@@ -25,7 +27,7 @@ class SocialAgent::Picker
 
   private
     def news
-      NewsItem.published.where(verified_at: (@now - FRESH)..@now, published_on: (@now - EVENT_MAX_AGE).to_date..)
+      NewsItem.published.where(verified_at: (@now - @fresh)..@now, published_on: (@now - @fresh - (EVENT_MAX_AGE - FRESH)).to_date..)
         .includes(:news_mentions).order(verified_at: :desc).filter_map do |news|
           next if [ news.title, news.headline ].compact.any? { |text| text.match?(NOT_NEWS) }
           next unless [ news.title, news.headline, news.summary ].compact.any? { |text| text.match?(NUCLEAR) }
@@ -54,7 +56,7 @@ class SocialAgent::Picker
     # Cameco and Westinghouse weren't news to the picker).
     def links
       first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
-        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - @fresh, @now).select(:subject_id)
       fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first), @now.to_date)
       bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
       fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).limit(20).filter_map do |link|
@@ -77,7 +79,7 @@ class SocialAgent::Picker
     def companies
       # New means first approved this week (a later edit re-verifies an old company; DQ), as What's new counts it.
       first = VerificationEvent.where(subject_type: "Organization", to_status: "verified").group(:subject_id)
-        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - @fresh, @now).select(:subject_id)
       Organization.published.where(id: first).where.not(description: [ nil, "" ]).order(verified_at: :desc).filter_map do |company|
         evidence = Evidence.where(subject: company).includes(:source).order(:id).to_a
         described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or next
