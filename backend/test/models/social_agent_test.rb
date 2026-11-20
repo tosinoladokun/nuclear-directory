@@ -401,4 +401,22 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent.define_singleton_method(:publisher) { SocialAgent::Buffer.new }
     SocialAgent.instance_variable_set(:@senders, nil)
   end
+
+  test "the writer lets a legal suffix go, and the voice check doesn't fail the nits rehearsal rounds 1-11 found" do
+    seen = []
+    client = Object.new
+    client.define_singleton_method(:structured) do |messages:, **|
+      seen << messages.first[:content]
+      Struct.new(:data).new({ "text" => "x" * 30, "pass" => true, "reason" => "" })
+    end
+    writer = SocialAgent::Writer.new(client:)
+    item = SocialAgent::Item.new(subject: nil, kind: "news", facts: { "headline" => "Acme signs an MOU" }, source_url: nil, source_quote: "q", path: "/", organization_ids: [])
+    writer.draft(item, platform: "x")
+    writer.voice_ok?("Acme signed a non-binding MOU.", item)
+
+    assert_match(/legal suffix\s+\(Pte\. Ltd\./, seen.first, "the writer may leave a legal suffix off")
+    assert_match(/Do not fail a post for these/, seen.last)
+    assert_match(/non-binding MOU/, seen.last)
+    assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
+  end
 end
