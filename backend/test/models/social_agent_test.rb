@@ -432,4 +432,16 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match(/non-binding MOU/, seen.last)
     assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
   end
+
+  test "the sensitive-word check reads the title, summary and opening of the article, not its menus or the deep body (DQ, 20 Nov)" do
+    page = ->(body) { "<html><head><title>Acme report</title></head><body><nav>Incident response</nav><article>#{body}</article><footer>stolen data policy</footer></body></html>" }
+    filler = "<p>#{'Acme Fission signed an agreement for fuel cladding tests. ' * 30}</p>"
+    check = ->(html) { SocialAgent::Rules.sensitive_topic(html) }
+
+    assert_nil check.(page.("<p>Acme Fission signed an agreement.</p>")), "a menu and footer word never counts"
+    assert_equal "accident", check.(page.("<p>An accident stopped the line.</p>")), "in the opening"
+    assert_nil check.(page.(filler + "<p>Years ago an accident was reviewed.</p>")), "deep in a long article: for a person's review, not a block"
+    assert_equal "Incident", check.("<html><head><title>Incident at the lab</title></head><body><article><p>Ok.</p></article></body></html>"), "in the title"
+    assert_equal "theft", check.("<html><head><meta name='description' content='Theft of material'></head><body><article><p>Ok.</p></article></body></html>"), "in the summary"
+  end
 end

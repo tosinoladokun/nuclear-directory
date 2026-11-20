@@ -80,6 +80,20 @@ module SocialAgent::Rules
     end
   end
 
+  # How much of the article counts as its opening for the sensitive-word check (DQ, 20 Nov): the first paragraphs.
+  OPENING_CHARS = 700
+
+  # The sensitive word that blocks a source page: one in its title, summary or the opening of its article. A word only
+  # deep in a long article (a routine release that mentions an "accident" in passing) is for a person's review, not an
+  # automatic block. Menus, footers and related links are never read (article_text drops them).
+  def sensitive_topic(body)
+    doc = Nokogiri::HTML(body.to_s)
+    summary = doc.at_css("meta[name='description'], meta[property='og:description']")&.[]("content").to_s
+    title = [ doc.at_css("title")&.text, doc.at_css("h1, meta[property='og:title']")&.then { |node| node.text.presence || node["content"] } ].join(" ")
+    opening = article_text(body)[0, OPENING_CHARS]
+    [ title, summary, opening ].join("\n")[PAGE_SENSITIVE]
+  end
+
   # A page's main text: its article or main element, without scripts, menus, headers and footers.
   def article_text(body)
     doc = Nokogiri::HTML(body.to_s)
@@ -237,7 +251,7 @@ module SocialAgent::Rules
     return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
 
     # The article, not the site's menus and other stories (rehearsal: "incident" in a lab's footer).
-    topic = article_text(response.body.to_s)[PAGE_SENSITIVE]
+    topic = sensitive_topic(response.body.to_s)
     return [ "its source page touches a sensitive topic (#{topic.downcase})" ] if topic
     # A news post's date must be the page's own (DQ, 20 Nov: NASA's pulsar item showed a date the page didn't).
     return [ "its date (#{item.facts['date']}) isn't on the source page" ] if item&.kind == "news" && !page_dated?(response.body.to_s, item.facts["date"])
