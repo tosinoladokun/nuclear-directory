@@ -112,12 +112,19 @@ module SocialAgent
   def self.write(post, item, platform, writer, fetcher:)
     run = CrawlRun.create!(source_kind: "social_agent", stage: "verify", started_at: Time.current)
     writer ||= SocialAgent::Writer.new
-    post.text = writer.draft(item, platform:, crawl_run: run)
-    problems = SocialAgent::Check.problems(post.text, item, platform:)
-    problems = SocialAgent::Rules.problems(post.text, item, platform:, fetcher:) if problems.empty?
-    if problems.empty?
-      ok, why = writer.voice_ok?(post.text, item, crawl_run: run)
-      problems << "voice check: #{why}" unless ok
+    problems = nil
+    # One revision: the writer sees what stopped its first draft and tries again; every check runs again (rehearsal,
+    # 20 Nov: most stops were the writer's slips the checks named exactly).
+    [ nil, :revise ].each do |pass|
+      break if pass && problems.empty?
+
+      post.text = writer.draft(item, platform:, crawl_run: run, **(pass ? { feedback: problems.to_sentence, previous: post.text } : {}))
+      problems = SocialAgent::Check.problems(post.text, item, platform:)
+      problems = SocialAgent::Rules.problems(post.text, item, platform:, fetcher:) if problems.empty?
+      if problems.empty?
+        ok, why = writer.voice_ok?(post.text, item, crawl_run: run)
+        problems << "voice check: #{why}" unless ok
+      end
     end
     run.finish!
     problems

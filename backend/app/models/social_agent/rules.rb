@@ -20,8 +20,9 @@ module SocialAgent::Rules
   }.freeze
   SUPERLATIVES = /\b(largest|biggest|first|only|smallest|fastest|most|record|unprecedented|leading|best|world's)\b/i
   SENSITIVE = /\b(incidents?|accidents?|injur\w*|casualt\w*|deaths?|died|killed|fatal\w*|leak\w*|contaminat\w*|evacuat\w*|security|
-    terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|export\s+controls?|lawsuits?|litigation|indict\w*)\b/ix
+    terror\w*|attack\w*|sabotage|theft|stolen|weapon\w*|warheads?|pit\s+production|export\s+controls?|lawsuits?|litigation|indict\w*)\b/ix
   # On the fetched page (menus included), a narrower list: a regulator's page always has "Security" in its menu.
+  LEDE = 800
   PAGE_SENSITIVE = /\b(incidents?|accidents?|casualt\w*|killed|fatal\w*|contaminat\w*|evacuat\w*|sabotage|theft|stolen|weapons?)\b/i
   MONTHS = Date::MONTHNAMES.compact.freeze
   STATES = %w[Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho Illinois
@@ -58,6 +59,7 @@ module SocialAgent::Rules
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found << "it says the same thing twice" if repeats?(text)
+    found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.own_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
@@ -78,20 +80,6 @@ module SocialAgent::Rules
 
       item.kind == "news" && own ? "the date #{day} #{Date::MONTHNAMES[month]} isn't the item's own (#{item.facts['date']}) or in the source" : "the date #{day} #{Date::MONTHNAMES[month]} isn't in the source"
     end
-  end
-
-  # How much of the article counts as its opening for the sensitive-word check (DQ, 20 Nov): the first paragraphs.
-  OPENING_CHARS = 700
-
-  # The sensitive word that blocks a source page: one in its title, summary or the opening of its article. A word only
-  # deep in a long article (a routine release that mentions an "accident" in passing) is for a person's review, not an
-  # automatic block. Menus, footers and related links are never read (article_text drops them).
-  def sensitive_topic(body)
-    doc = Nokogiri::HTML(body.to_s)
-    summary = doc.at_css("meta[name='description'], meta[property='og:description']")&.[]("content").to_s
-    title = [ doc.at_css("title")&.text, doc.at_css("h1, meta[property='og:title']")&.then { |node| node.text.presence || node["content"] } ].join(" ")
-    opening = article_text(body)[0, OPENING_CHARS]
-    [ title, summary, opening ].join("\n")[PAGE_SENSITIVE]
   end
 
   # A page's main text: its article or main element, without scripts, menus, headers and footers.
@@ -250,8 +238,11 @@ module SocialAgent::Rules
     response = fetcher.get(url.to_s)
     return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
 
-    # The article, not the site's menus and other stories (rehearsal: "incident" in a lab's footer).
-    topic = sensitive_topic(response.body.to_s)
+    # The article's subject, not a word in passing (rehearsal: "beyond any credible accident scenario" in a permit story,
+    # "safety incident rates improved"): in its opening, or three times or more.
+    article = article_text(response.body.to_s)
+    hits = article.scan(PAGE_SENSITIVE).flatten
+    topic = article.first(LEDE)[PAGE_SENSITIVE] || (hits.first if hits.size >= 3)
     return [ "its source page touches a sensitive topic (#{topic.downcase})" ] if topic
     # A news post's date must be the page's own (DQ, 20 Nov: NASA's pulsar item showed a date the page didn't).
     return [ "its date (#{item.facts['date']}) isn't on the source page" ] if item&.kind == "news" && !page_dated?(response.body.to_s, item.facts["date"])

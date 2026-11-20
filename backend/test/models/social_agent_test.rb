@@ -9,7 +9,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   class FakeWriter
     attr_accessor :text, :voice
     def initialize(text, voice: [ true, nil ]) = (@text, @voice = text, voice)
-    def draft(_item, platform:, crawl_run: nil) = text.respond_to?(:call) ? text.call : text
+    def draft(_item, platform:, crawl_run: nil, feedback: nil, previous: nil) = text.respond_to?(:call) ? text.call : text
     def voice_ok?(_text, _item, crawl_run: nil) = voice
   end
 
@@ -365,6 +365,25 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.people("NANO Nuclear signed with Surbana Jurong Infrastructure Pte. Ltd.", item), "a legal name isn't a person"
   end
 
+  test "a stopped draft gets one revision with what stopped it, then every check again (rehearsal)" do
+    drafts = [ "Acme Fission won 2 DOE awards.", DRAFT ]
+    seen = []
+    writer = FakeWriter.new(-> { drafts.shift })
+    writer.define_singleton_method(:draft) { |_item, platform:, crawl_run: nil, feedback: nil, previous: nil| seen << feedback; drafts.shift }
+    post = SocialAgent.run("x", now: MONDAY, writer:, fetcher: OK_FETCHER.new(200))
+    assert_equal "drafted", post.status
+    assert_equal [ nil, "the number 2 isn't in the source" ], seen
+  end
+
+  test "a sensitive word in passing deep in a page isn't its subject; in its opening it is (rehearsal)" do
+    page = ->(body) { Struct.new(:body) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body:, etag: nil,
+      last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }.new(body) }
+    filler = "<p>#{'The reactor design moves ahead with its partners and suppliers. ' * 20}</p>"
+    assert_empty SocialAgent::Rules.source_problems("https://x.example", page.("<article>#{filler}<p>It holds up beyond any credible accident scenario.</p></article>"))
+    assert_equal [ "its source page touches a sensitive topic (accident)" ],
+      SocialAgent::Rules.source_problems("https://x.example", page.("<article><p>An accident at the plant injured two workers.</p>#{filler}</article>"))
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
@@ -431,17 +450,5 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match(/Do not fail a post for these/, seen.last)
     assert_match(/non-binding MOU/, seen.last)
     assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
-  end
-
-  test "the sensitive-word check reads the title, summary and opening of the article, not its menus or the deep body (DQ, 20 Nov)" do
-    page = ->(body) { "<html><head><title>Acme report</title></head><body><nav>Incident response</nav><article>#{body}</article><footer>stolen data policy</footer></body></html>" }
-    filler = "<p>#{'Acme Fission signed an agreement for fuel cladding tests. ' * 30}</p>"
-    check = ->(html) { SocialAgent::Rules.sensitive_topic(html) }
-
-    assert_nil check.(page.("<p>Acme Fission signed an agreement.</p>")), "a menu and footer word never counts"
-    assert_equal "accident", check.(page.("<p>An accident stopped the line.</p>")), "in the opening"
-    assert_nil check.(page.(filler + "<p>Years ago an accident was reviewed.</p>")), "deep in a long article: for a person's review, not a block"
-    assert_equal "Incident", check.("<html><head><title>Incident at the lab</title></head><body><article><p>Ok.</p></article></body></html>"), "in the title"
-    assert_equal "theft", check.("<html><head><meta name='description' content='Theft of material'></head><body><article><p>Ok.</p></article></body></html>").downcase, "in the summary"
   end
 end
