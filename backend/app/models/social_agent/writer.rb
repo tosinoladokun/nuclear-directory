@@ -8,6 +8,7 @@ class SocialAgent::Writer
     - Use only the facts given. Every number and name must come from them. No guesses, rankings or opinions.
     - Say who issued the source, not who it mentions: a regulator's letter or notice is the regulator's ("the NRC said", "in an
       NRC letter dated 19 October"), never "the company said". A permit, project number or acceptance is the agency's act.
+    - A regulator's act keeps the source's verb: "approved" is not "authorized", "licensed" is not "permitted" or "cleared".
     - A dated event is told in the past tense ("signed", "announced"), never "signs" or "announces" beside a date.
     - A superlative (first, largest, only) is the source's claim: attribute it ("DOE calls it the first ...", "the company
       describes it as the largest ..."), never state it as fact.

@@ -588,4 +588,11 @@ class SocialAgentTest < ActiveSupport::TestCase
       date: "2026-11-12", quote: "q", link: "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission")
     assert_includes SocialAgent::Rehearsal.report([ row ]), "our page (the post's link): https://nuclear-directory.org/companies/acme-fission?utm_source=x"
   end
+
+  test "a regulator's act keeps the source's own verb: 'authorized' isn't 'approved' (DQ, round 17)" do
+    item = rules_item(quote: "DOE approved a construction permit for the Long Mott project.")
+    assert_equal 1, SocialAgent::Rules.act_problems("DOE authorized a construction permit for Long Mott.", item).size
+    assert_empty SocialAgent::Rules.act_problems("DOE approved a construction permit for Long Mott.", item)
+    assert_empty SocialAgent::Rules.act_problems("Dow and X-energy received a construction permit.", item), "no act verb, nothing to check"
+  end
 end

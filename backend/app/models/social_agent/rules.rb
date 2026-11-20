@@ -67,6 +67,7 @@ module SocialAgent::Rules
     found.concat(qualifiers(text, item))
     found << "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" unless attributed?(text)
     found.concat(speaker_problems(text, item))
+    found.concat(act_problems(text, item))
     found.concat(tense_problems(text))
     found.concat(unattributed_superlatives(text))
     found << "it says the same thing twice" if repeats?(text)
@@ -178,6 +179,16 @@ module SocialAgent::Rules
       next unless text.match?(/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}#{SPEECH}/i)
 
       "it says #{name} #{text[/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}(#{SPEECH.source})/i, 1].to_s.downcase}, but its source is a government document: say who issued it (\"the NRC said\", \"in an NRC letter\")"
+    end
+  end
+
+  # A regulator's act is the source's own word (DQ, round 17: a permit "authorized" where DOE says "approved"): each of these in the
+  # post must be in the source, as the verb of that act.
+  ACTS = %w[authorize authorized approve approved licensed permitted certified cleared].freeze
+  def act_problems(text, item)
+    source = item.source_text.downcase
+    text.downcase.scan(/\b(?:#{ACTS.join('|')})\b/).uniq.reject { |word| source.match?(/\b#{word.sub(/(?:ed|d)\z/, '')}\w*/) }.map do |word|
+      "it says \"#{word}\", which isn't the source's word for the act (use the source's own verb)"
     end
   end
 
