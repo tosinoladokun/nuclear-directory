@@ -33,6 +33,8 @@ Rails.application.routes.draw do
   # A public JSON summary for other sites (#193). GET only.
   get "api/snapshot.json" => "api/snapshots#show", as: :api_snapshot, format: false, defaults: { format: :json }
   # Data Quality's matching actions (#548): token only, 404 without one configured.
+  # Autopilot alerts with their owner session, for the Mac poller (#811).
+  get "api/autopilot/alerts" => "api/autopilot/alerts#index", defaults: { format: :json }, as: :api_autopilot_alerts
   scope "api/dq", module: "api/dq", defaults: { format: :json } do
     get "matching" => "matching#index", as: :api_dq_matching
     post "matching" => "matching#create"

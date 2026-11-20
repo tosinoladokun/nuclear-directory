@@ -103,6 +103,9 @@ services:
       # endpoint is off; a new digest rotates the token without a deploy.
       - key: DQ_AGENT_TOKEN_DIGEST
         sync: false
+      # The autopilot alerts endpoint's read-only token digest (#811), for the Mac poller; set in the dashboard.
+      - key: AUTOPILOT_READ_TOKEN_DIGEST
+        sync: false
       # IndexNow's key (#742), served publicly at /<key>.txt; set in the
       # dashboard so a blueprint sync never wipes it. Unset: IndexNow is off.
       - key: INDEXNOW_KEY

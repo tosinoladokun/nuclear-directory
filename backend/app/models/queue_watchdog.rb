@@ -58,11 +58,41 @@ class QueueWatchdog
       :stuck
     else
       Autopilot::Alert.resolve!(KEY, note: "Jobs are running again.")
+      catch_up
       :ok
     end
   rescue ActiveRecord::ActiveRecordError => error
     Rails.logger.warn("[queue_watchdog] the database didn't answer (#{error.class}); waiting")
     nil
+  end
+
+  # A daily (or rarer) scheduled job whose last run time passed LATE ago without being queued (the dispatcher was
+  # down) is queued once, for that run time (#811 auto-fix; Solid Queue records each run time once, so never twice).
+  LATE = 15.minutes
+  MAX_LATE = 1.day
+  # Too heavy to run in the day on its own say-so (DQ, Infra: memory): the nightly crawl and the checker wait for their next night.
+  NO_CATCH_UP = %w[daily_crawl dq_checker].freeze
+
+  def catch_up
+    paused = SolidQueue::Pause.pluck(:queue_name)
+    missed = SolidQueue::RecurringTask.static.where.not(key: NO_CATCH_UP).filter_map do |task|
+      due = task.previous_time
+      next if due > @now - LATE || due < @now - MAX_LATE
+      # Daily or rarer only: 20 hours allows a DST day of 23 (Copilot: hourly and 3-hourly tasks stay out).
+      next if task.next_time_after(due) - due < 20.hours
+      next if SolidQueue::RecurringExecution.exists?(task_key: task.key, run_at: due)
+      # A paused queue would only pile up (Infra).
+      next if paused.include?(task.queue_name.presence || task.class_name.safe_constantize&.queue_name.to_s)
+
+      [ due, task ]
+    end
+    # One a tick, oldest first: after an outage the backlog follows a minute apart, never one burst (Infra: the
+    # 256 MB database crashed on such a burst).
+    due, task = missed.min_by(&:first)
+    return [] unless task
+
+    Rails.logger.warn("[queue_watchdog] #{task.key} missed its #{due.iso8601} run; queued once now")
+    task.enqueue(at: due) ? [ task.key ] : []
   end
 
   private
