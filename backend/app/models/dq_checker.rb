@@ -18,6 +18,9 @@ class DqChecker
   DAILY_BUDGET = 1.0
   BATCH = 25
   WINDOW = 4_000
+  # A whole call, retries included: OpenRouter's keep-alive bytes reset the read timeout, so one slow answer
+  # held a call for six minutes in the exam.
+  CALL_DEADLINE = 60
   KINDS = %w[organization organization_role news_item].freeze
   # What a claim fills, by its payload keys; anything else is never judged.
   FIELDS = {
@@ -148,7 +151,7 @@ class DqChecker
     unsure("Needs a human: the model budget is used up")
   rescue StandardError => error
     Rails.error.report(error, handled: true, context: { dq_checker: claim.id })
-    unsure("Needs a human: the model didn't answer")
+    unsure("Needs a human: the model didn't answer (#{error.class.name.demodulize})")
   end
 
   def self.quoted?(quote, page)
@@ -185,12 +188,16 @@ class DqChecker
     end
 
     def ask(role, claim)
-      response = llm.structured(role:, schema: SCHEMA, schema_name: "checker_verdict", crawl_run: @run, reasoning_effort: "low",
-        messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(claim) } ])
+      response = Timeout.timeout(CALL_DEADLINE) { llm_call(role, claim) }
       data = response.data
       confidence = data["confidence"].is_a?(Numeric) && data["confidence"].between?(0, 1) ? BigDecimal(data["confidence"].to_s).floor(2) : nil
       verdict = data["verdict"].in?(CheckerVerdict::VERDICTS) && confidence ? data["verdict"] : "unsure"
       Answer.new(verdict:, reason: data["reason"].to_s.squish.presence || "No reason given", confidence:, model: response.model, escalated: false)
+    end
+
+    def llm_call(role, claim)
+      llm.structured(role:, schema: SCHEMA, schema_name: "checker_verdict", crawl_run: @run, reasoning_effort: "low",
+        messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(claim) } ])
     end
 
     def prompt(claim)
