@@ -16,6 +16,12 @@ class InboxClearRepairTest < ActiveSupport::TestCase
     @webcast = NewsItem.create!(id: 68, url: InboxClearRepair::WEBCAST[:url], title: "NANO Nuclear to Hold Fourth Quarter Business Update Webcast",
       headline: "NANO Nuclear to hold fourth-quarter business update webcast", published_on: Date.new(2026, 11, 11), publisher: "NANO Nuclear Energy",
       verification_status: "verified", verified_by: BY, verified_at: READ)
+    NewsItem.where(id: [ 19, 34 ]).destroy_all
+    @fr = NewsItem.create!(id: 19, url: "https://www.federalregister.gov/documents/2026/10/28/2026-21996/x", title: "Paducah FEIS (Federal Register)", headline: "Final environmental impact statement: Paducah Laser Enrichment Facility",
+      published_on: Date.new(2026, 10, 28), publisher: "Federal Register (NRC)", verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 2))
+    @gle = NewsItem.create!(id: 34, url: InboxClearRepair::PADUCAH_DUPLICATE[:url], title: "NRC Issues Final Environmental Impact Statement for the Paducah Laser Enrichment Facility",
+      headline: "NRC issues final environmental impact statement for Paducah facility", published_on: Date.new(2026, 10, 23), publisher: "Global Laser Enrichment",
+      verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 8))
     @other_news = NewsItem.create!(url: "https://example.com/n", title: "Other", headline: "Other nuclear news", published_on: Date.new(2026, 11, 19),
       publisher: "Other", verification_status: "verified", verified_by: BY, verified_at: READ)
 
@@ -47,6 +53,9 @@ class InboxClearRepairTest < ActiveSupport::TestCase
     assert_match "non-binding memorandum of understanding", @sj.summary
     assert_equal "verified", @sj.verification_status
     assert_equal "unpublished", @webcast.reload.verification_status
+    assert_equal "unpublished", @gle.reload.verification_status
+    assert_match "Duplicate of news item 19", VerificationEvent.where(subject: @gle).order(:id).last.reason.to_s
+    assert @fr.reload.verified?, "the Federal Register item stays"
     assert_equal "rejected", @lithios.reload.verification_status
     assert_equal "unpublished", @link.reload.verification_status
     assert_equal "unpublished", @term.reload.verification_status

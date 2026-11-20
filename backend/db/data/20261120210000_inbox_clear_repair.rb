@@ -2,6 +2,8 @@
 # - News item 69 (NANO Nuclear and SJ Group): its headline and summary said "collaboration"; the release says a signed
 #   non-binding MOU with Surbana Jurong Infrastructure Pte. Ltd., an affiliate of SJ Group. Reworded as the release does.
 # - News item 68 (a webcast notice) is not industry news and comes off.
+# - News item 34 (Paducah FEIS, from GLE's own PDF) duplicates item 19 (the same environmental impact statement from the
+#   Federal Register, NRC's own notice): the primary source stays, the duplicate comes off.
 # - Lithios (company 344, pending) is a lithium-extraction startup, not nuclear: rejected; the ARPA-E funds link to it
 #   (323) and its award term (262) come off, with the link's quote.
 # - Moltex Energy (company 291) was published with the HQ of its US office (Wilmington, DE) while its legal name is
@@ -24,6 +26,7 @@ class InboxClearRepair < DeployData::Migration
       "potential applications in Southeast Asia."
   }.freeze
   WEBCAST = { id: 68, url: "https://nanonuclearenergy.com/nano-nuclear-to-hold-fourth-quarter-business-update-webcast-on-november-30-2026/" }.freeze
+  PADUCAH_DUPLICATE = { id: 34, url: "https://www.gle-us.com/wp-content/uploads/2026/10/NRC-Issues-GLE-FEIS.pdf", keep_id: 19 }.freeze
   LITHIOS = { company_id: 344, name: "Lithios", link_id: 323, funder_id: 238, term_id: 262, amount: 19_999_250, evidence_id: 4486 }.freeze
   MOLTEX = { id: 291, name: "Moltex Energy", city: "Wilmington", state: "DE" }.freeze
   # Each record was last decided before this read (the inbox clear ran until 20:18 UTC).
@@ -32,6 +35,7 @@ class InboxClearRepair < DeployData::Migration
   def up
     reword_nano_sj
     take_off_webcast
+    take_off_paducah_duplicate
     reject_lithios
     clear_moltex_hq
   end
@@ -56,6 +60,15 @@ class InboxClearRepair < DeployData::Migration
     def take_off_webcast
       news = NewsItem.find_by(id: WEBCAST[:id]) or return say("News item #{WEBCAST[:id]} is gone; nothing to do")
       take_off("NewsItem", news, ok: news.url == WEBCAST[:url], what: "the webcast notice", why: "Not industry news: a company event notice")
+    end
+
+    def take_off_paducah_duplicate
+      news = NewsItem.find_by(id: PADUCAH_DUPLICATE[:id]) or return say("News item #{PADUCAH_DUPLICATE[:id]} is gone; nothing to do")
+      kept = NewsItem.find_by(id: PADUCAH_DUPLICATE[:keep_id])
+      return say("News item #{news.id}: its primary twin (#{PADUCAH_DUPLICATE[:keep_id]}) is not verified; left as it is") unless kept&.verification_status == "verified" || news.verification_status != "verified"
+
+      take_off("NewsItem", news, ok: news.url == PADUCAH_DUPLICATE[:url], what: "the Paducah item from GLE's own PDF",
+        why: "Duplicate of news item #{PADUCAH_DUPLICATE[:keep_id]} (the same statement from the Federal Register, NRC's own notice)")
     end
 
     def reject_lithios
