@@ -18,6 +18,8 @@ class Api::Dq::EditsController < ActionController::API
   ACTIONS = %w[edit_news propose_takeoff].freeze
   # Edits and proposals a day (DQ's own ask, 20 Nov).
   PER_DAY = 30
+  # Text lengths (Infra): a headline fits Latest; a summary is a line or two.
+  SUMMARY_MAX = 400
 
   def create
     rows = params.permit!.to_h.then { |all| all["actions"] || all["_json"] || [] }
@@ -40,6 +42,8 @@ class Api::Dq::EditsController < ActionController::API
   end
 
   private
+    def host(url) = (URI.parse(url).host.to_s.downcase.delete_prefix("www.") rescue "")
+
     def done_today
       VerificationEvent.where(subject_type: "NewsItem", by: BY, created_at: Time.current.all_day).count +
         TakeoffProposal.where(proposed_by: BY, created_at: Time.current.all_day).count
@@ -54,6 +58,16 @@ class Api::Dq::EditsController < ActionController::API
       source = row["source_url"].to_s.strip
       return { id:, ok: false, error: "give the source_url that shows the right text" } unless source.match?(%r{\Ahttps?://\S+\z})
       return propose_takeoff(row, id, source) if row["action"] == "propose_takeoff"
+
+      values = row["values"].to_h
+      return { id:, ok: false, error: "a summary is at most #{SUMMARY_MAX} characters" } if values["summary"].to_s.length > SUMMARY_MAX
+      return { id:, ok: false, error: "a headline is at most #{NewsItem::HEADLINE_MAX} characters" } if values["headline"].to_s.squish.length > NewsItem::HEADLINE_MAX
+
+      # The right text comes from the item's own page: the source is on its site (Infra).
+      item = NewsItem.find_by(id:) or return { id:, ok: false, error: "no news item #{id}" }
+      unless host(source) == host(item.url)
+        return { id:, ok: false, error: "source_url must be on the item's own site (#{host(item.url)})" }
+      end
 
       result = DataQuality::Review.edit_news(id:, by: BY, reason: row["reason"].to_s.strip, attributes: row["values"].to_h, context: { "source_url" => source })
       { id:, ok: result.ok?, error: result.errors.to_sentence.presence }.compact

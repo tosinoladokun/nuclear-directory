@@ -49,7 +49,10 @@
 <% end %>
 
 <%# Data Quality's take-off proposals (#863): one set per batch, Yes takes off (reversible), No keeps. %>
-<% takeoffs = TakeoffProposal.pending.order(:id).group_by(&:batch) %>
+<% pending_takeoffs = TakeoffProposal.pending.order(:id).to_a %>
+<%# One query per type for their names, not one per row (Infra). %>
+<% subjects = pending_takeoffs.group_by(&:subject_type).flat_map { |type, rows| type.constantize.where(id: rows.map(&:subject_id)).map { |record| [ [ type, record.id ], record ] } }.to_h %>
+<% takeoffs = pending_takeoffs.group_by(&:batch) %>
 <% if takeoffs.any? %>
   <section class="nd-stack" aria-labelledby="inbox-takeoffs">
     <h2 id="inbox-takeoffs" class="type-admin-h2 m-0">Take off what's wrong <span class="type-count"><%= takeoffs.values.sum(&:size) %></span></h2>
@@ -57,7 +60,7 @@
       <div class="nd-stack" id="takeoff-set-<%= batch %>">
         <ol class="nd-waits">
           <% proposals.each do |proposal| %>
-            <% subject = proposal.subject %>
+            <% subject = subjects[[ proposal.subject_type, proposal.subject_id ]] %>
             <li class="nd-inbox__recent" id="takeoff-<%= proposal.id %>">
               <span class="type-body-strong"><%= subject ? link_to(subject.try(:name) || subject.try(:display_title) || "#{type_label(proposal.subject_type)} #{proposal.subject_id}", admin_fact_path(type: proposal.subject_type, id: proposal.subject_id), class: "nd-link") : "#{proposal.subject_type} #{proposal.subject_id}" %></span>
               <span class="type-body"><%= proposal.reason %><% if proposal.source_url %> · <%= link_to "Source", proposal.source_url, class: "nd-link", target: "_blank", rel: "noopener" %><% end %></span>

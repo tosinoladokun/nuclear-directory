@@ -15,15 +15,15 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
   def edit(**row) = post(api_dq_edits_path, params: { actions: [ { action: "edit_news", id: @item.id, **row } ] }, headers: AUTH, as: :json)
 
   test "edits the headline with a reason and source; the approver and status stay; listed and undoable" do
-    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://www.nrc.gov/x")
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://example.org/news/2")
     assert_equal [ { "id" => @item.id, "ok" => true } ], response.parsed_body["results"]
     @item.reload
     assert_equal [ "Acme gets an exemption", "verified", "human:tosin" ], [ @item.headline, @item.verification_status, @item.verified_by ]
     event = @item.verification_events.order(:id).last
-    assert_equal [ "agent:data-quality", "Typo", "https://www.nrc.gov/x" ], [ event.by, event.reason, event.context["source_url"] ]
+    assert_equal [ "agent:data-quality", "Typo", "https://example.org/news/2" ], [ event.by, event.reason, event.context["source_url"] ]
 
     get api_dq_edits_path, headers: AUTH
-    assert_equal [ @item.id, "https://www.nrc.gov/x" ], response.parsed_body["edits"].sole.values_at("id", "source_url")
+    assert_equal [ @item.id, "https://example.org/news/2" ], response.parsed_body["edits"].sole.values_at("id", "source_url")
 
     post api_dq_edits_undo_path, params: { id: @item.id }, headers: AUTH, as: :json
     assert response.parsed_body["ok"]
@@ -33,13 +33,13 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
   test "edit only: a source, a reason and text fields are required; nothing else changes; a taken-off item isn't edited" do
     edit(values: { headline: "X" }, reason: "r")
     assert_match "source_url", response.parsed_body["results"].sole["error"]
-    edit(values: { url: "https://evil.example" }, reason: "r", source_url: "https://a.example/")
+    edit(values: { url: "https://evil.example" }, reason: "r", source_url: "https://example.org/news/2")
     assert_match "can't edit", response.parsed_body["results"].sole["error"]
     post api_dq_edits_path, params: { actions: [ { action: "take_off", id: @item.id, reason: "r", source_url: "https://a.example/" } ] }, headers: AUTH, as: :json
     assert_match "action must be", response.parsed_body["results"].sole["error"]
 
     @item.unpublish!(by: "human:tosin")
-    edit(values: { headline: "Y" }, reason: "r", source_url: "https://a.example/")
+    edit(values: { headline: "Y" }, reason: "r", source_url: "https://example.org/news/2")
     assert_match "put it back", response.parsed_body["results"].sole["error"]
     assert_equal [ "Acme gets an exemtpion", "https://example.org/news/2" ], @item.reload.values_at(:headline, :url)
   end
@@ -76,8 +76,18 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
 
   test "at most PER_DAY edits and proposals a day (DQ)" do
     Api::Dq::EditsController::PER_DAY.times { |n| @item.verification_events.create!(from_status: "verified", to_status: "verified", by: "agent:data-quality", reason: "r#{n}") }
-    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://www.nrc.gov/x")
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://example.org/news/2")
     assert_match "limit", response.parsed_body["results"].sole["error"]
+    assert_equal "Acme gets an exemtpion", @item.reload.headline
+  end
+
+  test "the source must be on the item's own site; a long headline or summary is refused (Infra)" do
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://elsewhere.example/x")
+    assert_match "item's own site", response.parsed_body["results"].sole["error"]
+    edit(values: { summary: "x" * 401 }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "at most 400", response.parsed_body["results"].sole["error"]
+    edit(values: { headline: "y" * 81 }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "at most 80", response.parsed_body["results"].sole["error"]
     assert_equal "Acme gets an exemtpion", @item.reload.headline
   end
 end
