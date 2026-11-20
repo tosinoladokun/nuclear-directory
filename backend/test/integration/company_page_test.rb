@@ -573,6 +573,8 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     graph = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"]
     assert_equal "NASDAQ: KRSP", graph.find { |node| node["@type"] == "Organization" }["tickerSymbol"]
 
+    assert_not_includes ApplicationController.helpers.edgar_url("0001234567&evil=1\"><x>"), "evil", "a CIK is digits only in the URL, whatever is stored"
+
     @kairos.update!(sec_cik: nil)
     get company_path(slug: "kairos-power")
     assert_select ".nd-glance dt", text: /\ATicker/, count: 0
