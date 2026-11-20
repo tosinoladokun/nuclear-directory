@@ -440,4 +440,55 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent.define_singleton_method(:publisher) { SocialAgent::Buffer.new }
     SocialAgent.instance_variable_set(:@senders, nil)
   end
+
+  # Copilot's six findings on #842, each with its regression.
+  def rules_item(kind: "news", facts: {}, quote: "")
+    SocialAgent::Item.new(subject: @news, kind:, facts:, source_url: nil, source_quote: quote, path: "/", organization_ids: [])
+  end
+
+  test "a country is its whole name: 'Asia Cook' is a person, 'South Korea' and 'Southeast Asia' are places" do
+    assert SocialAgent::Rules.place?(%w[Southeast Asia])
+    assert SocialAgent::Rules.place?(%w[South Korea])
+    assert SocialAgent::Rules.place?(%w[South Africa])
+    assert SocialAgent::Rules.place?(%w[Middle East])
+    assert SocialAgent::Rules.place?(%w[Asia Cook Islands]), "the whole name counts"
+    assert_not SocialAgent::Rules.place?(%w[Asia Cook]), "Cook alone isn't a country"
+    assert_not SocialAgent::Rules.place?(%w[Chad Jordan]), "a country alone never clears a run"
+  end
+
+  test "the nuclear gate sees 'spent fuel' and 'fuel cycle' as phrases, and not 'spentfuel'" do
+    assert_match SocialAgent::Picker::NUCLEAR, "Holtec expands spent fuel storage"
+    assert_match SocialAgent::Picker::NUCLEAR, "A new fuel cycle report"
+    assert_no_match SocialAgent::Picker::NUCLEAR, "Holtec expands spentfuel storage"
+  end
+
+  test "a date with a year must be the item's year: 19 November 2023 isn't the 2026 item's date" do
+    item = rules_item(facts: { "date" => "2026-11-19" }, quote: "Announced on 19 November 2026. The earlier plan dates from 2023.")
+    assert_empty SocialAgent::Rules.dates("On 19 November 2026 Acme signed.", item)
+    assert_empty SocialAgent::Rules.dates("On 19 November Acme signed.", item), "no year written: the item's day and month are enough"
+    assert_equal 1, SocialAgent::Rules.dates("On 19 November 2023 Acme signed.", item).size
+    other = rules_item(kind: "link", quote: "The closing is on 19 November 2026.")
+    assert_empty SocialAgent::Rules.dates("Closing is on 19 November 2026.", other)
+    assert_equal 1, SocialAgent::Rules.dates("Closing is on 19 November 2023.", other).size, "a non-news post's year is the source's too"
+  end
+
+  test "a source stating 19 November 2026 doesn't state 9 November 2026" do
+    assert SocialAgent::Rules.page_dated?("<p>Published 19 November 2026</p>", "2026-11-19")
+    assert_not SocialAgent::Rules.page_dated?("<p>Published 19 November 2026</p>", "2026-11-09")
+    assert_not SocialAgent::Rules.page_dated?("<p>Published November 19, 2026</p>", "2026-11-09")
+    other = rules_item(kind: "link", quote: "Signed on 19 November 2026.")
+    assert_equal 1, SocialAgent::Rules.dates("Signed on 9 November.", other).size, "9 isn't 19"
+  end
+
+  test "each absence phrase must be the source's own: 'not disclosed' doesn't clear 'no further details'" do
+    item = rules_item(quote: "The amount was not disclosed. The agreement covers fuel supply and a 2027 delivery.")
+    problems = SocialAgent::Rules.qualifiers("The amount was not disclosed, with no further details.", item)
+    assert_includes problems, "it says \"no further details\", which its source doesn't"
+    assert_not problems.any? { |problem| problem.include?("not disclosed") }, "the source says that one"
+  end
+
+  test "sentences giving different quantities aren't a repeat; the same thing said twice still is" do
+    assert_not SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. It produces 100 MW of heat at full power.")
+    assert SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. At full power the reactor produces 50 MW of electricity.")
+  end
 end

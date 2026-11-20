@@ -35,10 +35,20 @@ module SocialAgent::Rules
   REGIONS = %w[Asia Europe Africa America Americas Pacific Atlantic Arctic Antarctica Middle East Southeast Northeast
     Southwest Northwest Central Eastern Western Northern Southern North South West Gulf Caribbean Latin Baltic Nordic
     Scandinavia Oceania].to_set.freeze
-  COUNTRIES = TZInfo::Country.all.map { |country| country.name[/\A[A-Z][a-z]+/] }.compact.to_set.freeze
+  # Whole country names, never their first word ("Cook Islands" must not make "Cook" a country: "Asia Cook" is a person). A name
+  # written "Korea (South)" also counts as "Korea" and "South Korea"; "Congo (Dem. Rep.)" as "Congo".
+  COUNTRIES = TZInfo::Country.all.flat_map do |country|
+    name = country.name
+    base, detail = name.split(/\s*\(/, 2)
+    [ name, base, (("#{detail.delete(')').strip} #{base}") if detail) ]
+  end.compact.map(&:strip).to_set.freeze
 
-  def self.place?(words) = words.all? { |word| REGIONS.include?(word) } ||
-    (COUNTRIES.include?(words.last) && words[0...-1].all? { |word| REGIONS.include?(word) })
+  # Leading region words, then one whole country name, or only region words.
+  def self.place?(words)
+    return true if words.all? { |word| REGIONS.include?(word) }
+
+    (1...words.size).any? { |at| words[0...at].all? { |word| REGIONS.include?(word) } && COUNTRIES.include?(words[at..].join(" ")) }
+  end
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
   ARTICLES = %w[The A An This That These Those].freeze
   NOT_PERSON = %w[Pte Ltd Limited GmbH AG PLC SA Inc Corp Infrastructure Challenge Summit Prize Award Conference Forum Initiative
@@ -69,14 +79,19 @@ module SocialAgent::Rules
 
   # A date in a news post must be its item's own date (PM, 20 Nov: the page's published date); in any other post it must
   # be written in the source. "19 November", "November 19" and "19 November 2026" all count.
-  DATE = /\b(?:(\d{1,2})\s+(#{Date::MONTHNAMES.compact.join('|')})|(#{Date::MONTHNAMES.compact.join('|')})\s+(\d{1,2}))\b/
+  # A year written with the date is part of it ("On 19 November 2023" isn't the 2026 item's date).
+  DATE = /(?<!\d)(?:(\d{1,2})\s+(#{Date::MONTHNAMES.compact.join('|')})|(#{Date::MONTHNAMES.compact.join('|')})\s+(\d{1,2}))(?!\d)(?:,?\s+(\d{4})(?!\d))?/
   def dates(text, item)
     own = Date.parse(item.facts["date"].to_s) rescue nil
-    text.scan(DATE).filter_map do |day_first, month_a, month_b, day_last|
+    source = [ item.source_quote, item.page_text ].compact.join("\n")
+    text.scan(DATE).filter_map do |day_first, month_a, month_b, day_last, year|
       day, month = (day_first || day_last).to_i, Date::MONTHNAMES.index(month_a || month_b)
-      # The item's own date, or another date its source states (a deadline, a closing date).
-      stated = [ item.source_quote, item.page_text ].compact.join("\n").match?(/\b(#{day}\s+#{Date::MONTHNAMES[month]}|#{Date::MONTHNAMES[month]}\s+#{day})\b/i)
-      next if stated || (item.kind == "news" && own && own.day == day && own.month == month)
+      name = Date::MONTHNAMES[month]
+      # The item's own date, or another date its source states (a deadline, a closing date), in full: the day is a whole number
+      # and a year, when the post gives one, is the source's too.
+      tail = year ? ",?\\s+#{year}(?!\\d)" : ""
+      stated = source.match?(/(?<!\d)(?:#{day}\s+#{name}|#{name}\s+#{day})(?!\d)#{tail}/i)
+      next if stated || (item.kind == "news" && own && own.day == day && own.month == month && (year.nil? || own.year == year.to_i))
 
       item.kind == "news" && own ? "the date #{day} #{Date::MONTHNAMES[month]} isn't the item's own (#{item.facts['date']}) or in the source" : "the date #{day} #{Date::MONTHNAMES[month]} isn't in the source"
     end
@@ -97,7 +112,8 @@ module SocialAgent::Rules
     meta = body.scan(/(?:datePublished|published_time|article:published|pubdate)[^0-9]{0,40}(\d{4}-\d{2}-\d{2})/i).flatten
     forms = [ date.strftime("%B %-d, %Y"), date.strftime("%-d %B %Y"), date.strftime("%b %-d, %Y"), date.strftime("%b. %-d, %Y"),
       date.iso8601, date.strftime("%m/%d/%Y"), date.strftime("%-m/%-d/%Y") ]
-    meta.include?(date.iso8601) || forms.any? { |form| text.include?(form) }
+    # Whole dates: "19 November 2026" is not "9 November 2026".
+    meta.include?(date.iso8601) || forms.any? { |form| text.match?(/(?<![\d\/-])#{Regexp.escape(form)}(?![\d\/-])/) }
   end
 
   # What the source doesn't say isn't said (GTM, 20 Nov: "provides no further details" was false), and a qualifier the
@@ -113,7 +129,10 @@ module SocialAgent::Rules
     "a contract" => /\bcontracts?\b/i, "a deal" => /\bdeals?\b/i, "an alliance" => /\balliances?\b/i, "a venture" => /\bventures?\b/i }.freeze
   def qualifiers(text, item)
     found = []
-    found << "it says #{$&.downcase.inspect}, which its source doesn't" if text =~ ABSENCE && !item.source_text.match?(ABSENCE)
+    # Each absence phrase must be the source's own: its "not disclosed" doesn't clear "no further details".
+    text.scan(ABSENCE).map(&:downcase).uniq.each do |phrase|
+      found << "it says #{phrase.inspect}, which its source doesn't" unless item.source_text.match?(/\b#{Regexp.escape(phrase)}\b/i)
+    end
     DEAL_WORDS.each do |name, pattern|
       found << "it calls it #{name}, which its source doesn't" if text.match?(pattern) && !item.source_text.match?(pattern)
     end
@@ -129,8 +148,10 @@ module SocialAgent::Rules
   REPEAT = 0.6
   STOP = %w[the a an and or of to in on for with by at as is are was were its it that this from be will has have said].to_set.freeze
   def repeats?(text)
-    sentences = text.split(/(?<=[.!?])\s+/).map { |sentence| sentence.downcase.scan(/[a-z0-9]+/).to_set - STOP }.select { |words| words.size >= 4 }
-    sentences.combination(2).any? { |a, b| (a & b).size.to_f / [ a.size, b.size ].min >= REPEAT }
+    sentences = text.split(/(?<=[.!?])\s+/).map { |sentence| [ sentence.downcase.scan(/[a-z0-9]+/).to_set - STOP, sentence.scan(/\d[\d,.]*\d|\d/).to_set ] }
+      .select { |words, _| words.size >= 4 }
+    # Two sentences that both give quantities, and different ones, say different things ("50 MW of electricity... 100 MW of heat"), not the same twice.
+    sentences.combination(2).any? { |(a, a_numbers), (b, b_numbers)| (a_numbers.empty? || b_numbers.empty? || a_numbers == b_numbers) && (a & b).size.to_f / [ a.size, b.size ].min >= REPEAT }
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
