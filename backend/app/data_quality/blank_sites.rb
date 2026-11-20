@@ -16,24 +16,44 @@ module DataQuality::BlankSites
 
   # Cached until a crawl fetches a page again, so a page load never re-parses
   # every home page; only BATCH page bodies are in memory at once (Infra).
+  # Cached until a crawl fetches a page again, so a page load never re-parses
+  # every home page; only BATCH page bodies are in memory at once (Infra).
   def self.list(directory: DataQuality::DirectoryClient.new)
-    homes = directory.organizations_with_website.to_h { |name, website| [ Source.bare_homepage(website.to_s.strip), name ] }
-    sources = Source.where(source_kind: "company_pages", url: homes.keys + homes.keys.map { |url| "#{url}/" })
-    key = [ "blank_sites", Digest::SHA256.hexdigest(homes.to_a.sort.to_s), sources.maximum(:updated_at)&.to_i ]
+    homes = directory.organizations_with_website.group_by { |_, website| Source.bare_homepage(website.to_s.strip) }
+      .transform_values { |rows| rows.map(&:first) }
+    # A bare host is stored with or without its slash; a path only as given.
+    urls = homes.keys.flat_map { |url| url.match?(%r{\Ahttps?://[^/?#\s]+\z}i) ? [ url, "#{url}/" ] : [ url ] }
+    sources = Source.where(url: urls)
+    key = [ "blank_sites", Digest::SHA256.hexdigest(homes.sort.to_s), sources.maximum(:updated_at)&.to_i ]
     Rails.cache.fetch(key, expires_in: 1.day) { build(homes, sources) }
   end
 
   def self.build(homes, sources)
     reader = DataQuality::Plugins::CompanyPages.new
-    site = ->(source, reason) { Site.new(company: homes[Source.bare_homepage(source.url)], url: source.url, reason: REASONS.fetch(reason), checked_on: source.fetched_at&.to_date) }
-    failed = sources.where(crawl_status: %w[blocked needs_human]).select(:id, :url, :crawl_status, :fetched_at)
-      .map { |source| site.(source, source.crawl_status == "blocked" ? "blocked" : "unreadable") }
+    sites = ->(source, reason) do
+      Array(homes[Source.bare_homepage(source.url)]).map do |company|
+        Site.new(company:, url: source.url, reason: REASONS.fetch(reason), checked_on: source.fetched_at&.to_date)
+      end
+    end
+    failed = sources.where.not(crawl_status: "ok").or(sources.where.not(status_reason: nil))
+      .select(:id, :url, :crawl_status, :status_reason, :blocked_streak, :fetched_at)
+      .flat_map { |source| (reason = failure(source)) ? sites.(source, reason) : [] }
     thin = []
-    sources.where(crawl_status: "ok").find_each(batch_size: BATCH) do |source|
+    sources.where(crawl_status: "ok", status_reason: nil).find_each(batch_size: BATCH) do |source|
       reason = reason(source, reader)
-      thin << site.(source, reason) if reason
+      thin.concat(sites.(source, reason)) if reason
     end
     (failed + thin).sort_by { |entry| entry.company.to_s.downcase }
+  end
+
+  # The last fetch's outcome, as Snapshot records it: a block (or repeated
+  # blocks, or robots.txt) is "blocked"; any other failed fetch, including a
+  # timeout after an earlier good read, is "unreadable".
+  def self.failure(source)
+    return if source.fetched_at.nil?
+    return "blocked" if source.crawl_status == "blocked" || source.blocked_streak.positive? || source.status_reason.to_s.match?(/robots|disallow/i)
+
+    "unreadable" if source.crawl_status == "needs_human" || source.status_reason.present?
   end
 
   def self.count(...) = list(...).size
@@ -41,6 +61,6 @@ module DataQuality::BlankSites
   def self.reason(source, reader)
     return "empty" if source.content_text.blank?
 
-    "js_only" if reader.send(:body_text, source).length < DataQuality::Plugin::THIN_PAGE
+    "js_only" if reader.send(:visible_text, source).length < DataQuality::Plugin::THIN_PAGE
   end
 end

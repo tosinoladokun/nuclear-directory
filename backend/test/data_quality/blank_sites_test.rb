@@ -14,10 +14,25 @@ class DataQuality::BlankSitesTest < ActiveSupport::TestCase
     company("Fine Fission", "https://fine.example", crawl_status: "ok", content_text: "We build reactors. " * 60)
     company("Waiting Fission", "https://waiting.example")
 
+    company("Data Fission", "https://data.example", crawl_status: "ok",
+      content_text: "<html><head><meta name=description content='#{"We build microreactors for remote sites. " * 20}'></head><body></body></html>")
+    company("Timeout Fission", "https://timeout.example", crawl_status: "ok", content_text: "We build reactors. " * 60, status_reason: "Timed out")
+    company("First Fail Fission", "https://firstfail.example", status_reason: "Timed out")
+    company("Robots Fission", "https://robots.example", crawl_status: "needs_human", status_reason: "robots.txt disallows us")
+    Organization.create!(name: "Sister Fission", website: "https://blocked.example", verification_status: "verified", verified_by: "human:tosin")
+    Organization.create!(name: "Path Fission", website: "https://fine.example/company", verification_status: "verified", verified_by: "human:tosin")
+    Source.create!(url: "https://fine.example/company/", source_kind: "web_page", crawl_status: "blocked", fetched_at: Time.current)
+    Source.find_by!(url: "https://blocked.example").update!(source_kind: "web_page")
+
     sites = DataQuality::BlankSites.list
-    assert_equal [ "Blocked Fission", "Broken Fission", "Empty Fission", "Script Fission" ], sites.map(&:company)
-    assert_equal DataQuality::BlankSites::REASONS["js_only"], sites.last.reason
-    assert_equal [ "https://script.example", Date.new(2026, 11, 18) ], [ sites.last.url, sites.last.checked_on ]
-    assert_equal 4, DataQuality::BlankSites.count
+    by = sites.to_h { |site| [ site.company, site.reason ] }
+    reasons = DataQuality::BlankSites::REASONS
+    assert_equal({ "Blocked Fission" => reasons["blocked"], "Broken Fission" => reasons["unreadable"], "Empty Fission" => reasons["empty"],
+      "First Fail Fission" => reasons["unreadable"], "Robots Fission" => reasons["blocked"], "Script Fission" => reasons["js_only"],
+      "Sister Fission" => reasons["blocked"], "Timeout Fission" => reasons["unreadable"] }, by,
+      "page data counts; any source kind; shared sites list each company; a path site isn't matched by its slash form")
+    script = sites.find { |site| site.company == "Script Fission" }
+    assert_equal [ "https://script.example", Date.new(2026, 11, 18) ], [ script.url, script.checked_on ]
+    assert_equal 8, DataQuality::BlankSites.count
   end
 end
