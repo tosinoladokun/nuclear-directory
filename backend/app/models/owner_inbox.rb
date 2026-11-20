@@ -150,9 +150,17 @@ class OwnerInbox
   # Whether a company's other claim goes with its Create: Data Quality approved this very payload (only its approve,
   # never the verifier's alone, and never one it said no to: DQ, 12 Nov); its quote still in its page; nothing contradicts it. Checked again when it's decided.
   def self.rides_along?(claim, company_id)
-    claim.subject_id == company_id && claim.status.in?(%w[new matched needs_review]) &&
+    company_of(claim) == company_id && claim.status.in?(%w[new matched needs_review]) &&
       claim.dq_recommendation == "approve" && DataQuality::Recommendations.current?(claim) &&
       !DataQuality::Review.contradicted?(claim) && quote_in_source?(claim)
+  end
+
+  # The company a claim is on: its subject, or a role claim's company (#811: the role rides with the Create).
+  def self.company_of(claim)
+    case claim.subject_type
+    when "Organization" then claim.subject_id
+    when "OrganizationRole" then OrganizationRole.where(id: claim.subject_id).pick(:organization_id)
+    end
   end
 
   def self.quote_in_source?(candidate)
@@ -186,6 +194,13 @@ class OwnerInbox
     def one_create_per_company(grouped)
       creates = grouped.select { |(kind, candidate_kind, *), _| kind == "new_record" && candidate_kind == "organization" }
       by_company = creates.group_by { |_, copies| copies.first.subject_id }
+      # A role from its own page goes with the Create too (#811 end-to-end test: it was a row of its own).
+      role_rows = grouped.select { |(_, candidate_kind, subject_type), _| candidate_kind == "organization_role" && subject_type == "OrganizationRole" }
+      role_company = OrganizationRole.where(id: role_rows.map { |(*, subject_id, _), _| subject_id }).pluck(:id, :organization_id).to_h
+      role_rows.each do |key, copies|
+        company_id = role_company[key[3]]
+        by_company[company_id] << [ key, copies ] if by_company.key?(company_id)
+      end
       # He said No to the company (its proposing claim is rejected): what's left on it stays with Data Quality.
       declined = Candidate.where(subject_type: "Organization", subject_id: by_company.keys, proposed_subject: true, status: "rejected").distinct.pluck(:subject_id)
       by_company.each do |company_id, rows|
@@ -196,7 +211,7 @@ class OwnerInbox
         end
         next if rows.size < 2
 
-        primary ||= rows.min_by { |_, copies| copies.map(&:id).min }
+        primary ||= rows.select { |(_, candidate_kind), _| candidate_kind == "organization" }.min_by { |_, copies| copies.map(&:id).min }
         (rows - [ primary ]).each do |key, copies|
           grouped.delete(key)
           riders = copies.select { |claim| self.class.rides_along?(claim, company_id) }

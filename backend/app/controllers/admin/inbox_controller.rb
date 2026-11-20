@@ -82,7 +82,9 @@ class Admin::InboxController < Admin::BaseController
     results += DataQuality::Review.approve(field_ids, by: actor, reason: "With its Create") if field_ids.any?
     # And a created company's other checked claims shown with it (one Create per company), each checked again.
     companies = Candidate.where(id: created).pluck(:subject_id)
-    riders = Candidate.where(id: companions, subject_id: companies).includes(:source).select { |claim| OwnerInbox.rides_along?(claim, claim.subject_id) }
+    riders = Candidate.where(id: companions).includes(:source).select do |claim|
+      (company = OwnerInbox.company_of(claim)) && companies.include?(company) && OwnerInbox.rides_along?(claim, company)
+    end
     results += DataQuality::Review.approve(riders.map(&:id), by: actor, reason: "With its Create") if riders.any?
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Done: #{helpers.pluralize(done.size, 'item')} live." if done.any?
