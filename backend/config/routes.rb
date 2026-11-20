@@ -43,6 +43,10 @@ Rails.application.routes.draw do
     # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
     get "checker" => "checker#index", as: :api_dq_checker
+    # Data Quality's text fixes (#863): edit only, with reason and source, undoable.
+    get "edits" => "edits#index", as: :api_dq_edits
+    post "edits" => "edits#create"
+    post "edits/undo" => "edits#undo", as: :api_dq_edits_undo
     # The pipeline's health (#811): today's counts and problems, and the last two weeks.
     get "health" => "health#show", as: :api_dq_health
   end

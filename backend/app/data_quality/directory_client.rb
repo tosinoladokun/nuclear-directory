@@ -363,6 +363,14 @@ class DataQuality::DirectoryClient
   def news_items(q: nil, limit: 50) = lookup.news_items(q:, limit:)
   def news_history(id) = lookup.news_history(id)
 
+  # Edits a news item's text (#863); WriteResult-like: ref, errors.
+  def edit_news_text(id:, attributes:, by:, reason:, context: {})
+    Directory::FactWriter.edit_news_text(id:, attributes:, by:, reason:, context:)
+    WriteResult.new(ref: Ref.new(type: "NewsItem", id:), errors: [], created: false)
+  rescue Directory::FactWriter::Invalid, ActiveRecord::RecordInvalid => error
+    WriteResult.new(ref: nil, errors: [ error.message ], created: false)
+  end
+
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
     record(type, state, values: lookup.fact_attributes(type:, id:))
