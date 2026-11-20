@@ -19,6 +19,13 @@ class PublicRateLimitTest < ActionDispatch::IntegrationTest
     assert_match "[rate-limit] 127.0.0.1 GET /about", logged
   end
 
+  test "one log line per IP a minute, however many requests are limited (Infra)" do
+    travel_to Time.utc(2026, 11, 20, 12, 0, 5)
+    hit(PublicRateLimit::LIMIT)
+    logged = capture_log { 3.times { get "/about" } }
+    assert_equal 1, logged.scan("[rate-limit]").size
+  end
+
   test "another IP has its own count" do
     hit(PublicRateLimit::LIMIT + 1)
     get "/about", headers: { "REMOTE_ADDR" => "10.0.0.9" }

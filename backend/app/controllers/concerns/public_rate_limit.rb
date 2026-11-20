@@ -37,8 +37,9 @@ module PublicRateLimit
   DNS_TIMEOUT = 2
   # New lookups a minute, process-wide: a faker rotating IPs can't tie up the threads (Infra).
   LOOKUPS_PER_MINUTE = 20
-  # Off in tests, where every page test shares one IP; its own test turns it on.
-  mattr_accessor :enabled, default: !Rails.env.test?
+  # Off in tests, where every page test shares one IP (its own test turns it
+  # on), and with PUBLIC_RATE_LIMIT=off, an emergency switch (Infra).
+  mattr_accessor :enabled, default: !Rails.env.test? && ENV["PUBLIC_RATE_LIMIT"] != "off"
   mattr_accessor :resolver, default: -> { Resolv::DNS.new }
 
   included do
@@ -78,7 +79,9 @@ module PublicRateLimit
     def friendly_bot = FRIENDLY.find { |_, pattern| request.user_agent.to_s.match?(pattern) }&.first
 
     def limited!
-      Rails.logger.warn("[rate-limit] #{request.remote_ip} #{request.method} #{request.path} ua=#{request.user_agent.to_s.truncate(120).inspect}")
+      # One log line per IP a minute: a hammering crawler mustn't flood the logs (Infra).
+      logged = STORE.write("logged:#{request.remote_ip}:#{Time.current.to_i / 60}", true, unless_exist: true, expires_in: 2.minutes)
+      Rails.logger.warn("[rate-limit] #{request.remote_ip} #{request.method} #{request.path} ua=#{request.user_agent.to_s.truncate(120).inspect}") if logged
       response.set_header("Retry-After", WINDOW.to_i.to_s)
       head :too_many_requests
     end
