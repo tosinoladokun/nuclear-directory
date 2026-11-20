@@ -9,7 +9,8 @@ class SocialAgent::Rehearsal
   DAYS = 30
   FIXTURES = Rails.root.join("test/fixtures/files/social_rehearsal.yml")
 
-  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date) do
+  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date, :quote) do
+    def hash_hex = Digest::SHA256.hexdigest(text.to_s)
     def passed? = problems.empty?
   end
 
@@ -28,7 +29,8 @@ class SocialAgent::Rehearsal
         post = SocialPost.new(platform:)
         item, problems = SocialAgent.prepare(item, @fetcher)
         problems = SocialAgent.write(post, item, platform, @writer, fetcher: @fetcher) if problems.empty?
-        Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url, date: item.facts["date"])
+        Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url, date: item.facts["date"],
+          quote: [ item.source_quote, item.page_text ].compact.join("\n").first(1_500))
       end
     end
   end
@@ -42,13 +44,16 @@ class SocialAgent::Rehearsal
   end
 
   # For Data Quality's grading (20 Nov): each draft as id, platform, exact text, source URL, the item's own date, run ref.
-  def self.report(results, run: Time.current.utc.strftime("%Y%m%d-%H%M"))
-    lines = [ "# Social rehearsal #{run}", "" ]
+  def self.report(results, run: Time.current.utc.strftime("%Y%m%d-%H%M"), commit: ENV["REHEARSAL_COMMIT"])
+    lines = [ "# Social rehearsal #{run}", "",
+      "as of: #{Time.current.utc.iso8601} (items from the directory's public updates; rehearsal content, not freshness or Live approval)",
+      "commit: #{commit || 'unknown'}", "order: attempt order per platform, as below", "" ]
     results.group_by(&:platform).each do |platform, rows|
       lines << "## #{platform == 'x' ? 'X' : 'LinkedIn'}: #{rows.count(&:passed?)} of #{rows.size} passed" << ""
       rows.each_with_index do |row, index|
         lines << "### #{run}-#{platform}-#{index + 1} #{platform} #{row.passed? ? 'PASS' : 'BLOCK'}: #{row.label}"
-        lines << "run: #{run}" << "source: #{row.source_url}" << "item date: #{row.date || 'none'}"
+        lines << "run: #{run}" << "hash: #{row.hash_hex}" << "source: #{row.source_url}" << "item date: #{row.date || 'none'}"
+        lines << "source words (first 1,500 characters):" << row.quote.to_s.lines.map { |line| ">> #{line.chomp}" }.join("\n")
         lines << "why: #{row.problems.to_sentence}" unless row.passed?
         lines << "" << row.text.to_s.lines.map { |line| "> #{line.chomp}" }.join("\n") << ""
       end
