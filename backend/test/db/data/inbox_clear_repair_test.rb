@@ -22,7 +22,7 @@ class InboxClearRepairTest < ActiveSupport::TestCase
     @gle = NewsItem.create!(id: 34, url: InboxClearRepair::PADUCAH_DUPLICATE[:url], title: "NRC Issues Final Environmental Impact Statement for the Paducah Laser Enrichment Facility",
       headline: "NRC issues final environmental impact statement for Paducah facility", published_on: Date.new(2026, 10, 23), publisher: "Global Laser Enrichment",
       verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 8))
-    @other_news = NewsItem.create!(url: "https://example.com/n", title: "Other", headline: "Other nuclear news", published_on: Date.new(2026, 11, 19),
+    @other_news = NewsItem.create!(id: 900_001, url: "https://example.com/n", title: "Other", headline: "Other nuclear news", published_on: Date.new(2026, 11, 19),
       publisher: "Other", verification_status: "verified", verified_by: BY, verified_at: READ)
 
     pin = InboxClearRepair::LITHIOS
@@ -35,10 +35,11 @@ class InboxClearRepairTest < ActiveSupport::TestCase
     DealTerm.find_by(id: pin[:term_id])&.destroy!
     @term = DealTerm.create!(id: pin[:term_id], link: @link, term_type: "award", external_id: "x", amount_usd: pin[:amount], starts_on: Date.new(2026, 4, 6),
       verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 20, 20, 18))
-    page = Source.create!(url: "https://arpa-e.energy.gov/x", source_kind: "web_page", crawl_status: "ok")
+    Source.find_by(id: pin[:evidence_source_id])&.destroy!
+    page = Source.create!(id: pin[:evidence_source_id], url: "https://arpa-e.energy.gov/x", source_kind: "web_page", crawl_status: "ok")
     Evidence.find_by(id: pin[:evidence_id])&.destroy!
-    @quote = Evidence.create!(id: pin[:evidence_id], subject: @link, source: page, quote: "Project: NEXUS", found_by: "crawler")
-    @other_link = Relationship.create!(from_organization: @arpa, to_organization: Organization.create!(name: "Marathon Fusion"), relationship_type: "funds",
+    @quote = Evidence.create!(id: pin[:evidence_id], subject: @link, source: page, quote: pin[:evidence_quote], found_by: "crawler")
+    @other_link = Relationship.create!(id: 900_001, from_organization: @arpa, to_organization: Organization.create!(id: 900_001, name: "Marathon Fusion"), relationship_type: "funds",
       verification_status: "verified", verified_by: BY)
 
     @moltex = Organization.create!(id: InboxClearRepair::MOLTEX[:id], name: "Moltex Energy", legal_name: "Moltex Energy Limited", hq_city: "Wilmington",
@@ -78,13 +79,15 @@ class InboxClearRepairTest < ActiveSupport::TestCase
   test "records that are not as read are left and said, never a stopped deploy" do
     @sj.update_columns(headline: "Something else")
     @webcast.update_columns(url: "https://example.com/other")
-    @link.update_columns(to_organization_id: Organization.create!(name: "Someone Else").id)
+    @link.update_columns(to_organization_id: Organization.create!(id: 900_002, name: "Someone Else").id)
     @moltex.update_columns(hq_city: "Saint John", hq_state: "NB")
     output = nil
     assert_nothing_raised { output = run_it.output }
     assert_equal "Something else", @sj.reload.headline
     assert_equal "verified", @webcast.reload.verification_status
     assert_equal "verified", @link.reload.verification_status
+    assert_equal "verified", @term.reload.verification_status, "a changed link keeps its term"
+    assert Evidence.exists?(@quote.id), "and its quote"
     assert_equal "Saint John", @moltex.reload.hq_city
     assert output.any? { |line| line.include?("left as it is") }
   end
@@ -101,5 +104,31 @@ class InboxClearRepairTest < ActiveSupport::TestCase
     @lithios.update_columns(verification_status: "verified")
     run_it
     assert_equal "verified", @lithios.reload.verification_status
+  end
+
+  test "a link decided again since the read keeps its term and quote" do
+    @link.update_columns(verified_at: Time.utc(2026, 11, 20, 22))
+    run_it
+    assert_equal "verified", @link.reload.verification_status
+    assert_equal "verified", @term.reload.verification_status
+    assert Evidence.exists?(@quote.id)
+  end
+
+  test "a quote that changed on the link is not deleted" do
+    @quote.update_columns(quote: "A replacement quote")
+    run_it
+    assert_equal "unpublished", @link.reload.verification_status
+    assert Evidence.exists?(@quote.id), "the replacement stays"
+  end
+
+  test "a same-reviewer edit of the NANO item after the read (it keeps verified_at) is left alone" do
+    travel_to Time.utc(2026, 11, 21, 12) do
+      Directory::FactWriter.write("news_item", { id: 69, summary: "Tosin's own correction." },
+        verification: { status: "verified", by: BY, reason: "his edit" }, protect_human_verified: false)
+      @sj.update_columns(verified_at: READ)
+      run_it
+    end
+    assert_equal "Tosin's own correction.", @sj.reload.summary
+    assert_equal InboxClearRepair::NANO_SJ[:was], @sj.headline
   end
 end

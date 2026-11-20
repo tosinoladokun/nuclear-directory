@@ -27,7 +27,8 @@ class InboxClearRepair < DeployData::Migration
   }.freeze
   WEBCAST = { id: 68, url: "https://nanonuclearenergy.com/nano-nuclear-to-hold-fourth-quarter-business-update-webcast-on-november-30-2026/" }.freeze
   PADUCAH_DUPLICATE = { id: 34, url: "https://www.gle-us.com/wp-content/uploads/2026/10/NRC-Issues-GLE-FEIS.pdf", keep_id: 19 }.freeze
-  LITHIOS = { company_id: 344, name: "Lithios", link_id: 323, funder_id: 238, term_id: 262, amount: 19_999_250, evidence_id: 4486 }.freeze
+  LITHIOS = { company_id: 344, name: "Lithios", link_id: 323, funder_id: 238, term_id: 262, amount: 19_999_250, evidence_id: 4486, evidence_source_id: 2129,
+    evidence_quote: "Project: NEXUS: Next-Generation EXtraction of Untapped Lithium Sources | Organization: Lithios | Award: $19,999,250 | Program: SCALEUP Ready | Status: Active | Location: Medford, MA | Released: Apr 06 2026 | Area: nuclear fission | Funder: Advanced Research Projects Agency-Energy (ARPA-E)" }.freeze
   MOLTEX = { id: 291, name: "Moltex Energy", city: "Wilmington", state: "DE" }.freeze
   # Each record was last decided before this read (the inbox clear ran until 20:18 UTC).
   READ_AT = Time.utc(2026, 11, 20, 21)
@@ -90,6 +91,9 @@ class InboxClearRepair < DeployData::Migration
       ends = link && [ link.from_organization_id, link.relationship_type, link.to_organization_id ]
       link_ok = ends == [ LITHIOS[:funder_id], "funds", LITHIOS[:company_id] ]
       take_off("Relationship", link, ok: link_ok, what: "the ARPA-E link to Lithios", why: "Not nuclear: a lithium-extraction award")
+      # Its term and quote only go with the link this step pinned, once it is off; a link that changed, or was
+      # decided again since the read, keeps them (Copilot).
+      return say("The Lithios link is not as pinned and off; its award term and quote are left as they are") unless link_ok && link.reload.verification_status == "unpublished"
 
       term = DealTerm.find_by(id: LITHIOS[:term_id])
       term_ok = term && term.link_type == "Relationship" && term.link_id == LITHIOS[:link_id] && term.amount_usd.to_i == LITHIOS[:amount]
@@ -97,7 +101,9 @@ class InboxClearRepair < DeployData::Migration
 
       evidence = Evidence.find_by(id: LITHIOS[:evidence_id])
       return say("Quote #{LITHIOS[:evidence_id]} is already gone") if evidence.nil?
-      return say("Quote #{evidence.id} is no longer on link #{LITHIOS[:link_id]}; left as it is") unless evidence.subject_type == "Relationship" && evidence.subject_id == LITHIOS[:link_id]
+      pinned = evidence.subject_type == "Relationship" && evidence.subject_id == LITHIOS[:link_id] &&
+        evidence.source_id == LITHIOS[:evidence_source_id] && evidence.quote == LITHIOS[:evidence_quote]
+      return say("Quote #{evidence.id} is not the one read on 20 Nov; left as it is") unless pinned
 
       evidence.destroy!
       say "Removed quote #{evidence.id} (the Lithios link)"
@@ -134,5 +140,11 @@ class InboxClearRepair < DeployData::Migration
 
     def upcase_first(text) = text.sub(/\A./, &:upcase)
 
-    def decided_since_read?(record) = record.verified_at.nil? || record.verified_at >= READ_AT
+    # Decided again after the read: a later verified_at, or any later verification event (a same-reviewer edit keeps
+    # verified_at but records an event; Copilot).
+    def decided_since_read?(record)
+      return true if record.verified_at.nil? || record.verified_at >= READ_AT
+
+      VerificationEvent.where(subject: record).where(created_at: READ_AT..).exists?
+    end
 end
