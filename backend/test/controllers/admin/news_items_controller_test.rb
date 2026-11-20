@@ -10,6 +10,7 @@ class Admin::NewsItemsControllerTest < ActionDispatch::IntegrationTest
 
   test "finds it, edits its headline, summary and date with a reason, and keeps its status" do
     get admin_news_items_path(q: "exemption")
+    assert_select "nav a[href=?]", admin_news_items_path
     assert_select "a[href=?]", admin_news_item_path(id: @item.id)
 
     patch admin_news_item_path(id: @item.id), params: { values: { headline: "Vogtle exemption request", summary: "New summary.", published_on: "2026-11-17" }, note: "Clearer headline" }
