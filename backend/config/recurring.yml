@@ -31,7 +31,7 @@ production:
   # The nightly checker (#776), in shadow: a model's verdict on open claims, kept for Data Quality to compare.
   dq_checker:
     class: DqCheckerJob
-    schedule: every day at 9:30am UTC
+    schedule: every day at 10am UTC
   # The pipeline's health (#811): counts kept daily, problems to Sentry. After the night's crawl and finds.
   pipeline_health:
     class: PipelineHealthJob

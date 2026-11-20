@@ -112,4 +112,13 @@ class DqCheckerTest < ActiveSupport::TestCase
     assert_equal "role", field.("organization_role", {})
     assert_equal "relationship", field.("relationship", {})
   end
+
+  test "the page window is read in SQL around the quote, markup dropped; the start when the quote isn't found (Infra)" do
+    @page.update!(content_text: "<p>#{'filler ' * 20_000}</p><p>Acme Fission builds small fission reactors in Ohio.</p>#{'tail ' * 5_000}")
+    window = checker(FakeLlm.new).window(website_claim)
+    assert_includes window, "Acme Fission builds small fission reactors in Ohio"
+    assert_operator window.length, :<=, DqChecker::WINDOW
+    assert_not_includes window, "<p>"
+    assert checker(FakeLlm.new).window(website_claim(quote: "nowhere on it")).start_with?("filler")
+  end
 end

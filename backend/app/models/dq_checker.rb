@@ -1,6 +1,6 @@
 # The nightly checker (#776): Data Quality's routine verdict on a claim, by a model, in shadow.
 #
-# Each night (DqCheckerJob) it reads open claims it may judge, oldest first, and keeps one verdict each
+# Each night (DqCheckerJob, 10:00 UTC, after the crawl) it reads open claims it may judge, oldest first, and keeps one verdict each
 # (approve, reject or unsure, with a short reason) in checker_verdicts. Nothing else changes: no
 # recommendation is recorded and nothing is approved. After two weeks DQ compares them with its own and
 # switches fields on one at a time (then verdicts go through Recommendations.record by "checker:<model>").
@@ -160,15 +160,15 @@ class DqChecker
     quote.present? && page.to_s.squish.downcase.include?(quote)
   end
 
-  # About WINDOW characters of the page around the quote, by the source's own plug-in; one source at a time.
+  # About WINDOW characters of the page around the quote, read in SQL so a page of several MB is never loaded
+  # (Infra); the first WINDOW characters when the quote's start isn't found. Markup is dropped from the window only.
   def window(candidate)
-    source = Source.find_by(id: candidate.source_id)
-    return if source.nil? || source.content_text.blank?
-
-    plugin = (DataQuality::Plugin.for(source.source_kind) rescue nil)
-    text = (plugin ? plugin.verification_context(source, candidate.quote) : source.content_text).to_s.squish
-    at = text.downcase.index(candidate.quote.to_s.squish.downcase) || 0
-    text[[ at - (WINDOW / 2), 0 ].max, WINDOW]
+    needle = candidate.quote.to_s.squish.first(60).downcase
+    sql = ActiveRecord::Base.sanitize_sql_array([ "substring(content_text from greatest(position(? in lower(content_text)) - ?, 1) for ?)",
+      needle, WINDOW / 2, WINDOW ])
+    text = Source.where(id: candidate.source_id).pick(Arel.sql(sql)).to_s
+    text = Nokogiri::HTML.fragment(text).text if text.match?(/<\/?[a-z][^>]*>/i)
+    text.squish.presence
   end
 
   def holding(org)
