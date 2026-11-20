@@ -19,17 +19,9 @@ module DataQuality::FederalRegister
 
   def self.api_url(number) = "#{API}/#{number}.json?#{URI.encode_www_form(FIELDS.map { |field| [ "fields[]", field ] })}"
 
-  # Asks the API for the document a page address names; any other address as asked.
-  Fetcher = Struct.new(:fetcher) do
-    def get(url, **options)
-      number = DataQuality::FederalRegister.document_number(url)
-      fetcher.get(number ? DataQuality::FederalRegister.api_url(number) : url, **options)
-    end
-  end
-
   # The API's JSON as a small page: title, date (article meta) and abstract.
   def self.page(json)
-    doc = JSON.parse(json)
+    doc = JSON.parse(json.to_s) rescue {}
     title, date, abstract = ERB::Util.html_escape(doc["title"].to_s), ERB::Util.html_escape(doc["publication_date"].to_s), ERB::Util.html_escape(doc["abstract"].to_s)
     %(<html><head><title>#{title}</title><meta property="article:published_time" content="#{date}"><meta property="og:site_name" content="Federal Register"></head>) +
       %(<body><h1>#{title}</h1><p>#{abstract}</p></body></html>)

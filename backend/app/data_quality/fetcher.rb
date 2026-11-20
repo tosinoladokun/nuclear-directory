@@ -76,6 +76,16 @@ class DataQuality::Fetcher
   # Every fetch is https, on its starting host (www. or not) and on public
   # addresses (see check_url! and public_address!).
   def get(url, etag: nil, last_modified: nil, max_bytes: MAX_BYTES, binary: false)
+    # A Federal Register document page sends bots to a check page: every reader
+    # (link check, newsletter stories, the social agent) gets the document from
+    # the official API instead, as a small page, under the page's address (#860).
+    if !binary && (number = DataQuality::FederalRegister.document_number(url))
+      response = get(DataQuality::FederalRegister.api_url(number), etag:, last_modified:, max_bytes:)
+      return response.with(url:) unless response.kind == :ok && !response.truncated
+
+      return response.with(url:, body: DataQuality::FederalRegister.page(response.body), content_type: "text/html")
+    end
+
     redirects = 0
     first_host = nil
 
