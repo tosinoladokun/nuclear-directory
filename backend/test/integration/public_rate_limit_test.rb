@@ -73,10 +73,14 @@ class PublicRateLimitTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "a scraper faking a preview bot still stops at the family's own limit" do
-    assert_equal 200, hit(PublicRateLimit::FRIENDLY_LIMIT, "User-Agent" => "Twitterbot/1.0")
-    get "/about", headers: { "User-Agent" => "Twitterbot/1.0", "REMOTE_ADDR" => "10.0.0.7" }
+  test "a scraper faking preview bots stops at FRIENDLY_LIMIT per IP, however it switches agents; other IPs keep theirs (Copilot)" do
+    agents = [ "Twitterbot/1.0", "LinkedInBot/1.0", "facebookexternalhit/1.1" ]
+    PublicRateLimit::FRIENDLY_LIMIT.times { |n| get "/about", headers: { "User-Agent" => agents[n % 3] } }
+    assert_response :ok
+    get "/about", headers: { "User-Agent" => "Slackbot 1.0" }
     assert_response :too_many_requests
+    get "/about", headers: { "User-Agent" => "Twitterbot/1.0", "REMOTE_ADDR" => "10.0.0.7" }
+    assert_response :ok
   end
 
   test "one count across all public pages, not one per controller (Copilot)" do

@@ -23,9 +23,10 @@ module PublicRateLimit
     /YandexBot/i => %w[yandex.com yandex.net yandex.ru]
   }.freeze
   VERIFIED = ActiveSupport::Cache::MemoryStore.new(size: 1.megabyte)
-  # Link-preview bots (a post's card), our own monitors and fetcher: their
-  # IPs are many or shared, so each family gets one generous count of its own
-  # instead of a per-IP one; a scraper faking one can't pass FRIENDLY_LIMIT.
+  # Link-preview bots (a post's card), our own monitors and fetcher get a
+  # generous per-IP count instead of LIMIT; one count per IP whatever the
+  # family, so changing user agents can't reset it, and one IP can't use up
+  # another's (Copilot).
   FRIENDLY = {
     "linkedin" => /LinkedInBot/i, "x" => /Twitterbot/i, "facebook" => /facebookexternalhit|Facebot|meta-externalagent/i,
     "buffer" => /Buffer/i, "slack" => /Slackbot|Slack-ImgProxy/i, "discord" => /Discordbot/i, "telegram" => /TelegramBot/i,
@@ -43,7 +44,7 @@ module PublicRateLimit
   included do
     rate_limit to: LIMIT, within: WINDOW, store: STORE, name: "public", scope: "public", by: -> { request.remote_ip },
       with: -> { limited! }, unless: -> { rate_limit_exempt? || friendly_bot }
-    rate_limit to: FRIENDLY_LIMIT, within: WINDOW, store: STORE, name: "friendly", scope: "public", by: -> { friendly_bot },
+    rate_limit to: FRIENDLY_LIMIT, within: WINDOW, store: STORE, name: "friendly", scope: "public", by: -> { request.remote_ip },
       with: -> { limited! }, if: -> { !rate_limit_exempt? && friendly_bot }
   end
 
