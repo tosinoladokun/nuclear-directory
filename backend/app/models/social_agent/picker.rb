@@ -1,8 +1,11 @@
 # Picks the day's item for a platform (#769): something the directory published in the last week (a news deal
-# or fact, then a newly added company), never one used on any platform in the last two weeks, nor a company
+# or fact, a new link between two companies, then a newly added company), never one used on any platform in the last two weeks, nor a company
 # already in a post the same day. Social playbook: fresh data only; skip rather than post filler.
 class SocialAgent::Picker
   FRESH = 7.days
+  # A company with more new links than this in the window approved them in bulk (ARPA-E or DOE award lists):
+  # research awards for a roundup, never a "new deal" post (DQ, 20 Nov).
+  BULK_LINKS = 3
   # An event older than this isn't news, however recently it was published (DQ: GTM's rule is 7 to 9 days).
   EVENT_MAX_AGE = 10.days
   # Not deals or facts: people and event items (DQ).
@@ -15,7 +18,7 @@ class SocialAgent::Picker
 
   def call = candidates.find { |item| usable?(item) }
 
-  def candidates = news + companies
+  def candidates = news + links + companies
 
   private
     def news
@@ -32,6 +35,35 @@ class SocialAgent::Picker
                      "date" => news.published_on.strftime("%-d %B %Y"), "companies" => companies.map(&:name).join(", ") }.compact_blank,
             source_url: news.url, source_quote: [ news.title, news.summary ].compact.join("\n"),
             path: "/companies/#{companies.first.slug}", organization_ids: companies.map(&:id))
+        end
+    end
+
+    # In effect on the day: started (where it says) and not ended (Copilot; as ConnectionsMap#current).
+    def self.current_links(scope, day)
+      scope.where("relationships.started_on IS NULL OR relationships.started_on <= ?", day)
+        .where("relationships.ended_on IS NULL OR relationships.ended_on > ?", day)
+    end
+
+    # A link between two published companies first approved this week, with its own quote and source (PM, 20 Nov:
+    # Cameco and Westinghouse weren't news to the picker).
+    def links
+      first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
+      fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first), @now.to_date)
+      bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
+      fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).limit(20).filter_map do |link|
+          from, to = link.from_organization, link.to_organization
+          verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(link.relationship_type, link.relationship_type.humanize(capitalize: false))
+          # A quote from a primary source (an older trade-press one would only be blocked; Copilot); none, no item.
+          Evidence.where(subject: link).includes(:source).where.not(quote: [ nil, "" ]).order(:id).filter_map do |evidence|
+            # Its detail only when this quote states it (Copilot: "49%" must be in the saved quote).
+            detail = link.description if link.description.present? &&
+              (Array(evidence.fields).include?("description") || evidence.quote.include?(link.description))
+            item = SocialAgent::Item.new(subject: link, kind: "link",
+              facts: { "link" => "#{from.name} #{verb} #{to.name}", "detail" => detail, "companies" => "#{from.name}, #{to.name}" }.compact_blank,
+              source_url: evidence.source&.url, source_quote: evidence.quote, path: "/companies/#{from.slug}", organization_ids: [ from.id, to.id ])
+            item if SocialAgent::Rules.primary?(item)
+          end.first
         end
     end
 

@@ -70,6 +70,50 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_nil today.checker_ran_at, "a social run is never Joy's check (Copilot)"
   end
 
+  test "a link between two published companies, approved this week with its quote, is picked after news (PM)" do
+    @news.update_columns(verified_at: MONDAY - 20.days)
+    westinghouse = Organization.create!(name: "Westinghouse", slug: "westinghouse-test", verification_status: "verified", verified_by: BY)
+    acme = Organization.find_by!(slug: "acme-fission")
+    link = Relationship.create!(from_organization: acme, to_organization: westinghouse, relationship_type: "invests_in",
+      description: "a 49 percent holding", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
+    VerificationEvent.where(subject: link).update_all(created_at: MONDAY - 1.day)
+    VerificationEvent.create!(subject: link, to_status: "verified", by: BY, created_at: MONDAY - 1.day) unless VerificationEvent.exists?(subject: link, to_status: "verified")
+    acme.update!(domain: "acme.example")
+    press = Source.create!(url: "https://tradepress.example/acme", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: link, source: press, quote: "Acme Fission and Westinghouse agreed terms.", found_by: "human")
+    page = Source.create!(url: "https://acme.example/news", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: link, source: page, quote: "Acme Fission holds a 49% stake in Westinghouse.", found_by: "human")
+
+    item = SocialAgent::Picker.new(platform: "x", now: MONDAY).call
+    assert_equal [ "link", link ], [ item.kind, item.subject ]
+    assert_equal "Acme Fission invests in Westinghouse", item.facts["link"]
+    assert_equal "https://acme.example/news", item.source_url, "the primary source's quote, not the older trade press one (Copilot)"
+    assert_nil item.facts["detail"], "'49% stake' isn't the quote's exact words, so the detail stays out (Copilot)"
+
+    link.update!(description: "49% stake")
+    assert_equal "49% stake", SocialAgent::Picker.new(platform: "x", now: MONDAY).call.facts["detail"], "now the quote states it"
+
+    link.update!(started_on: MONDAY.to_date + 30)
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |c| c.kind == "link" }, "not in effect yet (Copilot)"
+    link.update!(started_on: nil, ended_on: MONDAY.to_date + 30)
+    assert_equal [ link ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |c| c.kind == "link" }.map(&:subject), "ends later: still in effect"
+    westinghouse.update_columns(verification_status: "unpublished")
+    assert_not SocialAgent.still_published?(link.reload), "a company taken off stops the send (Copilot)"
+    westinghouse.update_columns(verification_status: "verified")
+
+    # A funder's bulk list of awards that week is never a "new deal" post (DQ).
+    funder = Organization.create!(name: "ARPA-E", slug: "arpa-e-test", verification_status: "verified", verified_by: BY)
+    (SocialAgent::Picker::BULK_LINKS + 1).times do |i|
+      to = Organization.create!(name: "Lab #{i}", slug: "lab-#{i}-test", verification_status: "verified", verified_by: BY)
+      award = Relationship.create!(from_organization: funder, to_organization: to, relationship_type: "funds", verification_status: "verified",
+        verified_by: BY, verified_at: MONDAY - 1.hour)
+      VerificationEvent.where(subject: award).update_all(created_at: MONDAY - 1.hour)
+      VerificationEvent.create!(subject: award, to_status: "verified", by: BY, created_at: MONDAY - 1.hour) unless VerificationEvent.exists?(subject: award, to_status: "verified")
+      Evidence.create!(subject: award, source: page, quote: "ARPA-E funds Lab #{i}.", found_by: "human")
+    end
+    assert_equal [ link ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |c| c.kind == "link" }.map(&:subject)
+  end
+
   test "a newly added company is used when there's no fresh news" do
     @news.update_columns(verified_at: MONDAY - 20.days)
     company = Organization.create!(name: "Beta Reactors", slug: "beta-reactors", domain: "beta.example", description: "Beta Reactors designs small reactors.",

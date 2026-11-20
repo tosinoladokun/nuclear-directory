@@ -21,6 +21,13 @@ module SocialAgent
   # A send whose outcome isn't known (timeout, 5xx, 429): it may have gone out, so it's never sent again.
   class Uncertain < StandardError; end
 
+  # Its fact still published at send time: a link also needs both companies published and to be in effect (Copilot).
+  def self.still_published?(subject)
+    return subject.verification_status == "verified" unless subject.is_a?(Relationship)
+
+    SocialAgent::Picker.current_links(Relationship.published.where(id: subject.id), Date.current).exists?
+  end
+
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
   # Why a run today would write no post, from the cheap checks only (no picking): nil when it would try. For Draft now's
   # notice (DQ, 20 Nov); the same checks as the start of run.
@@ -103,8 +110,8 @@ module SocialAgent
     return post unless claimed == true
 
     # Its fact still published at send time (it may have been taken off since the pick).
-    unless post.subject.reload.verification_status == "verified"
-      return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{post.subject_type == 'NewsItem' ? 'news item' : 'company'} is no longer published") }
+    unless still_published?(post.subject.reload)
+      return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{{ 'NewsItem' => 'news item', 'Relationship' => 'link' }.fetch(post.subject_type, 'company')} is no longer published") }
     end
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
     sent = sender.call(post.text, post.link)
