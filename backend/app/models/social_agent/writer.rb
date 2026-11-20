@@ -26,6 +26,15 @@ class SocialAgent::Writer
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,
       no emoji, no links, no exclamation marks, no "not X but Y", no lists of three for rhythm.
   TEXT
+  # What the voice check lets through (rehearsal rounds 1-11: these were blocked and are not problems). Anything that changes
+  # what the source says still fails.
+  NITS = <<~TEXT.freeze
+    Do not fail a post for these:
+    - a legal suffix left off a company name (Pte. Ltd., Ltd., Inc., LLC, GmbH);
+    - the source's own qualifier beside the deal word, said once ("a non-binding MOU");
+    - a plain synonym for the source's verb ("said", "announced") that keeps the meaning and every condition.
+    Fail it when it changes what the source says, or adds, drops or contradicts a condition, number, name, date or party.
+  TEXT
   LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "One or two short paragraphs, at most 120 words; as short as the facts allow." }.freeze
   DRAFT = { type: "object", additionalProperties: false, required: %w[text], properties: { text: { type: "string" } } }.freeze
   JUDGE = { type: "object", additionalProperties: false, required: %w[pass reason],
@@ -49,7 +58,7 @@ class SocialAgent::Writer
   def voice_ok?(text, item, crawl_run: nil)
     data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
-        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
+        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}\n#{NITS}" },
       { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\n" \
         "Source's words:\n#{item.source_quote}\n#{item.page_text}\n\nPost:\n#{text}" }
     ]).data

@@ -234,6 +234,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
       source_quote: "Georgia Power filed its plan for Vogtle with state regulators.")
     assert_empty SocialAgent::Check.problems("Those plans came from Georgia Power. Georgia Power’s plan covers Vogtle.", item, platform: "x")
+    assert_empty SocialAgent::Check.problems("Neither side gave a figure. Georgia Power filed its plan for Vogtle.", item, platform: "x"), "Neither and Either only open a sentence"
     assert_equal [ "the name \"Westinghouse\" isn't in the source" ],
       SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
     assert_equal [ "the name \"Two\" isn't in the source" ], SocialAgent::Check.problems("Two plans came from Georgia Power.", item, platform: "x"),
@@ -505,5 +506,37 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "sentences giving different quantities aren't a repeat; the same thing said twice still is" do
     assert_not SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. It produces 100 MW of heat at full power.")
     assert SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. At full power the reactor produces 50 MW of electricity.")
+  end
+
+  test "the writer lets a legal suffix go, and the voice check doesn't fail the nits rehearsal rounds 1-11 found" do
+    seen = []
+    client = Object.new
+    client.define_singleton_method(:structured) do |messages:, **|
+      seen << messages.first[:content]
+      Struct.new(:data).new({ "text" => "x" * 30, "pass" => true, "reason" => "" })
+    end
+    writer = SocialAgent::Writer.new(client:)
+    item = SocialAgent::Item.new(subject: nil, kind: "news", facts: { "headline" => "Acme signs an MOU" }, source_url: nil, source_quote: "q", path: "/", organization_ids: [])
+    writer.draft(item, platform: "x")
+    writer.voice_ok?("Acme signed a non-binding MOU.", item)
+
+    assert_match(/legal ending\s+such as Inc\., Ltd\. or Pte\. Ltd\./, seen.first, "the writer may leave a legal ending off")
+    assert_match(/Do not fail a post for these/, seen.last)
+    assert_match(/non-binding MOU/, seen.last)
+    assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
+  end
+
+  test "the consistency table shows each item's PASS/BLOCK history, flags the flaky and marks only 3 straight passes ready (PM, 20 Nov)" do
+    row = ->(url, ok) { { "platform" => "x", "label" => "news #{url}", "problems" => ok ? [] : [ "voice check" ], "source_url" => url } }
+    Dir.mktmpdir do |dir|
+      [ [ true, false, true ], [ true, true, true ], [ true, true, true ], [ false, true, true ] ].each_with_index do |states, round|
+        File.write(File.join(dir, "round-#{round + 1}.json"), JSON.generate(states.each_with_index.map { |ok, index| row.("https://a.example/#{index}", ok) }))
+      end
+      table = SocialAgent::Rehearsal.consistency(Dir[File.join(dir, "*.json")])
+
+      assert_includes table, "| x | https://a.example/0 | PPPB | flaky |  |"
+      assert_includes table, "| x | https://a.example/1 | BPPP | flaky | ready |", "passed its last three rounds, but a block earlier"
+      assert_includes table, "| x | https://a.example/2 | PPPP |  | ready |"
+    end
   end
 end
