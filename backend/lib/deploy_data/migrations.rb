@@ -7,6 +7,8 @@ module DeployData
     Pending = Data.define(:version, :name, :path)
     Ran = Data.define(:version, :name, :by, :output)
     class Invalid < StandardError; end
+    # A step that declares AFTER = [versions] while one of them hasn't run (yet, or at all): skipped, reported, tried again.
+    class Waiting < StandardError; end
 
     def initialize(dir = Rails.root.join("db/data"))
       @dir = dir.to_s
@@ -33,6 +35,9 @@ module DeployData
       by = migration.by.to_s
       raise Invalid, "db/data/#{File.basename(pending.path)}: BY must name the human who approved it, like \"human:tosin\" (got #{by.inspect})" unless by.match?(Migration::HUMAN)
 
+      waiting = predecessors(klass) - DataMigration.pluck(:version)
+      raise Waiting, "waiting for #{waiting.join(', ')} to run first" if waiting.any?
+
       puts "Data migration #{pending.version} #{pending.name} (by #{by}):"
       ActiveRecord::Base.transaction(requires_new: true) do
         migration.up
@@ -43,6 +48,10 @@ module DeployData
     end
 
     private
+      # AFTER = %w[20261109120000] on a migration: it only runs once those versions are recorded as run (earlier,
+      # or earlier in this same run), so a step that builds on another is never applied without it (#669 -> #673).
+      def predecessors(klass) = Array(klass.const_defined?(:AFTER) ? klass::AFTER : []).map(&:to_s)
+
       # Each file is loaded into its own anonymous module, so a class name
       # can't clash with the app's or another migration's.
       def load_class(pending)

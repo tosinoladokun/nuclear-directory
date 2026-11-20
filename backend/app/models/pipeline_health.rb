@@ -75,6 +75,7 @@ class PipelineHealth
       "posts-unknown" => ("#{counts['posts_unknown']} social posts may have gone out (check the account)" if counts["posts_unknown"].positive?),
       "finds-unconfirmed" => unconfirmed,
       "budget" => budget,
+      "db-restarted" => db_restarted,
       "indexnow-refused" => ("IndexNow refused the last two batches (check INDEXNOW_KEY and its key file)" if IndexNowSubmission.refused_twice?),
       "search-limit" => search_limit,
       "sources-silent" => sources_silent
@@ -155,6 +156,13 @@ class PipelineHealth
     end
 
     # Brave refused every search for a day (its monthly limit or the key; Infra): leads wait instead of being found.
+    # Postgres' own start time (Infra): a crash, an out-of-memory kill or a plan change restarts it.
+    def db_restarted
+      started = ActiveRecord::Base.connection.select_value("select pg_postmaster_start_time()")
+      started = Time.zone.parse(started.to_s) unless started.respond_to?(:utc)
+      "The database restarted at #{started.utc.strftime('%H:%M UTC on %-d %b')} (crash or plan change)" if started && started > @now - 24.hours
+    end
+
     def search_limit
       held, done = counts.values_at("searches_held_last_day", "finds_answered_last_day")
       "#{held} lead finds waited a day because the search didn't answer (its monthly limit or key)" if held.positive? && done.zero?

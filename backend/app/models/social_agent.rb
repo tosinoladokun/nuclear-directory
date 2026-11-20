@@ -22,7 +22,18 @@ module SocialAgent
   class Uncertain < StandardError; end
 
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
-  def self.run(platform, now: Time.current, writer: nil, fetcher: nil)
+  # Why a run today would write no post, from the cheap checks only (no picking): nil when it would try. For Draft now's
+  # notice (DQ, 20 Nov); the same checks as the start of run.
+  def self.no_draft_reason(platform, now: Time.current)
+    day = now.in_time_zone(ZONE)
+    return "switched off" if SocialChannel.for(platform).off?
+    return "it's a weekend" if day.on_weekend?
+    return "it's a holiday" if SocialAgent::Rules.holiday?(day.to_date)
+    "today's post is already done" if SocialPost.used.where(platform:, created_at: day.all_day).exists?
+  end
+
+  # drafts_only: the admin's Draft now, which never sends whatever the switch says.
+  def self.run(platform, now: Time.current, writer: nil, fetcher: nil, drafts_only: false)
     channel = SocialChannel.for(platform)
     return if channel.off? || now.in_time_zone(ZONE).on_weekend? || SocialAgent::Rules.holiday?(now.in_time_zone(ZONE).to_date)
     if SocialAgent::Buffer.budget_spent?
@@ -39,7 +50,7 @@ module SocialAgent
     # Built only now (Copilot): a missing model setting never stops a day with nothing to post.
     problems = write(post, item, platform, writer, fetcher: fetcher || DataQuality::Fetcher.new)
     return post.tap { |blocked| blocked.update!(status: "blocked", reason: problems.to_sentence) } if problems.any?
-    return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled?
+    return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled? && !drafts_only
 
     send_post(post, now:)
   end

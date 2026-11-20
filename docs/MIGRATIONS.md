@@ -12,3 +12,5 @@
 - [ ] **schema.rb:** only your table, column, index, check or `enable_extension` line, plus the version bump to your migration's timestamp. Your timestamp is newer than main's. Undo unrelated lines Rails rewrites (`::text[]` check forms).
 - [ ] **Extensions:** only ones Render Postgres supports (`pg_trgm`, `unaccent`, `citext` and the like). A dump restores them.
 - [ ] **Backup and restore unaffected:** no new role, schema or tablespace, and nothing outside `public`.
+
+**Data migrations (`backend/db/data/`) are a different kind of file:** see its README. A step that builds on another declares `AFTER = %w[<version>]` so it waits for it (#811).

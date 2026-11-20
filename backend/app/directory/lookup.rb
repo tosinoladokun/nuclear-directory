@@ -394,6 +394,9 @@ module Directory
       Organization.where(verification_status: "verified").where.not(website: [ nil, "" ]).order(:id).pluck(:name, :website)
     end
 
+    # The id of the company or plant that had this slug before a rename or merge, or nil.
+    def former_slug_id(type:, slug:) = FormerSlug.where(sluggable_type: type.to_s, slug:).pick(:sluggable_id)
+
     # Ids of companies or plants by slug, in one query: { "terrapower" => 12 }.
     def ids_by_slug(type:, slugs:)
       raise ArgumentError, "not a company or plant: #{type.inspect}" unless %w[Organization Facility].include?(type.to_s)
