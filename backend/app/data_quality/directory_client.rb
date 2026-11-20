@@ -358,6 +358,11 @@ class DataQuality::DirectoryClient
   # Pending companies with no website: [[id, name]].
   def pending_organizations_without_website(limit: 50) = lookup.pending_organizations_without_website(limit:)
 
+  # News items for the admin's Edit (#863).
+  def news_item(id) = lookup.news_item(id)
+  def news_items(q: nil, limit: 50) = lookup.news_items(q:, limit:)
+  def news_history(id) = lookup.news_history(id)
+
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
     record(type, state, values: lookup.fact_attributes(type:, id:))

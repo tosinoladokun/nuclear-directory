@@ -127,6 +127,9 @@ module DataQuality::Review
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
+  # The news item fields edit_news may change (#863).
+  NEWS_EDITABLE = %w[headline summary published_on].freeze
+
   class << self
     # "human:<who>": a nonblank name, so the audit trail says who decided.
     def human!(by)
@@ -746,6 +749,34 @@ module DataQuality::Review
       return decide_fact(type, id, "pending", by:, reason:, directory:) if before == "pending"
 
       approve_fact(type:, id:, by:, reason:, directory:)
+    end
+
+    # A news item's text (#863): headline, summary, date (NEWS_EDITABLE). Its
+    # status stays as it is; the change, with its reason, is recorded in its history.
+    def edit_news(id:, by:, reason:, attributes:, directory: DataQuality::DirectoryClient.new)
+      human!(by)
+      item = directory.news_item(id) or return Result.new(candidate_id: nil, ref: nil, errors: [ "no news item #{id}" ])
+      return Result.new(candidate_id: nil, ref: nil, errors: [ "give a reason" ]) if reason.blank?
+
+      values = attributes.to_h.stringify_keys
+      if (other = values.keys - NEWS_EDITABLE).any?
+        return Result.new(candidate_id: nil, ref: nil, errors: [ "can't edit #{other.to_sentence} here" ])
+      end
+
+      values = values.transform_values { |value| value.is_a?(String) ? value.strip.presence : value }.reject { |name, value| item[name].to_s == value.to_s }
+      return Result.new(candidate_id: nil, ref: nil, errors: [ "nothing changed" ]) if values.empty?
+
+      result = directory.decide_fact("news_item", id:, status: item["verification_status"], by:, reason:, attributes: values)
+      Result.new(candidate_id: nil, ref: result.ref, errors: result.errors)
+    end
+
+    # Undo the latest edit of its text: the values it had before, as a new edit.
+    def undo_news_edit(id:, by:, directory: DataQuality::DirectoryClient.new)
+      last = directory.news_history(id).find { |event| (event.changed_values.keys & NEWS_EDITABLE).any? }
+      return Result.new(candidate_id: nil, ref: nil, errors: [ "no edit to undo" ]) unless last
+
+      before = last.changed_values.slice(*NEWS_EDITABLE).transform_values { |change| Array(change).first }
+      edit_news(id:, by:, reason: "Undo: #{last.reason}".truncate(500), attributes: before, directory:)
     end
 
     def reject_fact(type:, id:, by:, reason: nil, directory: DataQuality::DirectoryClient.new)

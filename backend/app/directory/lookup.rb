@@ -222,6 +222,19 @@ module Directory
         .map { |event| VerificationEventRef.from(event) }
     end
 
+    # A news item for the admin's Edit (#863): its stored values, or nil.
+    NEWS_FIELDS = %w[id url title headline publisher published_on summary verification_status verified_by verified_at].freeze
+    def news_item(id) = NewsItem.find_by(id:)&.attributes&.slice(*NEWS_FIELDS)
+
+    # Recent news items, newest first, matching q in the title or headline: [{ "id", "title", … }].
+    def news_items(q: nil, limit: 50)
+      scope = NewsItem.order(published_on: :desc, id: :desc).limit(limit)
+      scope = scope.where("title ILIKE :q OR headline ILIKE :q", q: "%#{NewsItem.sanitize_sql_like(q)}%") if q.present?
+      scope.map { |item| item.attributes.slice(*NEWS_FIELDS) }
+    end
+
+    def news_history(id) = VerificationEvent.where(subject_type: "NewsItem", subject_id: id).order(created_at: :desc, id: :desc).map { |event| VerificationEventRef.from(event) }
+
     FACT_TYPES = %w[Organization OrganizationRole OrganizationTechnology Facility Relationship FacilityRelationship DealTerm LicensingStage].freeze
     # FactWriter kinds, one per fact type.
     FACT_KINDS = FACT_TYPES.map(&:underscore).freeze

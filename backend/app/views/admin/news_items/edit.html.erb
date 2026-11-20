@@ -1,0 +1,35 @@
+<% title = @item["headline"].presence || @item["title"] %>
+<% content_for :title, "Edit #{title}" %>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: title.truncate(60), parent_path: admin_news_item_path(id: @item["id"]), current: "Edit" %>
+  <h1 class="type-admin-h1 m-0">Edit news item</h1>
+  <%= form_with url: admin_news_item_path(id: @item["id"]), method: :patch, class: "nd-stack" do |form| %>
+    <% if @errors.present? %>
+      <div class="nd-alert" role="alert">
+        <p class="type-body-strong">Not saved. Fix this and save again:</p>
+        <ul class="type-body"><% @errors.each do |error| %><li><%= error.upcase_first %></li><% end %></ul>
+      </div>
+    <% end %>
+    <div class="nd-field">
+      <%= label_tag "values_headline", field_label("headline"), class: "type-body-strong" %>
+      <%= text_field_tag "values[headline]", params.dig(:values, :headline) || @item["headline"], id: "values_headline", class: "nd-input type-input", maxlength: NewsItem::HEADLINE_MAX %>
+    </div>
+    <div class="nd-field">
+      <%= label_tag "values_summary", field_label("summary"), class: "type-body-strong" %>
+      <%= text_area_tag "values[summary]", params.dig(:values, :summary) || @item["summary"], id: "values_summary", class: "nd-input type-input", rows: 3 %>
+    </div>
+    <div class="nd-field">
+      <%= label_tag "values_published_on", field_label("published_on"), class: "type-body-strong" %>
+      <%= date_field_tag "values[published_on]", params.dig(:values, :published_on) || @item["published_on"], id: "values_published_on", class: "nd-input type-input" %>
+    </div>
+    <div class="nd-field">
+      <%= label_tag :note, "What you changed and why", class: "type-body-strong" %>
+      <%= text_field_tag :note, params[:note], class: "nd-input type-input", required: true %>
+    </div>
+    <div class="nd-row">
+      <%= form.submit "Save", class: "nd-btn nd-btn--primary" %>
+      <%= link_to "Cancel", admin_news_item_path(id: @item["id"]), class: "nd-btn nd-btn--outline" %>
+    </div>
+  <% end %>
+</div>
