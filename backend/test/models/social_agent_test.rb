@@ -16,7 +16,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   setup do
     @company = Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
     @news = NewsItem.create!(url: "https://www.energy.gov/acme-award", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding",
-      summary: "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", publisher: "DOE",
+      summary: "The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.", publisher: "DOE",
       published_on: Date.new(2026, 11, 12), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     @news.news_mentions.create!(subject: @company)
     SocialChannel.for("x").update!(mode: "drafts")
@@ -29,42 +29,42 @@ class SocialAgentTest < ActiveSupport::TestCase
   def run_x(text, fetcher: OK_FETCHER.new(200), **options) = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(text, **options), fetcher:)
 
   test "drafts one checked post on the freshest published news, linked to its company with tracking" do
-    post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.")
+    post = run_x("The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.")
     assert_equal [ "drafted", @news ], [ post.status, post.subject ]
-    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=news", post.link
+    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission", post.link
     assert_equal "https://www.energy.gov/acme-award", post.source_url
     assert_nil run_x("Again."), "one a day per platform"
   end
 
   test "a number or name the source doesn't have stops the post, as does the voice check" do
-    assert_match "the number 2 isn't in the source", run_x("Acme Fission won 2 DOE awards.").reason
+    assert_match "the number 2 isn't in the source", run_x("DOE said Acme Fission won 2 DOE awards.").reason
     SocialPost.delete_all
-    assert_match "the name \"Westinghouse\" isn't in the source", run_x("Acme Fission and Westinghouse won a DOE award.").reason
+    assert_match "the name \"Westinghouse\" isn't in the source", run_x("DOE said Acme Fission and Westinghouse won a DOE award.").reason
     SocialPost.delete_all
-    assert_match "voice check: reads like an ad", run_x("Acme Fission won a DOE award.", voice: [ false, "reads like an ad" ]).reason
+    assert_match "voice check: reads like an ad", run_x("DOE said Acme Fission won a DOE award.", voice: [ false, "reads like an ad" ]).reason
     SocialPost.delete_all
-    assert_match "hashtag", run_x("Acme Fission won a DOE award. #nuclear").reason
+    assert_match "hashtag", run_x("DOE said Acme Fission won a DOE award. #nuclear").reason
   end
 
   test "people and event items aren't news; relative time is stopped" do
     @news.update_columns(title: "Acme Fission engineer named to 40 Under 40")
-    assert_nil run_x("Acme Fission won a DOE award.")
+    assert_nil run_x("DOE said Acme Fission won a DOE award.")
     @news.update_columns(title: "Acme Fission wins $1,404,253 DOE award for fuel cladding")
-    assert_match "\"today\" instead of a date", run_x("Today Acme Fission won a DOE award.").reason
+    assert_match "\"today\" instead of a date", run_x("Today DOE said Acme Fission won a DOE award.").reason
   end
 
   test "off, weekends and nothing fresh post nothing; a fact used in the last two weeks isn't used again" do
     SocialChannel.for("x").update!(mode: "off")
-    assert_nil run_x("Acme Fission won a DOE award.")
+    assert_nil run_x("DOE said Acme Fission won a DOE award.")
     SocialChannel.for("x").update!(mode: "drafts")
-    assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("Acme Fission won a DOE award."), fetcher: OK_FETCHER.new(200)), "Saturday"
+    assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("DOE said Acme Fission won a DOE award."), fetcher: OK_FETCHER.new(200)), "Saturday"
     SocialPost.create!(platform: "linkedin", status: "posted", subject: @news, created_at: MONDAY - 10.days)
-    assert_nil run_x("Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
+    assert_nil run_x("DOE said Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
     stopped = CrawlRun.where(source_kind: SocialAgent::STOPPED).where("stats ? 'stopped'").order(:id).map { |run| run.stats.values_at("platform", "stopped") }
     assert_equal [ [ "x", "switched off in Admin > Posts" ], [ "x", "a weekend" ], [ "x", "no fresh item" ] ], stopped, "every silent run says why (PM)"
 
     SocialChannel.for("x").update!(mode: "off", paused_reason: "Buffer's 30-day request allowance is 80% used")
-    run_x("Acme Fission won a DOE award.")
+    run_x("DOE said Acme Fission won a DOE award.")
     assert_equal "Buffer's 30-day request allowance is 80% used", CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
     today = Today.new(on: MONDAY.in_time_zone(Today::ZONE).to_date, now: MONDAY + 1.hour)
     assert_nil today.checker_ran_at, "a social run is never Joy's check (Copilot)"
@@ -123,7 +123,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     Evidence.create!(subject: company, source: page, quote: "Beta Reactors designs small reactors.", found_by: "crawler", fields: %w[description])
     VerificationEvent.where(subject: @company).update_all(created_at: MONDAY - 1.day)
     VerificationEvent.create!(subject: @company, to_status: "verified", by: BY, created_at: MONDAY - 1.year)
-    post = run_x("Beta Reactors designs small reactors.")
+    post = run_x("Beta Reactors said it designs small reactors.")
     assert_equal [ "drafted", company ], [ post.status, post.subject ], "Acme, re-verified this week but first approved a year ago, isn't new"
   end
 
@@ -138,7 +138,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent.senders.delete("x")
   end
 
-  DRAFT = "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
+  DRAFT = "The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
 
   test "live sends once through the platform's sender, costed, and logs the permalink" do
     live!
@@ -302,7 +302,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.page_dated?("<p>Pulsars, found faster.</p>", "19 November 2026")
     undated = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>No date here</p>",
       etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
-    assert_nil run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200)),
+    assert_nil run_x("The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200)),
       "an item whose page lacks its date is skipped before drafting"
     assert_equal "no usable item (its date (12 November 2026) isn't on the source page)",
       CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
@@ -538,5 +538,21 @@ class SocialAgentTest < ActiveSupport::TestCase
       assert_includes table, "| x | https://a.example/1 | BPPP | flaky | ready |", "passed its last three rounds, but a block earlier"
       assert_includes table, "| x | https://a.example/2 | PPPP |  | ready |"
     end
+  end
+
+  test "every post links our own page with utm_source x or linkedin and the page's slug, and says its source in words (Tosin, 20 Nov)" do
+    item = rules_item(kind: "news", quote: "Acme said it signed.")
+    item = item.with(path: "/companies/acme-fission")
+    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission", SocialAgent.link(item, "x")
+    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=linkedin&utm_medium=social&utm_campaign=acme-fission", SocialAgent.link(item, "linkedin")
+    assert_not_includes SocialAgent.link(item, "x"), "energy.gov", "never the source's address"
+
+    quote = "DOE awarded Acme Fission $1,404,253 to test fuel cladding."
+    unsaid = SocialAgent::Rules.problems("Acme Fission won a $1,404,253 award to test fuel cladding.", rules_item(facts: { "date" => "2026-11-12" }, quote:), platform: "x")
+    assert unsaid.any? { |problem| problem.start_with?("it doesn't say where the item comes from") }, "no 'said' or document word: stopped"
+    assert_not SocialAgent::Rules.problems("DOE said on 12 November it awarded Acme Fission $1,404,253 to test fuel cladding.", rules_item(facts: { "date" => "2026-11-12" }, quote:), platform: "x")
+      .any? { |problem| problem.start_with?("it doesn't say where the item comes from") }
+    assert SocialAgent::Rules.attributed?("The award was listed in a Federal Register notice.")
+    assert_not SocialAgent::Rules.attributed?("Acme Fission won a DOE award.")
   end
 end

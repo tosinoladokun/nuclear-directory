@@ -65,6 +65,7 @@ module SocialAgent::Rules
     found.concat(people(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
+    found << "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" unless attributed?(text)
     found << "it says the same thing twice" if repeats?(text)
     found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
@@ -156,6 +157,12 @@ module SocialAgent::Rules
       (a & b).size.to_f / [ a.size, b.size ].min >= REPEAT
     end
   end
+
+  # The source named in words (Tosin, 20 Nov: the post's link is our page; the source is only said): a verb of saying or a
+  # document word. The writer is told to; this is the check.
+  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according to|told|issued|released|published|filed|
+    (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
+  def attributed?(text) = text.match?(ATTRIBUTION)
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
 
