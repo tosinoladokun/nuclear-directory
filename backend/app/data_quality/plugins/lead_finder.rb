@@ -294,6 +294,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         if host.match?(NEWS_HOSTS)
           sites.concat(about_links(link, name))
         elsif !host.match?(NOT_OWN)
+          # A lab's or program's .edu subdomain isn't the university's site: its home page is (DQ, 20 Nov).
+          host = host.split(".").last(2).join(".") if host.end_with?(".edu")
           sites << "https://#{host}"
         end
       end

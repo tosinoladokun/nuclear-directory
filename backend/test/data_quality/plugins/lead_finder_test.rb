@@ -308,4 +308,10 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     stub_request(:get, %r{api\.search\.brave\.com}).to_return(status: 401)
     assert_equal :retry, Plugin.call(lead("Ghost Key Nuclear").id, finder: finder.()).outcome, "a fresh finder: a key problem is a failure, not 'no website'"
   end
+
+  test "a lab's .edu subdomain is reduced to the university's home page (DQ, 20 Nov)" do
+    plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil)
+    sites = plugin.send(:candidates_for, "Caltech", [ "https://krl.caltech.edu/about", "https://www.mines.edu/x", "https://nuclear.mines.edu/" ], {})
+    assert_equal [ "https://caltech.edu", "https://mines.edu" ], sites.uniq
+  end
 end
