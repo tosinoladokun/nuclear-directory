@@ -117,6 +117,20 @@ class Admin::InboxController < Admin::BaseController
   end
 
   # Undo the last No, while nothing has changed it since.
+  # Data Quality's take-off proposal (#863): Yes takes it off (Put back undoes it), No keeps it.
+  def decide_takeoff
+    errors = TakeoffProposal.find(params[:id]).decide!(yes: params[:decision] == "yes", by: actor)
+    takeoff_flash(errors, 1)
+    redirect_to admin_inbox_path
+  end
+
+  def decide_takeoff_set
+    proposals = TakeoffProposal.pending.where(batch: params[:batch]).order(:id).to_a
+    errors = proposals.flat_map { |proposal| proposal.decide!(yes: params[:decision] == "yes", by: actor) }
+    takeoff_flash(errors, proposals.size)
+    redirect_to admin_inbox_path
+  end
+
   def undo
     state = undo_verifier.verified(params[:token].to_s)
     result = state && DataQuality::Review.undo_all(Array.wrap(state), by: actor)
@@ -173,5 +187,11 @@ class Admin::InboxController < Admin::BaseController
     end
 
     # Its own key: a token works only on the page that made it.
+    def takeoff_flash(errors, count)
+      if errors.any? then flash[:alert] = "Not done: #{errors.uniq.to_sentence}."
+      else flash[:notice] = params[:decision] == "yes" ? "Taken off (#{count}). Put back undoes it." : "Kept (#{count})."
+      end
+    end
+
     def undo_verifier = Rails.application.message_verifier(:owner_inbox_undo)
 end

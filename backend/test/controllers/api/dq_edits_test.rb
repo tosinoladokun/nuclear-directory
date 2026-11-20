@@ -48,4 +48,29 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
     post api_dq_edits_path, params: { actions: [] }, as: :json
     assert_response :unauthorized
   end
+
+  test "propose_takeoff puts one set of Yes/No rows in Today; Yes takes it off (reversible), No keeps it (#863)" do
+    by = { verification_status: "verified", verified_by: "human:tosin", verified_at: Time.current }
+    role = Role.first || Role.create!(key: "utility", name: "Utility")
+    wrong = [ organizations(:westinghouse), organizations(:terrapower) ].map { |org| OrganizationRole.create!(organization: org, role:, **by) }
+    post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: wrong.map { |r| { action: "propose_takeoff", type: "OrganizationRole", id: r.id,
+      reason: "Not a utility", source_url: "https://example.org/about", quote: "We design reactors." } } }
+    results = response.parsed_body["results"]
+    assert results.all? { |r| r["ok"] }
+    assert_equal 1, results.map { |r| r["batch"] }.uniq.size, "one request is one set"
+    assert_match "already proposed", (post(api_dq_edits_path, headers: AUTH, as: :json,
+      params: { actions: [ { action: "propose_takeoff", type: "OrganizationRole", id: wrong.first.id, reason: "x", source_url: "https://a.example/" } ] }) && response.parsed_body["results"].sole["error"])
+
+    sign_in_as users(:admin)
+    get admin_inbox_path
+    assert_select "section[aria-labelledby=inbox-takeoffs] li", 2
+    proposal = TakeoffProposal.find_by!(subject_id: wrong.first.id)
+    post admin_inbox_decide_takeoff_path(id: proposal.id, decision: "no")
+    assert_equal [ "kept", "verified" ], [ proposal.reload.status, wrong.first.reload.verification_status ]
+
+    post admin_inbox_decide_takeoff_set_path(batch: proposal.batch, decision: "yes")
+    assert_equal "unpublished", wrong.last.reload.verification_status
+    assert_equal "taken_off", TakeoffProposal.find_by!(subject_id: wrong.last.id).status
+    assert_equal 2, OrganizationRole.where(id: wrong.map(&:id)).count, "never deleted"
+  end
 end
