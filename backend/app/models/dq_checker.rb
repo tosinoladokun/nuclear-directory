@@ -30,9 +30,12 @@ class DqChecker
   }.freeze
   # Names shared by many companies or words: a website for one is never approved (DQ, 19 Nov).
   GENERIC = %w[natura aep candu fermi atlas].freeze
+  # A row in an award list or a regulator's table names a company but isn't its own page: never enough to
+  # approve a new company or a role (DQ, 20 Nov; DATA.md: nuclear work from its own page or a record stating it).
+  ROW_SOURCES = /\A(usaspending|nrc_|arpa_e|doe_|federal_register|sec_)/
   OTHER_HOSTS = /(\A|\.)(linkedin|facebook|twitter|x|youtube|instagram|crunchbase|bloomberg|wikipedia|github|medium|businesswire|prnewswire|globenewswire)\.(com|org)\z/
 
-  Claim = Data.define(:id, :kind, :payload, :quote, :page, :holding, :hold) do
+  Claim = Data.define(:id, :kind, :payload, :quote, :page, :holding, :hold, :source_kind) do
     # :hold is why code decides it is unsure before any model reads it, or nil.
     def field = DqChecker.field_for(kind, payload)
   end
@@ -137,6 +140,7 @@ class DqChecker
     hold ||= "There's no stored page to read" if page.blank?
     hold ||= "The quote isn't on the stored page" unless DqChecker.quoted?(candidate.quote, page)
     Claim.new(id: candidate.id, kind: candidate.kind, payload: candidate.payload, quote: candidate.quote,
+      source_kind: Source.where(id: candidate.source_id).pick(:source_kind),
       page:, holding: holding(org), hold:)
   end
 
@@ -213,8 +217,23 @@ class DqChecker
         case claim.field
         when "hq" then "No city in the claim" if claim.payload["hq_city"].blank?
         when "website" then website_rule(claim)
+        when "new_company", "role"
+          "Only an award or register row names it; nuclear work needs its own page" if claim.source_kind.to_s.match?(ROW_SOURCES)
+        when "news" then "News only for companies we hold; this one isn't in the directory" unless held_news?(claim)
         end
       why ? unsure(why).with(model: answer.model, escalated: answer.escalated) : answer
+    end
+
+    # Every company the item is about is in the directory, published or pending (DQ, 20 Nov).
+    def held_news?(claim)
+      names = Array(claim.payload["about"]).select { |about| about["type"].to_s == "organization" }.map { |about| about["name"].to_s.squish.downcase }
+      return false if names.empty? || names.any?(&:blank?)
+
+      open = Organization.where(verification_status: %w[verified pending])
+      names.all? do |name|
+        open.where("lower(name) = ?", name).exists? ||
+          open.where(id: OrganizationAlias.where("lower(alias) = ?", name).select(:organization_id)).exists?
+      end
     end
 
     def website_rule(claim)

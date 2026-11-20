@@ -121,4 +121,20 @@ class DqCheckerTest < ActiveSupport::TestCase
     assert_not_includes window, "<p>"
     assert checker(FakeLlm.new).window(website_claim(quote: "nowhere on it")).start_with?("filler")
   end
+
+  test "news is approved only about companies we hold; a new company or role from an award or NRC row alone is unsure (DQ)" do
+    held = Candidate.create!(source: @page, kind: "news_item", quote: "Acme Fission builds small fission reactors in Ohio", status: "new",
+      payload: { "title" => "Acme Fission news", "about" => [ { "name" => "Acme Fission", "type" => "organization" } ] })
+    not_held = Candidate.create!(source: @page, kind: "news_item", quote: "Acme Fission builds small fission reactors in Ohio", status: "new",
+      payload: { "title" => "Other news", "about" => [ { "name" => "Deep Elsewhere", "type" => "organization" } ] })
+    row = Source.create!(url: "https://www.usaspending.gov/recipient/x", source_kind: "usaspending_doe_awards", crawl_status: "ok", content_sha256: "u",
+      content_text: "DE123,ACME FUSION INC,100000")
+    award = Candidate.create!(source: row, kind: "organization", payload: { "name" => "Acme Fusion" }, quote: "DE123,ACME FUSION INC,100000", status: "new")
+    checker(FakeLlm.new(extract: Array.new(3) { [ "approve", "ok" ] })).run
+
+    verdicts = CheckerVerdict.pluck(:candidate_id, :verdict, :reason).to_h { |id, *rest| [ id, rest ] }
+    assert_equal "approve", verdicts[held.id].first
+    assert_equal [ "unsure", "News only for companies we hold; this one isn't in the directory" ], verdicts[not_held.id]
+    assert_equal [ "unsure", "Only an award or register row names it; nuclear work needs its own page" ], verdicts[award.id]
+  end
 end

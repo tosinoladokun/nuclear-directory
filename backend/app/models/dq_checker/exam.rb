@@ -51,7 +51,7 @@ class DqChecker::Exam
     stored = candidate && @checker.window(candidate)
     org = candidate&.subject if candidate&.subject_type == "Organization"
     page = stored.presence || row["quote"]
-    claim = DqChecker::Claim.new(id: row["candidate_id"], kind: row["kind"], payload: row["payload"], quote: row["quote"],
+    claim = DqChecker::Claim.new(id: row["candidate_id"], kind: row["kind"], payload: row["payload"], quote: row["quote"], source_kind: row["source_kind"],
       page:, holding: @checker.holding(org), hold: nil)
     [ claim, stored.present? ? "page" : "quote only" ]
   end
