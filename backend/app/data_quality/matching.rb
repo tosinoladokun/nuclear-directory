@@ -33,6 +33,11 @@ module DataQuality::Matching
   FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code ticker exchange].freeze
   TICKER = /\A[A-Z0-9][A-Z0-9.\-]{0,7}\z/
   EXCHANGE = /\A[A-Za-z][A-Za-z .&-]{1,19}\z/
+  # What a cover calls an exchange, besides its short name: the quote must name the ticker AND the exchange, so a ticker can't ride on an
+  # unrelated quote.
+  EXCHANGE_NAMES = { "NYSE" => /NYSE|New York Stock Exchange/i, "NASDAQ" => /Nasdaq/i, "TSX" => /TSX|Toronto Stock Exchange/i,
+                     "NYSE American" => /NYSE American|NYSE MKT|American Stock Exchange/i, "LSE" => /LSE|London Stock Exchange/i,
+                     "ASX" => /ASX|Australian Securities Exchange/i }.freeze
   # An SEC CIK is sourced to EDGAR only (PM, 31 Oct).
   EDGAR_HOSTS = %w[sec.gov www.sec.gov efts.sec.gov data.sec.gov].freeze
   MAX_DESCRIPTION = 2_000
@@ -262,6 +267,12 @@ module DataQuality::Matching
       return fail_with.call("a ticker and its exchange go together: give both") if fields.key?("ticker") != fields.key?("exchange")
       return fail_with.call("a ticker is capital letters or digits (e.g. NNE, BRK.B)") if fields.key?("ticker") && !fields["ticker"].match?(TICKER)
       return fail_with.call("an exchange is its short name (e.g. NYSE, NASDAQ, TSX)") if fields.key?("exchange") && !fields["exchange"].match?(EXCHANGE)
+      if fields.key?("ticker")
+        return fail_with.call("the quote must contain the ticker #{fields['ticker']}") unless quote.match?(/(?<![A-Za-z0-9.])#{Regexp.escape(fields['ticker'])}(?![A-Za-z0-9])/)
+
+        named = EXCHANGE_NAMES.fetch(fields["exchange"], /#{Regexp.escape(fields['exchange'])}/i)
+        return fail_with.call("the quote must name the exchange (#{fields['exchange']})") unless quote.match?(named)
+      end
       if fields.key?("sec_cik")
         cik = directory.normalize_cik(fields["sec_cik"])
         return fail_with.call("an SEC CIK is up to 10 digits") unless cik.to_s.match?(/\A\d{10}\z/)

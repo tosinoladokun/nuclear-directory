@@ -493,13 +493,19 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
       { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT" }, quote:, source_url: @page.url, reason: "r" },
       { action: "propose_fields", target: @holtec.id, fields: { exchange: "NYSE" }, quote:, source_url: @page.url, reason: "r" },
       { action: "propose_fields", target: @holtec.id, fields: { ticker: "holt", exchange: "NYSE" }, quote:, source_url: @page.url, reason: "r" },
-      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT", exchange: "the big board 123" }, quote:, source_url: @page.url, reason: "r" })
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT", exchange: "the big board 123" }, quote:, source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT", exchange: "NYSE" }, quote: "Holtec International is headquartered in Camden.", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOLT", exchange: "NASDAQ" }, quote:, source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { ticker: "HOL", exchange: "NYSE" }, quote:, source_url: @page.url, reason: "r" })
     assert results.first["ok"], results.inspect
     assert_equal({ "name" => "Holtec International", "ticker" => "HOLT", "exchange" => "NYSE" }.except("name"), Candidate.find(results.first["id"]).payload.slice("ticker", "exchange"))
     assert_match "go together", results.second["error"]
     assert_match "go together", results.third["error"]
     assert_match "capital letters or digits", results.fourth["error"]
     assert_match "short name", results.fifth["error"]
+    assert_match "must contain the ticker HOLT", results[5]["error"], "a ticker can't ride on an unrelated quote"
+    assert_match "must name the exchange (NASDAQ)", results[6]["error"], "the quote says NYSE, not NASDAQ"
+    assert_match "must contain the ticker HOL", results[7]["error"], "HOL isn't HOLT: whole word"
   end
 
   test "propose_fields takes a country (two capital letters) and a legal name" do
