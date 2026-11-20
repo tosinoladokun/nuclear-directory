@@ -3,6 +3,7 @@
 # Undo for an hour. Nothing goes live without his Yes; every decision is checked again
 # under its locks, as everywhere else.
 class Admin::InboxController < Admin::BaseController
+  SELECTED_YES = "Approved in Today (selected)".freeze
   # Rows one "selected" request decides, so it stays well under the web timeout (Infra).
   SELECTED_MAX = 50
 
@@ -134,6 +135,9 @@ class Admin::InboxController < Admin::BaseController
     end
 
     # "claim:<id>,<id>…" (a row and its copies) or "record:<Type>:<id>". Returns the errors, or nil when done.
+    # Today's rows as the server builds them, once per request.
+    def selectable_entries = (@selectable_entries ||= OwnerInbox.new.sections.values.flatten)
+
     def decide_pick(pick, yes:)
       kind, rest = pick.split(":", 2)
       result = case kind
@@ -143,8 +147,22 @@ class Admin::InboxController < Admin::BaseController
         # Gone since the page loaded (decide and approve skip ids they can't find): not a success.
         return [ "no longer in the inbox" ] if Candidate.where(id: ids).count < ids.uniq.size
         return [ "Data Quality says no, so it's decided on its own row" ] if yes && Candidate.where(id: ids).any? { |claim| DataQuality::Recommendations.says_no?(claim) }
+        # The row as the server builds it, never ids the request strings together (Copilot): its companions are the
+        # ones that ride with it.
+        entry = selectable_entries.find { |row| row.ids.sort == ids.sort } or return [ "no longer in the inbox" ]
+        # Only what Data Quality checked goes in a bulk Yes (#777).
+        return [ "Data Quality hasn't checked it, so it's decided on its own row" ] if yes && !entry.checked
 
-        results = yes ? DataQuality::Review.approve(ids, by: actor, reason: "Approved in Today") : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today")
+        # Its own reason, so a selection is told apart from a row's own button in the history (#777 audit). Checked
+        # again under each claim's lock (Copilot): Data Quality may have changed its call since the page loaded.
+        main = entry.item.candidate_id
+        recheck = lambda do |claim|
+          claim.reload
+          if DataQuality::Recommendations.says_no?(claim) then "Data Quality says no"
+          elsif claim.id == main && !OwnerInbox.judged?(claim) then "Data Quality hasn't checked it"
+          end
+        end
+        results = yes ? DataQuality::Review.approve(ids, by: actor, reason: SELECTED_YES, safe_check: recheck) : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today (selected)")
         stopped = results.reject(&:ok?)
         return stopped.flat_map(&:errors).uniq if stopped.any?
 

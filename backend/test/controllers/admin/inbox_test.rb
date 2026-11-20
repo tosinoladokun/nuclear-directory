@@ -186,6 +186,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   end
 
   test "decide selected (#771): every row ticked is decided as if clicked on its own, and one that stops doesn't stop the rest" do
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page\n#{@change.id} approve: its own page", by: "human:dq")
     get admin_inbox_path
     assert_select "#inbox-item-#{@create.id} input[type=checkbox][form=inbox-selected][value=?]", "claim:#{@create.id}"
     assert_select "form#inbox-selected button", /Create \/ Approve selected/
@@ -223,6 +224,46 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@change.id}" ] }
     assert_match "Data Quality says no", flash[:alert]
     assert @change.reload.status_matched?
+  end
+
+  test "a claim Data Quality hasn't checked has no box and is never approved in a selection (#777)" do
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@create.id} input[name='selected[]']", 0, "not judged yet"
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id}" ] }
+    assert_match "Data Quality hasn't checked it", flash[:alert]
+    assert_not @new_co.reload.verified?
+    assert @create.reload.status_matched?
+
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@create.id} input[name='selected[]']", 1, "checked: it can be selected"
+  end
+
+  test "the #777 audit case: a selection of unchecked, unconfirmed and contradicted claims approves none; a selection is told apart in the history" do
+    unconfirmed = claim({ "name" => "Bluefield Fission", "website" => "https://bluefield.example" }, subject: @new_co, ai_recommendation: "needs_review",
+      ai_reason: "The verifier couldn't confirm this from the source")
+    contradicted = claim({ "name" => "Rockville Nuclear", "hq_city" => "Annapolis" }, subject: @decided, ai_recommendation: "needs_review",
+      ai_reason: "#{DataQuality::Verifiers::Agent::CONTRADICTS} (the source gives Rockville): no")
+    picks = [ @create, @change, unconfirmed, contradicted ].map { |row| "claim:#{row.id}" }
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: picks }
+    assert_match(/Done 0, 4 failed: Data Quality hasn't checked it/, flash[:alert])
+    assert [ @create, @change, unconfirmed, contradicted ].none? { |row| row.reload.status_merged? }
+
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id}" ] }
+    assert_equal Admin::InboxController::SELECTED_YES, VerificationEvent.where(subject: @new_co, to_status: "verified").last&.reason
+  end
+
+  test "a selection can't string an unchecked claim onto a checked row; a call changed since the page loaded is checked again under the lock (Copilot)" do
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id},#{@change.id}" ] }
+    assert_match "no longer in the inbox", flash[:alert]
+    assert @change.reload.status_matched?, "the unchecked change rode nothing"
+
+    @create.update_columns(dq_recommendation: "reject", dq_reason: "changed its mind")
+    assert_equal "Data Quality says no", DataQuality::Review.approve([ @create.id ], by: "human:tosin",
+      safe_check: ->(claim) { claim.reload; DataQuality::Recommendations.says_no?(claim) ? "Data Quality says no" : nil }).sole.errors.first.to_s[/Data Quality says no/]
+    assert_not @new_co.reload.verified?
   end
 
   test "an empty selection does nothing" do
