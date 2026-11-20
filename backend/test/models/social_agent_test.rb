@@ -9,7 +9,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   class FakeWriter
     attr_accessor :text, :voice
     def initialize(text, voice: [ true, nil ]) = (@text, @voice = text, voice)
-    def draft(_item, platform:, crawl_run: nil) = text.respond_to?(:call) ? text.call : text
+    def draft(_item, platform:, crawl_run: nil, feedback: nil, previous: nil) = text.respond_to?(:call) ? text.call : text
     def voice_ok?(_text, _item, crawl_run: nil) = voice
   end
 
@@ -23,7 +23,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   end
 
   # The source answers 200 (no network in tests).
-  OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "", etag: nil,
+  OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "<p>Published November 12, 2026</p>", etag: nil,
     last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
 
   def run_x(text, fetcher: OK_FETCHER.new(200), **options) = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(text, **options), fetcher:)
@@ -259,6 +259,168 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.primary?(item.("https://news.boreholeco.example/release", "Someone Else"))
   end
 
+  test "a region or country is a place, not a person; a person's name still stops it (shadow day 20 Nov)" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "companies" => "Acme Fission" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: "Acme Fission will work in Southeast Asia and South Korea.")
+    assert_empty SocialAgent::Rules.people("Acme Fission will work in Southeast Asia and South Korea.", item)
+    assert_equal [ "it may name a person (Jane Doe)" ], SocialAgent::Rules.people("Jane Doe leads Acme Fission in Southeast Asia.", item)
+    assert_equal [ "it may name a person (Chad Jordan)" ], SocialAgent::Rules.people("Chad Jordan leads Acme Fission.", item),
+      "country words alone never clear a name"
+  end
+
+  test "a person's name in the source is still stopped; a news date must be the item's own; elsewhere it must be in the source (PM)" do
+    news = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: "Acme Fission and SJ Group will work with Mary Lane on reactors.")
+    assert_equal [ "it may name a person (Mary Lane)" ], SocialAgent::Rules.people("Acme Fission works with Mary Lane.", news),
+      "a person's name stays stopped even when the source has it (GTM)"
+    assert_empty SocialAgent::Rules.dates("On 19 November 2026, Acme Fission said so.", news)
+    assert_equal [ "the date 18 November isn't the item's own (19 November 2026) or in the source" ], SocialAgent::Rules.dates("On November 18, Acme Fission said so.", news)
+    link = SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "The deal closed on 7 November 2023.")
+    assert_empty SocialAgent::Rules.dates("It closed on 7 November 2023.", link)
+    assert_equal [ "the date 8 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 8 November.", link)
+  end
+
+  test "the picker skips news Data Quality said no to, and news only an off-topic feed gives (PM)" do
+    assert SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }
+    feed = Source.create!(url: "https://science.example/feed", source_kind: "nasa_nuclear_news", crawl_status: "ok")
+    claim = Candidate.create!(source: feed, kind: "news_item", payload: {}, quote: "q", status: "merged", subject: @news)
+    ENV["SOCIAL_SKIP_FEEDS"] = "nasa_nuclear_news"
+    assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "only that feed gives it"
+    ENV.delete("SOCIAL_SKIP_FEEDS")
+    claim.update_columns(dq_recommendation: "reject")
+    assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "DQ said no"
+  ensure
+    ENV.delete("SOCIAL_SKIP_FEEDS")
+  end
+
+  test "a news post's date must be on its source page, in its text or datePublished (DQ)" do
+    assert SocialAgent::Rules.page_dated?("<p>November 19, 2026</p>", "19 November 2026")
+    assert SocialAgent::Rules.page_dated?(%(<script type="application/ld+json">{"datePublished":"2026-11-19T10:00:00Z"}</script>), "19 November 2026")
+    assert SocialAgent::Rules.page_dated?("<p>Posted 11/19/2026</p>", "19 November 2026")
+    assert_not SocialAgent::Rules.page_dated?("<p>Pulsars, found faster.</p>", "19 November 2026")
+    undated = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>No date here</p>",
+      etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+    assert_nil run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200)),
+      "an item whose page lacks its date is skipped before drafting"
+    assert_equal "no usable item (its date (12 November 2026) isn't on the source page)",
+      CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
+  end
+
+  test "a post never says what its source doesn't, and keeps the source's qualifier on a deal (GTM)" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
+      source_quote: "Acme Fission signed a non-binding memorandum of understanding with SJ Group.")
+    assert_equal [ "it says \"no further details\", which its source doesn't", "it leaves out the source's qualifier (MOU)",
+      "it leaves out the source's qualifier (non-binding)" ],
+      SocialAgent::Rules.qualifiers("Acme Fission agreed to work with SJ Group; the announcement provides no further details.", item)
+    assert_empty SocialAgent::Rules.qualifiers("Acme Fission signed a non-binding MOU with SJ Group.", item)
+  end
+
+  # Today's two shadow drafts (20 Nov), as written.
+  PULSAR_TITLE = "NASA Fermi data helps team develop faster pulsar search method".freeze
+  NANO_SOURCE = "NANO Nuclear Energy signed a Memorandum of Understanding (MOU) with Surbana Jurong Infrastructure Pte. Ltd., an " \
+    "affiliate of SJ Group, to advance knowledge exchange and capability building in advanced nuclear energy across Southeast Asia. " \
+    "It establishes a non-binding framework for cooperation.".freeze
+  NANO_DRAFT = "On 19 November 2026, NANO Nuclear Energy and SJ Group established a collaboration to advance knowledge exchange and " \
+    "capability building in advanced nuclear energy across Southeast Asia, NANO Nuclear Energy said.\n\nThe stated focus is knowledge " \
+    "exchange and capability building, with advanced nuclear energy as the subject and Southeast Asia as the region. The announcement " \
+    "names the two organizations but provides no further details about the collaboration.".freeze
+
+  test "today's drafts: a pulsar story is never picked; the NANO post is stopped for its absence claim, missing qualifiers and repetition, not for a person" do
+    @news.update_columns(title: PULSAR_TITLE, headline: nil, summary: "Open data from Fermi helped find pulsars faster.")
+    assert_not SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.any? { |item| item.subject == @news }, "not nuclear (Founder, GTM)"
+
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "companies" => "NANO Nuclear Energy" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: NANO_SOURCE)
+    assert_empty SocialAgent::Rules.people(NANO_DRAFT, item), "Southeast Asia is a place"
+    problems = SocialAgent::Rules.qualifiers(NANO_DRAFT, item)
+    assert_includes problems, "it says \"no further details\", which its source doesn't"
+    assert_includes problems, "it leaves out the source's qualifier (MOU)"
+    assert SocialAgent::Rules.repeats?(NANO_DRAFT), "the second paragraph restates the first"
+    assert_includes problems, "it calls it a collaboration, which its source doesn't", "DQ: a signed MOU isn't 'a collaboration'"
+    assert_includes SocialAgent::Rules.qualifiers("They did not say when it starts.", item), "it says \"did not say\", which its source doesn't"
+    assert_not SocialAgent::Rules.repeats?("Acme Fission won a DOE award for fuel cladding. The work starts in Idaho next spring with two partners.")
+  end
+
+  test "a rehearsal drafts and checks every candidate and the fixed cases, saves no post and uses no day's slot (PM)" do
+    SocialChannel.for("x").update!(mode: "drafts")
+    results = SocialAgent::Rehearsal.new(per_platform: 5, now: MONDAY, writer: FakeWriter.new(DRAFT), fetcher: OK_FETCHER.new(200)).run
+    assert_equal 0, SocialPost.count, "nothing saved"
+    assert_equal %w[linkedin x], results.map(&:platform).uniq.sort
+    assert(results.any? { |row| row.label.start_with?("fixture: #35") }, "today's fixed cases are in")
+    assert(results.any? { |row| row.kind == "news" && row.passed? }, "the real news item drafts and passes")
+    report = SocialAgent::Rehearsal.report(results)
+    assert_match(/## X: \d+ of \d+ passed/, report)
+    assert_not_nil run_x(DRAFT), "the day's slot is still free"
+  end
+
+  test "a person's name inside a company's name is still a person; the company's whole name isn't (DQ)" do
+    Organization.create!(name: "Mary Lane Engineering", verification_status: "verified", verified_by: BY)
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: "q")
+    assert_equal [ "it may name a person (Mary Lane)" ], SocialAgent::Rules.people("Mary Lane leads Acme Fission.", item)
+    assert_empty SocialAgent::Rules.people("Mary Lane Engineering works with Acme Fission.", item)
+  end
+
+  test "the source page's own qualifier counts too: an MOU only the page body names must be in the post (rehearsal)" do
+    page = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200,
+      body: "<p>November 19, 2026</p><p>NANO signed a non-binding MOU with Surbana Jurong Infrastructure Pte. Ltd.</p>", etag: nil,
+      last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: "https://nanonuclearenergy.com/x",
+      path: "/", organization_ids: [], source_quote: "NANO Nuclear and SJ Group establish Southeast Asia collaboration")
+    problems = SocialAgent::Rules.source_problems(item.source_url, page.new(200), item:, text: "NANO Nuclear and SJ Group set up a collaboration.")
+    assert_includes problems, "it leaves out the source's qualifier (MOU)"
+    assert_empty SocialAgent::Rules.people("NANO Nuclear signed with Surbana Jurong Infrastructure Pte. Ltd.", item), "a legal name isn't a person"
+  end
+
+  test "a stopped draft gets one revision with what stopped it, then every check again (rehearsal)" do
+    drafts = [ "Acme Fission won 2 DOE awards.", DRAFT ]
+    seen = []
+    writer = FakeWriter.new(-> { drafts.shift })
+    writer.define_singleton_method(:draft) { |_item, platform:, crawl_run: nil, feedback: nil, previous: nil| seen << feedback; drafts.shift }
+    post = SocialAgent.run("x", now: MONDAY, writer:, fetcher: OK_FETCHER.new(200))
+    assert_equal "drafted", post.status
+    assert_equal [ nil, "the number 2 isn't in the source" ], seen
+  end
+
+  test "a sensitive word in passing deep in a page isn't its subject; in its opening it is (rehearsal)" do
+    page = ->(body) { Struct.new(:body) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body:, etag: nil,
+      last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }.new(body) }
+    filler = "<p>#{'The reactor design moves ahead with its partners and suppliers. ' * 20}</p>"
+    assert_empty SocialAgent::Rules.source_problems("https://x.example", page.("<article>#{filler}<p>It holds up beyond any credible accident scenario.</p></article>"))
+    assert_equal [ "its source page touches a sensitive topic (accident)" ],
+      SocialAgent::Rules.source_problems("https://x.example", page.("<article><p>An accident at the plant injured two workers.</p>#{filler}</article>"))
+  end
+
+  test "Copilot on #842: whole country names, years in dates, whole date forms, each absence phrase, quantities, spaced keywords" do
+    item = SocialAgent::Item.new(subject: @news, kind: "news", facts: { "date" => "19 November 2026" }, source_url: nil, path: "/",
+      organization_ids: [], source_quote: "Acme Fission signed in 2023. The amount was not disclosed.")
+    assert_equal [ "it may name a person (Asia Cook)" ], SocialAgent::Rules.people("Asia Cook leads Acme Fission.", item)
+    assert_empty SocialAgent::Rules.people("Acme Fission works in South Korea and the United Kingdom.", item)
+    assert_equal [ "the date 19 November isn't the item's own (19 November 2026) or in the source" ],
+      SocialAgent::Rules.dates("On 19 November 2023, Acme Fission said so.", item)
+    assert_empty SocialAgent::Rules.dates("On 19 November 2026, Acme Fission said so.", item)
+    assert_not SocialAgent::Rules.page_dated?("<p>19 November 2026</p>", "9 November 2026")
+    assert_equal [ "it says \"no further details\", which its source doesn't" ],
+      SocialAgent::Rules.qualifiers("The amount was not disclosed; there are no further details.", item).grep(/says/)
+    assert_not SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. It produces 100 MW of heat at full power.")
+    assert_match SocialAgent::Picker::NUCLEAR, "Holtec expands spent fuel storage"
+  end
+
+  test "a draft still stopped after the last revision stays blocked with its reason; a revision gets only the reason, no new facts (DQ)" do
+    calls = []
+    writer = FakeWriter.new("x")
+    writer.define_singleton_method(:draft) do |item, platform:, crawl_run: nil, feedback: nil, previous: nil|
+      calls << [ item.facts, feedback ]
+      "Acme Fission won 2 DOE awards."
+    end
+    post = SocialAgent.run("x", now: MONDAY, writer:, fetcher: OK_FETCHER.new(200))
+    assert_equal [ "blocked", "the number 2 isn't in the source" ], [ post.status, post.reason ]
+    assert_equal 3, calls.size, "the first draft and two revisions"
+    assert_equal 1, calls.map(&:first).uniq.size, "every revision gets the same facts, nothing new"
+    assert_equal [ nil, "the number 2 isn't in the source", "the number 2 isn't in the source" ], calls.map(&:last)
+    assert_not SocialPost.where(status: SocialPost::SENT).exists?, "never posted"
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
@@ -307,5 +469,56 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent.singleton_class.send(:remove_method, :publisher)
     SocialAgent.define_singleton_method(:publisher) { SocialAgent::Buffer.new }
     SocialAgent.instance_variable_set(:@senders, nil)
+  end
+
+  # Copilot's six findings on #842, each with its regression.
+  def rules_item(kind: "news", facts: {}, quote: "")
+    SocialAgent::Item.new(subject: @news, kind:, facts:, source_url: nil, source_quote: quote, path: "/", organization_ids: [])
+  end
+
+  test "a country is its whole name: 'Asia Cook' is a person, 'South Korea' and 'Southeast Asia' are places" do
+    assert SocialAgent::Rules.place?(%w[Southeast Asia])
+    assert SocialAgent::Rules.place?(%w[South Korea])
+    assert SocialAgent::Rules.place?(%w[South Africa])
+    assert SocialAgent::Rules.place?(%w[Middle East])
+    assert SocialAgent::Rules.place?(%w[Asia Cook Islands]), "the whole name counts"
+    assert_not SocialAgent::Rules.place?(%w[Asia Cook]), "Cook alone isn't a country"
+    assert_not SocialAgent::Rules.place?(%w[Chad Jordan]), "a country alone never clears a run"
+  end
+
+  test "the nuclear gate sees 'spent fuel' and 'fuel cycle' as phrases, and not 'spentfuel'" do
+    assert_match SocialAgent::Picker::NUCLEAR, "Holtec expands spent fuel storage"
+    assert_match SocialAgent::Picker::NUCLEAR, "A new fuel cycle report"
+    assert_no_match SocialAgent::Picker::NUCLEAR, "Holtec expands spentfuel storage"
+  end
+
+  test "a date with a year must be the item's year: 19 November 2023 isn't the 2026 item's date" do
+    item = rules_item(facts: { "date" => "2026-11-19" }, quote: "Announced on 19 November 2026. The earlier plan dates from 2023.")
+    assert_empty SocialAgent::Rules.dates("On 19 November 2026 Acme signed.", item)
+    assert_empty SocialAgent::Rules.dates("On 19 November Acme signed.", item), "no year written: the item's day and month are enough"
+    assert_equal 1, SocialAgent::Rules.dates("On 19 November 2023 Acme signed.", item).size
+    other = rules_item(kind: "link", quote: "The closing is on 19 November 2026.")
+    assert_empty SocialAgent::Rules.dates("Closing is on 19 November 2026.", other)
+    assert_equal 1, SocialAgent::Rules.dates("Closing is on 19 November 2023.", other).size, "a non-news post's year is the source's too"
+  end
+
+  test "a source stating 19 November 2026 doesn't state 9 November 2026" do
+    assert SocialAgent::Rules.page_dated?("<p>Published 19 November 2026</p>", "2026-11-19")
+    assert_not SocialAgent::Rules.page_dated?("<p>Published 19 November 2026</p>", "2026-11-09")
+    assert_not SocialAgent::Rules.page_dated?("<p>Published November 19, 2026</p>", "2026-11-09")
+    other = rules_item(kind: "link", quote: "Signed on 19 November 2026.")
+    assert_equal 1, SocialAgent::Rules.dates("Signed on 9 November.", other).size, "9 isn't 19"
+  end
+
+  test "each absence phrase must be the source's own: 'not disclosed' doesn't clear 'no further details'" do
+    item = rules_item(quote: "The amount was not disclosed. The agreement covers fuel supply and a 2027 delivery.")
+    problems = SocialAgent::Rules.qualifiers("The amount was not disclosed, with no further details.", item)
+    assert_includes problems, "it says \"no further details\", which its source doesn't"
+    assert_not problems.any? { |problem| problem.include?("not disclosed") }, "the source says that one"
+  end
+
+  test "sentences giving different quantities aren't a repeat; the same thing said twice still is" do
+    assert_not SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. It produces 100 MW of heat at full power.")
+    assert SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. At full power the reactor produces 50 MW of electricity.")
   end
 end

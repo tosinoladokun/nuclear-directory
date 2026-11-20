@@ -9,22 +9,35 @@ class SocialAgent::Picker
   # An event older than this isn't news, however recently it was published (DQ: GTM's rule is 7 to 9 days).
   EVENT_MAX_AGE = 10.days
   # Not deals or facts: people and event items (DQ).
-  NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|workshop|hiring|award ceremony|internship)\b/i
+  # About the nuclear industry, by its own words (Founder, GTM: a feed can let a pulsar story through).
+  NUCLEAR = /\b(nuclear|reactors?|microreactors?|SMRs?|uranium|fission|fusion|isotopes?|radioisotopes?|radioactive|radiation|
+    radiological|enrich\w*|HALEU|TRISO|plutonium|thorium|tritium|spent\s+fuel|fuel\s+cycle|NRC|decommission\w*|nuclides?|neutrons?)\b/ix
+  NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|webcast|explains?|how [\w-]+(?: [\w-]+){0,3} works|asks why|conference call|earnings call|business update|workshop|hiring|award ceremony|internship)\b/i
+  # Link verbs worth a post (DQ, #839): a standing "funds" award row isn't news.
+  LINK_VERBS = %w[supplies invests_in offtake_with subsidiary_of].freeze
 
-  def initialize(platform:, now: Time.current)
+  # fresh: how far back counts as new (a rehearsal looks back further; social:rehearse).
+  def initialize(platform:, now: Time.current, fresh: FRESH)
     @platform = platform
     @now = now
+    @fresh = fresh
   end
 
   def call = candidates.find { |item| usable?(item) }
+
+  # Every usable candidate, best first.
+  def usable = candidates.select { |item| usable?(item) }
 
   def candidates = news + links + companies
 
   private
     def news
-      NewsItem.published.where(verified_at: (@now - FRESH)..@now, published_on: (@now - EVENT_MAX_AGE).to_date..)
+      NewsItem.published.where(verified_at: (@now - @fresh)..@now, published_on: (@now - @fresh - (EVENT_MAX_AGE - FRESH)).to_date..)
         .includes(:news_mentions).order(verified_at: :desc).filter_map do |news|
           next if [ news.title, news.headline ].compact.any? { |text| text.match?(NOT_NEWS) }
+          next unless [ news.title, news.headline, news.summary ].compact.any? { |text| text.match?(NUCLEAR) }
+          # Never one Data Quality said no to, nor one only a feed it flagged off-topic gives (PM, 20 Nov).
+          next if rejected_news.include?(news.id) || off_topic?(news)
 
           mentions = news.news_mentions.select { |mention| mention.subject_type == "Organization" }
           companies = Organization.published.where(id: mentions.map(&:subject_id)).to_a
@@ -48,8 +61,8 @@ class SocialAgent::Picker
     # Cameco and Westinghouse weren't news to the picker).
     def links
       first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
-        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
-      fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first), @now.to_date)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - @fresh, @now).select(:subject_id)
+      fresh = SocialAgent::Picker.current_links(Relationship.published.where(id: first, relationship_type: LINK_VERBS), @now.to_date)
       bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
       fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).limit(20).filter_map do |link|
           from, to = link.from_organization, link.to_organization
@@ -71,7 +84,7 @@ class SocialAgent::Picker
     def companies
       # New means first approved this week (a later edit re-verifies an old company; DQ), as What's new counts it.
       first = VerificationEvent.where(subject_type: "Organization", to_status: "verified").group(:subject_id)
-        .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
+        .having("MIN(created_at) BETWEEN ? AND ?", @now - @fresh, @now).select(:subject_id)
       Organization.published.where(id: first).where.not(description: [ nil, "" ]).order(verified_at: :desc).filter_map do |company|
         evidence = Evidence.where(subject: company).includes(:source).order(:id).to_a
         described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or next
@@ -82,6 +95,20 @@ class SocialAgent::Picker
           source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}",
           organization_ids: [ company.id ])
       end
+    end
+
+    def rejected_news
+      @rejected_news ||= Candidate.where(subject_type: "NewsItem", dq_recommendation: "reject").distinct.pluck(:subject_id).to_set
+    end
+
+    # Feeds Data Quality flags as off-topic, by source kind (SOCIAL_SKIP_FEEDS, comma-separated on Render).
+    def off_topic?(news)
+      feeds = ENV["SOCIAL_SKIP_FEEDS"].to_s.split(",").map(&:strip).compact_blank
+      return false if feeds.empty?
+
+      kinds = (Evidence.where(subject: news).joins(:source).distinct.pluck("sources.source_kind") +
+        Candidate.where(subject_type: "NewsItem", subject_id: news.id).joins(:source).distinct.pluck("sources.source_kind")).uniq
+      kinds.any? && (kinds - feeds).empty?
     end
 
     def usable?(item)

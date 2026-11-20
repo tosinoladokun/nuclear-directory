@@ -22,7 +22,10 @@ module SocialAgent::Check
     found << "it has an emoji" if text.match?(/\p{Extended_Pictographic}/)
     # A date, not relative time: the post may go out days after the event (DQ).
     found << "it says #{$1.downcase.inspect} instead of a date" if text.match(/\b(today|yesterday|tonight|this week|last week|just|now)\b/i)
-    found << "it's too long for #{platform == 'x' ? 'X' : 'LinkedIn'}" if too_long?(text, platform)
+    if too_long?(text, platform)
+      limit = platform == "x" ? X_LIMIT - 2 - X_LINK : LINKEDIN_LIMIT
+      found << "it's too long for #{platform == 'x' ? 'X' : 'LinkedIn'} (#{text.length} characters; at most #{limit})"
+    end
     found
   end
 
