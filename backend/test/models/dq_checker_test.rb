@@ -92,7 +92,7 @@ class DqCheckerTest < ActiveSupport::TestCase
   test "an error or the spent budget is unsure, never an approve; the day's limits come from the database" do
     website_claim
     checker(FakeLlm.new(error: DataQuality::OpenRouter::Client::Error.new("down"))).run
-    assert_equal [ "unsure", "Needs a human: the model didn't answer" ], CheckerVerdict.sole.values_at(:verdict, :reason)
+    assert_equal [ "unsure", "Needs a human: the model didn't answer (Error)" ], CheckerVerdict.sole.values_at(:verdict, :reason)
 
     CheckerVerdict.delete_all
     CrawlRun.create!(source_kind: "dq_checker", stage: "verify", started_at: NOW - 1.hour, stats: { "llm" => { "cost" => 1.0 } })
