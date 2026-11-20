@@ -77,6 +77,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal [ "link", link ], [ item.kind, item.subject ]
     assert_equal "Acme Fission invests in Westinghouse", item.facts["link"]
     assert_equal "https://acme.example/news", item.source_url
+
+    # A funder's bulk list of awards that week is never a "new deal" post (DQ).
+    funder = Organization.create!(name: "ARPA-E", slug: "arpa-e-test", verification_status: "verified", verified_by: BY)
+    (SocialAgent::Picker::BULK_LINKS + 1).times do |i|
+      to = Organization.create!(name: "Lab #{i}", slug: "lab-#{i}-test", verification_status: "verified", verified_by: BY)
+      award = Relationship.create!(from_organization: funder, to_organization: to, relationship_type: "funds", verification_status: "verified",
+        verified_by: BY, verified_at: MONDAY - 1.hour)
+      VerificationEvent.where(subject: award).update_all(created_at: MONDAY - 1.hour)
+      VerificationEvent.create!(subject: award, to_status: "verified", by: BY, created_at: MONDAY - 1.hour) unless VerificationEvent.exists?(subject: award, to_status: "verified")
+      Evidence.create!(subject: award, source: page, quote: "ARPA-E funds Lab #{i}.", found_by: "human")
+    end
+    assert_equal [ link ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |c| c.kind == "link" }.map(&:subject)
   end
 
   test "a newly added company is used when there's no fresh news" do

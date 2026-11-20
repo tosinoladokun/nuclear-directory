@@ -3,6 +3,9 @@
 # already in a post the same day. Social playbook: fresh data only; skip rather than post filler.
 class SocialAgent::Picker
   FRESH = 7.days
+  # A company with more new links than this in the window approved them in bulk (ARPA-E or DOE award lists):
+  # research awards for a roundup, never a "new deal" post (DQ, 20 Nov).
+  BULK_LINKS = 3
   # An event older than this isn't news, however recently it was published (DQ: GTM's rule is 7 to 9 days).
   EVENT_MAX_AGE = 10.days
   # Not deals or facts: people and event items (DQ).
@@ -41,8 +44,9 @@ class SocialAgent::Picker
       first = VerificationEvent.where(subject_type: "Relationship", to_status: "verified").group(:subject_id)
         .having("MIN(created_at) BETWEEN ? AND ?", @now - FRESH, @now).select(:subject_id)
       published = Organization.published.select(:id)
-      Relationship.where(id: first, verification_status: "verified", ended_on: nil, from_organization_id: published, to_organization_id: published)
-        .includes(:from_organization, :to_organization).order(verified_at: :desc).filter_map do |link|
+      fresh = Relationship.where(id: first, verification_status: "verified", ended_on: nil, from_organization_id: published, to_organization_id: published)
+      bulk = fresh.group(:from_organization_id).having("COUNT(*) > ?", BULK_LINKS).select(:from_organization_id)
+      fresh.where.not(from_organization_id: bulk).includes(:from_organization, :to_organization).order(verified_at: :desc).filter_map do |link|
           evidence = Evidence.where(subject: link).includes(:source).where.not(quote: [ nil, "" ]).order(:id).first or next
           from, to = link.from_organization, link.to_organization
           verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(link.relationship_type, link.relationship_type.humanize(capitalize: false))
