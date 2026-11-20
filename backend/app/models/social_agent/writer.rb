@@ -11,6 +11,8 @@ class SocialAgent::Writer
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output. Keep the
       source's own qualifier on a deal (an MOU, non-binding, a letter of intent, a framework agreement).
     - Never say what the source doesn't say: no "no further details", "undisclosed" or "did not say".
+    - Call the deal what the source calls it (an MOU is an MOU, not "a collaboration"), and name each party as the source
+      names it, with the relationship it states ("Surbana Jurong Infrastructure, an SJ Group affiliate").
     - Say each thing once. When the facts are short, the post is short: never pad, restate the fact in other words,
       or repeat a name, label or purpose in an extra sentence.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,

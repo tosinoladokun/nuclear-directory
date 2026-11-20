@@ -316,8 +316,9 @@ class SocialAgentTest < ActiveSupport::TestCase
 
   # Today's two shadow drafts (20 Nov), as written.
   PULSAR_TITLE = "NASA Fermi data helps team develop faster pulsar search method".freeze
-  NANO_SOURCE = "NANO Nuclear Energy and SJ Group establish collaboration to advance knowledge exchange and capability building in " \
-    "advanced nuclear energy across Southeast Asia. The non-binding memorandum of understanding sets a phased technical exchange.".freeze
+  NANO_SOURCE = "NANO Nuclear Energy signed a Memorandum of Understanding (MOU) with Surbana Jurong Infrastructure Pte. Ltd., an " \
+    "affiliate of SJ Group, to advance knowledge exchange and capability building in advanced nuclear energy across Southeast Asia. " \
+    "It establishes a non-binding framework for cooperation.".freeze
   NANO_DRAFT = "On 19 November 2026, NANO Nuclear Energy and SJ Group established a collaboration to advance knowledge exchange and " \
     "capability building in advanced nuclear energy across Southeast Asia, NANO Nuclear Energy said.\n\nThe stated focus is knowledge " \
     "exchange and capability building, with advanced nuclear energy as the subject and Southeast Asia as the region. The announcement " \
@@ -334,6 +335,8 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_includes problems, "it says \"no further details\", which its source doesn't"
     assert_includes problems, "it leaves out the source's qualifier (MOU)"
     assert SocialAgent::Rules.repeats?(NANO_DRAFT), "the second paragraph restates the first"
+    assert_includes problems, "it calls it a collaboration, which its source doesn't", "DQ: a signed MOU isn't 'a collaboration'"
+    assert_includes SocialAgent::Rules.qualifiers("They did not say when it starts.", item), "it says \"did not say\", which its source doesn't"
     assert_not SocialAgent::Rules.repeats?("Acme Fission won a DOE award for fuel cladding. The work starts in Idaho next spring with two partners.")
   end
 

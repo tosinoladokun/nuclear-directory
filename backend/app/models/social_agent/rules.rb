@@ -92,12 +92,21 @@ module SocialAgent::Rules
 
   # What the source doesn't say isn't said (GTM, 20 Nov: "provides no further details" was false), and a qualifier the
   # source puts on the deal stays on it (an MOU, a non-binding framework, a letter of intent).
-  ABSENCE = /\b(no further details|did not disclose|didn't disclose|were not disclosed|weren't disclosed|undisclosed|gave no details|no details (were|was) (given|provided))\b/i
+  ABSENCE = Regexp.union([ "no further details", "no other details", "did not disclose", "didn't disclose", "did not say", "didn't say",
+    "not disclosed", "undisclosed", "gave no details", "nothing else", "no details were given", "no details were provided" ]
+    .map { |phrase| /\b#{Regexp.escape(phrase)}\b/i })
   QUALIFIERS = { /memorandum of understanding|\bMOU\b/i => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
-                 /framework agreement/i => "framework agreement" }.freeze
+                 /framework agreement/i => "framework agreement", /\bproposed\b/i => "proposed", /\bplanned\b/i => "planned" }.freeze
+  # A deal word in the post must be the source's own word (DQ: "a collaboration" for a signed MOU).
+  DEAL_WORDS = { "an MOU" => /\bMOUs?\b|memorand(?:um|a) of understanding/i, "a framework" => /\bframeworks?\b/i,
+    "an agreement" => /\bagreements?\b/i, "a partnership" => /\bpartnerships?\b/i, "a collaboration" => /\bcollaborations?\b/i,
+    "a contract" => /\bcontracts?\b/i, "a deal" => /\bdeals?\b/i, "an alliance" => /\balliances?\b/i, "a venture" => /\bventures?\b/i }.freeze
   def qualifiers(text, item)
     found = []
-    found << "it says #{$1.downcase.inspect}, which its source doesn't" if text =~ ABSENCE && !item.source_text.match?(ABSENCE)
+    found << "it says #{$&.downcase.inspect}, which its source doesn't" if text =~ ABSENCE && !item.source_text.match?(ABSENCE)
+    DEAL_WORDS.each do |name, pattern|
+      found << "it calls it #{name}, which its source doesn't" if text.match?(pattern) && !item.source_text.match?(pattern)
+    end
     QUALIFIERS.each do |pattern, name|
       found << "it leaves out the source's qualifier (#{name})" if item.source_text.match?(pattern) && !text.match?(pattern)
     end
