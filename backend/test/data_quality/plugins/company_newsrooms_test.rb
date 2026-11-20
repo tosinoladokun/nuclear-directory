@@ -234,7 +234,7 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
   test "only news about nuclear becomes a claim; a broad company's needs a nuclear word (29 Oct: Amazon Alexa)" do
     item = ->(title) { Plugin::Item.new(title:, url: "https://x/#{title.parameterize}", published_on: TODAY, summary: nil) }
     names = Class.new do
-      def published_names = { "Organization" => [ "Kairos Power", "Constellation Energy Corporation" ] }
+      def published_names = { "Organization" => [ "Kairos Power", "Constellation Energy Corporation" ], "Facility" => [ "Fermi" ] }
       def organization(name:) = { "Cloud Hall" => 1, "Acme Fission" => 2, "Constellation" => 3, "Constellation Energy Corporation" => 3, "Kairos Power" => 4 }[name]&.then { |id| Struct.new(:id).new(id) }
       def role_keys(id) = id == 1 ? %w[data_center_offtaker] : %w[reactor_vendor]
     end.new
@@ -251,6 +251,12 @@ class DataQuality::Plugins::CompanyNewsroomsTest < ActiveSupport::TestCase
     refute listed.send(:about_nuclear?, "Equinix", item.("Equinix Adds Kairos Power Hall")), "broad"
     refute listed.send(:about_nuclear?, "GE Vernova", item.("GE Vernova Wins Wind Order With Kairos Power")), "GE Vernova is broad"
     refute listed.send(:about_nuclear?, "Constellation", item.("Constellation Energy Corporation Names New Board Chair")), "its own legal-name alias isn't another record"
+
+    # NewsItem 70 (DQ, 20 Nov): NASA's general feed; "Fermi" (the telescope) is also a plant's name.
+    fermi = Plugin::Item.new(title: "NASA Science Data Powers New Method to Discover Hard-to-Find Pulsars", url: "https://science.nasa.gov/open-science/fermi-data-pulsar-discovery/",
+      published_on: TODAY, summary: "Open data from NASA’s Fermi mission helped an international team develop a method to find pulsars about a million times faster than before.")
+    refute listed.send(:about_nuclear?, "NASA", fermi), "NASA is broad: a nuclear word is required"
+    assert listed.send(:about_nuclear?, "NASA", item.("NASA Selects Fission Surface Power Designs"))
   end
 
   test "a found feed that isn't a feed is dropped quietly, never sent to a person (Energy Northwest, 2 Nov)" do

@@ -40,7 +40,9 @@ class DataQuality::Plugins::CompanyNewsrooms < DataQuality::Plugin
   # Companies whose news is mostly not nuclear: their items need a nuclear word.
   BROAD = [ "Amazon", "Google", "Alphabet", "Meta", "Microsoft", "Apple", "Oracle", "Nvidia", "Dow", "3M", "Siemens",
     "General Electric", "GE Vernova", "GE Aerospace", "GE HealthCare", "Hitachi", "Honeywell", "Lockheed Martin", "Boeing", "Caterpillar", "Duke Energy", "Southern Company",
-    "Leidos", "Eni", "Entergy", "Samsung", "Equinix", "Crusoe", "Switch", "Curtiss-Wright", "Kiewit", "Hyundai" ].freeze
+    "Leidos", "Eni", "Entergy", "Samsung", "Equinix", "Crusoe", "Switch", "Curtiss-Wright", "Kiewit", "Hyundai",
+    # NASA's general feed is mostly space science; "Fermi" (the telescope) read as a record we have (DQ, 20 Nov).
+    "NASA", "National Aeronautics and Space Administration" ].freeze
   # A publisher only in these roles isn't a nuclear company: its items need a nuclear word too (DQ).
   NON_NUCLEAR_ROLES = %w[data_center_offtaker venture_capital].freeze
   WINDOW_DAYS = 60
