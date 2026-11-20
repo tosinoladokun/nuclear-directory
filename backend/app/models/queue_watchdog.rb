@@ -70,8 +70,8 @@ class QueueWatchdog
   # down) is queued once, for that run time (#811 auto-fix; Solid Queue records each run time once, so never twice).
   LATE = 15.minutes
   MAX_LATE = 1.day
-  # Too heavy to run in the day on its own say-so (DQ, memory): the nightly crawl waits for its next night.
-  NO_CATCH_UP = %w[daily_crawl].freeze
+  # Too heavy to run in the day on its own say-so (DQ, Infra: memory): the nightly crawl and the checker wait for their next night.
+  NO_CATCH_UP = %w[daily_crawl dq_checker].freeze
 
   def catch_up
     paused = SolidQueue::Pause.pluck(:queue_name)
