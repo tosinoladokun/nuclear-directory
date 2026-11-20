@@ -94,4 +94,14 @@ class QueueWatchdogTest < ActiveSupport::TestCase
   ensure
     PipelineHealthJob.alerts = nil
   end
+
+  test "a failing alert never stops the restart (Infra)" do
+    worker(NOW - 11.minutes)
+    Autopilot::Alert.singleton_class.alias_method(:original_raise!, :raise!)
+    Autopilot::Alert.define_singleton_method(:raise!) { |*, **| raise "mail down" }
+    assert_equal :restart, tick
+    assert_equal 1, @stopped
+  ensure
+    Autopilot::Alert.singleton_class.alias_method(:raise!, :original_raise!)
+  end
 end

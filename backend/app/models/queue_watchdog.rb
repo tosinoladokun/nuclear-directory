@@ -40,10 +40,16 @@ class QueueWatchdog
   def tick
     problem = @health.problem
     if restart?
-      Rails.error.report(RuntimeError.new("Solid Queue worker in this process stopped; restarting the process"), handled: true)
-      Autopilot::Alert.raise!(KEY, title: "The job queue's worker stopped; the web process restarts itself",
-        body: "#{problem || 'This process has no working job worker'}.\n\nSee Admin > Health.", deliver_now: true)
-      stopper.call
+      # Saying so may fail (mail, Sentry); the restart happens anyway (Infra).
+      begin
+        Rails.error.report(RuntimeError.new("Solid Queue worker in this process stopped; restarting the process"), handled: true)
+        Autopilot::Alert.raise!(KEY, title: "The job queue's worker stopped; the web process restarts itself",
+          body: "#{problem || 'This process has no working job worker'}.\n\nSee Admin > Health.", deliver_now: true)
+      rescue StandardError => error
+        Rails.logger.error("[queue_watchdog] couldn't report the restart: #{error.class}: #{error.message}")
+      ensure
+        stopper.call
+      end
       return :restart
     end
 
