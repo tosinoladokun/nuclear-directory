@@ -60,6 +60,8 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("Acme Fission won a DOE award."), fetcher: OK_FETCHER.new(200)), "Saturday"
     SocialPost.create!(platform: "linkedin", status: "posted", subject: @news, created_at: MONDAY - 10.days)
     assert_nil run_x("Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
+    stopped = CrawlRun.where(source_kind: SocialAgent::STOPPED).where("stats ? 'stopped'").order(:id).map { |run| run.stats.values_at("platform", "stopped") }
+    assert_equal [ [ "x", "switched off in Admin > Posts" ], [ "x", "a weekend" ], [ "x", "no fresh item" ] ], stopped, "every silent run says why (PM)"
   end
 
   test "a newly added company is used when there's no fresh news" do

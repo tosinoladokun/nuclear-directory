@@ -24,16 +24,19 @@ module SocialAgent
   # One post for the platform, or nil when it's off, it's a weekend, today's is done, or there's nothing fresh.
   def self.run(platform, now: Time.current, writer: nil, fetcher: nil)
     channel = SocialChannel.for(platform)
-    return if channel.off? || now.in_time_zone(ZONE).on_weekend? || SocialAgent::Rules.holiday?(now.in_time_zone(ZONE).to_date)
+    # Every run that writes no post says why (PM, shadow day 20 Nov: silence looked like a failure).
+    return stopped(platform, now, "switched off in Admin > Posts") if channel.off?
+    return stopped(platform, now, "a weekend") if now.in_time_zone(ZONE).on_weekend?
+    return stopped(platform, now, "a holiday") if SocialAgent::Rules.holiday?(now.in_time_zone(ZONE).to_date)
     if SocialAgent::Buffer.budget_spent?
       reason = "Buffer's 30-day request allowance is #{(SocialAgent::Buffer::ALERT_AT * 100).round}% used"
       SocialChannel.where(platform: SocialChannel::PLATFORMS).find_each { |each| each.update!(mode: "off", paused_reason: reason) }
-      return
+      return stopped(platform, now, reason)
     end
     # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
-    return if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
+    return stopped(platform, now, "today's post is done") if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
 
-    item = SocialAgent::Picker.new(platform:, now:).call or return
+    item = SocialAgent::Picker.new(platform:, now:).call or return stopped(platform, now, "no fresh item")
     post = SocialPost.new(platform:, subject: item.subject, source_url: item.source_url, source_quote: item.source_quote,
       organization_ids: item.organization_ids, link: link(item, platform))
     # Built only now (Copilot): a missing model setting never stops a day with nothing to post.
@@ -42,6 +45,15 @@ module SocialAgent
     return post.tap { |draft| draft.update!(status: "drafted") } unless channel.live? && sending_enabled?
 
     send_post(post, now:)
+  end
+
+  STOPPED = "social_agent".freeze
+
+  # A run that wrote no post, kept as a finished run with its platform and why (shown in /api/dq/social_posts). nil.
+  def self.stopped(platform, now, why)
+    CrawlRun.create!(source_kind: STOPPED, stage: "verify", status: "succeeded", started_at: now, finished_at: now,
+      stats: { "platform" => platform, "stopped" => why })
+    nil
   end
 
   # Drafts and checks the post; the problems, empty when it passes. A model or budget error stops this post, logged,
