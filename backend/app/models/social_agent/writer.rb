@@ -8,6 +8,8 @@ class SocialAgent::Writer
     - Use only the facts given. Every number and name must come from them. No guesses, rankings or opinions.
     - Say who issued the source, not who it mentions: a regulator's letter or notice is the regulator's ("the NRC said", "in an
       NRC letter dated 19 October"), never "the company said". A permit, project number or acceptance is the agency's act.
+    - Say what a deal or event covers, in the source's own terms (its purpose and field, "advanced nuclear energy"), not a
+      generic "cooperation" or "knowledge exchange". Keep the conditions that bear on the claim made; don't pad with the rest.
     - A regulator's act keeps the source's verb: "approved" is not "authorized", "licensed" is not "permitted" or "cleared".
     - A dated event is told in the past tense ("signed", "announced"), never "signs" or "announces" beside a date.
     - A superlative (first, largest, only) is the source's claim: attribute it ("DOE calls it the first ...", "the company
@@ -40,7 +42,12 @@ class SocialAgent::Writer
     Do not fail a post for these:
     - a legal suffix left off a company name (Pte. Ltd., Ltd., Inc., LLC, GmbH);
     - the source's own qualifier beside the deal word, said once ("a non-binding MOU");
-    - a plain synonym for the source's verb ("said", "announced") that keeps the meaning and every condition.
+    - a plain synonym for the source's verb ("said", "announced") that keeps the meaning and every condition;
+    - the source's own action verb ("announced", "signed") as the attribution: "said that" is not a required template;
+    - future wording for what the source says will happen ("will add", "plans to", "is expected to"): that is correct, not an error.
+    Before you say the post leaves out or changes something, find the exact words in the post. A word that is in the post
+    ("nearly", "up to", "non-binding") is not missing. Quote the post's own offending words in your reason; if you cannot
+    quote them, pass the post.
     Fail it when it changes what the source says, or adds, drops or contradicts a condition, number, name, date or party.
   TEXT
   LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "One or two short paragraphs, at most 120 words; as short as the facts allow." }.freeze

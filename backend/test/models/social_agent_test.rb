@@ -524,6 +524,11 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match(/Do not fail a post for these/, seen.last)
     assert_match(/non-binding MOU/, seen.last)
     assert_match(/Fail it when it changes what the source says/, seen.last, "real changes still fail")
+    assert_match(/A word that is in the post\s+\("nearly"/, seen.last, "a qualifier that is present isn't missing (GTM, 20 Nov)")
+    assert_match(/future wording for what the source says will happen/, seen.last)
+    assert_match(/Quote the post's own offending words/, seen.last)
+    assert_match(/"said that" is not a required template/, seen.last)
+    assert_match(/Say what a deal or event covers/, seen.first)
   end
 
   test "the consistency table shows each item's PASS/BLOCK history, flags the flaky and marks only 3 straight passes ready (PM, 20 Nov)" do
