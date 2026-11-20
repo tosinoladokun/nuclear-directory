@@ -63,8 +63,15 @@ module SocialAgent::Rules
       own = (site.include?("/") ? host(site) : site).delete_prefix("www.")
       own.present? && (host == own || host.end_with?(".#{own}"))
     end
+    return false if host.match?(OUTLETS)
+
     own_site || publishers_site?(host, item.facts["publisher"]) || known_domain?(host, item)
   end
+
+  # News outlets and wires are never primary, whatever their name (DQ: a wire copy isn't the issuer's own site).
+  OUTLETS = /(\A|\.)(prnewswire|businesswire|globenewswire|einpresswire|accesswire|newswire|newsfilecorp|prweb|reuters|apnews|bloomberg|
+    world-nuclear-news|neimagazine|ans|utilitydive|powermag|eenews|energy-reporters|nucnet|power-eng|powerengineeringint|
+    nuclearnewswire|ft|wsj|nytimes|washingtonpost|cnbc|forbes|yahoo|marketwatch|seekingalpha)\.(com|org|net|co\.uk)\z/x
 
   # The site is a company's known domain or website in the directory (pending too: a company not yet listed, PM 20 Nov),
   # and that company is the item's publisher or one it names.

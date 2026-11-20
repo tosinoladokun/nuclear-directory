@@ -195,6 +195,11 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert SocialAgent::Rules.primary?(item.("https://www.nuscalepower.com/news/1", "NuScale Power, Inc."))
     assert_not SocialAgent::Rules.primary?(item.("https://deepisolation-news.example/x", "Deep Isolation"))
     assert_not SocialAgent::Rules.primary?(item.("https://www.prnewswire.com/news/x", "Deep Isolation"))
+    # An outlet or wire named as its own publisher is still not primary (DQ).
+    assert_not SocialAgent::Rules.primary?(item.("https://www.prnewswire.com/news/x", "PR Newswire"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.world-nuclear-news.org/articles/x", "World Nuclear News"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.reuters.com/x", "Reuters"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.ans.org/news/x", "ANS"))
 
     # A company the directory knows (pending too), named as the publisher, on its recorded website (PM).
     Organization.create!(name: "Borehole Energy", website: "https://www.boreholeco.example", verification_status: "pending")
