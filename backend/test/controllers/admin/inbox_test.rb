@@ -254,6 +254,18 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_equal Admin::InboxController::SELECTED_YES, VerificationEvent.where(subject: @new_co, to_status: "verified").last&.reason
   end
 
+  test "a selection can't string an unchecked claim onto a checked row; a call changed since the page loaded is checked again under the lock (Copilot)" do
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id},#{@change.id}" ] }
+    assert_match "no longer in the inbox", flash[:alert]
+    assert @change.reload.status_matched?, "the unchecked change rode nothing"
+
+    @create.update_columns(dq_recommendation: "reject", dq_reason: "changed its mind")
+    assert_equal "Data Quality says no", DataQuality::Review.approve([ @create.id ], by: "human:tosin",
+      safe_check: ->(claim) { claim.reload; DataQuality::Recommendations.says_no?(claim) ? "Data Quality says no" : nil }).sole.errors.first.to_s[/Data Quality says no/]
+    assert_not @new_co.reload.verified?
+  end
+
   test "an empty selection does nothing" do
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "" ] }
     assert_equal "Tick at least one row first.", flash[:alert]
