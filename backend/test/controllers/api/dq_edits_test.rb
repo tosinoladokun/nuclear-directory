@@ -84,10 +84,12 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
   test "the source must be on the item's own site; a long headline or summary is refused (Infra)" do
     edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://elsewhere.example/x")
     assert_match "item's own site", response.parsed_body["results"].sole["error"]
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://ir.example.org/releases/2")
+    assert response.parsed_body["results"].sole["ok"], "the same registrable domain (an IR subdomain) counts (DQ)"
     edit(values: { summary: "x" * 401 }, reason: "r", source_url: "https://example.org/news/2")
     assert_match "at most 400", response.parsed_body["results"].sole["error"]
     edit(values: { headline: "y" * 81 }, reason: "r", source_url: "https://example.org/news/2")
     assert_match "at most 80", response.parsed_body["results"].sole["error"]
-    assert_equal "Acme gets an exemtpion", @item.reload.headline
+    assert_equal "Acme gets an exemption", @item.reload.headline
   end
 end

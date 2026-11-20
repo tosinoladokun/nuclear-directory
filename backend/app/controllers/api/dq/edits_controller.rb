@@ -44,6 +44,14 @@ class Api::Dq::EditsController < ActionController::API
   private
     def host(url) = (URI.parse(url).host.to_s.downcase.delete_prefix("www.") rescue "")
 
+    # A host's registrable domain: its last two labels, or three under a
+    # country's second level (co.uk, gov.au).
+    def site(url)
+      labels = host(url).split(".")
+      keep = labels.size > 2 && labels[-1].length == 2 && %w[co com gov ac org net edu].include?(labels[-2]) ? 3 : 2
+      labels.last(keep).join(".")
+    end
+
     def done_today
       VerificationEvent.where(subject_type: "NewsItem", by: BY, created_at: Time.current.all_day).count +
         TakeoffProposal.where(proposed_by: BY, created_at: Time.current.all_day).count
@@ -65,8 +73,9 @@ class Api::Dq::EditsController < ActionController::API
 
       # The right text comes from the item's own page: the source is on its site (Infra).
       item = NewsItem.find_by(id:) or return { id:, ok: false, error: "no news item #{id}" }
-      unless host(source) == host(item.url)
-        return { id:, ok: false, error: "source_url must be on the item's own site (#{host(item.url)})" }
+      # The same registrable domain: a release on the company's IR subdomain counts (DQ).
+      unless site(source).present? && site(source) == site(item.url)
+        return { id:, ok: false, error: "source_url must be on the item's own site (#{site(item.url)})" }
       end
 
       result = DataQuality::Review.edit_news(id:, by: BY, reason: row["reason"].to_s.strip, attributes: row["values"].to_h, context: { "source_url" => source })
