@@ -12,3 +12,12 @@ namespace :social do
     puts "Report: tmp/rehearsal/#{stamp}.md"
   end
 end
+
+namespace :social do
+  desc "Load the directory's public updates feed into this (empty, local) database for social:rehearse"
+  task load_public: :environment do
+    abort "Local only: never in production" if Rails.env.production?
+    loaded = SocialRehearsal::PublicLoad.new.call
+    puts "Loaded #{loaded.news} news items and #{loaded.links} links; skipped #{loaded.skipped.size}: #{loaded.skipped.first(10).join('; ')}"
+  end
+end

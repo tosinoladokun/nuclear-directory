@@ -10,6 +10,11 @@ class SocialAgent::Writer
       publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output. Keep the
       source's own qualifier on a deal (an MOU, non-binding, a letter of intent, a framework agreement).
+    - Say what the source says it did, with its own verb and tense; use "said" for the publisher, never "announced",
+      "approved" or another status word the source doesn't use, and never "said it announced".
+    - The date in the facts is when the source published the item: write "<publisher> said on <date> that ...",
+      and give any other date only as the source states it (a deadline, a closing date).
+    - Keep the conditions the source puts on what it reports (subject to approvals, does not commit to a project).
     - Never say what the source doesn't say: no "no further details", "undisclosed" or "did not say".
     - Call the deal what the source calls it (an MOU is an MOU, not "a collaboration"), and name each party as the source
       names it, with the relationship it states ("Surbana Jurong Infrastructure, an SJ Group affiliate"). A legal suffix
@@ -41,7 +46,7 @@ class SocialAgent::Writer
     facts = item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")
     @client.structured(role: :extract, schema: DRAFT, schema_name: "post", crawl_run:, messages: [
       { role: "system", content: "#{RULES}\n#{LENGTH.fetch(platform)}" },
-      { role: "user", content: "Facts:\n#{facts}\n\nSource's words:\n#{item.source_quote}" }
+      { role: "user", content: "Facts:\n#{facts}\n\nSource's words:\n#{item.source_quote}\n#{item.page_text}" }
     ]).data.fetch("text").strip
   end
 
@@ -49,8 +54,9 @@ class SocialAgent::Writer
   def voice_ok?(text, item, crawl_run: nil)
     data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
-        "states nothing the facts don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}\n#{NITS}" },
-      { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\nPost:\n#{text}" }
+        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}\n#{NITS}" },
+      { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\n" \
+        "Source's words:\n#{item.source_quote}\n#{item.page_text}\n\nPost:\n#{text}" }
     ]).data
     [ data["pass"] == true, data["reason"] ]
   end
