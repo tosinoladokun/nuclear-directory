@@ -20,4 +20,16 @@ class Api::DqSocialPostsTest < ActionDispatch::IntegrationTest
     get api_dq_social_posts_path
     assert_response :unauthorized
   end
+
+  test "a run that wrote no post is listed with why: switched off, or nothing fresh (PM: never silence)" do
+    SocialChannel.for("x").update!(mode: "off")
+    SocialChannel.for("linkedin").update!(mode: "drafts")
+    monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
+    travel_to(monday) do
+      assert_nil SocialAgent.run("x")
+    end
+    get api_dq_social_posts_path, params: { since: "2026-11-23" }, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    runs = response.parsed_body["runs"]
+    assert_includes runs.map { |run| run.values_at("platform", "stopped") }, [ "x", "switched off in Admin > Posts" ]
+  end
 end
