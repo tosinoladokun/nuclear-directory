@@ -578,6 +578,9 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal 1, wrong.size
     assert_match(/but its source is a government document/, wrong.first)
     assert_empty SocialAgent::Rules.speaker_problems("The NRC said on 19 October 2026 it assigned Leapfrog Nuclear project number 99902187.", nrc), "the agency speaks"
+    nasa = rules_item(facts: { "companies" => "NASA", "publisher" => "NASA" }).with(source_url: "https://science.nasa.gov/centers-and-facilities/glenn/x")
+    assert_empty SocialAgent::Rules.speaker_problems("NASA said on 17 November 2026 its student challenge kicked off.", nasa), "the agency speaking about itself"
+    assert_empty SocialAgent::Rules.people("Seadrift Operations is the site.", rules_item(quote: "Dow's Seadrift Operations site in Texas.")), "Operations makes it a facility, not a person"
     company_page = rules_item(facts: { "companies" => "Leapfrog Nuclear" }).with(source_url: "https://leapfrog.example/news")
     assert_empty SocialAgent::Rules.speaker_problems("Leapfrog Nuclear said it signed.", company_page), "a company's own release is its own"
 

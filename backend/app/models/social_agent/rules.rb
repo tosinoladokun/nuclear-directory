@@ -49,7 +49,7 @@ module SocialAgent::Rules
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
   ARTICLES = %w[The A An This That These Those].freeze
   NOT_PERSON = %w[Pte Ltd Limited GmbH AG PLC SA Inc Corp Infrastructure Challenge Summit Prize Award Conference Forum Initiative
-    Mission Facility Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
+    Mission Facility Operations Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
     Authority University Institute Corporation Company Inc LLC Power Station Plant Unit Units Reactor Project Program Federal Register
     Fund Bank Group Energy Fuel Fuels Technologies Systems Services Holdings Partners Capital Industries Electric Utility Council
     Board Court Congress Senate House Army Navy Air Force Generating Clean Center Centre Site County City River Lake Valley].freeze
@@ -175,7 +175,9 @@ module SocialAgent::Rules
     return [] unless host(item.source_url).delete_prefix("www.").match?(PRIMARY_HOSTS)
 
     names = item.facts["companies"].to_s.split(", ").compact_blank + item.organization_ids.then { |ids| Organization.where(id: ids).pluck(:name) }
-    names.uniq.filter_map do |name|
+    # The agency itself speaking is fine: NASA on nasa.gov, DOE on energy.gov (the publisher, or a name in the host).
+    own = [ item.facts["publisher"].to_s.downcase, host(item.source_url) ]
+    names.uniq.reject { |name| own.first == name.downcase || own.last.delete("-").include?(name.downcase.delete(" ")) }.filter_map do |name|
       next unless text.match?(/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}#{SPEECH}/i)
 
       "it says #{name} #{text[/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}(#{SPEECH.source})/i, 1].to_s.downcase}, but its source is a government document: say who issued it (\"the NRC said\", \"in an NRC letter\")"

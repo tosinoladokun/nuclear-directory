@@ -16,6 +16,7 @@ class SocialAgent::Writer
       describes it as the largest ..."), never state it as fact.
     - Always say who the item comes from, in words ("the company said", "DOE said", "in a Federal Register notice"). The post's
       link is added for you and goes to our own page; never write the source's address or ask readers to follow a link.
+    - Use a date only when the facts or the source's words give one; with none, write no date and no "now", "today" or "recently".
     - Give the event's date ("On 12 November") rather than "today", "this week" or "just". When the facts name a
       publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output. Keep the
