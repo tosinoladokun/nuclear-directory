@@ -354,4 +354,21 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal :unconfirmed, found[startup.id].outcome, "a startup must state nuclear work"
     assert_equal [ { "verdict" => "not_nuclear" } ], CrawlRun.where("stats->>'site_for' = ?", startup.id.to_s).sole.stats["checked"]
   end
+
+  test "a lead a person typed may show its nuclear work on another page of its site; a found one may not (DQ, 20 Nov: Fluor)" do
+    home = "https://www.fluor.example"
+    stub_request(:get, "#{home}/robots.txt").to_return(status: 404)
+    stub_request(:get, "#{home}/").to_return(body: %(<html><body><p>Fluor builds plants for energy and chemicals.</p><a href="/markets/nuclear">Nuclear power</a><a href="/careers">Careers</a></body></html>),
+      headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "#{home}/markets/nuclear").to_return(body: "<html><body><p>Fluor has built nuclear reactors for decades.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    typed = Plugin.call(lead("fluor", url: home).id, finder: finder)
+    assert_equal :proposed, typed.outcome, typed.reason
+    assert_equal "Fluor has built nuclear reactors for decades.", Candidate.find(typed.candidate_id).quote
+    assert_not_requested :get, "#{home}/careers"
+
+    Candidate.delete_all
+    found = Plugin.call(Lead.sighted!(name: "Fluor", kind: "company", key: "trade_press:fluor", label: "Trade press", url: home).id, finder: finder)
+    assert_equal :unconfirmed, found.outcome, "only person-added leads look past the home page"
+    assert_match "nuclear work", found.reason
+  end
 end
