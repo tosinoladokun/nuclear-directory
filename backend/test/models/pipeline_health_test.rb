@@ -140,4 +140,11 @@ class PipelineHealthTest < ActiveSupport::TestCase
     IndexNowSubmission.create!(urls: 3, accepted: true)
     assert_nil PipelineHealth.new(now: NOW).checks["indexnow-refused"]
   end
+
+  test "a database restart in the last day is named with its time; older is fine (Infra)" do
+    started = ActiveRecord::Base.connection.select_value("select pg_postmaster_start_time()")
+    started = Time.zone.parse(started.to_s) unless started.respond_to?(:utc)
+    assert_match(/\AThe database restarted at \d\d:\d\d UTC/, PipelineHealth.new(now: started + 1.hour).checks["db-restarted"])
+    assert_nil PipelineHealth.new(now: started + 25.hours).checks["db-restarted"]
+  end
 end
