@@ -186,6 +186,15 @@ class SocialAgentTest < ActiveSupport::TestCase
       SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
   end
 
+  test "a news item's publisher on its own site is a primary source; a look-alike isn't (DQ, shadow day)" do
+    item = ->(url, publisher) { SocialAgent::Item.new(subject: @news, kind: "news", facts: { "publisher" => publisher }, source_url: url, path: "/",
+      organization_ids: [], source_quote: "q") }
+    assert SocialAgent::Rules.primary?(item.("https://deepisolation.com/press/otcqx", "Deep Isolation"))
+    assert SocialAgent::Rules.primary?(item.("https://www.nuscalepower.com/news/1", "NuScale Power, Inc."))
+    assert_not SocialAgent::Rules.primary?(item.("https://deepisolation-news.example/x", "Deep Isolation"))
+    assert_not SocialAgent::Rules.primary?(item.("https://www.prnewswire.com/news/x", "Deep Isolation"))
+  end
+
   test "a month's post count is a backstop" do
     live!
     ENV["SOCIAL_MONTHLY_MAX"] = "1"
