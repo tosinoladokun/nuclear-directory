@@ -172,6 +172,13 @@ class OwnerInbox
     end
   end
 
+  # Judged for a bulk Yes (#777): Data Quality's own approve, still current, never contradicted, its quote still in its
+  # page. Yes to all and Approve selected take only these; anything else is decided on its own row.
+  def self.judged?(candidate)
+    candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
+      !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate)
+  end
+
   def self.quote_in_source?(candidate)
     return false if candidate.quote.blank?
 
@@ -255,10 +262,7 @@ class OwnerInbox
     # even where the checker doubted (PM, 27 Oct); the row shows both. Never
     # a claim the checker contradicted with a different value, and only while
     # its quote is still in the source, as Accept checks.
-    def checked?(candidate)
-      candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
-        !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate)
-    end
+    def checked?(candidate) = self.class.judged?(candidate)
 
     def quote_in_source?(candidate) = self.class.quote_in_source?(candidate)
 end

@@ -186,6 +186,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
   end
 
   test "decide selected (#771): every row ticked is decided as if clicked on its own, and one that stops doesn't stop the rest" do
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page\n#{@change.id} approve: its own page", by: "human:dq")
     get admin_inbox_path
     assert_select "#inbox-item-#{@create.id} input[type=checkbox][form=inbox-selected][value=?]", "claim:#{@create.id}"
     assert_select "form#inbox-selected button", /Create \/ Approve selected/
@@ -223,6 +224,19 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@change.id}" ] }
     assert_match "Data Quality says no", flash[:alert]
     assert @change.reload.status_matched?
+  end
+
+  test "a claim Data Quality hasn't checked has no box and is never approved in a selection (#777)" do
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@create.id} input[name='selected[]']", 0, "not judged yet"
+    post admin_inbox_decide_selected_path, params: { decision: "yes", selected: [ "claim:#{@create.id}" ] }
+    assert_match "Data Quality hasn't checked it", flash[:alert]
+    assert_not @new_co.reload.verified?
+    assert @create.reload.status_matched?
+
+    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page", by: "human:dq")
+    get admin_inbox_path
+    assert_select "#inbox-item-#{@create.id} input[name='selected[]']", 1, "checked: it can be selected"
   end
 
   test "an empty selection does nothing" do

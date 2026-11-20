@@ -69,8 +69,8 @@
       <% entries.each do |entry| %>
         <% item = entry.item %>
         <li class="nd-wait nd-inbox__item" id="inbox-item-<%= item.candidate_id %>">
-          <%# Data Quality said no: decided on its own row only (DQ, 12 Nov). %>
-          <% if entry.ids.any? { |id| said_no.key?(id) } %>
+          <%# Data Quality said no, or hasn't checked it: decided on its own row only (DQ, 12 Nov; #777). %>
+          <% if entry.ids.any? { |id| said_no.key?(id) } || !entry.checked %>
             <span class="nd-check" aria-hidden="true"></span>
           <% else %>
             <input type="checkbox" class="nd-check" name="selected[]" value="claim:<%= entry.ids.join(",") %>" form="inbox-selected" data-section="<%= key %>"
