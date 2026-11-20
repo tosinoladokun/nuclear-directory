@@ -58,6 +58,47 @@ class PublicRateLimitTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "link-preview bots and our own monitors get 200 well past the per-IP limit (posts keep their cards)" do
+    {
+      "LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)" => "linkedin",
+      "Twitterbot/1.0" => "x",
+      "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" => "facebook",
+      "Mozilla/5.0 (compatible; BufferLinkPreviewBot/1.0)" => "buffer",
+      "Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)" => "uptimerobot",
+      "nd-uptime/1" => "nd-uptime",
+      "NuclearDirectoryBot/0.1 (+https://nuclear-directory.org/bot)" => "nd-bot"
+    }.each_key do |agent|
+      PublicRateLimit::STORE.clear
+      assert_equal 200, hit(PublicRateLimit::LIMIT * 2, "User-Agent" => agent), agent
+    end
+  end
+
+  test "a scraper faking a preview bot still stops at the family's own limit" do
+    assert_equal 200, hit(PublicRateLimit::FRIENDLY_LIMIT, "User-Agent" => "Twitterbot/1.0")
+    get "/about", headers: { "User-Agent" => "Twitterbot/1.0", "REMOTE_ADDR" => "10.0.0.7" }
+    assert_response :too_many_requests
+  end
+
+  test "one count across all public pages, not one per controller (Copilot)" do
+    hit(PublicRateLimit::LIMIT)
+    get "/"
+    assert_response :too_many_requests
+  end
+
+  test "an IPv6 crawler's forward lookup matches in any written form (Copilot)" do
+    with_dns({ "2001:4860:4801:0010:0000:0000:0000:0001" => "crawl.googlebot.com" }, { "crawl.googlebot.com" => [ "2001:4860:4801:10::1" ] }) do
+      assert PublicRateLimit.verified_search_bot?("2001:4860:4801:0010:0000:0000:0000:0001", "Googlebot/2.1")
+    end
+  end
+
+  test "a signed-in admin isn't limited; once the session is revoked, its signed cookie no longer exempts (Copilot)" do
+    sign_in_as users(:admin)
+    assert_equal 200, hit(PublicRateLimit::LIMIT + 5)
+    Session.delete_all
+    PublicRateLimit::STORE.clear
+    assert_equal 429, hit(PublicRateLimit::LIMIT + 1)
+  end
+
   private
     def capture_log
       io = StringIO.new
