@@ -65,6 +65,7 @@ Rails.application.routes.draw do
     # Whether the pipeline runs alone (#811).
     get "health" => "health#show", as: :health
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
+    post "social/draft_now" => "social#draft_now", as: :social_draft_now
     # Change your password (#783).
     resource :password, only: %i[edit update]
     # Admin v2 (#201): Overview, Sources, Checks (where claims and pending
