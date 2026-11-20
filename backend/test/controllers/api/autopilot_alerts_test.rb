@@ -4,8 +4,12 @@ require "test_helper"
 class Api::AutopilotAlertsTest < ActionDispatch::IntegrationTest
   TOKEN = "alerts-token"
 
-  setup { ENV["DQ_AGENT_TOKEN_DIGEST"] = Digest::SHA256.hexdigest(TOKEN) }
-  teardown { ENV.delete("DQ_AGENT_TOKEN_DIGEST") }
+  setup do
+    ENV["AUTOPILOT_READ_TOKEN_DIGEST"] = Digest::SHA256.hexdigest(TOKEN)
+    ENV["DQ_AGENT_TOKEN_DIGEST"] = Digest::SHA256.hexdigest("dq-token")
+  end
+
+  teardown { ENV.delete("AUTOPILOT_READ_TOKEN_DIGEST"); ENV.delete("DQ_AGENT_TOKEN_DIGEST") }
 
   test "open and recently resolved alerts with their owner; nothing without the token" do
     AutopilotAlert.create!(key: "unchecked-claims", title: "152 company claims have no verdict yet", opened_at: 1.hour.ago)
@@ -20,5 +24,7 @@ class Api::AutopilotAlertsTest < ActionDispatch::IntegrationTest
 
     get api_autopilot_alerts_path
     assert_response :unauthorized
+    get api_autopilot_alerts_path, headers: { "Authorization" => "Bearer dq-token" }
+    assert_response :unauthorized, "its own read token, never DQ's"
   end
 end

@@ -114,10 +114,20 @@ class QueueWatchdogTest < ActiveSupport::TestCase
       SolidQueue::RecurringTask.create!(key: "often_test", class_name: "PageWarmJob", schedule: "every 5 minutes", static: true)
       SolidQueue::RecurringTask.create!(key: "daily_crawl", class_name: "PageWarmJob", schedule: "every day at 9am UTC", static: true)
       watchdog = QueueWatchdog.new(booted: NOW - 1.hour, now: NOW)
+      SolidQueue::RecurringTask.create!(key: "daily_test_2", class_name: "PageWarmJob", schedule: "every day at 8am UTC", static: true)
+      assert_equal [ "daily_test_2" ], watchdog.catch_up, "one a tick, oldest first (Infra)"
       assert_equal [ "daily_test" ], watchdog.catch_up
       assert_empty watchdog.catch_up, "never twice for the same run time"
     end
   ensure
     PageWarmJob.queue_adapter = adapter
+  end
+
+  test "nothing is caught up into a paused queue (Infra)" do
+    travel_to NOW do
+      SolidQueue::RecurringTask.create!(key: "daily_paused", class_name: "PageWarmJob", schedule: "every day at 9am UTC", static: true)
+      SolidQueue::Pause.create!(queue_name: PageWarmJob.queue_name)
+      assert_empty QueueWatchdog.new(booted: NOW - 1.hour, now: NOW).catch_up
+    end
   end
 end
