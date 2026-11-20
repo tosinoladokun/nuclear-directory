@@ -9,6 +9,9 @@ class InboxClearRepairTest < ActiveSupport::TestCase
   READ = Time.utc(2026, 11, 20, 17, 46)
 
   setup do
+    # The fixtures are decisions made BEFORE the step's read (17:46 UTC): created at a fixed earlier time, so the tests
+    # don't depend on when they run; the step then runs after the cutoff, as it does at deploy.
+    travel_to Time.utc(2026, 11, 20, 18)
     NewsItem.where(id: [ 68, 69 ]).destroy_all
     @sj = NewsItem.create!(id: 69, url: InboxClearRepair::NANO_SJ[:url], title: "NANO Nuclear Energy and SJ Group Establish Collaboration",
       headline: InboxClearRepair::NANO_SJ[:was], published_on: Date.new(2026, 11, 19), publisher: "NANO Nuclear Energy",
@@ -44,6 +47,9 @@ class InboxClearRepairTest < ActiveSupport::TestCase
 
     @moltex = Organization.create!(id: InboxClearRepair::MOLTEX[:id], name: "Moltex Energy", legal_name: "Moltex Energy Limited", hq_city: "Wilmington",
       hq_state: "DE", verification_status: "verified", verified_by: BY, verified_at: Time.utc(2026, 11, 20, 19, 35))
+    # Every decision above was made before the read; the step runs after the cutoff, as it does at deploy.
+    VerificationEvent.update_all(created_at: READ)
+    travel_to Time.utc(2026, 11, 21, 12)
   end
 
   def run_it = InboxClearRepair.new(reason: "deploy abc1234, PR #1").tap(&:up)
@@ -122,12 +128,10 @@ class InboxClearRepairTest < ActiveSupport::TestCase
   end
 
   test "a same-reviewer edit of the NANO item after the read (it keeps verified_at) is left alone" do
-    travel_to Time.utc(2026, 11, 21, 12) do
-      Directory::FactWriter.write("news_item", { id: 69, summary: "Tosin's own correction." },
-        verification: { status: "verified", by: BY, reason: "his edit" }, protect_human_verified: false)
-      @sj.update_columns(verified_at: READ)
-      run_it
-    end
+    Directory::FactWriter.write("news_item", { id: 69, summary: "Tosin's own correction." },
+      verification: { status: "verified", by: BY, reason: "his edit" }, protect_human_verified: false)
+    @sj.update_columns(verified_at: READ)
+    run_it
     assert_equal "Tosin's own correction.", @sj.reload.summary
     assert_equal InboxClearRepair::NANO_SJ[:was], @sj.headline
   end
