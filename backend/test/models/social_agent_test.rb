@@ -542,6 +542,7 @@ class SocialAgentTest < ActiveSupport::TestCase
       assert_includes table, "| x | https://a.example/0 | PPPB | flaky |  |"
       assert_includes table, "| x | https://a.example/1 | BPPP | flaky | ready |", "passed its last three rounds, but a block earlier"
       assert_includes table, "| x | https://a.example/2 | PPPP |  | ready |"
+      assert_includes table, "Items ready (3 of 3 runs, fixtures excluded): 2"
     end
   end
 

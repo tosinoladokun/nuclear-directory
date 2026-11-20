@@ -66,6 +66,7 @@ class SocialAgent::Rehearsal
   # blocked, . not drawn that round. Flaky = both passed and blocked at least once; ready = passed its last 3 rounds.
   def self.consistency(files)
     rounds = files.sort.map { |file| JSON.parse(File.read(file)) }
+    fixture_keys = rounds.flatten.select { |row| row["label"].to_s.start_with?("fixture:") }.map { |row| row["source_url"].presence || row["label"] }.to_set
     keys = rounds.flatten.map { |row| [ row["platform"], row["source_url"].presence || row["label"] ] }.uniq
     rows = keys.map do |platform, key|
       history = rounds.map do |round|
@@ -75,7 +76,9 @@ class SocialAgent::Rehearsal
       drawn = history.delete(".")
       [ platform, key, history, (drawn.include?("P") && drawn.include?("B")) ? "flaky" : "", drawn.last(3) == "PPP" ? "ready" : "" ]
     end
-    lines = [ "# Per-item consistency (#{rounds.size} rounds)", "", "| platform | item | history | flaky | ready (3/3) |", "|---|---|---|---|---|" ]
+    # A fixed fixture is a test, not a generated post: it doesn't count toward the goal (Backend/PM, 20 Nov); a blank attempt is a block.
+    ready = rows.count { |_, key, _, _, ready| !ready.empty? && !fixture_keys.include?(key) }
+    lines = [ "# Per-item consistency (#{rounds.size} rounds)", "", "Items ready (3 of 3 runs, fixtures excluded): #{ready}", "", "| platform | item | history | flaky | ready (3/3) |", "|---|---|---|---|---|" ]
     rows.sort_by { |platform, key, history, flaky, ready| [ platform, ready.empty? ? 1 : 0, flaky.empty? ? 1 : 0, key ] }.each do |platform, key, history, flaky, ready|
       lines << "| #{platform} | #{key.to_s.truncate(90)} | #{history} | #{flaky} | #{ready} |"
     end
