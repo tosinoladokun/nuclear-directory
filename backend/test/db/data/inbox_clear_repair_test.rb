@@ -9,8 +9,9 @@ class InboxClearRepairTest < ActiveSupport::TestCase
   READ = Time.utc(2026, 11, 20, 17, 46)
 
   setup do
-    # The fixtures are decisions made BEFORE the step's read (17:46 UTC): created at a fixed earlier time, so the tests
-    # don't depend on when they run; the step then runs after the cutoff, as it does at deploy.
+    # The step skips anything decided at or after its read cutoff (InboxClearRepair::READ_AT, 21:00 UTC on 20 Nov). The
+    # fixtures are decisions made before it: created at a fixed 18:00 UTC, their events set to READ (17:46 UTC), so the
+    # test doesn't depend on when it runs; the step then runs at a fixed later time, as it does at deploy.
     travel_to Time.utc(2026, 11, 20, 18)
     NewsItem.where(id: [ 68, 69 ]).destroy_all
     @sj = NewsItem.create!(id: 69, url: InboxClearRepair::NANO_SJ[:url], title: "NANO Nuclear Energy and SJ Group Establish Collaboration",
