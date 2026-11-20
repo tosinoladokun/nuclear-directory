@@ -84,7 +84,8 @@ class OwnerInbox
   # record or in its claims), then best-sourced (most distinct pages naming it), then newest.
   def ranked_companies
     @ranked_companies ||= begin
-      by_company = company_groups.flat_map { |_, copies| copies }.group_by(&:subject_id)
+      # By the Create's company (its first claim), riders included: a role rider's subject is its OrganizationRole (Copilot).
+      by_company = company_groups.group_by { |_, copies| copies.first.subject_id }.transform_values { |rows| rows.flat_map(&:last) }
       stored = Organization.where(id: by_company.keys).pluck(:id, *COMPLETE).to_h { |id, *values| [ id, COMPLETE.zip(values).to_h ] }
       complete = ->(id, claims) { COMPLETE.count { |field| stored.dig(id, field).present? || claims.any? { |c| c.payload[field].present? } } }
       by_company.sort_by { |id, claims| [ -complete.call(id, claims), -claims.map(&:source_id).uniq.size, -claims.map(&:id).max ] }.map(&:first)
@@ -212,7 +213,8 @@ class OwnerInbox
       # He said No to the company (its proposing claim is rejected): what's left on it stays with Data Quality.
       declined = Candidate.where(subject_type: "Organization", subject_id: by_company.keys, proposed_subject: true, status: "rejected").distinct.pluck(:subject_id)
       by_company.each do |company_id, rows|
-        primary = rows.find { |_, copies| copies.any?(&:proposed_subject) }
+        # Only a company row can be the Create: a newly proposed role never takes its place (Copilot).
+        primary = rows.find { |(_, candidate_kind), copies| candidate_kind == "organization" && copies.any?(&:proposed_subject) }
         if primary.nil? && declined.include?(company_id)
           rows.each { |key, _| grouped.delete(key) }
           next
