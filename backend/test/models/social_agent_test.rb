@@ -195,6 +195,11 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert SocialAgent::Rules.primary?(item.("https://www.nuscalepower.com/news/1", "NuScale Power, Inc."))
     assert_not SocialAgent::Rules.primary?(item.("https://deepisolation-news.example/x", "Deep Isolation"))
     assert_not SocialAgent::Rules.primary?(item.("https://www.prnewswire.com/news/x", "Deep Isolation"))
+
+    # A company the directory knows (pending too), named as the publisher, on its recorded website (PM).
+    Organization.create!(name: "Borehole Energy", website: "https://www.boreholeco.example", verification_status: "pending")
+    assert SocialAgent::Rules.primary?(item.("https://news.boreholeco.example/release", "Borehole Energy"))
+    assert_not SocialAgent::Rules.primary?(item.("https://news.boreholeco.example/release", "Someone Else"))
   end
 
   test "a month's post count is a backstop" do

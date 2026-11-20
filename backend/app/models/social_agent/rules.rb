@@ -63,7 +63,19 @@ module SocialAgent::Rules
       own = (site.include?("/") ? host(site) : site).delete_prefix("www.")
       own.present? && (host == own || host.end_with?(".#{own}"))
     end
-    own_site || publishers_site?(host, item.facts["publisher"])
+    own_site || publishers_site?(host, item.facts["publisher"]) || known_domain?(host, item)
+  end
+
+  # The site is a company's known domain or website in the directory (pending too: a company not yet listed, PM 20 Nov),
+  # and that company is the item's publisher or one it names.
+  def known_domain?(host, item)
+    names = [ item.facts["publisher"], *item.facts["companies"].to_s.split(", ") ].compact_blank.map { |name| name.squish.downcase }
+    return false if names.empty?
+
+    Organization.where(verification_status: %w[verified pending]).where("lower(name) IN (?)", names).pluck(:domain, :website).flatten.compact.any? do |site|
+      own = (site.include?("/") ? host(site) : site).downcase.delete_prefix("www.")
+      own.present? && (host == own || host.end_with?(".#{own}"))
+    end
   end
 
   # A news item's publisher on its own site, by name (DQ, shadow day 20 Nov: Deep Isolation's release on
