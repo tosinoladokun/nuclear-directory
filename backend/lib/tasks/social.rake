@@ -6,7 +6,7 @@ namespace :social do
     dir = Rails.root.join("tmp/rehearsal")
     FileUtils.mkdir_p(dir)
     stamp = Time.current.utc.strftime("%Y%m%d-%H%M")
-    File.write(dir.join("#{stamp}.md"), SocialAgent::Rehearsal.report(results))
+    File.write(dir.join("#{stamp}.md"), SocialAgent::Rehearsal.report(results, run: stamp))
     File.write(dir.join("#{stamp}.json"), JSON.pretty_generate(results.map(&:to_h)))
     results.group_by(&:platform).each { |platform, rows| puts "#{platform}: #{rows.count(&:passed?)}/#{rows.size} passed" }
     puts "Report: tmp/rehearsal/#{stamp}.md"

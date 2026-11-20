@@ -9,7 +9,7 @@ class SocialAgent::Rehearsal
   DAYS = 30
   FIXTURES = Rails.root.join("test/fixtures/files/social_rehearsal.yml")
 
-  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url) do
+  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date) do
     def passed? = problems.empty?
   end
 
@@ -28,7 +28,7 @@ class SocialAgent::Rehearsal
         post = SocialPost.new(platform:)
         item, problems = SocialAgent.prepare(item, @fetcher)
         problems = SocialAgent.write(post, item, platform, @writer, fetcher: @fetcher) if problems.empty?
-        Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url)
+        Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url, date: item.facts["date"])
       end
     end
   end
@@ -41,13 +41,14 @@ class SocialAgent::Rehearsal
     end
   end
 
-  def self.report(results)
-    lines = [ "# Social rehearsal, #{Time.current.utc.strftime('%Y-%m-%d %H:%M UTC')}", "" ]
+  # For Data Quality's grading (20 Nov): each draft as id, platform, exact text, source URL, the item's own date, run ref.
+  def self.report(results, run: Time.current.utc.strftime("%Y%m%d-%H%M"))
+    lines = [ "# Social rehearsal #{run}", "" ]
     results.group_by(&:platform).each do |platform, rows|
       lines << "## #{platform == 'x' ? 'X' : 'LinkedIn'}: #{rows.count(&:passed?)} of #{rows.size} passed" << ""
-      rows.each do |row|
-        lines << "### #{row.passed? ? 'PASS' : 'BLOCK'} #{row.label}"
-        lines << "source: #{row.source_url}"
+      rows.each_with_index do |row, index|
+        lines << "### #{run}-#{platform}-#{index + 1} #{platform} #{row.passed? ? 'PASS' : 'BLOCK'}: #{row.label}"
+        lines << "run: #{run}" << "source: #{row.source_url}" << "item date: #{row.date || 'none'}"
         lines << "why: #{row.problems.to_sentence}" unless row.passed?
         lines << "" << row.text.to_s.lines.map { |line| "> #{line.chomp}" }.join("\n") << ""
       end
