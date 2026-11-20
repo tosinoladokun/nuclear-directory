@@ -22,6 +22,9 @@ module DeployData
   #   merge; `say` what it changes so the rehearsal and deploy logs match.
   # - Never stop the deploy on a record a person may decide first (#811):
   #   accept the decided state, or skip and `say` why.
+  # - A step that builds on another says so: AFTER = %w[<version>] (the other's
+  #   14-digit timestamp). It is skipped, and reported as waiting, until each is
+  #   recorded as run, so a failed or missing predecessor never lets it apply.
   # - Never rescue a database error inside `up`: let it raise. A swallowed
   #   error leaves Postgres' transaction aborted, so the step's savepoint can't
   #   roll back cleanly and every later statement fails (Backend's review, #813).
