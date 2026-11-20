@@ -234,6 +234,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
       source_quote: "Georgia Power filed its plan for Vogtle with state regulators.")
     assert_empty SocialAgent::Check.problems("Those plans came from Georgia Power. Georgia Power’s plan covers Vogtle.", item, platform: "x")
+    assert_empty SocialAgent::Check.problems("Neither side gave a figure. Georgia Power filed its plan for Vogtle.", item, platform: "x"), "Neither and Either only open a sentence"
     assert_equal [ "the name \"Westinghouse\" isn't in the source" ],
       SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
     assert_equal [ "the name \"Two\" isn't in the source" ], SocialAgent::Check.problems("Two plans came from Georgia Power.", item, platform: "x"),
