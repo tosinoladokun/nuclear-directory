@@ -561,4 +561,25 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "nobody")
     assert_response :not_found
   end
+
+  test "a public company shows its ticker, linked to its SEC filings by CIK, only with ticker, exchange and CIK on a sourced record; no referral code (#874)" do
+    @kairos.update!(exchange: "NASDAQ", ticker: "KRSP", sec_cik: "0001234567")
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-glance dt", text: /\ATicker/
+    assert_select ".nd-glance a[href=?]", "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234567&type=&dateb=&owner=include&count=40", text: "NASDAQ: KRSP"
+    assert_select ".nd-glance a[href*='sec.gov'][href*='utm']", 0
+    assert_select ".nd-glance a[href*='sec.gov'][rel~='noopener']", 1
+    graph = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"]
+    assert_equal "NASDAQ: KRSP", graph.find { |node| node["@type"] == "Organization" }["tickerSymbol"]
+
+    @kairos.update!(sec_cik: nil)
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0
+    assert_no_match "sec.gov", response.body, "no CIK, no filings link"
+
+    @kairos.update!(exchange: nil, ticker: nil)
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0
+  end
 end

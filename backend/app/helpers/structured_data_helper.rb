@@ -45,6 +45,7 @@ module StructuredDataHelper
       "@type" => "Organization", "@id" => "#{page_url}#organization", "name" => profile.name,
       "legalName" => profile.legal_name.presence, "alternateName" => profile.aliases.presence,
       "description" => profile.description.presence, "url" => linked_website(profile.website),
+      "tickerSymbol" => ("#{profile.exchange}: #{profile.ticker}" if profile.listing?),
       "address" => postal_address(profile.hq_city, profile.hq_state), "foundingDate" => profile.founded_year&.to_s,
       "parentOrganization" => profile.parents.map { |link| organization_ref(link.to_organization) }.presence,
       "subOrganization" => profile.subsidiaries.map { |link| organization_ref(link.from_organization) }.presence

@@ -36,9 +36,12 @@ class CompanyProfile
 
   # The record's own fields, only when a source backs them.
   def sourced? = defined?(@sourced) ? @sourced : (@sourced = organization.evidence.any?)
-  %i[description website hq_city hq_state founded_year legal_name].each do |field|
+  %i[description website hq_city hq_state founded_year legal_name exchange ticker sec_cik].each do |field|
     define_method(field) { organization.public_send(field) if sourced? }
   end
+
+  # A public company's listing, shown only with a ticker, its exchange and its SEC CIK, all on a sourced record (#874).
+  def listing? = exchange.present? && ticker.present? && sec_cik.present?
 
   # [[number, source], ...] for a fact on this page.
   def citations_for(fact) = @cited.fetch(fact) { [] }
@@ -177,7 +180,7 @@ class CompanyProfile
       cite(organization) if description.present? || website.present? || aliases.any? || legal_name.present?
       shown_roles.each { |role| cite(role) }
       technologies.each { |technology| cite(technology) }
-      cite(organization) if hq_city.present? || hq_state.present? || founded_year.present?
+      cite(organization) if hq_city.present? || hq_state.present? || founded_year.present? || listing?
       (parents + subsidiaries).each { |link| cite(link) }
       deals.each do |deal|
         cite(deal)
