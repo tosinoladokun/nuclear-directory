@@ -101,11 +101,23 @@ module SocialAgent::Rules
   end
 
   # A page's main text: its article or main element, without scripts, menus, headers and footers.
+  # Several <article>s (a list of stories) or a thin one (a headline, the body in a div beside it) read as the longest of them;
+  # under MIN_ARTICLE characters the whole body is the article (GTM, round 17: BWXT's quote was its headline plus an unrelated
+  # story's).
+  MIN_ARTICLE = 600
   def article_text(body)
     doc = Nokogiri::HTML(body.to_s)
     doc.css("script, style, nav, header, footer, noscript, aside").remove
-    (doc.at_css("article, main") || doc.at_css("body") || doc).text.squish
+    texts = doc.css("article, main").map { |node| node.text.squish }
+    best = texts.max_by(&:length).to_s
+    return best if best.length >= MIN_ARTICLE
+
+    [ best, (doc.at_css("body") || doc).text.squish ].max_by(&:length)
   end
+
+  # A PDF's bytes aren't a page (GTM, round 17: a Leapfrog quote was raw PDF bytes): the agent has no PDF reader, so a source that
+  # is one isn't used.
+  def pdf?(response) = response.content_type.to_s.include?("pdf") || response.body.to_s.byteslice(0, 5) == "%PDF-"
 
   # The page states the date, in its text or its datePublished/published_time: "November 19, 2026", "19 November 2026",
   # "Nov 19, 2026", "2026-11-19" or "11/19/2026".
@@ -320,6 +332,7 @@ module SocialAgent::Rules
   def source_problems(url, fetcher, item: nil, text: nil)
     response = fetcher.get(url.to_s)
     return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
+    return [ "its source is a PDF, which the agent can't read yet: no grounding for a post" ] if pdf?(response)
 
     # The article's subject, not a word in passing (rehearsal: "beyond any credible accident scenario" in a permit story,
     # "safety incident rates improved"): in its opening, or three times or more.

@@ -613,4 +613,23 @@ class SocialAgentTest < ActiveSupport::TestCase
     said = rules_item(quote: "Neither side gave a figure for the agreement.")
     assert_empty SocialAgent::Rules.qualifiers("Neither side gave a figure.", said).select { |problem| problem.start_with?("it says") }, "when the source says it"
   end
+
+  test "the page reader reads the real article (a thin <article> or a list of stories) and never a PDF's bytes (GTM, round 17)" do
+    body_text = "BWXT announces a multi-year commercial agreement with Antares for TRISO fuel production. " * 12
+    thin = "<html><body><nav>Menu</nav><article><h1>BWXT signs TRISO agreement</h1></article><div class='body'><p>#{body_text}</p></div><footer>Contact</footer></body></html>"
+    text = SocialAgent::Rules.article_text(thin)
+    assert_includes text, "multi-year commercial agreement", "the body beside a thin article"
+    assert_not_includes text, "Menu"
+    assert_not_includes text, "Contact"
+
+    list = "<html><body><main><article><h2>Short story</h2><p>Brief.</p></article><article><p>#{body_text}</p></article></main></body></html>"
+    assert_includes SocialAgent::Rules.article_text(list), "TRISO fuel production", "the longest article of a list"
+
+    pdf = Struct.new(:content_type, :body)
+    assert SocialAgent::Rules.pdf?(pdf.new("application/pdf", "x"))
+    assert SocialAgent::Rules.pdf?(pdf.new("text/html", "%PDF-1.4 \x00\x01"))
+    assert_not SocialAgent::Rules.pdf?(pdf.new("text/html", "<html></html>"))
+    pdf_fetcher = Struct.new(:ignored) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "%PDF-1.4 binary", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "application/pdf", truncated: false) }
+    assert_equal [ "its source is a PDF, which the agent can't read yet: no grounding for a post" ], SocialAgent::Rules.source_problems("https://www.nrc.gov/a.pdf", pdf_fetcher.new)
+  end
 end
