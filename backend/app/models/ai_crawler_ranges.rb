@@ -35,14 +35,15 @@ module AiCrawlerRanges
   def self.verified?(ip, user_agent)
     url = LISTS.find { |pattern, _| user_agent.to_s.match?(pattern) }&.last or return false
     address = IPAddr.new(ip.to_s)
-    Array(lists[url]).any? { |prefix| IPAddr.new(prefix).include?(address) }
+    Array(lists[url]).any? { |range| range.include?(address) }
   rescue IPAddr::Error
     false
   end
 
   def self.lists
     self.local = nil if local && local[:at] < 1.hour.ago
-    (self.local ||= { at: Time.current, ranges: store.read(CACHE_KEY) || {} })[:ranges]
+    # Parsed once per hourly copy, not per request (Infra).
+    (self.local ||= { at: Time.current, ranges: (store.read(CACHE_KEY) || {}).transform_values { |prefixes| prefixes.filter_map { |p| IPAddr.new(p) rescue nil } } })[:ranges]
   end
 
   def self.fetch(url)
