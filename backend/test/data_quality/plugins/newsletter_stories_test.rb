@@ -39,5 +39,10 @@ class DataQuality::Plugins::NewsletterStoriesTest < ActiveSupport::TestCase
     assert_empty plugin.extract(source.(page("DOE Funds Reactor Study", "2026-11-18", "A reactor study is funded.")), nil), "names nothing we have"
     assert_empty plugin.extract(source.(page("Acme Fission Reactor Milestone", "2026-09-01", "Acme Fission reactor.")), nil), "older than two weeks"
     assert_empty plugin.extract(source.(%(<html><head><title>Acme Fission Reactor</title></head><body>Acme Fission reactor.</body></html>)), nil), "no date of its own"
+
+    Organization.create!(name: "Google", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "Google")
+    @plugin = nil
+    assert_empty plugin.extract(source.(page("Google Opens Data Center", "2026-11-18", "Google opens a data center near a nuclear plant.")), nil), "broad: nuclear once in passing"
+    assert_equal 1, plugin.extract(source.(page("Google Signs Nuclear Power Deal", "2026-11-18", "Google signs a nuclear power deal.")), nil).size, "broad: nuclear in the title"
   end
 end

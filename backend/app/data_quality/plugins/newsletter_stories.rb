@@ -48,6 +48,8 @@ class DataQuality::Plugins::NewsletterStories < DataQuality::Plugin
     # Nuclear work beyond the names ("Acme Fission Opens Office" isn't).
     words = named.reduce("#{title} #{text.first(3_000)}") { |all, hit| all.gsub(/#{Regexp.escape(hit['name'])}/i, " ") }
     return [] unless words.match?(STRONG_NUCLEAR)
+    # A broad company's page (Google, Amazon, NASA…) says nuclear in its title, not once in passing (DQ, 20 Nov).
+    return [] if broad?(source, named) && !named.reduce(title) { |all, hit| all.gsub(/#{Regexp.escape(hit['name'])}/i, " ") }.match?(STRONG_NUCLEAR)
 
     [ { kind: "news_item", quote: title, payload: {
       "url" => source.final_url.presence || source.url, "title" => title, "publisher" => publisher(source, doc),
@@ -80,6 +82,15 @@ class DataQuality::Plugins::NewsletterStories < DataQuality::Plugin
       host.end_with?(".gov") || own.include?(host)
     rescue URI::InvalidURIError
       false
+    end
+
+    BROAD = DataQuality::Plugins::CompanyNewsrooms::BROAD
+
+    # On a broad company's site, or naming only broad companies.
+    def broad?(source, named)
+      owner = @directory.organizations_with_website.find { |_, site| host_of(site) == host_of(source.url) }&.first
+      broad = ->(name) { BROAD.any? { |b| name.to_s.match?(/\A#{Regexp.escape(b)}(?![[:alnum:]])/i) } }
+      (owner && broad.(owner)) || named.select { |hit| hit["type"] == "organization" }.then { |orgs| orgs.any? && orgs.all? { |hit| broad.(hit["name"]) } }
     end
 
     def host_of(url) = (URI.parse(url.to_s.strip).host.to_s.downcase.delete_prefix("www.").presence rescue nil)
