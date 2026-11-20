@@ -34,6 +34,8 @@ module PublicRateLimit
   }.freeze
   FRIENDLY_LIMIT = 300
   DNS_TIMEOUT = 2
+  # New lookups a minute, process-wide: a faker rotating IPs can't tie up the threads (Infra).
+  LOOKUPS_PER_MINUTE = 20
   # Off in tests, where every page test shares one IP; its own test turns it on.
   mattr_accessor :enabled, default: !Rails.env.test?
   mattr_accessor :resolver, default: -> { Resolv::DNS.new }
@@ -49,7 +51,12 @@ module PublicRateLimit
   def self.verified_search_bot?(ip, user_agent)
     domains = SEARCH_BOTS.find { |pattern, _| user_agent.to_s.match?(pattern) }&.last or return false
 
-    VERIFIED.fetch("#{ip}:#{domains.first}", expires_in: 1.day) do
+    key = "#{ip}:#{domains.first}"
+    cached = VERIFIED.read(key)
+    return cached unless cached.nil?
+    return false if VERIFIED.increment("lookups:#{Time.current.to_i / 60}", 1, expires_in: 2.minutes).to_i > LOOKUPS_PER_MINUTE
+
+    VERIFIED.fetch(key, expires_in: 1.day) do
       Timeout.timeout(DNS_TIMEOUT) do
         dns = resolver.call
         name = dns.getname(ip).to_s.downcase

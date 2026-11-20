@@ -99,6 +99,16 @@ class PublicRateLimitTest < ActionDispatch::IntegrationTest
     assert_equal 429, hit(PublicRateLimit::LIMIT + 1)
   end
 
+  test "at most LOOKUPS_PER_MINUTE new DNS lookups a minute; past that a claimed crawler is simply unverified (Infra)" do
+    names = (1..25).to_h { |n| [ "66.249.66.#{n}", "crawl-#{n}.googlebot.com" ] }
+    travel_to Time.utc(2026, 11, 20, 12, 0, 10)
+    with_dns(names, names.to_h { |ip, name| [ name, [ ip ] ] }) do
+      results = names.keys.map { |ip| PublicRateLimit.verified_search_bot?(ip, "Googlebot/2.1") }
+      assert_equal [ true ] * PublicRateLimit::LOOKUPS_PER_MINUTE + [ false ] * 5, results
+      assert PublicRateLimit.verified_search_bot?("66.249.66.1", "Googlebot/2.1"), "a cached answer needs no lookup"
+    end
+  end
+
   private
     def capture_log
       io = StringIO.new
