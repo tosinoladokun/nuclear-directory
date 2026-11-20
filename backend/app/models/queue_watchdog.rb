@@ -70,9 +70,11 @@ class QueueWatchdog
   # down) is queued once, for that run time (#811 auto-fix; Solid Queue records each run time once, so never twice).
   LATE = 15.minutes
   MAX_LATE = 1.day
+  # Too heavy to run in the day on its own say-so (DQ, memory): the nightly crawl waits for its next night.
+  NO_CATCH_UP = %w[daily_crawl].freeze
 
   def catch_up
-    SolidQueue::RecurringTask.static.filter_map do |task|
+    SolidQueue::RecurringTask.static.where.not(key: NO_CATCH_UP).filter_map do |task|
       due = task.previous_time
       next if due > @now - LATE || due < @now - MAX_LATE
       next if task.next_time_after(due) - due < 1.hour
