@@ -34,6 +34,8 @@ module SocialAgent
   # The item with its source page's own words added (about EXCERPT characters from where its title starts, else the
   # page's start), and the page's problems (no answer, sensitive, date not on it). [item, problems]
   def self.prepare(item, fetcher)
+    # A sensitive subject in the item's own words is skipped before any writing.
+    return [ item, [ "it touches a sensitive topic (#{$1.downcase})" ] ] if item.own_text =~ SocialAgent::Rules::SENSITIVE
     return [ item, [ "its source isn't a primary one (#{SocialAgent::Rules.host(item.source_url).presence || 'none'})" ] ] unless SocialAgent::Rules.primary?(item)
 
     problems = SocialAgent::Rules.source_problems(item.source_url, fetcher, item:)
@@ -113,9 +115,9 @@ module SocialAgent
     run = CrawlRun.create!(source_kind: "social_agent", stage: "verify", started_at: Time.current)
     writer ||= SocialAgent::Writer.new
     problems = nil
-    # One revision: the writer sees what stopped its first draft and tries again; every check runs again (rehearsal,
+    # Up to two revisions: the writer sees what stopped its first draft and tries again; every check runs again (rehearsal,
     # 20 Nov: most stops were the writer's slips the checks named exactly).
-    [ nil, :revise ].each do |pass|
+    [ nil, :revise, :revise ].each do |pass|
       break if pass && problems.empty?
 
       post.text = writer.draft(item, platform:, crawl_run: run, **(pass ? { feedback: problems.to_sentence, previous: post.text } : {}))
