@@ -371,6 +371,13 @@ class DataQuality::DirectoryClient
     WriteResult.new(ref: nil, errors: [ error.message ], created: false)
   end
 
+  def undo_news_text(id:, by:, context: {})
+    Directory::FactWriter.undo_news_text(id:, by:, context:)
+    WriteResult.new(ref: Ref.new(type: "NewsItem", id:), errors: [], created: false)
+  rescue Directory::FactWriter::Invalid, ActiveRecord::RecordInvalid => error
+    WriteResult.new(ref: nil, errors: [ error.message ], created: false)
+  end
+
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
     record(type, state, values: lookup.fact_attributes(type:, id:))

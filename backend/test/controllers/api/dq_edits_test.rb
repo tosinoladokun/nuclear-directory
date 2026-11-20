@@ -26,6 +26,8 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
     assert_equal [ @item.id, "https://example.org/news/2" ], response.parsed_body["edits"].sole.values_at("id", "source_url")
 
     post api_dq_edits_undo_path, params: { id: @item.id }, headers: AUTH, as: :json
+    refute response.parsed_body["ok"], "a source is required"
+    post api_dq_edits_undo_path, params: { id: @item.id, source_url: "https://example.org/news/2" }, headers: AUTH, as: :json
     assert response.parsed_body["ok"]
     assert_equal [ "Acme gets an exemtpion", "human:tosin" ], @item.reload.values_at(:headline, :verified_by)
   end
@@ -106,5 +108,23 @@ class Api::DqEditsTest < ActionDispatch::IntegrationTest
     post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: 2.times.map { { action: "edit_news", id: @item.id, values: { headline: "Z" }, reason: "r", source_url: "https://www.nrc.gov/x" } } }
     assert_response :unprocessable_content
     assert_equal "Acme gets an exemption", @item.reload.headline
+  end
+
+  test "malformed values are a row's refusal; the list pages through the whole window (Copilot)" do
+    post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: [ { action: "edit_news", id: @item.id, values: "bad", reason: "r", source_url: "https://example.org/news/2" } ] }
+    assert_match "values must be an object", response.parsed_body["results"].sole["error"]
+
+    3.times { |n| @item.verification_events.create!(from_status: "verified", to_status: "verified", by: "agent:data-quality", reason: "r#{n}") }
+    stub = Api::Dq::EditsController::PAGE
+    Api::Dq::EditsController.send(:remove_const, :PAGE)
+    Api::Dq::EditsController.const_set(:PAGE, 2)
+    get api_dq_edits_path, headers: AUTH
+    first = response.parsed_body
+    get api_dq_edits_path, params: { before: first["next_before"] }, headers: AUTH
+    assert_equal [ 2, 1 ], [ first["edits"].size, response.parsed_body["edits"].size ]
+    assert_nil response.parsed_body["next_before"]
+  ensure
+    Api::Dq::EditsController.send(:remove_const, :PAGE)
+    Api::Dq::EditsController.const_set(:PAGE, stub)
   end
 end

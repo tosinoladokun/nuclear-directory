@@ -36,14 +36,23 @@ class Api::Dq::EditsController < ActionController::API
     render json: { results: rows.map { |row| apply(row) } }
   end
 
+  # The source supporting the restored text is required too, like any edit (Copilot).
   def undo
-    result = DataQuality::Review.undo_news_edit(id: params[:id].to_i, by: BY)
+    source = params[:source_url].to_s.strip
+    return render(json: { ok: false, error: "give the source_url that shows the right text" }) unless source.match?(%r{\Ahttps?://\S+\z})
+
+    result = DataQuality::Review.undo_news_edit(id: params[:id].to_i, by: BY, context: { "source_url" => source })
     render json: result.ok? ? { ok: true } : { ok: false, error: result.errors.to_sentence }
   end
 
+  # Newest first, PAGE at a time; next_before pages back through the whole window (Copilot).
+  PAGE = 200
   def index
-    events = VerificationEvent.where(subject_type: "NewsItem", by: BY, created_at: 7.days.ago..).order(id: :desc).limit(200)
-    render json: { edits: events.map { |event| { id: event.subject_id, at: event.created_at, reason: event.reason, source_url: event.context["source_url"], changed: event.changed_values } } }
+    events = VerificationEvent.where(subject_type: "NewsItem", by: BY, created_at: 7.days.ago..).order(id: :desc)
+    events = events.where(id: ...params[:before].to_i) if params[:before].present?
+    page = events.limit(PAGE + 1).to_a
+    render json: { edits: page.first(PAGE).map { |event| { event_id: event.id, id: event.subject_id, at: event.created_at, reason: event.reason,
+      source_url: event.context["source_url"], changed: event.changed_values } }, next_before: (page[PAGE - 1].id if page.size > PAGE) }
   end
 
   private
@@ -80,7 +89,10 @@ class Api::Dq::EditsController < ActionController::API
       return { id:, ok: false, error: "give the source_url that shows the right text" } unless source.match?(%r{\Ahttps?://\S+\z})
       return propose_takeoff(row, id, source) if row["action"] == "propose_takeoff"
 
-      values = row["values"].to_h
+      # Malformed values get this row's refusal, never a 500 mid-request (Copilot).
+      return { id:, ok: false, error: "values must be an object" } unless row["values"].is_a?(Hash)
+
+      values = row["values"]
       return { id:, ok: false, error: "a summary is at most #{SUMMARY_MAX} characters" } if values["summary"].to_s.length > SUMMARY_MAX
       return { id:, ok: false, error: "a headline is at most #{NewsItem::HEADLINE_MAX} characters" } if values["headline"].to_s.squish.length > NewsItem::HEADLINE_MAX
 
@@ -91,7 +103,7 @@ class Api::Dq::EditsController < ActionController::API
         return { id:, ok: false, error: "source_url must be on the item's own site (#{site(item.url)}), a company it's about, or a .gov, .mil or .edu site" }
       end
 
-      result = DataQuality::Review.edit_news(id:, by: BY, reason: row["reason"].to_s.strip, attributes: row["values"].to_h, context: { "source_url" => source })
+      result = DataQuality::Review.edit_news(id:, by: BY, reason: row["reason"].to_s.strip, attributes: values, context: { "source_url" => source })
       { id:, ok: result.ok?, error: result.errors.to_sentence.presence }.compact
     end
 

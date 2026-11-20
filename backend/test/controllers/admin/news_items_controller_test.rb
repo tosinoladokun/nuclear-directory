@@ -39,4 +39,20 @@ class Admin::NewsItemsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Westinghouse asks for an exemption", @item.reload.headline
     assert_equal "Undo: Typo", @item.verification_events.order(:id).last.reason
   end
+
+  test "a text edit keeps who approved it and when; a taken-off item isn't edited; undo reverses the newest edit (Copilot)" do
+    approved_at = @item.verified_at
+    DataQuality::Review.edit_news(id: @item.id, by: "human:other", reason: "Shorter", attributes: { "headline" => "First" })
+    DataQuality::Review.edit_news(id: @item.id, by: "human:other", reason: "Clearer", attributes: { "headline" => "Second" })
+    @item.reload
+    assert_equal [ "human:tosin", approved_at.to_i, "verified" ], [ @item.verified_by, @item.verified_at.to_i, @item.verification_status ]
+
+    assert DataQuality::Review.undo_news_edit(id: @item.id, by: "human:other").ok?
+    assert_equal "First", @item.reload.headline, "the newest edit is the one undone"
+
+    @item.unpublish!(by: "human:tosin")
+    result = DataQuality::Review.edit_news(id: @item.id, by: "human:other", reason: "x", attributes: { "headline" => "Third" })
+    assert_match "put it back", result.errors.to_sentence
+    assert_equal "unpublished", @item.reload.verification_status
+  end
 end

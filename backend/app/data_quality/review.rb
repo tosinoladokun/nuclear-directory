@@ -768,17 +768,20 @@ module DataQuality::Review
       values = values.transform_values { |value| value.is_a?(String) ? value.strip.presence : value }.reject { |name, value| item[name].to_s == value.to_s }
       return Result.new(candidate_id: nil, ref: nil, errors: [ "nothing changed" ]) if values.empty?
 
+      # Text only: its status and approver stay, under the writer's lock (Copilot).
       result = directory.edit_news_text(id:, attributes: values, by:, reason:, context:)
       Result.new(candidate_id: nil, ref: result.ref, errors: result.errors)
     end
 
-    # Undo the latest edit of its text: the values it had before, as a new edit.
-    def undo_news_edit(id:, by:, directory: DataQuality::DirectoryClient.new)
-      last = directory.news_history(id).find { |event| (event.changed_values.keys & NEWS_EDITABLE).any? }
-      return Result.new(candidate_id: nil, ref: nil, errors: [ "no edit to undo" ]) unless last
+    # Undo the latest edit of its text, chosen and reversed under one lock.
+    # context: the source that supports the restored text (Data Quality's).
+    def undo_news_edit(id:, by:, context: {}, directory: DataQuality::DirectoryClient.new)
+      unless by.to_s.match?(/\A(human:\S+|agent:data-quality)\z/)
+        raise ArgumentError, "a person or Data Quality's agent edits news text"
+      end
 
-      before = last.changed_values.slice(*NEWS_EDITABLE).transform_values { |change| Array(change).first }
-      edit_news(id:, by:, reason: "Undo: #{last.reason}".truncate(500), attributes: before, directory:)
+      result = directory.undo_news_text(id:, by:, context:)
+      Result.new(candidate_id: nil, ref: result.ref, errors: result.errors)
     end
 
     def reject_fact(type:, id:, by:, reason: nil, directory: DataQuality::DirectoryClient.new)
