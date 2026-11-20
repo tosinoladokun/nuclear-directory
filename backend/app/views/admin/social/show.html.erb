@@ -12,6 +12,7 @@
       <p class="type-small m-0" id="social-buffer-key">Buffer isn't set up yet: BUFFER_API_KEY, BUFFER_X_CHANNEL_ID and BUFFER_LINKEDIN_CHANNEL_ID go on Render.</p>
     <% end %>
     <p class="type-small text-ink-muted m-0">This month: $<%= number_with_precision(@spent, precision: 2) %> of $<%= number_with_precision(SocialAgent.monthly_cap, precision: 2) %>.</p>
+    <%= button_to "Draft now", admin_social_draft_now_path, class: "nd-btn nd-btn--outline type-ui", form: { id: "social-draft-now" } %>
     <% @channels.each do |channel| %>
       <div class="nd-row" id="social-switch-<%= channel.platform %>">
         <p class="type-body-strong m-0"><%= channel.platform == "x" ? "X" : "LinkedIn" %></p>

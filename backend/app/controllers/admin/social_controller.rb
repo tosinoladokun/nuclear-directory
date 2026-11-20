@@ -7,6 +7,13 @@ class Admin::SocialController < Admin::BaseController
     @spent = SocialPost.where(status: SocialPost::SENT, created_at: Time.current.all_month).sum(:cost_usd)
   end
 
+  # Draft now (PM, 20 Nov: admin UI over console): today's drafts for the platforms that are on, never sent.
+  # The usual rules hold: one a day, weekdays, something fresh.
+  def draft_now
+    SocialPostJob.perform_later(drafts_only: true)
+    redirect_to admin_social_path, notice: "Drafting now. Reload in a minute to see it in the log."
+  end
+
   def update
     channel = SocialChannel.for(params[:platform])
     if channel.update(mode: params[:mode], paused_reason: nil)

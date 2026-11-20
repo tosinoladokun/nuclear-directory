@@ -97,6 +97,13 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal post.link, sent.last
   end
 
+  test "Draft now never sends, even when the switch is Live (PM)" do
+    live!
+    SocialAgent.senders["x"] = ->(*) { flunk "sent" }
+    post = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(DRAFT), fetcher: OK_FETCHER.new(200), drafts_only: true)
+    assert_equal "drafted", post.status
+  end
+
   test "Live with sending off on the server only drafts" do
     SocialChannel.for("x").update!(mode: "live")
     SocialAgent.senders["x"] = ->(*) { flunk "never called" }

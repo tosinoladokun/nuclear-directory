@@ -27,4 +27,11 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     patch admin_social_channel_path("x"), params: { mode: "drafts" }
     assert_nil SocialChannel.for("x").paused_reason
   end
+
+  test "Draft now queues today's drafts, never a send (PM)" do
+    get admin_social_path
+    assert_select "form#social-draft-now button", "Draft now"
+    assert_enqueued_with(job: SocialPostJob, args: [ { drafts_only: true } ]) { post admin_social_draft_now_path }
+    assert_redirected_to admin_social_path
+  end
 end
