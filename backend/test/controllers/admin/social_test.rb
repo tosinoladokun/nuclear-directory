@@ -76,4 +76,30 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     assert_select "form#social-by-hand-form input[name='platforms[]']", 2
     assert_select ".nd-wait__what", text: /Posted by hand/
   end
+
+  test "the news item can be given by its admin address, and an automated post still queued must be taken back first (Copilot, #878)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou2", title: "NANO and SJ Group sign a non-binding MOU", publisher: "NANO Nuclear Energy", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+
+    assert_difference -> { SocialPost.count }, 1 do
+      post admin_social_by_hand_path, params: { item: "https://www.nuclear-directory.org/admin/facts/NewsItem/#{news.id}", platforms: %w[x] }
+    end
+    assert SocialPost.find_by(platform: "x", subject: news).by_hand?, "its reason says it was posted by hand"
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: "/admin/facts/NewsItem/#{news.id}", platforms: %w[x] }
+    end
+    assert_match(/already had it/, flash[:notice])
+
+    queued = NewsItem.create!(url: "https://nanonuclearenergy.com/mou3", title: "Another item", publisher: "NANO Nuclear Energy", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    SocialPost.create!(platform: "linkedin", status: "queued", subject: queued, text: "Automated.", external_id: "b1", posted_at: 1.hour.from_now)
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: queued.id.to_s, platforms: %w[linkedin x] }
+    end
+    assert_match(/LinkedIn has an automated post queued in Buffer/, flash[:alert])
+    assert_equal 0, SocialPost.where(subject: queued, status: "posted").count, "nothing recorded for either platform until it is taken back"
+
+    get admin_social_path
+    assert_select ".nd-wait__what .text-critical", text: SocialPost::BY_HAND, count: 0
+  end
 end

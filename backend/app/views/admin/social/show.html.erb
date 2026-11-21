@@ -30,7 +30,7 @@
     <h2 id="social-by-hand" class="type-admin-h2 m-0">Posted by hand</h2>
     <p class="type-small m-0">Made a post yourself? Record it here so the agent doesn't post the same item within two weeks.</p>
     <%= form_with url: admin_social_by_hand_path, class: "nd-stack", id: "social-by-hand-form" do %>
-      <label class="type-small" for="by-hand-item">News item (its id, or its source link)</label>
+      <label class="type-small" for="by-hand-item">News item (its id, its address in Admin, or its source link)</label>
       <%= text_field_tag :item, nil, id: "by-hand-item", class: "nd-input type-input", required: true %>
       <fieldset class="m-0 p-0 border-0">
         <legend class="type-small">Where you posted it</legend>
@@ -58,7 +58,7 @@
               <%= { "posted" => "Posted", "drafted" => "Draft", "sending" => "Sending", "queued" => "Queued to go out at #{post.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%H:%M')}", "cancelled" => "Taken back", "unknown" => "May have gone out: check the account",
                     "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
             <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
-            <% if post.reason.present? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <% if post.reason.present? && !post.by_hand? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
             <p class="type-small m-0">
               <% if post.permalink %><%= link_to "See the post", post.permalink, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>
               <% if (url = safe_url(post.source_url)) %><%= link_to "Source: #{source_host(url)}", url, class: "nd-link", target: "_blank", rel: "noopener" %><% end %>
