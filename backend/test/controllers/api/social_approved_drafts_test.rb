@@ -117,7 +117,7 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     ENV["SOCIAL_POSTING_ENABLED"] = "on"
     SocialChannel.for("x").update!(mode: "drafts")
     sent = []
-    SocialAgent.senders["x"] = ->(text, link) { sent << [ text, link ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    SocialAgent.senders["x"] = ->(text, link, **) { sent << [ text, link ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
     travel_to(monday) do
       approve
       post = SocialPost.last
@@ -203,7 +203,7 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     ENV["SOCIAL_POSTING_ENABLED"] = "on"
     SocialChannel.for("x").update!(mode: "drafts")
     sent = []
-    SocialAgent.senders["x"] = ->(text, link) { sent << [ text, link ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    SocialAgent.senders["x"] = ->(text, link, **) { sent << [ text, link ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
     travel_to(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 14, 0)) { approve({ send_on: "2026-11-23" }) }
     assert_response :created
     post = SocialPost.last
@@ -295,7 +295,7 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     SocialChannel.for("x").update!(mode: "drafts")
     SocialChannel.for("linkedin").update!(mode: "drafts")
     sent = []
-    SocialAgent.senders["x"] = ->(text, link) { sent << [ :x, text ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    SocialAgent.senders["x"] = ->(text, link, **) { sent << [ :x, text ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
     SocialAgent.senders["linkedin"] = ->(*) { flunk "LinkedIn's row is for tomorrow" }
     travel_to(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 14, 0)) do
       load_row(platform: "x", send_on: "2026-11-23")
@@ -344,7 +344,7 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     ENV["SOCIAL_POSTING_ENABLED"] = "on"
     SocialChannel.for("x").update!(mode: "drafts")
     sent = []
-    SocialAgent.senders["x"] = ->(text, _link) { sent << text; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    SocialAgent.senders["x"] = ->(text, _link, **) { sent << text; { id: "9", permalink: "https://x.com/i/web/status/9" } }
     monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
     travel_to(monday - 3.days) { load_row(platform: "x", send_on: "2026-11-23") }
     approved = SocialPost.last
@@ -410,5 +410,117 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   ensure
     ENV.delete("SOCIAL_MONTHLY_MAX")
     SocialAgent.senders.delete("x")
+  end
+
+  # GTM's TerraPower payloads (schedule JSON v3): the X text with our URL inside and the handle last, and the LinkedIn text with a native mention.
+  TERRA_URL_X = "https://nuclear-directory.org/companies/terrapower?utm_source=x&utm_medium=social&utm_campaign=terrapower".freeze
+  TERRA_X = "Meet TerraPower.\n\nBased in Bellevue, WA, it is building the Natrium demonstration plant. Its January 2026 Meta agreement covers early development of two new Natrium units.\n\n#{TERRA_URL_X}\n\n@terrapower".freeze
+  TERRA_LI = "Meet TerraPower.\n\nBased in Bellevue, WA, it is building the Natrium demonstration plant. Its January 2026 Meta agreement covers early development of two new Natrium units.".freeze
+  TERRA_LI_URL = "https://nuclear-directory.org/companies/terrapower?utm_source=linkedin&utm_medium=social&utm_campaign=terrapower".freeze
+  TERRA_ANNOTATION = { "id" => "7300927", "entity" => "urn:li:organization:7300927", "length" => 10, "link" => "https://www.linkedin.com/company/terrapower", "localizedName" => "TerraPower", "start" => 5, "vanityName" => "terrapower" }.freeze
+  TERRA_CARD = { "title" => "TerraPower", "description" => "Based in Bellevue, WA, it is building the Natrium demonstration plant. Its January 2026 Meta agreement covers early development of two new Natrium units.",
+                 "image_url" => "https://nuclear-directory.org/cards/companies/terrapower/3c6cd97de2f87f53.png" }.freeze
+
+  def terrapower!
+    Organization.find_by(slug: "terrapower")&.tap { |company| company.update_columns(verification_status: "verified", verified_by: BY, verified_at: 1.year.ago) } ||
+      Organization.create!(name: "TerraPower", slug: "terrapower", website: "https://www.terrapower.com", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago, description: "Reactor developer.")
+  end
+
+  test "X: the approved text with our URL inside and the handle last is accepted as is, hashed as is, and sent verbatim (no URL appended)" do
+    terrapower!
+    sha = Digest::SHA256.hexdigest(TERRA_X)
+    assert_equal "7bf1c9053398d1f391f5ac058cd135f27c57a7690ea9c4cae167910cab6c2106", sha, "GTM's post_text_sha256"
+    travel_to(FRIDAY) { approve({ slug: "terrapower", text: TERRA_X, link: TERRA_URL_X, sha256: sha, send_on: "2026-11-23", opener_pattern_id: "place" }) }
+    assert_response :created, response.parsed_body.inspect
+    post = SocialPost.last
+    assert_equal [ TERRA_X, true, "place" ], [ post.text, post.exact_text, post.opener_pattern_id ]
+
+    ENV.update("BUFFER_API_KEY" => "dummy", "BUFFER_X_CHANNEL_ID" => "ch-x", "BUFFER_LINKEDIN_CHANNEL_ID" => "ch-li")
+    seen = []
+    buffer = SocialAgent::Buffer.new(http: ->(request) { seen << JSON.parse(request.body); { "data" => { "createPost" => { "post" => { "id" => "p", "dueAt" => "2026-11-23T16:45:00Z" } } } } }, card: ->(_) { flunk "no page read" })
+    buffer.call("x", post.text, post.link, exact: true, strict: true)
+    assert_equal TERRA_X, seen.last["variables"]["input"]["text"], "verbatim: the URL isn't appended again"
+    assert_equal 1, seen.last["variables"]["input"]["text"].scan("https://").size
+  end
+
+  test "X exact text: another URL, a wrong hash, or over 280 weighted characters is refused" do
+    terrapower!
+    two = "#{TERRA_X} https://example.com/x"
+    approve({ slug: "terrapower", text: two, link: TERRA_URL_X, sha256: Digest::SHA256.hexdigest(two) })
+    assert_includes response.parsed_body["codes"], "url_in_text"
+    approve({ slug: "terrapower", text: TERRA_X, link: TERRA_URL_X, sha256: Digest::SHA256.hexdigest("#{TERRA_X}\n\n#{TERRA_URL_X}") })
+    assert_includes response.parsed_body["codes"], "sha256", "an exact text hashes as itself, not text + link"
+    long = TERRA_X.sub("Meet TerraPower.", "Meet TerraPower. #{'Padding sentence here. ' * 8}")
+    approve({ slug: "terrapower", text: long, link: TERRA_URL_X, sha256: Digest::SHA256.hexdigest(long) })
+    assert_includes response.parsed_body["codes"], "length"
+  end
+
+  test "LinkedIn: native mention + card + the canonical content hash GTM computed (eec98020...), DQ's approval of both hashes, and the payload is stored for the send" do
+    terrapower!
+    content = "eec98020fa132e9bd89b0ce5fd0f3b2baba339d1b4d187afeaaf8edc174de90d"
+    sha = Digest::SHA256.hexdigest(TERRA_LI)
+    body = { platform: "linkedin", slug: "terrapower", text: TERRA_LI, link: TERRA_LI_URL, sha256: sha, annotations: [ TERRA_ANNOTATION ], card: TERRA_CARD, content_payload_sha256: content, send_on: "2026-11-24" }
+    SocialApproval.create!(platform: "linkedin", slug: "terrapower", sha256: sha, approved_by: "agent:data-quality")
+    travel_to(FRIDAY) { approve(body, dq: false) }
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body["codes"], "dq_approval", "the content hash needs DQ's approval too"
+
+    SocialApproval.create!(platform: "linkedin", slug: "terrapower", sha256: content, approved_by: "agent:data-quality")
+    travel_to(FRIDAY) { approve(body, dq: false) }
+    assert_response :created, response.parsed_body.inspect
+    post = SocialPost.last
+    assert_equal [ [ TERRA_ANNOTATION ], TERRA_CARD, content, false ], [ post.annotations, post.card, post.content_payload_sha256, post.exact_text ]
+
+    # A different name offset, a wrong urn, or a changed card changes what is approved: refused.
+    SocialPost.delete_all
+    travel_to(FRIDAY) { approve(body.merge(annotations: [ TERRA_ANNOTATION.merge("start" => 6) ]), dq: false) }
+    assert_includes response.parsed_body["codes"], "annotations"
+    travel_to(FRIDAY) { approve(body.merge(annotations: [ TERRA_ANNOTATION.merge("entity" => "urn:li:organization:1") ]), dq: false) }
+    assert_includes response.parsed_body["codes"], "annotations"
+    travel_to(FRIDAY) { approve(body.merge(card: TERRA_CARD.merge("description" => "Something else")), dq: false) }
+    assert_includes response.parsed_body["codes"], "content_sha"
+  end
+
+  test "the sender sends the approved LinkedIn payload exactly: annotations and card as approved, no page read, and no fallback: a refusal fails the post, nothing changed is posted" do
+    ENV.update("BUFFER_API_KEY" => "dummy", "BUFFER_X_CHANNEL_ID" => "ch-x", "BUFFER_LINKEDIN_CHANNEL_ID" => "ch-li")
+    seen = []
+    replies = []
+    buffer = SocialAgent::Buffer.new(http: ->(request) { seen << JSON.parse(request.body); replies.shift }, card: ->(_) { flunk "the approved card is used, the page isn't read" })
+    replies << { "data" => { "createPost" => { "post" => { "id" => "p", "dueAt" => "2026-11-24T16:45:00Z" } } } }
+    buffer.call("linkedin", TERRA_LI, TERRA_LI_URL, card: TERRA_CARD.transform_keys(&:to_sym), annotations: [ TERRA_ANNOTATION ], strict: true)
+    meta = seen.last["variables"]["input"]["metadata"]["linkedin"]
+    assert_equal TERRA_LI, seen.last["variables"]["input"]["text"]
+    assert_equal [ TERRA_ANNOTATION ], meta["annotations"]
+    assert_equal({ "url" => TERRA_LI_URL, "title" => "TerraPower", "description" => TERRA_CARD["description"], "thumbnail" => { "url" => TERRA_CARD["image_url"] } }, meta["linkAttachment"])
+
+    seen.clear
+    replies << { "data" => { "createPost" => { "message" => "Invalid annotation" } } }
+    assert_raises(SocialAgent::Buffer::Error) { buffer.call("linkedin", TERRA_LI, TERRA_LI_URL, card: TERRA_CARD.transform_keys(&:to_sym), annotations: [ TERRA_ANNOTATION ], strict: true) }
+    assert_equal 1, seen.size, "strict: one request, no retry without the mention or the card"
+    unreadable = SocialAgent::Buffer.new(http: ->(_) { flunk "nothing is sent" }, card: ->(_) { nil })
+    assert_raises(SocialAgent::Buffer::Error) { unreadable.call("linkedin", TERRA_LI, TERRA_LI_URL, strict: true) }
+  end
+
+  test "an opener pattern used in the last five posts on the platform is refused (opener_repeat); the queue can be read back with its hashes" do
+    travel_to(FRIDAY) do
+      load_row(platform: "x", send_on: "2026-11-23")
+      assert_response :created
+    end
+    SocialPost.last.update!(opener_pattern_id: "label")
+    other = Organization.create!(name: "Energy Northwest", slug: "energy-northwest", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    text = "Energy Northwest: it owns and operates Columbia Generating Station."
+    link = "https://nuclear-directory.org/companies/energy-northwest?utm_source=x&utm_medium=social&utm_campaign=energy-northwest"
+    travel_to(FRIDAY) { approve({ slug: "energy-northwest", link:, text:, sha256: Digest::SHA256.hexdigest("#{text}\n\n#{link}"), send_on: "2026-11-24", opener_pattern_id: "label" }) }
+    assert_includes response.parsed_body["codes"], "opener_repeat"
+    travel_to(FRIDAY) { approve({ slug: "energy-northwest", link:, text:, sha256: Digest::SHA256.hexdigest("#{text}\n\n#{link}"), send_on: "2026-11-24", opener_pattern_id: "activity" }) }
+    assert_response :created
+
+    get api_social_approved_drafts_path, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    assert_response :success
+    queue = response.parsed_body["queue"]
+    assert_equal [ [ "2026-11-23", "x", "vistra-corporation" ], [ "2026-11-24", "x", "energy-northwest" ] ], queue.map { |row| row.values_at("send_on", "platform", "company") }
+    assert_equal Digest::SHA256.hexdigest(queue.first["approved_sha256"] ? SocialPost.find(queue.first["id"]).text : ""), queue.first["text_sha256"]
+    get api_social_approved_drafts_path
+    assert_response :unauthorized
   end
 end

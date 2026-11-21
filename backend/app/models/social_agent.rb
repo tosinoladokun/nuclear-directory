@@ -7,7 +7,7 @@ module SocialAgent
 
   # Publishers by platform, each ->(text, link) returning { id:, due_at: } (queued) or { id:, permalink: } (sent).
   # Both go through Buffer (PM, 18 Nov); swap one here to change how a platform is published.
-  def self.senders = @senders ||= SocialChannel::PLATFORMS.to_h { |platform| [ platform, ->(text, link) { publisher.call(platform, text, link) } ] }
+  def self.senders = @senders ||= SocialChannel::PLATFORMS.to_h { |platform| [ platform, ->(text, link, **payload) { publisher.call(platform, text, link, **payload) } ] }
   def self.publisher = SocialAgent::Buffer.new
 
   # Sending is on only when SOCIAL_POSTING_ENABLED is "on" (Render dashboard; Infra): otherwise Live drafts too.
@@ -158,7 +158,9 @@ module SocialAgent
       return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{{ 'NewsItem' => 'news item', 'Relationship' => 'link' }.fetch(post.subject_type, 'company')} is no longer published") }
     end
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
-    sent = sender.call(post.text, post.link)
+    # A graders-approved post goes out exactly as approved: the text verbatim when it carries its own URL, the approved card and native mentions,
+    # and no fallback of any kind (strict). Anything else keeps the plain call.
+    sent = post.graded? ? sender.call(post.text, post.link, exact: post.exact_text, card: post.card, annotations: post.annotations, strict: true) : sender.call(post.text, post.link)
     if sent[:permalink]
       post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
     else

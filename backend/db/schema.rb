@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_21_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_21_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -621,6 +621,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_180000) do
     t.text "warnings"
     t.string "approved_sha256"
     t.date "sent_on"
+    t.boolean "exact_text", default: false, null: false
+    t.jsonb "annotations"
+    t.jsonb "card"
+    t.string "content_payload_sha256"
+    t.string "opener_pattern_id"
     t.index ["platform", "created_at"], name: "index_social_posts_on_platform_and_created_at"
     t.index ["platform", "send_on"], name: "index_social_posts_on_platform_and_send_on", where: "(send_on IS NOT NULL)"
     t.index ["platform", "sent_on"], name: "index_social_posts_one_send_per_platform_day", unique: true, where: "((sent_on IS NOT NULL) AND ((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text])))"

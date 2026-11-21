@@ -13,7 +13,10 @@ class SocialAgent::ApprovedDraft
   # can't quietly become a warning (Infra).
   HARD = /own link|hashtag|emoji|too long|empty or a placeholder/
   # Stable codes for what is refused (the messages may be reworded).
-  CODES = %w[platform text_empty graders company dq_approval link sha256 url_in_text already_sent cooldown send_on_taken hard_check send_on].freeze
+  CODES = %w[platform text_empty graders company dq_approval link sha256 url_in_text already_sent cooldown send_on_taken hard_check send_on length annotations card content_sha opener_repeat].freeze
+  X_WEIGHT = 280
+  X_URL_WEIGHT = 23
+  OPENER_RECENT = 5
 
   # The text's own hard problems (shape only), for the creation check and again at send (SocialAgent.recheck).
   def self.hard_problems(text, platform)
@@ -27,9 +30,11 @@ class SocialAgent::ApprovedDraft
     def fetcher = @fetcher ||= DataQuality::Fetcher.new
   end
 
-  def initialize(platform:, slug:, text:, link:, sha256:, graders:, source_url: nil, send_on: nil, now: Time.current, fetcher: nil)
+  def initialize(platform:, slug:, text:, link:, sha256:, graders:, source_url: nil, send_on: nil, annotations: nil, card: nil, content_payload_sha256: nil,
+                 opener_pattern_id: nil, now: Time.current, fetcher: nil)
     @platform, @slug, @text, @link, @sha, @graders, @source_url, @now = platform, slug, text.to_s.strip, link, sha256.to_s.downcase, graders, source_url, now
     @send_on = send_on
+    @annotations, @card, @content_sha, @opener = annotations, card, content_payload_sha256.to_s.downcase.presence, opener_pattern_id.to_s.strip.presence
     @fetcher = fetcher
   end
 
@@ -47,12 +52,19 @@ class SocialAgent::ApprovedDraft
 
     expected = "#{SocialAgent::SITE}/companies/#{company.slug}?utm_source=#{@platform}&utm_medium=social&utm_campaign=#{company.slug}"
     err.("link", "the link must be #{expected}") unless @link == expected
-    err.("sha256", "sha256 matches neither the text nor the text + blank line + link") unless [ @text, "#{@text}\n\n#{@link}" ].map { |shape| Digest::SHA256.hexdigest(shape) }.include?(@sha)
-    err.("url_in_text", "the text carries a URL: the link is added when it is sent") if @text.match?(%r{https?://}i)
+    # X may carry our own company URL inside the text (then a handle after it): the text is stored and SENT VERBATIM, and its hash is the text's own.
+    exact = @platform == "x" && @text.scan(%r{https?://\S+}i) == [ @link ]
+    shapes = exact ? [ @text ] : [ @text, "#{@text}\n\n#{@link}" ]
+    err.("sha256", "sha256 matches neither the text nor the text + blank line + link") unless shapes.map { |shape| Digest::SHA256.hexdigest(shape) }.include?(@sha)
+    err.("url_in_text", "the text carries a URL other than our own link (on X, our link exactly once; on LinkedIn none: the card carries it)") if !exact && @text.match?(%r{https?://}i)
+    err.("url_in_text", "the text carries a second URL") if exact && @text.scan(%r{https?://\S+}i).size > 1
+    err.("length", "over X's 280 weighted characters (the URL counts as 23): #{x_weight(@text)}") if exact && x_weight(@text) > X_WEIGHT
+    card, annotations = validate_native(err)
+    err.("opener_repeat", "that opener pattern was used in the last #{OPENER_RECENT} posts on #{@platform}") if @opener && opener_recent(@opener)
     # Data Quality's recorded PASS of exactly this hash (POST /api/dq/social_approvals): "graders: DQ" is a fact on file, not the caller's word.
     err.("dq_approval", "Data Quality has not recorded a PASS for this exact sha256 (POST /api/dq/social_approvals)") unless ::SocialApproval.exists?(platform: @platform, slug: @slug, sha256: @sha)
     used_by_another(company, send_on).each { |code, message| err.(code, message) }
-    problems = problems_for(company)
+    problems = problems_for(company, exact)
     hard, warnings = problems.partition { |problem| problem.match?(HARD) }
     hard.each { |problem| err.("hard_check", problem) }
     return result(nil, errors, warnings) if errors.any?
@@ -67,13 +79,56 @@ class SocialAgent::ApprovedDraft
       next if again.any?
 
       post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
-        organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, created_at: @now)
+        organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, exact_text: exact, card:, annotations:, content_payload_sha256: @content_sha, opener_pattern_id: @opener, created_at: @now)
     end
     return result(nil, again, warnings) if again.any?
 
     result(post, [], warnings)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => error
     result(nil, [ [ "hard_check", "couldn't save the draft: #{error.message}" ] ], [])
+  end
+
+  # The LinkedIn card and native mentions the graders approved, checked as a set: every annotation names the same Page in its id, urn, link and vanity name and
+  # the name stands in the text where it says; the canonical JSON hash of the whole content payload is the one on file with Data Quality.
+  def validate_native(err)
+    return [ nil, nil ] if @platform != "linkedin" || (@annotations.blank? && @card.blank?)
+
+    card = @card.to_h.stringify_keys.slice("title", "description", "image_url")
+    err.("card", "card needs a title, a description and an image_url") unless card.values_at("title", "description", "image_url").all?(&:present?)
+    annotations = Array(@annotations).map { |annotation| annotation.to_h.stringify_keys.slice("id", "entity", "start", "length", "link", "localizedName", "vanityName") }
+    annotations.each do |annotation|
+      name = annotation["localizedName"].to_s
+      ok = annotation["id"].to_s.match?(/\A\d+\z/) && annotation["entity"] == "urn:li:organization:#{annotation['id']}" &&
+        annotation["link"] == "https://www.linkedin.com/company/#{annotation['vanityName']}" && annotation["vanityName"].to_s.present? &&
+        annotation["start"].is_a?(Integer) && annotation["length"] == name.length && @text[annotation["start"], name.length] == name
+      err.("annotations", "annotation for #{name.inspect} doesn't match its id, urn, link, vanity name or its place in the text") unless ok
+    end
+    expected = content_hash(annotations, card)
+    err.("content_sha", "content_payload_sha256 doesn't match the canonical JSON of the text, annotations and card") unless @content_sha == expected
+    err.("dq_approval", "Data Quality has not recorded a PASS for the content_payload_sha256") unless @content_sha && ::SocialApproval.exists?(platform: @platform, slug: @slug, sha256: @content_sha)
+    [ card.presence, annotations.presence ]
+  end
+
+  # {text, metadata: {linkedin: {annotations, linkAttachment: {url, title, description, thumbnail: {url}}}}}: sorted keys, compact, unescaped unicode.
+  def content_hash(annotations, card)
+    payload = { "text" => @text, "metadata" => { "linkedin" => { "annotations" => annotations, "linkAttachment" => { "url" => @link, "title" => card["title"],
+      "description" => card["description"], "thumbnail" => { "url" => card["image_url"] } } } } }
+    Digest::SHA256.hexdigest(JSON.generate(canonical(payload)))
+  end
+
+  def canonical(value)
+    case value
+    when Hash then value.sort_by { |key, _| key.to_s }.to_h { |key, inner| [ key.to_s, canonical(inner) ] }
+    when Array then value.map { |inner| canonical(inner) }
+    else value
+    end
+  end
+
+  # X's weight: each of our URLs counts 23, every other character 1 (ASCII text; GTM's weighted_length rule).
+  def x_weight(text) = text.gsub(%r{https?://\S+}, "x" * X_URL_WEIGHT).length
+
+  def opener_recent(id)
+    SocialPost.where(platform: @platform).where.not(opener_pattern_id: nil).where.not(status: %w[cancelled blocked failed]).order(id: :desc).limit(OPENER_RECENT).pluck(:opener_pattern_id).include?(id)
   end
 
   private
@@ -109,7 +164,7 @@ class SocialAgent::ApprovedDraft
     end
 
     # The agent's own content checks against what our page for the company says (and its source page when given).
-    def problems_for(company)
+    def problems_for(company, exact = false)
       profile = CompanyProfile.new(company)
       deals = profile.deals.map { |deal| [ deal.from_organization.name, "and", deal.to_organization.name, deal.description ].compact.join(" ") }
       facts = { "name" => company.name, "description" => profile.description, "headquarters" => [ profile.hq_city, profile.hq_state ].compact_blank.join(", "), "records" => deals.join("; ") }.compact_blank
@@ -118,8 +173,10 @@ class SocialAgent::ApprovedDraft
       fetcher = @fetcher || self.class.fetcher
       ready, pre = SocialAgent.prepare(item, fetcher)
       found = pre.map { |problem| "source: #{problem}" }
-      found.concat(SocialAgent::Check.problems(@text, ready, platform: @platform))
-      found.concat(SocialAgent::Rules.problems(@text, ready, platform: @platform, fetcher:)) if found.none? { |problem| problem.match?(HARD) }
+      # The checks read the post's prose: with our URL inside an exact X text, they read it without the URL (its length is checked separately).
+      prose = exact ? @text.sub(@link, "").squeeze("\n").strip : @text
+      found.concat(SocialAgent::Check.problems(prose, ready, platform: @platform).reject { |problem| exact && problem.match?(/too long/) })
+      found.concat(SocialAgent::Rules.problems(prose, ready, platform: @platform, fetcher:)) if found.none? { |problem| problem.match?(HARD) }
       found
     rescue StandardError => error
       [ "the content checks couldn't run (#{error.class})" ]

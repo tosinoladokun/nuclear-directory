@@ -38,6 +38,7 @@ Rails.application.routes.draw do
   # GTM-approved spotlight drafts, with their own token (#896).
   scope "api/social", module: "api/social", defaults: { format: :json } do
     post "approved_drafts" => "approved_drafts#create", as: :api_social_approved_drafts
+    get "approved_drafts" => "approved_drafts#index"
   end
 
   scope "api/dq", module: "api/dq", defaults: { format: :json } do
