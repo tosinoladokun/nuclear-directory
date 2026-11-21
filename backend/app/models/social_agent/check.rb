@@ -34,7 +34,7 @@ module SocialAgent::Check
 
   # Capitalised words (names), each of which must be a word in the source. A sentence may start with a plain word.
   # Words that only start a sentence (shadow day 20 Nov: "Those" was taken for a name).
-  OPENERS = %w[Meet Say Introducing New According Per The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
+  OPENERS = %w[Meet Say Introducing According Per The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
     Several Few Other Another Neither Either Such In On At For With Under After Before By From Since As Over About Across Along Among
     Between During Through Into Upon Within Without While When Where Which Who What Why How If Once Unlike Like Also
     And But Or So Yet Still Meanwhile Separately Together].freeze
@@ -44,7 +44,7 @@ module SocialAgent::Check
     text.split(/(?<=[.!?:])\s+/).flat_map do |sentence|
       # A possessive is its name: "Power's" checks "Power" (shadow day 20 Nov).
       words = sentence.scan(/[[:alnum:]][\w&'’.-]*[[:alnum:]&]|[[:alnum:]]/).map { |word| word.sub(/['’]s\z/i, "") }.select { |word| word.match?(/[A-Z]/) }
-      words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && OPENERS.include?(word) }
+      words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && (OPENERS.include?(word) || SocialAgent::Openers.first_words.include?(word)) }
     end.uniq
   end
 
