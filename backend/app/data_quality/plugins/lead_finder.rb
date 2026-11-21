@@ -30,6 +30,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Leads (Backend gates them at 50) plus the nightly pending-company sites (SITES_PER_NIGHT).
   FINDS_PER_DAY = 100
   FINDS = "finds".freeze
+  # Extra same-site pages read for person-added leads, a day (Infra: a big batch can't spike the crawl).
+  NUCLEAR_PAGES = "nuclear_pages".freeze
+  NUCLEAR_PAGES_PER_DAY = 30
   LEAD_MARK = "#lead-finder".freeze
   # Brave's plan allows 1 request a second (Infra): this much between our calls.
   SEARCH_GAP = 1.1
@@ -132,7 +135,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
     lead = lead.with(name: input) if input.present?
     @power_buyer = @site_for_pending = false
-    @us_shown_elsewhere = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
+    @us_shown_elsewhere = @person_added = lead.keys.to_a.any? { |key| key.match?(PERSON_KEYS) }
     # What a person said about it ("Austin microreactor startup"; Backend #806), for the search.
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
@@ -151,6 +154,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         return outcome(:duplicate, name:, website:, organization_id: known.id, reason: "Its website is already listed", found:)
       end
       verdict, page, why = verify(name, website)
+      # A lead a person typed: the sentence may be on another page of its site (DQ, 20 Nov: Fluor's nuclear page).
+      if @person_added && page && (verdict == :not_nuclear || (verdict == :ok && !nuclear_sentence?(page, name))) && (inner = nuclear_page(page, name))
+        verdict, page, why = :ok, inner, nil
+      end
       (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
       next unless verdict == :ok
 
@@ -169,12 +176,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     name = source.title.to_s.squish
     return [] if !source.url.end_with?(LEAD_MARK) || name.blank? || source.content_text.blank?
 
-    blocks = Nokogiri::HTML(source.content_text).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
+    blocks = blocks(source.content_text)
     # A site found for a company already listed (a pending one) is claimed for
     # that company by its own name, so Match can't give it to another (Copilot);
     # for a university, national lab or power buyer the sentence need only name it (Tosin, 20 Nov).
     target = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id)
-    sentences = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }.select { |sentence| names?(sentence, name) }
+    sentences = naming_sentences(blocks, name)
     quote = (sentences.find { |sentence| nuclear?(sentence, brand(name)) } || (sentences.first if target && (institution?(source.url.delete_suffix(LEAD_MARK)) || power_buyer?(target.id, target.name)))) or return []
     claimed = target ? target.name : page_name(quote.strip, name, site_names(source))
     [ { kind: "organization", quote: quote.strip, payload: { "name" => claimed, "website" => "https://#{URI(source.url).host}" } } ]
@@ -228,6 +235,35 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     # A home page with no address: its own contact or about page (at most two, robots and spacing as always) may show one.
     CONTACT = %r{contact|about|company|locations?|offices?}i
+    def blocks(html) = Nokogiri::HTML(html.to_s).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
+
+    def naming_sentences(blocks, name) = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }.select { |sentence| names?(sentence, name) }
+
+    def nuclear_sentence?(page, name) = naming_sentences(blocks(page.content_text), name).any? { |sentence| nuclear?(sentence, brand(name)) }
+
+    NUCLEAR_LINK = /nuclear|reactor|fission|\bsmr/i
+    # Up to 3 pages of the same site whose link or address says nuclear, the
+    # first with a sentence naming the company and its nuclear work.
+    def nuclear_page(home, name)
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
+      links = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
+        url = URI.join(base, link["href"].to_s).to_s.split("#").first rescue next
+        # The page already checked never takes one of the three places (Copilot).
+        url if URI(url).host.to_s.downcase.delete_prefix("www.") == host && "#{URI(url).path} #{link.text}".match?(NUCLEAR_LINK) &&
+          Source.bare_homepage(url) != Source.bare_homepage(base)
+      end.uniq.first(3)
+      links.each do |url|
+        break unless reserve(NUCLEAR_PAGES, NUCLEAR_PAGES_PER_DAY)
+
+        page = snapshot(url) or next
+        return page if nuclear_sentence?(page, name)
+      end
+      nil
+    rescue URI::Error
+      nil
+    end
+
     def us_on_own_pages?(home)
       base = home.final_url.presence || home.url
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
