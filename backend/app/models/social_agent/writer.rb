@@ -58,7 +58,7 @@ class SocialAgent::Writer
     - Relationship sentences begin "Per the directory's records" or "The directory lists", name who does what for whom (who builds what),
       and never use the present tense for a finished award, loan or investment. Do not pick examples out of a longer list.
     - Write whole sentences with every number and name spelled exactly as the facts give it ("$1.7 billion", never "$1.7B"; "Bellevue, WA",
-      never "WA-based"; no slashes or abbreviations the facts don't use). Where a link says "the source names the party as: X", the money,
+      never "WA-based"; "$1.52 billion" in lower case, never "$1.52 Billion"; no slashes or abbreviations the facts don't use). Where a link says "the source names the party as: X", the money,
       loan or award went to X, and the post names X. When the length limit is tight, leave a fact out: never shorten
       it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
     - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
