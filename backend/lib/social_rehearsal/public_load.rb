@@ -78,11 +78,13 @@ module SocialRehearsal
     # 'Meet a company' (#883): up to `limit` company pages as the directory publishes them: its one-line description, headquarters,
     # website, what it works on (tags) and its deals with their own quotes and sources. Public data only, like the news above.
     # Only companies that show a description, a website and at least one deal; spread across the index, not just the first ones.
-    def load_spotlights(limit = 20)
+    def load_spotlights(limit = 20, slugs: [])
       items = JSON.parse(get(INDEX).to_s)["items"].select { |item| item["k"] == "c" }
       loaded = 0
       # A spread across the index first (every 5th), then the rest, until `limit` pages have what a spotlight needs.
-      ordered = items.each_slice(5).map(&:first) + items.each_with_index.reject { |_, index| (index % 5).zero? }.map(&:first)
+      # slugs: these companies first, in this order (GTM's priority accounts).
+      named = slugs.filter_map { |slug| items.find { |item| item["s"] == slug } }
+      ordered = named + items.each_slice(5).map(&:first) + items.each_with_index.reject { |_, index| (index % 5).zero? }.map(&:first)
       ordered.each do |item|
         break if loaded >= limit
 

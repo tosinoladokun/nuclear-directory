@@ -28,7 +28,7 @@ namespace :social do
     loader = SocialRehearsal::PublicLoad.new
     # SPOTLIGHTS=20: the 'Meet a company' pool instead of news (#883).
     if ENV["SPOTLIGHTS"].present?
-      puts "Loaded #{loader.load_spotlights(ENV["SPOTLIGHTS"].to_i)} company spotlights"
+      puts "Loaded #{loader.load_spotlights(ENV["SPOTLIGHTS"].to_i, slugs: ENV["SPOTLIGHT_SLUGS"].to_s.split(","))} company spotlights"
       next
     end
     loaded = loader.call
