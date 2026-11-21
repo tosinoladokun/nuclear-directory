@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_20_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_20_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -813,6 +813,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_160000) do
     t.index ["url"], name: "index_sources_on_url", unique: true
     t.check_constraint "crawl_status::text = ANY (ARRAY['pending'::character varying::text, 'ok'::character varying::text, 'blocked'::character varying::text, 'needs_human'::character varying::text])", name: "sources_crawl_status_check"
     t.check_constraint "link_status IS NULL OR (link_status::text = ANY (ARRAY['ok'::character varying::text, 'dead'::character varying::text, 'failing'::character varying::text, 'error'::character varying::text, 'blocked'::character varying::text, 'disallowed'::character varying::text]))", name: "sources_link_status_check"
+  end
+
+  create_table "takeoff_proposals", force: :cascade do |t|
+    t.string "subject_type", null: false
+    t.bigint "subject_id", null: false
+    t.string "batch", null: false
+    t.text "reason", null: false
+    t.string "source_url"
+    t.text "quote"
+    t.string "proposed_by", null: false
+    t.string "status", default: "pending", null: false
+    t.string "decided_by"
+    t.datetime "decided_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["status", "batch"], name: "index_takeoff_proposals_on_status_and_batch"
+    t.index ["subject_type", "subject_id"], name: "index_takeoff_proposals_on_subject_type_and_subject_id"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'taken_off'::character varying, 'kept'::character varying]::text[])", name: "takeoff_proposals_status_check"
   end
 
   create_table "technologies", force: :cascade do |t|

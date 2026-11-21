@@ -145,6 +145,35 @@ module Directory
     # fact's Directory::FactStateRef is returned. nil otherwise. For callers
     # that act on a fact staying open, e.g. rejecting a candidate attached to
     # it, so a human's decision made meanwhile is never missed.
+    # A news item's text (#863): headline, summary, published_on, edited by a
+    # person or Data Quality's agent. Its status and who approved it stay as
+    # they are (it stays public); the change is one history event by `by`,
+    # with the reason and context (Data Quality's source). Returns the item.
+    NEWS_TEXT = %i[headline summary published_on].freeze
+    def self.edit_news_text(id:, attributes:, by:, reason:, context: {})
+      raise Invalid, "a person or Data Quality's agent edits news text" unless by.to_s.match?(/\A(human:\S+|agent:data-quality)\z/)
+      raise Invalid, "give a reason" if reason.blank?
+
+      values = attributes.to_h.symbolize_keys
+      raise Invalid, "can't edit #{(values.keys - NEWS_TEXT).to_sentence} here" if (values.keys - NEWS_TEXT).any?
+
+      ActiveRecord::Base.transaction(requires_new: true) do
+        item = NewsItem.lock.find_by(id:) or raise Invalid, "no news item #{id}"
+        raise Invalid, "it's #{item.verification_status}; put it back before editing" if item.closed?
+
+        item.assign_attributes(values)
+        changes = item.changes_to_save.slice(*NEWS_TEXT.map(&:to_s)).transform_values { |before, after| [ before&.to_s, after&.to_s ] }
+        raise Invalid, "nothing changed" if changes.empty?
+
+        item.save!
+        item.verification_reason = reason
+        item.verification_context = context.to_h.compact
+        item.audited_changes = changes
+        item.log_verification_event(from_status: item.verification_status, by:)
+        item
+      end
+    end
+
     def self.while_open(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless Lookup::FACT_TYPES.include?(type.to_s)
 

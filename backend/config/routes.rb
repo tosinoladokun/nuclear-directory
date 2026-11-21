@@ -43,6 +43,10 @@ Rails.application.routes.draw do
     # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
     get "checker" => "checker#index", as: :api_dq_checker
+    # Data Quality's text fixes (#863): edit only, with reason and source, undoable.
+    get "edits" => "edits#index", as: :api_dq_edits
+    post "edits" => "edits#create"
+    post "edits/undo" => "edits#undo", as: :api_dq_edits_undo
     # The pipeline's health (#811): today's counts and problems, and the last two weeks.
     get "health" => "health#show", as: :api_dq_health
   end
@@ -86,6 +90,9 @@ Rails.application.routes.draw do
       constraints: { type: /Organization|Facility/, id: /\d+/, decision: /yes|no/ }
     post "inbox/selected" => "inbox#decide_selected", as: :inbox_decide_selected
     post "inbox/undo" => "inbox#undo", as: :inbox_undo
+    # Data Quality's take-off proposals (#863): Yes takes off (reversible), No keeps; one row or a whole set.
+    post "inbox/takeoffs/:id/:decision" => "inbox#decide_takeoff", as: :inbox_decide_takeoff, constraints: { id: /\d+/, decision: /yes|no/ }
+    post "inbox/takeoff_sets/:batch/:decision" => "inbox#decide_takeoff_set", as: :inbox_decide_takeoff_set, constraints: { batch: /[\w-]+/, decision: /yes|no/ }
     # Suggest a company (#752): a name, website or link; found in the background.
     post "inbox/suggest" => "inbox#suggest", as: :inbox_suggest
     post "inbox/:candidate_id/:decision" => "inbox#decide", as: :inbox_decide, constraints: { decision: /yes|no/ }

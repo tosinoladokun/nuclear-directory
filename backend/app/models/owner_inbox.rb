@@ -48,7 +48,7 @@ class OwnerInbox
   # How many facts wait for him, without building their rows (the nav badge).
   def size
     capped = groups.size - company_groups.size + company_groups.count { |_, copies| shown_companies.include?(copies.first.subject_id) }
-    (@sections ? sections.values.sum(&:size) : capped) + records.size
+    (@sections ? sections.values.sum(&:size) : capped) + records.size + TakeoffProposal.pending.count
   end
 
   # Pending companies and plants with no open claim (seeded, or a claim
