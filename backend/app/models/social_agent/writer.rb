@@ -80,6 +80,8 @@ class SocialAgent::Writer
     Before you say the post leaves out or changes something, find the exact words in the post. A word that is in the post
     ("nearly", "up to", "non-binding") is not missing. Quote the post's own offending words in your reason; if you cannot
     quote them, pass the post.
+    A "Meet <company>" post may leave facts out for length (an X post is short): do not fail it for leaving out the headquarters, part of
+    the description or a link. Fail it only for changing or adding something, or dropping a condition on what it does say.
     Fail it when it reverses who did what for whom, or changes what the source says, or adds, drops or contradicts a condition, number, name, date or party.
   TEXT
   LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "One or two short paragraphs, at most 120 words; as short as the facts allow." }.freeze

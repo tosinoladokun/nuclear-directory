@@ -789,4 +789,11 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal 1, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts["records of its links"].split("; ").size
     assert_equal 2, SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts["records of its links"].split("; ").size
   end
+
+  test "'per its website' / 'per DOE' name the source in words (spotlights, #883)" do
+    assert SocialAgent::Rules.attributed?("Meet Acme: it designs reactors, per its website.")
+    assert SocialAgent::Rules.attributed?("It received a loan, per USAspending.gov.")
+    assert_not SocialAgent::Rules.attributed?("Meet Acme: it designs reactors.")
+    assert_not SocialAgent::Rules.attributed?("Meet Acme: it designs 3 reactors per year.")
+  end
 end
