@@ -57,8 +57,20 @@ class SocialAgent::ApprovedDraft
     hard.each { |problem| err.("hard_check", problem) }
     return result(nil, errors, warnings) if errors.any?
 
-    post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
-      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, created_at: @now)
+    # Created under the platform's channel lock with the conflicts read again, so two overlapping submissions for the same company can't both
+    # be created (each would then block the other's send; Copilot).
+    post = nil
+    again = []
+    SocialChannel.transaction do
+      SocialChannel.for(@platform).lock!
+      again = used_by_another(company, send_on)
+      next if again.any?
+
+      post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
+        organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, created_at: @now)
+    end
+    return result(nil, again, warnings) if again.any?
+
     result(post, [], warnings)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => error
     result(nil, [ [ "hard_check", "couldn't save the draft: #{error.message}" ] ], [])

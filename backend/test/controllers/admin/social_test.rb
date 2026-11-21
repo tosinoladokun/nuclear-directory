@@ -317,7 +317,7 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
 
   test "a draft the graders approved shows in Admin > Posts with Send this draft and its hash, and its reason isn't shown as an error (#896)" do
     draft = draft_for
-    draft.update!(reason: "#{SocialPost::GRADED} GTM, Founder, DQ")
+    draft.update!(reason: "#{SocialPost::GRADED} GTM, Founder, DQ", approved_sha256: Digest::SHA256.hexdigest(draft.text))
     get admin_social_path
     assert_select "form#social-send-#{draft.id}", 1
     assert_select "p", /Text hash #{draft.text_hash}/
@@ -327,7 +327,7 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
   test "the approved queue lists each waiting row with its day, hash and Cancel; Cancel takes only a waiting graders-approved row out (#897)" do
     company = Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: "human:tosin", verified_at: 1.year.ago)
     row = SocialPost.create!(platform: "x", status: "drafted", subject: company, text: "Meet Acme Fission. It designs reactors.", link: "https://nuclear-directory.org/companies/acme-fission",
-      reason: "#{SocialPost::GRADED} GTM, Founder, DQ", send_on: Date.new(2026, 11, 24), warnings: "the name \"Acme\" isn't in the source", organization_ids: [ company.id ])
+      reason: "#{SocialPost::GRADED} GTM, Founder, DQ", approved_sha256: Digest::SHA256.hexdigest("Meet Acme Fission. It designs reactors."), send_on: Date.new(2026, 11, 24), warnings: "the name \"Acme\" isn't in the source", organization_ids: [ company.id ])
     get admin_social_path
     assert_select "#social-queued-#{row.id}", /Tue 24 Nov/
     assert_select "#social-queued-#{row.id} p", /Text hash #{row.text_hash}/

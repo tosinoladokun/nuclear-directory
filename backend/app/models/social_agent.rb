@@ -58,7 +58,7 @@ module SocialAgent
     return "switched off" if SocialChannel.for(platform).off?
     return "it's a weekend" if day.on_weekend?
     return "it's a holiday" if SocialAgent::Rules.holiday?(day.to_date)
-    "today's post is already done" if SocialPost.used.where(platform:, created_at: day.all_day).exists?
+    "today's post is already done" if SocialPost.used.where(platform:).on_day(day).exists?
   end
 
   # drafts_only: the admin's Draft now, which never sends whatever the switch says.
@@ -77,7 +77,7 @@ module SocialAgent
       return stopped(platform, now, reason)
     end
     # Today's done once anything was sent, queued, drafted or failed (a failure may have been ambiguous; Infra).
-    return stopped(platform, now, "today's post is done") if SocialPost.used.where(platform:, created_at: now.in_time_zone(ZONE).all_day).exists?
+    return stopped(platform, now, "today's post is done") if SocialPost.used.where(platform:).on_day(now.in_time_zone(ZONE)).exists?
 
     fetcher ||= DataQuality::Fetcher.new
     # The first usable item whose source page answers, isn't sensitive and carries its date; its page's words go to the
@@ -143,7 +143,7 @@ module SocialAgent
   def self.send_post(post, now: Time.current)
     claimed = SocialChannel.transaction do
       SocialChannel.lock.find_by!(platform: post.platform)
-      month = SocialPost.where(platform: post.platform, status: SocialPost::SENT, created_at: now.all_month)
+      month = SocialPost.where(platform: post.platform, status: SocialPost::SENT).in_month(now.in_time_zone(ZONE))
       next post.tap { |over| over.update!(status: "blocked", reason: "this month's #{monthly_max} posts are done") } if month.count >= monthly_max
 
       spent = month.sum(:cost_usd)
@@ -285,7 +285,7 @@ module SocialAgent
   def self.cancel_queued(platform: nil, why: "switched off", publisher: self.publisher, keep_approved: false)
     queued = SocialPost.where(status: "queued").where(posted_at: Time.current..)
     queued = queued.where(platform:) if platform
-    queued = queued.where("reason IS NULL OR (reason <> ? AND reason NOT LIKE ?)", APPROVED, "#{SocialPost::GRADED}%") if keep_approved
+    queued = queued.where("reason IS NULL OR (reason <> ? AND approved_sha256 IS NULL)", APPROVED) if keep_approved
     queued.find_each do |post|
       publisher.cancel(post.external_id)
       post.update!(status: "cancelled", cost_usd: 0, reason: "taken back before it went out: #{why}")

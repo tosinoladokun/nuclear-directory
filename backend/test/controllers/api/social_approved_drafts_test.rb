@@ -5,6 +5,8 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   TOKEN = "approve-token"
   BY = "human:tosin"
   PAGE = Struct.new(:x) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>Vistra generates electricity in Irving.</p>", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+  # Tests that name a send_on freeze the clock before it (a date in the past is refused), so they keep passing after those days.
+  FRIDAY = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 12, 0)
   TEXT = "Meet Vistra Corporation.\n\nBased in Irving, TX, Vistra generates and sells electricity and operates nuclear plants. Its releases record signed 20-year nuclear power agreements with AWS and Meta.".freeze
 
   setup do
@@ -164,19 +166,21 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   end
 
   test "refusals come with stable codes" do
-    approve({ graders: %w[GTM] })
-    assert_includes response.parsed_body["codes"], "graders"
-    approve({ slug: "nobody" })
-    assert_includes response.parsed_body["codes"], "company"
-    approve({ link: "https://nuclear-directory.org/companies/vistra-corporation" })
-    assert_includes response.parsed_body["codes"], "link"
-    approve({ sha256: Digest::SHA256.hexdigest("else") })
-    assert_includes response.parsed_body["codes"], "sha256"
-    approve({ platform: "mastodon" })
-    assert_includes response.parsed_body["codes"], "platform"
-    approve({ send_on: "2026-11-22" })
-    assert_includes response.parsed_body["codes"], "send_on", "a Sunday"
-    assert((response.parsed_body["codes"] - SocialAgent::ApprovedDraft::CODES).empty?)
+    travel_to(FRIDAY) do
+      approve({ graders: %w[GTM] })
+      assert_includes response.parsed_body["codes"], "graders"
+      approve({ slug: "nobody" })
+      assert_includes response.parsed_body["codes"], "company"
+      approve({ link: "https://nuclear-directory.org/companies/vistra-corporation" })
+      assert_includes response.parsed_body["codes"], "link"
+      approve({ sha256: Digest::SHA256.hexdigest("else") })
+      assert_includes response.parsed_body["codes"], "sha256"
+      approve({ platform: "mastodon" })
+      assert_includes response.parsed_body["codes"], "platform"
+      approve({ send_on: "2026-11-22" })
+      assert_includes response.parsed_body["codes"], "send_on", "a Sunday"
+      assert((response.parsed_body["codes"] - SocialAgent::ApprovedDraft::CODES).empty?)
+    end
   end
 
   test "every shape the content checks call hard is classified hard, so a reworded check can't become a warning (Infra)" do
@@ -252,10 +256,12 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   end
 
   test "the content checks' warnings are stored and shown on the row, with the day it goes out" do
-    approve({ send_on: "2026-11-23" })
-    post = SocialPost.last
-    assert post.warnings.present?
-    assert_equal response.parsed_body["warnings"], post.warnings.split("\n")
+    travel_to(FRIDAY) do
+      approve({ send_on: "2026-11-23" })
+      post = SocialPost.last
+      assert post.warnings.present?
+      assert_equal response.parsed_body["warnings"], post.warnings.split("\n")
+    end
   end
 
   def load_row(platform:, slug: "vistra-corporation", send_on:, text: TEXT)
@@ -264,22 +270,24 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   end
 
   test "an approved QUEUE: rows for several days wait, one per platform per day, the same company on two platforms on different days is fine, and waiting rows hold no slot or cooldown" do
-    load_row(platform: "x", send_on: "2026-11-23")
-    assert_response :created
-    load_row(platform: "linkedin", send_on: "2026-11-24")
-    assert_response :created, response.parsed_body.inspect
-    other = Organization.create!(name: "Energy Northwest", slug: "energy-northwest", website: "https://energy-northwest.com", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago, description: "Public power agency.")
-    load_row(platform: "x", slug: "energy-northwest", send_on: "2026-11-23", text: "Meet Energy Northwest. It owns and operates Columbia Generating Station in Richland, WA.")
-    assert_response :unprocessable_entity
-    assert_includes response.parsed_body["codes"], "send_on_taken", "one approved row per platform per day"
-    load_row(platform: "x", slug: "energy-northwest", send_on: "2026-11-24", text: "Meet Energy Northwest. It owns and operates Columbia Generating Station in Richland, WA.")
-    assert_response :created
-    assert_equal 3, SocialPost.waiting.count
-    load_row(platform: "x", send_on: "2026-12-04")
-    assert_response :unprocessable_entity, "the same company again on X within 14 days of its queued day"
-    assert_includes response.parsed_body["codes"], "cooldown"
-    # A waiting row holds no slot: the used scope (today's slot, similarity) ignores it.
-    assert_equal 0, SocialPost.used.count
+    travel_to(FRIDAY) do
+      load_row(platform: "x", send_on: "2026-11-23")
+      assert_response :created
+      load_row(platform: "linkedin", send_on: "2026-11-24")
+      assert_response :created, response.parsed_body.inspect
+      other = Organization.create!(name: "Energy Northwest", slug: "energy-northwest", website: "https://energy-northwest.com", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago, description: "Public power agency.")
+      load_row(platform: "x", slug: "energy-northwest", send_on: "2026-11-23", text: "Meet Energy Northwest. It owns and operates Columbia Generating Station in Richland, WA.")
+      assert_response :unprocessable_entity
+      assert_includes response.parsed_body["codes"], "send_on_taken", "one approved row per platform per day"
+      load_row(platform: "x", slug: "energy-northwest", send_on: "2026-11-24", text: "Meet Energy Northwest. It owns and operates Columbia Generating Station in Richland, WA.")
+      assert_response :created
+      assert_equal 3, SocialPost.waiting.count
+      load_row(platform: "x", send_on: "2026-12-04")
+      assert_response :unprocessable_entity, "the same company again on X within 14 days of its queued day"
+      assert_includes response.parsed_body["codes"], "cooldown"
+      # A waiting row holds no slot: the used scope (today's slot, similarity) ignores it.
+      assert_equal 0, SocialPost.used.count
+    end
   end
 
   test "the 8:30 job sends today's row even though the same company waits on another platform for tomorrow; the guards read the queue as waiting, not as tried" do
@@ -367,5 +375,40 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
 
   test "social_approvals is a private table for Metabase" do
     assert_includes Metabase::ReadonlyRole::PRIVATE_TABLES, "social_approvals"
+  end
+
+  test "graders' approval survives the outcome: a Buffer timeout or a taken-back post rewrites the reason, and the DQ API still says approved by the graders, never 'passed every check' (Copilot)" do
+    travel_to(FRIDAY) { approve({ send_on: "2026-11-23" }) }
+    post = SocialPost.last
+    post.update!(status: "unknown", reason: "may have gone out (timeout); check the account, never resent")
+    assert post.reload.graded?
+    ENV["DQ_AGENT_TOKEN_DIGEST"] = Digest::SHA256.hexdigest("dq")
+    get api_dq_social_posts_path, params: { since: "2026-11-01" }, headers: { "Authorization" => "Bearer dq" }
+    assert_equal Api::Dq::SocialPostsController::GRADED, response.parsed_body["posts"].last["checks"]
+    assert_not SocialPost.new(reason: "approved by graders: GTM", approved_sha256: nil).graded?, "a reason alone claims nothing"
+  ensure
+    ENV.delete("DQ_AGENT_TOKEN_DIGEST")
+  end
+
+  test "caps count a post by the day it was sent: a November draft sent in December counts in December's cap and today's slot (Copilot)" do
+    company = Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    sent_dec = SocialPost.create!(platform: "x", status: "posted", subject: company, text: "Meet Acme.", cost_usd: 0.5, created_at: Time.utc(2026, 11, 20, 20), sent_on: Date.new(2026, 12, 1))
+    december = Time.find_zone(SocialAgent::ZONE).local(2026, 12, 15, 9)
+    assert_includes SocialPost.where(status: SocialPost::SENT).in_month(december), sent_dec
+    assert_not_includes SocialPost.where(status: SocialPost::SENT).in_month(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 15)), sent_dec
+    assert_includes SocialPost.on_day(Time.find_zone(SocialAgent::ZONE).local(2026, 12, 1, 8, 30)), sent_dec
+    assert_not_includes SocialPost.on_day(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 8, 30)), sent_dec
+    third = Organization.create!(name: "Gamma Fission", slug: "gamma-fission", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    legacy = SocialPost.create!(platform: "x", status: "posted", subject: third, text: "Old.", created_at: Time.utc(2026, 12, 2, 18))
+    assert_includes SocialPost.in_month(december), legacy, "an older row without sent_on falls back to created_at"
+    ENV["SOCIAL_MONTHLY_MAX"] = "1"
+    other = Organization.create!(name: "Beta Fission", slug: "beta-fission", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    SocialChannel.for("x")
+    draft = SocialPost.create!(platform: "x", status: "drafted", subject: other, text: "Meet Beta.", created_at: december - 1.hour)
+    SocialAgent.senders["x"] = ->(*) { flunk "over the month's cap" }
+    assert_match(/this month's 1 posts are done/, SocialAgent.send_post(draft, now: december).reason)
+  ensure
+    ENV.delete("SOCIAL_MONTHLY_MAX")
+    SocialAgent.senders.delete("x")
   end
 end

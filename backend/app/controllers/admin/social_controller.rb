@@ -5,7 +5,7 @@ class Admin::SocialController < Admin::BaseController
     @channels = SocialChannel::PLATFORMS.map { |platform| SocialChannel.for(platform) }
     @posts = SocialPost.order(created_at: :desc).limit(100)
     @queue = SocialPost.waiting.includes(:subject).order(:send_on, :platform)
-    @spent = SocialPost.where(status: SocialPost::SENT, created_at: Time.current.all_month).sum(:cost_usd)
+    @spent = SocialPost.where(status: SocialPost::SENT).in_month(Time.current).sum(:cost_usd)
   end
 
   # Draft now (PM, 20 Nov: admin UI over console): today's drafts for the platforms that are on, never sent.
