@@ -816,4 +816,13 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "a page on newswire.example", item.facts["headquarters comes from"]
     assert_no_match(/own website/, item.facts.values_at("description comes from", "headquarters comes from").join(" "), "a press-release fact is never 'its website'")
   end
+
+  test "a spotlight puts the company only where the directory's headquarters is (Helion: Redmond was an award's location, the headquarters is Everett)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Helion Energy", "headquarters" => "Everett, WA" }, source_url: "https://helionenergy.com", source_quote: "x", path: "/companies/helion", organization_ids: [])
+    assert_equal [ "it puts the company in Redmond, but its headquarters in the directory is Everett, WA" ], SocialAgent::Rules.headquarters("Meet Helion Energy: it is based in Redmond, WA.", item)
+    assert_empty SocialAgent::Rules.headquarters("Meet Helion Energy: it is headquartered in Everett, Washington.", item)
+    assert_empty SocialAgent::Rules.headquarters("Meet Helion Energy: it builds a fusion plant.", item), "no place said"
+    news = item.with(kind: "news")
+    assert_empty SocialAgent::Rules.headquarters("It is based in Redmond, WA.", news), "only spotlights"
+  end
 end

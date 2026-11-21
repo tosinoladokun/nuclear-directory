@@ -64,6 +64,7 @@ module SocialAgent::Rules
     found.concat(status_words(text, item))
     found.concat(people(text, item))
     found.concat(tags(text, item))
+    found.concat(headquarters(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found.concat(speaker_problems(text, item))
@@ -288,6 +289,20 @@ module SocialAgent::Rules
       "it says #{said.downcase.inspect}, which its source doesn't" unless item.source_text.match?(stem)
     end
     (words + terms).uniq
+  end
+
+  # Where a spotlight puts the company is the directory's headquarters, nothing else on the page (Founder/DQ, Helion: "Redmond" was the
+  # 2014 award's project location, the headquarters is Everett).
+  PLACED = /\b(?:based|headquartered|headquarters(?:\s+(?:is|are))?)\s+in\s+([A-Z][\p{L}.'-]*(?:\s+[A-Z][\p{L}.'-]*)*)/
+  def headquarters(text, item)
+    return [] unless item.kind == "spotlight"
+
+    hq = item.facts["headquarters"].to_s
+    text.scan(PLACED).flatten.filter_map do |place|
+      next if hq.downcase.include?(place.downcase)
+
+      hq.present? ? "it puts the company in #{place}, but its headquarters in the directory is #{hq}" : "it says where the company is (#{place}), but the directory has no headquarters for it"
+    end
   end
 
   # An @ account in a post is only the company's own verified X handle (GTM's list, #883): never another account, never on LinkedIn.
