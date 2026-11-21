@@ -217,6 +217,9 @@ module DirectoryHelper
     [ city.presence, state.presence ].compact.join(", ").presence
   end
 
+  # The company's SEC filings on EDGAR, by CIK: the primary source for a public company, no referral code (#874).
+  def edgar_url(cik) = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=#{cik.to_s.gsub(/\D/, "")}&type=&dateb=&owner=include&count=40"
+
   # A company's HQ as its own page shows it: only when a source backs the record (CompanyProfile#sourced?), written by
   # #location. nil otherwise, so a row keeps its empty cell. Load :evidence with the companies to avoid a query per row.
   def company_place(company) = (location(company.hq_city, company.hq_state, country: company.country_code) if company.evidence.any?)

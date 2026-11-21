@@ -561,4 +561,53 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "nobody")
     assert_response :not_found
   end
+
+  test "a public company shows its ticker, linked to its SEC filings by CIK, only with ticker, exchange and CIK on a sourced record; no referral code (#874)" do
+    @kairos.update!(exchange: "NASDAQ", ticker: "KRSP", sec_cik: "0001234567")
+    get company_path(slug: "kairos-power")
+
+    assert_select ".nd-glance dt", text: /\ATicker/
+    assert_select ".nd-glance a[href=?]", "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001234567&type=&dateb=&owner=include&count=40", text: "NASDAQ: KRSP"
+    assert_select ".nd-glance a[href*='sec.gov'][href*='utm']", 0
+    assert_select ".nd-glance a[href*='sec.gov'][rel~='noopener']", 1
+    graph = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"]
+    assert_equal "NASDAQ: KRSP", graph.find { |node| node["@type"] == "Organization" }["tickerSymbol"]
+
+    assert_not_includes ApplicationController.helpers.edgar_url("0001234567&evil=1\"><x>"), "evil", "a CIK is digits only in the URL, whatever is stored"
+
+    @kairos.update!(sec_cik: nil)
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0
+    assert_no_match "sec.gov", response.body, "no CIK, no filings link"
+
+    @kairos.update!(exchange: nil, ticker: nil)
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0
+  end
+
+  test "each of ticker, exchange and CIK needs evidence that covers it: another fact's quote doesn't support a listing (#874, Copilot)" do
+    @kairos.update!(exchange: "NASDAQ", ticker: "KRSP", sec_cik: "0001234567")
+    @kairos.evidence.destroy_all
+    source = Source.first || Source.create!(url: "https://example.com/10k", source_kind: "web_page", crawl_status: "ok", content_sha256: "s", content_text: "t")
+    evidence = ->(*fields) { @kairos.evidence.create!(source:, quote: "q", found_by: "human", fields: fields.presence) }
+
+    evidence.("hq_city")
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0
+    assert_no_match "tickerSymbol", response.body, "an HQ quote isn't a listing's source"
+
+    evidence.("ticker", "exchange")
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance dt", text: /\ATicker/, count: 0 # no evidence for the CIK yet
+
+    evidence.("sec_cik")
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance a", text: "NASDAQ: KRSP"
+    assert_match "tickerSymbol", response.body
+
+    @kairos.evidence.destroy_all
+    evidence.()
+    get company_path(slug: "kairos-power")
+    assert_select ".nd-glance a", text: "NASDAQ: KRSP", count: 1 # an older record-wide quote still counts
+  end
 end
