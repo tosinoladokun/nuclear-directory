@@ -1,0 +1,79 @@
+name: db-watch
+
+# Watches the production Postgres memory from outside Render (replaces the Mac's dbwatch job, #889): every 10
+# minutes it reads Render's metrics for the last hour. It opens ONE "db-alert" issue (GitHub emails its watchers)
+# when memory stays above the alert level for 10 minutes, nears the 1 GB limit, or drops by more than 400 MB in
+# a minute (the database restarted); the first calm check after that comments and closes it. Once a day (07:00 UTC)
+# it adds the baseline (median and peak of the last hour) as a comment on the open "db-baseline" issue.
+# The run itself always ends green, so it can never hold back a deploy. Needs the RENDER_API_KEY secret (a Render
+# API key Tosin creates in Account Settings; without it the run only says so and stops).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: db-watch
+  cancel-in-progress: false
+
+env:
+  DB: dpg-db56bqavcj2c73avnv20-a
+  LIMIT_MB: "800"
+  CRASH_MB: "900"
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read the last hour and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -u
+          if [ -z "${RENDER_API_KEY:-}" ]; then echo "RENDER_API_KEY is not set: nothing to watch yet (see #889)"; exit 0; fi
+          now=$(date -u +%s)
+          start=$(date -u -d "@$((now-3600))" +%Y-%m-%dT%H:%M:%SZ)
+          end=$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%SZ)
+          raw=$(curl -s --max-time 30 -H "Authorization: Bearer $RENDER_API_KEY" \
+            "https://api.render.com/v1/metrics/memory?resource=$DB&startTime=$start&endTime=$end&resolutionSeconds=60" || true)
+          series=$(echo "$raw" | jq -c '[.[0].values[]?.value / 1048576 | floor]' 2>/dev/null || echo "[]")
+          n=$(echo "$series" | jq 'length')
+          if [ "$n" -lt 5 ]; then echo "No usable samples from Render ($n); skipping this run"; exit 0; fi
+          last=$(echo "$series" | jq '.[-1]'); peak=$(echo "$series" | jq 'max')
+          above=$(echo "$series" | jq --argjson l "$LIMIT_MB" '.[-10:] | map(select(. > $l)) | length')
+          high=$(echo "$series" | jq --argjson c "$CRASH_MB" '.[-8:] | map(select(. >= $c)) | length')
+          drop=$(echo "$series" | jq '.[-8:] as $w | [range(1; ($w|length)) | select(($w[.-1] - $w[.]) > 400)] | length')
+          echo "samples=$n last=${last}MB peak=${peak}MB above_limit_last10=$above near_limit=$high drops=$drop"
+          problem=""
+          [ "$drop" -gt 0 ] && problem="Postgres memory dropped by over 400 MB in a minute: the database restarted (OOM crash)."
+          [ -z "$problem" ] && [ "$high" -gt 0 ] && problem="Postgres memory reached ${CRASH_MB} MB or more of 1024: a crash is imminent."
+          [ -z "$problem" ] && [ "$n" -ge 10 ] && [ "$above" -ge 10 ] && problem="Postgres memory stayed above ${LIMIT_MB} MB for the last 10 minutes (now ${last} MB, peak ${peak} MB of 1024)."
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh label create db-alert --color B60205 --description "Production database memory or restart alert" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh label create db-baseline --color 0E8A16 --description "Daily database memory baseline log" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label db-alert --state open --json number --jq '.[0].number // empty')
+          if [ -n "$problem" ]; then
+            if [ -z "$open" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" --label db-alert --title "DB alert: $(date -u +'%d %b %H:%M UTC')" \
+                --body "$(printf '%s\n\nLast hour: now %s MB, peak %s MB (plan: 1 GB).\nRun: %s\n\nOwner: Infrastructure (rule: a crash within 7 days of the last, or a daily baseline above about 800 MB, means revisiting the plan).' "$problem" "$last" "$peak" "$run_url")"
+            fi
+            echo "ALERT: $problem"
+          elif [ -n "$open" ] && [ "$above" -eq 0 ] && [ "$high" -eq 0 ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "Calm again: now ${last} MB, peak ${peak} MB over the last hour ($run_url)."
+            gh issue close "$open" --repo "$GITHUB_REPOSITORY"
+          fi
+          if [ "$(date -u +%H)" = "07" ] && [ "$(date -u +%M)" -lt 10 ]; then
+            median=$(echo "$series" | jq 'sort | .[(length/2|floor)]')
+            base=$(gh issue list --repo "$GITHUB_REPOSITORY" --label db-baseline --state open --json number --jq '.[0].number // empty')
+            if [ -z "$base" ]; then
+              base=$(gh issue create --repo "$GITHUB_REPOSITORY" --label db-baseline --title "Database memory baseline log" --body "One comment a day (07:00 UTC) with the median and peak of the last hour, written by the db-watch workflow, for the weekly report." | grep -oE '[0-9]+$')
+            fi
+            gh issue comment "$base" --repo "$GITHUB_REPOSITORY" --body "$(date -u +%F): median ${median} MB, peak ${peak} MB of 1024 (last hour)."
+          fi

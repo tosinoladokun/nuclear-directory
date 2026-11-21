@@ -1,0 +1,56 @@
+name: alert-watch
+
+# Routes the production autopilot alerts to their owners from outside the Mac (replaces the Mac's alertwatch job, #890).
+# Every 10 minutes it reads the read-only alerts endpoint and keeps ONE issue per open alert ("Alert <key>: ...", label
+# "autopilot-alert" + "owner:<Owner>"; GitHub emails its watchers) and closes it when the alert resolves. The alerts
+# also already email the project inbox and go to Sentry from the server; this only makes them visible to the owning session.
+# The run always ends green. Needs the AUTOPILOT_READ_TOKEN secret (the endpoint answers 404 without it).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: alert-watch
+  cancel-in-progress: false
+
+env:
+  URL: https://nuclear-directory.org/api/autopilot/alerts
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Sync alerts to issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUTOPILOT_READ_TOKEN: ${{ secrets.AUTOPILOT_READ_TOKEN }}
+        run: |
+          set -u
+          if [ -z "${AUTOPILOT_READ_TOKEN:-}" ]; then echo "AUTOPILOT_READ_TOKEN is not set: nothing to read yet (see #890)"; exit 0; fi
+          out=$(mktemp)
+          code=$(curl -s -o "$out" -w '%{http_code}' --max-time 30 -H "Authorization: Bearer $AUTOPILOT_READ_TOKEN" -A 'nd-uptime/1' "$URL" || true)
+          if [ "$code" != "200" ]; then echo "Alerts endpoint answered $code; skipping this run"; exit 0; fi
+          gh label create autopilot-alert --color FBCA04 --description "An autopilot alert from the production pipeline" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          jq -c '.alerts[]' "$out" | while read -r row; do
+            key=$(echo "$row" | jq -r .key); owner=$(echo "$row" | jq -r .owner); title=$(echo "$row" | jq -r .title)
+            opened=$(echo "$row" | jq -r .opened_at); resolved=$(echo "$row" | jq -r '.resolved_at // empty')
+            gh label create "owner:$owner" --color 5319E7 --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+            prefix="Alert $key:"
+            existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label autopilot-alert --state open --search "\"$prefix\" in:title" --json number,title --jq "map(select(.title | startswith(\"$prefix\"))) | .[0].number // empty")
+            if [ -z "$resolved" ]; then
+              if [ -z "$existing" ]; then
+                gh issue create --repo "$GITHUB_REPOSITORY" --label autopilot-alert --label "owner:$owner" --title "$prefix $title" \
+                  --body "$(printf 'Autopilot alert **%s**, opened %s.\n\n%s\n\nOwner: %s (it is yours to fix; Admin > Health has the detail). This issue closes itself when the alert resolves.' "$key" "$opened" "$title" "$owner")"
+              fi
+            elif [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Resolved at $resolved."
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
