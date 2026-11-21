@@ -49,14 +49,15 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
 
   FETCHER = Struct.new(:x) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>Published November 20, 2026</p>", etag: nil,
     last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
-  TEXT = "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
+  TEXT = "DOE said on 20 November 2026 that it awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
+  SUMMARY = "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
 
   setup { SocialAgent.draft_fetcher = FETCHER.new }
   teardown { SocialAgent.draft_fetcher = nil }
 
   def draft_for(platform: "x", news: nil, at: MONDAY - 1.hour, text: TEXT)
     company = Organization.find_by(slug: "acme-fission") || Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: "human:tosin", verified_at: 1.year.ago)
-    news ||= NewsItem.create!(url: "https://www.energy.gov/a#{SecureRandom.hex(3)}", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding", summary: TEXT, publisher: "DOE",
+    news ||= NewsItem.create!(url: "https://www.energy.gov/a#{SecureRandom.hex(3)}", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding", summary: SUMMARY, publisher: "DOE",
       published_on: Date.new(2026, 11, 20), verification_status: "verified", verified_by: "human:tosin", verified_at: MONDAY - 1.day)
     news.news_mentions.find_or_create_by!(subject: company)
     SocialPost.create!(platform:, status: "drafted", subject: news, text:, link: "https://nuclear-directory.org/companies/acme-fission",
