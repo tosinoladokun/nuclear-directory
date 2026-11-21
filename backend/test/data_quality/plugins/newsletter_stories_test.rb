@@ -46,6 +46,18 @@ class DataQuality::Plugins::NewsletterStoriesTest < ActiveSupport::TestCase
     assert_equal 1, plugin.extract(source.(page("Google Signs Nuclear Power Deal", "2026-11-18", "Google signs a nuclear power deal.")), nil).size, "broad: nuclear in the title"
   end
 
+  test "a Federal Register document is read through its API (#860)" do
+    url = "https://www.federalregister.gov/documents/2026/11/18/2026-23456/acme-fission-reactor-construction-permit"
+    Source.where(source_kind: "newsletters").update_all(content_text: "x#{DataQuality::Plugins::Newsletters::LINKS}#{url}")
+    stub_request(:get, "https://www.federalregister.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{\Ahttps://www\.federalregister\.gov/api/v1/documents/2026-23456\.json\?}).to_return(
+      body: { title: "Acme Fission; Reactor Construction Permit Application", publication_date: "2026-11-18", abstract: "The NRC received Acme Fission's reactor application." }.to_json)
+    plugin.crawl(nil)
+    assert_not_requested :get, url
+    claim = plugin.extract(Source.find_by!(url:), nil).sole
+    assert_equal [ "Acme Fission; Reactor Construction Permit Application", "2026-11-18", "Federal Register" ], claim[:payload].values_at("title", "published_on", "publisher")
+  end
+
   test "the quote is the page title even when only the head has it; an acronym-only page names its company (Copilot)" do
     Organization.create!(name: "TVA", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "TVA")
     @plugin = nil

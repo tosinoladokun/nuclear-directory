@@ -30,6 +30,7 @@ class DataQuality::Plugins::NewsletterStories < DataQuality::Plugin
     fresh = story_links.reject { |url| known.include?(url) }.first(PER_RUN)
     results = fresh.map do |url|
       source = Source.create!(url:, source_kind:)
+      # A Federal Register document comes from its API (the Fetcher, #860).
       DataQuality::Snapshot.take(source, fetcher: @fetcher).to_s
     end
     { "links" => story_links.size, "fetched" => fresh.size }.merge(results.tally)

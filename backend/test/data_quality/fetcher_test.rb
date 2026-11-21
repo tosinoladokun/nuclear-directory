@@ -269,4 +269,28 @@ class DataQuality::FetcherTest < ActiveSupport::TestCase
     assert_match "internal address", internal.post_json("https://internal.example/api/", {}).reason
     assert_not_requested :post, %r{internal\.example}
   end
+
+  test "a Federal Register document page is read from the official API, under the page's address (#860)" do
+    page = "https://www.federalregister.gov/documents/2026/11/18/2026-23456/acme-exemption"
+    stub_request(:get, "https://www.federalregister.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{\Ahttps://www\.federalregister\.gov/api/v1/documents/2026-23456\.json\?}).to_return(
+      body: { title: "Acme; Exemption", publication_date: "2026-11-18", abstract: "The NRC grants <b>an</b> exemption." }.to_json, headers: { "Content-Type" => "application/json" })
+    response = DataQuality::Fetcher.new(sleeper: ->(_) { }).get(page)
+    assert_equal [ :ok, page, "text/html" ], [ response.kind, response.url, response.content_type ]
+    assert_includes response.body, "<title>Acme; Exemption</title>"
+    assert_includes response.body, "The NRC grants &lt;b&gt;an&lt;/b&gt; exemption."
+    assert_not_requested :get, page
+  end
+
+  test "a Federal Register page that isn't https on 443 isn't fetched; an unreadable API answer is an error, not a page (Copilot)" do
+    fetcher = DataQuality::Fetcher.new(sleeper: ->(_) { })
+    %w[http://www.federalregister.gov/d/2026-23456 https://www.federalregister.gov:8443/d/2026-23456].each do |url|
+      assert_equal :error, fetcher.get(url).kind, url
+    end
+    assert_not_requested :get, %r{api/v1/documents}
+
+    stub_request(:get, "https://www.federalregister.gov/robots.txt").to_return(status: 404)
+    stub_request(:get, %r{\Ahttps://www\.federalregister\.gov/api/v1/documents/2026-11111\.json\?}).to_return(body: "<html>maintenance</html>")
+    assert_equal :error, fetcher.get("https://www.federalregister.gov/d/2026-11111").kind
+  end
 end
