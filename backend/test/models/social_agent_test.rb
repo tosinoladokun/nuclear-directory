@@ -669,7 +669,9 @@ class SocialAgentTest < ActiveSupport::TestCase
   end
 
   test "the picker skips a news item whose words are only radiation or isotopes (NASA bone-marrow chip, 21 Nov)" do
-    @news.update_columns(title: "NASA bone-marrow chip flies to the space station", summary: "The chip studies how space radiation and isotopes affect astronaut bone marrow.")
+    # News item 55 exactly as stored (DQ): its only nuclear-ish word is "ionizing radiation".
+    @news.update_columns(title: "BPS Digital AVATAR Challenge", headline: "NASA features BPS Digital AVATAR Challenge", publisher: "NASA",
+      summary: "NASA's Space Biology Program investigates how living systems respond to spaceflight stressors, including microgravity and ionizing radiation.")
     assert_nil SocialAgent::Picker.new(platform: "x", now: MONDAY).call
   end
 end
