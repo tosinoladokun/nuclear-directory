@@ -522,7 +522,7 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     get company_path(slug: "kairos-power")
 
     assert_select "meta[property='og:title'][content='Kairos Power']"
-    line = "Kairos Power: Develops salt-cooled reactors. Owns Hermes."
+    line = "Kairos Power: Develops salt-cooled reactors. 1 site, 1 deal."
     assert_select "meta[property='og:description'][content=?]", line
     assert_select "meta[name=description][content^=?]", "Kairos Power: Develops salt-cooled reactors. "
     assert_select "link[rel=canonical][href=?]", "http://www.example.com/companies/kairos-power"

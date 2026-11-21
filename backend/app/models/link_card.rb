@@ -75,7 +75,9 @@ class LinkCard
     label = [ kind, place ].compact.join(" · ").presence
     # Present tense, so only links in effect today (as on a plant's card).
     current = ->(link) { (link.started_on.nil? || link.started_on <= Date.current) && (link.ended_on.nil? || link.ended_on > Date.current) }
-    sites = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && current.call(link) }.map { |link| link.facility.parent || link.facility }.uniq.size }
+    # "Operates" only counts a plant that is operating today (a plant not operating, shut down or being decommissioned isn't "operated"; Holtec's Palisades).
+    running = ->(link) { link.relationship_type != "operates" || link.facility.status.nil? || link.facility.status == "operating" }
+    sites = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && current.call(link) && running.call(link) }.map { |link| link.facility.parent || link.facility }.uniq.size }
     operates, owns, deals = sites.call("operates"), sites.call("owns"), profile.counted_deals.size
     facts = [ ("Operates #{helpers.pluralize(operates, 'plant')}" if operates.positive?),
               ("Owns stakes in #{helpers.pluralize(owns, 'plant')}" if owns.positive?),

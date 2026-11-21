@@ -590,44 +590,19 @@ module DirectoryHelper
     text.match?(STAGE_WORDS) || (deal.relationship_type == "supplies" && text.present? && !text.match?(SUPPLY_WORDS))
   end
 
+  # The link-preview text (og:description and the card): what the company is and where, then how many plants and deals. Never a sentence about
+  # a link: "Supplies X", "Invests in Y", "Operates P" state a relationship flat, and the record may be an announced plan, a term sheet, a letter of
+  # intent or a lease (PM, 21 Nov: NuScale, Samsung C&T, Prometheus, Dominion). The page itself says what each link is, with its stage.
   def company_description(profile)
-    listed = ->(names, noun = nil) { names.many? ? "#{names.first} and #{pluralize(names.size - 1, [ "other", noun ].compact.join(" "))}" : names.first }
-    # Present tense, so only links in effect today (as on the company's card).
-    current = ->(l) { (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
-    # "Operates" only for a plant that is operating today: a plant not operating, shut down, being decommissioned or planned isn't "operated"
-    # in a present-tense line (GTM: "Operates Palisades" for a plant that isn't operating).
-    running = ->(l) { l.relationship_type != "operates" || l.facility.status.nil? || l.facility.status == "operating" }
-    places = ->(type) { profile.plant_links.select { |l| l.relationship_type == type && current.call(l) && running.call(l) }.map { |l| l.facility.parent || l.facility }.uniq }
-    sites = ->(type) { places.call(type).map(&:name) }
-    # "plant" only when every one is a published power plant; a mine, a fuel
-    # plant or a type that isn't published makes it "site" (VOICE.md).
-    noun = ->(type) { places.call(type).all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site" }
-    # Signed deals said flat; a framework or non-binding one says so (#487).
-    # A link whose own description carries a stage (an announced plan, a letter of intent, a term sheet, subject to approvals) is left out of a
-    # present-tense line: "Supplies Standard Power" must not drop "announced plan" (PM, NuScale). The card never says less than the record.
-    deals_out = ->(type) { profile.counted_deals.select { |d| d.relationship_type == type && d.from_organization_id == profile.organization.id && current.call(d) && !qualified_link?(d) }.map { |d| d.to_organization.name }.uniq }
-    staged_out = ->(stage) { profile.deals.select { |d| d.stage == stage && d.relationship_type == "offtake_with" && d.from_organization_id == profile.organization.id && current.call(d) }.map { |d| d.to_organization.name }.uniq }
-    facts = [
-      ("Owns #{listed.call(sites.call('owns'), noun.call('owns'))}" if sites.call("owns").any?),
-      ("Operates #{listed.call(sites.call('operates'), noun.call('operates'))}" if sites.call("operates").any?),
-      ("Investors include #{listed.call(investors_of(profile))}" if investors_of(profile).any?),
-      ("Invests in #{listed.call(deals_out.call('invests_in'))}" if deals_out.call("invests_in").any?),
-      ("Supplies #{listed.call(deals_out.call('supplies'))}" if deals_out.call("supplies").any?),
-      ("Offtakes from #{listed.call(deals_out.call('offtake_with'))}" if deals_out.call("offtake_with").any?),
-      ("Framework offtake with #{listed.call(staged_out.call('framework'))}" if staged_out.call("framework").any?),
-      ("Non-binding offtake with #{listed.call(staged_out.call('non_binding'))}" if staged_out.call("non_binding").any?),
-      ("Legal name: #{profile.legal_name}" if profile.legal_name.present? && profile.legal_name != profile.name)
-    ].compact.map { |fact| fact.end_with?(".") ? fact : "#{fact}." }
     role = profile.shown_roles.first && role_label(profile.shown_roles.first.role)
     lead = profile.description.presence || [ role, location(profile.hq_city, profile.hq_state, country: (profile.organization.country_code if profile.sourced?)) ].compact.join(" in ").presence
     # With nothing published yet, still a plain line about the company.
     text = lead ? "#{profile.name}: #{lead.end_with?('.') ? lead : "#{lead}."}" : "#{profile.name}, a company in the US nuclear industry."
     text = text.truncate(PREVIEW_LIMIT, separator: " ") if text.length > PREVIEW_LIMIT
-    facts.each do |fact|
-      joined = "#{text} #{fact}"
-      text = joined if joined.length <= PREVIEW_LIMIT
-    end
-    text
+    counts = counted([ company_current_sites(profile).size, company_places_noun(profile) ], [ company_signed_deals(profile).size, "deal" ])
+    text = fit_counts(text, counts)
+    legal = "Legal name: #{profile.legal_name}." if profile.legal_name.present? && profile.legal_name != profile.name
+    legal && "#{text} #{legal}".length <= PREVIEW_LIMIT ? "#{text} #{legal}" : text
   end
 
   # Companies that invest in this one (equity, invests_in), from the deals the
