@@ -934,4 +934,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Check.problems("Meet X-energy. The directory lists an October 2020 award of $80M initial funding.", item, platform: "linkedin").grep(/October/)
     assert_not_empty SocialAgent::Check.problems("Meet X-energy. The directory lists a March 2020 award.", item, platform: "linkedin").grep(/March/)
   end
+
+  test "HQ fact Everett, WA with page text that says Redmond: a post placing Helion in Redmond is stopped by the full problems, Everett passes the place gate (DQ)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Helion Energy", "headquarters" => "Everett, WA", "description" => "Fusion company building a fusion power plant." },
+      source_url: "https://helionenergy.com", source_quote: "Fusion company building a fusion power plant.\nEverett, WA", path: "/companies/helion-energy", organization_ids: [],
+      page_text: "Helion's 2014 ARPA-E project, Compression of FRC Targets for Fusion, was run from Redmond, WA. Headquartered in Everett, WA.")
+    assert_includes SocialAgent::Rules.headquarters("Meet Helion Energy: it is a fusion company based in Redmond, WA.", item).join, "its headquarters in the directory is Everett, WA"
+    assert_empty SocialAgent::Rules.headquarters("Meet Helion Energy: it is a fusion company based in Everett, WA.", item)
+    # The page text mentions Redmond and Everett; only the directory's HQ field decides where the post may place the company.
+    assert_match(/Redmond/, item.page_text)
+  end
 end
