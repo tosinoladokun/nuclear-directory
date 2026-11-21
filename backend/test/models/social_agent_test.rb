@@ -20,7 +20,10 @@ class SocialAgentTest < ActiveSupport::TestCase
       published_on: Date.new(2026, 11, 12), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     @news.news_mentions.create!(subject: @company)
     SocialChannel.for("x").update!(mode: "drafts")
+    ENV["SOCIAL_POST_KINDS"] = "news,link,new_company"
   end
+
+  teardown { ENV.delete("SOCIAL_POST_KINDS") }
 
   # The source answers 200 (no network in tests).
   OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "<p>Published November 12, 2026</p>", etag: nil,
@@ -664,5 +667,63 @@ class SocialAgentTest < ActiveSupport::TestCase
       assert_includes table, "| x | https://a.example/mou | PPPPPPPPPPB | flaky |  |", "the live item's block isn't hidden by the fixture"
       assert_includes table, "Items ready (3 of 3 runs, fixtures excluded): 0"
     end
+  end
+
+  # 'Meet a company' (#883).
+  def spotlight_company(name, slug, complete: true, website: true)
+    company = Organization.create!(name:, slug:, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year, domain: ("#{slug}.example" if website),
+      website: ("https://#{slug}.example" if website), description: "#{name} designs small modular reactors.", hq_city: ("Austin" if complete), hq_state: ("Texas" if complete))
+    page = Source.create!(url: "https://#{slug}.example/about", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: company, source: page, quote: "#{name} designs small modular reactors.", found_by: "human", fields: %w[description])
+    Evidence.create!(subject: company, source: page, quote: "Headquartered in Austin, Texas.", found_by: "human", fields: %w[hq_city hq_state]) if complete
+    if complete
+      tech = Technology.create!(key: "smr_#{slug.tr("-", "_")}", name: "Small modular reactor")
+      link = OrganizationTechnology.create!(organization: company, technology: tech, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      Evidence.create!(subject: link, source: page, quote: "Our SMR design.", found_by: "human")
+      other = Organization.create!(name: "#{name} Partner", slug: "#{slug}-partner", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      deal = Relationship.create!(from_organization: company, to_organization: other, relationship_type: "supplies", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      Evidence.create!(subject: deal, source: page, quote: "#{name} supplies #{name} Partner.", found_by: "human")
+    end
+    company
+  end
+
+  test "spotlights: complete sourced profiles first, from the company's own site, none repeated within eight weeks, none without a website (#883)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    thin = spotlight_company("Thin Reactors", "thin-reactors", complete: false)
+    full = spotlight_company("Full Reactors", "full-reactors")
+    spotlight_company("No Site", "no-site", website: false)
+    items = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+    assert_equal [ "spotlight" ], items.map(&:kind).uniq
+    assert_equal [ full, thin ], items.map(&:subject), "complete first; a company with no website isn't a candidate"
+    item = items.first
+    assert_equal "https://full-reactors.example", item.source_url
+    assert_match "Austin, Texas", item.facts["headquarters"]
+    assert_match "Small modular reactor", item.facts["works on"]
+    assert_match "Full Reactors supplies Full Reactors Partner", item.facts["relationships"]
+    assert SocialAgent::Rules.primary?(item), "the company's own site is a primary source"
+
+    SocialPost.create!(platform: "linkedin", status: "posted", subject: full, text: "Meet Full Reactors.", created_at: MONDAY - 7.weeks)
+    assert_equal [ thin ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject), "spotlighted within eight weeks"
+    SocialPost.update_all(created_at: MONDAY - 9.weeks)
+    assert_includes SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject), full
+  end
+
+  test "a spotlight post links our company page with tracking and passes the same checks" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    post = run_x("Meet Full Reactors: according to its website, it designs small modular reactors. It is based in Austin, Texas, and supplies Full Reactors Partner.")
+    assert_equal "drafted", post.status, post.reason
+    assert_equal full, post.subject
+    assert_equal "https://nuclear-directory.org/companies/full-reactors?utm_source=x&utm_medium=social&utm_campaign=full-reactors", post.link
+    assert_equal "https://full-reactors.example", post.source_url
+    SocialPost.delete_all
+    assert_match "isn't in the source", run_x("Meet Full Reactors: according to its website, it designs small modular reactors and employs 400 people.").reason
+  end
+
+  test "news posts stay available as an extra when SOCIAL_POST_KINDS lists them" do
+    ENV["SOCIAL_POST_KINDS"] = "spotlight,news"
+    assert_includes SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:kind), "news"
+    ENV.delete("SOCIAL_POST_KINDS")
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |item| item.kind == "news" }, "spotlights only by default"
   end
 end

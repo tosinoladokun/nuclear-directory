@@ -178,7 +178,7 @@ module SocialAgent::Rules
 
   # The source named in words (Tosin, 20 Nov: the post's link is our page; the source is only said): a verb of saying or a
   # document word. The writer is told to; this is the check.
-  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according to|told|issued|released|published|filed|
+  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according\s+to|told|issued|released|published|filed|
     (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
   def attributed?(text) = text.match?(ATTRIBUTION)
 
@@ -294,7 +294,7 @@ module SocialAgent::Rules
     known = [ item.facts["companies"], item.facts["name"], item.facts["publisher"] ].compact.join(" ").downcase
     text.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/).uniq.filter_map do |found|
       # An article isn't a name, nor evidence of an organisation (Copilot: "The Jane Doe statement").
-      words = found.split.drop_while { |word| ARTICLES.include?(word) }
+      words = found.split.drop_while { |word| ARTICLES.include?(word) || (word == "Meet" && item.kind == "spotlight") }
       next if words.size < 2
 
       phrase = words.join(" ")
