@@ -11,6 +11,9 @@ class SocialPost < ApplicationRecord
   # No fact or company again within this, on any platform (the cross-platform cooldown).
   COOLDOWN = 14.days
 
+  # What a reviewer's verdict quotes, so it is checkable that the text hasn't changed since (DQ, #880).
+  def text_hash = Digest::SHA256.hexdigest(text.to_s).first(12)
+
   # A post Tosin made by hand and recorded in Admin > Posts (#877): the agent's checks never ran on it. Its reason says so, and the
   # DQ API reports it as manually recorded, not as having passed them.
   BY_HAND = "posted by hand".freeze
