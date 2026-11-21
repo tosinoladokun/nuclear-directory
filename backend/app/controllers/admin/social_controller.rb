@@ -68,18 +68,28 @@ class Admin::SocialController < Admin::BaseController
   # An automated post marked "unknown" (the send may have gone out): after checking the account, Tosin says which. "Never went out" takes
   # it back, so the item can be sent or recorded again; "It did go out" keeps it as posted. Nothing else unblocks it (#877).
   def reconcile
-    post = SocialPost.find(params[:id])
-    return redirect_to(admin_social_path, alert: "Only a post marked unknown needs this.") unless post.status == "unknown"
+    outcome = params[:outcome].to_s
+    return redirect_to(admin_social_path, alert: "Say whether it went out or never went out.") unless %w[sent never].include?(outcome)
 
     permalink = params[:permalink].to_s.strip.presence
     return redirect_to(admin_social_path, alert: "That link isn't a web address.") if permalink && !web_address?(permalink)
 
-    if params[:outcome] == "sent"
-      post.update!(status: "posted", reason: "confirmed by hand: it went out", permalink: permalink || post.permalink, posted_at: post.posted_at || Time.current)
-      redirect_to admin_social_path, notice: "Kept as posted: the agent won't post this item again."
-    else
-      post.update!(status: "cancelled", cost_usd: 0, reason: "confirmed by hand: it never went out")
-      redirect_to admin_social_path, notice: "Taken back: it never went out, so the item can be recorded or sent again."
+    # Still unknown under the row's lock: a late Buffer answer may have settled it first.
+    result = SocialPost.transaction do
+      post = SocialPost.lock.find(params[:id])
+      next :settled unless post.status == "unknown"
+
+      if outcome == "sent"
+        post.update!(status: "posted", reason: "confirmed by hand: it went out", permalink: permalink || post.permalink, posted_at: post.posted_at || Time.current)
+      else
+        post.update!(status: "cancelled", cost_usd: 0, reason: "confirmed by hand: it never went out")
+      end
+      outcome.to_sym
+    end
+    case result
+    when :settled then redirect_to admin_social_path, alert: "Only a post marked unknown needs this."
+    when :sent then redirect_to admin_social_path, notice: "Kept as posted: the agent won't post this item again."
+    else redirect_to admin_social_path, notice: "Taken back: it never went out, so the item can be recorded or sent again."
     end
   end
 

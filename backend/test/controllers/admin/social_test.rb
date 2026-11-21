@@ -121,4 +121,24 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
       post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x] }
     end
   end
+
+  test "reconcile takes only sent or never, and only while the post is still unknown (#878)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou10", title: "Item", publisher: "NANO", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    unknown = SocialPost.create!(platform: "x", status: "unknown", subject: news, text: "Auto.", posted_at: 1.hour.ago)
+    [ "", "maybe", "Never " ].each do |outcome|
+      post admin_social_reconcile_path(unknown, outcome:)
+      assert_match(/Say whether it went out/, flash[:alert])
+      assert_equal "unknown", unknown.reload.status, "an unclear answer never frees the item for a resend"
+    end
+    post admin_social_reconcile_path(unknown)
+    assert_equal "unknown", unknown.reload.status
+    unknown.update_columns(status: "posted")
+    post admin_social_reconcile_path(unknown, outcome: "never")
+    assert_match(/Only a post marked unknown/, flash[:alert])
+    assert_equal "posted", unknown.reload.status, "a post settled meanwhile isn't changed"
+    unknown.update_columns(status: "unknown")
+    post admin_social_reconcile_path(unknown, outcome: "sent", permalink: "https://x.com/NuclearDir/status/5")
+    assert_equal [ "posted", "https://x.com/NuclearDir/status/5" ], unknown.reload.values_at(:status, :permalink)
+  end
 end
