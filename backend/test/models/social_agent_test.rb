@@ -832,5 +832,11 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.qualifiers("Meet Helion Energy: it is a fusion company based in Everett, WA.", item)
     news = item.with(kind: "news", facts: { "headline" => "Helion signs a letter of intent" })
     assert_not_empty SocialAgent::Rules.qualifiers("Helion said it signed a deal.", news), "a news item still keeps its source's qualifiers"
+    planned = item.with(facts: { "name" => "NuScale", "records of its links" => "Announced plan (Oct 2023) for planned SMR plants" })
+    assert_empty SocialAgent::Rules.qualifiers("Meet NuScale: the directory lists two DOE awards.", planned), "a link the post doesn't mention keeps its qualifier out of the way"
+  end
+
+  test "'first in 2015, latest in 2019' is an order, not a claim to be first" do
+    assert_empty SocialAgent::Rules.unattributed_superlatives("DOE made two awards, first in 2015 and latest in 2019.")
   end
 end

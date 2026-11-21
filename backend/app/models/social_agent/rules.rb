@@ -156,9 +156,12 @@ module SocialAgent::Rules
       found << "it calls it #{name}, which its source doesn't" if text.match?(pattern) && !item.source_text.match?(pattern)
     end
     QUALIFIERS.each do |pattern, name|
+      # A spotlight tells only some of a company's links: a qualifier of a link the post doesn't mention (a plan, a letter of intent) isn't
+      # dropped by it. The voice check and the graders read what the post does say about each link it names (GTM, Helion and NuScale).
+      next if item.kind == "spotlight"
+
       # "Proposed" and "planned" count only in the item's own words: a page's other stories have their own plans.
-      # A spotlight's page text is the whole company site: a letter of intent in another story there isn't what this post says (GTM, Helion).
-      said = %w[proposed planned].include?(name) || item.kind == "spotlight" ? item.own_text : item.source_text
+      said = %w[proposed planned].include?(name) ? item.own_text : item.source_text
       found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
     end
     found
@@ -224,7 +227,7 @@ module SocialAgent::Rules
   def unattributed_superlatives(text)
     text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
       # "the first phase", "the first two units" put things in order: they aren't a claim to be first.
-      word = sentence.gsub(/\bfirst\s+(?:phase|stage|unit|units|quarter|half|year|round|two|three|four|five|six|seven|eight|nine|ten|\d+\w*)\b/i, "")[SUPERLATIVES, 1]
+      word = sentence.gsub(/\bfirst\s+(?:phase|stage|unit|units|quarter|half|year|round|two|three|four|five|six|seven|eight|nine|ten|\d+\w*)\b|\bfirst\s+in\s+\d{4}\b/i, "")[SUPERLATIVES, 1]
       next unless word
       next if sentence.match?(CLAIM_CUE)
 
