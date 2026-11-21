@@ -257,4 +257,78 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     assert post.warnings.present?
     assert_equal response.parsed_body["warnings"], post.warnings.split("\n")
   end
+
+  def load_row(platform:, slug: "vistra-corporation", send_on:, text: TEXT)
+    link = "https://nuclear-directory.org/companies/#{slug}?utm_source=#{platform}&utm_medium=social&utm_campaign=#{slug}"
+    approve({ platform:, slug:, link:, text:, sha256: Digest::SHA256.hexdigest(platform == "x" ? "#{text}\n\n#{link}" : text), send_on: })
+  end
+
+  test "an approved QUEUE: rows for several days wait, one per platform per day, the same company on two platforms on different days is fine, and waiting rows hold no slot or cooldown" do
+    load_row(platform: "x", send_on: "2026-11-23")
+    assert_response :created
+    load_row(platform: "linkedin", send_on: "2026-11-24")
+    assert_response :created, response.parsed_body.inspect
+    other = Organization.create!(name: "Energy Northwest", slug: "energy-northwest", website: "https://energy-northwest.com", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago, description: "Public power agency.")
+    load_row(platform: "x", slug: "energy-northwest", send_on: "2026-11-23", text: "Meet Energy Northwest. It owns and operates Columbia Generating Station in Richland, WA.")
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body["codes"], "send_on_taken", "one approved row per platform per day"
+    load_row(platform: "x", slug: "energy-northwest", send_on: "2026-11-24", text: "Meet Energy Northwest. It owns and operates Columbia Generating Station in Richland, WA.")
+    assert_response :created
+    assert_equal 3, SocialPost.waiting.count
+    load_row(platform: "x", send_on: "2026-12-04")
+    assert_response :unprocessable_entity, "the same company again on X within 14 days of its queued day"
+    assert_includes response.parsed_body["codes"], "cooldown"
+    # A waiting row holds no slot: the used scope (today's slot, similarity) ignores it.
+    assert_equal 0, SocialPost.used.count
+  end
+
+  test "the 8:30 job sends today's row even though the same company waits on another platform for tomorrow; the guards read the queue as waiting, not as tried" do
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    SocialChannel.for("linkedin").update!(mode: "drafts")
+    sent = []
+    SocialAgent.senders["x"] = ->(text, link) { sent << [ :x, text ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    SocialAgent.senders["linkedin"] = ->(*) { flunk "LinkedIn's row is for tomorrow" }
+    travel_to(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 14, 0)) do
+      load_row(platform: "x", send_on: "2026-11-23")
+      load_row(platform: "linkedin", send_on: "2026-11-24")
+    end
+    travel_to(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)) { SocialPostJob.perform_now }
+    assert_equal [ [ :x, TEXT ] ], sent
+    assert_equal %w[posted drafted], SocialPost.order(:id).pluck(:status)
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+    SocialAgent.senders.delete("linkedin")
+  end
+
+  test "at send the hash, DQ's approval on file and the text's hard problems are checked again; a changed row never goes out" do
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    SocialAgent.senders["x"] = ->(*) { flunk "never sent" }
+    monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
+    travel_to(monday - 3.days) { load_row(platform: "x", send_on: "2026-11-23") }
+    post = SocialPost.last
+    travel_to(monday) do
+      post.update_columns(text: "#{TEXT} Edited.")
+      assert_match(/no longer matches the hash the graders approved/, SocialAgent.send_draft(post.reload, now: monday).last)
+      post.update_columns(text: TEXT)
+      SocialApproval.delete_all
+      assert_match(/approval of its hash is no longer on file/, SocialAgent.send_draft(post.reload, now: monday).last)
+      assert_equal "drafted", post.reload.status
+    end
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
+
+  test "the job only DRAFTS what the agent writes, never sends it, even on a Live platform" do
+    calls = []
+    original = SocialAgent.method(:run)
+    SocialAgent.singleton_class.send(:define_method, :run) { |platform, **options| calls << [ platform, options[:drafts_only] ] }
+    SocialPostJob.perform_now
+    assert_equal [ [ "x", true ], [ "linkedin", true ] ], calls
+  ensure
+    SocialAgent.singleton_class.send(:define_method, :run, original)
+  end
 end

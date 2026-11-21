@@ -26,6 +26,27 @@
     <% end %>
   </section>
 
+  <section class="nd-stack" aria-labelledby="social-queue">
+    <h2 id="social-queue" class="type-admin-h2 m-0">Approved queue</h2>
+    <% if @queue.empty? %>
+      <p class="type-small m-0">Nothing waiting. The graders load approved posts with their date; the 8:30 weekday job sends each day's row first.</p>
+    <% else %>
+      <p class="type-small m-0">The 8:30 weekday job sends each day's row first (Off, the caps and the other guards still stop it).</p>
+      <ul class="nd-stack" id="social-queue-list">
+        <% @queue.each do |post| %>
+          <li id="social-queued-<%= post.id %>" class="nd-stack">
+            <p class="type-ui m-0"><%= post.send_on.strftime("%a %-d %b") %> · <%= post.platform == "x" ? "X" : "LinkedIn" %> · <%= post.subject.try(:name) %></p>
+            <p class="type-body m-0"><%= post.text %></p>
+            <p class="type-small m-0">Text hash <%= post.text_hash %></p>
+            <% if post.warnings.present? %><p class="type-small m-0">Checks said: <%= post.warnings.tr("\n", ";") %></p><% end %>
+            <%= button_to "Cancel", admin_social_cancel_queued_path(post), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-cancel-#{post.id}" },
+                  data: { turbo_confirm: "Take this post out of the queue? It won't go out." } %>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+
   <section class="nd-stack" aria-labelledby="social-by-hand">
     <h2 id="social-by-hand" class="type-admin-h2 m-0">Posted by hand</h2>
     <p class="type-small m-0">Made a post yourself? Record it here so the agent doesn't post the same item within two weeks.</p>

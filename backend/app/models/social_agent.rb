@@ -207,6 +207,14 @@ module SocialAgent
     # A graders-approved draft keeps its hash as the control; only its source still answering is looked at again (DQ): a release taken down
     # or moved after approval stops the send, and the draft stays so it can be sent when it answers again.
     if post.graded?
+      # The text must still be the one the graders approved, with Data Quality's recorded PASS of that hash on file, and its own hard problems
+      # (a raw URL, a hashtag, an emoji, a placeholder, length) re-checked: a changed row never goes out.
+      shapes = [ post.text.to_s.strip, "#{post.text.to_s.strip}\n\n#{post.link}" ].map { |shape| Digest::SHA256.hexdigest(shape) }
+      return "its text no longer matches the hash the graders approved" unless post.approved_sha256.present? && shapes.include?(post.approved_sha256)
+      return "Data Quality's approval of its hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.approved_sha256)
+
+      hard = SocialAgent::ApprovedDraft.hard_problems(post.text.to_s.strip, post.platform)
+      return "its text no longer passes: #{hard.to_sentence}" if hard.any?
       return if post.source_url.blank?
 
       response = fetcher.get(post.source_url)
@@ -230,7 +238,7 @@ module SocialAgent
   def self.draft_refusal(post, now)
     day = now.in_time_zone(ZONE)
     channel = SocialChannel.for(post.platform)
-    window = ->(scope) { scope.where.not(id: post.id) }
+    window = ->(scope) { scope.where.not(id: post.id).not_waiting }
     return "only a draft that passed every check can be sent (this one is #{post.status})" unless post.status == "drafted"
     return "sending is off on the server (SOCIAL_POSTING_ENABLED)" unless sending_enabled?
     return "#{post.platform == 'x' ? 'X' : 'LinkedIn'} is switched off in Admin > Posts#{(': ' + channel.paused_reason) if channel.paused_reason.present?}" if channel.off?

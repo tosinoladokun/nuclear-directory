@@ -79,6 +79,7 @@ Rails.application.routes.draw do
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     post "social/draft_now" => "social#draft_now", as: :social_draft_now
     post "social/posts/:id/send" => "social#send_draft", as: :social_send_draft
+    post "social/posts/:id/cancel" => "social#cancel_queued", as: :social_cancel_queued
     post "social/by_hand" => "social#by_hand", as: :social_by_hand
     post "social/posts/:id/reconcile" => "social#reconcile", as: :social_reconcile
     # Change your password (#783).

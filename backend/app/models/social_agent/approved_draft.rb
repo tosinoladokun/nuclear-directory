@@ -13,7 +13,13 @@ class SocialAgent::ApprovedDraft
   # can't quietly become a warning (Infra).
   HARD = /own link|hashtag|emoji|too long|empty or a placeholder/
   # Stable codes for what is refused (the messages may be reworded).
-  CODES = %w[platform text_empty graders company dq_approval link sha256 url_in_text already_sent cooldown hard_check send_on].freeze
+  CODES = %w[platform text_empty graders company dq_approval link sha256 url_in_text already_sent cooldown send_on_taken hard_check send_on].freeze
+
+  # The text's own hard problems (shape only), for the creation check and again at send (SocialAgent.recheck).
+  def self.hard_problems(text, platform)
+    item = SocialAgent::Item.new(subject: nil, kind: "spotlight", facts: {}, source_url: nil, source_quote: nil, path: nil, organization_ids: [])
+    SocialAgent::Check.problems(text, item, platform:).grep(HARD)
+  end
 
   def self.call(**args) = new(**args).call
   class << self
@@ -45,14 +51,14 @@ class SocialAgent::ApprovedDraft
     err.("url_in_text", "the text carries a URL: the link is added when it is sent") if @text.match?(%r{https?://}i)
     # Data Quality's recorded PASS of exactly this hash (POST /api/dq/social_approvals): "graders: DQ" is a fact on file, not the caller's word.
     err.("dq_approval", "Data Quality has not recorded a PASS for this exact sha256 (POST /api/dq/social_approvals)") unless ::SocialApproval.exists?(platform: @platform, slug: @slug, sha256: @sha)
-    used_by_another(company).each { |code, message| err.(code, message) }
+    used_by_another(company, send_on).each { |code, message| err.(code, message) }
     problems = problems_for(company)
     hard, warnings = problems.partition { |problem| problem.match?(HARD) }
     hard.each { |problem| err.("hard_check", problem) }
     return result(nil, errors, warnings) if errors.any?
 
     post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
-      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), created_at: @now)
+      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, created_at: @now)
     result(post, [], warnings)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => error
     result(nil, [ [ "hard_check", "couldn't save the draft: #{error.message}" ] ], [])
@@ -72,12 +78,22 @@ class SocialAgent::ApprovedDraft
       nil
     end
 
-    def used_by_another(company)
+    # One send ever per company and platform; one approved row per platform per day; and 14 days between a company's posts on a platform
+    # counted around the day this one goes out (a row waiting for its day counts on that day, not on the day it was loaded).
+    def used_by_another(company, send_on)
       sent = SocialPost.where(subject: company, platform: @platform, status: SocialPost::SENT)
       return [ [ "already_sent", "this platform already sent a post about #{company.name} (one send per company and platform)" ] ] if sent.exists?
 
-      open = SocialPost.where(subject: company, platform: @platform).where.not(status: %w[cancelled blocked failed]).where(created_at: (@now - SocialPost::COOLDOWN)..)
-      open.exists? ? [ [ "cooldown", "a post about #{company.name} already exists on this platform (post #{open.first.id}, #{open.first.status}) within #{SocialPost::COOLDOWN.inspect}" ] ] : []
+      target = send_on || @now.in_time_zone(SocialAgent::ZONE).to_date
+      found = []
+      if send_on && SocialPost.waiting.where(platform: @platform, send_on:).exists?
+        found << [ "send_on_taken", "an approved post for #{@platform} is already queued for #{send_on} (one per platform per day)" ]
+      end
+      near = SocialPost.where(subject: company, platform: @platform).where.not(status: %w[cancelled blocked failed]).detect do |post|
+        ((post.send_on || post.created_at.in_time_zone(SocialAgent::ZONE).to_date) - target).abs < SocialPost::COOLDOWN.in_days
+      end
+      found << [ "cooldown", "a post about #{company.name} already exists on this platform (post #{near.id}, #{near.status}) within #{SocialPost::COOLDOWN.inspect} of #{target}" ] if near
+      found
     end
 
     # The agent's own content checks against what our page for the company says (and its source page when given).

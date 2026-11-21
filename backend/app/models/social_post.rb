@@ -31,5 +31,8 @@ class SocialPost < ApplicationRecord
 
   # Posts that count as used: sent, or drafted in drafts mode (so a trial run behaves as the real one).
   # Used: sent, queued, drafted, or failed after the call started (it may have gone out; Infra, DQ).
-  scope :used, -> { where(status: [ *SENT, "drafted", "failed" ]) }
+  # A graders-approved row waiting for its day (drafted with a send_on) hasn't used anything yet: it must not hold today's slot or a cooldown.
+  scope :waiting, -> { where(status: "drafted").where.not(send_on: nil) }
+  scope :not_waiting, -> { where.not(id: waiting.select(:id)) }
+  scope :used, -> { where(status: [ *SENT, "drafted", "failed" ]).not_waiting }
 end

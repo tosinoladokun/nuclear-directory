@@ -4,6 +4,7 @@ class Admin::SocialController < Admin::BaseController
   def show
     @channels = SocialChannel::PLATFORMS.map { |platform| SocialChannel.for(platform) }
     @posts = SocialPost.order(created_at: :desc).limit(100)
+    @queue = SocialPost.waiting.includes(:subject).order(:send_on, :platform)
     @spent = SocialPost.where(status: SocialPost::SENT, created_at: Time.current.all_month).sum(:cost_usd)
   end
 
@@ -28,6 +29,17 @@ class Admin::SocialController < Admin::BaseController
       redirect_to admin_social_path, alert: "Not sent to #{where}: #{why}."
     else
       redirect_to admin_social_path, notice: sent.status == "posted" ? "Sent to #{where}." : "Handed to Buffer for #{where}: it goes out at #{sent.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%-d %b %H:%M')}."
+    end
+  end
+
+  # Takes a row out of the approved queue (#897): it never goes out; the graders can load a new one.
+  def cancel_queued
+    post = SocialPost.find(params[:id])
+    if post.status == "drafted" && post.graded?
+      post.update!(status: "cancelled", reason: "taken out of the approved queue in Admin > Posts", send_on: nil)
+      redirect_to admin_social_path, notice: "Taken out of the queue: it won't go out."
+    else
+      redirect_to admin_social_path, alert: "Only a post waiting in the approved queue can be taken out."
     end
   end
 

@@ -619,6 +619,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_180000) do
     t.datetime "updated_at", null: false
     t.date "send_on"
     t.text "warnings"
+    t.string "approved_sha256"
     t.index ["platform", "created_at"], name: "index_social_posts_on_platform_and_created_at"
     t.index ["platform", "send_on"], name: "index_social_posts_on_platform_and_send_on", where: "(send_on IS NOT NULL)"
     t.index ["platform", "subject_type", "subject_id"], name: "index_social_posts_one_send", unique: true, where: "((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text]))"
