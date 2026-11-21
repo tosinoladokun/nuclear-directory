@@ -189,9 +189,23 @@ class DataQuality::Fetcher
     # A DataQuality::Robots, or a Response when robots.txt itself can't be read.
     # Per RFC 9309: missing (4xx) means everything is allowed; unreachable
     # (5xx, network) means nothing is. A 401/403 is a block, not "missing".
+    # RFC 9309: up to ROBOTS_REDIRECTS redirects are followed, here only within
+    # the same site (www and the bare domain, https on 443), e.g.
+    # www.oklo.com/robots.txt to oklo.com/robots.txt (Site, 21 Nov).
+    ROBOTS_REDIRECTS = 5
     def fetch_robots(uri)
       robots_uri = uri.dup.tap { |copy| copy.path = "/robots.txt"; copy.query = copy.fragment = nil }
-      fetched = request(robots_uri, {}, max_bytes: 1.megabyte)
+      fetched = nil
+      (ROBOTS_REDIRECTS + 1).times do
+        fetched = request(robots_uri, {}, max_bytes: 1.megabyte)
+        location = fetched.http["location"] if (300..399).cover?(fetched.http.code.to_i)
+        break unless location
+
+        target = (URI.join(robots_uri.to_s, location) rescue nil)
+        break unless target.is_a?(URI::HTTPS) && target.port == 443 && same_site?(target.host.to_s, uri.host.to_s)
+
+        robots_uri = target
+      end
       status = fetched.http.code.to_i
       # A bot challenge on robots.txt is a block, as on any page.
       return classify(robots_uri.to_s, fetched) if challenge?(fetched.http)
