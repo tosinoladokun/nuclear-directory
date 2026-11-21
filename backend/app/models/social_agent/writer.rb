@@ -39,6 +39,24 @@ class SocialAgent::Writer
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,
       no emoji, no links, no exclamation marks, no "not X but Y", no lists of three for rhythm.
   TEXT
+  # 'Meet a company' (#883, Tosin 21 Nov): one company from the directory, told like a short research note.
+  SPOTLIGHT = <<~TEXT.freeze
+    You write one post for Nuclear Directory's brand account, a free directory of the US nuclear industry. The post introduces one
+    company from the directory, like a short research note: "Meet <company>: what it does, where it is, who it works with."
+    Rules (the Social playbook and VOICE.md):
+    - Use only the facts given and the company's own words. Every number, name and place must come from them. No guesses.
+    - Start with "Meet <the company's name>". Then what it does, where it is based (only when the facts give a headquarters), and who
+      it works with (only the relationships the facts list). Leave out whatever the facts don't give: never say it is missing.
+    - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
+    - Say where the description comes from, in words ("according to its website", "the company says"). Never write an address or a link;
+      the link to our company page is added for you.
+    - No person names. No rankings, no "leading", "pioneering", "first", "largest" or "only" unless the facts say it, and then
+      attribute it ("the company describes itself as ...").
+    - A relationship is told as the facts state it, with its verb ("supplies", "invests in"), never stronger ("partners with" for a
+      supply deal) and never in the other direction.
+    - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags, no emoji, no links,
+      no exclamation marks, no "not X but Y", no lists of three for rhythm. Say each thing once; when the facts are short, so is the post.
+  TEXT
   # What the voice check lets through (rehearsal rounds 1-11: these were blocked and are not problems). Anything that changes
   # what the source says still fails.
   NITS = <<~TEXT.freeze
@@ -67,7 +85,7 @@ class SocialAgent::Writer
     facts = item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")
     revise = "\n\nYour earlier draft:\n#{previous}\n\nIt was stopped because: #{feedback}\nWrite it again, fixing that." if feedback
     @client.structured(role: :extract, schema: DRAFT, schema_name: "post", crawl_run:, messages: [
-      { role: "system", content: "#{RULES}\n#{LENGTH.fetch(platform)}" },
+      { role: "system", content: "#{item.kind == 'spotlight' ? SPOTLIGHT : RULES}\n#{LENGTH.fetch(platform)}" },
       { role: "user", content: "Facts:\n#{facts}\n\nSource's words:\n#{item.source_quote}\n#{item.page_text}#{revise}" }
     ]).data.fetch("text").strip
   end
@@ -76,7 +94,7 @@ class SocialAgent::Writer
   def voice_ok?(text, item, crawl_run: nil)
     data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
-        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}\n#{NITS}" },
+        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{item.kind == 'spotlight' ? SPOTLIGHT : RULES}\n#{NITS}" },
       { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\n" \
         "Source's words:\n#{item.source_quote}\n#{item.page_text}\n\nPost:\n#{text}" }
     ]).data

@@ -63,6 +63,7 @@ module SocialAgent::Rules
     found << "its source isn't a primary one (#{host(item.source_url).presence || 'none'})" unless primary?(item)
     found.concat(status_words(text, item))
     found.concat(people(text, item))
+    found.concat(tags(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found.concat(speaker_problems(text, item))
@@ -178,7 +179,7 @@ module SocialAgent::Rules
 
   # The source named in words (Tosin, 20 Nov: the post's link is our page; the source is only said): a verb of saying or a
   # document word. The writer is told to; this is the check.
-  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according to|told|issued|released|published|filed|
+  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according\s+to|told|issued|released|published|filed|
     (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
   def attributed?(text) = text.match?(ATTRIBUTION)
 
@@ -288,13 +289,19 @@ module SocialAgent::Rules
     (words + terms).uniq
   end
 
+  # An @ account in a post is only the company's own verified X handle (GTM's list, #883): never another account, never on LinkedIn.
+  def tags(text, item)
+    allowed = item.facts["x_handle"].to_s.downcase
+    text.scan(/@\w+/).uniq.filter_map { |tag| "it tags #{tag}, which isn't this company's verified handle" unless tag.downcase == allowed }
+  end
+
   # Two or more capitalised words in a row are a name: allowed only for a company, plant or place the directory knows,
   # the facts' own companies and publisher, a month or a state; anything else may be a person (Founder 3.7).
   def people(text, item)
     known = [ item.facts["companies"], item.facts["name"], item.facts["publisher"] ].compact.join(" ").downcase
     text.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/).uniq.filter_map do |found|
       # An article isn't a name, nor evidence of an organisation (Copilot: "The Jane Doe statement").
-      words = found.split.drop_while { |word| ARTICLES.include?(word) }
+      words = found.split.drop_while { |word| ARTICLES.include?(word) || (word == "Meet" && item.kind == "spotlight") }
       next if words.size < 2
 
       phrase = words.join(" ")

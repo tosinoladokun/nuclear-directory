@@ -17,7 +17,19 @@ class SocialAgent::Picker
   LINK_VERBS = %w[supplies invests_in offtake_with subsidiary_of].freeze
 
   # fresh: how far back counts as new (a rehearsal looks back further; social:rehearse).
-  def initialize(platform:, now: Time.current, fresh: FRESH)
+  # kinds: what the agent posts about (SOCIAL_POST_KINDS, comma-separated; Tosin, 21 Nov, #883: company spotlights are the default and
+  # news posts are an occasional extra for later). news, link, new_company and spotlight.
+  def self.kinds = ENV.fetch("SOCIAL_POST_KINDS", "spotlight").split(",").map(&:strip).compact_blank
+  SPOTLIGHT_COOLDOWN = 8.weeks
+  SPOTLIGHT_POOL = 40
+  # Not a company to introduce (DQ, 21 Nov): agencies, labs, universities, investors and data-center buyers (these only through their nuclear deals).
+  GOVERNMENT_ROLES = %w[government_agency national_lab university research_organization venture_capital data_center_offtaker].freeze
+  # Companies whose X/LinkedIn accounts GTM verified (config/social_tags.yml): picked first, and on X tagged with their handle.
+  def self.tags = @tags ||= YAML.safe_load_file(Rails.root.join("config/social_tags.yml")) || {}
+  def self.taggable = tags.keys
+
+  def initialize(platform:, now: Time.current, fresh: FRESH, kinds: self.class.kinds)
+    @kinds = kinds
     @platform = platform
     @now = now
     @fresh = fresh
@@ -28,7 +40,7 @@ class SocialAgent::Picker
   # Every usable candidate, best first.
   def usable = candidates.select { |item| usable?(item) }
 
-  def candidates = news + links + companies
+  def candidates = @kinds.flat_map { |kind| { "spotlight" => :spotlights, "news" => :news, "link" => :links, "new_company" => :companies }.fetch(kind, :none).then { |name| name == :none ? [] : send(name) } }
 
   private
     def news
@@ -95,6 +107,50 @@ class SocialAgent::Picker
           source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}",
           organization_ids: [ company.id ])
       end
+    end
+
+    # 'Meet a company' (#883): a published company whose page has a sourced description and website, complete profiles first
+    # (a description, headquarters, what it works on and a deal, each sourced), then the most connected, then the newest. Never one
+    # spotlighted in the last eight weeks. Its facts are only what the page shows (CompanyProfile) and its source is the company's own site.
+    def spotlights
+      recent = SocialPost.where.not(status: %w[cancelled blocked failed]).where(subject_type: "Organization", created_at: (@now - SPOTLIGHT_COOLDOWN)..).select(:subject_id)
+      # Nothing open on it (DQ): no candidate waiting for review and no pending take-off proposal.
+      open = Candidate.where(subject_type: "Organization", status: %w[new matched needs_review]).select(:subject_id)
+      proposed = TakeoffProposal.where(subject_type: "Organization", status: "pending").select(:subject_id)
+      pool = Organization.published.where.not(description: [ nil, "" ]).where.not(website: [ nil, "" ]).where.not(id: recent).where.not(id: open).where.not(id: proposed).to_a
+      return [] if pool.empty?
+
+      links = Relationship.published.where(from_organization_id: pool.map(&:id)).group(:from_organization_id).count
+        .merge(Relationship.published.where(to_organization_id: pool.map(&:id)).group(:to_organization_id).count) { |_, from, to| from + to }
+      pool.sort_by { |company| [ -links.fetch(company.id, 0), -company.verified_at.to_i ] }.first(SPOTLIGHT_POOL)
+        .filter_map { |company| spotlight(company) }.each_with_index.sort_by { |item, index| [ self.class.taggable.include?(item.subject.slug) ? 0 : 1, index ] }.map(&:first)
+    end
+
+    def spotlight(company)
+      profile = CompanyProfile.new(company)
+      return unless profile.sourced? && profile.description.present? && profile.website.present?
+      # A company, not an agency, lab or university ('Meet a company', #883).
+      return if profile.roles.empty? || profile.roles.all? { |row| GOVERNMENT_ROLES.include?(row.role.key) }
+
+      evidence = company.evidence.includes(:source).order(:id).to_a
+      described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or return
+      located = evidence.find { |row| (Array(row.fields) & %w[hq_city hq_state]).any? }
+      works_on = (profile.shown_roles.map { |row| row.role.name } + profile.technologies.map { |row| row.technology.name }).uniq.first(4)
+      deals = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? }.first(3).map do |deal|
+        verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(deal.relationship_type, deal.relationship_type.humanize(capitalize: false))
+        "#{deal.from_organization.name} #{verb} #{deal.to_organization.name}"
+      end
+      headquarters = [ company.hq_city, company.hq_state ].compact_blank.join(", ") if located
+      facts = { "name" => company.name, "description" => company.description, "headquarters" => headquarters.presence,
+                "works on" => works_on.to_sentence.presence, "relationships" => deals.join("; ").presence,
+                "founded" => company.founded_year&.to_s,
+                "x_handle" => (self.class.tags.dig(company.slug, "x") if @platform == "x") }.compact_blank
+      # The page its description rests on when that is the company's own site (a redirect on the bare homepage doesn't stop it), else the site.
+      own = described.source&.url.presence if described.source&.url.present? && SocialAgent::Rules.primary?(SocialAgent::Item.new(subject: company, kind: "spotlight", facts: {}, source_url: described.source.url, source_quote: nil, path: nil, organization_ids: [ company.id ]))
+      item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: own || company.website,
+        source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}", organization_ids: [ company.id ])
+      # Complete only (DQ): a role, a website, a description, a sourced headquarters and at least one current link to a published company.
+      item if headquarters.present? && deals.any?
     end
 
     def rejected_news
