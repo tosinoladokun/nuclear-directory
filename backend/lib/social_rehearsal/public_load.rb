@@ -110,7 +110,9 @@ module SocialRehearsal
           quote = row.at_css(".nd-quote")&.text.to_s.gsub(/[“”]/, "").squish.presence
           url = row.at_css("a.nd-src")&.[]("href").to_s.presence
           detail = row.at_css("p.type-body")&.text.to_s.squish.presence
-          [ left, verb, right, quote, url, detail ] if quote && url && detail && (left == name || right == name)
+          type = VERBS.fetch(verb)
+          type = "offtake_with" if type == "offtakes_from"
+          [ left, type, right, quote, url, detail ] if quote && url && detail && (left == name || right == name) && Relationship.relationship_types.key?(type)
         end
         return false if rows.empty?
 
@@ -138,11 +140,11 @@ module SocialRehearsal
           link = OrganizationTechnology.find_or_create_by!(organization: org, technology: tech) { |row| row.verification_status = "verified"; row.verified_by = BY; row.verified_at = 30.days.ago }
           Evidence.create!(subject: link, source: site_source, quote: about, found_by: "human")
         end
-        rows.each do |left, verb, right, quote, url, detail|
+        rows.each do |left, type, right, quote, url, detail|
           other_name = left == name ? right : left
           other = Organization.find_by(name: other_name) || Organization.create!(name: other_name, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
           from, to = left == name ? [ org, other ] : [ other, org ]
-          deal = Relationship.create!(from_organization: from, to_organization: to, relationship_type: VERBS.fetch(verb), description: detail, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          deal = Relationship.create!(from_organization: from, to_organization: to, relationship_type: type, description: detail, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
           Evidence.create!(subject: deal, source: Source.find_or_create_by!(url: url) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }, quote:, found_by: "human")
         end
         true
