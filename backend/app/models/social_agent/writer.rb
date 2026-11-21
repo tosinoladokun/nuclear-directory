@@ -60,7 +60,8 @@ class SocialAgent::Writer
     - Write whole sentences with every number and name spelled exactly as the facts give it ("$1.7 billion", never "$1.7B"; "Bellevue, WA",
       never "WA-based"; "$1.52 billion" in lower case, never "$1.52 Billion"; no slashes or abbreviations the facts don't use). Where a link says "the source names the party as: X", the money,
       loan or award went to X, and the post names X. When the length limit is tight, leave a fact out: never shorten
-      it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
+      it into a fragment. On X, tell the one strongest link: when the post is too long, leave out the
+      headquarters before the link (a dated relationship says more than where it is); on LinkedIn, at most two.
     - When the facts give an x_handle, put it alone on the last line of the post (after a blank line), exactly as given, with no brackets
       ("@oklo"). Never any other @ account, and never in square brackets.
     - Give the headquarters in its own sentence, attributed to the source its "headquarters comes from" line names (not to the company's website when
