@@ -491,6 +491,8 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match SocialAgent::Picker::NUCLEAR, "Holtec expands spent fuel storage"
     assert_match SocialAgent::Picker::NUCLEAR, "A new fuel cycle report"
     assert_no_match SocialAgent::Picker::NUCLEAR, "Holtec expands spentfuel storage"
+    assert_no_match SocialAgent::Picker::NUCLEAR, "NASA bone-marrow chip tests how space radiation and isotopes affect astronauts", "a space-radiation or imaging story isn't about the industry"
+    assert_match SocialAgent::Picker::NUCLEAR, "Commonwealth Fusion Systems fusion energy plant"
   end
 
   test "a date with a year must be the item's year: 19 November 2023 isn't the 2026 item's date" do
@@ -664,5 +666,10 @@ class SocialAgentTest < ActiveSupport::TestCase
       assert_includes table, "| x | https://a.example/mou | PPPPPPPPPPB | flaky |  |", "the live item's block isn't hidden by the fixture"
       assert_includes table, "Items ready (3 of 3 runs, fixtures excluded): 0"
     end
+  end
+
+  test "the picker skips a news item whose words are only radiation or isotopes (NASA bone-marrow chip, 21 Nov)" do
+    @news.update_columns(title: "NASA bone-marrow chip flies to the space station", summary: "The chip studies how space radiation and isotopes affect astronaut bone marrow.")
+    assert_nil SocialAgent::Picker.new(platform: "x", now: MONDAY).call
   end
 end
