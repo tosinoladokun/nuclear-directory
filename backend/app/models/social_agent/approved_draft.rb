@@ -27,9 +27,10 @@ class SocialAgent::ApprovedDraft
     def fetcher = @fetcher ||= DataQuality::Fetcher.new
   end
 
-  def initialize(platform:, slug:, text:, link:, sha256:, graders:, source_url: nil, send_on: nil, now: Time.current, fetcher: nil)
+  def initialize(platform:, slug:, text:, link:, sha256:, graders:, source_url: nil, send_on: nil, card_description: nil, now: Time.current, fetcher: nil)
     @platform, @slug, @text, @link, @sha, @graders, @source_url, @now = platform, slug, text.to_s.strip, link, sha256.to_s.downcase, graders, source_url, now
     @send_on = send_on
+    @card_description = card_description.to_s.squish.presence
     @fetcher = fetcher
   end
 
@@ -58,7 +59,7 @@ class SocialAgent::ApprovedDraft
     return result(nil, errors, warnings) if errors.any?
 
     post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
-      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, created_at: @now)
+      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), approved_sha256: @sha, card_description: (@card_description if @platform == "linkedin"), created_at: @now)
     result(post, [], warnings)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => error
     result(nil, [ [ "hard_check", "couldn't save the draft: #{error.message}" ] ], [])
