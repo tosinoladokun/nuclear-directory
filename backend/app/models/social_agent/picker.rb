@@ -205,6 +205,8 @@ class SocialAgent::Picker
     def source_label(url, company)
       host = SocialAgent::Rules.host(url).to_s.delete_prefix("www.")
       return "an unnamed page" if host.blank?
+      # Our own page for the company is the directory's record, not a source outside it (the writer says "the directory lists").
+      return "the directory's own record" if host == "nuclear-directory.org"
 
       own = [ company.domain, company.website ].compact.map { |site| (site.include?("/") ? SocialAgent::Rules.host(site) : site).to_s.delete_prefix("www.") }.reject(&:blank?)
       own.any? { |site| host == site || host.end_with?(".#{site}") } ? "the company's own website" : "a page on #{host}"

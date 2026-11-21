@@ -995,4 +995,15 @@ class SocialAgentTest < ActiveSupport::TestCase
     own = item.with(facts: facts.merge("headquarters comes from" => "the company's own website"))
     assert_empty SocialAgent::Rules.hq_attribution(bad, own), "its own website really is the HQ source"
   end
+
+  test "a headquarters whose only source is our own company page is 'the directory's own record' (Founder: no company site states Portland or Camden)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    ours = Source.create!(url: "https://nuclear-directory.org/companies/full-reactors", source_kind: "web_page", crawl_status: "ok")
+    Evidence.where(subject: full, fields: %w[hq_city hq_state]).update_all(source_id: ours.id)
+    facts = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts
+    assert_equal "the directory's own record", facts["headquarters comes from"]
+    assert_equal "the company's own website", facts["description comes from"]
+    assert_match "The directory lists its headquarters as", SocialAgent::Writer::SPOTLIGHT
+  end
 end

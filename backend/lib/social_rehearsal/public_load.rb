@@ -124,7 +124,8 @@ module SocialRehearsal
         org = existing ? existing.tap { |row| row.update!(attrs) } : Organization.create!(name: CGI.unescapeHTML(name), slug:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago, **attrs)
         site_source = Source.find_or_create_by!(url: site) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }
         Evidence.create!(subject: org, source: site_source, quote: about, found_by: "human", fields: %w[description])
-        Evidence.create!(subject: org, source: site_source, quote: hq, found_by: "human", fields: %w[hq_city hq_state]) if hq.present?
+        # The public page is the only place the rehearsal finds the headquarters: the directory's own record, not the company's website (Founder, round 13).
+        Evidence.create!(subject: org, source: Source.find_or_create_by!(url: page) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }, quote: hq, found_by: "human", fields: %w[hq_city hq_state]) if hq.present?
         # The page's own role tag (its first tag, e.g. "Reactor designer"); the Government and research bucket is the agency role, so the
         # picker can tell an agency from a company.
         role_label = doc.at_css(".nd-pagehead__tags span.nd-tag")&.text.to_s.squish.presence

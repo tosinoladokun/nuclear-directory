@@ -65,6 +65,8 @@ class SocialAgent::Writer
       ("@oklo"). Never any other @ account, and never in square brackets.
     - Give the headquarters in its own sentence, attributed to the source its "headquarters comes from" line names (not to the company's website when
       that line names another source). Never merge it into the description's "according to its website" sentence unless both come from the company's own website.
+    - Where "headquarters comes from" says "the directory's own record", write "The directory lists its headquarters as <place>" (never "according to its
+      website"): no company page was found that states the place.
     - When the source is the company's own site, "according to <the company's name>" is exact ("according to TerraPower"); "its website" is fine
       for the description and headquarters.
     - Name each source once and plainly: "According to its website, ..." for the description and headquarters together when they come from
