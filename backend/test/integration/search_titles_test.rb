@@ -101,6 +101,28 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     assert_equal "Helion Energy: Develops fusion power plants. Investors include Lightspeed.", description
   end
 
+  test "a link whose description carries a stage isn't stated flat in the card text, and a plant that isn't operating isn't 'operated' (PM/GTM: NuScale, Holtec)" do
+    nuscale = cite!(company("NuScale", description: "Small modular reactor company."))
+    plan = cite!(link(nuscale, "supplies", cite!(company("Standard Power"))))
+    plan.update!(description: "Announced plan (Oct 2023): NuScale to provide 24 modules for planned SMR plants in Ohio and Pennsylvania")
+    get company_path(slug: nuscale.slug)
+    assert_no_match(/Supplies/, description, "an announced plan is not 'Supplies Standard Power'")
+    assert_equal description, og_description
+
+    plan.update!(description: "Supplies 24 modules under a signed supply contract")
+    get company_path(slug: nuscale.slug)
+    assert_match(/Supplies Standard Power/, description, "a plain supply link still reads flat")
+
+    holtec = cite!(company("Holtec", description: "Makes spent fuel storage systems."))
+    palisades = cite!(plant("Palisades", facility_type: "power_reactor", status: "not_operating"))
+    cite!(link(holtec, "operates", palisades))
+    get company_path(slug: holtec.slug)
+    assert_no_match(/Operates Palisades/, description, "not operating")
+    palisades.update!(status: "operating")
+    get company_path(slug: holtec.slug)
+    assert_match(/Operates Palisades/, description)
+  end
+
   test "an ended deal isn't present tense, and an unpublished plant type isn't called a plant" do
     supplier = cite!(company("Old Supplier", roles: [ role("fuel") ], description: "Made fuel."))
     cite!(link(supplier, "supplies", cite!(company("Past Customer")))).update!(ended_on: Date.new(2020, 1, 1))

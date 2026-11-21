@@ -580,17 +580,27 @@ module DirectoryHelper
       ("#{staged['non_binding']} not binding" if staged["non_binding"]) ].compact.join(" · ")
   end
 
+  # A link description that carries a stage or a condition: planned, announced, non-binding, a letter of intent or MOU, a term sheet, proposed,
+  # subject to approvals, conditional. A short flat phrase can't carry it, so such a link isn't stated flat anywhere (card, preview).
+  STAGE_WORDS = /\b(plans?|planned|announced|announces|propos(?:ed|al|als)|non-?binding|letters? of intent|LOI|MOU|memorand(?:um|a)|term sheets?|framework|options?|preliminary|intends?|intended|expects?|expected|targets?|targeted|subject to|conditional|conditions?|approvals?)\b/i
+  def qualified_link?(deal) = deal.description.to_s.match?(STAGE_WORDS)
+
   def company_description(profile)
     listed = ->(names, noun = nil) { names.many? ? "#{names.first} and #{pluralize(names.size - 1, [ "other", noun ].compact.join(" "))}" : names.first }
     # Present tense, so only links in effect today (as on the company's card).
     current = ->(l) { (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
-    places = ->(type) { profile.plant_links.select { |l| l.relationship_type == type && current.call(l) }.map { |l| l.facility.parent || l.facility }.uniq }
+    # "Operates" only for a plant that is operating today: a plant not operating, shut down, being decommissioned or planned isn't "operated"
+    # in a present-tense line (GTM: "Operates Palisades" for a plant that isn't operating).
+    running = ->(l) { l.relationship_type != "operates" || l.facility.status.nil? || l.facility.status == "operating" }
+    places = ->(type) { profile.plant_links.select { |l| l.relationship_type == type && current.call(l) && running.call(l) }.map { |l| l.facility.parent || l.facility }.uniq }
     sites = ->(type) { places.call(type).map(&:name) }
     # "plant" only when every one is a published power plant; a mine, a fuel
     # plant or a type that isn't published makes it "site" (VOICE.md).
     noun = ->(type) { places.call(type).all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site" }
     # Signed deals said flat; a framework or non-binding one says so (#487).
-    deals_out = ->(type) { profile.counted_deals.select { |d| d.relationship_type == type && d.from_organization_id == profile.organization.id && current.call(d) }.map { |d| d.to_organization.name }.uniq }
+    # A link whose own description carries a stage (an announced plan, a letter of intent, a term sheet, subject to approvals) is left out of a
+    # present-tense line: "Supplies Standard Power" must not drop "announced plan" (PM, NuScale). The card never says less than the record.
+    deals_out = ->(type) { profile.counted_deals.select { |d| d.relationship_type == type && d.from_organization_id == profile.organization.id && current.call(d) && !qualified_link?(d) }.map { |d| d.to_organization.name }.uniq }
     staged_out = ->(stage) { profile.deals.select { |d| d.stage == stage && d.relationship_type == "offtake_with" && d.from_organization_id == profile.organization.id && current.call(d) }.map { |d| d.to_organization.name }.uniq }
     facts = [
       ("Owns #{listed.call(sites.call('owns'), noun.call('owns'))}" if sites.call("owns").any?),
@@ -621,7 +631,7 @@ module DirectoryHelper
   def investors_of(profile)
     today = Date.current
     profile.deals.select { |d| d.relationship_type == "invests_in" && d.to_organization_id == profile.organization.id &&
-      (d.started_on.nil? || d.started_on <= today) && (d.ended_on.nil? || d.ended_on > today) }
+      (d.started_on.nil? || d.started_on <= today) && (d.ended_on.nil? || d.ended_on > today) && !qualified_link?(d) }
       .map { |d| d.from_organization.name }.uniq
   end
 
