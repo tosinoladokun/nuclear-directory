@@ -910,4 +910,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match "[source: a page on energy.gov]", facts["records of its links"]
     assert_no_match(/usaspending/, facts["records of its links"])
   end
+
+  test "a link whose supporting quote names the borrower carries that party (Holtec Palisades, LLC), and the judge is told a partial list fails (DQ, #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    deal.update!(relationship_type: "funds", description: "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024")
+    deal.evidence.destroy_all
+    loan = Source.create!(url: "https://www.energy.gov/edf/palisades", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: deal, source: loan, quote: "Owners: Full Reactors Palisades, LLC | Loan: $1.52 billion under the Energy Dominance Financing Program, closed September 2024", found_by: "human")
+    facts = SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts
+    assert_match "[the source names the party as: Full Reactors Palisades, LLC]", facts["records of its links"]
+    assert_match "keeps only some items of a list", SocialAgent::Writer::NITS
+    assert_equal "Full Reactors Palisades, LLC", SocialAgent::Picker.new(platform: "x", now: MONDAY).send(:named_party, "Recipient: Full Reactors Palisades, LLC; amount 2 million")
+  end
 end

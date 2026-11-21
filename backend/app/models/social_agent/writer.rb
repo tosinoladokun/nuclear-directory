@@ -58,7 +58,8 @@ class SocialAgent::Writer
     - Relationship sentences begin "Per the directory's records" or "The directory lists", name who does what for whom (who builds what),
       and never use the present tense for a finished award, loan or investment. Do not pick examples out of a longer list.
     - Write whole sentences with every number and name spelled exactly as the facts give it ("$1.7 billion", never "$1.7B"; "Bellevue, WA",
-      never "WA-based"; no slashes or abbreviations the facts don't use). When the length limit is tight, leave a fact out: never shorten
+      never "WA-based"; no slashes or abbreviations the facts don't use). Where a link says "the source names the party as: X", the money,
+      loan or award went to X, and the post names X. When the length limit is tight, leave a fact out: never shorten
       it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
     - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
     - Name each source once and plainly: "According to its website, ..." for the description and headquarters together when they come from
@@ -88,8 +89,10 @@ class SocialAgent::Writer
     Before you say the post leaves out or changes something, find the exact words in the post. A word that is in the post
     ("nearly", "up to", "non-binding") is not missing. Quote the post's own offending words in your reason; if you cannot
     quote them, pass the post.
-    A "Meet <company>" post may leave facts out for length (an X post is short): do not fail it for leaving out the headquarters, part of
-    the description or a link. Fail it only for changing or adding something, or dropping a condition on what it does say.
+    A "Meet <company>" post may leave facts out for length (an X post is short): do not fail it for leaving out the headquarters or a
+    link. But fail a sentence that keeps only some items of a list in the description (it says one of several things the company does), or
+    that cuts a qualifier from it ("nuclear plants" to "plants"); the whole description sentence may be left out, never half of it. Fail it
+    for changing or adding something, or dropping a condition on what it does say.
     Fail it when it reverses who did what for whom, or changes what the source says, or adds, drops or contradicts a condition, number, name, date or party.
   TEXT
   LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "One or two short paragraphs, at most 120 words; as short as the facts allow." }.freeze

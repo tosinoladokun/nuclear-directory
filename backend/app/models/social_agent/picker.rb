@@ -162,9 +162,11 @@ class SocialAgent::Picker
         (deal.relationship_type != "supplies" || deal.description.match?(supply)) }.first(@platform == "x" ? 1 : 2)
       deals = told.map do |deal|
         date = profile.deal_date(deal)&.strftime("%B %Y")
-        from = best_source(deal)
+        support = best_evidence(deal)
+        from = support&.source&.url
+        party = named_party(support&.quote)
         stage = " [stage: #{deal.stage_label.downcase}]" if deal.stage
-        "#{deal.from_organization.name} and #{deal.to_organization.name}: #{deal.description.squish.delete_suffix('.')}#{" (#{date})" if date}#{stage}#{" [source: #{source_label(from, company)}]" if from}"
+        "#{deal.from_organization.name} and #{deal.to_organization.name}: #{deal.description.squish.delete_suffix('.')}#{" (#{date})" if date}#{stage}#{" [the source names the party as: #{party}]" if party}#{" [source: #{source_label(from, company)}]" if from}"
       end
       headquarters = [ company.hq_city, company.hq_state ].compact_blank.join(", ") if located
       facts = { "name" => company.name, "description" => company.description, "description comes from" => source_label(described.source&.url, company),
@@ -181,11 +183,16 @@ class SocialAgent::Picker
 
     # The source whose quote states what the link's description says (Founder: the loan is on energy.gov, not on the USAspending page that
     # supports a different award): the evidence row whose quote shares the most of the description's words and figures, else the first.
-    def best_source(deal)
+    def best_evidence(deal)
       wanted = deal.description.to_s.downcase.scan(/[[:alnum:]$.,]+/).reject { |word| word.length < 3 }.uniq
       rows = deal.evidence.select { |row| row.source&.url.present? }
-      best = rows.max_by { |row| quote = row.quote.to_s.downcase; wanted.count { |word| quote.include?(word) } }
-      best&.source&.url
+      rows.max_by { |row| quote = row.quote.to_s.downcase; wanted.count { |word| quote.include?(word) } }
+    end
+
+    # The party the supporting quote itself names as the recipient, owner or borrower ("Owners: Holtec Palisades, LLC"): the loan is to
+    # that entity, not to the company's parent (DQ, Holtec).
+    def named_party(quote)
+      quote.to_s[/\b(?:Owners?|Recipients?|Borrowers?|Awardees?)\s*:\s*([^|\n;]+?)\s*(?:\||\n|;|\z)/i, 1]&.squish.presence
     end
 
     # Where a fact really comes from, in words: the company's own website only when it is, else the page's site (DQ: never "its website" for a DOE or SEC page).
