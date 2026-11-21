@@ -171,6 +171,36 @@ module SocialAgent
       .tap { pause_after_errors(post.platform) }
   end
 
+  # Admin > Posts "Send this draft" (#879, PM: Tosin sends the graded draft himself): that exact draft, through the same send as the
+  # agent's, after every guard the agent has. Returns [post, nil] when it was handed on, or [post, why] when something refused it
+  # (nothing is sent then). The platform's switch may be Drafts only (his click is the approval) but never Off.
+  def self.send_draft(post, now: Time.current)
+    refusal = draft_refusal(post, now)
+    return [ post, refusal ] if refusal
+
+    sent = send_post(post, now:)
+    [ sent, (sent.reason.presence || "it didn't send" if sent.status.in?(%w[blocked failed unknown])) ]
+  end
+
+  def self.draft_refusal(post, now)
+    day = now.in_time_zone(ZONE)
+    channel = SocialChannel.for(post.platform)
+    window = ->(scope) { scope.where.not(id: post.id) }
+    return "only a draft that passed every check can be sent (this one is #{post.status})" unless post.status == "drafted"
+    return "sending is off on the server (SOCIAL_POSTING_ENABLED)" unless sending_enabled?
+    return "#{post.platform == 'x' ? 'X' : 'LinkedIn'} is switched off in Admin > Posts#{(': ' + channel.paused_reason) if channel.paused_reason.present?}" if channel.off?
+    return "it's a weekend" if day.on_weekend?
+    return "it's a holiday" if SocialAgent::Rules.holiday?(day.to_date)
+    return "this draft is from #{post.created_at.in_time_zone(ZONE).strftime('%-d %b')}: draft again today so the facts and checks are fresh" unless post.created_at.in_time_zone(ZONE).to_date == day.to_date
+    return "Buffer's 30-day request allowance is used up" if SocialAgent::Buffer.budget_spent?
+    return "today's post for this platform is already out" if window.(SocialPost.where(platform: post.platform, status: SocialPost::SENT, created_at: day.all_day)).exists?
+    return "the same item was posted within the last #{SocialPost::COOLDOWN.inspect}" if window.(SocialPost.where(subject: post.subject, status: SocialPost::SENT, created_at: (now - SocialPost::COOLDOWN)..)).exists?
+    return "a post about the same company went out today" if window.(SocialPost.where(status: SocialPost::SENT, created_at: day.all_day)).where("organization_ids && ARRAY[?]::bigint[]", post.organization_ids).exists?
+    return "its item is no longer published" unless still_published?(post.subject.reload)
+
+    nil
+  end
+
   # Takes back every queued post not yet out, for the platform (or all): the kill switch (PM: it stops dispatch
   # and cancels what's queued). A post the publisher won't take back stays queued and says why.
   def self.cancel_queued(platform: nil, why: "switched off", publisher: self.publisher)

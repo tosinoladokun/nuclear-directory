@@ -19,6 +19,18 @@ class Admin::SocialController < Admin::BaseController
     redirect_to admin_social_path, notice:
   end
 
+  # Send this draft (#879): the exact draft Tosin graded, only after every guard (SocialAgent.send_draft).
+  def send_draft
+    post = SocialPost.find(params[:id])
+    sent, why = SocialAgent.send_draft(post)
+    where = post.platform == "x" ? "X" : "LinkedIn"
+    if why
+      redirect_to admin_social_path, alert: "Not sent to #{where}: #{why}."
+    else
+      redirect_to admin_social_path, notice: sent.status == "posted" ? "Sent to #{where}." : "Handed to Buffer for #{where}: it goes out at #{sent.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%-d %b %H:%M')}."
+    end
+  end
+
   def update
     channel = SocialChannel.for(params[:platform])
     if channel.update(mode: params[:mode], paused_reason: nil)
