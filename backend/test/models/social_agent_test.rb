@@ -670,13 +670,16 @@ class SocialAgentTest < ActiveSupport::TestCase
   end
 
   # 'Meet a company' (#883).
-  def spotlight_company(name, slug, complete: true, website: true)
+  def spotlight_company(name, slug, complete: true, website: true, role: "reactor_vendor")
     company = Organization.create!(name:, slug:, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year, domain: ("#{slug}.example" if website),
       website: ("https://#{slug}.example" if website), description: "#{name} designs small modular reactors.", hq_city: ("Austin" if complete), hq_state: ("Texas" if complete))
     page = Source.create!(url: "https://#{slug}.example/about", source_kind: "web_page", crawl_status: "ok")
     Evidence.create!(subject: company, source: page, quote: "#{name} designs small modular reactors.", found_by: "human", fields: %w[description])
     Evidence.create!(subject: company, source: page, quote: "Headquartered in Austin, Texas.", found_by: "human", fields: %w[hq_city hq_state]) if complete
     if complete
+      kind = Role.find_or_create_by!(key: role) { |row| row.name = role.humanize }
+      held = OrganizationRole.create!(organization: company, role: kind, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      Evidence.create!(subject: held, source: page, quote: "What we do.", found_by: "human")
       tech = Technology.create!(key: "smr_#{slug.tr("-", "_")}", name: "Small modular reactor")
       link = OrganizationTechnology.create!(organization: company, technology: tech, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
       Evidence.create!(subject: link, source: page, quote: "Our SMR design.", found_by: "human")
@@ -694,7 +697,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     spotlight_company("No Site", "no-site", website: false)
     items = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
     assert_equal [ "spotlight" ], items.map(&:kind).uniq
-    assert_equal [ full, thin ], items.map(&:subject), "complete first; a company with no website isn't a candidate"
+    assert_equal [ full ], items.map(&:subject), "only a complete profile (role, website, description, headquarters, a link); no website or a thin page isn't a candidate"
     item = items.first
     assert_equal "https://full-reactors.example/about", item.source_url
     assert_match "Austin, Texas", item.facts["headquarters"]
@@ -703,7 +706,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert SocialAgent::Rules.primary?(item), "the company's own site is a primary source"
 
     SocialPost.create!(platform: "linkedin", status: "posted", subject: full, text: "Meet Full Reactors.", created_at: MONDAY - 7.weeks)
-    assert_equal [ thin ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject), "spotlighted within eight weeks"
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "spotlighted within eight weeks"
     SocialPost.update_all(created_at: MONDAY - 9.weeks)
     assert_includes SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject), full
   end
@@ -730,12 +733,25 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "spotlights skip an agency, lab or university, and take the page its description rests on when that is the company's own site (#883)" do
     ENV.delete("SOCIAL_POST_KINDS")
     full = spotlight_company("Full Reactors", "full-reactors")
-    agency = spotlight_company("Fed Agency", "fed-agency")
-    role = Role.create!(key: "government_agency", name: "Government agency")
-    link = OrganizationRole.create!(organization: agency, role:, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
-    Evidence.create!(subject: link, source: Source.first, quote: "A federal agency.", found_by: "human")
+    spotlight_company("Fed Agency", "fed-agency", role: "government_agency")
+    spotlight_company("Some Fund", "some-fund", role: "venture_capital")
     items = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
     assert_equal [ full ], items.map(&:subject), "an agency isn't a company"
     assert_equal "https://full-reactors.example/about", items.first.source_url, "the own-site page its description rests on"
+  end
+
+  test "spotlights skip a company with an open candidate or a pending take-off, and put GTM's taggable companies first (DQ, #883)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    a = spotlight_company("Alpha Reactors", "alpha-reactors")
+    b = spotlight_company("Beta Reactors", "beta-reactors")
+    c = spotlight_company("Gamma Reactors", "gamma-reactors")
+    ENV["SOCIAL_TAGGABLE_SLUGS"] = "gamma-reactors"
+    order = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
+    assert_equal c, order.first, "taggable first"
+    TakeoffProposal.create!(subject_type: "Organization", subject_id: a.id, batch: "t", reason: "wrong", proposed_by: "dq", status: "pending")
+    Candidate.create!(source: Source.first, kind: "organization", subject_type: "Organization", subject_id: b.id, status: "new", payload: {})
+    assert_equal [ c ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
+  ensure
+    ENV.delete("SOCIAL_TAGGABLE_SLUGS")
   end
 end
