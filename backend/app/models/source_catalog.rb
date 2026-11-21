@@ -61,6 +61,7 @@ class SourceCatalog
     "lead_finder" => { name: "Lead finder (company home pages)", note: "read when a lead is checked" },
     "lead_forwards" => { name: "Emails forwarded to leads@", note: "leads only, never cited; read every hour", daily: true },
     "newsletters" => { name: "Nuclear newsletters (bot@ inbox)", note: "leads for the lead pipeline, never cited", daily: true },
+    "newsletter_stories" => { name: "Newsletter stories' primary sources", note: "company or .gov pages a newsletter linked", daily: true },
     "nrc_reactor_vendors" => { name: "NRC reactor vendors (unit pages)", daily: true },
     "doe_programs" => { name: "DOE program pages", daily: true },
     "nrc_research_reactors" => { name: "NRC research and test reactors", daily: true },

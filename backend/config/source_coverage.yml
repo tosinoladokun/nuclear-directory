@@ -113,4 +113,5 @@ general:
   - { name: "Trade press feeds (WNN, ANS, NucNet, NEI magazine)", kind: trade_press, status: built, issue: 127, leads: true, note: "leads for Data Quality, never cited" }
   - { name: Emails forwarded to leads@, kind: lead_forwards, status: built, issue: 757, leads: true, note: "leads only, never cited" }
   - { name: Nuclear newsletters by email (bot@), kind: newsletters, status: built, issue: 714, leads: true, note: "leads for the lead pipeline, never cited" }
+  - { name: Newsletter stories to their primary source, kind: newsletter_stories, status: built, issue: 792, note: "the linked company or .gov page is cited, never the newsletter" }
   - { name: Daily lead researcher, status: planned, issue: 278, note: "leads for Data Quality, not facts" }

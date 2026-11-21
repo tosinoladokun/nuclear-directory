@@ -276,9 +276,9 @@ module SocialAgent
     SocialChannel.for(platform).update!(mode: "off", paused_reason: "#{PAUSE_AFTER} sends in a row didn't go through")
   end
 
-  # The record's page, tracked (Social playbook: utm_source x or linkedin-page).
+  # Our own page for the item (the company or plant it belongs to), never the source's URL, tracked: utm_source x or
+  # linkedin, utm_medium social, utm_campaign the page's slug (Tosin, 20 Nov).
   def self.link(item, platform)
-    source = platform == "x" ? "x" : "linkedin-page"
-    "#{SITE}#{item.path}?utm_source=#{source}&utm_medium=social&utm_campaign=#{item.kind}"
+    "#{SITE}#{item.path}?utm_source=#{platform}&utm_medium=social&utm_campaign=#{item.path.to_s.split('/').last}"
   end
 end

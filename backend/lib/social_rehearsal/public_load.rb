@@ -29,6 +29,9 @@ module SocialRehearsal
       doc = Nokogiri::XML(get(@feed).to_s).remove_namespaces!
       news = links = 0
       skipped = []
+      # The directory's own dates first (each company's Latest list shows the published date, as production has it); the source
+      # page's date only for what no company page lists (PM, 20 Nov: INL's supercomputer is 18 Nov, not the page's 27 Oct).
+      news += load_company_news if @companies
       doc.xpath("//entry").each do |entry|
         kind = entry.at_xpath("category")&.[]("term")
         title = entry.at_xpath("title")&.text.to_s.squish
@@ -46,7 +49,6 @@ module SocialRehearsal
       rescue StandardError => error
         skipped << "#{title} (#{error.class})"
       end
-      news += load_company_news if @companies
       Loaded.new(news:, links:, skipped:)
     end
 
@@ -98,11 +100,15 @@ module SocialRehearsal
         Organization.find_by(slug:) || begin
           html = get(page).to_s
           name = html[/og:title" content="([^"]+)"/, 1] || slug.titleize
-          Organization.create!(name: CGI.unescapeHTML(name), slug:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          # Its website as the public page shows it: a company's own site is a primary source (a press release on gle-us.com).
+          site = Nokogiri::HTML(html).at_css("a[data-outbound='company_website']")&.[]("href").to_s.sub(/\?.*\z/, "").presence
+          Organization.create!(name: CGI.unescapeHTML(name), slug:, website: site, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
         end
       end
 
       def load_news(title, page, source, at)
+        return true if NewsItem.exists?(url: source)
+
         org = company(page) or return
         html = get(source) or return
         date = page_date(html) or return

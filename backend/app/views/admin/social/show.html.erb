@@ -26,6 +26,24 @@
     <% end %>
   </section>
 
+  <section class="nd-stack" aria-labelledby="social-by-hand">
+    <h2 id="social-by-hand" class="type-admin-h2 m-0">Posted by hand</h2>
+    <p class="type-small m-0">Made a post yourself? Record it here so the agent doesn't post the same item within two weeks.</p>
+    <%= form_with url: admin_social_by_hand_path, class: "nd-stack", id: "social-by-hand-form" do %>
+      <label class="type-small" for="by-hand-item">News item (its id, its address in Admin, or its source link)</label>
+      <%= text_field_tag :item, nil, id: "by-hand-item", class: "nd-input type-input", required: true %>
+      <fieldset class="m-0 p-0 border-0">
+        <legend class="type-small">Where you posted it</legend>
+        <% SocialChannel::PLATFORMS.each do |platform| %>
+          <label class="type-body"><%= check_box_tag "platforms[]", platform, true, id: "by-hand-#{platform}" %> <%= platform == "x" ? "X" : "LinkedIn" %></label>
+        <% end %>
+      </fieldset>
+      <label class="type-small" for="by-hand-permalink">Link to your post (optional)</label>
+      <%= text_field_tag :permalink, nil, id: "by-hand-permalink", class: "nd-input type-input", placeholder: "https://" %>
+      <%= submit_tag "Record it", class: "nd-btn nd-btn--outline type-ui" %>
+    <% end %>
+  </section>
+
   <section class="nd-stack" aria-labelledby="social-log">
     <h2 id="social-log" class="type-admin-h2 m-0">Log</h2>
     <% if @posts.empty? %>
@@ -40,11 +58,17 @@
               <%= { "posted" => "Posted", "drafted" => "Draft", "sending" => "Sending", "queued" => "Queued to go out at #{post.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%H:%M')}", "cancelled" => "Taken back", "unknown" => "May have gone out: check the account",
                     "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
             <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
-            <% if post.reason.present? && post.reason != SocialAgent::APPROVED %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <% if post.reason.present? && !post.by_hand? && post.reason != SocialAgent::APPROVED %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
             <% if post.status == "drafted" %>
               <%= button_to "Send this draft", admin_social_send_draft_path(post), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-send-#{post.id}" },
                     data: { turbo_confirm: "Send this exact draft (hash #{post.text_hash}) to #{post.platform == 'x' ? 'X' : 'LinkedIn'} now?" } %>
               <p class="type-small m-0">Text hash <%= post.text_hash %></p>
+            <% end %>
+            <% if post.status == "unknown" %>
+              <p class="type-small m-0">Check the account, then say what happened:</p>
+              <%= button_to "It never went out", admin_social_reconcile_path(post, outcome: "never"), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-never-#{post.id}" },
+                    data: { turbo_confirm: "You checked the account and it isn't there?" } %>
+              <%= button_to "It did go out", admin_social_reconcile_path(post, outcome: "sent"), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-sent-#{post.id}" } %>
             <% end %>
             <p class="type-small m-0">
               <% if post.permalink %><%= link_to "See the post", post.permalink, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>

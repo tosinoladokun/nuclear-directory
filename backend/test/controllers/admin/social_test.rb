@@ -216,4 +216,101 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     ENV.delete("SOCIAL_POSTING_ENABLED")
     SocialAgent.senders.delete("x")
   end
+
+  test "a post made by hand is recorded per platform, so the agent won't post the item again (#877)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou", title: "NANO and SJ Group sign a non-binding MOU", publisher: "NANO Nuclear Energy", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    company = Organization.create!(name: "NANO Nuclear Energy", slug: "nano-nuclear-energy", verification_status: "verified", verified_by: "human:tosin")
+    news.news_mentions.create!(subject: company)
+
+    assert_difference -> { SocialPost.count }, 2 do
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x linkedin], permalink: "https://x.com/NuclearDir/status/1" }
+    end
+    assert_redirected_to admin_social_path
+    rows = SocialPost.where(subject: news).order(:platform)
+    assert_equal %w[linkedin x], rows.map(&:platform)
+    assert rows.all? { |row| row.status == "posted" && row.organization_ids == [ company.id ] && row.permalink == "https://x.com/NuclearDir/status/1" }
+    assert SocialPost.used.exists?(subject: news), "counts as used: the picker's cooldown sees it"
+
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: news.url, platforms: %w[x] }
+    end
+    assert_match(/already had it/, flash[:notice], "the one-send index: a second record is a no-op")
+
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: "999999", platforms: %w[x] }
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: [] }
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x], permalink: "javascript:alert(1)" }
+    end
+    assert_match(/Not recorded/, flash[:alert])
+
+    get admin_social_path
+    assert_select "form#social-by-hand-form input[name='platforms[]']", 2
+    assert_select ".nd-wait__what", text: /Posted by hand/
+  end
+
+  test "the news item can be given by its admin address, and an automated post still queued must be taken back first (Copilot, #878)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou2", title: "NANO and SJ Group sign a non-binding MOU", publisher: "NANO Nuclear Energy", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+
+    assert_difference -> { SocialPost.count }, 1 do
+      post admin_social_by_hand_path, params: { item: "https://www.nuclear-directory.org/admin/facts/NewsItem/#{news.id}", platforms: %w[x] }
+    end
+    assert SocialPost.find_by(platform: "x", subject: news).by_hand?, "its reason says it was posted by hand"
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: "/admin/facts/NewsItem/#{news.id}", platforms: %w[x] }
+    end
+    assert_match(/already had it/, flash[:notice])
+
+    queued = NewsItem.create!(url: "https://nanonuclearenergy.com/mou3", title: "Another item", publisher: "NANO Nuclear Energy", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    SocialPost.create!(platform: "linkedin", status: "queued", subject: queued, text: "Automated.", external_id: "b1", posted_at: 1.hour.from_now)
+    assert_no_difference -> { SocialPost.count } do
+      post admin_social_by_hand_path, params: { item: queued.id.to_s, platforms: %w[linkedin x] }
+    end
+    assert_match(/LinkedIn has an automated post queued in Buffer/, flash[:alert])
+    assert_equal 0, SocialPost.where(subject: queued, status: "posted").count, "nothing recorded for either platform until it is taken back"
+
+    get admin_social_path
+    assert_select ".nd-wait__what .text-critical", text: SocialPost::BY_HAND, count: 0
+  end
+
+  test "hostless links record nothing, and an unknown post is settled by hand so recording can go on (Copilot, #878)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou9", title: "Item", publisher: "NANO", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    [ "https://?", "https:///status/1" ].each do |bad|
+      assert_no_difference -> { SocialPost.count } do
+        post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x], permalink: bad }
+      end
+      assert_match(/Not recorded/, flash[:alert])
+    end
+    unknown = SocialPost.create!(platform: "x", status: "unknown", subject: news, text: "Auto.", posted_at: 1.hour.ago)
+    post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x] }
+    assert_match(/marked unknown/, flash[:alert])
+    post admin_social_reconcile_path(unknown, outcome: "never")
+    assert_equal "cancelled", unknown.reload.status
+    assert_difference -> { SocialPost.where(status: "posted").count }, 1 do
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x] }
+    end
+  end
+
+  test "reconcile takes only sent or never, and only while the post is still unknown (#878)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou10", title: "Item", publisher: "NANO", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    unknown = SocialPost.create!(platform: "x", status: "unknown", subject: news, text: "Auto.", posted_at: 1.hour.ago)
+    [ "", "maybe", "Never " ].each do |outcome|
+      post admin_social_reconcile_path(unknown, outcome:)
+      assert_match(/Say whether it went out/, flash[:alert])
+      assert_equal "unknown", unknown.reload.status, "an unclear answer never frees the item for a resend"
+    end
+    post admin_social_reconcile_path(unknown)
+    assert_equal "unknown", unknown.reload.status
+    unknown.update_columns(status: "posted")
+    post admin_social_reconcile_path(unknown, outcome: "never")
+    assert_match(/Only a post marked unknown/, flash[:alert])
+    assert_equal "posted", unknown.reload.status, "a post settled meanwhile isn't changed"
+    unknown.update_columns(status: "unknown")
+    post admin_social_reconcile_path(unknown, outcome: "sent", permalink: "https://x.com/NuclearDir/status/5")
+    assert_equal [ "posted", "https://x.com/NuclearDir/status/5" ], unknown.reload.values_at(:status, :permalink)
+  end
 end

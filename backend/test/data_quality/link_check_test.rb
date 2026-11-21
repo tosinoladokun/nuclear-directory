@@ -87,4 +87,18 @@ class DataQuality::LinkCheckTest < ActiveSupport::TestCase
     refute_includes DataQuality::LinkCheck.new(clock: -> { NOW }).due.map(&:id), unpublished_only.id
     assert_includes DataQuality::LinkCheck.new(clock: -> { NOW }).due.map(&:id), recent.id
   end
+
+  test "a Federal Register page is checked through its API, never the page (#860)" do
+    stub_request(:get, "https://www.federalregister.gov/robots.txt").to_return(status: 404)
+    page = cite("https://www.federalregister.gov/documents/2026/11/18/2026-23456/linked-fission-exemption")
+    gone = cite("https://www.federalregister.gov/d/2026-99999")
+    api = ->(number) { %r{\Ahttps://www\.federalregister\.gov/api/v1/documents/#{number}\.json\?} }
+    stub_request(:get, api.("2026-23456")).to_return(body: { document_number: "2026-23456" }.to_json)
+    stub_request(:get, api.("2026-99999")).to_return(status: 404)
+
+    check
+
+    assert_equal [ "ok", "dead" ], [ page.reload.link_status, gone.reload.link_status ]
+    assert_not_requested :get, page.url
+  end
 end

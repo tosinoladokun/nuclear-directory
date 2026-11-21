@@ -753,11 +753,13 @@ module DataQuality::Review
 
     # A news item's text (#863): headline, summary, date (NEWS_EDITABLE). Its
     # status stays as it is; the change, with its reason, is recorded in its history.
-    def edit_news(id:, by:, reason:, attributes:, directory: DataQuality::DirectoryClient.new)
-      human!(by)
-      item = directory.news_item(id) or return Result.new(candidate_id: nil, ref: nil, errors: [ "no news item #{id}" ])
+    def edit_news(id:, by:, reason:, attributes:, context: {}, directory: DataQuality::DirectoryClient.new)
+      unless by.to_s.match?(/\A(human:\S+|agent:data-quality)\z/)
+        raise ArgumentError, "a person or Data Quality's agent edits news text"
+      end
       return Result.new(candidate_id: nil, ref: nil, errors: [ "give a reason" ]) if reason.blank?
 
+      item = directory.news_item(id) or return Result.new(candidate_id: nil, ref: nil, errors: [ "no news item #{id}" ])
       values = attributes.to_h.stringify_keys
       if (other = values.keys - NEWS_EDITABLE).any?
         return Result.new(candidate_id: nil, ref: nil, errors: [ "can't edit #{other.to_sentence} here" ])
@@ -767,14 +769,18 @@ module DataQuality::Review
       return Result.new(candidate_id: nil, ref: nil, errors: [ "nothing changed" ]) if values.empty?
 
       # Text only: its status and approver stay, under the writer's lock (Copilot).
-      result = directory.edit_news_text(id:, attributes: values, by:, reason:)
+      result = directory.edit_news_text(id:, attributes: values, by:, reason:, context:)
       Result.new(candidate_id: nil, ref: result.ref, errors: result.errors)
     end
 
     # Undo the latest edit of its text, chosen and reversed under one lock.
-    def undo_news_edit(id:, by:, directory: DataQuality::DirectoryClient.new)
-      human!(by)
-      result = directory.undo_news_text(id:, by:)
+    # context: the source that supports the restored text (Data Quality's).
+    def undo_news_edit(id:, by:, context: {}, directory: DataQuality::DirectoryClient.new)
+      unless by.to_s.match?(/\A(human:\S+|agent:data-quality)\z/)
+        raise ArgumentError, "a person or Data Quality's agent edits news text"
+      end
+
+      result = directory.undo_news_text(id:, by:, context:)
       Result.new(candidate_id: nil, ref: result.ref, errors: result.errors)
     end
 

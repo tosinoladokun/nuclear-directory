@@ -1,0 +1,130 @@
+require "test_helper"
+
+# #863 part 2: Data Quality fixes a news item's text through its endpoint.
+class Api::DqEditsTest < ActionDispatch::IntegrationTest
+  TOKEN = "edits-token"
+  AUTH = { "Authorization" => "Bearer #{TOKEN}" }.freeze
+
+  setup do
+    ENV["DQ_AGENT_TOKEN_DIGEST"] = Digest::SHA256.hexdigest(TOKEN)
+    @item = NewsItem.create!(url: "https://example.org/news/2", title: "Acme; Plant; Exemption", headline: "Acme gets an exemtpion",
+      published_on: Date.new(2026, 11, 18), verification_status: "verified", verified_by: "human:tosin", verified_at: Time.current)
+  end
+  teardown { ENV.delete("DQ_AGENT_TOKEN_DIGEST") }
+
+  def edit(**row) = post(api_dq_edits_path, params: { actions: [ { action: "edit_news", id: @item.id, **row } ] }, headers: AUTH, as: :json)
+
+  test "edits the headline with a reason and source; the approver and status stay; listed and undoable" do
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://example.org/news/2")
+    assert_equal [ { "id" => @item.id, "ok" => true } ], response.parsed_body["results"]
+    @item.reload
+    assert_equal [ "Acme gets an exemption", "verified", "human:tosin" ], [ @item.headline, @item.verification_status, @item.verified_by ]
+    event = @item.verification_events.order(:id).last
+    assert_equal [ "agent:data-quality", "Typo", "https://example.org/news/2" ], [ event.by, event.reason, event.context["source_url"] ]
+
+    get api_dq_edits_path, headers: AUTH
+    assert_equal [ @item.id, "https://example.org/news/2" ], response.parsed_body["edits"].sole.values_at("id", "source_url")
+
+    post api_dq_edits_undo_path, params: { id: @item.id }, headers: AUTH, as: :json
+    refute response.parsed_body["ok"], "a source is required"
+    post api_dq_edits_undo_path, params: { id: @item.id, source_url: "https://example.org/news/2" }, headers: AUTH, as: :json
+    assert response.parsed_body["ok"]
+    assert_equal [ "Acme gets an exemtpion", "human:tosin" ], @item.reload.values_at(:headline, :verified_by)
+  end
+
+  test "edit only: a source, a reason and text fields are required; nothing else changes; a taken-off item isn't edited" do
+    edit(values: { headline: "X" }, reason: "r")
+    assert_match "source_url", response.parsed_body["results"].sole["error"]
+    edit(values: { url: "https://evil.example" }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "can't edit", response.parsed_body["results"].sole["error"]
+    post api_dq_edits_path, params: { actions: [ { action: "take_off", id: @item.id, reason: "r", source_url: "https://a.example/" } ] }, headers: AUTH, as: :json
+    assert_match "action must be", response.parsed_body["results"].sole["error"]
+
+    @item.unpublish!(by: "human:tosin")
+    edit(values: { headline: "Y" }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "put it back", response.parsed_body["results"].sole["error"]
+    assert_equal [ "Acme gets an exemtpion", "https://example.org/news/2" ], @item.reload.values_at(:headline, :url)
+  end
+
+  test "nothing without the token" do
+    post api_dq_edits_path, params: { actions: [] }, as: :json
+    assert_response :unauthorized
+  end
+
+  test "propose_takeoff puts one set of Yes/No rows in Today; Yes takes it off (reversible), No keeps it (#863)" do
+    by = { verification_status: "verified", verified_by: "human:tosin", verified_at: Time.current }
+    role = Role.first || Role.create!(key: "utility", name: "Utility")
+    wrong = [ organizations(:westinghouse), organizations(:terrapower) ].map { |org| OrganizationRole.create!(organization: org, role:, **by) }
+    post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: wrong.map { |r| { action: "propose_takeoff", type: "OrganizationRole", id: r.id,
+      reason: "Not a utility", source_url: "https://example.org/about", quote: "We design reactors." } } }
+    results = response.parsed_body["results"]
+    assert results.all? { |r| r["ok"] }
+    assert_equal 1, results.map { |r| r["batch"] }.uniq.size, "one request is one set"
+    assert_match "already proposed", (post(api_dq_edits_path, headers: AUTH, as: :json,
+      params: { actions: [ { action: "propose_takeoff", type: "OrganizationRole", id: wrong.first.id, reason: "x", source_url: "https://a.example/" } ] }) && response.parsed_body["results"].sole["error"])
+
+    sign_in_as users(:admin)
+    get admin_inbox_path
+    assert_select "section[aria-labelledby=inbox-takeoffs] li", 2
+    proposal = TakeoffProposal.find_by!(subject_id: wrong.first.id)
+    post admin_inbox_decide_takeoff_path(id: proposal.id, decision: "no")
+    assert_equal [ "kept", "verified" ], [ proposal.reload.status, wrong.first.reload.verification_status ]
+
+    post admin_inbox_decide_takeoff_set_path(batch: proposal.batch, decision: "yes")
+    assert_equal "unpublished", wrong.last.reload.verification_status
+    assert_equal "taken_off", TakeoffProposal.find_by!(subject_id: wrong.last.id).status
+    assert_equal 2, OrganizationRole.where(id: wrong.map(&:id)).count, "never deleted"
+  end
+
+  test "at most PER_DAY edits and proposals a day (DQ)" do
+    Api::Dq::EditsController::PER_DAY.times { |n| @item.verification_events.create!(from_status: "verified", to_status: "verified", by: "agent:data-quality", reason: "r#{n}") }
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://example.org/news/2")
+    assert_match "limit", response.parsed_body["results"].sole["error"]
+    assert_equal "Acme gets an exemtpion", @item.reload.headline
+  end
+
+  test "the source must be on the item's own site; a long headline or summary is refused (Infra)" do
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://elsewhere.example/x")
+    assert_match "item's own site", response.parsed_body["results"].sole["error"]
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://ir.example.org/releases/2")
+    assert response.parsed_body["results"].sole["ok"], "the same registrable domain (an IR subdomain) counts (DQ)"
+    edit(values: { summary: "x" * 501 }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "at most 500", response.parsed_body["results"].sole["error"]
+    edit(values: { headline: "y" * 81 }, reason: "r", source_url: "https://example.org/news/2")
+    assert_match "at most 80", response.parsed_body["results"].sole["error"]
+    assert_equal "Acme gets an exemption", @item.reload.headline
+  end
+
+  test "a source may also be a company the item is about or a .gov/.mil/.edu site; one news item per request (PM)" do
+    company = Organization.create!(name: "Acme Fission", website: "https://www.acmefission.example", verification_status: "verified", verified_by: "human:tosin")
+    NewsMention.create!(news_item: @item, subject: company)
+    edit(values: { headline: "Acme gets an exemption" }, reason: "Typo", source_url: "https://ir.acmefission.example/release")
+    assert response.parsed_body["results"].sole["ok"], "the company's site"
+    edit(values: { summary: "Exemption granted." }, reason: "From the NRC", source_url: "https://www.nrc.gov/reading-rm/x")
+    assert response.parsed_body["results"].sole["ok"], "a .gov site"
+    edit(values: { summary: "Other." }, reason: "r", source_url: "https://wire.example/acme")
+    assert_match "a company it's about", response.parsed_body["results"].sole["error"]
+
+    post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: 2.times.map { { action: "edit_news", id: @item.id, values: { headline: "Z" }, reason: "r", source_url: "https://www.nrc.gov/x" } } }
+    assert_response :unprocessable_content
+    assert_equal "Acme gets an exemption", @item.reload.headline
+  end
+
+  test "malformed values are a row's refusal; the list pages through the whole window (Copilot)" do
+    post api_dq_edits_path, headers: AUTH, as: :json, params: { actions: [ { action: "edit_news", id: @item.id, values: "bad", reason: "r", source_url: "https://example.org/news/2" } ] }
+    assert_match "values must be an object", response.parsed_body["results"].sole["error"]
+
+    3.times { |n| @item.verification_events.create!(from_status: "verified", to_status: "verified", by: "agent:data-quality", reason: "r#{n}") }
+    stub = Api::Dq::EditsController::PAGE
+    Api::Dq::EditsController.send(:remove_const, :PAGE)
+    Api::Dq::EditsController.const_set(:PAGE, 2)
+    get api_dq_edits_path, headers: AUTH
+    first = response.parsed_body
+    get api_dq_edits_path, params: { before: first["next_before"] }, headers: AUTH
+    assert_equal [ 2, 1 ], [ first["edits"].size, response.parsed_body["edits"].size ]
+    assert_nil response.parsed_body["next_before"]
+  ensure
+    Api::Dq::EditsController.send(:remove_const, :PAGE)
+    Api::Dq::EditsController.const_set(:PAGE, stub)
+  end
+end

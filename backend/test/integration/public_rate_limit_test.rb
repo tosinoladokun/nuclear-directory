@@ -120,6 +120,29 @@ class PublicRateLimitTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "an AI answer crawler from its operator's published ranges gets the larger allowance; the same agent from elsewhere doesn't (#864)" do
+    AiCrawlerRanges.store.write(AiCrawlerRanges::CACHE_KEY, { "https://openai.com/searchbot.json" => [ "127.0.0.0/24" ] })
+    AiCrawlerRanges.local = nil
+    agent = { "User-Agent" => "Mozilla/5.0; compatible; OAI-SearchBot/1.4; +https://openai.com/searchbot" }
+    assert_equal 200, hit(PublicRateLimit::LIMIT * 2, **agent)
+
+    PublicRateLimit::STORE.clear
+    AiCrawlerRanges.store.write(AiCrawlerRanges::CACHE_KEY, { "https://openai.com/searchbot.json" => [ "20.0.0.0/24" ] })
+    AiCrawlerRanges.local = nil
+    assert_equal 429, hit(PublicRateLimit::LIMIT + 1, **agent), "outside the ranges: a scraper using the name"
+  ensure
+    AiCrawlerRanges.store.delete(AiCrawlerRanges::CACHE_KEY)
+    AiCrawlerRanges.local = nil
+  end
+
+  test "IPv6 clients share one count per /64 (#864)" do
+    hit(PublicRateLimit::LIMIT, "REMOTE_ADDR" => "2001:db8:1:2::1")
+    get "/about", headers: { "REMOTE_ADDR" => "2001:db8:1:2::ffff" }
+    assert_response :too_many_requests
+    get "/about", headers: { "REMOTE_ADDR" => "2001:db8:1:3::1" }
+    assert_response :ok
+  end
+
   private
     def capture_log
       io = StringIO.new
