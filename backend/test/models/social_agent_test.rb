@@ -802,4 +802,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.unattributed_superlatives("It builds the first two units.")
     assert_not_empty SocialAgent::Rules.unattributed_superlatives("It is the first SMR design approved by the NRC.")
   end
+
+  test "spotlight facts: a funds link that is a loan is told in the record's words, and a description from a press release is never 'its website' (DQ, #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    Relationship.where(from_organization: full).update_all(relationship_type: "funds", description: "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024")
+    press = Source.create!(url: "https://newswire.example/full-reactors-release", source_kind: "web_page", crawl_status: "ok")
+    Evidence.where(subject: full).update_all(source_id: press.id)
+    item = SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first
+    assert_match "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024", item.facts["records of its links"]
+    assert_no_match(/\bfunds\b/, item.facts["records of its links"], "no 'funds' present-tense verb")
+    assert_equal "a page on newswire.example", item.facts["description comes from"]
+    assert_equal "a page on newswire.example", item.facts["headquarters comes from"]
+    assert_no_match(/own website/, item.facts.values_at("description comes from", "headquarters comes from").join(" "), "a press-release fact is never 'its website'")
+  end
 end
