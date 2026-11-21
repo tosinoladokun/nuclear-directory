@@ -177,6 +177,14 @@ Rails.application.routes.draw do
         post :reopen
       end
     end
+    # News items (#863): find one, edit its text, undo the last edit.
+    get "news" => "news_items#index", as: :news_items
+    scope "news/:id", as: :news_item, constraints: { id: /\d+/ } do
+      get "/" => "news_items#show"
+      get "edit" => "news_items#edit", as: :edit
+      patch "/" => "news_items#update"
+      post "undo" => "news_items#undo", as: :undo
+    end
     scope "facts/:type/:id", as: :fact, constraints: { type: /[A-Z][A-Za-z]+/, id: /\d+/ } do
       get "/" => "facts#show"
       post "unpublish" => "facts#unpublish", as: :unpublish
