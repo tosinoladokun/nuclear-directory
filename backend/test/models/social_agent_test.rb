@@ -684,7 +684,7 @@ class SocialAgentTest < ActiveSupport::TestCase
       link = OrganizationTechnology.create!(organization: company, technology: tech, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
       Evidence.create!(subject: link, source: page, quote: "Our SMR design.", found_by: "human")
       other = Organization.create!(name: "#{name} Partner", slug: "#{slug}-partner", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
-      deal = Relationship.create!(from_organization: company, to_organization: other, relationship_type: "supplies", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      deal = Relationship.create!(from_organization: company, to_organization: other, relationship_type: "supplies", description: "Announced plan (Oct 2023): #{name} to provide 24 modules to #{name} Partner", started_on: Date.new(2023, 10, 5), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
       Evidence.create!(subject: deal, source: page, quote: "#{name} supplies #{name} Partner.", found_by: "human")
     end
     company
@@ -701,8 +701,10 @@ class SocialAgentTest < ActiveSupport::TestCase
     item = items.first
     assert_equal "https://full-reactors.example/about", item.source_url
     assert_match "Austin, Texas", item.facts["headquarters"]
-    assert_match "Small modular reactor", item.facts["works on"]
-    assert_match "Full Reactors supplies Full Reactors Partner", item.facts["relationships"]
+    assert_nil item.facts["works on"], "no roles or technology lines (DQ)"
+    assert_match "Announced plan (Oct 2023): Full Reactors to provide 24 modules to Full Reactors Partner (October 2023) [source: a page on full-reactors.example]".sub("a page on full-reactors.example", "the company's own website"), item.facts["records of its links"], "a link in its record's words, dated and sourced, never a bare verb"
+    assert_equal "the company's own website", item.facts["description comes from"]
+    assert_equal "the company's own website", item.facts["headquarters comes from"]
     assert SocialAgent::Rules.primary?(item), "the company's own site is a primary source"
 
     SocialPost.create!(platform: "linkedin", status: "posted", subject: full, text: "Meet Full Reactors.", created_at: MONDAY - 7.weeks)
@@ -714,7 +716,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "a spotlight post links our company page with tracking and passes the same checks" do
     ENV.delete("SOCIAL_POST_KINDS")
     full = spotlight_company("Full Reactors", "full-reactors")
-    post = run_x("Meet Full Reactors: according to its website, it designs small modular reactors. It is based in Austin, Texas, and supplies Full Reactors Partner.")
+    post = run_x("Meet Full Reactors: according to its website, it designs small modular reactors. It is based in Austin, Texas. Per the directory's records, in October 2023 it announced a plan to provide 24 modules to Full Reactors Partner.")
     assert_equal "drafted", post.status, post.reason
     assert_equal full, post.subject
     assert_equal "https://nuclear-directory.org/companies/full-reactors?utm_source=x&utm_medium=social&utm_campaign=full-reactors", post.link

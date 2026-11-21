@@ -109,7 +109,8 @@ module SocialRehearsal
           left, right = who.split(" #{verb} ", 2)
           quote = row.at_css(".nd-quote")&.text.to_s.gsub(/[“”]/, "").squish.presence
           url = row.at_css("a.nd-src")&.[]("href").to_s.presence
-          [ left, verb, right, quote, url ] if quote && url && (left == name || right == name)
+          detail = row.at_css("p.type-body")&.text.to_s.squish.presence
+          [ left, verb, right, quote, url, detail ] if quote && url && detail && (left == name || right == name)
         end
         return false if rows.empty?
 
@@ -137,11 +138,11 @@ module SocialRehearsal
           link = OrganizationTechnology.find_or_create_by!(organization: org, technology: tech) { |row| row.verification_status = "verified"; row.verified_by = BY; row.verified_at = 30.days.ago }
           Evidence.create!(subject: link, source: site_source, quote: about, found_by: "human")
         end
-        rows.each do |left, verb, right, quote, url|
+        rows.each do |left, verb, right, quote, url, detail|
           other_name = left == name ? right : left
           other = Organization.find_by(name: other_name) || Organization.create!(name: other_name, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
           from, to = left == name ? [ org, other ] : [ other, org ]
-          deal = Relationship.create!(from_organization: from, to_organization: to, relationship_type: VERBS.fetch(verb), verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          deal = Relationship.create!(from_organization: from, to_organization: to, relationship_type: VERBS.fetch(verb), description: detail, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
           Evidence.create!(subject: deal, source: Source.find_or_create_by!(url: url) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }, quote:, found_by: "human")
         end
         true

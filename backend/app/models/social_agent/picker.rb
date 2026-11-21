@@ -135,14 +135,18 @@ class SocialAgent::Picker
       evidence = company.evidence.includes(:source).order(:id).to_a
       described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or return
       located = evidence.find { |row| (Array(row.fields) & %w[hq_city hq_state]).any? }
-      works_on = (profile.shown_roles.map { |row| row.role.name } + profile.technologies.map { |row| row.technology.name }).uniq.first(4)
-      deals = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? }.first(3).map do |deal|
-        verb = DataQuality::Claim::RELATIONSHIP_VERBS.fetch(deal.relationship_type, deal.relationship_type.humanize(capitalize: false))
-        "#{deal.from_organization.name} #{verb} #{deal.to_organization.name}"
+      # Each link in its own words (DQ, #884): the record's description at its strength (an announced plan stays a plan, a loan a loan), its
+      # date and where it comes from, never a bare verb; a link with no description of its own isn't told. No "works on" line: roles and
+      # technologies aren't quotes from the company.
+      deals = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? && deal.description.present? }.first(3).map do |deal|
+        date = profile.deal_date(deal)&.strftime("%B %Y")
+        from = deal.evidence.filter_map { |row| row.source&.url }.first
+        "#{deal.from_organization.name} and #{deal.to_organization.name}: #{deal.description.squish.delete_suffix('.')}#{" (#{date})" if date}#{" [source: #{source_label(from, company)}]" if from}"
       end
       headquarters = [ company.hq_city, company.hq_state ].compact_blank.join(", ") if located
-      facts = { "name" => company.name, "description" => company.description, "headquarters" => headquarters.presence,
-                "works on" => works_on.to_sentence.presence, "relationships" => deals.join("; ").presence,
+      facts = { "name" => company.name, "description" => company.description, "description comes from" => source_label(described.source&.url, company),
+                "headquarters" => headquarters.presence, "headquarters comes from" => (source_label(located.source&.url, company) if located),
+                "records of its links" => deals.join("; ").presence,
                 "founded" => company.founded_year&.to_s,
                 "x_handle" => (self.class.tags.dig(company.slug, "x") if @platform == "x") }.compact_blank
       # The page its description rests on when that is the company's own site (a redirect on the bare homepage doesn't stop it), else the site.
@@ -151,6 +155,15 @@ class SocialAgent::Picker
         source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}", organization_ids: [ company.id ])
       # Complete only (DQ): a role, a website, a description, a sourced headquarters and at least one current link to a published company.
       item if headquarters.present? && deals.any?
+    end
+
+    # Where a fact really comes from, in words: the company's own website only when it is, else the page's site (DQ: never "its website" for a DOE or SEC page).
+    def source_label(url, company)
+      host = SocialAgent::Rules.host(url).to_s.delete_prefix("www.")
+      return "an unnamed page" if host.blank?
+
+      own = [ company.domain, company.website ].compact.map { |site| (site.include?("/") ? SocialAgent::Rules.host(site) : site).to_s.delete_prefix("www.") }.reject(&:blank?)
+      own.any? { |site| host == site || host.end_with?(".#{site}") } ? "the company's own website" : "a page on #{host}"
     end
 
     def rejected_news

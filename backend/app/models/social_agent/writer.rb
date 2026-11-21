@@ -46,9 +46,15 @@ class SocialAgent::Writer
     Rules (the Social playbook and VOICE.md):
     - Use only the facts given and the company's own words. Every number, name and place must come from them. No guesses.
     - Start with "Meet <the company's name>". Then what it does, where it is based (only when the facts give a headquarters), and who
-      it works with (only the relationships the facts list). Leave out whatever the facts don't give: never say it is missing.
+      it works with (only the records of its links). Leave out whatever the facts don't give: never say it is missing.
+    - Tell each link in the words of its record, at the record's strength, with its date: an announced plan stays "announced a plan", a
+      loan is "a loan", a letter of intent is "a non-binding letter of intent", an investment is "invested" in the past tense. Never
+      reduce a link to a bare verb ("funds", "supplies", "invests in") and never state it as a present fact; keep the amounts and dates.
+    - Do not describe what it works on beyond its description; no roles, no technology lists.
     - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
-    - Say where the description comes from, in words ("according to its website", "the company says"). Never write an address or a link;
+    - Say where each fact comes from, as the facts' "comes from" lines and link sources say: "according to its website" only when the fact
+      comes from the company's own website; a fact from another page is "according to <that site>" or "per DOE" or "in an SEC filing"; the
+      links are "per the directory's records". Never put the company's website over a fact from elsewhere. Never write an address or a link;
       the link to our company page is added for you.
     - No person names. No rankings, no "leading", "pioneering", "first", "largest" or "only" unless the facts say it, and then
       attribute it ("the company describes itself as ...").
