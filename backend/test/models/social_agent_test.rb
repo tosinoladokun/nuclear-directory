@@ -696,7 +696,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal [ "spotlight" ], items.map(&:kind).uniq
     assert_equal [ full, thin ], items.map(&:subject), "complete first; a company with no website isn't a candidate"
     item = items.first
-    assert_equal "https://full-reactors.example", item.source_url
+    assert_equal "https://full-reactors.example/about", item.source_url
     assert_match "Austin, Texas", item.facts["headquarters"]
     assert_match "Small modular reactor", item.facts["works on"]
     assert_match "Full Reactors supplies Full Reactors Partner", item.facts["relationships"]
@@ -715,7 +715,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "drafted", post.status, post.reason
     assert_equal full, post.subject
     assert_equal "https://nuclear-directory.org/companies/full-reactors?utm_source=x&utm_medium=social&utm_campaign=full-reactors", post.link
-    assert_equal "https://full-reactors.example", post.source_url
+    assert_equal "https://full-reactors.example/about", post.source_url
     SocialPost.delete_all
     assert_match "isn't in the source", run_x("Meet Full Reactors: according to its website, it designs small modular reactors and employs 400 people.").reason
   end
@@ -725,5 +725,17 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_includes SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:kind), "news"
     ENV.delete("SOCIAL_POST_KINDS")
     assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |item| item.kind == "news" }, "spotlights only by default"
+  end
+
+  test "spotlights skip an agency, lab or university, and take the page its description rests on when that is the company's own site (#883)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    agency = spotlight_company("Fed Agency", "fed-agency")
+    role = Role.create!(key: "government_agency", name: "Government agency")
+    link = OrganizationRole.create!(organization: agency, role:, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+    Evidence.create!(subject: link, source: Source.first, quote: "A federal agency.", found_by: "human")
+    items = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+    assert_equal [ full ], items.map(&:subject), "an agency isn't a company"
+    assert_equal "https://full-reactors.example/about", items.first.source_url, "the own-site page its description rests on"
   end
 end

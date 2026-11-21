@@ -22,6 +22,7 @@ class SocialAgent::Picker
   def self.kinds = ENV.fetch("SOCIAL_POST_KINDS", "spotlight").split(",").map(&:strip).compact_blank
   SPOTLIGHT_COOLDOWN = 8.weeks
   SPOTLIGHT_POOL = 40
+  GOVERNMENT_ROLES = %w[government_agency national_lab university research_organization].freeze
 
   def initialize(platform:, now: Time.current, fresh: FRESH, kinds: self.class.kinds)
     @kinds = kinds
@@ -121,6 +122,8 @@ class SocialAgent::Picker
     def spotlight(company)
       profile = CompanyProfile.new(company)
       return unless profile.sourced? && profile.description.present? && profile.website.present?
+      # A company, not an agency, lab or university ('Meet a company', #883).
+      return if profile.roles.any? && profile.roles.all? { |row| GOVERNMENT_ROLES.include?(row.role.key) }
 
       evidence = company.evidence.includes(:source).order(:id).to_a
       described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or return
@@ -134,7 +137,9 @@ class SocialAgent::Picker
       facts = { "name" => company.name, "description" => company.description, "headquarters" => headquarters.presence,
                 "works on" => works_on.to_sentence.presence, "relationships" => deals.join("; ").presence,
                 "founded" => company.founded_year&.to_s }.compact_blank
-      item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: company.website,
+      # The page its description rests on when that is the company's own site (a redirect on the bare homepage doesn't stop it), else the site.
+      own = described.source&.url.presence if described.source&.url.present? && SocialAgent::Rules.primary?(SocialAgent::Item.new(subject: company, kind: "spotlight", facts: {}, source_url: described.source.url, source_quote: nil, path: nil, organization_ids: [ company.id ]))
+      item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: own || company.website,
         source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}", organization_ids: [ company.id ])
       [ item, headquarters.present? && works_on.any? && deals.any? ]
     end

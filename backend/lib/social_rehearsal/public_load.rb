@@ -81,12 +81,14 @@ module SocialRehearsal
     def load_spotlights(limit = 20)
       items = JSON.parse(get(INDEX).to_s)["items"].select { |item| item["k"] == "c" }
       loaded = 0
-      items.each_slice(7).map(&:first).each do |item|
+      # A spread across the index first (every 5th), then the rest, until `limit` pages have what a spotlight needs.
+      ordered = items.each_slice(5).map(&:first) + items.each_with_index.reject { |_, index| (index % 5).zero? }.map(&:first)
+      ordered.each do |item|
         break if loaded >= limit
 
         loaded += 1 if load_spotlight("#{SITE}/companies/#{item['s']}")
-      rescue StandardError
-        next
+      rescue StandardError => error
+        warn "spotlight #{item['s']}: #{error.class}: #{error.message.to_s.first(100)}"
       end
       loaded
     end
@@ -110,11 +112,20 @@ module SocialRehearsal
         return false if rows.empty?
 
         slug = page[%r{/companies/([a-z0-9-]+)}, 1]
-        org = Organization.find_by(slug:) || Organization.create!(name: CGI.unescapeHTML(name), slug:, website: site, domain: URI(site).host.to_s.delete_prefix("www."),
-          description: about, hq_city: city, hq_state: state, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+        existing = Organization.find_by(slug:)
+        return false if existing&.description.present?
+
+        attrs = { website: site, domain: URI(site).host.to_s.delete_prefix("www."), description: about, hq_city: city, hq_state: state }
+        org = existing ? existing.tap { |row| row.update!(attrs) } : Organization.create!(name: CGI.unescapeHTML(name), slug:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago, **attrs)
         site_source = Source.find_or_create_by!(url: site) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }
         Evidence.create!(subject: org, source: site_source, quote: about, found_by: "human", fields: %w[description])
         Evidence.create!(subject: org, source: site_source, quote: hq, found_by: "human", fields: %w[hq_city hq_state]) if hq.present?
+        # The page's own bucket (Government and research): its roles, so the picker can tell an agency from a company.
+        if doc.at_css(".nd-pagehead__tags .nd-bucket--government-research")
+          role = Role.find_or_create_by!(key: "government_agency") { |row| row.name = "Government agency" }
+          link = OrganizationRole.create!(organization: org, role:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          Evidence.create!(subject: link, source: site_source, quote: about, found_by: "human")
+        end
         doc.css("a.nd-tag--link").first(3).each do |tag|
           label = tag.text.squish
           tech = Technology.find_or_create_by!(key: label.parameterize(separator: "_")) { |row| row.name = label }
