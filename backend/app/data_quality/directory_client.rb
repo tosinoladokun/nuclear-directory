@@ -358,6 +358,26 @@ class DataQuality::DirectoryClient
   # Pending companies with no website: [[id, name]].
   def pending_organizations_without_website(limit: 50) = lookup.pending_organizations_without_website(limit:)
 
+  # News items for the admin's Edit (#863).
+  def news_item(id) = lookup.news_item(id)
+  def news_items(q: nil, limit: 50) = lookup.news_items(q:, limit:)
+  def news_history(id) = lookup.news_history(id)
+
+  # Edits a news item's text (#863); WriteResult-like: ref, errors.
+  def edit_news_text(id:, attributes:, by:, reason:, context: {})
+    Directory::FactWriter.edit_news_text(id:, attributes:, by:, reason:, context:)
+    WriteResult.new(ref: Ref.new(type: "NewsItem", id:), errors: [], created: false)
+  rescue Directory::FactWriter::Invalid, ActiveRecord::RecordInvalid => error
+    WriteResult.new(ref: nil, errors: [ error.message ], created: false)
+  end
+
+  def undo_news_text(id:, by:, context: {})
+    Directory::FactWriter.undo_news_text(id:, by:, context:)
+    WriteResult.new(ref: Ref.new(type: "NewsItem", id:), errors: [], created: false)
+  rescue Directory::FactWriter::Invalid, ActiveRecord::RecordInvalid => error
+    WriteResult.new(ref: nil, errors: [ error.message ], created: false)
+  end
+
   def fact(type:, id:)
     state = lookup.fact_state(type:, id:) or return
     record(type, state, values: lookup.fact_attributes(type:, id:))

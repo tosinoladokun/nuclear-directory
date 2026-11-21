@@ -1,0 +1,22 @@
+<% content_for :title, "News" %>
+
+<div class="nd-stack">
+  <h1 class="type-admin-h1 m-0">News</h1>
+  <%= form_with url: admin_news_items_path, method: :get, class: "nd-row" do %>
+    <%= label_tag :q, "Find a news item", class: "sr-only" %>
+    <%= search_field_tag :q, params[:q], class: "nd-input type-input", placeholder: "Title or headline" %>
+    <button type="submit" class="nd-btn nd-btn--outline">Find</button>
+  <% end %>
+  <% if @items.empty? %>
+    <p class="type-body text-ink-muted">No news items match.</p>
+  <% else %>
+    <ul class="nd-stack type-body">
+      <% @items.each do |item| %>
+        <li>
+          <%= link_to (item["headline"].presence || item["title"]), admin_news_item_path(id: item["id"]), class: "nd-link" %>
+          <span class="type-small text-ink-muted"> · <span class="type-data"><%= item["published_on"] %></span> · <%= item["publisher"] %></span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</div>

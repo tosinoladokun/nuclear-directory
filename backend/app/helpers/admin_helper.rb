@@ -45,6 +45,7 @@ module AdminHelper
       { label: "Leads", path: admin_leads_path, count: counts[:leads], title: "Not facts yet", current: controller_name == "leads" },
       { label: "Sources", path: admin_sources_path, count: counts[:sources], current: controller_name == "sources" },
       { label: "Live", path: admin_live_path, count: counts[:live], current: %w[live records].include?(controller_name) },
+      { label: "News", path: admin_news_items_path, current: controller_name == "news_items" },
       { label: "Removed", path: admin_removed_path, count: counts[:removed], current: controller_name == "removed" },
       { label: "Where it appears", path: admin_outputs_path, count: counts[:outputs], current: controller_name == "outputs" },
       { label: "Correction requests", path: admin_corrections_path, count: counts[:corrections], title: "From visitors", gap: true,

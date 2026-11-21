@@ -1,0 +1,35 @@
+<% title = @item["headline"].presence || @item["title"] %>
+<% content_for :title, title %>
+
+<div class="nd-stack max-w-prose">
+  <%= render "admin/crumbs", parent_label: "News", parent_path: admin_news_items_path, current: title.truncate(60) %>
+  <h1 class="type-admin-h1 m-0"><%= title %></h1>
+  <dl class="nd-kv type-body">
+    <% %w[title headline summary published_on publisher url verification_status].each do |name| %>
+      <dt class="type-label"><%= field_label(name) %></dt><dd><%= name == "url" ? link_to(@item[name], @item[name], class: "nd-link", target: "_blank", rel: "noopener") : @item[name].presence || "None" %></dd>
+    <% end %>
+  </dl>
+  <div class="nd-row">
+    <%= link_to "Edit", admin_news_item_edit_path(id: @item["id"]), class: "nd-btn nd-btn--primary" %>
+    <% if @history.any? { |event| (event.changed_values.keys & DataQuality::Review::NEWS_EDITABLE).any? } %>
+      <%= button_to "Undo last edit", admin_news_item_undo_path(id: @item["id"]), class: "nd-btn nd-btn--outline", form: { data: { turbo_confirm: "Put back the text it had before the last edit?" } } %>
+    <% end %>
+  </div>
+  <section class="nd-stack" aria-label="History">
+    <h2 class="type-admin-h2 m-0">History</h2>
+    <% if @history.empty? %>
+      <p class="type-body text-ink-muted">No changes yet.</p>
+    <% else %>
+      <ul class="nd-stack type-body">
+        <% @history.each do |event| %>
+          <li>
+            <span class="type-data"><%= event.at.strftime("%-d %b %H:%M") %></span> · <%= who(event.by) %><% if event.reason.present? %> · <%= event.reason %><% end %>
+            <% event.changed_values.slice(*DataQuality::Review::NEWS_EDITABLE).each do |name, (before, after)| %>
+              <div class="type-small text-ink-muted"><%= field_label(name) %>: <%= before.presence || "None" %> → <%= after.presence || "None" %></div>
+            <% end %>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+</div>
