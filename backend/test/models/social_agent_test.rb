@@ -704,7 +704,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "https://full-reactors.example/about", item.source_url
     assert_match "Austin, Texas", item.facts["headquarters"]
     assert_nil item.facts["works on"], "no roles or technology lines (DQ)"
-    assert_match "Announced plan (Oct 2023): Full Reactors to provide 24 modules to Full Reactors Partner (October 2023) [source: a page on full-reactors.example]".sub("a page on full-reactors.example", "the company's own website"), item.facts["records of its links"], "a link in its record's words, dated and sourced, never a bare verb"
+    assert_match "Announced plan (Oct 2023): Full Reactors to provide 24 modules to Full Reactors Partner [source: a page on full-reactors.example]".sub("a page on full-reactors.example", "the company's own website"), item.facts["records of its links"], "a link in its record's words, dated and sourced, never a bare verb"
     assert_equal "the company's own website", item.facts["description comes from"]
     assert_equal "the company's own website", item.facts["headquarters comes from"]
     assert SocialAgent::Rules.primary?(item), "the company's own site is a primary source"

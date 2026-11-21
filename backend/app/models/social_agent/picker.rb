@@ -169,7 +169,8 @@ class SocialAgent::Picker
         (profile.deal_date(deal) || deal.description.match?(/\b(?:19|20)\d{2}\b/)) &&
         (deal.relationship_type != "supplies" || deal.description.match?(supply)) }.first(@platform == "x" ? 1 : 2)
       deals = told.map do |deal|
-        date = profile.deal_date(deal)&.strftime("%B %Y")
+        # The date isn't repeated when the description already carries a year ("closed Sept 2024 (September 2024)").
+        date = profile.deal_date(deal)&.strftime("%B %Y") unless deal.description.to_s.match?(/\b(?:19|20)\d{2}\b/)
         support = best_evidence(deal)
         from = support&.source&.url
         party = named_party(support&.quote)
