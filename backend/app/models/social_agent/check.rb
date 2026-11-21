@@ -6,7 +6,7 @@ module SocialAgent::Check
   # X counts any link as 23 characters.
   X_LINK = 23
   LINKEDIN_LIMIT = 1_300
-  ALWAYS_ALLOWED = [ "Nuclear Directory", "US", "U.S." ].freeze
+  ALWAYS_ALLOWED = [ "Nuclear Directory", "Nuclear", "Directory", "US", "U.S." ].freeze
 
   module_function
 
@@ -40,7 +40,8 @@ module SocialAgent::Check
     And But Or So Yet Still Meanwhile Separately Together].freeze
 
   def names(text)
-    text.split(/(?<=[.!?])\s+/).flat_map do |sentence|
+    # A colon opens a clause too: "Meet X: According to ..." (spotlights, #883).
+    text.split(/(?<=[.!?:])\s+/).flat_map do |sentence|
       # A possessive is its name: "Power's" checks "Power" (shadow day 20 Nov).
       words = sentence.scan(/[[:alnum:]][\w&'’.-]*[[:alnum:]&]|[[:alnum:]]/).map { |word| word.sub(/['’]s\z/i, "") }.select { |word| word.match?(/[A-Z]/) }
       words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && OPENERS.include?(word) }

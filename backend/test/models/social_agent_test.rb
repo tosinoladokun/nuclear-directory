@@ -720,6 +720,9 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "https://nuclear-directory.org/companies/full-reactors?utm_source=x&utm_medium=social&utm_campaign=full-reactors", post.link
     assert_equal "https://full-reactors.example/about", post.source_url
     SocialPost.delete_all
+    capital = run_x("Meet Full Reactors: According to its website, it designs small modular reactors. Nuclear Directory lists Full Reactors as supplying Full Reactors Partner.")
+    assert_equal "drafted", capital.status, capital.reason
+    SocialPost.delete_all
     assert_match "isn't in the source", run_x("Meet Full Reactors: according to its website, it designs small modular reactors and employs 400 people.").reason
   end
 
