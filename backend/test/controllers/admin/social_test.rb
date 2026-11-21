@@ -47,11 +47,49 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
 
   MONDAY = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 10, 0)
 
-  def draft_for(platform: "x", news: nil, at: MONDAY - 1.hour)
-    news ||= NewsItem.create!(url: "https://www.energy.gov/a#{SecureRandom.hex(3)}", title: "Acme Fission wins a DOE award", publisher: "DOE", published_on: Date.new(2026, 11, 20),
-      verification_status: "verified", verified_by: "human:tosin", verified_at: MONDAY - 3.days)
-    SocialPost.create!(platform:, status: "drafted", subject: news, text: "DOE said on 20 November it awarded Acme Fission a grant.", link: "https://nuclear-directory.org/companies/acme",
-      source_url: news.url, organization_ids: [], created_at: at)
+  FETCHER = Struct.new(:x) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>Published November 20, 2026</p>", etag: nil,
+    last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+  TEXT = "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
+
+  setup { SocialAgent.draft_fetcher = FETCHER.new }
+  teardown { SocialAgent.draft_fetcher = nil }
+
+  def draft_for(platform: "x", news: nil, at: MONDAY - 1.hour, text: TEXT)
+    company = Organization.find_by(slug: "acme-fission") || Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: "human:tosin", verified_at: 1.year.ago)
+    news ||= NewsItem.create!(url: "https://www.energy.gov/a#{SecureRandom.hex(3)}", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding", summary: TEXT, publisher: "DOE",
+      published_on: Date.new(2026, 11, 20), verification_status: "verified", verified_by: "human:tosin", verified_at: MONDAY - 1.day)
+    news.news_mentions.find_or_create_by!(subject: company)
+    SocialPost.create!(platform:, status: "drafted", subject: news, text:, link: "https://nuclear-directory.org/companies/acme-fission",
+      source_url: news.url, organization_ids: [ company.id ], created_at: at)
+  end
+
+  test "Send this draft shows the text's hash, rechecks the text, and a second call never sends (#880)" do
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    sent = 0
+    SocialAgent.senders["x"] = ->(*) { sent += 1; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    bad = draft_for(text: "Acme Fission won 2 DOE awards.")
+    travel_to(MONDAY) do
+      get admin_social_path
+      assert_select "p", /Text hash #{bad.text_hash}/
+      post admin_social_send_draft_path(bad)
+      assert_match(/its checks no longer pass: .*number 2/, flash[:alert])
+      assert_equal [ "blocked", 0 ], [ bad.reload.status, sent ]
+    end
+    SocialPost.delete_all
+    draft = draft_for
+    travel_to(MONDAY) do
+      2.times { post admin_social_send_draft_path(draft) }
+      assert_equal 1, sent
+      stale = SocialPost.find(draft.id)
+      stale.update_columns(status: "drafted")
+      SocialPost.where(id: draft.id).update_all(status: "sending")
+      assert_equal [ stale, "it is already being sent, or was sent" ], SocialAgent.send_draft(stale, now: MONDAY).then { |post, why| [ stale, why ] }
+      assert_equal 1, sent, "a stale copy can't claim a draft already taken"
+    end
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
   end
 
   test "Send this draft sends that exact draft through the platform's sender, once, after every guard (#879)" do

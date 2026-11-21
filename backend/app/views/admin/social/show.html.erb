@@ -43,7 +43,8 @@
             <% if post.reason.present? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
             <% if post.status == "drafted" %>
               <%= button_to "Send this draft", admin_social_send_draft_path(post), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-send-#{post.id}" },
-                    data: { turbo_confirm: "Send this exact draft to #{post.platform == 'x' ? 'X' : 'LinkedIn'} now?" } %>
+                    data: { turbo_confirm: "Send this exact draft (hash #{post.text_hash}) to #{post.platform == 'x' ? 'X' : 'LinkedIn'} now?" } %>
+              <p class="type-small m-0">Text hash <%= post.text_hash %></p>
             <% end %>
             <p class="type-small m-0">
               <% if post.permalink %><%= link_to "See the post", post.permalink, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>

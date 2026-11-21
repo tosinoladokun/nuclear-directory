@@ -11,6 +11,9 @@ class SocialPost < ApplicationRecord
   # No fact or company again within this, on any platform (the cross-platform cooldown).
   COOLDOWN = 14.days
 
+  # What a reviewer's verdict quotes, so it is checkable that the text hasn't changed since (DQ, #880).
+  def text_hash = Digest::SHA256.hexdigest(text.to_s).first(12)
+
   belongs_to :subject, polymorphic: true
   validates :platform, inclusion: { in: SocialChannel::PLATFORMS }
   validates :status, inclusion: { in: STATUSES }

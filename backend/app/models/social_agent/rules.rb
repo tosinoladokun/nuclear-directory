@@ -58,7 +58,7 @@ module SocialAgent::Rules
 
   module_function
 
-  def problems(text, item, platform:, fetcher: DataQuality::Fetcher.new)
+  def problems(text, item, platform:, fetcher: DataQuality::Fetcher.new, except_id: nil)
     found = []
     found << "its source isn't a primary one (#{host(item.source_url).presence || 'none'})" unless primary?(item)
     found.concat(status_words(text, item))
@@ -69,7 +69,7 @@ module SocialAgent::Rules
     found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.own_text}" =~ SENSITIVE
-    found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
+    found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform, except_id:)
     found.concat(source_problems(item.source_url, fetcher, item:, text:)) if found.empty?
     found
   end
@@ -247,9 +247,9 @@ module SocialAgent::Rules
     text.scan(SUPERLATIVES).flatten.map(&:downcase).uniq.reject { |word| item.source_text.match?(/\b#{Regexp.escape(word)}\b/i) }
   end
 
-  def similar?(text, platform)
+  def similar?(text, platform, except_id: nil)
     mine = tokens(text)
-    SocialPost.used.where(platform:, created_at: SIMILAR_DAYS.days.ago..).where.not(text: nil).pluck(:text).any? do |other|
+    SocialPost.used.where.not(id: except_id).where(platform:, created_at: SIMILAR_DAYS.days.ago..).where.not(text: nil).pluck(:text).any? do |other|
       theirs = tokens(other)
       (mine & theirs).size.to_f / [ (mine | theirs).size, 1 ].max >= SIMILAR
     end

@@ -174,12 +174,36 @@ module SocialAgent
   # Admin > Posts "Send this draft" (#879, PM: Tosin sends the graded draft himself): that exact draft, through the same send as the
   # agent's, after every guard the agent has. Returns [post, nil] when it was handed on, or [post, why] when something refused it
   # (nothing is sent then). The platform's switch may be Drafts only (his click is the approval) but never Off.
-  def self.send_draft(post, now: Time.current)
-    refusal = draft_refusal(post, now)
+  def self.draft_fetcher = @draft_fetcher ||= DataQuality::Fetcher.new
+  class << self
+    attr_writer :draft_fetcher
+  end
+
+  def self.send_draft(post, now: Time.current, fetcher: draft_fetcher)
+    refusal = draft_refusal(post, now) || recheck(post, now, fetcher)
     return [ post, refusal ] if refusal
 
-    sent = send_post(post, now:)
+    # Claimed atomically before anything is sent (Infra): a second click, tab or admin finds it already taken and never calls Buffer.
+    claimed = SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", updated_at: Time.current)
+    return [ post.reload, "it is already being sent, or was sent" ] unless claimed == 1
+
+    sent = send_post(post.reload, now:)
     [ sent, (sent.reason.presence || "it didn't send" if sent.status.in?(%w[blocked failed unknown])) ]
+  end
+
+  # The stored text checked again against the item and its source as they stand now (DQ): the facts may have changed since the draft.
+  # The voice check is a model call and isn't repeated. Sets the post blocked when a check no longer passes.
+  def self.recheck(post, now, fetcher)
+    item = SocialAgent::Picker.new(platform: post.platform, now:).candidates.find { |candidate| candidate.subject == post.subject }
+    return "its item is no longer one the agent could post" unless item
+
+    ready, problems = prepare(item, fetcher)
+    problems = SocialAgent::Check.problems(post.text, ready, platform: post.platform) if problems.empty?
+    problems = SocialAgent::Rules.problems(post.text, ready, platform: post.platform, fetcher:, except_id: post.id) if problems.empty?
+    return if problems.empty?
+
+    post.update!(status: "blocked", reason: problems.to_sentence)
+    "its checks no longer pass: #{problems.to_sentence}"
   end
 
   def self.draft_refusal(post, now)
