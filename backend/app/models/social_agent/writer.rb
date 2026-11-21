@@ -50,7 +50,12 @@ class SocialAgent::Writer
     - Tell each link in the words of its record, at the record's strength, with its date: an announced plan stays "announced a plan", a
       loan is "a loan", a letter of intent is "a non-binding letter of intent", an investment is "invested" in the past tense. Never
       reduce a link to a bare verb ("funds", "supplies", "invests in") and never state it as a present fact; keep the amounts and dates.
-    - Do not describe what it works on beyond its description; no roles, no technology lists.
+    - Do not describe what it works on beyond its description; no roles, no technology lists, no bare tags as facts.
+    - Relationship sentences begin "Per the directory's records" or "The directory lists", name who does what for whom (who builds what),
+      and never use the present tense for a finished award, loan or investment. Do not pick examples out of a longer list.
+    - Write whole sentences with every number and name spelled exactly as the facts give it ("$1.7 billion", never "$1.7B"; "Bellevue, WA",
+      never "WA-based"; no slashes or abbreviations the facts don't use). When the length limit is tight, leave a fact out: never shorten
+      it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
     - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
     - Say where each fact comes from, as the facts' "comes from" lines and link sources say: "according to its website" only when the fact
       comes from the company's own website; a fact from another page is "according to <that site>" or "per DOE" or "in an SEC filing"; the

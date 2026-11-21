@@ -775,4 +775,18 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "@terrapower", SocialAgent::Picker.tags.dig("terrapower", "x")
     assert SocialAgent::Picker.tags.values.all? { |row| row["x"].to_s.match?(/\A@\w+\z/) || row["x"].nil? }
   end
+
+  test "a supplies link whose description isn't about supply is left out, and X tells one link at most (DQ, #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    lease = Relationship.where(from_organization: full).first
+    lease.update!(description: "Collaboration and site lease at the ARC campus")
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "its only link isn't a supply link"
+    lease.update!(description: "Announced plan (Oct 2023): to provide 24 modules")
+    other = Organization.create!(name: "Third Co", slug: "third-co", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+    second = Relationship.create!(from_organization: full, to_organization: other, relationship_type: "invests_in", description: "Term sheet (Sept 2026) for up to $100 million", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+    Evidence.create!(subject: second, source: Source.first, quote: "Term sheet.", found_by: "human")
+    assert_equal 1, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts["records of its links"].split("; ").size
+    assert_equal 2, SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts["records of its links"].split("; ").size
+  end
 end

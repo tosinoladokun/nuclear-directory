@@ -138,7 +138,10 @@ class SocialAgent::Picker
       # Each link in its own words (DQ, #884): the record's description at its strength (an announced plan stays a plan, a loan a loan), its
       # date and where it comes from, never a bare verb; a link with no description of its own isn't told. No "works on" line: roles and
       # technologies aren't quotes from the company.
-      deals = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? && deal.description.present? }.first(3).map do |deal|
+      # A "supplies" link whose description doesn't speak of supply, fuel or services isn't a supply link (DQ: Dominion and CFS is a lease).
+      supply = /suppl|fuel|service|provid|deliver|procure|offtak|purchase/i
+      deals = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? && deal.description.present? &&
+        (deal.relationship_type != "supplies" || deal.description.match?(supply)) }.first(@platform == "x" ? 1 : 2).map do |deal|
         date = profile.deal_date(deal)&.strftime("%B %Y")
         from = deal.evidence.filter_map { |row| row.source&.url }.first
         "#{deal.from_organization.name} and #{deal.to_organization.name}: #{deal.description.squish.delete_suffix('.')}#{" (#{date})" if date}#{" [source: #{source_label(from, company)}]" if from}"
