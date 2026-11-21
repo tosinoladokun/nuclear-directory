@@ -8,6 +8,7 @@ class SocialPostJob < ApplicationJob
   # drafts_only: Admin > Posts' Draft now (PM, 20 Nov): today's draft, never sent.
   def perform(drafts_only: false)
     SocialChannel::PLATFORMS.each do |platform|
+      SocialAgent.send_scheduled(platform) unless drafts_only
       SocialAgent.run(platform, drafts_only:)
     rescue StandardError => error
       Rails.error.report(error, context: { social_platform: platform })

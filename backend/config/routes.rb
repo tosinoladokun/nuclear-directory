@@ -47,6 +47,7 @@ Rails.application.routes.draw do
     get "completeness" => "completeness#show", as: :api_dq_completeness
     # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
+    post "social_approvals" => "social_approvals#create", as: :api_dq_social_approvals
     get "checker" => "checker#index", as: :api_dq_checker
     # Data Quality's text fixes (#863): edit only, with reason and source, undoable.
     get "edits" => "edits#index", as: :api_dq_edits

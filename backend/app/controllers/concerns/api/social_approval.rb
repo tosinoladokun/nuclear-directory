@@ -6,7 +6,7 @@ module Api::SocialApproval
   RATE_LIMIT_STORE = Rails.env.test? ? ActiveSupport::Cache::MemoryStore.new : Rails.cache
 
   included do
-    rate_limit to: 30, within: 1.minute, store: RATE_LIMIT_STORE, by: -> { "social-approval" },
+    rate_limit to: 6, within: 1.minute, store: RATE_LIMIT_STORE, by: -> { "social-approval" },
       with: -> { head :too_many_requests, "Retry-After" => "60" }
     before_action :require_approver
   end

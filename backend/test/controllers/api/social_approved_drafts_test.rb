@@ -10,6 +10,8 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   setup do
     ENV["SOCIAL_APPROVE_TOKEN_DIGEST"] = Digest::SHA256.hexdigest(TOKEN)
     SocialAgent::ApprovedDraft.fetcher = PAGE.new
+    SocialAgent.draft_fetcher = PAGE.new
+    Api::SocialApproval::RATE_LIMIT_STORE.clear
     @company = Organization.create!(name: "Vistra Corporation", slug: "vistra-corporation", website: "https://vistracorp.com", domain: "vistracorp.com", verification_status: "verified", verified_by: BY,
       verified_at: 1.year.ago, description: "Power generation and retail electricity company.", hq_city: "Irving", hq_state: "TX")
     Evidence.create!(subject: @company, source: Source.create!(url: "https://vistracorp.com/about", source_kind: "web_page", crawl_status: "ok"), quote: "Power generation and retail electricity company. Irving, TX", found_by: "human")
@@ -19,10 +21,14 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   teardown do
     ENV.delete("SOCIAL_APPROVE_TOKEN_DIGEST")
     SocialAgent::ApprovedDraft.fetcher = nil
+    SocialAgent.draft_fetcher = nil
   end
 
-  def approve(overrides = {}, token: TOKEN)
+  # dq: false = Data Quality has not recorded its PASS for this hash.
+  def approve(overrides = {}, token: TOKEN, dq: true)
+    Api::SocialApproval::RATE_LIMIT_STORE.clear
     params = { platform: "x", slug: "vistra-corporation", text: TEXT, link: @link, sha256: Digest::SHA256.hexdigest("#{TEXT}\n\n#{@link}"), graders: %w[GTM Founder DQ] }.merge(overrides)
+    SocialApproval.find_or_create_by!(platform: params[:platform], slug: params[:slug], sha256: params[:sha256], approved_by: "agent:data-quality") if dq && params[:sha256].to_s.match?(/\A\h{64}\z/) && SocialChannel::PLATFORMS.include?(params[:platform])
     post api_social_approved_drafts_path, params:, headers: ({ "Authorization" => "Bearer #{token}" } if token), as: :json
   end
 
@@ -126,5 +132,129 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     ENV.delete("SOCIAL_POSTING_ENABLED")
     ENV.delete("DQ_AGENT_TOKEN_DIGEST")
     SocialAgent.senders.delete("x")
+  end
+
+  test "Data Quality's recorded PASS of the exact hash is required, and an edited text needs a new one (#897)" do
+    approve({}, dq: false)
+    assert_response :unprocessable_entity
+    assert_includes response.parsed_body["codes"], "dq_approval"
+    assert_equal 0, SocialPost.count
+
+    # DQ records its PASS with its own token.
+    ENV["DQ_AGENT_TOKEN_DIGEST"] = Digest::SHA256.hexdigest("dq-token")
+    sha = Digest::SHA256.hexdigest("#{TEXT}\n\n#{@link}")
+    post api_dq_social_approvals_path, params: { platform: "x", slug: "vistra-corporation", sha256: sha, note: "graded against the release" }, headers: { "Authorization" => "Bearer dq-token" }, as: :json
+    assert_response :created
+    post api_dq_social_approvals_path, params: { platform: "x", slug: "vistra-corporation", sha256: sha }, headers: { "Authorization" => "Bearer dq-token" }, as: :json
+    assert_response :ok
+    post api_dq_social_approvals_path, params: { platform: "x", slug: "vistra-corporation", sha256: "nothex" }, headers: { "Authorization" => "Bearer dq-token" }, as: :json
+    assert_response :unprocessable_entity
+    post api_dq_social_approvals_path, params: { platform: "x", slug: "vistra-corporation", sha256: sha }, headers: { "Authorization" => "Bearer #{TOKEN}" }, as: :json
+    assert_response :unauthorized, "the approvals take DQ's token, not the endpoint's"
+
+    approve({}, dq: false)
+    assert_response :created
+    SocialPost.delete_all
+    edited = "#{TEXT} Extra."
+    approve({ text: edited, sha256: Digest::SHA256.hexdigest("#{edited}\n\n#{@link}") }, dq: false)
+    assert_response :unprocessable_entity, "a new text, a new hash, no approval on file"
+    assert_includes response.parsed_body["codes"], "dq_approval"
+  ensure
+    ENV.delete("DQ_AGENT_TOKEN_DIGEST")
+  end
+
+  test "refusals come with stable codes" do
+    approve({ graders: %w[GTM] })
+    assert_includes response.parsed_body["codes"], "graders"
+    approve({ slug: "nobody" })
+    assert_includes response.parsed_body["codes"], "company"
+    approve({ link: "https://nuclear-directory.org/companies/vistra-corporation" })
+    assert_includes response.parsed_body["codes"], "link"
+    approve({ sha256: Digest::SHA256.hexdigest("else") })
+    assert_includes response.parsed_body["codes"], "sha256"
+    approve({ platform: "mastodon" })
+    assert_includes response.parsed_body["codes"], "platform"
+    approve({ send_on: "2026-11-22" })
+    assert_includes response.parsed_body["codes"], "send_on", "a Sunday"
+    assert((response.parsed_body["codes"] - SocialAgent::ApprovedDraft::CODES).empty?)
+  end
+
+  test "every shape the content checks call hard is classified hard, so a reworded check can't become a warning (Infra)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Vistra Corporation" }, source_url: "https://vistracorp.com", source_quote: "Vistra Corporation generates electricity.", path: "/companies/vistra-corporation", organization_ids: [])
+    {
+      "Meet Vistra Corporation: see https://example.com for more about it." => /own link/,
+      "Meet Vistra Corporation: it generates electricity. #nuclear" => /hashtag/,
+      "Meet Vistra Corporation: it generates electricity \u{1F525}" => /emoji/,
+      "Meet Vistra Corporation: [placeholder text goes here]" => /placeholder/,
+      "Meet Vistra Corporation. #{'It generates electricity. ' * 14}" => /too long/
+    }.each do |text, shape|
+      found = SocialAgent::Check.problems(text, item, platform: "x").grep(shape)
+      assert found.any?, "the real check no longer says #{shape.inspect} for #{text[0, 40].inspect}"
+      assert found.all? { |problem| problem.match?(SocialAgent::ApprovedDraft::HARD) }, "#{found.inspect} must match HARD"
+    end
+  end
+
+  test "send_on: the 8:30 job sends today's approved draft even on Drafts only; Off stops it; a draft for another day waits; the agent never writes over it (#897)" do
+    monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    sent = []
+    SocialAgent.senders["x"] = ->(text, link) { sent << [ text, link ]; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    travel_to(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 14, 0)) { approve({ send_on: "2026-11-23" }) }
+    assert_response :created
+    post = SocialPost.last
+    assert_equal Date.new(2026, 11, 23), post.send_on
+
+    travel_to(Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 8, 30)) do
+      assert_nil SocialAgent.send_scheduled("x"), "Friday isn't its day"
+      assert_empty sent
+    end
+    SocialChannel.for("x").update!(mode: "off")
+    travel_to(monday) do
+      assert_nil SocialAgent.send_scheduled("x")
+      assert_empty sent, "Off stops it"
+      assert_equal "drafted", post.reload.status
+      assert_match(/approved draft #{post.id} not sent: X is switched off/, CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"])
+    end
+    # On Drafts only but with sending off on the server, today's approved draft isn't out, and the agent doesn't write another over it.
+    SocialChannel.for("x").update!(mode: "drafts")
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    travel_to(monday) do
+      assert_nil SocialAgent.send_scheduled("x")
+      assert_nil SocialAgent.run("x", now: monday, writer: Object.new), "the agent leaves today's slot to the approved draft"
+      assert_match(/graders-approved draft is scheduled for today/, CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"])
+    end
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    travel_to(monday) { SocialPostJob.perform_now }
+    assert_equal [ [ TEXT, @link ] ], sent
+    assert_equal "posted", post.reload.status
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
+
+  test "at send the approved draft's source must still answer 200 (a release taken down stops it, the draft stays)" do
+    monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    SocialAgent.senders["x"] = ->(*) { flunk "never sent with a dead source" }
+    travel_to(monday - 3.days) { approve({ send_on: "2026-11-23", source_url: "https://investor.vistracorp.com/release" }) }
+    post = SocialPost.last
+    gone = Struct.new(:x) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :error, status: 404, body: "", etag: nil, last_modified: nil, reason: "gone", block_reference: nil, content_type: "text/html", truncated: false) }
+    travel_to(monday) do
+      sent, why = SocialAgent.send_draft(post, now: monday, fetcher: gone.new)
+      assert_match(/its source page no longer answers \(404\)/, why)
+      assert_equal "drafted", post.reload.status, "the draft stays so it can go when the source answers"
+    end
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
+
+  test "the content checks' warnings are stored and shown on the row, with the day it goes out" do
+    approve({ send_on: "2026-11-23" })
+    post = SocialPost.last
+    assert post.warnings.present?
+    assert_equal response.parsed_body["warnings"], post.warnings.split("\n")
   end
 end

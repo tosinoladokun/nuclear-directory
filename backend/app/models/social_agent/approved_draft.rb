@@ -3,10 +3,17 @@
 # content checks run too, and what they find about the company page's own words (a number or name the page doesn't carry, a qualifier) is
 # returned as warnings, because the graders checked a hand-approved text against its primary sources. It never sends.
 class SocialAgent::ApprovedDraft
-  Result = Data.define(:post, :errors, :warnings)
+  Result = Data.define(:post, :errors, :warnings, :codes) do
+    def initialize(post:, errors:, warnings:, codes: [])
+      super
+    end
+  end
   GRADERS = %w[GTM Founder DQ].freeze
-  # What stays a refusal whatever the page says: the text's own shape.
+  # What stays a refusal whatever the page says: the text's own shape. A test feeds each shape to the real checks, so a reworded check
+  # can't quietly become a warning (Infra).
   HARD = /own link|hashtag|emoji|too long|empty or a placeholder/
+  # Stable codes for what is refused (the messages may be reworded).
+  CODES = %w[platform text_empty graders company dq_approval link sha256 url_in_text already_sent cooldown hard_check send_on].freeze
 
   def self.call(**args) = new(**args).call
   class << self
@@ -14,45 +21,63 @@ class SocialAgent::ApprovedDraft
     def fetcher = @fetcher ||= DataQuality::Fetcher.new
   end
 
-  def initialize(platform:, slug:, text:, link:, sha256:, graders:, source_url: nil, now: Time.current, fetcher: nil)
+  def initialize(platform:, slug:, text:, link:, sha256:, graders:, source_url: nil, send_on: nil, now: Time.current, fetcher: nil)
     @platform, @slug, @text, @link, @sha, @graders, @source_url, @now = platform, slug, text.to_s.strip, link, sha256.to_s.downcase, graders, source_url, now
+    @send_on = send_on
     @fetcher = fetcher
   end
 
   def call
     errors = []
-    errors << "platform must be x or linkedin" unless SocialChannel::PLATFORMS.include?(@platform)
-    errors << "the text is empty" if @text.blank?
+    err = ->(code, message) { errors << [ code, message ] }
+    err.("platform", "platform must be x or linkedin") unless SocialChannel::PLATFORMS.include?(@platform)
+    err.("text_empty", "the text is empty") if @text.blank?
     named = @graders.map { |name| name.to_s.strip.downcase }
-    errors << "graders must name GTM, Founder and DQ (all three passed it)" unless GRADERS.all? { |name| named.include?(name.downcase) }
+    err.("graders", "graders must name GTM, Founder and DQ (all three passed it)") unless GRADERS.all? { |name| named.include?(name.downcase) }
+    send_on = parse_send_on(err)
     company = Organization.published.find_by(slug: @slug)
-    errors << "no published company #{@slug.inspect}" unless company
-    return Result.new(nil, errors, []) if errors.any?
+    err.("company", "no published company #{@slug.inspect}") unless company
+    return result(nil, errors, []) if errors.any?
 
     expected = "#{SocialAgent::SITE}/companies/#{company.slug}?utm_source=#{@platform}&utm_medium=social&utm_campaign=#{company.slug}"
-    errors << "the link must be #{expected}" unless @link == expected
-    errors << "sha256 matches neither the text nor the text + blank line + link" unless [ @text, "#{@text}\n\n#{@link}" ].map { |shape| Digest::SHA256.hexdigest(shape) }.include?(@sha)
-    errors << "the text carries a URL: the link is added when it is sent" if @text.match?(%r{https?://}i)
-    errors.concat(used_by_another(company))
+    err.("link", "the link must be #{expected}") unless @link == expected
+    err.("sha256", "sha256 matches neither the text nor the text + blank line + link") unless [ @text, "#{@text}\n\n#{@link}" ].map { |shape| Digest::SHA256.hexdigest(shape) }.include?(@sha)
+    err.("url_in_text", "the text carries a URL: the link is added when it is sent") if @text.match?(%r{https?://}i)
+    # Data Quality's recorded PASS of exactly this hash (POST /api/dq/social_approvals): "graders: DQ" is a fact on file, not the caller's word.
+    err.("dq_approval", "Data Quality has not recorded a PASS for this exact sha256 (POST /api/dq/social_approvals)") unless ::SocialApproval.exists?(platform: @platform, slug: @slug, sha256: @sha)
+    used_by_another(company).each { |code, message| err.(code, message) }
     problems = problems_for(company)
     hard, warnings = problems.partition { |problem| problem.match?(HARD) }
-    errors.concat(hard)
-    return Result.new(nil, errors.uniq, warnings) if errors.any?
+    hard.each { |problem| err.("hard_check", problem) }
+    return result(nil, errors, warnings) if errors.any?
 
     post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
-      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", created_at: @now)
-    Result.new(post, [], warnings)
+      organization_ids: [ company.id ], reason: "#{SocialPost::GRADED} #{@graders.join(', ')}", send_on:, warnings: warnings.presence&.join("\n"), created_at: @now)
+    result(post, [], warnings)
   rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => error
-    Result.new(nil, [ "couldn't save the draft: #{error.message}" ], [])
+    result(nil, [ [ "hard_check", "couldn't save the draft: #{error.message}" ] ], [])
   end
 
   private
+    def result(post, errors, warnings) = Result.new(post:, errors: errors.map(&:last).uniq, warnings:, codes: errors.map(&:first).uniq)
+
+    def parse_send_on(err)
+      return if @send_on.blank?
+
+      date = Date.iso8601(@send_on.to_s)
+      err.("send_on", "send_on must be today or later, on a weekday") if date < @now.in_time_zone(SocialAgent::ZONE).to_date || date.on_weekend?
+      date
+    rescue Date::Error
+      err.("send_on", "send_on must be a date (YYYY-MM-DD)")
+      nil
+    end
+
     def used_by_another(company)
       sent = SocialPost.where(subject: company, platform: @platform, status: SocialPost::SENT)
-      return [ "this platform already sent a post about #{company.name} (one send per company and platform)" ] if sent.exists?
+      return [ [ "already_sent", "this platform already sent a post about #{company.name} (one send per company and platform)" ] ] if sent.exists?
 
       open = SocialPost.where(subject: company, platform: @platform).where.not(status: %w[cancelled blocked failed]).where(created_at: (@now - SocialPost::COOLDOWN)..)
-      open.exists? ? [ "a post about #{company.name} already exists on this platform (post #{open.first.id}, #{open.first.status}) within #{SocialPost::COOLDOWN.inspect}" ] : []
+      open.exists? ? [ [ "cooldown", "a post about #{company.name} already exists on this platform (post #{open.first.id}, #{open.first.status}) within #{SocialPost::COOLDOWN.inspect}" ] ] : []
     end
 
     # The agent's own content checks against what our page for the company says (and its source page when given).
