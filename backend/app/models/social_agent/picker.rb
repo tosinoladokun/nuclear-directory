@@ -10,8 +10,10 @@ class SocialAgent::Picker
   EVENT_MAX_AGE = 10.days
   # Not deals or facts: people and event items (DQ).
   # About the nuclear industry, by its own words (Founder, GTM: a feed can let a pulsar story through).
-  NUCLEAR = /\b(nuclear|reactors?|microreactors?|SMRs?|uranium|fission|fusion|isotopes?|radioisotopes?|radioactive|radiation|
-    radiological|enrich\w*|HALEU|TRISO|plutonium|thorium|tritium|spent\s+fuel|fuel\s+cycle|NRC|decommission\w*|nuclides?|neutrons?)\b/ix
+  # Words that mean the nuclear industry on their own. "Radiation", "isotope", "neutron" and the like are left out: a space-radiation or
+  # medical-imaging story uses them without being about the industry (NASA bone-marrow chip, news 55, 21 Nov).
+  NUCLEAR = /\b(nuclear|reactors?|microreactors?|SMRs?|uranium|fission|fusion\s+(?:energy|power|reactors?|plants?|company|startup)|radioisotopes?|radioactive\s+(?:waste|material)s?|
+    HALEU|TRISO|plutonium|thorium|tritium|spent\s+fuel|fuel\s+cycle|NRC|nuclides?)\b/ix
   NOT_NEWS = /\b(named to|honorees?|under 40|podcast|webinar|webcast|explains?|how [\w-]+(?: [\w-]+){0,3} works|asks why|conference call|earnings call|business update|workshop|hiring|award ceremony|internship)\b/i
   # Link verbs worth a post (DQ, #839): a standing "funds" award row isn't news.
   LINK_VERBS = %w[supplies invests_in offtake_with subsidiary_of].freeze
