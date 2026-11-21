@@ -75,7 +75,62 @@ module SocialRehearsal
       end
     end
 
+    # 'Meet a company' (#883): up to `limit` company pages as the directory publishes them: its one-line description, headquarters,
+    # website, what it works on (tags) and its deals with their own quotes and sources. Public data only, like the news above.
+    # Only companies that show a description, a website and at least one deal; spread across the index, not just the first ones.
+    def load_spotlights(limit = 20)
+      items = JSON.parse(get(INDEX).to_s)["items"].select { |item| item["k"] == "c" }
+      loaded = 0
+      items.each_slice(7).map(&:first).each do |item|
+        break if loaded >= limit
+
+        loaded += 1 if load_spotlight("#{SITE}/companies/#{item['s']}")
+      rescue StandardError
+        next
+      end
+      loaded
+    end
+
     private
+      def load_spotlight(page)
+        doc = Nokogiri::HTML(get(page).to_s)
+        name = doc.at_css("h1.nd-pagehead__name")&.[]("title").to_s.squish.presence or return false
+        about = doc.at_css(".nd-pagehead__about")&.text.to_s.squish.presence or return false
+        site = doc.at_css("a[data-outbound='company_website']")&.[]("href").to_s.sub(/\?.*\z/, "").presence or return false
+        hq = doc.css(".nd-glance__fact").find { |fact| fact.at_css("dt")&.text == "Headquarters" }&.at_css("dd")&.text.to_s.squish
+        city, state = hq.to_s.split(", ", 2)
+        rows = doc.css("li.nd-crow").filter_map do |row|
+          who = row.at_css(".nd-crow__who")&.[]("title").to_s.squish
+          verb = VERBS.keys.find { |word| who.include?(" #{word} ") } or next
+          left, right = who.split(" #{verb} ", 2)
+          quote = row.at_css(".nd-quote")&.text.to_s.gsub(/[“”]/, "").squish.presence
+          url = row.at_css("a.nd-src")&.[]("href").to_s.presence
+          [ left, verb, right, quote, url ] if quote && url && (left == name || right == name)
+        end
+        return false if rows.empty?
+
+        slug = page[%r{/companies/([a-z0-9-]+)}, 1]
+        org = Organization.find_by(slug:) || Organization.create!(name: CGI.unescapeHTML(name), slug:, website: site, domain: URI(site).host.to_s.delete_prefix("www."),
+          description: about, hq_city: city, hq_state: state, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+        site_source = Source.find_or_create_by!(url: site) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }
+        Evidence.create!(subject: org, source: site_source, quote: about, found_by: "human", fields: %w[description])
+        Evidence.create!(subject: org, source: site_source, quote: hq, found_by: "human", fields: %w[hq_city hq_state]) if hq.present?
+        doc.css("a.nd-tag--link").first(3).each do |tag|
+          label = tag.text.squish
+          tech = Technology.find_or_create_by!(key: label.parameterize(separator: "_")) { |row| row.name = label }
+          link = OrganizationTechnology.find_or_create_by!(organization: org, technology: tech) { |row| row.verification_status = "verified"; row.verified_by = BY; row.verified_at = 30.days.ago }
+          Evidence.create!(subject: link, source: site_source, quote: about, found_by: "human")
+        end
+        rows.each do |left, verb, right, quote, url|
+          other_name = left == name ? right : left
+          other = Organization.find_by(name: other_name) || Organization.create!(name: other_name, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          from, to = left == name ? [ org, other ] : [ other, org ]
+          deal = Relationship.create!(from_organization: from, to_organization: to, relationship_type: VERBS.fetch(verb), verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          Evidence.create!(subject: deal, source: Source.find_or_create_by!(url: url) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }, quote:, found_by: "human")
+        end
+        true
+      end
+
       def get(url)
         cached = CACHE.join(Digest::SHA256.hexdigest(url)) if url.start_with?(SITE)
         return File.binread(cached).force_encoding("UTF-8") if cached&.exist? && cached.size.positive? && cached.mtime > 1.day.ago

@@ -25,7 +25,13 @@ namespace :social do
   desc "Load the directory's public updates feed into this (empty, local) database for social:rehearse"
   task load_public: :environment do
     abort "Local only: never in production" if Rails.env.production?
-    loaded = SocialRehearsal::PublicLoad.new.call
+    loader = SocialRehearsal::PublicLoad.new
+    # SPOTLIGHTS=20: the 'Meet a company' pool instead of news (#883).
+    if ENV["SPOTLIGHTS"].present?
+      puts "Loaded #{loader.load_spotlights(ENV["SPOTLIGHTS"].to_i)} company spotlights"
+      next
+    end
+    loaded = loader.call
     puts "Loaded #{loaded.news} news items and #{loaded.links} links; skipped #{loaded.skipped.size}: #{loaded.skipped.first(10).join('; ')}"
   end
 end
