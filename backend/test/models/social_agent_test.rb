@@ -825,4 +825,12 @@ class SocialAgentTest < ActiveSupport::TestCase
     news = item.with(kind: "news")
     assert_empty SocialAgent::Rules.headquarters("It is based in Redmond, WA.", news), "only spotlights"
   end
+
+  test "a spotlight isn't stopped for a qualifier that appears only in another story on the company's site (GTM, Helion's letter of intent)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Helion Energy", "headquarters" => "Everett, WA" }, source_url: "https://helionenergy.com",
+      source_quote: "Fusion company.", path: "/companies/helion", organization_ids: [], page_text: "News: Helion signed a non-binding letter of intent with the Department of Commerce.")
+    assert_empty SocialAgent::Rules.qualifiers("Meet Helion Energy: it is a fusion company based in Everett, WA.", item)
+    news = item.with(kind: "news", facts: { "headline" => "Helion signs a letter of intent" })
+    assert_not_empty SocialAgent::Rules.qualifiers("Helion said it signed a deal.", news), "a news item still keeps its source's qualifiers"
+  end
 end

@@ -157,7 +157,8 @@ module SocialAgent::Rules
     end
     QUALIFIERS.each do |pattern, name|
       # "Proposed" and "planned" count only in the item's own words: a page's other stories have their own plans.
-      said = %w[proposed planned].include?(name) ? item.own_text : item.source_text
+      # A spotlight's page text is the whole company site: a letter of intent in another story there isn't what this post says (GTM, Helion).
+      said = %w[proposed planned].include?(name) || item.kind == "spotlight" ? item.own_text : item.source_text
       found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
     end
     found
