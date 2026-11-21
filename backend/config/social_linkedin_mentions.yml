@@ -1,0 +1,8 @@
+# Companies whose LinkedIn Page a person has confirmed, for real @mentions in LinkedIn posts (SocialAgent::LinkedInMentions).
+# The numeric organisation id is what LinkedIn needs (the number in urn:li:organization:<id>); our fetch of LinkedIn is refused, so it has
+# to come from someone looking at the Page while logged in. Nothing is guessed: no entry, no mention (the name stays plain text).
+#
+#   terrapower:
+#     id: "12345678"        # urn:li:organization:12345678
+#     vanity: terrapower    # linkedin.com/company/terrapower
+#     name: TerraPower      # exactly as it appears in the post text

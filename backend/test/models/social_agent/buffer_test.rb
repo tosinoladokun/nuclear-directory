@@ -114,6 +114,45 @@ class SocialAgent::BufferTest < ActiveSupport::TestCase
     assert_nil @requests.last["variables"]["input"]["metadata"]
   end
 
+  test "a configured company name becomes a LinkedIn mention (annotation with its organisation urn); a refused request drops the mentions first, then the card (PM, 21 Nov)" do
+    SocialAgent::LinkedInMentions.entries = { "terrapower" => { "id" => "1234567", "vanity" => "terrapower", "name" => "TerraPower" } }
+    text = "Meet TerraPower.\n\nBased in Bellevue, WA."
+    link = "https://nuclear-directory.org/companies/terrapower?utm_source=linkedin"
+    card = { url: link, title: "TerraPower", thumbnail: { url: "https://nuclear-directory.org/c.png" } }
+    with_card = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { Time.utc(2026, 11, 16, 16, 30) }, card: ->(_) { card })
+    @replies << { "data" => { "createPost" => { "post" => { "id" => "p1", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    with_card.call("linkedin", text, link)
+    meta = @requests.last["variables"]["input"]["metadata"]["linkedin"]
+    assert_equal [ { "id" => "1234567", "entity" => "urn:li:organization:1234567", "start" => 5, "length" => 10, "link" => "https://www.linkedin.com/company/terrapower",
+                     "localizedName" => "TerraPower", "vanityName" => "terrapower" } ], meta["annotations"]
+    assert_equal "TerraPower", meta.dig("linkAttachment", "title")
+    assert_equal "Meet TerraPower.", text[0, 16], "start 5, length 10 is the name"
+    assert_equal "TerraPower", text[5, 10]
+
+    @requests.clear
+    @replies << { "data" => { "createPost" => { "message" => "Invalid annotation" } } } << { "data" => { "createPost" => { "post" => { "id" => "p2", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    assert_equal "p2", with_card.call("linkedin", text, link)[:id]
+    assert_nil @requests.last["variables"]["input"].dig("metadata", "linkedin", "annotations"), "the mentions dropped, the card kept"
+    assert_equal "TerraPower", @requests.last["variables"]["input"].dig("metadata", "linkedin", "linkAttachment", "title")
+
+    @requests.clear
+    @replies << { "data" => { "createPost" => { "message" => "no" } } } << { "data" => { "createPost" => { "message" => "no" } } } << { "data" => { "createPost" => { "post" => { "id" => "p3", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    with_card.call("linkedin", text, link)
+    assert_equal 3, @requests.size
+    assert_equal "#{text}\n\n#{link}", @requests.last["variables"]["input"]["text"]
+    assert_nil @requests.last["variables"]["input"]["metadata"]
+
+    # X never gets annotations; a name not configured, or an entry without a numeric id, stays plain text.
+    @requests.clear
+    @replies << { "data" => { "createPost" => { "post" => { "id" => "p4", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    with_card.call("x", text, link)
+    assert_nil @requests.last["variables"]["input"]["metadata"]
+    SocialAgent::LinkedInMentions.entries = { "terrapower" => { "id" => "not-a-number", "vanity" => "terrapower", "name" => "TerraPower" } }
+    assert_empty SocialAgent::LinkedInMentions.in(text)
+  ensure
+    SocialAgent::LinkedInMentions.entries = nil
+  end
+
   test "a channel without its id set on Render isn't posted to; an odd reply after sending is 'may have gone out'" do
     ENV.delete("BUFFER_X_CHANNEL_ID")
     error = assert_raises(SocialAgent::Buffer::Error) { @buffer.call("x", "Text here for the post.", "l") }

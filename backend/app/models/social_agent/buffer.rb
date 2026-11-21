@@ -44,17 +44,21 @@ class SocialAgent::Buffer
     due = @now.call + DELAY
     card = @card.call(link) if platform == "linkedin"
     input = { text: card ? text : "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
-    input[:metadata] = { linkedin: { linkAttachment: card } } if card
-    result =
-      begin
-        create(input)
-      rescue Error
-        # Buffer refused the request (a refusal means nothing was created, so a retry can't double-post; a timeout or odd reply is
-        # Uncertain and never retried). When the attachment may be why, the post goes with the URL in its text instead (Infra, Backend).
-        raise unless card
-
-        create(input.except(:metadata).merge(text: "#{text}\n\n#{link}"))
-      end
+    mentions = platform == "linkedin" ? SocialAgent::LinkedInMentions.in(text) : []
+    metadata = { annotations: mentions.presence, linkAttachment: card }.compact
+    input[:metadata] = { linkedin: metadata } if metadata.any?
+    # Buffer refusing the request means nothing was created, so a retry can't double-post (a timeout or odd reply is Uncertain and never
+    # retried). Each refusal drops the newest extra: the mentions first, then the card (the URL goes back into the text).
+    attempts = [ input ]
+    attempts << input.merge(metadata: { linkedin: { linkAttachment: card } }) if mentions.any? && card
+    attempts << input.except(:metadata).merge(text: "#{text}\n\n#{link}") if metadata.any?
+    result = nil
+    attempts.each_with_index do |attempt, index|
+      result = create(attempt)
+      break
+    rescue Error
+      raise if index == attempts.size - 1
+    end
     id = result.dig("post", "id") or raise SocialAgent::Uncertain, "Buffer didn't return the post's id"
     { id:, due_at: Time.zone.parse(result.dig("post", "dueAt").to_s) || due }
   end
