@@ -64,19 +64,54 @@ class SocialAgent::BufferTest < ActiveSupport::TestCase
     assert_raises(SocialAgent::Buffer::Error) { with_card.call("linkedin", "Meet Acme.", card[:url]) }
   end
 
-  test "the card fetch identifies itself as NuclearDirectoryBot, so it counts as a bot and not a pageview (Infra)" do
-    agent = nil
-    stub = Net::HTTP.singleton_class
+  # The default page reader against a stubbed Net::HTTP, so its HTTP handling and og-tag reading are exercised (Copilot, #885).
+  def with_page(body: nil, response_class: Net::HTTPOK, error: nil)
+    seen = {}
     original = Net::HTTP.method(:start)
-    stub.send(:define_method, :start) do |*_args, **_opts, &block|
+    Net::HTTP.singleton_class.send(:define_method, :start) do |*_args, **_opts, &block|
+      raise error if error
+
       http = Object.new
-      http.define_singleton_method(:get) { |_path, headers| agent = headers["User-Agent"]; Net::HTTPNotFound.new("1.1", "404", "Not Found") }
+      http.define_singleton_method(:get) do |_path, headers|
+        seen[:agent] = headers["User-Agent"]
+        response_class.new("1.1", "200", "x").tap { |reply| reply.instance_variable_set(:@read, true); reply.instance_variable_set(:@body, body) }
+      end
       block.call(http)
     end
-    SocialAgent::Buffer.new.send(:page_card, "https://nuclear-directory.org/companies/acme")
-    assert_match(/\ANuclearDirectoryBot\//, agent)
+    yield seen
   ensure
-    stub.send(:define_method, :start, original) if original
+    Net::HTTP.singleton_class.send(:define_method, :start, original)
+  end
+
+  OG_PAGE = <<~HTML.freeze
+    <html><head>
+    <meta property="og:title" content="Acme Fission">
+    <meta property="og:description" content="Acme Fission: designs reactors.">
+    <meta property="og:image" content="https://nuclear-directory.org/cards/acme.png">
+    </head><body></body></html>
+  HTML
+  LINK = "https://nuclear-directory.org/companies/acme?utm_source=linkedin".freeze
+
+  test "the default card reader reads our page's og tags, identifies as NuclearDirectoryBot, and falls back to the URL for a missing title or image, a non-success answer or a timeout (Copilot, #885; Infra)" do
+    reader = SocialAgent::Buffer.new
+    with_page(body: OG_PAGE) do |seen|
+      assert_equal({ url: LINK, title: "Acme Fission", description: "Acme Fission: designs reactors.", thumbnail: { url: "https://nuclear-directory.org/cards/acme.png" } }, reader.send(:page_card, LINK))
+      assert_match(/\ANuclearDirectoryBot\//, seen[:agent], "a bot, not a human pageview")
+    end
+    with_page(body: OG_PAGE.sub(/<meta property="og:image"[^>]*>/, "")) { assert_nil reader.send(:page_card, LINK), "no image: no card" }
+    with_page(body: OG_PAGE.sub(/<meta property="og:title"[^>]*>/, "")) { assert_nil reader.send(:page_card, LINK), "no title: no card" }
+    with_page(body: "Not found", response_class: Net::HTTPNotFound) { assert_nil reader.send(:page_card, LINK), "a non-success answer: no card" }
+    with_page(error: Net::ReadTimeout.new) { assert_nil reader.send(:page_card, LINK), "a timeout: no card" }
+
+    # Through #call with the default reader: the attachment when the page reads, the URL in the text when it doesn't.
+    @replies << { "data" => { "createPost" => { "post" => { "id" => "p1", "dueAt" => "2026-11-16T16:45:00Z" } } } } << { "data" => { "createPost" => { "post" => { "id" => "p2", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    live = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { Time.utc(2026, 11, 16, 16, 30) })
+    with_page(body: OG_PAGE) { live.call("linkedin", "Meet Acme.", LINK) }
+    assert_equal "Meet Acme.", @requests.last["variables"]["input"]["text"]
+    assert_equal "Acme Fission", @requests.last["variables"]["input"].dig("metadata", "linkedin", "linkAttachment", "title")
+    with_page(error: Net::OpenTimeout.new) { live.call("linkedin", "Meet Acme.", LINK) }
+    assert_equal "Meet Acme.\n\n#{LINK}", @requests.last["variables"]["input"]["text"]
+    assert_nil @requests.last["variables"]["input"]["metadata"]
   end
 
   test "a channel without its id set on Render isn't posted to; an odd reply after sending is 'may have gone out'" do
