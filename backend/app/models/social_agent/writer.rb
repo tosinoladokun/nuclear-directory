@@ -62,6 +62,8 @@ class SocialAgent::Writer
       loan or award went to X, and the post names X. When the length limit is tight, leave a fact out: never shorten
       it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
     - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
+    - When the source is the company's own site, "according to <the company's name>" is exact ("according to TerraPower"); "its website" is fine
+      for the description and headquarters.
     - Name each source once and plainly: "According to its website, ..." for the description and headquarters together when they come from
       the same place, then "The directory lists ..." for the links; add a link's own source ("per energy.gov") only when it differs from
       the description's. Never stack the same attribution on every sentence. Tell at most two links, and on LinkedIn keep a short post.
