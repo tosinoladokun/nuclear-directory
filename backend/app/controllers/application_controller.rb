@@ -1,5 +1,6 @@
 class ApplicationController < ActionController::Base
   include TracksAnalytics
+  include PublicRateLimit
 
   # Every browser gets the pages: a public directory turns no reader away,
   # and an older one only loses some styling. (Rails' allow_browser :modern
