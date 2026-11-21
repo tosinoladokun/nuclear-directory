@@ -91,10 +91,11 @@ class SocialAgent::ApprovedDraft
   # The LinkedIn card and native mentions the graders approved, checked as a set: every annotation names the same Page in its id, urn, link and vanity name and
   # the name stands in the text where it says; the canonical JSON hash of the whole content payload is the one on file with Data Quality.
   def validate_native(err)
-    return [ nil, nil ] if @platform != "linkedin" || (@annotations.blank? && @card.blank?)
+    return [ nil, nil ] if @platform != "linkedin"
 
+    # A LinkedIn post always carries its card and the content hash DQ approved (no page-read, unhashed card; DQ): mentions may be none.
     card = @card.to_h.stringify_keys.slice("title", "description", "image_url")
-    err.("card", "card needs a title, a description and an image_url") unless card.values_at("title", "description", "image_url").all?(&:present?)
+    err.("card", "a LinkedIn post needs its card: a title, a description and an image_url") unless card.values_at("title", "description", "image_url").all?(&:present?)
     annotations = Array(@annotations).map { |annotation| annotation.to_h.stringify_keys.slice("id", "entity", "start", "length", "link", "localizedName", "vanityName") }
     annotations.each do |annotation|
       name = annotation["localizedName"].to_s
@@ -103,20 +104,22 @@ class SocialAgent::ApprovedDraft
         annotation["start"].is_a?(Integer) && annotation["length"] == name.length && @text[annotation["start"], name.length] == name
       err.("annotations", "annotation for #{name.inspect} doesn't match its id, urn, link, vanity name or its place in the text") unless ok
     end
-    expected = content_hash(annotations, card)
+    expected = self.class.content_hash(text: @text, link: @link, annotations:, card:)
     err.("content_sha", "content_payload_sha256 doesn't match the canonical JSON of the text, annotations and card") unless @content_sha == expected
     err.("dq_approval", "Data Quality has not recorded a PASS for the content_payload_sha256") unless @content_sha && ::SocialApproval.exists?(platform: @platform, slug: @slug, sha256: @content_sha)
     [ card.presence, annotations.presence ]
   end
 
   # {text, metadata: {linkedin: {annotations, linkAttachment: {url, title, description, thumbnail: {url}}}}}: sorted keys, compact, unescaped unicode.
-  def content_hash(annotations, card)
-    payload = { "text" => @text, "metadata" => { "linkedin" => { "annotations" => annotations, "linkAttachment" => { "url" => @link, "title" => card["title"],
+  # A class method: computed again at send from the stored row (SocialAgent.recheck).
+  def self.content_hash(text:, link:, annotations:, card:)
+    card = card.to_h.stringify_keys
+    payload = { "text" => text, "metadata" => { "linkedin" => { "annotations" => Array(annotations), "linkAttachment" => { "url" => link, "title" => card["title"],
       "description" => card["description"], "thumbnail" => { "url" => card["image_url"] } } } } }
     Digest::SHA256.hexdigest(JSON.generate(canonical(payload)))
   end
 
-  def canonical(value)
+  def self.canonical(value)
     case value
     when Hash then value.sort_by { |key, _| key.to_s }.to_h { |key, inner| [ key.to_s, canonical(inner) ] }
     when Array then value.map { |inner| canonical(inner) }

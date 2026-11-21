@@ -219,6 +219,16 @@ module SocialAgent
       return "its text no longer matches the hash the graders approved" unless post.approved_sha256.present? && shapes.include?(post.approved_sha256)
       return "Data Quality's approval of its hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.approved_sha256)
 
+      # A LinkedIn post goes out with the card and mentions DQ approved: the content hash is recomputed from what is stored and must still be the one on
+      # file, with DQ's approval of it, or nothing is sent.
+      if post.platform == "linkedin"
+        return "its card or content hash is missing, so it can't be sent as approved" if post.card.blank? || post.content_payload_sha256.blank?
+
+        content = SocialAgent::ApprovedDraft.content_hash(text: post.text.to_s.strip, link: post.link, annotations: post.annotations, card: post.card)
+        return "its content no longer matches the content hash the graders approved" unless content == post.content_payload_sha256
+        return "Data Quality's approval of its content hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.content_payload_sha256)
+      end
+
       hard = SocialAgent::ApprovedDraft.hard_problems(post.text.to_s.strip, post.platform)
       return "its text no longer passes: #{hard.to_sentence}" if hard.any?
       return if post.source_url.blank?

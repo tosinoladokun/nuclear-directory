@@ -30,7 +30,17 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   def approve(overrides = {}, token: TOKEN, dq: true)
     Api::SocialApproval::RATE_LIMIT_STORE.clear
     params = { platform: "x", slug: "vistra-corporation", text: TEXT, link: @link, sha256: Digest::SHA256.hexdigest("#{TEXT}\n\n#{@link}"), graders: %w[GTM Founder DQ] }.merge(overrides)
-    SocialApproval.find_or_create_by!(platform: params[:platform], slug: params[:slug], sha256: params[:sha256], approved_by: "agent:data-quality") if dq && params[:sha256].to_s.match?(/\A\h{64}\z/) && SocialChannel::PLATFORMS.include?(params[:platform])
+    # A LinkedIn post always carries its card and content hash (DQ): added here unless the test gives its own.
+    if params[:platform] == "linkedin" && !overrides.key?(:card)
+      params[:card] = { title: "Card title", description: "Card description.", image_url: "https://nuclear-directory.org/cards/x.png" }
+      params[:annotations] ||= []
+      params[:content_payload_sha256] = SocialAgent::ApprovedDraft.content_hash(text: params[:text].to_s.strip, link: params[:link], annotations: params[:annotations], card: params[:card].stringify_keys)
+    end
+    if dq && SocialChannel::PLATFORMS.include?(params[:platform])
+      [ params[:sha256], params[:content_payload_sha256] ].compact.select { |sha| sha.to_s.match?(/\A\h{64}\z/) }.each do |sha|
+        SocialApproval.find_or_create_by!(platform: params[:platform], slug: params[:slug], sha256: sha, approved_by: "agent:data-quality")
+      end
+    end
     post api_social_approved_drafts_path, params:, headers: ({ "Authorization" => "Bearer #{token}" } if token), as: :json
   end
 
@@ -541,5 +551,36 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   ensure
     SocialAgent.singleton_class.send(:define_method, :send_scheduled, send_original)
     SocialAgent.singleton_class.send(:define_method, :run, run_original)
+  end
+
+  test "a LinkedIn post always carries its card and content hash, and at SEND the content hash is recomputed from the stored row and DQ's approval of it must still be on file (DQ)" do
+    link = @link.sub("utm_source=x", "utm_source=linkedin")
+    sha = Digest::SHA256.hexdigest(TEXT)
+    SocialApproval.create!(platform: "linkedin", slug: "vistra-corporation", sha256: sha, approved_by: "agent:data-quality")
+    travel_to(FRIDAY) { approve({ platform: "linkedin", link:, sha256: sha, card: nil, content_payload_sha256: nil, send_on: "2026-11-23" }, dq: false) }
+    assert_response :unprocessable_entity
+    assert((response.parsed_body["codes"] & %w[card content_sha]).any?, "no card, no content hash: refused")
+
+    travel_to(FRIDAY) { approve({ platform: "linkedin", link:, sha256: sha, send_on: "2026-11-23" }) }
+    assert_response :created, response.parsed_body.inspect
+    post = SocialPost.last
+    assert post.content_payload_sha256.present?
+    monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("linkedin").update!(mode: "drafts")
+    SocialAgent.senders["linkedin"] = ->(*, **) { flunk "never sent" }
+    travel_to(monday) do
+      post.update_columns(card: post.card.merge("description" => "Edited after approval."))
+      assert_match(/content no longer matches the content hash the graders approved/, SocialAgent.send_draft(post.reload, now: monday).last)
+      post.update_columns(card: post.card.merge("description" => "Card description."))
+      SocialApproval.where(sha256: post.content_payload_sha256).delete_all
+      assert_match(/approval of its content hash is no longer on file/, SocialAgent.send_draft(post.reload, now: monday).last)
+      post.update_columns(card: nil)
+      assert_match(/card or content hash is missing/, SocialAgent.send_draft(post.reload, now: monday).last)
+      assert_equal "drafted", post.reload.status, "nothing was claimed or sent"
+    end
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("linkedin")
   end
 end
