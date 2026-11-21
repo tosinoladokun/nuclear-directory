@@ -971,4 +971,12 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match(/opens like one of the last 5 posts on x/, problems.join)
     assert_empty SocialAgent::Rules.opener(repeated, item, platform: "linkedin").grep(/last 5 posts/), "not repeated on LinkedIn"
   end
+
+  test "the spotlight scan stops at ten eligible companies and tries at most 80 (Infra)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    assert_equal 10, SocialAgent::Picker::SPOTLIGHT_POOL
+    assert_equal 80, SocialAgent::Picker::SPOTLIGHT_MAX_TRIES
+    3.times { |index| spotlight_company("Co #{index}", "co-#{index}") }
+    assert_equal 3, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.size
+  end
 end

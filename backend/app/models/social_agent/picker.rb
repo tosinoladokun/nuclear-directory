@@ -24,7 +24,10 @@ class SocialAgent::Picker
   def self.kinds = ENV.fetch("SOCIAL_POST_KINDS", "spotlight").split(",").map(&:strip).compact_blank
   ALL_KINDS = %w[news link new_company spotlight].freeze
   SPOTLIGHT_COOLDOWN = 8.weeks
-  SPOTLIGHT_POOL = 40
+  # The agent tries the first TRIES (5) usable candidates, so ten eligible spotlights are plenty; and no more than SPOTLIGHT_MAX_TRIES companies are built
+  # (each builds a CompanyProfile: a few queries), bounding a run (Infra).
+  SPOTLIGHT_POOL = 10
+  SPOTLIGHT_MAX_TRIES = 80
   # Not a company to introduce (DQ, 21 Nov): agencies, labs, universities, investors and data-center buyers (these only through their nuclear deals).
   GOVERNMENT_ROLES = %w[government_agency national_lab university research_organization venture_capital data_center_offtaker].freeze
   # Companies whose X/LinkedIn accounts GTM verified (config/social_tags.yml): picked first, and on X tagged with their handle.
@@ -133,7 +136,7 @@ class SocialAgent::Picker
       # above a complete one never hides it (Copilot).
       ordered = pool.sort_by { |company| [ self.class.taggable.include?(company.slug) ? 0 : 1, -links.fetch(company.id, 0), -company.verified_at.to_i ] }
       items = []
-      ordered.each do |company|
+      ordered.first(SPOTLIGHT_MAX_TRIES).each do |company|
         break if items.size >= SPOTLIGHT_POOL
 
         item = spotlight(company)
