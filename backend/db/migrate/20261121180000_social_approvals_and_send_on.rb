@@ -5,7 +5,6 @@ class SocialApprovalsAndSendOn < ActiveRecord::Migration[8.1]
     add_column :social_posts, :send_on, :date
     add_column :social_posts, :warnings, :text
     add_column :social_posts, :approved_sha256, :string
-    add_column :social_posts, :card_description, :text
     add_index :social_posts, %i[platform send_on], where: "send_on IS NOT NULL", name: "index_social_posts_on_platform_and_send_on"
 
     create_table :social_approvals do |t|

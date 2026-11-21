@@ -40,12 +40,9 @@ class SocialAgent::Buffer
   # LinkedIn only draws a preview card for a link attachment, not for a URL in the text (PM, 21 Nov: the first live post had none): the
   # attachment carries our page's own title, description and card image, and the text then has no raw URL. X builds its card from the
   # URL in the text (its metadata has no link attachment). When the page can't be read, the URL stays in the text, so the post still goes.
-  def call(platform, text, link, card_description: nil)
+  def call(platform, text, link)
     due = @now.call + DELAY
     card = @card.call(link) if platform == "linkedin"
-    # The card description is the approved paragraph when the graders gave one (our page meta description may say something else); X draws its
-    # card from the page itself, which this cannot change.
-    card = card.merge(description: card_description.to_s.squish) if card && card_description.present?
     input = { text: card ? text : "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
     input[:metadata] = { linkedin: { linkAttachment: card } } if card
     result =

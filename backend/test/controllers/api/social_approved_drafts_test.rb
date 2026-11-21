@@ -331,25 +331,4 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   ensure
     SocialAgent.singleton_class.send(:define_method, :run, original)
   end
-
-  test "a LinkedIn draft can carry the card description the graders approved; the sender uses it instead of the page's meta description (GTM: NuScale/Holtec)" do
-    link = @link.sub("utm_source=x", "utm_source=linkedin")
-    approve({ platform: "linkedin", link:, sha256: Digest::SHA256.hexdigest(TEXT), card_description: "Announced plan for 24 modules at planned sites." })
-    assert_response :created
-    post = SocialPost.last
-    assert_equal "Announced plan for 24 modules at planned sites.", post.card_description
-
-    ENV.update("BUFFER_API_KEY" => "dummy", "BUFFER_X_CHANNEL_ID" => "ch-x", "BUFFER_LINKEDIN_CHANNEL_ID" => "ch-li")
-    seen = []
-    page = { url: link, title: "Vistra Corporation", description: "Supplies Standard Power", thumbnail: { url: "https://nuclear-directory.org/c.png" } }
-    buffer = SocialAgent::Buffer.new(http: ->(request) { seen << JSON.parse(request.body); { "data" => { "createPost" => { "post" => { "id" => "p", "dueAt" => "2026-11-23T16:45:00Z" } } } } }, card: ->(_) { page })
-    buffer.call("linkedin", TEXT, link, card_description: post.card_description)
-    assert_equal "Announced plan for 24 modules at planned sites.", seen.last["variables"]["input"].dig("metadata", "linkedin", "linkAttachment", "description")
-    buffer.call("linkedin", TEXT, link)
-    assert_equal "Supplies Standard Power", seen.last["variables"]["input"].dig("metadata", "linkedin", "linkAttachment", "description"), "no override: the page's own"
-
-    SocialPost.delete_all
-    approve({ card_description: "ignored on X" })
-    assert_nil SocialPost.last.card_description, "X's card comes from the page"
-  end
 end
