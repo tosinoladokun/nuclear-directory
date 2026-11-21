@@ -169,4 +169,19 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     ENV.delete("SOCIAL_POSTING_ENABLED")
     SocialAgent.senders.delete("x")
   end
+
+  test "Send this draft refuses and blocks when the source no longer answers (#880)" do
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    SocialAgent.senders["x"] = ->(*) { flunk "never sent" }
+    gone = Struct.new(:x) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :error, status: 404, body: "", etag: nil, last_modified: nil, reason: "gone", block_reference: nil, content_type: "text/html", truncated: false) }
+    SocialAgent.draft_fetcher = gone.new
+    draft = draft_for
+    travel_to(MONDAY) { post admin_social_send_draft_path(draft) }
+    assert_match(/its checks no longer pass/, flash[:alert])
+    assert_equal "blocked", draft.reload.status
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
 end
