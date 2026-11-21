@@ -59,6 +59,9 @@ class SocialAgent::Writer
       never "WA-based"; no slashes or abbreviations the facts don't use). When the length limit is tight, leave a fact out: never shorten
       it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
     - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
+    - Name each source once and plainly: "According to its website, ..." for the description and headquarters together when they come from
+      the same place, then "The directory lists ..." for the links; add a link's own source ("per energy.gov") only when it differs from
+      the description's. Never stack the same attribution on every sentence. Tell at most two links, and on LinkedIn keep a short post.
     - Say where each fact comes from, as the facts' "comes from" lines and link sources say: "according to its website" only when the fact
       comes from the company's own website; a fact from another page is "according to <that site>" or "per DOE" or "in an SEC filing"; the
       links are "per the directory's records". Never put the company's website over a fact from elsewhere. Never write an address or a link;

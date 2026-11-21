@@ -895,4 +895,19 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
     assert_equal 1, SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.size, "another platform is fine"
   end
+
+  test "a link's source is the page whose quote states the link, not just the first evidence row (Founder: the loan is on energy.gov, not USAspending)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    deal.update!(relationship_type: "funds", description: "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024")
+    deal.evidence.destroy_all
+    award = Source.create!(url: "https://www.usaspending.gov/award/1", source_kind: "web_page", crawl_status: "ok")
+    loan = Source.create!(url: "https://www.energy.gov/lpo/full-reactors", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: deal, source: award, quote: "Award of $2 million, 2023", found_by: "human")
+    Evidence.create!(subject: deal, source: loan, quote: "closed a loan of $1.52 billion under the Energy Dominance Financing Program in September 2024", found_by: "human")
+    facts = SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts
+    assert_match "[source: a page on energy.gov]", facts["records of its links"]
+    assert_no_match(/usaspending/, facts["records of its links"])
+  end
 end

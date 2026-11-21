@@ -162,7 +162,7 @@ class SocialAgent::Picker
         (deal.relationship_type != "supplies" || deal.description.match?(supply)) }.first(@platform == "x" ? 1 : 2)
       deals = told.map do |deal|
         date = profile.deal_date(deal)&.strftime("%B %Y")
-        from = deal.evidence.filter_map { |row| row.source&.url }.first
+        from = best_source(deal)
         stage = " [stage: #{deal.stage_label.downcase}]" if deal.stage
         "#{deal.from_organization.name} and #{deal.to_organization.name}: #{deal.description.squish.delete_suffix('.')}#{" (#{date})" if date}#{stage}#{" [source: #{source_label(from, company)}]" if from}"
       end
@@ -177,6 +177,15 @@ class SocialAgent::Picker
         source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}", organization_ids: [ company.id, *told.flat_map { |deal| [ deal.from_organization_id, deal.to_organization_id ] } ].uniq)
       # Complete only (DQ): a role, a website, a description, a sourced headquarters and at least one current link to a published company.
       item if headquarters.present? && deals.any?
+    end
+
+    # The source whose quote states what the link's description says (Founder: the loan is on energy.gov, not on the USAspending page that
+    # supports a different award): the evidence row whose quote shares the most of the description's words and figures, else the first.
+    def best_source(deal)
+      wanted = deal.description.to_s.downcase.scan(/[[:alnum:]$.,]+/).reject { |word| word.length < 3 }.uniq
+      rows = deal.evidence.select { |row| row.source&.url.present? }
+      best = rows.max_by { |row| quote = row.quote.to_s.downcase; wanted.count { |word| quote.include?(word) } }
+      best&.source&.url
     end
 
     # Where a fact really comes from, in words: the company's own website only when it is, else the page's site (DQ: never "its website" for a DOE or SEC page).
