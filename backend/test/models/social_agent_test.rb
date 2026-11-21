@@ -740,18 +740,34 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "https://full-reactors.example/about", items.first.source_url, "the own-site page its description rests on"
   end
 
-  test "spotlights skip a company with an open candidate or a pending take-off, and put GTM's taggable companies first (DQ, #883)" do
+  test "spotlights skip a company with an open candidate or a pending take-off, and put GTM's verified-account companies first (DQ, #883)" do
     ENV.delete("SOCIAL_POST_KINDS")
     a = spotlight_company("Alpha Reactors", "alpha-reactors")
     b = spotlight_company("Beta Reactors", "beta-reactors")
     c = spotlight_company("Gamma Reactors", "gamma-reactors")
-    ENV["SOCIAL_TAGGABLE_SLUGS"] = "gamma-reactors"
-    order = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
-    assert_equal c, order.first, "taggable first"
-    TakeoffProposal.create!(subject_type: "Organization", subject_id: a.id, batch: "t", reason: "wrong", proposed_by: "dq", status: "pending")
-    Candidate.create!(source: Source.first, kind: "organization", subject_type: "Organization", subject_id: b.id, status: "new", payload: {})
-    assert_equal [ c ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
-  ensure
-    ENV.delete("SOCIAL_TAGGABLE_SLUGS")
+    original = SocialAgent::Picker.instance_variable_get(:@tags)
+    SocialAgent::Picker.instance_variable_set(:@tags, { "gamma-reactors" => { "x" => "@gamma_reactors", "linkedin" => "Gamma Reactors" } })
+    begin
+      order = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+      assert_equal c, order.first.subject, "verified accounts first"
+      assert_equal "@gamma_reactors", order.first.facts["x_handle"], "its handle on X"
+      assert_nil SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts["x_handle"], "no tag on LinkedIn"
+      TakeoffProposal.create!(subject_type: "Organization", subject_id: a.id, batch: "t", reason: "wrong", proposed_by: "dq", status: "pending")
+      Candidate.create!(source: Source.first, kind: "organization", subject_type: "Organization", subject_id: b.id, status: "new", payload: {})
+      assert_equal [ c ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
+
+      post = run_x("Meet Gamma Reactors (@gamma_reactors): according to its website, it designs small modular reactors. It is based in Austin, Texas, and supplies Gamma Reactors Partner.")
+      assert_equal "drafted", post.status, post.reason
+      SocialPost.delete_all
+      assert_match "which isn't this company's verified handle", run_x("Meet Gamma Reactors (@someone_else): according to its website, it designs small modular reactors.").reason
+    ensure
+      SocialAgent::Picker.instance_variable_set(:@tags, original)
+    end
+  end
+
+  test "the verified-accounts list only holds handles, per slug (GTM's list)" do
+    assert SocialAgent::Picker.tags.size > 20
+    assert_equal "@terrapower", SocialAgent::Picker.tags.dig("terrapower", "x")
+    assert SocialAgent::Picker.tags.values.all? { |row| row["x"].to_s.match?(/\A@\w+\z/) || row["x"].nil? }
   end
 end

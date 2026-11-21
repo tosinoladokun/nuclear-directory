@@ -63,6 +63,7 @@ module SocialAgent::Rules
     found << "its source isn't a primary one (#{host(item.source_url).presence || 'none'})" unless primary?(item)
     found.concat(status_words(text, item))
     found.concat(people(text, item))
+    found.concat(tags(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found.concat(speaker_problems(text, item))
@@ -286,6 +287,12 @@ module SocialAgent::Rules
       "it says #{said.downcase.inspect}, which its source doesn't" unless item.source_text.match?(stem)
     end
     (words + terms).uniq
+  end
+
+  # An @ account in a post is only the company's own verified X handle (GTM's list, #883): never another account, never on LinkedIn.
+  def tags(text, item)
+    allowed = item.facts["x_handle"].to_s.downcase
+    text.scan(/@\w+/).uniq.filter_map { |tag| "it tags #{tag}, which isn't this company's verified handle" unless tag.downcase == allowed }
   end
 
   # Two or more capitalised words in a row are a name: allowed only for a company, plant or place the directory knows,

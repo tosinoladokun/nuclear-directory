@@ -1,0 +1,118 @@
+# Company accounts GTM verified from each company's own site (21 Nov, #883): the only tags a spotlight post may use.
+# A missing key means do not tag on that platform. Never filled from search results, parents or similar names.
+# x: handle, used on X only. linkedin: the Page's verified display name (LinkedIn text can't mention a Page, so it is the name only).
+commonwealth-fusion-systems:
+  x: "@cfs_energy"
+terrapower:
+  x: "@terrapower"
+  linkedin: "TerraPower"
+x-energy:
+  x: "@xenergynuclear"
+  linkedin: "X-energy"
+kairos-power:
+  x: "@kairospower"
+  linkedin: "Kairos Power"
+oklo:
+  x: "@oklo"
+  linkedin: "Oklo Inc"
+centrus-energy:
+  x: "@centrus_energy"
+  linkedin: "Centrus Energy Corp."
+helion-energy:
+  x: "@helion_energy"
+  linkedin: "Helion"
+type-one-energy:
+  linkedin: "Type One Energy"
+westinghouse-electric-company:
+  x: "@WECNuclear"
+  linkedin: "Westinghouse Electric Company"
+holtec-international:
+  x: "@holtecintl"
+  linkedin: "Holtec International"
+allied-power:
+  linkedin: "Allied Power"
+general-atomics:
+  x: "@generalatomics"
+  linkedin: "General Atomics"
+zap-energy:
+  x: "@Zap_Energy"
+ames-national-laboratory:
+  x: "@Ames_Laboratory"
+  linkedin: "Ames National Laboratory"
+nasa:
+  x: "@NASA"
+  linkedin: "NASA - National Aeronautics and Space Administration"
+bernhard-capital-partners:
+  linkedin: "Bernhard Capital Partners"
+university-of-tennessee-knoxville:
+  x: "@utknoxville"
+constellation-energy:
+  x: "@constellationeg"
+  linkedin: "Constellation"
+curtiss-wright:
+  linkedin: "Curtiss-Wright Corporation"
+dominion-energy:
+  x: "@dominionenergy"
+  linkedin: "Dominion Energy"
+enercon:
+  linkedin: "Enercon Services, Inc."
+energy-northwest:
+  x: "@EnergyNorthwest"
+  linkedin: "Energy Northwest"
+ge-vernova:
+  x: "@gevernova"
+  linkedin: "GE Vernova"
+global-laser-enrichment:
+  linkedin: "Global Laser Enrichment"
+energy-fuels:
+  x: "@energy_fuels"
+  linkedin: "Energy Fuels Inc"
+khosla-ventures:
+  x: "@khoslaventures"
+  linkedin: "Khosla Ventures"
+leidos:
+  x: "@leidosinc"
+  linkedin: "Leidos"
+los-alamos-national-laboratory:
+  x: "@LosAlamosNatLab"
+  linkedin: "Los Alamos National Laboratory"
+massachusetts-institute-of-technology:
+  x: "@mit"
+texas-a-m-university:
+  x: "@tamu"
+nuscale-power:
+  x: "@NuScale_Power"
+  linkedin: "NuScale Power"
+oak-ridge-national-laboratory:
+  x: "@ORNL"
+  linkedin: "Oak Ridge National Laboratory"
+oregon-state-university:
+  x: "@oregonstate"
+rensselaer-polytechnic:
+  x: "@RPI"
+sargent-lundy:
+  linkedin: "Sargent & Lundy"
+southern-company:
+  x: "@SouthernCompany"
+  linkedin: "Southern Company"
+switch:
+  x: "@switch"
+  linkedin: "Switch"
+university-of-washington:
+  x: "@UW"
+talen-energy:
+  linkedin: "Talen Energy"
+tennessee-valley-authority:
+  x: "@tvanews"
+  linkedin: "Tennessee Valley Authority"
+advanced-reactor-concepts:
+  x: "@arc_cleantech"
+  linkedin: "ARC Clean Technology"
+university-of-utah:
+  x: "@uutah"
+ur-energy:
+  x: "@ur_energy"
+  linkedin: "Ur-Energy Inc."
+us-department-of-energy:
+  x: "@energy"
+  linkedin: "U.S. Department of Energy (DOE)"

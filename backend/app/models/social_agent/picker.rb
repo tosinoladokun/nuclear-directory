@@ -24,8 +24,9 @@ class SocialAgent::Picker
   SPOTLIGHT_POOL = 40
   # Not a company to introduce (DQ, 21 Nov): agencies, labs, universities, investors and data-center buyers (these only through their nuclear deals).
   GOVERNMENT_ROLES = %w[government_agency national_lab university research_organization venture_capital data_center_offtaker].freeze
-  # Companies whose X/LinkedIn pages GTM verified (SOCIAL_TAGGABLE_SLUGS, comma-separated): picked first so they can be tagged. The directory has no handle field.
-  def self.taggable = ENV["SOCIAL_TAGGABLE_SLUGS"].to_s.split(",").map(&:strip).compact_blank
+  # Companies whose X/LinkedIn accounts GTM verified (config/social_tags.yml): picked first, and on X tagged with their handle.
+  def self.tags = @tags ||= YAML.safe_load_file(Rails.root.join("config/social_tags.yml")) || {}
+  def self.taggable = tags.keys
 
   def initialize(platform:, now: Time.current, fresh: FRESH, kinds: self.class.kinds)
     @kinds = kinds
@@ -142,7 +143,8 @@ class SocialAgent::Picker
       headquarters = [ company.hq_city, company.hq_state ].compact_blank.join(", ") if located
       facts = { "name" => company.name, "description" => company.description, "headquarters" => headquarters.presence,
                 "works on" => works_on.to_sentence.presence, "relationships" => deals.join("; ").presence,
-                "founded" => company.founded_year&.to_s }.compact_blank
+                "founded" => company.founded_year&.to_s,
+                "x_handle" => (self.class.tags.dig(company.slug, "x") if @platform == "x") }.compact_blank
       # The page its description rests on when that is the company's own site (a redirect on the bare homepage doesn't stop it), else the site.
       own = described.source&.url.presence if described.source&.url.present? && SocialAgent::Rules.primary?(SocialAgent::Item.new(subject: company, kind: "spotlight", facts: {}, source_url: described.source.url, source_quote: nil, path: nil, organization_ids: [ company.id ]))
       item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: own || company.website,

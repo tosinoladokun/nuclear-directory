@@ -47,6 +47,7 @@ class SocialAgent::Writer
     - Use only the facts given and the company's own words. Every number, name and place must come from them. No guesses.
     - Start with "Meet <the company's name>". Then what it does, where it is based (only when the facts give a headquarters), and who
       it works with (only the relationships the facts list). Leave out whatever the facts don't give: never say it is missing.
+    - When the facts give an x_handle, write it in brackets right after the company's name, exactly as given ("Meet Oklo (@oklo): ..."). Never any other @ account.
     - Say where the description comes from, in words ("according to its website", "the company says"). Never write an address or a link;
       the link to our company page is added for you.
     - No person names. No rankings, no "leading", "pioneering", "first", "largest" or "only" unless the facts say it, and then
