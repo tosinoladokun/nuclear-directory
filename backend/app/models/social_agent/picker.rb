@@ -119,7 +119,7 @@ class SocialAgent::Picker
     def spotlights
       recent = SocialPost.where.not(id: @except).where.not(status: %w[cancelled blocked failed]).where(subject_type: "Organization", created_at: (@now - SPOTLIGHT_COOLDOWN)..).select(:subject_id)
       # And never one this platform already sent (any age): the one-send index (index_social_posts_one_send) would refuse its second send, so a
-      # repeat after eight weeks needs its own send identity first (tracked: #889).
+      # repeat after eight weeks needs its own send identity first (tracked: #895).
       sent = SocialPost.where.not(id: @except).where(subject_type: "Organization", platform: @platform, status: SocialPost::SENT).select(:subject_id)
       # Nothing open on it (DQ): no candidate waiting for review and no pending take-off proposal.
       open = Candidate.where(subject_type: "Organization", status: %w[new matched needs_review]).select(:subject_id)
