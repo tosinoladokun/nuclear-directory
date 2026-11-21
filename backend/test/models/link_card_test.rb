@@ -100,6 +100,12 @@ class LinkCardTest < ActiveSupport::TestCase
       plant_links: [ link("operates"), link("owns"), link("owns") ], deals: Array.new(3), category: Category.find("reactor-developers"), **overrides)
   end
 
+  test "a company card doesn't say it operates a plant that isn't operating (Holtec's Palisades)" do
+    idle = Link.new("operates", Facility.new(name: "Palisades", status: "not_operating"), nil, nil)
+    card = LinkCard.for_company(kairos(plant_links: [ idle, link("owns") ]))
+    assert_equal "Owns stakes in 1 plant · 3 deals", card.footer_right
+  end
+
   test "a company card: role and HQ, then up to two facts in order" do
     profile = kairos
 

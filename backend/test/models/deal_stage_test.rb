@@ -31,9 +31,11 @@ class DealStageTest < ActionDispatch::IntegrationTest
     get company_path(slug: @buyer.slug)
     assert_select "#deals-heading .nd-sechead__count", "1 · 1 framework"
     assert_select "span.nd-tag", "Framework"
-    # The link preview keeps the sentences; the search meta description now carries the signed-deal count only.
-    assert_select "meta[property='og:description'][content*=?]", "Framework offtake with Oklo Stage Co"
-    assert_select "meta[property='og:description'][content*=?]", "Offtakes from Signed Seller Co"
+    # The link preview says nothing about any link (PM, 21 Nov: never a flat "Offtakes from X"); the page itself still names the framework and the deal.
+    assert_select "meta[property='og:description'][content*=?]", "Framework offtake with Oklo Stage Co", count: 0
+    assert_select "meta[property='og:description'][content*=?]", "Offtakes from Signed Seller Co", count: 0
+    assert_select "#deals", text: /Oklo Stage Co/
+    assert_select "#deals", text: /Signed Seller Co/
     assert_select "meta[name=description][content*=?]", "1 deal"
     assert_select "meta[name=description][content*=?]", "2 deals", count: 0
   end
