@@ -10,7 +10,7 @@ class SocialAgent::BufferTest < ActiveSupport::TestCase
     @requests = []
     @replies = []
     now = Time.utc(2026, 11, 16, 16, 30)
-    @buffer = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { now })
+    @buffer = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { now }, card: ->(_) { nil })
   end
 
   teardown { KEYS.each_key { |key| @saved.key?(key) ? ENV[key] = @saved[key] : ENV.delete(key) } }
@@ -22,6 +22,46 @@ class SocialAgent::BufferTest < ActiveSupport::TestCase
     input = @requests.last["variables"]["input"]
     assert_equal [ "ch-li", "customScheduled", "2026-11-16T16:45:00Z" ], input.values_at("channelId", "mode", "dueAt")
     assert_equal "Acme Fission won a DOE award.\n\nhttps://nuclear-directory.org/companies/acme", input["text"]
+  end
+
+  test "LinkedIn gets our page as a link attachment (title, description, card image) and no raw URL; X keeps the URL in its text; a page that can't be read keeps the URL (PM, 21 Nov)" do
+    card = { url: "https://nuclear-directory.org/companies/acme?utm_source=linkedin", title: "Acme Fission | Nuclear Directory", description: "Acme designs reactors.", thumbnail: { url: "https://nuclear-directory.org/cards/companies/acme/abc.png" } }
+    with_card = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { Time.utc(2026, 11, 16, 16, 30) }, card: ->(_link) { card })
+    2.times { @replies << { "data" => { "createPost" => { "post" => { "id" => "p1", "dueAt" => "2026-11-16T16:45:00Z" } } } } }
+    with_card.call("linkedin", "Meet Acme Fission.", card[:url])
+    input = @requests.last["variables"]["input"]
+    assert_equal "Meet Acme Fission.", input["text"], "no URL in the text: the card is the link"
+    assert_equal({ "url" => card[:url], "title" => card[:title], "description" => card[:description], "thumbnail" => { "url" => card[:thumbnail][:url] } }, input.dig("metadata", "linkedin", "linkAttachment"))
+
+    with_card.call("x", "Meet Acme Fission.", card[:url])
+    input = @requests.last["variables"]["input"]
+    assert_equal "Meet Acme Fission.\n\n#{card[:url]}", input["text"]
+    assert_nil input["metadata"], "X has no link attachment: its card comes from the URL in the text"
+
+    @replies << { "data" => { "createPost" => { "post" => { "id" => "p2", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    @buffer.call("linkedin", "Meet Acme Fission.", card[:url])
+    assert_equal "Meet Acme Fission.\n\n#{card[:url]}", @requests.last["variables"]["input"]["text"], "page unreadable: the URL stays in the text"
+    assert_nil @requests.last["variables"]["input"]["metadata"]
+  end
+
+  test "when Buffer refuses the LinkedIn attachment, the post goes once more with the URL in its text; an uncertain reply is never retried" do
+    card = { url: "https://nuclear-directory.org/companies/acme", title: "Acme", thumbnail: { url: "https://nuclear-directory.org/c.png" } }
+    with_card = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { Time.utc(2026, 11, 16, 16, 30) }, card: ->(_) { card })
+    @replies << { "data" => { "createPost" => { "message" => "Invalid link attachment" } } }
+    @replies << { "data" => { "createPost" => { "post" => { "id" => "p9", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    assert_equal "p9", with_card.call("linkedin", "Meet Acme.", card[:url])[:id]
+    assert_equal 2, @requests.size
+    assert_equal "Meet Acme.\n\n#{card[:url]}", @requests.last["variables"]["input"]["text"]
+    assert_nil @requests.last["variables"]["input"]["metadata"]
+
+    @requests.clear
+    @replies << { "data" => {} }
+    assert_raises(SocialAgent::Uncertain) { with_card.call("linkedin", "Meet Acme.", card[:url]) }
+    assert_equal 1, @requests.size, "never retried when it may have gone out"
+    @requests.clear
+    @replies << { "data" => { "createPost" => { "message" => "Daily limit reached" } } }
+    @replies << { "data" => { "createPost" => { "message" => "Daily limit reached" } } }
+    assert_raises(SocialAgent::Buffer::Error) { with_card.call("linkedin", "Meet Acme.", card[:url]) }
   end
 
   test "a channel without its id set on Render isn't posted to; an odd reply after sending is 'may have gone out'" do

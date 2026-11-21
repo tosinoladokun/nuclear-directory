@@ -30,18 +30,31 @@ class SocialAgent::Buffer
 
   def self.configured? = ENV["BUFFER_API_KEY"].present? && CHANNEL_KEYS.values.all? { |key| ENV[key].present? }
 
-  def initialize(http: method(:deliver), now: -> { Time.current })
+  def initialize(http: method(:deliver), now: -> { Time.current }, card: method(:page_card))
     @http = http
     @now = now
+    @card = card
   end
 
-  # Schedules one post: the text, a blank line, the link. Returns { id:, due_at: }.
+  # Schedules one post. Returns { id:, due_at: }.
+  # LinkedIn only draws a preview card for a link attachment, not for a URL in the text (PM, 21 Nov: the first live post had none): the
+  # attachment carries our page's own title, description and card image, and the text then has no raw URL. X builds its card from the
+  # URL in the text (its metadata has no link attachment). When the page can't be read, the URL stays in the text, so the post still goes.
   def call(platform, text, link)
     due = @now.call + DELAY
-    data = graphql(CREATE, { input: { text: "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic",
-      mode: "customScheduled", dueAt: due.utc.iso8601 } })
-    result = data["createPost"] or raise SocialAgent::Uncertain, "Buffer's reply had no createPost"
-    raise Error, "Buffer said: #{result['message']}" if result["message"]
+    card = @card.call(link) if platform == "linkedin"
+    input = { text: card ? text : "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
+    input[:metadata] = { linkedin: { linkAttachment: card } } if card
+    result =
+      begin
+        create(input)
+      rescue Error
+        # Buffer refused the request (a refusal means nothing was created, so a retry can't double-post; a timeout or odd reply is
+        # Uncertain and never retried). When the attachment may be why, the post goes with the URL in its text instead (Infra, Backend).
+        raise unless card
+
+        create(input.except(:metadata).merge(text: "#{text}\n\n#{link}"))
+      end
     id = result.dig("post", "id") or raise SocialAgent::Uncertain, "Buffer didn't return the post's id"
     { id:, due_at: Time.zone.parse(result.dig("post", "dueAt").to_s) || due }
   end
@@ -56,6 +69,29 @@ class SocialAgent::Buffer
   end
 
   private
+    def create(input)
+      result = graphql(CREATE, { input: })["createPost"] or raise SocialAgent::Uncertain, "Buffer's reply had no createPost"
+      raise Error, "Buffer said: #{result['message']}" if result["message"]
+
+      result
+    end
+
+    # Our page's own link preview, read from its og tags: { url:, title:, description:, thumbnail: { url: } }, or nil.
+    def page_card(link)
+      uri = URI(link)
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: 10) { |http| http.get(uri.request_uri, "User-Agent" => "NuclearDirectory-social") }
+      return unless response.is_a?(Net::HTTPSuccess)
+
+      doc = Nokogiri::HTML(response.body.to_s)
+      og = ->(name) { doc.at_css(%(meta[property="og:#{name}"]))&.[]("content").to_s.squish.presence }
+      title, image = og.("title"), og.("image")
+      return unless title && image
+
+      { url: link, title:, description: og.("description"), thumbnail: { url: image } }.compact
+    rescue StandardError
+      nil
+    end
+
     # The brand channels by their Buffer ids (Infra): never found by service, so a personal profile or a second
     # account on the same Buffer login can't get the post.
     def channel_id(platform) = ENV[CHANNEL_KEYS.fetch(platform)].presence || raise(Error, "#{CHANNEL_KEYS.fetch(platform)} isn't set on Render")
