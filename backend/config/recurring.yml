@@ -28,6 +28,10 @@ production:
   lead_find:
     class: LeadFindJob
     schedule: every day at 2:30am America/New_York
+  # AI answer crawlers' published IP ranges (#864), for the public rate limit.
+  ai_crawler_ranges:
+    class: AiCrawlerRangesJob
+    schedule: every day at 1am America/New_York
   # The nightly checker (#776), in shadow: a model's verdict on open claims, kept for Data Quality to compare.
   dq_checker:
     class: DqCheckerJob
