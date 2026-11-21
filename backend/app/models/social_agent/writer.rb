@@ -52,6 +52,8 @@ class SocialAgent::Writer
       reduce a link to a bare verb ("funds", "supplies", "invests in") and never state it as a present fact; keep the amounts and dates.
     - Say where it is based only from the headquarters fact. Any other place in the source's words (a project site, an award's location,
       a plant) is not its headquarters.
+    - Say what the company does in the description's own words and keep every qualifier ("decommissions nuclear plants" stays "nuclear
+      plants"); never cut it to a shorter claim. Name a party as the record names it ("Holtec Palisades, LLC", not "Holtec International").
     - Do not describe what it works on beyond its description; no roles, no technology lists, no bare tags as facts.
     - Relationship sentences begin "Per the directory's records" or "The directory lists", name who does what for whom (who builds what),
       and never use the present tense for a finished award, loan or investment. Do not pick examples out of a longer list.
