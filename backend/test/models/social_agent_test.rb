@@ -979,4 +979,9 @@ class SocialAgentTest < ActiveSupport::TestCase
     3.times { |index| spotlight_company("Co #{index}", "co-#{index}") }
     assert_equal 3, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.size
   end
+
+  test "no opener claims something that isn't true of every company (DQ: 'New on the directory' said a company was new)" do
+    patterns = SocialAgent::Openers.patterns.join(" ")
+    assert_no_match(/\bnew\b|\bnow\b|\bjust\b|\blatest\b|\bfirst\b/i, patterns)
+  end
 end
