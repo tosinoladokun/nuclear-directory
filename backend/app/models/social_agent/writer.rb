@@ -72,6 +72,8 @@ class SocialAgent::Writer
   # what the source says still fails.
   NITS = <<~TEXT.freeze
     Do not fail a post for these:
+    - the site's name as the source ("per USAspending.gov", "a page on about.fb.com", "per energy.gov"): that is a source named in words,
+      not an address or a link;
     - a legal suffix left off a company name (Pte. Ltd., Ltd., Inc., LLC, GmbH);
     - the source's own qualifier beside the deal word, said once ("a non-binding MOU");
     - a plain synonym for the source's verb ("said", "announced") that keeps the meaning and every condition;

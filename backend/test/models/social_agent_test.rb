@@ -796,4 +796,10 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.attributed?("Meet Acme: it designs reactors.")
     assert_not SocialAgent::Rules.attributed?("Meet Acme: it designs 3 reactors per year.")
   end
+
+  test "'the first phase' is an order, not a claim to be first; 'the first SMR design' still is" do
+    assert_empty SocialAgent::Rules.unattributed_superlatives("Amazon has the right to buy electricity from the first phase.")
+    assert_empty SocialAgent::Rules.unattributed_superlatives("It builds the first two units.")
+    assert_not_empty SocialAgent::Rules.unattributed_superlatives("It is the first SMR design approved by the NRC.")
+  end
 end

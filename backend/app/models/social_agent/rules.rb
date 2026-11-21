@@ -221,7 +221,8 @@ module SocialAgent::Rules
   CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?)\b/i
   def unattributed_superlatives(text)
     text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
-      word = sentence[SUPERLATIVES, 1]
+      # "the first phase", "the first two units" put things in order: they aren't a claim to be first.
+      word = sentence.gsub(/\bfirst\s+(?:phase|stage|unit|units|quarter|half|year|round|two|three|four|five|six|seven|eight|nine|ten|\d+\w*)\b/i, "")[SUPERLATIVES, 1]
       next unless word
       next if sentence.match?(CLAIM_CUE)
 
