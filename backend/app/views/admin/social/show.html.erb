@@ -59,6 +59,12 @@
                     "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
             <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
             <% if post.reason.present? && !post.by_hand? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <% if post.status == "unknown" %>
+              <p class="type-small m-0">Check the account, then say what happened:</p>
+              <%= button_to "It never went out", admin_social_reconcile_path(post, outcome: "never"), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-never-#{post.id}" },
+                    data: { turbo_confirm: "You checked the account and it isn't there?" } %>
+              <%= button_to "It did go out", admin_social_reconcile_path(post, outcome: "sent"), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-sent-#{post.id}" } %>
+            <% end %>
             <p class="type-small m-0">
               <% if post.permalink %><%= link_to "See the post", post.permalink, class: "nd-link", target: "_blank", rel: "noopener" %> · <% end %>
               <% if (url = safe_url(post.source_url)) %><%= link_to "Source: #{source_host(url)}", url, class: "nd-link", target: "_blank", rel: "noopener" %><% end %>

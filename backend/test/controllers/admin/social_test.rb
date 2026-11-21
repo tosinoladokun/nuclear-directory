@@ -102,4 +102,23 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     get admin_social_path
     assert_select ".nd-wait__what .text-critical", text: SocialPost::BY_HAND, count: 0
   end
+
+  test "hostless links record nothing, and an unknown post is settled by hand so recording can go on (Copilot, #878)" do
+    news = NewsItem.create!(url: "https://nanonuclearenergy.com/mou9", title: "Item", publisher: "NANO", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: 1.day.ago)
+    [ "https://?", "https:///status/1" ].each do |bad|
+      assert_no_difference -> { SocialPost.count } do
+        post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x], permalink: bad }
+      end
+      assert_match(/Not recorded/, flash[:alert])
+    end
+    unknown = SocialPost.create!(platform: "x", status: "unknown", subject: news, text: "Auto.", posted_at: 1.hour.ago)
+    post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x] }
+    assert_match(/marked unknown/, flash[:alert])
+    post admin_social_reconcile_path(unknown, outcome: "never")
+    assert_equal "cancelled", unknown.reload.status
+    assert_difference -> { SocialPost.where(status: "posted").count }, 1 do
+      post admin_social_by_hand_path, params: { item: news.id.to_s, platforms: %w[x] }
+    end
+  end
 end

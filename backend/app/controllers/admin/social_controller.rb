@@ -28,31 +28,59 @@ class Admin::SocialController < Admin::BaseController
     news = (NewsItem.find_by(id:) if id) || NewsItem.find_by(url: item)
     platforms = Array(params[:platforms]) & SocialChannel::PLATFORMS
     permalink = params[:permalink].to_s.strip.presence
-    if news.nil? || platforms.empty? || (permalink && !permalink.match?(%r{\Ahttps?://\S+\z}))
-      redirect_to admin_social_path, alert: "Not recorded: give a news item's id or source URL, at least one platform, and a link that starts with https:// if you add one." and return
+    if news.nil? || platforms.empty? || (permalink && !web_address?(permalink))
+      redirect_to admin_social_path, alert: "Not recorded: give a news item's id, its address in Admin or its source URL, at least one platform, and a link that starts with https:// and has a site name if you add one." and return
     end
 
     name = ->(platform) { platform == "x" ? "X" : "LinkedIn" }
-    # A post the agent already has for this item and platform: a finished one is a harmless repeat; one still going out (queued in
-    # Buffer, sending, or unsure) must be dealt with first, or the platform may publish a duplicate.
-    existing = platforms.index_with { |platform| SocialPost.where(platform:, subject: news, status: SocialPost::SENT).order(:id).last }
-    pending = existing.select { |_, post| post&.status.in?(%w[queued sending unknown]) }
+    orgs = news.news_mentions.where(subject_type: "Organization").pluck(:subject_id)
+    # Under the same channel locks the agent's send takes, all platforms or none: a post the agent already has for this item is a
+    # harmless repeat when it is finished, and a warning when it is still going out (queued in Buffer, sending, or unsure), so a
+    # duplicate can't slip out between the check and the record.
+    pending = {}
+    saved = []
+    already = []
+    SocialChannel.transaction do
+      platforms.sort.each { |platform| SocialChannel.for(platform).lock! }
+      platforms.each do |platform|
+        existing = SocialPost.where(platform:, subject: news, status: SocialPost::SENT).order(:id).last
+        if existing&.status.in?(%w[queued sending unknown]) then pending[platform] = existing
+        elsif existing then already << platform
+        end
+      end
+      raise ActiveRecord::Rollback if pending.any?
+
+      (platforms - already).each do |platform|
+        SocialPost.create!(platform:, status: "posted", subject: news, text: "Posted by hand.", reason: SocialPost::BY_HAND, source_url: news.url,
+          organization_ids: orgs, permalink:, posted_at: Time.current)
+        saved << platform
+      end
+    end
     if pending.any?
       redirect_to admin_social_path, alert: "Not recorded: #{pending.map { |platform, post| "#{name.(platform)} has an automated post #{post.status == 'queued' ? 'queued in Buffer' : "marked #{post.status}"}" }.to_sentence}. " \
-        "Take it back first (switch #{pending.keys.map(&name).to_sentence} off under Switches, or remove it in Buffer, or check the platform), then record yours." and return
-    end
-
-    orgs = news.news_mentions.where(subject_type: "Organization").pluck(:subject_id)
-    saved, already = platforms.partition do |platform|
-      SocialPost.create!(platform:, status: "posted", subject: news, text: "Posted by hand.", reason: SocialPost::BY_HAND, source_url: news.url,
-        organization_ids: orgs, permalink:, posted_at: Time.current)
-      true
-    rescue ActiveRecord::RecordNotUnique
-      false
+        "Take it back first: switch #{pending.keys.map(&name).to_sentence} off under Switches or remove it in Buffer for a queued one; for one marked unknown, check the account and say what happened on its row in the log (it never went out / it did). Then record yours." and return
     end
     notice = "Recorded for #{saved.map(&name).to_sentence}: the agent won't post it again." if saved.any?
     notice = [ notice, "#{already.map(&name).to_sentence} already had it." ].compact.join(" ") if already.any?
     redirect_to admin_social_path, notice:
+  end
+
+  # An automated post marked "unknown" (the send may have gone out): after checking the account, Tosin says which. "Never went out" takes
+  # it back, so the item can be sent or recorded again; "It did go out" keeps it as posted. Nothing else unblocks it (#877).
+  def reconcile
+    post = SocialPost.find(params[:id])
+    return redirect_to(admin_social_path, alert: "Only a post marked unknown needs this.") unless post.status == "unknown"
+
+    permalink = params[:permalink].to_s.strip.presence
+    return redirect_to(admin_social_path, alert: "That link isn't a web address.") if permalink && !web_address?(permalink)
+
+    if params[:outcome] == "sent"
+      post.update!(status: "posted", reason: "confirmed by hand: it went out", permalink: permalink || post.permalink, posted_at: post.posted_at || Time.current)
+      redirect_to admin_social_path, notice: "Kept as posted: the agent won't post this item again."
+    else
+      post.update!(status: "cancelled", cost_usd: 0, reason: "confirmed by hand: it never went out")
+      redirect_to admin_social_path, notice: "Taken back: it never went out, so the item can be recorded or sent again."
+    end
   end
 
   def update
@@ -65,4 +93,13 @@ class Admin::SocialController < Admin::BaseController
     end
     redirect_to admin_social_path
   end
+
+  private
+    # A real web address: http or https with a host (never "https://?" or "https:///x").
+    def web_address?(value)
+      uri = URI.parse(value)
+      uri.is_a?(URI::HTTP) && uri.host.present? && !value.match?(/\s/)
+    rescue URI::InvalidURIError
+      false
+    end
 end
