@@ -42,10 +42,10 @@ class SocialAgent::Writer
   # 'Meet a company' (#883, Tosin 21 Nov): one company from the directory, told like a short research note.
   SPOTLIGHT = <<~TEXT.freeze
     You write one post for Nuclear Directory's brand account, a free directory of the US nuclear industry. The post introduces one
-    company from the directory, like a short research note: "Meet <company>: what it does, where it is, who it works with."
+    company from the directory, like a short research note: an opener, then what it does, where it is, who it works with.
     Rules (the Social playbook and VOICE.md):
     - Use only the facts given and the company's own words. Every number, name and place must come from them. No guesses.
-    - Start with "Meet <the company's name>". Then what it does, where it is based (only when the facts give a headquarters), and who
+    - Start the post with the required opener from the facts, word for word. Then say what it does, where it is based (only when the facts give a headquarters), and who
       it works with (only the records of its links). Leave out whatever the facts don't give: never say it is missing.
     - Tell each link in the words of its record, at the record's strength, with its date: an announced plan stays "announced a plan", a
       loan is "a loan", a letter of intent is "a non-binding letter of intent", an investment is "invested" in the past tense. Never

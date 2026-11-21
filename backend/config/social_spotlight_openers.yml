@@ -1,0 +1,9 @@
+# How a spotlight post may open (Tosin, 21 Nov: not always "Meet X"). {name} is the company's name. The agent gives each post one pattern it
+# hasn't used in the last five posts on that platform, in this order, and a check blocks a post whose opener repeats one of those five
+# (SocialAgent::Openers). GTM owns this list: add or reword patterns here. A pattern's first word is let through the name checks.
+- "Meet {name}."
+- "Say hello to {name}."
+- "A closer look at {name}."
+- "Introducing {name}."
+- "New on the directory: {name}."
+- "{name}, in short."

@@ -173,6 +173,9 @@ class SocialAgent::Picker
                 "headquarters" => headquarters.presence, "headquarters comes from" => (source_label(located.source&.url, company) if located),
                 "records of its links" => deals.join("; ").presence,
                 "x_handle" => (self.class.tags.dig(company.slug, "x") if @platform == "x") }.compact_blank
+      # The opener this post must start with: the first pattern not used in the last five posts on the platform.
+      pattern = SocialAgent::Openers.patterns[SocialAgent::Openers.next_for(@platform, except: @except)]
+      facts["required opener"] = SocialAgent::Openers.fill(pattern, company.name) if pattern
       # The page its description rests on when that is the company's own site (a redirect on the bare homepage doesn't stop it), else the site.
       own = described.source.url if described.source&.url.present? && source_label(described.source.url, company) == "the company's own website"
       item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: own || company.website,

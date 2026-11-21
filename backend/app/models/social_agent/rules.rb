@@ -64,6 +64,7 @@ module SocialAgent::Rules
     found.concat(status_words(text, item))
     found.concat(people(text, item))
     found.concat(tags(text, item))
+    found.concat(opener(text, item, platform:, except_id:))
     found.concat(headquarters(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
@@ -309,6 +310,19 @@ module SocialAgent::Rules
     end
   end
 
+  # A spotlight opens with its required opener and not like one of the last five posts on the platform (Tosin: varied openers).
+  def opener(text, item, platform:, except_id: nil)
+    return [] unless item.kind == "spotlight"
+
+    name = item.facts["name"].to_s
+    index = SocialAgent::Openers.index_of(text, name)
+    required = item.facts["required opener"].to_s
+    found = []
+    found << "it doesn't open with the required opener (#{required})" if required.present? && !text.to_s.lstrip.start_with?(required.sub(/[.:]\z/, ""))
+    found << "it opens like one of the last #{SocialAgent::Openers::RECENT} posts on #{platform}" if index && SocialAgent::Openers.recent(platform, except: except_id).include?(index)
+    found
+  end
+
   # An @ account in a post is only the company's own verified X handle (GTM's list, #883): never another account, never on LinkedIn.
   def tags(text, item)
     allowed = item.facts["x_handle"].to_s.downcase
@@ -321,7 +335,7 @@ module SocialAgent::Rules
     known = [ item.facts["companies"], item.facts["name"], item.facts["publisher"] ].compact.join(" ").downcase
     text.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/).uniq.filter_map do |found|
       # An article isn't a name, nor evidence of an organisation (Copilot: "The Jane Doe statement").
-      words = found.split.drop_while { |word| ARTICLES.include?(word) || (word == "Meet" && item.kind == "spotlight") }
+      words = found.split.drop_while { |word| ARTICLES.include?(word) || (item.kind == "spotlight" && SocialAgent::Openers.first_words.include?(word)) }
       next if words.size < 2
 
       phrase = words.join(" ")

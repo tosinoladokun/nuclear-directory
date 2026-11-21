@@ -944,4 +944,31 @@ class SocialAgentTest < ActiveSupport::TestCase
     # The page text mentions Redmond and Everett; only the directory's HQ field decides where the post may place the company.
     assert_match(/Redmond/, item.page_text)
   end
+
+  test "spotlight openers rotate: each post gets a pattern not used in the last five posts on its platform, and an opener repeating one of them is blocked (Tosin: not always 'Meet X')" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    patterns = SocialAgent::Openers.patterns
+    assert patterns.size >= 6
+    full = spotlight_company("Full Reactors", "full-reactors")
+    assert_equal 0, SocialAgent::Openers.next_for("x")
+
+    # Five earlier posts on X, one per opener 0..4, so the next free pattern is 5.
+    5.times do |index|
+      other = Organization.create!(name: "Co #{index}", slug: "co-#{index}", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      SocialPost.create!(platform: "x", status: "posted", subject: other, text: "#{SocialAgent::Openers.fill(patterns[index], other.name)} It does things.", created_at: MONDAY - (10 - index).days)
+    end
+    assert_equal [ 4, 3, 2, 1, 0 ], SocialAgent::Openers.recent("x")
+    assert_equal 5, SocialAgent::Openers.next_for("x")
+    assert_equal 0, SocialAgent::Openers.next_for("linkedin"), "another platform has its own history"
+    item = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.find { |candidate| candidate.subject == full }
+    assert_equal SocialAgent::Openers.fill(patterns[5], "Full Reactors"), item.facts["required opener"]
+
+    ok = "#{SocialAgent::Openers.fill(patterns[5], 'Full Reactors')} According to its website, it designs small modular reactors."
+    assert_empty SocialAgent::Rules.opener(ok, item, platform: "x")
+    repeated = "#{SocialAgent::Openers.fill(patterns[0], 'Full Reactors')} According to its website, it designs small modular reactors."
+    problems = SocialAgent::Rules.opener(repeated, item, platform: "x")
+    assert_match(/doesn't open with the required opener/, problems.join)
+    assert_match(/opens like one of the last 5 posts on x/, problems.join)
+    assert_empty SocialAgent::Rules.opener(repeated, item, platform: "linkedin").grep(/last 5 posts/), "not repeated on LinkedIn"
+  end
 end
