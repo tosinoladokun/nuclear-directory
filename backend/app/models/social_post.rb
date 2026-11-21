@@ -19,6 +19,11 @@ class SocialPost < ApplicationRecord
   BY_HAND = "posted by hand".freeze
   def by_hand? = reason == BY_HAND
 
+  # A draft the graders approved and handed over through POST /api/social/approved_drafts (#896): the hash they signed is the control, so the
+  # send-time content recheck doesn't run on it (every send guard still does).
+  GRADED = "approved by graders:".freeze
+  def graded? = reason.to_s.start_with?(GRADED)
+
   belongs_to :subject, polymorphic: true
   validates :platform, inclusion: { in: SocialChannel::PLATFORMS }
   validates :status, inclusion: { in: STATUSES }

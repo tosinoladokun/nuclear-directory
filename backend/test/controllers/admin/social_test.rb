@@ -314,4 +314,13 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     post admin_social_reconcile_path(unknown, outcome: "sent", permalink: "https://x.com/NuclearDir/status/5")
     assert_equal [ "posted", "https://x.com/NuclearDir/status/5" ], unknown.reload.values_at(:status, :permalink)
   end
+
+  test "a draft the graders approved shows in Admin > Posts with Send this draft and its hash, and its reason isn't shown as an error (#896)" do
+    draft = draft_for
+    draft.update!(reason: "#{SocialPost::GRADED} GTM, Founder, DQ")
+    get admin_social_path
+    assert_select "form#social-send-#{draft.id}", 1
+    assert_select "p", /Text hash #{draft.text_hash}/
+    assert_select ".text-critical", text: /approved by graders/, count: 0
+  end
 end

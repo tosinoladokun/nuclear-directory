@@ -35,6 +35,11 @@ Rails.application.routes.draw do
   # Data Quality's matching actions (#548): token only, 404 without one configured.
   # Autopilot alerts with their owner session, for the Mac poller (#811).
   get "api/autopilot/alerts" => "api/autopilot/alerts#index", defaults: { format: :json }, as: :api_autopilot_alerts
+  # GTM-approved spotlight drafts, with their own token (#896).
+  scope "api/social", module: "api/social", defaults: { format: :json } do
+    post "approved_drafts" => "approved_drafts#create", as: :api_social_approved_drafts
+  end
+
   scope "api/dq", module: "api/dq", defaults: { format: :json } do
     get "matching" => "matching#index", as: :api_dq_matching
     post "matching" => "matching#create"

@@ -58,7 +58,7 @@
               <%= { "posted" => "Posted", "drafted" => "Draft", "sending" => "Sending", "queued" => "Queued to go out at #{post.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%H:%M')}", "cancelled" => "Taken back", "unknown" => "May have gone out: check the account",
                     "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
             <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
-            <% if post.reason.present? && !post.by_hand? && post.reason != SocialAgent::APPROVED %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <% if post.reason.present? && !post.by_hand? && post.reason != SocialAgent::APPROVED && !post.graded? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
             <% if post.status == "drafted" %>
               <%= button_to "Send this draft", admin_social_send_draft_path(post), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-send-#{post.id}" },
                     data: { turbo_confirm: "Send this exact draft (hash #{post.text_hash}) to #{post.platform == 'x' ? 'X' : 'LinkedIn'} now?" } %>

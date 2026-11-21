@@ -191,7 +191,7 @@ module SocialAgent
     why = SocialChannel.transaction do
       SocialChannel.for(post.platform).lock!
       next draft_refusal(post.reload, now) ||
-        (SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", reason: APPROVED, updated_at: Time.current) == 1 ? nil : "it is already being sent, or was sent")
+        (SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", reason: (post.graded? ? post.reason : APPROVED), updated_at: Time.current) == 1 ? nil : "it is already being sent, or was sent")
     end
     return [ post.reload, why ] if why
 
@@ -202,6 +202,8 @@ module SocialAgent
   # The stored text checked again against the item and its source as they stand now (DQ): the facts may have changed since the draft.
   # The voice check is a model call and isn't repeated. Sets the post blocked when a check no longer passes.
   def self.recheck(post, now, fetcher)
+    return if post.graded?
+
     item = SocialAgent::Picker.new(platform: post.platform, now:).candidates.find { |candidate| candidate.subject == post.subject }
     return "its item is no longer one the agent could post" unless item
 
@@ -239,7 +241,7 @@ module SocialAgent
   def self.cancel_queued(platform: nil, why: "switched off", publisher: self.publisher, keep_approved: false)
     queued = SocialPost.where(status: "queued").where(posted_at: Time.current..)
     queued = queued.where(platform:) if platform
-    queued = queued.where("reason IS NULL OR reason <> ?", APPROVED) if keep_approved
+    queued = queued.where("reason IS NULL OR (reason <> ? AND reason NOT LIKE ?)", APPROVED, "#{SocialPost::GRADED}%") if keep_approved
     queued.find_each do |post|
       publisher.cancel(post.external_id)
       post.update!(status: "cancelled", cost_usd: 0, reason: "taken back before it went out: #{why}")
