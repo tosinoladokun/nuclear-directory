@@ -331,4 +331,41 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   ensure
     SocialAgent.singleton_class.send(:define_method, :run, original)
   end
+
+  test "a second send on the same platform and day is impossible, in the guards and in the database (Backend)" do
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    sent = []
+    SocialAgent.senders["x"] = ->(text, _link) { sent << text; { id: "9", permalink: "https://x.com/i/web/status/9" } }
+    monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 8, 30)
+    travel_to(monday - 3.days) { load_row(platform: "x", send_on: "2026-11-23") }
+    approved = SocialPost.last
+    other_company = Organization.create!(name: "Energy Northwest", slug: "energy-northwest", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    plain = SocialPost.create!(platform: "x", status: "drafted", subject: other_company, text: "Meet Energy Northwest. A plain draft.", link: "https://nuclear-directory.org/companies/energy-northwest",
+      organization_ids: [ other_company.id ], created_at: monday - 1.hour)
+    travel_to(monday) do
+      assert_nil SocialAgent.send_draft(approved, now: monday).last
+      assert_equal [ TEXT ], sent
+      _, why = SocialAgent.send_draft(plain, now: monday)
+      assert_match(/today's slot for this platform is already taken/, why)
+      assert_equal "drafted", plain.reload.status
+      assert_equal 1, sent.size
+
+      # Even if a guard were missed (two requests racing), the database refuses a second claim for the platform and day.
+      assert_raises(ActiveRecord::RecordNotUnique) { ActiveRecord::Base.transaction(requires_new: true) { plain.update_columns(status: "sending", sent_on: monday.to_date) } }
+      assert_equal 1, SocialPost.where(platform: "x", sent_on: monday.to_date, status: SocialPost::SENT).count
+      plain.update_columns(sent_on: monday.to_date, status: "failed")
+      assert_equal "failed", plain.reload.status, "a failed attempt frees the day's index"
+    end
+    # The next weekday is a new day: the slot is free again.
+    plain.update_columns(status: "drafted", sent_on: nil, created_at: monday + 1.day - 1.hour)
+    travel_to(monday + 1.day) { assert_nil SocialAgent.draft_refusal(plain, monday + 1.day), "a new day, a free slot" }
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
+
+  test "social_approvals is a private table for Metabase" do
+    assert_includes Metabase::ReadonlyRole::PRIVATE_TABLES, "social_approvals"
+  end
 end

@@ -149,7 +149,7 @@ module SocialAgent
       spent = month.sum(:cost_usd)
       next post.tap { |over| over.update!(status: "blocked", reason: "this month's cap of $#{monthly_cap.to_s('F')} is reached") } if spent + post_cost > monthly_cap
 
-      post.update!(status: "sending", cost_usd: post_cost)
+      post.update!(status: "sending", cost_usd: post_cost, sent_on: now.in_time_zone(ZONE).to_date)
     end
     return post unless claimed == true
 
@@ -165,7 +165,7 @@ module SocialAgent
       post.tap { |queued| queued.update!(status: "queued", external_id: sent[:id], posted_at: sent[:due_at]) }
     end
   rescue ActiveRecord::RecordNotUnique
-    post.tap { |again| again.update!(status: "blocked", reason: "already sent once") }
+    post.tap { |again| again.update!(status: "blocked", reason: "already sent once, or another post for this platform went out today") }
   rescue Uncertain => error
     post.tap { |unknown| unknown.update!(status: "unknown", reason: "may have gone out (#{error.message}); check the account, never resent".truncate(250)) }
       .tap { pause_after_errors(post.platform) }
@@ -190,10 +190,14 @@ module SocialAgent
     # Under the channel lock the agent's send takes (Infra, Copilot): the guards are read again from what is stored, and the draft is
     # claimed (drafted -> sending, which also takes the day's slot) before the lock is released, so two clicks, or two drafts, can't both pass.
     # The reason marks it as approved by hand, so the sync keeps it queued in Drafts only mode.
-    why = SocialChannel.transaction do
-      SocialChannel.for(post.platform).lock!
-      next draft_refusal(post.reload, now) ||
-        (SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", reason: (post.graded? ? post.reason : APPROVED), updated_at: Time.current) == 1 ? nil : "it is already being sent, or was sent")
+    why = begin
+      SocialChannel.transaction do
+        SocialChannel.for(post.platform).lock!
+        next draft_refusal(post.reload, now) ||
+          (SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", reason: (post.graded? ? post.reason : APPROVED), sent_on: now.in_time_zone(ZONE).to_date, updated_at: Time.current) == 1 ? nil : "it is already being sent, or was sent")
+      end
+    rescue ActiveRecord::RecordNotUnique
+      "today's slot for this platform is already taken (one send per platform per day)"
     end
     return [ post.reload, why ] if why
 
@@ -251,7 +255,11 @@ module SocialAgent
       return "this draft is from #{post.created_at.in_time_zone(ZONE).strftime('%-d %b')}: draft again today so the facts and checks are fresh"
     end
     return "Buffer's 30-day request allowance is used up" if SocialAgent::Buffer.budget_spent?
-    return "today's slot for this platform is already taken (a post or an attempt)" if window.(SocialPost.used.where(platform: post.platform, created_at: day.all_day)).exists?
+    # Today's slot is taken by any other post that went out or was tried today (a failed attempt too: the next may be the same text); a plain
+    # draft holds nothing. The database adds the hard rule: index_social_posts_one_send_per_platform_day allows only one claimed-for-sending
+    # post per platform per day.
+    return "today's slot for this platform is already taken (a post or an attempt)" if window.(SocialPost.where(status: [ *SocialPost::SENT, "failed" ], platform: post.platform)
+      .where("sent_on = ? OR (sent_on IS NULL AND created_at BETWEEN ? AND ?)", day.to_date, day.beginning_of_day, day.end_of_day)).exists?
     return "the same item was posted or tried within the last #{SocialPost::COOLDOWN.inspect}" if window.(SocialPost.where.not(status: "cancelled").where(subject: post.subject, created_at: (now - SocialPost::COOLDOWN)..)).exists?
     return "a post about the same company was posted or tried today" if window.(SocialPost.where.not(status: "cancelled").where(created_at: day.all_day)).where("organization_ids && ARRAY[?]::bigint[]", post.organization_ids).exists?
     return "its item is no longer published" unless still_published?(post.subject.reload)
