@@ -16,7 +16,7 @@ class SocialAgentTest < ActiveSupport::TestCase
   setup do
     @company = Organization.create!(name: "Acme Fission", slug: "acme-fission", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
     @news = NewsItem.create!(url: "https://www.energy.gov/acme-award", title: "Acme Fission wins $1,404,253 DOE award for fuel cladding",
-      summary: "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", publisher: "DOE",
+      summary: "The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.", publisher: "DOE",
       published_on: Date.new(2026, 11, 12), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     @news.news_mentions.create!(subject: @company)
     SocialChannel.for("x").update!(mode: "drafts")
@@ -29,42 +29,42 @@ class SocialAgentTest < ActiveSupport::TestCase
   def run_x(text, fetcher: OK_FETCHER.new(200), **options) = SocialAgent.run("x", now: MONDAY, writer: FakeWriter.new(text, **options), fetcher:)
 
   test "drafts one checked post on the freshest published news, linked to its company with tracking" do
-    post = run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.")
+    post = run_x("The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.")
     assert_equal [ "drafted", @news ], [ post.status, post.subject ]
-    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=news", post.link
+    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission", post.link
     assert_equal "https://www.energy.gov/acme-award", post.source_url
     assert_nil run_x("Again."), "one a day per platform"
   end
 
   test "a number or name the source doesn't have stops the post, as does the voice check" do
-    assert_match "the number 2 isn't in the source", run_x("Acme Fission won 2 DOE awards.").reason
+    assert_match "the number 2 isn't in the source", run_x("DOE said Acme Fission won 2 DOE awards.").reason
     SocialPost.delete_all
-    assert_match "the name \"Westinghouse\" isn't in the source", run_x("Acme Fission and Westinghouse won a DOE award.").reason
+    assert_match "the name \"Westinghouse\" isn't in the source", run_x("DOE said Acme Fission and Westinghouse won a DOE award.").reason
     SocialPost.delete_all
-    assert_match "voice check: reads like an ad", run_x("Acme Fission won a DOE award.", voice: [ false, "reads like an ad" ]).reason
+    assert_match "voice check: reads like an ad", run_x("DOE said Acme Fission won a DOE award.", voice: [ false, "reads like an ad" ]).reason
     SocialPost.delete_all
-    assert_match "hashtag", run_x("Acme Fission won a DOE award. #nuclear").reason
+    assert_match "hashtag", run_x("DOE said Acme Fission won a DOE award. #nuclear").reason
   end
 
   test "people and event items aren't news; relative time is stopped" do
     @news.update_columns(title: "Acme Fission engineer named to 40 Under 40")
-    assert_nil run_x("Acme Fission won a DOE award.")
+    assert_nil run_x("DOE said Acme Fission won a DOE award.")
     @news.update_columns(title: "Acme Fission wins $1,404,253 DOE award for fuel cladding")
-    assert_match "\"today\" instead of a date", run_x("Today Acme Fission won a DOE award.").reason
+    assert_match "\"today\" instead of a date", run_x("Today DOE said Acme Fission won a DOE award.").reason
   end
 
   test "off, weekends and nothing fresh post nothing; a fact used in the last two weeks isn't used again" do
     SocialChannel.for("x").update!(mode: "off")
-    assert_nil run_x("Acme Fission won a DOE award.")
+    assert_nil run_x("DOE said Acme Fission won a DOE award.")
     SocialChannel.for("x").update!(mode: "drafts")
-    assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("Acme Fission won a DOE award."), fetcher: OK_FETCHER.new(200)), "Saturday"
+    assert_nil SocialAgent.run("x", now: MONDAY - 2.days, writer: FakeWriter.new("DOE said Acme Fission won a DOE award."), fetcher: OK_FETCHER.new(200)), "Saturday"
     SocialPost.create!(platform: "linkedin", status: "posted", subject: @news, created_at: MONDAY - 10.days)
-    assert_nil run_x("Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
+    assert_nil run_x("DOE said Acme Fission won a DOE award."), "used on LinkedIn 10 days ago"
     stopped = CrawlRun.where(source_kind: SocialAgent::STOPPED).where("stats ? 'stopped'").order(:id).map { |run| run.stats.values_at("platform", "stopped") }
     assert_equal [ [ "x", "switched off in Admin > Posts" ], [ "x", "a weekend" ], [ "x", "no fresh item" ] ], stopped, "every silent run says why (PM)"
 
     SocialChannel.for("x").update!(mode: "off", paused_reason: "Buffer's 30-day request allowance is 80% used")
-    run_x("Acme Fission won a DOE award.")
+    run_x("DOE said Acme Fission won a DOE award.")
     assert_equal "Buffer's 30-day request allowance is 80% used", CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
     today = Today.new(on: MONDAY.in_time_zone(Today::ZONE).to_date, now: MONDAY + 1.hour)
     assert_nil today.checker_ran_at, "a social run is never Joy's check (Copilot)"
@@ -123,7 +123,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     Evidence.create!(subject: company, source: page, quote: "Beta Reactors designs small reactors.", found_by: "crawler", fields: %w[description])
     VerificationEvent.where(subject: @company).update_all(created_at: MONDAY - 1.day)
     VerificationEvent.create!(subject: @company, to_status: "verified", by: BY, created_at: MONDAY - 1.year)
-    post = run_x("Beta Reactors designs small reactors.")
+    post = run_x("Beta Reactors said it designs small reactors.")
     assert_equal [ "drafted", company ], [ post.status, post.subject ], "Acme, re-verified this week but first approved a year ago, isn't new"
   end
 
@@ -138,7 +138,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent.senders.delete("x")
   end
 
-  DRAFT = "The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
+  DRAFT = "The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.".freeze
 
   test "live sends once through the platform's sender, costed, and logs the permalink" do
     live!
@@ -234,6 +234,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     item = SocialAgent::Item.new(subject: @news, kind: "news", facts: {}, source_url: nil, path: "/", organization_ids: [],
       source_quote: "Georgia Power filed its plan for Vogtle with state regulators.")
     assert_empty SocialAgent::Check.problems("Those plans came from Georgia Power. Georgia Power’s plan covers Vogtle.", item, platform: "x")
+    assert_empty SocialAgent::Check.problems("Neither side gave a figure. Georgia Power filed its plan for Vogtle.", item, platform: "x"), "Neither and Either only open a sentence"
     assert_equal [ "the name \"Westinghouse\" isn't in the source" ],
       SocialAgent::Check.problems("Georgia Power's plan with Westinghouse covers Vogtle.", item, platform: "x")
     assert_equal [ "the name \"Two\" isn't in the source" ], SocialAgent::Check.problems("Two plans came from Georgia Power.", item, platform: "x"),
@@ -301,7 +302,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_not SocialAgent::Rules.page_dated?("<p>Pulsars, found faster.</p>", "19 November 2026")
     undated = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>No date here</p>",
       etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
-    assert_nil run_x("The Department of Energy awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200)),
+    assert_nil run_x("The Department of Energy said it awarded Acme Fission $1,404,253 to test fuel cladding.", fetcher: undated.new(200)),
       "an item whose page lacks its date is skipped before drafting"
     assert_equal "no usable item (its date (12 November 2026) isn't on the source page)",
       CrawlRun.where(source_kind: SocialAgent::STOPPED).order(:id).last.stats["stopped"]
@@ -520,5 +521,148 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "sentences giving different quantities aren't a repeat; the same thing said twice still is" do
     assert_not SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. It produces 100 MW of heat at full power.")
     assert SocialAgent::Rules.repeats?("The reactor produces 50 MW of electricity at full power. At full power the reactor produces 50 MW of electricity.")
+  end
+
+  test "the writer lets a legal suffix go, and the voice check doesn't fail the nits rehearsal rounds 1-11 found" do
+    seen = []
+    client = Object.new
+    client.define_singleton_method(:structured) do |messages:, **|
+      seen << messages.first[:content]
+      Struct.new(:data).new({ "text" => "x" * 30, "pass" => true, "reason" => "" })
+    end
+    writer = SocialAgent::Writer.new(client:)
+    item = SocialAgent::Item.new(subject: nil, kind: "news", facts: { "headline" => "Acme signs an MOU" }, source_url: nil, source_quote: "q", path: "/", organization_ids: [])
+    writer.draft(item, platform: "x")
+    writer.voice_ok?("Acme signed a non-binding MOU.", item)
+
+    assert_match(/legal ending\s+such as Inc\., Ltd\. or Pte\. Ltd\./, seen.first, "the writer may leave a legal ending off")
+    assert_match(/Do not fail a post for these/, seen.last)
+    assert_match(/non-binding MOU/, seen.last)
+    assert_match(/Fail it when it reverses who did what for whom, or changes what the source says/, seen.last, "real changes still fail")
+    assert_match(/A word that is in the post\s+\("nearly"/, seen.last, "a qualifier that is present isn't missing (GTM, 20 Nov)")
+    assert_match(/future wording for what the source says will happen/, seen.last)
+    assert_match(/Quote the post's own offending words/, seen.last)
+    assert_match(/"said that" is not a required template/, seen.last)
+    assert_match(/Say what a deal or event covers/, seen.first)
+    assert_match(/Keep who did what for whom/, seen.first, "Founder: STS supported ORS, not the reverse")
+    assert_match(/reverses who did what for whom/, seen.last)
+  end
+
+  test "the consistency table shows each item's PASS/BLOCK history, flags the flaky and marks only 3 straight passes ready (PM, 20 Nov)" do
+    row = ->(url, ok) { { "platform" => "x", "label" => "news #{url}", "problems" => ok ? [] : [ "voice check" ], "source_url" => url } }
+    Dir.mktmpdir do |dir|
+      [ [ true, false, true ], [ true, true, true ], [ true, true, true ], [ false, true, true ] ].each_with_index do |states, round|
+        File.write(File.join(dir, "round-#{round + 1}.json"), JSON.generate(states.each_with_index.map { |ok, index| row.("https://a.example/#{index}", ok) }))
+      end
+      table = SocialAgent::Rehearsal.consistency(Dir[File.join(dir, "*.json")])
+
+      assert_includes table, "| x | https://a.example/0 | PPPB | flaky |  |"
+      assert_includes table, "| x | https://a.example/1 | BPPP | flaky | ready |", "passed its last three rounds, but a block earlier"
+      assert_includes table, "| x | https://a.example/2 | PPPP |  | ready |"
+      assert_includes table, "Items ready (3 of 3 runs, fixtures excluded): 2"
+    end
+  end
+
+  test "every post links our own page with utm_source x or linkedin and the page's slug, and says its source in words (Tosin, 20 Nov)" do
+    item = rules_item(kind: "news", quote: "Acme said it signed.")
+    item = item.with(path: "/companies/acme-fission")
+    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission", SocialAgent.link(item, "x")
+    assert_equal "https://nuclear-directory.org/companies/acme-fission?utm_source=linkedin&utm_medium=social&utm_campaign=acme-fission", SocialAgent.link(item, "linkedin")
+    assert_not_includes SocialAgent.link(item, "x"), "energy.gov", "never the source's address"
+
+    assert SocialAgent::Rules.attributed?("The award was listed in a Federal Register notice.")
+    assert_not SocialAgent::Rules.attributed?("Acme Fission won a DOE award.")
+  end
+
+  test "a company's own site is a primary source; a wire or outlet never is, whoever it covers (PM, 20 Nov)" do
+    gle = Organization.create!(name: "Global Laser Enrichment", slug: "global-laser-enrichment", website: "https://www.gle-us.com",
+      verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    on = ->(url) { rules_item(facts: { "publisher" => "Global Laser Enrichment" }).with(source_url: url, organization_ids: [ gle.id ]) }
+
+    assert SocialAgent::Rules.primary?(on.("https://www.gle-us.com/wp-content/uploads/2026/10/NRC-Issues-GLE-FEIS.pdf")), "GLE's own site"
+    assert_not SocialAgent::Rules.primary?(on.("https://www.prnewswire.com/news-releases/gle-feis.html")), "a wire"
+    assert_not SocialAgent::Rules.primary?(on.("https://www.globenewswire.com/news-release/gle"))
+    assert_not SocialAgent::Rules.primary?(on.("https://www.businesswire.com/news/home/gle"))
+  end
+
+  test "GTM and DQ round 17: a government document is its agency's, a dated event is past tense, a superlative is attributed, the report shows our link" do
+    nrc = rules_item(facts: { "companies" => "Leapfrog Nuclear", "date" => "2026-10-19" }, quote: "NRC assigned project number 99902187.").with(source_url: "https://www.nrc.gov/docs/ML2628/ML26281A396.pdf")
+    wrong = SocialAgent::Rules.speaker_problems("Leapfrog Nuclear said on 19 October 2026 that NRC assigned it project number 99902187.", nrc)
+    assert_equal 1, wrong.size
+    assert_match(/but its source is a government document/, wrong.first)
+    assert_empty SocialAgent::Rules.speaker_problems("The NRC said on 19 October 2026 it assigned Leapfrog Nuclear project number 99902187.", nrc), "the agency speaks"
+    nasa = rules_item(facts: { "companies" => "NASA", "publisher" => "NASA" }).with(source_url: "https://science.nasa.gov/centers-and-facilities/glenn/x")
+    assert_empty SocialAgent::Rules.speaker_problems("NASA said on 17 November 2026 its student challenge kicked off.", nasa), "the agency speaking about itself"
+    assert_empty SocialAgent::Rules.people("Seadrift Operations is the site.", rules_item(quote: "Dow's Seadrift Operations site in Texas.")), "Operations makes it a facility, not a person"
+    company_page = rules_item(facts: { "companies" => "Leapfrog Nuclear" }).with(source_url: "https://leapfrog.example/news")
+    assert_empty SocialAgent::Rules.speaker_problems("Leapfrog Nuclear said it signed.", company_page), "a company's own release is its own"
+
+    assert_equal 1, SocialAgent::Rules.tense_problems("BWXT said on 27 October 2026 it signs a TRISO fuel agreement with Antares.").size
+    assert_empty SocialAgent::Rules.tense_problems("DOE said on 18 November 2026 the work enters a new phase."), "'enters' is too ambiguous to block on (round 21)"
+    assert_empty SocialAgent::Rules.tense_problems("BWXT said on 27 October 2026 it signed a TRISO fuel agreement with Antares.")
+    assert_empty SocialAgent::Rules.tense_problems("BWXT signs agreements with fuel makers."), "no date, no tense rule"
+
+    assert_equal 1, SocialAgent::Rules.unattributed_superlatives("The Long Mott project is the first advanced facility at a US industrial site.").size
+    assert_empty SocialAgent::Rules.unattributed_superlatives("DOE calls the Long Mott project the first advanced facility at a US industrial site.")
+    assert_empty SocialAgent::Rules.unattributed_superlatives("Dow said it is the largest site it operates.")
+
+    row = SocialAgent::Rehearsal::Result.new(platform: "x", label: "news", kind: "news", text: "DOE said on 12 November it awarded Acme.", problems: [], source_url: "https://www.energy.gov/a",
+      date: "2026-11-12", quote: "q", link: "https://nuclear-directory.org/companies/acme-fission?utm_source=x&utm_medium=social&utm_campaign=acme-fission")
+    assert_includes SocialAgent::Rehearsal.report([ row ]), "our page (the post's link): https://nuclear-directory.org/companies/acme-fission?utm_source=x"
+  end
+
+  test "a regulator's act keeps the source's own verb: 'authorized' isn't 'approved' (DQ, round 17)" do
+    item = rules_item(quote: "DOE approved a construction permit for the Long Mott project.")
+    assert_equal 1, SocialAgent::Rules.act_problems("DOE authorized a construction permit for Long Mott.", item).size
+    assert_empty SocialAgent::Rules.act_problems("DOE approved a construction permit for Long Mott.", item)
+    assert_empty SocialAgent::Rules.act_problems("Dow and X-energy received a construction permit.", item), "no act verb, nothing to check"
+  end
+
+  test "an unsupported negative can't ride on 'Neither': it is an absence claim like 'no further details' (DQ, #868)" do
+    item = rules_item(quote: "Acme Fission signed a fuel supply agreement with Westinghouse.")
+    [ "Neither side gave a figure.", "Acme Fission declined to give a price.", "Acme did not give a date.", "Westinghouse has not said when it starts." ].each do |sentence|
+      assert SocialAgent::Rules.qualifiers(sentence, item).any? { |problem| problem.start_with?("it says") }, sentence
+    end
+    said = rules_item(quote: "Neither side gave a figure for the agreement.")
+    assert_empty SocialAgent::Rules.qualifiers("Neither side gave a figure.", said).select { |problem| problem.start_with?("it says") }, "when the source says it"
+  end
+
+  test "the page reader reads the real article (a thin <article> or a list of stories) and never a PDF's bytes (GTM, round 17)" do
+    body_text = "BWXT announces a multi-year commercial agreement with Antares for TRISO fuel production. " * 12
+    thin = "<html><body><nav>Menu</nav><article><h1>BWXT signs TRISO agreement</h1></article><div class='body'><p>#{body_text}</p></div><footer>Contact</footer></body></html>"
+    text = SocialAgent::Rules.article_text(thin)
+    assert_includes text, "multi-year commercial agreement", "the body beside a thin article"
+    assert_not_includes text, "Menu"
+    assert_not_includes text, "Contact"
+
+    list = "<html><body><main><article><h2>Short story</h2><p>Brief.</p></article><article><p>#{body_text}</p></article></main></body></html>"
+    assert_includes SocialAgent::Rules.article_text(list), "TRISO fuel production", "the longest article of a list"
+
+    pdf = Struct.new(:content_type, :body)
+    assert SocialAgent::Rules.pdf?(pdf.new("application/pdf", "x"))
+    assert SocialAgent::Rules.pdf?(pdf.new("text/html", "%PDF-1.4 \x00\x01"))
+    assert_not SocialAgent::Rules.pdf?(pdf.new("text/html", "<html></html>"))
+    pdf_fetcher = Struct.new(:ignored) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "%PDF-1.4 binary", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "application/pdf", truncated: false) }
+    assert_equal [ "its source is a PDF, which the agent can't read yet: no grounding for a post" ], SocialAgent::Rules.source_problems("https://www.nrc.gov/a.pdf", pdf_fetcher.new)
+  end
+
+  test "the consistency table reads rounds in natural order (round-10 after round-2) and keeps a fixture apart from a live item with the same source (Copilot, #868)" do
+    row = ->(label, url, ok) { { "platform" => "x", "label" => label, "problems" => ok ? [] : [ "voice check" ], "source_url" => url } }
+    Dir.mktmpdir do |dir|
+      # An item that passes rounds 1-9 and fails 10 and 11 is not ready; a plain sort would put 10 and 11 before 2.
+      (1..11).each do |round|
+        File.write(File.join(dir, "round-#{round}.json"), JSON.generate([
+          row.("news a", "https://a.example/late-failure", round < 10),
+          row.("fixture: NANO MOU", "https://a.example/mou", true),
+          row.("news NANO", "https://a.example/mou", round == 11 ? false : true)
+        ]))
+      end
+      table = SocialAgent::Rehearsal.consistency(Dir[File.join(dir, "*.json")])
+
+      assert_includes table, "| x | https://a.example/late-failure | PPPPPPPPPBB | flaky |  |", "its history reads in round order, so it isn't ready"
+      assert_includes table, "| x | fixture: NANO MOU | PPPPPPPPPPP |  | ready |", "the fixture is its own row"
+      assert_includes table, "| x | https://a.example/mou | PPPPPPPPPPB | flaky |  |", "the live item's block isn't hidden by the fixture"
+      assert_includes table, "Items ready (3 of 3 runs, fixtures excluded): 0"
+    end
   end
 end

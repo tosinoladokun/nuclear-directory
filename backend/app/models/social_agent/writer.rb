@@ -6,6 +6,19 @@ class SocialAgent::Writer
     Rules (the Social playbook and VOICE.md):
     - Lead with the useful fact: who did what, with the number, date and conditions the facts give. Nothing else.
     - Use only the facts given. Every number and name must come from them. No guesses, rankings or opinions.
+    - Say who issued the source, not who it mentions: a regulator's letter or notice is the regulator's ("the NRC said", "in an
+      NRC letter dated 19 October"), never "the company said". A permit, project number or acceptance is the agency's act.
+    - Say what a deal or event covers, in the source's own terms (its purpose and field, "advanced nuclear energy"), not a
+      generic "cooperation" or "knowledge exchange". Keep the conditions that bear on the claim made; don't pad with the rest.
+    - Keep who did what for whom: when the source says A acted in support of B, the post never says B supported A. A condition
+      stays on what the source puts it on (a regulatory condition on a future application, not on the MOU itself).
+    - A regulator's act keeps the source's verb: "approved" is not "authorized", "licensed" is not "permitted" or "cleared".
+    - A dated event is told in the past tense ("signed", "announced"), never "signs" or "announces" beside a date.
+    - A superlative (first, largest, only) is the source's claim: attribute it ("DOE calls it the first ...", "the company
+      describes it as the largest ..."), never state it as fact.
+    - Always say who the item comes from, in words ("the company said", "DOE said", "in a Federal Register notice"). The post's
+      link is added for you and goes to our own page; never write the source's address or ask readers to follow a link.
+    - Use a date only when the facts or the source's words give one; with none, write no date and no "now", "today" or "recently".
     - Give the event's date ("On 12 November") rather than "today", "this week" or "just". When the facts name a
       publisher or regulator, say where it comes from in a short clause ("in a Federal Register notice", "DOE said").
     - Keep distinctions: an award isn't a payment, a framework isn't a contract, proposed MW aren't output. Keep the
@@ -25,6 +38,20 @@ class SocialAgent::Writer
       or repeat a name, label or purpose in an extra sentence.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags,
       no emoji, no links, no exclamation marks, no "not X but Y", no lists of three for rhythm.
+  TEXT
+  # What the voice check lets through (rehearsal rounds 1-11: these were blocked and are not problems). Anything that changes
+  # what the source says still fails.
+  NITS = <<~TEXT.freeze
+    Do not fail a post for these:
+    - a legal suffix left off a company name (Pte. Ltd., Ltd., Inc., LLC, GmbH);
+    - the source's own qualifier beside the deal word, said once ("a non-binding MOU");
+    - a plain synonym for the source's verb ("said", "announced") that keeps the meaning and every condition;
+    - the source's own action verb ("announced", "signed") as the attribution: "said that" is not a required template;
+    - future wording for what the source says will happen ("will add", "plans to", "is expected to"): that is correct, not an error.
+    Before you say the post leaves out or changes something, find the exact words in the post. A word that is in the post
+    ("nearly", "up to", "non-binding") is not missing. Quote the post's own offending words in your reason; if you cannot
+    quote them, pass the post.
+    Fail it when it reverses who did what for whom, or changes what the source says, or adds, drops or contradicts a condition, number, name, date or party.
   TEXT
   LENGTH = { "x" => "One or two sentences, at most 220 characters.", "linkedin" => "One or two short paragraphs, at most 120 words; as short as the facts allow." }.freeze
   DRAFT = { type: "object", additionalProperties: false, required: %w[text], properties: { text: { type: "string" } } }.freeze
@@ -49,7 +76,7 @@ class SocialAgent::Writer
   def voice_ok?(text, item, crawl_run: nil)
     data = @client.structured(role: :verify, schema: JUDGE, schema_name: "check", crawl_run:, messages: [
       { role: "system", content: "You check a social post before it goes out. Pass it only if it follows every rule, " \
-        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}" },
+        "states nothing the facts and the source's words don't, says nothing twice, has no filler sentence, and reads like a careful trade reporter. Otherwise fail it and say why in one sentence.\n#{RULES}\n#{NITS}" },
       { role: "user", content: "Facts:\n#{item.facts.map { |key, value| "#{key}: #{value}" }.join("\n")}\n\n" \
         "Source's words:\n#{item.source_quote}\n#{item.page_text}\n\nPost:\n#{text}" }
     ]).data

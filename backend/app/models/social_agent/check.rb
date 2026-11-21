@@ -35,7 +35,7 @@ module SocialAgent::Check
   # Capitalised words (names), each of which must be a word in the source. A sentence may start with a plain word.
   # Words that only start a sentence (shadow day 20 Nov: "Those" was taken for a name).
   OPENERS = %w[The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
-    Several Few Other Another Such In On At For With Under After Before By From Since As Over About Across Along Among
+    Several Few Other Another Neither Either Such In On At For With Under After Before By From Since As Over About Across Along Among
     Between During Through Into Upon Within Without While When Where Which Who What Why How If Once Unlike Like Also
     And But Or So Yet Still Meanwhile Separately Together].freeze
 

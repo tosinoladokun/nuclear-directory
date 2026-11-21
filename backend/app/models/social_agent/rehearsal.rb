@@ -9,7 +9,7 @@ class SocialAgent::Rehearsal
   DAYS = 30
   FIXTURES = Rails.root.join("test/fixtures/files/social_rehearsal.yml")
 
-  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date, :quote) do
+  Result = Data.define(:platform, :label, :kind, :text, :problems, :source_url, :date, :quote, :link) do
     def hash_hex = Digest::SHA256.hexdigest(text.to_s)
     def passed? = problems.empty?
   end
@@ -30,7 +30,7 @@ class SocialAgent::Rehearsal
         item, problems = SocialAgent.prepare(item, @fetcher)
         problems = SocialAgent.write(post, item, platform, @writer, fetcher: @fetcher) if problems.empty?
         Result.new(platform:, label:, kind: item.kind, text: post.text, problems:, source_url: item.source_url, date: item.facts["date"],
-          quote: [ item.source_quote, item.page_text ].compact.join("\n").first(1_500))
+          quote: [ item.source_quote, item.page_text ].compact.join("\n").first(1_500), link: SocialAgent.link(item, platform))
       end
     end
   end
@@ -52,11 +52,39 @@ class SocialAgent::Rehearsal
       lines << "## #{platform == 'x' ? 'X' : 'LinkedIn'}: #{rows.count(&:passed?)} of #{rows.size} passed" << ""
       rows.each_with_index do |row, index|
         lines << "### #{run}-#{platform}-#{index + 1} #{platform} #{row.passed? ? 'PASS' : 'BLOCK'}: #{row.label}"
-        lines << "run: #{run}" << "hash: #{row.hash_hex}" << "source: #{row.source_url}" << "item date: #{row.date || 'none'}"
+        lines << "run: #{run}" << "hash: #{row.hash_hex}" << "source: #{row.source_url}" << "our page (the post's link): #{row.link}" << "item date: #{row.date || 'none'}"
         lines << "source words (first 1,500 characters):" << row.quote.to_s.lines.map { |line| ">> #{line.chomp}" }.join("\n")
         lines << "why: #{row.problems.to_sentence}" unless row.passed?
         lines << "" << row.text.to_s.lines.map { |line| "> #{line.chomp}" }.join("\n") << ""
       end
+    end
+    lines.join("\n")
+  end
+
+  # Each item's history across rounds (PM, 20 Nov: an item must pass 3 of 3 runs, not once). Rounds are the *.json files of
+  # past reports, oldest first by name; an item is its source URL (or label for a fixture) on one platform. P passed, B
+  # blocked, . not drawn that round. Flaky = both passed and blocked at least once; ready = passed its last 3 rounds.
+  def self.consistency(files)
+    # Natural order: round-2 before round-10 (a plain sort puts round-10 first); timestamps still sort oldest first.
+    natural = ->(file) { File.basename(file).scan(/\d+|\D+/).map { |part| part.match?(/\A\d+\z/) ? [ 0, part.to_i, "" ] : [ 1, 0, part ] } }
+    rounds = files.sort_by(&natural).map { |file| JSON.parse(File.read(file)) }
+    # A fixture is its own item (its label), even when a live candidate shares its source URL: the two never collapse into one row.
+    identity = ->(row) { row["label"].to_s.start_with?("fixture:") ? row["label"] : (row["source_url"].presence || row["label"]) }
+    fixture_keys = rounds.flatten.select { |row| row["label"].to_s.start_with?("fixture:") }.map(&identity).to_set
+    keys = rounds.flatten.map { |row| [ row["platform"], identity.(row) ] }.uniq
+    rows = keys.map do |platform, key|
+      history = rounds.map do |round|
+        hit = round.find { |row| row["platform"] == platform && identity.(row) == key }
+        hit ? (hit["problems"].empty? ? "P" : "B") : "."
+      end.join
+      drawn = history.delete(".")
+      [ platform, key, history, (drawn.include?("P") && drawn.include?("B")) ? "flaky" : "", drawn.last(3) == "PPP" ? "ready" : "" ]
+    end
+    # A fixed fixture is a test, not a generated post: it doesn't count toward the goal (Backend/PM, 20 Nov); a blank attempt is a block.
+    ready = rows.count { |_, key, _, _, ready| !ready.empty? && !fixture_keys.include?(key) }
+    lines = [ "# Per-item consistency (#{rounds.size} rounds)", "", "Items ready (3 of 3 runs, fixtures excluded): #{ready}", "", "| platform | item | history | flaky | ready (3/3) |", "|---|---|---|---|---|" ]
+    rows.sort_by { |platform, key, history, flaky, ready| [ platform, ready.empty? ? 1 : 0, flaky.empty? ? 1 : 0, key ] }.each do |platform, key, history, flaky, ready|
+      lines << "| #{platform} | #{key.to_s.truncate(90)} | #{history} | #{flaky} | #{ready} |"
     end
     lines.join("\n")
   end

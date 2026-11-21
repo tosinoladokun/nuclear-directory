@@ -49,7 +49,7 @@ module SocialAgent::Rules
   # A word that makes a capitalised run an organisation, place or thing rather than a person.
   ARTICLES = %w[The A An This That These Those].freeze
   NOT_PERSON = %w[Pte Ltd Limited GmbH AG PLC SA Inc Corp Infrastructure Challenge Summit Prize Award Conference Forum Initiative
-    Mission Facility Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
+    Mission Facility Operations Asset Management Investment Investments Ventures Environmental Statement Department Energy Commission Agency Laboratory Lab National Nuclear Regulatory Office Administration
     Authority University Institute Corporation Company Inc LLC Power Station Plant Unit Units Reactor Project Program Federal Register
     Fund Bank Group Energy Fuel Fuels Technologies Systems Services Holdings Partners Capital Industries Electric Utility Council
     Board Court Congress Senate House Army Navy Air Force Generating Clean Center Centre Site County City River Lake Valley].freeze
@@ -65,12 +65,18 @@ module SocialAgent::Rules
     found.concat(people(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
+    found.concat(speaker_problems(text, item))
+    found.concat(act_problems(text, item))
+    found.concat(tense_problems(text))
+    found.concat(unattributed_superlatives(text))
     found << "it says the same thing twice" if repeats?(text)
     found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
     found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.own_text}" =~ SENSITIVE
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform)
     found.concat(source_problems(item.source_url, fetcher, item:, text:)) if found.empty?
+    # Last, so the source's own problems (it didn't answer, a sensitive page) are what a post that has them is told.
+    found << "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" if found.empty? && !attributed?(text)
     found
   end
 
@@ -96,11 +102,23 @@ module SocialAgent::Rules
   end
 
   # A page's main text: its article or main element, without scripts, menus, headers and footers.
+  # Several <article>s (a list of stories) or a thin one (a headline, the body in a div beside it) read as the longest of them;
+  # under MIN_ARTICLE characters the whole body is the article (GTM, round 17: BWXT's quote was its headline plus an unrelated
+  # story's).
+  MIN_ARTICLE = 600
   def article_text(body)
     doc = Nokogiri::HTML(body.to_s)
     doc.css("script, style, nav, header, footer, noscript, aside").remove
-    (doc.at_css("article, main") || doc.at_css("body") || doc).text.squish
+    texts = doc.css("article, main").map { |node| node.text.squish }
+    best = texts.max_by(&:length).to_s
+    return best if best.length >= MIN_ARTICLE
+
+    [ best, (doc.at_css("body") || doc).text.squish ].max_by(&:length)
   end
+
+  # A PDF's bytes aren't a page (GTM, round 17: a Leapfrog quote was raw PDF bytes): the agent has no PDF reader, so a source that
+  # is one isn't used.
+  def pdf?(response) = response.content_type.to_s.include?("pdf") || response.body.to_s.byteslice(0, 5) == "%PDF-"
 
   # The page states the date, in its text or its datePublished/published_time: "November 19, 2026", "19 November 2026",
   # "Nov 19, 2026", "2026-11-19" or "11/19/2026".
@@ -117,8 +135,9 @@ module SocialAgent::Rules
   # What the source doesn't say isn't said (GTM, 20 Nov: "provides no further details" was false), and a qualifier the
   # source puts on the deal stays on it (an MOU, a non-binding framework, a letter of intent).
   ABSENCE = Regexp.union([ "no further details", "no other details", "did not disclose", "didn't disclose", "did not say", "didn't say",
-    "not disclosed", "undisclosed", "gave no details", "nothing else", "no details were given", "no details were provided" ]
-    .map { |phrase| /\b#{Regexp.escape(phrase)}\b/i })
+    "not disclosed", "undisclosed", "gave no details", "nothing else", "no details were given", "no details were provided",
+    "gave no figure", "gave a figure", "did not give", "didn't give", "declined to", "has not said", "hasn't said", "has not disclosed" ]
+    .map { |phrase| /\b#{Regexp.escape(phrase)}\b/i } + [ /\bneither\b[^.]{0,40}\bgave\b/i ])
   QUALIFIERS = { /memorandum of understanding|\bMOU\b/i => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
                  /framework agreement/i => "framework agreement", /\bproposed\b/i => "proposed", /\bplanned\b/i => "planned" }.freeze
   # A deal word in the post must be the source's own word (DQ: "a collaboration" for a signed MOU).
@@ -155,6 +174,58 @@ module SocialAgent::Rules
 
       (a & b).size.to_f / [ a.size, b.size ].min >= REPEAT
     end
+  end
+
+  # The source named in words (Tosin, 20 Nov: the post's link is our page; the source is only said): a verb of saying or a
+  # document word. The writer is told to; this is the check.
+  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according to|told|issued|released|published|filed|
+    (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
+  def attributed?(text) = text.match?(ATTRIBUTION)
+
+  # A government document is its agency's, not the company's (GTM, round 17: an NRC letter assigning a project number was
+  # "Leapfrog said"). On a government page, a company named in the facts doesn't "say" or "announce" it.
+  SPEECH = /\b(said|says|announced|announces|stated|states|reported|reports|confirmed|filed|told|unveiled|revealed)\b/i
+  def speaker_problems(text, item)
+    return [] unless host(item.source_url).delete_prefix("www.").match?(PRIMARY_HOSTS)
+
+    names = item.facts["companies"].to_s.split(", ").compact_blank + item.organization_ids.then { |ids| Organization.where(id: ids).pluck(:name) }
+    # The agency itself speaking is fine: NASA on nasa.gov, DOE on energy.gov (the publisher, or a name in the host).
+    own = [ item.facts["publisher"].to_s.downcase, host(item.source_url) ]
+    names.uniq.reject { |name| own.first == name.downcase || own.last.delete("-").include?(name.downcase.delete(" ")) }.filter_map do |name|
+      next unless text.match?(/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}#{SPEECH}/i)
+
+      "it says #{name} #{text[/#{Regexp.escape(name)}\s+(?:\w+\s+){0,2}(#{SPEECH.source})/i, 1].to_s.downcase}, but its source is a government document: say who issued it (\"the NRC said\", \"in an NRC letter\")"
+    end
+  end
+
+  # A regulator's act is the source's own word (DQ, round 17: a permit "authorized" where DOE says "approved"): each of these in the
+  # post must be in the source, as the verb of that act.
+  ACTS = %w[authorize authorized approve approved licensed permitted certified cleared].freeze
+  def act_problems(text, item)
+    source = item.source_text.downcase
+    text.downcase.scan(/\b(?:#{ACTS.join('|')})\b/).uniq.reject { |word| source.match?(/\b#{word.sub(/(?:ed|d)\z/, '')}\w*/) }.map do |word|
+      "it says \"#{word}\", which isn't the source's word for the act (use the source's own verb)"
+    end
+  end
+
+  # A dated event is told in the past tense (GTM, round 17: "said on 27 October ... signs" was blocked).
+  PRESENT_NEWS = /\b(signs|announces|launches|awards|receives|closes|issues|unveils|completes|secures|establishes)\b/i
+  def tense_problems(text)
+    return [] unless text.match?(DATE) && (verb = text[PRESENT_NEWS, 1])
+
+    [ "it dates the event but writes \"#{verb.downcase}\" in the present tense: use the past (signed, announced)" ]
+  end
+
+  # A superlative the source claims is attributed to it, not stated as fact (DQ, round 17: "DOE calls it the first ...").
+  CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?)\b/i
+  def unattributed_superlatives(text)
+    text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
+      word = sentence[SUPERLATIVES, 1]
+      next unless word
+      next if sentence.match?(CLAIM_CUE)
+
+      "it states \"#{word.downcase}\" as fact: attribute the claim to its source (\"DOE calls it the first ...\")"
+    end.uniq
   end
 
   def host(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "")
@@ -262,6 +333,7 @@ module SocialAgent::Rules
   def source_problems(url, fetcher, item: nil, text: nil)
     response = fetcher.get(url.to_s)
     return [ "its source didn't answer (#{response.status || response.reason})" ] unless response.kind == :ok && response.status == 200
+    return [ "its source is a PDF, which the agent can't read yet: no grounding for a post" ] if pdf?(response)
 
     # The article's subject, not a word in passing (rehearsal: "beyond any credible accident scenario" in a permit story,
     # "safety incident rates improved"): in its opening, or three times or more.

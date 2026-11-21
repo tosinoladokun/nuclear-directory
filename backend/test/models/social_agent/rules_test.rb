@@ -17,7 +17,9 @@ class SocialAgent::RulesTest < ActiveSupport::TestCase
   end
 
   test "a clean post from a primary source passes" do
-    assert_empty Rules.problems("The NRC received Acme Fission's construction permit application.", item, platform: "x", fetcher: OK.new(200))
+    assert_empty Rules.problems("The NRC said it received Acme Fission's construction permit application.", item, platform: "x", fetcher: OK.new(200))
+    assert_equal [ "it doesn't say where the item comes from in words (\"the company said\", \"DOE said\", \"in a Federal Register notice\")" ],
+      Rules.problems("Acme Fission's construction permit application was received.", item, platform: "x", fetcher: OK.new(200)), "the source is named in words (Tosin, 20 Nov)"
   end
 
   test "primary sources: government, or the company's own site; a news outlet isn't" do
