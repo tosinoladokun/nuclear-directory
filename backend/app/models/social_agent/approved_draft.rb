@@ -96,6 +96,16 @@ class SocialAgent::ApprovedDraft
     # A LinkedIn post always carries its card and the content hash DQ approved (no page-read, unhashed card; DQ): mentions may be none.
     card = @card.to_h.stringify_keys.slice("title", "description", "image_url")
     err.("card", "a LinkedIn post needs its card: a title, a description and an image_url") unless card.values_at("title", "description", "image_url").all?(&:present?)
+    # The card's image must answer 200 as an image now: the send is strict (no fallback), so a dead thumbnail would fail the post and pause the channel (Infra).
+    if card["image_url"].present?
+      reply = begin
+        (@fetcher || self.class.fetcher).get(card["image_url"], binary: true)
+      rescue StandardError
+        nil
+      end
+      ok = reply && reply.kind == :ok && reply.status == 200 && (reply.content_type.to_s.empty? || reply.content_type.to_s.start_with?("image/"))
+      err.("card", "the card's image_url doesn't answer 200 as an image") unless ok
+    end
     annotations = Array(@annotations).map { |annotation| annotation.to_h.stringify_keys.slice("id", "entity", "start", "length", "link", "localizedName", "vanityName") }
     annotations.each do |annotation|
       name = annotation["localizedName"].to_s

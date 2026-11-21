@@ -4,7 +4,10 @@ require "test_helper"
 class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   TOKEN = "approve-token"
   BY = "human:tosin"
-  PAGE = Struct.new(:x) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>Vistra generates electricity in Irving.</p>", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+  PAGE = Struct.new(:x) do
+    def get(url, **) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "<p>Vistra generates electricity in Irving.</p>", etag: nil, last_modified: nil, reason: "x", block_reference: nil,
+      content_type: url.to_s.end_with?(".png") ? "image/png" : "text/html", truncated: false)
+  end
   # Tests that name a send_on freeze the clock before it (a date in the past is refused), so they keep passing after those days.
   FRIDAY = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 20, 12, 0)
   TEXT = "Meet Vistra Corporation.\n\nBased in Irving, TX, Vistra generates and sells electricity and operates nuclear plants. Its releases record signed 20-year nuclear power agreements with AWS and Meta.".freeze
@@ -582,5 +585,17 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
   ensure
     ENV.delete("SOCIAL_POSTING_ENABLED")
     SocialAgent.senders.delete("linkedin")
+  end
+
+  test "the card's image must answer 200 as an image when the post is loaded (Infra: a dead thumbnail would fail a strict send and pause the channel)" do
+    link = @link.sub("utm_source=x", "utm_source=linkedin")
+    gone = Struct.new(:x) { def get(_url, **) = DataQuality::Fetcher::Response.new(url: "", kind: :error, status: 404, body: "", etag: nil, last_modified: nil, reason: "gone", block_reference: nil, content_type: "text/html", truncated: false) }
+    SocialAgent::ApprovedDraft.fetcher = gone.new
+    travel_to(FRIDAY) { approve({ platform: "linkedin", link:, sha256: Digest::SHA256.hexdigest(TEXT), send_on: "2026-11-23" }) }
+    assert_response :unprocessable_entity
+    assert_match(/image_url doesn't answer 200/, response.parsed_body["errors"].join)
+    SocialAgent::ApprovedDraft.fetcher = PAGE.new
+    travel_to(FRIDAY) { approve({ platform: "linkedin", link:, sha256: Digest::SHA256.hexdigest(TEXT), send_on: "2026-11-23" }) }
+    assert_response :created
   end
 end
