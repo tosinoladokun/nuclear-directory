@@ -64,6 +64,21 @@ class SocialAgent::BufferTest < ActiveSupport::TestCase
     assert_raises(SocialAgent::Buffer::Error) { with_card.call("linkedin", "Meet Acme.", card[:url]) }
   end
 
+  test "the card fetch identifies itself as NuclearDirectoryBot, so it counts as a bot and not a pageview (Infra)" do
+    agent = nil
+    stub = Net::HTTP.singleton_class
+    original = Net::HTTP.method(:start)
+    stub.send(:define_method, :start) do |*_args, **_opts, &block|
+      http = Object.new
+      http.define_singleton_method(:get) { |_path, headers| agent = headers["User-Agent"]; Net::HTTPNotFound.new("1.1", "404", "Not Found") }
+      block.call(http)
+    end
+    SocialAgent::Buffer.new.send(:page_card, "https://nuclear-directory.org/companies/acme")
+    assert_match(/\ANuclearDirectoryBot\//, agent)
+  ensure
+    stub.send(:define_method, :start, original) if original
+  end
+
   test "a channel without its id set on Render isn't posted to; an odd reply after sending is 'may have gone out'" do
     ENV.delete("BUFFER_X_CHANNEL_ID")
     error = assert_raises(SocialAgent::Buffer::Error) { @buffer.call("x", "Text here for the post.", "l") }

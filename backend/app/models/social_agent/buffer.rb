@@ -79,7 +79,7 @@ class SocialAgent::Buffer
     # Our page's own link preview, read from its og tags: { url:, title:, description:, thumbnail: { url: } }, or nil.
     def page_card(link)
       uri = URI(link)
-      response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: 10) { |http| http.get(uri.request_uri, "User-Agent" => "NuclearDirectory-social") }
+      response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: 10) { |http| http.get(uri.request_uri, "User-Agent" => DataQuality::Fetcher::USER_AGENT) }
       return unless response.is_a?(Net::HTTPSuccess)
 
       doc = Nokogiri::HTML(response.body.to_s)
