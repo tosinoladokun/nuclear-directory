@@ -66,6 +66,7 @@ module SocialAgent::Rules
     found.concat(tags(text, item))
     found.concat(opener(text, item, platform:, except_id:))
     found.concat(headquarters(text, item))
+    found.concat(hq_attribution(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found.concat(speaker_problems(text, item))
@@ -321,6 +322,23 @@ module SocialAgent::Rules
     found << "it doesn't open with the required opener (#{required})" if required.present? && !text.to_s.lstrip.start_with?(required.sub(/[.:]\z/, ""))
     found << "it opens like one of the last #{SocialAgent::Openers::RECENT} posts on #{platform}" if index && SocialAgent::Openers.recent(platform, except: except_id).include?(index)
     found
+  end
+
+  # A sentence that gives the headquarters isn't put under the company's own website unless the HQ evidence really is that site (DQ, NuScale: the HQ is
+  # in an SEC filing; TerraPower and X-energy: an energy.gov article). The writer is told to give the HQ in its own sentence with its own source.
+  OWN_SITE_PHRASE = /\b(?:its|the company's|the company\u2019s)\s+(?:own\s+)?(?:website|site)\b/i
+  def hq_attribution(text, item)
+    return [] unless item.kind == "spotlight"
+
+    city = item.facts["headquarters"].to_s.split(",").first.to_s.strip
+    from = item.facts["headquarters comes from"].to_s
+    return [] if city.blank? || from.blank? || from == "the company's own website"
+
+    text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
+      next unless sentence.include?(city) && sentence.match?(OWN_SITE_PHRASE)
+
+      "it puts the headquarters under the company's website, but the headquarters comes from #{from}: give it in its own sentence, from that source"
+    end
   end
 
   # An @ account in a post is only the company's own verified X handle (GTM's list, #883): never another account, never on LinkedIn.

@@ -63,6 +63,8 @@ class SocialAgent::Writer
       it into a fragment. On X, tell the one strongest link; on LinkedIn, at most two.
     - When the facts give an x_handle, put it alone on the last line of the post (after a blank line), exactly as given, with no brackets
       ("@oklo"). Never any other @ account, and never in square brackets.
+    - Give the headquarters in its own sentence, attributed to the source its "headquarters comes from" line names (not to the company's website when
+      that line names another source). Never merge it into the description's "according to its website" sentence unless both come from the company's own website.
     - When the source is the company's own site, "according to <the company's name>" is exact ("according to TerraPower"); "its website" is fine
       for the description and headquarters.
     - Name each source once and plainly: "According to its website, ..." for the description and headquarters together when they come from

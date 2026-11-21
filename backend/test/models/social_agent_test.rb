@@ -984,4 +984,15 @@ class SocialAgentTest < ActiveSupport::TestCase
     patterns = SocialAgent::Openers.patterns.join(" ")
     assert_no_match(/\bnew\b|\bnow\b|\bjust\b|\blatest\b|\bfirst\b/i, patterns)
   end
+
+  test "the headquarters isn't put under 'its website' when its evidence is another source (DQ, NuScale's SEC filing)" do
+    facts = { "name" => "NuScale Power", "headquarters" => "Portland, OR", "headquarters comes from" => "a page on sec.gov", "description comes from" => "the company's own website" }
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts:, source_url: "https://www.nuscalepower.com", source_quote: "x", path: "/companies/nuscale-power", organization_ids: [])
+    bad = "Meet NuScale Power. According to its website, NuScale Power is based in Portland, OR and is a small modular reactor company."
+    assert_match(/puts the headquarters under the company's website, but the headquarters comes from a page on sec.gov/, SocialAgent::Rules.hq_attribution(bad, item).join)
+    good = "Meet NuScale Power. According to its website, it is a small modular reactor company. Per an SEC filing, it is based in Portland, OR."
+    assert_empty SocialAgent::Rules.hq_attribution(good, item)
+    own = item.with(facts: facts.merge("headquarters comes from" => "the company's own website"))
+    assert_empty SocialAgent::Rules.hq_attribution(bad, own), "its own website really is the HQ source"
+  end
 end
