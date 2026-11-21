@@ -645,4 +645,24 @@ class SocialAgentTest < ActiveSupport::TestCase
     pdf_fetcher = Struct.new(:ignored) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200, body: "%PDF-1.4 binary", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "application/pdf", truncated: false) }
     assert_equal [ "its source is a PDF, which the agent can't read yet: no grounding for a post" ], SocialAgent::Rules.source_problems("https://www.nrc.gov/a.pdf", pdf_fetcher.new)
   end
+
+  test "the consistency table reads rounds in natural order (round-10 after round-2) and keeps a fixture apart from a live item with the same source (Copilot, #868)" do
+    row = ->(label, url, ok) { { "platform" => "x", "label" => label, "problems" => ok ? [] : [ "voice check" ], "source_url" => url } }
+    Dir.mktmpdir do |dir|
+      # An item that passes rounds 1-9 and fails 10 and 11 is not ready; a plain sort would put 10 and 11 before 2.
+      (1..11).each do |round|
+        File.write(File.join(dir, "round-#{round}.json"), JSON.generate([
+          row.("news a", "https://a.example/late-failure", round < 10),
+          row.("fixture: NANO MOU", "https://a.example/mou", true),
+          row.("news NANO", "https://a.example/mou", round == 11 ? false : true)
+        ]))
+      end
+      table = SocialAgent::Rehearsal.consistency(Dir[File.join(dir, "*.json")])
+
+      assert_includes table, "| x | https://a.example/late-failure | PPPPPPPPPBB | flaky |  |", "its history reads in round order, so it isn't ready"
+      assert_includes table, "| x | fixture: NANO MOU | PPPPPPPPPPP |  | ready |", "the fixture is its own row"
+      assert_includes table, "| x | https://a.example/mou | PPPPPPPPPPB | flaky |  |", "the live item's block isn't hidden by the fixture"
+      assert_includes table, "Items ready (3 of 3 runs, fixtures excluded): 0"
+    end
+  end
 end

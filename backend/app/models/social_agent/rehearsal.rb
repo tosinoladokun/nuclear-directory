@@ -65,12 +65,16 @@ class SocialAgent::Rehearsal
   # past reports, oldest first by name; an item is its source URL (or label for a fixture) on one platform. P passed, B
   # blocked, . not drawn that round. Flaky = both passed and blocked at least once; ready = passed its last 3 rounds.
   def self.consistency(files)
-    rounds = files.sort.map { |file| JSON.parse(File.read(file)) }
-    fixture_keys = rounds.flatten.select { |row| row["label"].to_s.start_with?("fixture:") }.map { |row| row["source_url"].presence || row["label"] }.to_set
-    keys = rounds.flatten.map { |row| [ row["platform"], row["source_url"].presence || row["label"] ] }.uniq
+    # Natural order: round-2 before round-10 (a plain sort puts round-10 first); timestamps still sort oldest first.
+    natural = ->(file) { File.basename(file).scan(/\d+|\D+/).map { |part| part.match?(/\A\d+\z/) ? [ 0, part.to_i, "" ] : [ 1, 0, part ] } }
+    rounds = files.sort_by(&natural).map { |file| JSON.parse(File.read(file)) }
+    # A fixture is its own item (its label), even when a live candidate shares its source URL: the two never collapse into one row.
+    identity = ->(row) { row["label"].to_s.start_with?("fixture:") ? row["label"] : (row["source_url"].presence || row["label"]) }
+    fixture_keys = rounds.flatten.select { |row| row["label"].to_s.start_with?("fixture:") }.map(&identity).to_set
+    keys = rounds.flatten.map { |row| [ row["platform"], identity.(row) ] }.uniq
     rows = keys.map do |platform, key|
       history = rounds.map do |round|
-        hit = round.find { |row| row["platform"] == platform && (row["source_url"].presence || row["label"]) == key }
+        hit = round.find { |row| row["platform"] == platform && identity.(row) == key }
         hit ? (hit["problems"].empty? ? "P" : "B") : "."
       end.join
       drawn = history.delete(".")
