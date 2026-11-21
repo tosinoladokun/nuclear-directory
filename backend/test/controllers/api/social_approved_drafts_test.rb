@@ -523,4 +523,23 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     get api_social_approved_drafts_path
     assert_response :unauthorized
   end
+
+  test "a holiday send_on is refused (Thanksgiving), and the job sends every platform's approved row before any model draft" do
+    travel_to(FRIDAY) do
+      load_row(platform: "x", send_on: "2026-11-26")
+      assert_response :unprocessable_entity
+      assert_includes response.parsed_body["codes"], "send_on"
+      assert_match(/is a holiday/, response.parsed_body["errors"].join)
+    end
+    order = []
+    send_original = SocialAgent.method(:send_scheduled)
+    run_original = SocialAgent.method(:run)
+    SocialAgent.singleton_class.send(:define_method, :send_scheduled) { |platform, **| order << [ :send, platform ] }
+    SocialAgent.singleton_class.send(:define_method, :run) { |platform, **| order << [ :draft, platform ] }
+    SocialPostJob.perform_now
+    assert_equal [ [ :send, "x" ], [ :send, "linkedin" ], [ :draft, "x" ], [ :draft, "linkedin" ] ], order
+  ensure
+    SocialAgent.singleton_class.send(:define_method, :send_scheduled, send_original)
+    SocialAgent.singleton_class.send(:define_method, :run, run_original)
+  end
 end

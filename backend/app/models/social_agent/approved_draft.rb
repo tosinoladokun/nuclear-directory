@@ -139,6 +139,8 @@ class SocialAgent::ApprovedDraft
 
       date = Date.iso8601(@send_on.to_s)
       err.("send_on", "send_on must be today or later, on a weekday") if date < @now.in_time_zone(SocialAgent::ZONE).to_date || date.on_weekend?
+      # The agent doesn't post on a federal holiday (Thanksgiving, 26 Nov): a row for one would only wait, so it isn't accepted; load the next weekday.
+      err.("send_on", "#{date} is a holiday: nothing is sent that day, pick another weekday") if SocialAgent::Rules.holiday?(date)
       date
     rescue Date::Error
       err.("send_on", "send_on must be a date (YYYY-MM-DD)")
