@@ -202,7 +202,7 @@ module SocialAgent
   # The stored text checked again against the item and its source as they stand now (DQ): the facts may have changed since the draft.
   # The voice check is a model call and isn't repeated. Sets the post blocked when a check no longer passes.
   def self.recheck(post, now, fetcher)
-    item = SocialAgent::Picker.new(platform: post.platform, now:).candidates.find { |candidate| candidate.subject == post.subject }
+    item = SocialAgent::Picker.new(platform: post.platform, now:, kinds: SocialAgent::Picker::ALL_KINDS, except: post.id).candidates.find { |candidate| candidate.subject == post.subject }
     return "its item is no longer one the agent could post" unless item
 
     ready, problems = prepare(item, fetcher)

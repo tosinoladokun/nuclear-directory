@@ -858,4 +858,41 @@ class SocialAgentTest < ActiveSupport::TestCase
       summary: "NASA's Space Biology Program investigates how living systems respond to spaceflight stressors, including microgravity and ionizing radiation.")
     assert_nil SocialAgent::Picker.new(platform: "x", now: MONDAY).call
   end
+
+  test "the send-time recheck finds a spotlight draft's own company (its draft doesn't exclude it) and every post kind (#880 with #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    draft = SocialPost.create!(platform: "x", status: "drafted", subject: full, text: "Meet Full Reactors: according to its website, it designs small modular reactors. Per the directory's records, in October 2023 it announced a plan to provide 24 modules to Full Reactors Partner.",
+      link: "https://nuclear-directory.org/companies/full-reactors", source_url: "https://full-reactors.example/about", organization_ids: [ full.id ], created_at: MONDAY - 1.hour)
+    assert_nil SocialAgent.recheck(draft, MONDAY, OK_FETCHER.new(200)), "the draft passes its own recheck"
+  end
+
+  test "spotlight picker (Copilot, #884): both ends of a told deal are reserved, an HQ field without a backing quote isn't trusted, a gov-page description isn't 'its website', a company this platform already sent is not picked, no founding year without a quote" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    item = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first
+    assert_equal [ full.id, deal.to_organization_id ].sort, item.organization_ids.sort, "the counterparty is reserved for the day too"
+    assert_nil item.facts["founded"], "no founding year without a quote that covers it"
+
+    full.update_columns(founded_year: 1999)
+    assert_nil SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts["founded"]
+
+    # An HQ field with no quote that names that city and state is not a headquarters.
+    full.update_columns(hq_city: "Reno", hq_state: "NV")
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "the quotes say Austin, Texas, not Reno"
+    full.update_columns(hq_city: "Austin", hq_state: "Texas")
+
+    # A description sourced from a regulator's page is not 'the company's own website' and doesn't become the source.
+    nrc = Source.create!(url: "https://www.nrc.gov/reading-rm/doc.html", source_kind: "web_page", crawl_status: "ok")
+    Evidence.where(subject: full, fields: [ "description" ]).update_all(source_id: nrc.id)
+    gov = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first
+    assert_equal "a page on nrc.gov", gov.facts["description comes from"]
+    assert_equal "https://full-reactors.example", gov.source_url, "the company's website, not the NRC page"
+
+    # A send already on this platform (any age): never picked, the one-send index would refuse it.
+    SocialPost.create!(platform: "x", status: "posted", subject: full, text: "Old.", created_at: MONDAY - 20.weeks)
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+    assert_equal 1, SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.size, "another platform is fine"
+  end
 end
