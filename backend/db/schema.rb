@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_20_220000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_21_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -576,6 +576,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_220000) do
     t.index ["user_id"], name: "index_sessions_on_user_id"
   end
 
+  create_table "social_approvals", force: :cascade do |t|
+    t.string "platform", null: false
+    t.string "slug", null: false
+    t.string "sha256", null: false
+    t.string "approved_by", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["platform", "slug", "sha256"], name: "index_social_approvals_on_platform_and_slug_and_sha256", unique: true
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_approvals_platform_check"
+    t.check_constraint "sha256::text ~ '^[0-9a-f]{64}$'::text", name: "social_approvals_sha256_check"
+  end
+
   create_table "social_channels", force: :cascade do |t|
     t.string "platform", null: false
     t.string "mode", default: "off", null: false
@@ -604,7 +617,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_220000) do
     t.datetime "posted_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.date "send_on"
+    t.text "warnings"
+    t.string "approved_sha256"
+    t.date "sent_on"
     t.index ["platform", "created_at"], name: "index_social_posts_on_platform_and_created_at"
+    t.index ["platform", "send_on"], name: "index_social_posts_on_platform_and_send_on", where: "(send_on IS NOT NULL)"
+    t.index ["platform", "sent_on"], name: "index_social_posts_one_send_per_platform_day", unique: true, where: "((sent_on IS NOT NULL) AND ((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text])))"
     t.index ["platform", "subject_type", "subject_id"], name: "index_social_posts_one_send", unique: true, where: "((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text]))"
     t.index ["subject_type", "subject_id"], name: "index_social_posts_on_subject_type_and_subject_id"
     t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_posts_platform_check"

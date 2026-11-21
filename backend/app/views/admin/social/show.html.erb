@@ -26,6 +26,27 @@
     <% end %>
   </section>
 
+  <section class="nd-stack" aria-labelledby="social-queue">
+    <h2 id="social-queue" class="type-admin-h2 m-0">Approved queue</h2>
+    <% if @queue.empty? %>
+      <p class="type-small m-0">Nothing waiting. The graders load approved posts with their date; the 8:30 weekday job sends each day's row first.</p>
+    <% else %>
+      <p class="type-small m-0">The 8:30 weekday job sends each day's row first (Off, the caps and the other guards still stop it).</p>
+      <ul class="nd-stack" id="social-queue-list">
+        <% @queue.each do |post| %>
+          <li id="social-queued-<%= post.id %>" class="nd-stack">
+            <p class="type-ui m-0"><%= post.send_on.strftime("%a %-d %b") %> · <%= post.platform == "x" ? "X" : "LinkedIn" %> · <%= post.subject.try(:name) %></p>
+            <p class="type-body m-0"><%= post.text %></p>
+            <p class="type-small m-0">Text hash <%= post.text_hash %></p>
+            <% if post.warnings.present? %><p class="type-small m-0">Checks said: <%= post.warnings.tr("\n", ";") %></p><% end %>
+            <%= button_to "Cancel", admin_social_cancel_queued_path(post), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-cancel-#{post.id}" },
+                  data: { turbo_confirm: "Take this post out of the queue? It won't go out." } %>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+
   <section class="nd-stack" aria-labelledby="social-by-hand">
     <h2 id="social-by-hand" class="type-admin-h2 m-0">Posted by hand</h2>
     <p class="type-small m-0">Made a post yourself? Record it here so the agent doesn't post the same item within two weeks.</p>
@@ -58,7 +79,9 @@
               <%= { "posted" => "Posted", "drafted" => "Draft", "sending" => "Sending", "queued" => "Queued to go out at #{post.posted_at&.in_time_zone(SocialAgent::ZONE)&.strftime('%H:%M')}", "cancelled" => "Taken back", "unknown" => "May have gone out: check the account",
                     "blocked" => "Stopped", "failed" => "Didn't send" }.fetch(post.status) %></p>
             <% if post.text.present? %><p class="type-body m-0"><%= post.text %></p><% end %>
-            <% if post.reason.present? && !post.by_hand? && post.reason != SocialAgent::APPROVED %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <% if post.reason.present? && !post.by_hand? && post.reason != SocialAgent::APPROVED && !post.graded? %><p class="type-small text-critical m-0"><%= post.reason %></p><% end %>
+            <% if post.warnings.present? %><p class="type-small m-0">Checks said: <%= post.warnings.tr("\n", ";") %></p><% end %>
+            <% if post.send_on && post.status == "drafted" %><p class="type-small m-0">Goes out <%= post.send_on.strftime("%-d %b") %> at 8:30 (Off stops it).</p><% end %>
             <% if post.status == "drafted" %>
               <%= button_to "Send this draft", admin_social_send_draft_path(post), class: "nd-btn nd-btn--outline type-ui", form: { id: "social-send-#{post.id}" },
                     data: { turbo_confirm: "Send this exact draft (hash #{post.text_hash}) to #{post.platform == 'x' ? 'X' : 'LinkedIn'} now?" } %>

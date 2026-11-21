@@ -103,6 +103,9 @@ services:
       # endpoint is off; a new digest rotates the token without a deploy.
       - key: DQ_AGENT_TOKEN_DIGEST
         sync: false
+      # GTM's approved-drafts endpoint (#897): the SHA-256 hex digest of its token, set by hand (Infra). Unset, the endpoint is off.
+      - key: SOCIAL_APPROVE_TOKEN_DIGEST
+        sync: false
       # The autopilot alerts endpoint's read-only token digest (#811), for the Mac poller; set in the dashboard.
       - key: AUTOPILOT_READ_TOKEN_DIGEST
         sync: false
