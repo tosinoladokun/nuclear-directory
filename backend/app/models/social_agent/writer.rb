@@ -65,8 +65,7 @@ class SocialAgent::Writer
       the link to our company page is added for you.
     - No person names. No rankings, no "leading", "pioneering", "first", "largest" or "only" unless the facts say it, and then
       attribute it ("the company describes itself as ...").
-    - A relationship is told as the facts state it, with its verb ("supplies", "invests in"), never stronger ("partners with" for a
-      supply deal) and never in the other direction.
+    - Never tell a relationship stronger than its record ("partners with" for a plan) and never in the other direction.
     - Plain and neutral. No hype, no questions to the reader, no calls to action, no "we", no hashtags, no emoji, no links,
       no exclamation marks, no "not X but Y", no lists of three for rhythm. Say each thing once; when the facts are short, so is the post.
   TEXT
