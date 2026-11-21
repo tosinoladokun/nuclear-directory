@@ -184,7 +184,7 @@ module SocialAgent::Rules
 
   # The source named in words (Tosin, 20 Nov: the post's link is our page; the source is only said): a verb of saying or a
   # document word. The writer is told to; this is the check.
-  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according\s+to|per\s+(?:its|the|our|(?-i:[A-Z])\w*)|told|issued|released|published|filed|
+  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|describ(?:es|ed)|according\s+to|per\s+(?:its|the|our|(?-i:[A-Z])\w*)|told|issued|released|published|filed|
     (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
   def attributed?(text) = text.match?(ATTRIBUTION)
 
@@ -223,7 +223,7 @@ module SocialAgent::Rules
   end
 
   # A superlative the source claims is attributed to it, not stated as fact (DQ, round 17: "DOE calls it the first ...").
-  CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?)\b/i
+  CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?|lists?|records?|per the directory)\b/i
   def unattributed_superlatives(text)
     text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
       # "the first phase", "the first two units" put things in order: they aren't a claim to be first.

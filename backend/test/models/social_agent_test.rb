@@ -924,4 +924,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_match "keeps only some items of a list", SocialAgent::Writer::NITS
     assert_equal "Full Reactors Palisades, LLC", SocialAgent::Picker.new(platform: "x", now: MONDAY).send(:named_party, "Recipient: Full Reactors Palisades, LLC; amount 2 million")
   end
+
+  test "'its website describes it', 'the directory lists' and a month written out for the source's abbreviation are fine (rehearsal 11)" do
+    assert SocialAgent::Rules.attributed?("Its website describes it as a reactor developer.")
+    assert_empty SocialAgent::Rules.unattributed_superlatives("The directory lists that Helion would supply electricity from its first fusion plant.")
+    assert_not_empty SocialAgent::Rules.unattributed_superlatives("It is the first fusion company.")
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "X-energy" }, source_url: "https://x-energy.com", source_quote: "ARDP award: Oct 2020, $80M initial funding",
+      path: "/companies/x", organization_ids: [])
+    assert_empty SocialAgent::Check.problems("Meet X-energy. The directory lists an October 2020 award of $80M initial funding.", item, platform: "linkedin").grep(/October/)
+    assert_not_empty SocialAgent::Check.problems("Meet X-energy. The directory lists a March 2020 award.", item, platform: "linkedin").grep(/March/)
+  end
 end

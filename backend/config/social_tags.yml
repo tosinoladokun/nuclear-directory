@@ -1,14 +1,18 @@
-# Company accounts GTM verified from each company's own site (21 Nov, #883): the only tags a spotlight post may use.
+# Company accounts verified by own-site link OR matching profile + official-domain website/bio link (Tosin, 21 Nov, #883).
 # A missing key means do not tag on that platform. Never filled from search results, parents or similar names.
-# x: handle, used on X only. linkedin: the Page's verified display name (LinkedIn text can't mention a Page, so it is the name only).
+# x: verified handle. linkedin: verified Page name. linkedin_id/linkedin_url identify native annotations; sender support must be validated.
 commonwealth-fusion-systems:
   x: "@cfs_energy"
 terrapower:
   x: "@terrapower"
   linkedin: "TerraPower"
+  linkedin_id: "7300927"
+  linkedin_url: "https://www.linkedin.com/company/terrapower"
 x-energy:
   x: "@xenergynuclear"
   linkedin: "X-energy"
+  linkedin_id: "4991265"
+  linkedin_url: "https://www.linkedin.com/company/x-energy"
 kairos-power:
   x: "@kairospower"
   linkedin: "Kairos Power"
@@ -21,6 +25,8 @@ centrus-energy:
 helion-energy:
   x: "@helion_energy"
   linkedin: "Helion"
+  linkedin_id: "3051270"
+  linkedin_url: "https://www.linkedin.com/company/helion-energy"
 type-one-energy:
   linkedin: "Type One Energy"
 westinghouse-electric-company:
@@ -29,6 +35,8 @@ westinghouse-electric-company:
 holtec-international:
   x: "@holtecintl"
   linkedin: "Holtec International"
+  linkedin_id: "1151762"
+  linkedin_url: "https://www.linkedin.com/company/holtec-international"
 allied-power:
   linkedin: "Allied Power"
 general-atomics:
@@ -59,6 +67,8 @@ enercon:
 energy-northwest:
   x: "@EnergyNorthwest"
   linkedin: "Energy Northwest"
+  linkedin_id: "24747"
+  linkedin_url: "https://www.linkedin.com/company/energy-northwest"
 ge-vernova:
   x: "@gevernova"
   linkedin: "GE Vernova"
@@ -83,6 +93,8 @@ texas-a-m-university:
 nuscale-power:
   x: "@NuScale_Power"
   linkedin: "NuScale Power"
+  linkedin_id: "777544"
+  linkedin_url: "https://www.linkedin.com/company/nuscale-power"
 oak-ridge-national-laboratory:
   x: "@ORNL"
   linkedin: "Oak Ridge National Laboratory"
@@ -116,3 +128,23 @@ ur-energy:
 us-department-of-energy:
   x: "@energy"
   linkedin: "U.S. Department of Energy (DOE)"
+vistra-corporation:
+  x: "@VistraCorp"
+  linkedin: "Vistra Corp."
+  linkedin_id: "15233868"
+  linkedin_url: "https://www.linkedin.com/company/vistra-energy/"
+good-energy-collective-incorporated:
+  x: "@GoodEnergyColl"
+  linkedin: "Good Energy Collective"
+lawrence-berkeley-national-laboratory:
+  x: "@BerkeleyLab"
+entra1-energy:
+  linkedin: "ENTRA1 Energy"
+converdyn:
+  linkedin: "ConverDyn"
+microsoft:
+  linkedin: "Microsoft"
+north-carolina-state-university:
+  x: "@NCState"
+advanced-conductor-technologies:
+  linkedin: "ADVANCED CONDUCTOR TECHNOLOGIES LLC"

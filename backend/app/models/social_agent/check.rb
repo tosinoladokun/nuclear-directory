@@ -49,7 +49,13 @@ module SocialAgent::Check
   end
 
   def allowed_name?(name, source)
-    ALWAYS_ALLOWED.include?(name) || source.match?(/(?<![\w])#{Regexp.escape(normalize(name))}(?![\w])/)
+    ALWAYS_ALLOWED.include?(name) || month_written_out?(name, source) || source.match?(/(?<![\w])#{Regexp.escape(normalize(name))}(?![\w])/)
+  end
+
+  # "October 2020" for a source's "Oct 2020": a month written out in full is the same month.
+  def month_written_out?(name, source)
+    index = Date::MONTHNAMES.index(name)
+    index && source.match?(/(?<![[:alpha:]])#{Regexp.escape(Date::ABBR_MONTHNAMES[index].downcase)}\b/)
   end
 
   def too_long?(text, platform)
