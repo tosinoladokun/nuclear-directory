@@ -1006,4 +1006,16 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_equal "the company's own website", facts["description comes from"]
     assert_match "The directory lists its headquarters as", SocialAgent::Writer::SPOTLIGHT
   end
+
+  test "a company in config/social_spotlight_holds.yml is never picked by the generator (GTM/DQ: Energy Northwest's record, the card-text holds)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    held = spotlight_company("Held Reactors", "held-reactors")
+    free = spotlight_company("Free Reactors", "free-reactors")
+    SocialAgent::Picker.holds = { "held-reactors" => "test hold" }
+    assert_equal [ free ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
+    assert_includes SocialAgent::Picker.holds.keys, "held-reactors"
+  ensure
+    SocialAgent::Picker.holds = nil
+    assert_includes SocialAgent::Picker.holds.keys, "energy-northwest"
+  end
 end

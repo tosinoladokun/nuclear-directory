@@ -33,6 +33,11 @@ class SocialAgent::Picker
   # Companies whose X/LinkedIn accounts GTM verified (config/social_tags.yml): picked first, and on X tagged with their handle.
   def self.tags = @tags ||= YAML.safe_load_file(Rails.root.join("config/social_tags.yml")) || {}
   def self.taggable = tags.keys
+  # Companies parked from the generator (config/social_spotlight_holds.yml: slug => reason).
+  def self.holds = @holds ||= YAML.safe_load_file(Rails.root.join("config/social_spotlight_holds.yml")) || {}
+  def self.holds=(value)
+    @holds = value
+  end
 
   def initialize(platform:, now: Time.current, fresh: FRESH, kinds: self.class.kinds, except: nil)
     @kinds = kinds
@@ -127,7 +132,7 @@ class SocialAgent::Picker
       # Nothing open on it (DQ): no candidate waiting for review and no pending take-off proposal.
       open = Candidate.where(subject_type: "Organization", status: %w[new matched needs_review]).select(:subject_id)
       proposed = TakeoffProposal.where(subject_type: "Organization", status: "pending").select(:subject_id)
-      pool = Organization.published.where.not(description: [ nil, "" ]).where.not(website: [ nil, "" ]).where.not(id: recent).where.not(id: sent).where.not(id: open).where.not(id: proposed).to_a
+      pool = Organization.published.where.not(description: [ nil, "" ]).where.not(website: [ nil, "" ]).where.not(slug: self.class.holds.keys).where.not(id: recent).where.not(id: sent).where.not(id: open).where.not(id: proposed).to_a
       return [] if pool.empty?
 
       links = Relationship.published.where(from_organization_id: pool.map(&:id)).group(:from_organization_id).count

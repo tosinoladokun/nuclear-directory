@@ -1,0 +1,7 @@
+# Companies the agent must not spotlight on its own until their record is repaired or their card text is fixed (GTM/DQ, 21 Nov). One slug per line with the
+# reason. Hand-approved posts for these are a separate decision (the approved queue); this only stops the GENERATOR.
+energy-northwest: "stored link says 'first phase', the primary source says 'first project' (4 modules): DQ repairs the record"
+nuscale-power: "card/OG text said 'Supplies Standard Power' for an announced plan: parked until the OG fix (#899) is live"
+samsung-c-t: "binding term sheet told as an investment on the card: parked until the OG fix (#899) is live"
+prometheus-hyperscale: "non-binding letter of intent told as supply on the card: parked until the OG fix (#899) is live"
+dominion-energy: "collaboration and site lease told as supply on the card: parked until the OG fix (#899) is live"
