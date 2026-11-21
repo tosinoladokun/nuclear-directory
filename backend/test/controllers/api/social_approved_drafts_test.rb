@@ -507,9 +507,25 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     assert_equal({ "url" => TERRA_LI_URL, "title" => "TerraPower", "description" => TERRA_CARD["description"], "thumbnail" => { "url" => TERRA_CARD["image_url"] } }, meta["linkAttachment"])
 
     seen.clear
-    replies << { "data" => { "createPost" => { "message" => "Invalid annotation" } } }
+    replies << { "data" => { "createPost" => { "message" => "Daily limit reached" } } }
     assert_raises(SocialAgent::Buffer::Error) { buffer.call("linkedin", TERRA_LI, TERRA_LI_URL, card: TERRA_CARD.transform_keys(&:to_sym), annotations: [ TERRA_ANNOTATION ], strict: true) }
-    assert_equal 1, seen.size, "strict: one request, no retry without the mention or the card"
+    assert_equal 1, seen.size, "a refusal that isn't about the card is never retried"
+
+    # A DEFINITE card refusal: the post may go with the URL inline, the mentions kept, and the fallback reported (PM, 21 Nov).
+    seen.clear
+    replies << { "data" => { "createPost" => { "message" => "Invalid link attachment thumbnail" } } } << { "data" => { "createPost" => { "post" => { "id" => "p2", "dueAt" => "2026-11-24T16:45:00Z" } } } }
+    sent = buffer.call("linkedin", TERRA_LI, TERRA_LI_URL, card: TERRA_CARD.transform_keys(&:to_sym), annotations: [ TERRA_ANNOTATION ], strict: true)
+    assert_equal 2, seen.size
+    assert_equal "#{TERRA_LI}\n\n#{TERRA_LI_URL}", seen.last["variables"]["input"]["text"]
+    assert_equal [ TERRA_ANNOTATION ], seen.last["variables"]["input"].dig("metadata", "linkedin", "annotations"), "mentions kept"
+    assert_nil seen.last["variables"]["input"].dig("metadata", "linkedin", "linkAttachment")
+    assert_match(/Buffer refused the card .*posted with the URL inline and the mentions kept/, sent[:fallback])
+
+    # An uncertain reply is never retried.
+    seen.clear
+    replies << { "data" => {} }
+    assert_raises(SocialAgent::Uncertain) { buffer.call("linkedin", TERRA_LI, TERRA_LI_URL, card: TERRA_CARD.transform_keys(&:to_sym), annotations: [ TERRA_ANNOTATION ], strict: true) }
+    assert_equal 1, seen.size
     unreadable = SocialAgent::Buffer.new(http: ->(_) { flunk "nothing is sent" }, card: ->(_) { nil })
     assert_raises(SocialAgent::Buffer::Error) { unreadable.call("linkedin", TERRA_LI, TERRA_LI_URL, strict: true) }
   end

@@ -17,6 +17,8 @@ class SocialAgent::Buffer
   GQL
 
   class Error < StandardError; end
+  # A refusal that is about the link card itself (Buffer's wording isn't documented): only then may an approved post fall back to its URL inline.
+  CARD_REFUSAL = /attach|thumbnail|link|image|card|preview|url/i
 
   # Buffer Free allows 1,000 requests a channel per 30 days (2 channels: 2,000); we stop at 80% and say so (PM).
   MONTHLY_REQUESTS = ENV.fetch("BUFFER_MONTHLY_REQUESTS", "2000").to_i
@@ -56,7 +58,20 @@ class SocialAgent::Buffer
     input = { text: body, channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
     metadata = { annotations:, linkAttachment: card }.compact
     input[:metadata] = { linkedin: metadata } if platform == "linkedin" && metadata.any?
-    return finish(create(input), due) if strict
+    if strict
+      begin
+        return finish(create(input), due)
+      rescue Error => error
+        # PM: a graders-approved post may go out with its URL inline ONLY after a definite refusal of the card attachment, with the native mentions kept and the
+        # fallback reported (the sender's caller records it on the post). Any other refusal, and every uncertain reply, is never retried.
+        raise unless platform == "linkedin" && card && error.message.match?(CARD_REFUSAL)
+
+        retry_input = input.merge(text: "#{text}\n\n#{link}")
+        retry_input[:metadata] = { linkedin: { annotations: }.compact } if annotations
+        retry_input.delete(:metadata) unless annotations
+        return finish(create(retry_input), due).merge(fallback: "Buffer refused the card (#{error.message.truncate(120)}): posted with the URL inline#{' and the mentions kept' if annotations}")
+      end
+    end
 
     result =
       begin

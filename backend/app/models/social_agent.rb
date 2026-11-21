@@ -161,6 +161,8 @@ module SocialAgent
     # A graders-approved post goes out exactly as approved: the text verbatim when it carries its own URL, the approved card and native mentions,
     # and no fallback of any kind (strict). Anything else keeps the plain call.
     sent = post.graded? ? sender.call(post.text, post.link, exact: post.exact_text, card: post.card, annotations: post.annotations, strict: true) : sender.call(post.text, post.link)
+    # An actual fallback is recorded on the post (the row and the DQ API show it), never silent.
+    post.update!(warnings: [ post.warnings.presence, "FALLBACK: #{sent[:fallback]}" ].compact.join("\n")) if sent[:fallback]
     if sent[:permalink]
       post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
     else
