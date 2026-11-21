@@ -113,6 +113,15 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     get company_path(slug: nuscale.slug)
     assert_match(/Supplies Standard Power/, description, "a plain supply link still reads flat")
 
+    # A selection, a collaboration or a lease isn't a flat link either (DQ: Samsung/Kairos term sheet, Dominion/CFS lease).
+    plan.update!(description: "Selected as supplier for a planned project")
+    get company_path(slug: nuscale.slug)
+    assert_no_match(/Supplies/, description)
+    plan.update!(description: "Collaboration and site lease at the ARC campus")
+    get company_path(slug: nuscale.slug)
+    assert_no_match(/Supplies/, description, "a collaboration or lease isn't a supply")
+    plan.update!(description: "Supplies 24 modules under a signed supply contract")
+
     holtec = cite!(company("Holtec", description: "Makes spent fuel storage systems."))
     palisades = cite!(plant("Palisades", facility_type: "power_reactor", status: "not_operating"))
     cite!(link(holtec, "operates", palisades))

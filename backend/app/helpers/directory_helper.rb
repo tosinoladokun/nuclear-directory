@@ -582,8 +582,13 @@ module DirectoryHelper
 
   # A link description that carries a stage or a condition: planned, announced, non-binding, a letter of intent or MOU, a term sheet, proposed,
   # subject to approvals, conditional. A short flat phrase can't carry it, so such a link isn't stated flat anywhere (card, preview).
-  STAGE_WORDS = /\b(plans?|planned|announced|announces|propos(?:ed|al|als)|non-?binding|letters? of intent|LOI|MOU|memorand(?:um|a)|term sheets?|framework|options?|preliminary|intends?|intended|expects?|expected|targets?|targeted|subject to|conditional|conditions?|approvals?)\b/i
-  def qualified_link?(deal) = deal.description.to_s.match?(STAGE_WORDS)
+  STAGE_WORDS = /\b(plans?|planned|announced|announces|propos(?:ed|al|als)|non-?binding|letters? of intent|LOI|MOU|memorand(?:um|a)|term sheets?|framework|options?|preliminary|intends?|intended|expects?|expected|targets?|targeted|subject to|conditional|conditions?|approvals?|selected|collaborat\w*|lease[ds]?)\b/i
+  # A "supplies" link whose description doesn't speak of supply, fuel or services (a collaboration, a site lease) isn't a supply link either (DQ: Dominion and CFS).
+  SUPPLY_WORDS = /suppl|fuel|service|provid|deliver|procure|offtak|purchase|sell|sale/i
+  def qualified_link?(deal)
+    text = deal.description.to_s
+    text.match?(STAGE_WORDS) || (deal.relationship_type == "supplies" && text.present? && !text.match?(SUPPLY_WORDS))
+  end
 
   def company_description(profile)
     listed = ->(names, noun = nil) { names.many? ? "#{names.first} and #{pluralize(names.size - 1, [ "other", noun ].compact.join(" "))}" : names.first }
