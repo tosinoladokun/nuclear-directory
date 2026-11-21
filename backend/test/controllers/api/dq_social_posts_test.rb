@@ -21,6 +21,16 @@ class Api::DqSocialPostsTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized
   end
 
+  test "a post recorded by hand is reported as manually recorded, never as having passed the automated checks (Copilot, #878)" do
+    company = Organization.create!(name: "Acme Fission", verification_status: "verified", verified_by: "human:tosin")
+    SocialPost.create!(platform: "x", status: "posted", subject: company, text: "Posted by hand.", reason: SocialPost::BY_HAND, permalink: "https://x.com/NuclearDir/status/1")
+    get api_dq_social_posts_path, params: { since: 2.days.ago.to_date.iso8601 }, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    post = response.parsed_body["posts"].sole
+    assert_equal true, post["by_hand"]
+    assert_equal Api::Dq::SocialPostsController::MANUAL, post["checks"]
+    assert_not_equal Api::Dq::SocialPostsController::PASSED, post["checks"]
+  end
+
   test "a run that wrote no post is listed with why: switched off, or nothing fresh (PM: never silence)" do
     SocialChannel.for("x").update!(mode: "off")
     SocialChannel.for("linkedin").update!(mode: "drafts")
