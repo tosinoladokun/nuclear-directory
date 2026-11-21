@@ -141,6 +141,8 @@ class SocialAgent::Picker
       # A "supplies" link whose description doesn't speak of supply, fuel or services isn't a supply link (DQ: Dominion and CFS is a lease).
       supply = /suppl|fuel|service|provid|deliver|procure|offtak|purchase/i
       deals = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? && deal.description.present? &&
+        # An undated link isn't told (DQ: "ARPA-E research funding" with no year reads as a present state).
+        (profile.deal_date(deal) || deal.description.match?(/\b(?:19|20)\d{2}\b/)) &&
         (deal.relationship_type != "supplies" || deal.description.match?(supply)) }.first(@platform == "x" ? 1 : 2).map do |deal|
         date = profile.deal_date(deal)&.strftime("%B %Y")
         from = deal.evidence.filter_map { |row| row.source&.url }.first

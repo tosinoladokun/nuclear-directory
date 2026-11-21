@@ -839,4 +839,14 @@ class SocialAgentTest < ActiveSupport::TestCase
   test "'first in 2015, latest in 2019' is an order, not a claim to be first" do
     assert_empty SocialAgent::Rules.unattributed_superlatives("DOE made two awards, first in 2015 and latest in 2019.")
   end
+
+  test "a link with no date anywhere isn't told in a spotlight (DQ: undated ARPA-E funding)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    deal.update!(relationship_type: "funds", description: "Research funding", started_on: nil)
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "its only link has no date"
+    deal.update!(description: "Research funding awarded in 2019")
+    assert_equal 1, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.size, "a year in its own words is a date"
+  end
 end
