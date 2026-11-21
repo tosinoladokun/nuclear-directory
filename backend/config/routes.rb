@@ -72,6 +72,8 @@ Rails.application.routes.draw do
     get "health" => "health#show", as: :health
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     post "social/draft_now" => "social#draft_now", as: :social_draft_now
+    post "social/by_hand" => "social#by_hand", as: :social_by_hand
+    post "social/posts/:id/reconcile" => "social#reconcile", as: :social_reconcile
     # Change your password (#783).
     resource :password, only: %i[edit update]
     # Admin v2 (#201): Overview, Sources, Checks (where claims and pending

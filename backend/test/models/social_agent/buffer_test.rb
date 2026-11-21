@@ -44,6 +44,26 @@ class SocialAgent::BufferTest < ActiveSupport::TestCase
     assert_nil @requests.last["variables"]["input"]["metadata"]
   end
 
+  test "when Buffer refuses the LinkedIn attachment, the post goes once more with the URL in its text; an uncertain reply is never retried" do
+    card = { url: "https://nuclear-directory.org/companies/acme", title: "Acme", thumbnail: { url: "https://nuclear-directory.org/c.png" } }
+    with_card = SocialAgent::Buffer.new(http: ->(request) { @requests << JSON.parse(request.body); @replies.shift }, now: -> { Time.utc(2026, 11, 16, 16, 30) }, card: ->(_) { card })
+    @replies << { "data" => { "createPost" => { "message" => "Invalid link attachment" } } }
+    @replies << { "data" => { "createPost" => { "post" => { "id" => "p9", "dueAt" => "2026-11-16T16:45:00Z" } } } }
+    assert_equal "p9", with_card.call("linkedin", "Meet Acme.", card[:url])[:id]
+    assert_equal 2, @requests.size
+    assert_equal "Meet Acme.\n\n#{card[:url]}", @requests.last["variables"]["input"]["text"]
+    assert_nil @requests.last["variables"]["input"]["metadata"]
+
+    @requests.clear
+    @replies << { "data" => {} }
+    assert_raises(SocialAgent::Uncertain) { with_card.call("linkedin", "Meet Acme.", card[:url]) }
+    assert_equal 1, @requests.size, "never retried when it may have gone out"
+    @requests.clear
+    @replies << { "data" => { "createPost" => { "message" => "Daily limit reached" } } }
+    @replies << { "data" => { "createPost" => { "message" => "Daily limit reached" } } }
+    assert_raises(SocialAgent::Buffer::Error) { with_card.call("linkedin", "Meet Acme.", card[:url]) }
+  end
+
   test "a channel without its id set on Render isn't posted to; an odd reply after sending is 'may have gone out'" do
     ENV.delete("BUFFER_X_CHANNEL_ID")
     error = assert_raises(SocialAgent::Buffer::Error) { @buffer.call("x", "Text here for the post.", "l") }

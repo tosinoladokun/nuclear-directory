@@ -45,9 +45,16 @@ class SocialAgent::Buffer
     card = @card.call(link) if platform == "linkedin"
     input = { text: card ? text : "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
     input[:metadata] = { linkedin: { linkAttachment: card } } if card
-    data = graphql(CREATE, { input: })
-    result = data["createPost"] or raise SocialAgent::Uncertain, "Buffer's reply had no createPost"
-    raise Error, "Buffer said: #{result['message']}" if result["message"]
+    result =
+      begin
+        create(input)
+      rescue Error
+        # Buffer refused the request (a refusal means nothing was created, so a retry can't double-post; a timeout or odd reply is
+        # Uncertain and never retried). When the attachment may be why, the post goes with the URL in its text instead (Infra, Backend).
+        raise unless card
+
+        create(input.except(:metadata).merge(text: "#{text}\n\n#{link}"))
+      end
     id = result.dig("post", "id") or raise SocialAgent::Uncertain, "Buffer didn't return the post's id"
     { id:, due_at: Time.zone.parse(result.dig("post", "dueAt").to_s) || due }
   end
@@ -62,6 +69,13 @@ class SocialAgent::Buffer
   end
 
   private
+    def create(input)
+      result = graphql(CREATE, { input: })["createPost"] or raise SocialAgent::Uncertain, "Buffer's reply had no createPost"
+      raise Error, "Buffer said: #{result['message']}" if result["message"]
+
+      result
+    end
+
     # Our page's own link preview, read from its og tags: { url:, title:, description:, thumbnail: { url: } }, or nil.
     def page_card(link)
       uri = URI(link)
