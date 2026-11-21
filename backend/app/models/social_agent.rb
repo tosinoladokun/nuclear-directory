@@ -23,6 +23,7 @@ module SocialAgent
 
   # Its fact still published at send time: a link also needs both companies published and to be in effect (Copilot).
   def self.still_published?(subject)
+    return NewsItem.published.exists?(subject.id) if subject.is_a?(NewsItem)
     return subject.verification_status == "verified" unless subject.is_a?(Relationship)
 
     SocialAgent::Picker.current_links(Relationship.published.where(id: subject.id), Date.current).exists?
@@ -174,6 +175,7 @@ module SocialAgent
   # Admin > Posts "Send this draft" (#879, PM: Tosin sends the graded draft himself): that exact draft, through the same send as the
   # agent's, after every guard the agent has. Returns [post, nil] when it was handed on, or [post, why] when something refused it
   # (nothing is sent then). The platform's switch may be Drafts only (his click is the approval) but never Off.
+  APPROVED = "approved by hand".freeze
   def self.draft_fetcher = @draft_fetcher ||= DataQuality::Fetcher.new
   class << self
     attr_writer :draft_fetcher
@@ -183,9 +185,15 @@ module SocialAgent
     refusal = draft_refusal(post, now) || recheck(post, now, fetcher)
     return [ post, refusal ] if refusal
 
-    # Claimed atomically before anything is sent (Infra): a second click, tab or admin finds it already taken and never calls Buffer.
-    claimed = SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", updated_at: Time.current)
-    return [ post.reload, "it is already being sent, or was sent" ] unless claimed == 1
+    # Under the channel lock the agent's send takes (Infra, Copilot): the guards are read again from what is stored, and the draft is
+    # claimed (drafted -> sending, which also takes the day's slot) before the lock is released, so two clicks, or two drafts, can't both pass.
+    # The reason marks it as approved by hand, so the sync keeps it queued in Drafts only mode.
+    why = SocialChannel.transaction do
+      SocialChannel.for(post.platform).lock!
+      next draft_refusal(post.reload, now) ||
+        (SocialPost.where(id: post.id, status: "drafted").update_all(status: "sending", reason: APPROVED, updated_at: Time.current) == 1 ? nil : "it is already being sent, or was sent")
+    end
+    return [ post.reload, why ] if why
 
     sent = send_post(post.reload, now:)
     [ sent, (sent.reason.presence || "it didn't send" if sent.status.in?(%w[blocked failed unknown])) ]
@@ -217,9 +225,9 @@ module SocialAgent
     return "it's a holiday" if SocialAgent::Rules.holiday?(day.to_date)
     return "this draft is from #{post.created_at.in_time_zone(ZONE).strftime('%-d %b')}: draft again today so the facts and checks are fresh" unless post.created_at.in_time_zone(ZONE).to_date == day.to_date
     return "Buffer's 30-day request allowance is used up" if SocialAgent::Buffer.budget_spent?
-    return "today's post for this platform is already out" if window.(SocialPost.where(platform: post.platform, status: SocialPost::SENT, created_at: day.all_day)).exists?
-    return "the same item was posted within the last #{SocialPost::COOLDOWN.inspect}" if window.(SocialPost.where(subject: post.subject, status: SocialPost::SENT, created_at: (now - SocialPost::COOLDOWN)..)).exists?
-    return "a post about the same company went out today" if window.(SocialPost.where(status: SocialPost::SENT, created_at: day.all_day)).where("organization_ids && ARRAY[?]::bigint[]", post.organization_ids).exists?
+    return "today's slot for this platform is already taken (a post or an attempt)" if window.(SocialPost.used.where(platform: post.platform, created_at: day.all_day)).exists?
+    return "the same item was posted or tried within the last #{SocialPost::COOLDOWN.inspect}" if window.(SocialPost.where.not(status: "cancelled").where(subject: post.subject, created_at: (now - SocialPost::COOLDOWN)..)).exists?
+    return "a post about the same company was posted or tried today" if window.(SocialPost.where.not(status: "cancelled").where(created_at: day.all_day)).where("organization_ids && ARRAY[?]::bigint[]", post.organization_ids).exists?
     return "its item is no longer published" unless still_published?(post.subject.reload)
 
     nil
@@ -227,9 +235,11 @@ module SocialAgent
 
   # Takes back every queued post not yet out, for the platform (or all): the kill switch (PM: it stops dispatch
   # and cancels what's queued). A post the publisher won't take back stays queued and says why.
-  def self.cancel_queued(platform: nil, why: "switched off", publisher: self.publisher)
+  # keep_approved: a draft Tosin sent by hand stays queued when the platform is only Drafts only (not Live), never when it is Off.
+  def self.cancel_queued(platform: nil, why: "switched off", publisher: self.publisher, keep_approved: false)
     queued = SocialPost.where(status: "queued").where(posted_at: Time.current..)
     queued = queued.where(platform:) if platform
+    queued = queued.where("reason IS NULL OR reason <> ?", APPROVED) if keep_approved
     queued.find_each do |post|
       publisher.cancel(post.external_id)
       post.update!(status: "cancelled", cost_usd: 0, reason: "taken back before it went out: #{why}")
@@ -242,7 +252,7 @@ module SocialAgent
   # queued), and queued posts that are due are read back: sent with their link, or an error.
   def self.sync(publisher: self.publisher)
     SocialChannel.where(platform: SocialChannel::PLATFORMS).find_each do |channel|
-      cancel_queued(platform: channel.platform, why: "switched off", publisher:) unless channel.live? && sending_enabled?
+      cancel_queued(platform: channel.platform, why: "switched off", publisher:, keep_approved: !channel.off? && sending_enabled?) unless channel.live? && sending_enabled?
     end
     SocialPost.where(status: "queued").where(posted_at: ..2.minutes.ago).find_each do |post|
       state = publisher.status(post.external_id)

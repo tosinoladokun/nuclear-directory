@@ -84,7 +84,7 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
       stale = SocialPost.find(draft.id)
       stale.update_columns(status: "drafted")
       SocialPost.where(id: draft.id).update_all(status: "sending")
-      assert_equal [ stale, "it is already being sent, or was sent" ], SocialAgent.send_draft(stale, now: MONDAY).then { |post, why| [ stale, why ] }
+      assert_match(/only a draft that passed every check/, SocialAgent.send_draft(stale, now: MONDAY).last)
       assert_equal 1, sent, "a stale copy can't claim a draft already taken"
     end
   ensure
@@ -135,11 +135,11 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
 
     other = draft_for(news: nil)
     other.update_columns(status: "posted")
-    refuse.(/today's post for this platform is already out/)
+    refuse.(/today's slot for this platform is already taken/)
     other.destroy
 
     SocialPost.create!(platform: "linkedin", status: "posted", subject: draft.subject, text: "Earlier.", created_at: MONDAY - 3.days)
-    refuse.(/the same item was posted within the last 14 days/)
+    refuse.(/the same item was posted or tried within the last 14 days/)
 
     draft.update_columns(status: "blocked")
     refuse_blocked = -> { travel_to(MONDAY) { post admin_social_send_draft_path(draft) } }
@@ -180,6 +180,38 @@ class Admin::SocialTest < ActionDispatch::IntegrationTest
     travel_to(MONDAY) { post admin_social_send_draft_path(draft) }
     assert_match(/its checks no longer pass/, flash[:alert])
     assert_equal "blocked", draft.reload.status
+  ensure
+    ENV.delete("SOCIAL_POSTING_ENABLED")
+    SocialAgent.senders.delete("x")
+  end
+
+  test "Send this draft: a failed attempt still takes the slot, a hidden company blocks it, and a hand-approved queued draft survives Drafts only but not Off (Copilot, #880)" do
+    ENV["SOCIAL_POSTING_ENABLED"] = "on"
+    SocialChannel.for("x").update!(mode: "drafts")
+    SocialAgent.senders["x"] = ->(*) { flunk "never sent" }
+    draft = draft_for
+    failed = SocialPost.create!(platform: "x", status: "failed", subject: NewsItem.create!(url: "https://www.energy.gov/f", title: "Other", publisher: "DOE", published_on: Date.new(2026, 11, 19),
+      verification_status: "verified", verified_by: "human:tosin", verified_at: MONDAY - 1.day), text: "Failed.", created_at: MONDAY - 2.hours)
+    travel_to(MONDAY) { post admin_social_send_draft_path(draft) }
+    assert_match(/slot for this platform is already taken/, flash[:alert])
+    failed.destroy
+    Organization.find_by(slug: "acme-fission").update_columns(verification_status: "unpublished")
+    travel_to(MONDAY) { post admin_social_send_draft_path(draft) }
+    assert_match(/no longer (published|one the agent could post)/, flash[:alert])
+    assert_equal "drafted", draft.reload.status, "refused, nothing sent"
+
+    queued = draft_for(platform: "linkedin")
+    queued.update_columns(status: "queued", reason: SocialAgent::APPROVED, external_id: "b1", posted_at: MONDAY + 1.hour)
+    cancelled = []
+    publisher = Object.new
+    publisher.define_singleton_method(:cancel) { |id| cancelled << id }
+    publisher.define_singleton_method(:status) { |_id| { status: "queued" } }
+    SocialChannel.for("linkedin").update!(mode: "drafts")
+    travel_to(MONDAY) { SocialAgent.sync(publisher:) }
+    assert_equal [ [], "queued" ], [ cancelled, queued.reload.status ], "Drafts only keeps what he approved"
+    SocialChannel.for("linkedin").update!(mode: "off")
+    travel_to(MONDAY) { SocialAgent.sync(publisher:) }
+    assert_equal [ [ "b1" ], "cancelled" ], [ cancelled, queued.reload.status ], "Off still takes it back"
   ensure
     ENV.delete("SOCIAL_POSTING_ENABLED")
     SocialAgent.senders.delete("x")
