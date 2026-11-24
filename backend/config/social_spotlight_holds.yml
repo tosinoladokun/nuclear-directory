@@ -1,0 +1,4 @@
+# Companies the agent must not spotlight on its own until their record is repaired (GTM/DQ). One slug per line with the reason. Hand-approved posts for
+# these are a separate decision (the approved queue); this only stops the GENERATOR. The card-text holds were lifted on 24 Nov (#899 live, DQ's rescan clean).
+energy-northwest: "stored link says 'first phase', the primary source says 'first project' (4 modules): DQ repairs the record (claim 6075)"
+helion-energy: "the Microsoft link says 'signed, from 2028' but the source says an announced agreement, online expected 2028, 50 MW+ after a one-year ramp: DQ repairs the record (claim 6076)"

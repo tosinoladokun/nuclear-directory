@@ -20,7 +20,10 @@ class SocialAgentTest < ActiveSupport::TestCase
       published_on: Date.new(2026, 11, 12), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.day)
     @news.news_mentions.create!(subject: @company)
     SocialChannel.for("x").update!(mode: "drafts")
+    ENV["SOCIAL_POST_KINDS"] = "news,link,new_company"
   end
+
+  teardown { ENV.delete("SOCIAL_POST_KINDS") }
 
   # The source answers 200 (no network in tests).
   OK_FETCHER = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: status == 200 ? :ok : :error, status:, body: "<p>Published November 12, 2026</p>", etag: nil,
@@ -668,6 +671,187 @@ class SocialAgentTest < ActiveSupport::TestCase
     end
   end
 
+  # 'Meet a company' (#883).
+  def spotlight_company(name, slug, complete: true, website: true, role: "reactor_vendor")
+    company = Organization.create!(name:, slug:, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year, domain: ("#{slug}.example" if website),
+      website: ("https://#{slug}.example" if website), description: "#{name} designs small modular reactors.", hq_city: ("Austin" if complete), hq_state: ("Texas" if complete))
+    page = Source.create!(url: "https://#{slug}.example/about", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: company, source: page, quote: "#{name} designs small modular reactors.", found_by: "human", fields: %w[description])
+    Evidence.create!(subject: company, source: page, quote: "Headquartered in Austin, Texas.", found_by: "human", fields: %w[hq_city hq_state]) if complete
+    if complete
+      kind = Role.find_or_create_by!(key: role) { |row| row.name = role.humanize }
+      held = OrganizationRole.create!(organization: company, role: kind, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      Evidence.create!(subject: held, source: page, quote: "What we do.", found_by: "human")
+      tech = Technology.create!(key: "smr_#{slug.tr("-", "_")}", name: "Small modular reactor")
+      link = OrganizationTechnology.create!(organization: company, technology: tech, verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      Evidence.create!(subject: link, source: page, quote: "Our SMR design.", found_by: "human")
+      other = Organization.create!(name: "#{name} Partner", slug: "#{slug}-partner", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      deal = Relationship.create!(from_organization: company, to_organization: other, relationship_type: "supplies", description: "Announced plan (Oct 2023): #{name} to provide 24 modules to #{name} Partner", started_on: Date.new(2023, 10, 5), verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      Evidence.create!(subject: deal, source: page, quote: "#{name} supplies #{name} Partner.", found_by: "human")
+    end
+    company
+  end
+
+  test "spotlights: complete sourced profiles first, from the company's own site, none repeated within eight weeks, none without a website (#883)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    thin = spotlight_company("Thin Reactors", "thin-reactors", complete: false)
+    full = spotlight_company("Full Reactors", "full-reactors")
+    spotlight_company("No Site", "no-site", website: false)
+    items = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+    assert_equal [ "spotlight" ], items.map(&:kind).uniq
+    assert_equal [ full ], items.map(&:subject), "only a complete profile (role, website, description, headquarters, a link); no website or a thin page isn't a candidate"
+    item = items.first
+    assert_equal "https://full-reactors.example/about", item.source_url
+    assert_match "Austin, Texas", item.facts["headquarters"]
+    assert_nil item.facts["works on"], "no roles or technology lines (DQ)"
+    assert_match "Announced plan (Oct 2023): Full Reactors to provide 24 modules to Full Reactors Partner [source: a page on full-reactors.example]".sub("a page on full-reactors.example", "the company's own website"), item.facts["records of its links"], "a link in its record's words, dated and sourced, never a bare verb"
+    assert_equal "the company's own website", item.facts["description comes from"]
+    assert_equal "the company's own website", item.facts["headquarters comes from"]
+    assert SocialAgent::Rules.primary?(item), "the company's own site is a primary source"
+
+    SocialPost.create!(platform: "linkedin", status: "posted", subject: full, text: "Meet Full Reactors.", created_at: MONDAY - 7.weeks)
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "spotlighted within eight weeks"
+    SocialPost.update_all(created_at: MONDAY - 9.weeks)
+    assert_includes SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject), full
+  end
+
+  test "a spotlight post links our company page with tracking and passes the same checks" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    post = run_x("Meet Full Reactors: according to its website, it designs small modular reactors. It is based in Austin, Texas. Per the directory's records, in October 2023 it announced a plan to provide 24 modules to Full Reactors Partner.")
+    assert_equal "drafted", post.status, post.reason
+    assert_equal full, post.subject
+    assert_equal "https://nuclear-directory.org/companies/full-reactors?utm_source=x&utm_medium=social&utm_campaign=full-reactors", post.link
+    assert_equal "https://full-reactors.example/about", post.source_url
+    SocialPost.delete_all
+    capital = run_x("Meet Full Reactors: According to its website, it designs small modular reactors. Nuclear Directory lists Full Reactors as supplying Full Reactors Partner.")
+    assert_equal "drafted", capital.status, capital.reason
+    SocialPost.delete_all
+    assert_match "isn't in the source", run_x("Meet Full Reactors: according to its website, it designs small modular reactors and employs 400 people.").reason
+  end
+
+  test "news posts stay available as an extra when SOCIAL_POST_KINDS lists them" do
+    ENV["SOCIAL_POST_KINDS"] = "spotlight,news"
+    assert_includes SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:kind), "news"
+    ENV.delete("SOCIAL_POST_KINDS")
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.select { |item| item.kind == "news" }, "spotlights only by default"
+  end
+
+  test "spotlights skip an agency, lab or university, and take the page its description rests on when that is the company's own site (#883)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    spotlight_company("Fed Agency", "fed-agency", role: "government_agency")
+    spotlight_company("Some Fund", "some-fund", role: "venture_capital")
+    items = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+    assert_equal [ full ], items.map(&:subject), "an agency isn't a company"
+    assert_equal "https://full-reactors.example/about", items.first.source_url, "the own-site page its description rests on"
+  end
+
+  test "spotlights skip a company with an open candidate or a pending take-off, and put GTM's verified-account companies first (DQ, #883)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    a = spotlight_company("Alpha Reactors", "alpha-reactors")
+    b = spotlight_company("Beta Reactors", "beta-reactors")
+    c = spotlight_company("Gamma Reactors", "gamma-reactors")
+    original = SocialAgent::Picker.instance_variable_get(:@tags)
+    SocialAgent::Picker.instance_variable_set(:@tags, { "gamma-reactors" => { "x" => "@gamma_reactors", "linkedin" => "Gamma Reactors" } })
+    begin
+      order = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+      assert_equal c, order.first.subject, "verified accounts first"
+      assert_equal "@gamma_reactors", order.first.facts["x_handle"], "its handle on X"
+      assert_nil SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts["x_handle"], "no tag on LinkedIn"
+      TakeoffProposal.create!(subject_type: "Organization", subject_id: a.id, batch: "t", reason: "wrong", proposed_by: "dq", status: "pending")
+      Candidate.create!(source: Source.first, kind: "organization", subject_type: "Organization", subject_id: b.id, status: "new", payload: {})
+      assert_equal [ c ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
+
+      post = run_x("Meet Gamma Reactors (@gamma_reactors): according to its website, it designs small modular reactors. It is based in Austin, Texas, and supplies Gamma Reactors Partner.")
+      assert_equal "drafted", post.status, post.reason
+      SocialPost.delete_all
+      assert_match "which isn't this company's verified handle", run_x("Meet Gamma Reactors (@someone_else): according to its website, it designs small modular reactors.").reason
+    ensure
+      SocialAgent::Picker.instance_variable_set(:@tags, original)
+    end
+  end
+
+  test "the verified-accounts list only holds handles, per slug (GTM's list)" do
+    assert SocialAgent::Picker.tags.size > 20
+    assert_equal "@terrapower", SocialAgent::Picker.tags.dig("terrapower", "x")
+    assert SocialAgent::Picker.tags.values.all? { |row| row["x"].to_s.match?(/\A@\w+\z/) || row["x"].nil? }
+  end
+
+  test "a supplies link whose description isn't about supply is left out, and X tells one link at most (DQ, #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    lease = Relationship.where(from_organization: full).first
+    lease.update!(description: "Collaboration and site lease at the ARC campus")
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "its only link isn't a supply link"
+    lease.update!(description: "Announced plan (Oct 2023): to provide 24 modules")
+    other = Organization.create!(name: "Third Co", slug: "third-co", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+    second = Relationship.create!(from_organization: full, to_organization: other, relationship_type: "invests_in", description: "Term sheet (Sept 2026) for up to $100 million", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+    Evidence.create!(subject: second, source: Source.first, quote: "Term sheet.", found_by: "human")
+    assert_equal 1, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts["records of its links"].split("; ").size
+    assert_equal 2, SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts["records of its links"].split("; ").size
+  end
+
+  test "'per its website' / 'per DOE' name the source in words (spotlights, #883)" do
+    assert SocialAgent::Rules.attributed?("Meet Acme: it designs reactors, per its website.")
+    assert SocialAgent::Rules.attributed?("It received a loan, per USAspending.gov.")
+    assert_not SocialAgent::Rules.attributed?("Meet Acme: it designs reactors.")
+    assert_not SocialAgent::Rules.attributed?("Meet Acme: it designs 3 reactors per year.")
+  end
+
+  test "'the first phase' is an order, not a claim to be first; 'the first SMR design' still is" do
+    assert_empty SocialAgent::Rules.unattributed_superlatives("Amazon has the right to buy electricity from the first phase.")
+    assert_empty SocialAgent::Rules.unattributed_superlatives("It builds the first two units.")
+    assert_not_empty SocialAgent::Rules.unattributed_superlatives("It is the first SMR design approved by the NRC.")
+  end
+
+  test "spotlight facts: a funds link that is a loan is told in the record's words, and a description from a press release is never 'its website' (DQ, #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    Relationship.where(from_organization: full).update_all(relationship_type: "funds", description: "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024")
+    press = Source.create!(url: "https://newswire.example/full-reactors-release", source_kind: "web_page", crawl_status: "ok")
+    Evidence.where(subject: full).update_all(source_id: press.id)
+    item = SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first
+    assert_match "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024", item.facts["records of its links"]
+    assert_no_match(/\bfunds\b/, item.facts["records of its links"], "no 'funds' present-tense verb")
+    assert_equal "a page on newswire.example", item.facts["description comes from"]
+    assert_equal "a page on newswire.example", item.facts["headquarters comes from"]
+    assert_no_match(/own website/, item.facts.values_at("description comes from", "headquarters comes from").join(" "), "a press-release fact is never 'its website'")
+  end
+
+  test "a spotlight puts the company only where the directory's headquarters is (Helion: Redmond was an award's location, the headquarters is Everett)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Helion Energy", "headquarters" => "Everett, WA" }, source_url: "https://helionenergy.com", source_quote: "x", path: "/companies/helion", organization_ids: [])
+    assert_equal [ "it puts the company in Redmond, but its headquarters in the directory is Everett, WA" ], SocialAgent::Rules.headquarters("Meet Helion Energy: it is based in Redmond, WA.", item)
+    assert_empty SocialAgent::Rules.headquarters("Meet Helion Energy: it is headquartered in Everett, Washington.", item)
+    assert_empty SocialAgent::Rules.headquarters("Meet Helion Energy: it builds a fusion plant.", item), "no place said"
+    news = item.with(kind: "news")
+    assert_empty SocialAgent::Rules.headquarters("It is based in Redmond, WA.", news), "only spotlights"
+  end
+
+  test "a spotlight isn't stopped for a qualifier that appears only in another story on the company's site (GTM, Helion's letter of intent)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Helion Energy", "headquarters" => "Everett, WA" }, source_url: "https://helionenergy.com",
+      source_quote: "Fusion company.", path: "/companies/helion", organization_ids: [], page_text: "News: Helion signed a non-binding letter of intent with the Department of Commerce.")
+    assert_empty SocialAgent::Rules.qualifiers("Meet Helion Energy: it is a fusion company based in Everett, WA.", item)
+    news = item.with(kind: "news", facts: { "headline" => "Helion signs a letter of intent" })
+    assert_not_empty SocialAgent::Rules.qualifiers("Helion said it signed a deal.", news), "a news item still keeps its source's qualifiers"
+    planned = item.with(facts: { "name" => "NuScale", "records of its links" => "Announced plan (Oct 2023) for planned SMR plants" })
+    assert_empty SocialAgent::Rules.qualifiers("Meet NuScale: the directory lists two DOE awards.", planned), "a link the post doesn't mention keeps its qualifier out of the way"
+  end
+
+  test "'first in 2015, latest in 2019' is an order, not a claim to be first" do
+    assert_empty SocialAgent::Rules.unattributed_superlatives("DOE made two awards, first in 2015 and latest in 2019.")
+  end
+
+  test "a link with no date anywhere isn't told in a spotlight (DQ: undated ARPA-E funding)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    deal.update!(relationship_type: "funds", description: "Research funding", started_on: nil)
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "its only link has no date"
+    deal.update!(description: "Research funding awarded in 2019")
+    assert_equal 1, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.size, "a year in its own words is a date"
+  end
+
   test "the picker skips a news item whose words are only radiation or isotopes (NASA bone-marrow chip, 21 Nov)" do
     # News item 55 exactly as stored (DQ): its only nuclear-ish word is "ionizing radiation".
     @news.update_columns(title: "BPS Digital AVATAR Challenge", headline: "NASA features BPS Digital AVATAR Challenge", publisher: "NASA",
@@ -684,5 +868,165 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.dates("It closed on 7 September.", item.("Closed Sept. 7, 2023."))
     assert_equal [ "the date 7 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 7 November 2022.", item.("Cameco said on November 7, 2023."))
     assert_equal [ "the date 17 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 17 November.", item.("Cameco said on November 7, 2023.")), "7 isn't 17"
+  end
+
+  test "the send-time recheck finds a spotlight draft's own company (its draft doesn't exclude it) and every post kind (#880 with #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    draft = SocialPost.create!(platform: "x", status: "drafted", subject: full, text: "Meet Full Reactors: according to its website, it designs small modular reactors. Per the directory's records, in October 2023 it announced a plan to provide 24 modules to Full Reactors Partner.",
+      link: "https://nuclear-directory.org/companies/full-reactors", source_url: "https://full-reactors.example/about", organization_ids: [ full.id ], created_at: MONDAY - 1.hour)
+    assert_nil SocialAgent.recheck(draft, MONDAY, OK_FETCHER.new(200)), "the draft passes its own recheck"
+  end
+
+  test "spotlight picker (Copilot, #884): both ends of a told deal are reserved, an HQ field without a backing quote isn't trusted, a gov-page description isn't 'its website', a company this platform already sent is not picked, no founding year without a quote" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    item = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first
+    assert_equal [ full.id, deal.to_organization_id ].sort, item.organization_ids.sort, "the counterparty is reserved for the day too"
+    assert_nil item.facts["founded"], "no founding year without a quote that covers it"
+
+    full.update_columns(founded_year: 1999)
+    assert_nil SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts["founded"]
+
+    # An HQ field with no quote that names that city and state is not a headquarters.
+    full.update_columns(hq_city: "Reno", hq_state: "NV")
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates, "the quotes say Austin, Texas, not Reno"
+    full.update_columns(hq_city: "Austin", hq_state: "Texas")
+
+    # A description sourced from a regulator's page is not 'the company's own website' and doesn't become the source.
+    nrc = Source.create!(url: "https://www.nrc.gov/reading-rm/doc.html", source_kind: "web_page", crawl_status: "ok")
+    Evidence.where(subject: full, fields: [ "description" ]).update_all(source_id: nrc.id)
+    gov = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first
+    assert_equal "a page on nrc.gov", gov.facts["description comes from"]
+    assert_equal "https://full-reactors.example", gov.source_url, "the company's website, not the NRC page"
+
+    # A send already on this platform (any age): never picked, the one-send index would refuse it.
+    SocialPost.create!(platform: "x", status: "posted", subject: full, text: "Old.", created_at: MONDAY - 20.weeks)
+    assert_empty SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates
+    assert_equal 1, SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.size, "another platform is fine"
+  end
+
+  test "a link's source is the page whose quote states the link, not just the first evidence row (Founder: the loan is on energy.gov, not USAspending)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    deal.update!(relationship_type: "funds", description: "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024")
+    deal.evidence.destroy_all
+    award = Source.create!(url: "https://www.usaspending.gov/award/1", source_kind: "web_page", crawl_status: "ok")
+    loan = Source.create!(url: "https://www.energy.gov/lpo/full-reactors", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: deal, source: award, quote: "Award of $2 million, 2023", found_by: "human")
+    Evidence.create!(subject: deal, source: loan, quote: "closed a loan of $1.52 billion under the Energy Dominance Financing Program in September 2024", found_by: "human")
+    facts = SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts
+    assert_match "[source: a page on energy.gov]", facts["records of its links"]
+    assert_no_match(/usaspending/, facts["records of its links"])
+  end
+
+  test "a link whose supporting quote names the borrower carries that party (Holtec Palisades, LLC), and the judge is told a partial list fails (DQ, #884)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    deal = Relationship.where(from_organization: full).first
+    deal.update!(relationship_type: "funds", description: "Loan of $1.52 billion under the Energy Dominance Financing Program, closed Sept 2024")
+    deal.evidence.destroy_all
+    loan = Source.create!(url: "https://www.energy.gov/edf/palisades", source_kind: "web_page", crawl_status: "ok")
+    Evidence.create!(subject: deal, source: loan, quote: "Owners: Full Reactors Palisades, LLC | Loan: $1.52 billion under the Energy Dominance Financing Program, closed September 2024", found_by: "human")
+    facts = SocialAgent::Picker.new(platform: "linkedin", now: MONDAY).candidates.first.facts
+    assert_match "[the source names the party as: Full Reactors Palisades, LLC]", facts["records of its links"]
+    assert_match "keeps only some items of a list", SocialAgent::Writer::NITS
+    assert_equal "Full Reactors Palisades, LLC", SocialAgent::Picker.new(platform: "x", now: MONDAY).send(:named_party, "Recipient: Full Reactors Palisades, LLC; amount 2 million")
+  end
+
+  test "'its website describes it', 'the directory lists' and a month written out for the source's abbreviation are fine (rehearsal 11)" do
+    assert SocialAgent::Rules.attributed?("Its website describes it as a reactor developer.")
+    assert_empty SocialAgent::Rules.unattributed_superlatives("The directory lists that Helion would supply electricity from its first fusion plant.")
+    assert_not_empty SocialAgent::Rules.unattributed_superlatives("It is the first fusion company.")
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "X-energy" }, source_url: "https://x-energy.com", source_quote: "ARDP award: Oct 2020, $80M initial funding",
+      path: "/companies/x", organization_ids: [])
+    assert_empty SocialAgent::Check.problems("Meet X-energy. The directory lists an October 2020 award of $80M initial funding.", item, platform: "linkedin").grep(/October/)
+    assert_not_empty SocialAgent::Check.problems("Meet X-energy. The directory lists a March 2020 award.", item, platform: "linkedin").grep(/March/)
+  end
+
+  test "HQ fact Everett, WA with page text that says Redmond: a post placing Helion in Redmond is stopped by the full problems, Everett passes the place gate (DQ)" do
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts: { "name" => "Helion Energy", "headquarters" => "Everett, WA", "description" => "Fusion company building a fusion power plant." },
+      source_url: "https://helionenergy.com", source_quote: "Fusion company building a fusion power plant.\nEverett, WA", path: "/companies/helion-energy", organization_ids: [],
+      page_text: "Helion's 2014 ARPA-E project, Compression of FRC Targets for Fusion, was run from Redmond, WA. Headquartered in Everett, WA.")
+    assert_includes SocialAgent::Rules.headquarters("Meet Helion Energy: it is a fusion company based in Redmond, WA.", item).join, "its headquarters in the directory is Everett, WA"
+    assert_empty SocialAgent::Rules.headquarters("Meet Helion Energy: it is a fusion company based in Everett, WA.", item)
+    # The page text mentions Redmond and Everett; only the directory's HQ field decides where the post may place the company.
+    assert_match(/Redmond/, item.page_text)
+  end
+
+  test "spotlight openers rotate: each post gets a pattern not used in the last five posts on its platform, and an opener repeating one of them is blocked (Tosin: not always 'Meet X')" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    patterns = SocialAgent::Openers.patterns
+    assert patterns.size >= 6
+    full = spotlight_company("Full Reactors", "full-reactors")
+    assert_equal 0, SocialAgent::Openers.next_for("x")
+
+    # Five earlier posts on X, one per opener 0..4, so the next free pattern is 5.
+    5.times do |index|
+      other = Organization.create!(name: "Co #{index}", slug: "co-#{index}", verification_status: "verified", verified_by: BY, verified_at: MONDAY - 1.year)
+      SocialPost.create!(platform: "x", status: "posted", subject: other, text: "#{SocialAgent::Openers.fill(patterns[index], other.name)} It does things.", created_at: MONDAY - (10 - index).days)
+    end
+    assert_equal [ 4, 3, 2, 1, 0 ], SocialAgent::Openers.recent("x")
+    assert_equal 5, SocialAgent::Openers.next_for("x")
+    assert_equal 0, SocialAgent::Openers.next_for("linkedin"), "another platform has its own history"
+    item = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.find { |candidate| candidate.subject == full }
+    assert_equal SocialAgent::Openers.fill(patterns[5], "Full Reactors"), item.facts["required opener"]
+
+    ok = "#{SocialAgent::Openers.fill(patterns[5], 'Full Reactors')} According to its website, it designs small modular reactors."
+    assert_empty SocialAgent::Rules.opener(ok, item, platform: "x")
+    repeated = "#{SocialAgent::Openers.fill(patterns[0], 'Full Reactors')} According to its website, it designs small modular reactors."
+    problems = SocialAgent::Rules.opener(repeated, item, platform: "x")
+    assert_match(/doesn't open with the required opener/, problems.join)
+    assert_match(/opens like one of the last 5 posts on x/, problems.join)
+    assert_empty SocialAgent::Rules.opener(repeated, item, platform: "linkedin").grep(/last 5 posts/), "not repeated on LinkedIn"
+  end
+
+  test "the spotlight scan stops at ten eligible companies and tries at most 80 (Infra)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    assert_equal 10, SocialAgent::Picker::SPOTLIGHT_POOL
+    assert_equal 80, SocialAgent::Picker::SPOTLIGHT_MAX_TRIES
+    3.times { |index| spotlight_company("Co #{index}", "co-#{index}") }
+    assert_equal 3, SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.size
+  end
+
+  test "no opener claims something that isn't true of every company (DQ: 'New on the directory' said a company was new)" do
+    patterns = SocialAgent::Openers.patterns.join(" ")
+    assert_no_match(/\bnew\b|\bnow\b|\bjust\b|\blatest\b|\bfirst\b/i, patterns)
+  end
+
+  test "the headquarters isn't put under 'its website' when its evidence is another source (DQ, NuScale's SEC filing)" do
+    facts = { "name" => "NuScale Power", "headquarters" => "Portland, OR", "headquarters comes from" => "a page on sec.gov", "description comes from" => "the company's own website" }
+    item = SocialAgent::Item.new(subject: @company, kind: "spotlight", facts:, source_url: "https://www.nuscalepower.com", source_quote: "x", path: "/companies/nuscale-power", organization_ids: [])
+    bad = "Meet NuScale Power. According to its website, NuScale Power is based in Portland, OR and is a small modular reactor company."
+    assert_match(/puts the headquarters under the company's website, but the headquarters comes from a page on sec.gov/, SocialAgent::Rules.hq_attribution(bad, item).join)
+    good = "Meet NuScale Power. According to its website, it is a small modular reactor company. Per an SEC filing, it is based in Portland, OR."
+    assert_empty SocialAgent::Rules.hq_attribution(good, item)
+    own = item.with(facts: facts.merge("headquarters comes from" => "the company's own website"))
+    assert_empty SocialAgent::Rules.hq_attribution(bad, own), "its own website really is the HQ source"
+  end
+
+  test "a headquarters whose only source is our own company page is 'the directory's own record' (Founder: no company site states Portland or Camden)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    full = spotlight_company("Full Reactors", "full-reactors")
+    ours = Source.create!(url: "https://nuclear-directory.org/companies/full-reactors", source_kind: "web_page", crawl_status: "ok")
+    Evidence.where(subject: full, fields: %w[hq_city hq_state]).update_all(source_id: ours.id)
+    facts = SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.first.facts
+    assert_equal "the directory's own record", facts["headquarters comes from"]
+    assert_equal "the company's own website", facts["description comes from"]
+    assert_match "The directory lists its headquarters as", SocialAgent::Writer::SPOTLIGHT
+  end
+
+  test "a company in config/social_spotlight_holds.yml is never picked by the generator (GTM/DQ: Energy Northwest's record, the card-text holds)" do
+    ENV.delete("SOCIAL_POST_KINDS")
+    held = spotlight_company("Held Reactors", "held-reactors")
+    free = spotlight_company("Free Reactors", "free-reactors")
+    SocialAgent::Picker.holds = { "held-reactors" => "test hold" }
+    assert_equal [ free ], SocialAgent::Picker.new(platform: "x", now: MONDAY).candidates.map(&:subject)
+    assert_includes SocialAgent::Picker.holds.keys, "held-reactors"
+  ensure
+    SocialAgent::Picker.holds = nil
+    assert_includes SocialAgent::Picker.holds.keys, "energy-northwest"
   end
 end

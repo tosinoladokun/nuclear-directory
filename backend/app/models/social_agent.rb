@@ -227,7 +227,7 @@ module SocialAgent
       return "its source page no longer answers (#{response.status || response.reason})"
     end
 
-    item = SocialAgent::Picker.new(platform: post.platform, now:).candidates.find { |candidate| candidate.subject == post.subject }
+    item = SocialAgent::Picker.new(platform: post.platform, now:, kinds: SocialAgent::Picker::ALL_KINDS, except: post.id).candidates.find { |candidate| candidate.subject == post.subject }
     return "its item is no longer one the agent could post" unless item
 
     ready, problems = prepare(item, fetcher)

@@ -6,7 +6,7 @@ module SocialAgent::Check
   # X counts any link as 23 characters.
   X_LINK = 23
   LINKEDIN_LIMIT = 1_300
-  ALWAYS_ALLOWED = [ "Nuclear Directory", "US", "U.S." ].freeze
+  ALWAYS_ALLOWED = [ "Nuclear Directory", "Nuclear", "Directory", "US", "U.S." ].freeze
 
   module_function
 
@@ -34,21 +34,28 @@ module SocialAgent::Check
 
   # Capitalised words (names), each of which must be a word in the source. A sentence may start with a plain word.
   # Words that only start a sentence (shadow day 20 Nov: "Those" was taken for a name).
-  OPENERS = %w[The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
+  OPENERS = %w[Meet Say Introducing According Per The A An It Its This That These Those They Their There Here We Our Both Each Every All Some Most Many
     Several Few Other Another Neither Either Such In On At For With Under After Before By From Since As Over About Across Along Among
     Between During Through Into Upon Within Without While When Where Which Who What Why How If Once Unlike Like Also
     And But Or So Yet Still Meanwhile Separately Together].freeze
 
   def names(text)
-    text.split(/(?<=[.!?])\s+/).flat_map do |sentence|
+    # A colon opens a clause too: "Meet X: According to ..." (spotlights, #883).
+    text.split(/(?<=[.!?:])\s+/).flat_map do |sentence|
       # A possessive is its name: "Power's" checks "Power" (shadow day 20 Nov).
       words = sentence.scan(/[[:alnum:]][\w&'’.-]*[[:alnum:]&]|[[:alnum:]]/).map { |word| word.sub(/['’]s\z/i, "") }.select { |word| word.match?(/[A-Z]/) }
-      words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && OPENERS.include?(word) }
+      words.reject.with_index { |word, index| index.zero? && sentence.start_with?(word) && (OPENERS.include?(word) || SocialAgent::Openers.first_words.include?(word)) }
     end.uniq
   end
 
   def allowed_name?(name, source)
-    ALWAYS_ALLOWED.include?(name) || source.match?(/(?<![\w])#{Regexp.escape(normalize(name))}(?![\w])/)
+    ALWAYS_ALLOWED.include?(name) || month_written_out?(name, source) || source.match?(/(?<![\w])#{Regexp.escape(normalize(name))}(?![\w])/)
+  end
+
+  # "October 2020" for a source's "Oct 2020": a month written out in full is the same month.
+  def month_written_out?(name, source)
+    index = Date::MONTHNAMES.index(name)
+    index && source.match?(/(?<![[:alpha:]])#{Regexp.escape(Date::ABBR_MONTHNAMES[index].downcase)}\b/)
   end
 
   def too_long?(text, platform)

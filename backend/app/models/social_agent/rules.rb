@@ -63,6 +63,10 @@ module SocialAgent::Rules
     found << "its source isn't a primary one (#{host(item.source_url).presence || 'none'})" unless primary?(item)
     found.concat(status_words(text, item))
     found.concat(people(text, item))
+    found.concat(tags(text, item))
+    found.concat(opener(text, item, platform:, except_id:))
+    found.concat(headquarters(text, item))
+    found.concat(hq_attribution(text, item))
     found.concat(dates(text, item))
     found.concat(qualifiers(text, item))
     found.concat(speaker_problems(text, item))
@@ -157,6 +161,10 @@ module SocialAgent::Rules
       found << "it calls it #{name}, which its source doesn't" if text.match?(pattern) && !item.source_text.match?(pattern)
     end
     QUALIFIERS.each do |pattern, name|
+      # A spotlight tells only some of a company's links: a qualifier of a link the post doesn't mention (a plan, a letter of intent) isn't
+      # dropped by it. The voice check and the graders read what the post does say about each link it names (GTM, Helion and NuScale).
+      next if item.kind == "spotlight"
+
       # "Proposed" and "planned" count only in the item's own words: a page's other stories have their own plans.
       said = %w[proposed planned].include?(name) ? item.own_text : item.source_text
       found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
@@ -181,7 +189,7 @@ module SocialAgent::Rules
 
   # The source named in words (Tosin, 20 Nov: the post's link is our page; the source is only said): a verb of saying or a
   # document word. The writer is told to; this is the check.
-  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|according to|told|issued|released|published|filed|
+  ATTRIBUTION = /\b(said|says|announced|announces|reported|reports|stated|states|confirmed|describ(?:es|ed)|according\s+to|per\s+(?:its|the|our|(?-i:[A-Z])\w*)|told|issued|released|published|filed|
     (?:in|from|through)\s+(?:a|an|its|the)\s+[\w\s.'-]{0,40}?(?:notice|filing|release|statement|report|order|letter|permit|announcement|page|post|article))\b/ix
   def attributed?(text) = text.match?(ATTRIBUTION)
 
@@ -220,10 +228,11 @@ module SocialAgent::Rules
   end
 
   # A superlative the source claims is attributed to it, not stated as fact (DQ, round 17: "DOE calls it the first ...").
-  CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?)\b/i
+  CLAIM_CUE = /\b(calls?|called|describes?|described|says?|said|claims?|claimed|according to|billed|labels?|labelled|touts?|lists?|records?|per the directory)\b/i
   def unattributed_superlatives(text)
     text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
-      word = sentence[SUPERLATIVES, 1]
+      # "the first phase", "the first two units" put things in order: they aren't a claim to be first.
+      word = sentence.gsub(/\bfirst\s+(?:phase|stage|unit|units|quarter|half|year|round|two|three|four|five|six|seven|eight|nine|ten|\d+\w*)\b|\bfirst\s+in\s+\d{4}\b/i, "")[SUPERLATIVES, 1]
       next unless word
       next if sentence.match?(CLAIM_CUE)
 
@@ -291,13 +300,63 @@ module SocialAgent::Rules
     (words + terms).uniq
   end
 
+  # Where a spotlight puts the company is the directory's headquarters, nothing else on the page (Founder/DQ, Helion: "Redmond" was the
+  # 2014 award's project location, the headquarters is Everett).
+  PLACED = /\b(?:based|headquartered|headquarters(?:\s+(?:is|are))?)\s+in\s+([A-Z][\p{L}.'-]*(?:\s+[A-Z][\p{L}.'-]*)*)/
+  def headquarters(text, item)
+    return [] unless item.kind == "spotlight"
+
+    hq = item.facts["headquarters"].to_s
+    text.scan(PLACED).flatten.filter_map do |place|
+      next if hq.downcase.include?(place.downcase)
+
+      hq.present? ? "it puts the company in #{place}, but its headquarters in the directory is #{hq}" : "it says where the company is (#{place}), but the directory has no headquarters for it"
+    end
+  end
+
+  # A spotlight opens with its required opener and not like one of the last five posts on the platform (Tosin: varied openers).
+  def opener(text, item, platform:, except_id: nil)
+    return [] unless item.kind == "spotlight"
+
+    name = item.facts["name"].to_s
+    index = SocialAgent::Openers.index_of(text, name)
+    required = item.facts["required opener"].to_s
+    found = []
+    found << "it doesn't open with the required opener (#{required})" if required.present? && !text.to_s.lstrip.start_with?(required.sub(/[.:]\z/, ""))
+    found << "it opens like one of the last #{SocialAgent::Openers::RECENT} posts on #{platform}" if index && SocialAgent::Openers.recent(platform, except: except_id).include?(index)
+    found
+  end
+
+  # A sentence that gives the headquarters isn't put under the company's own website unless the HQ evidence really is that site (DQ, NuScale: the HQ is
+  # in an SEC filing; TerraPower and X-energy: an energy.gov article). The writer is told to give the HQ in its own sentence with its own source.
+  OWN_SITE_PHRASE = /\b(?:its|the company's|the company\u2019s)\s+(?:own\s+)?(?:website|site)\b/i
+  def hq_attribution(text, item)
+    return [] unless item.kind == "spotlight"
+
+    city = item.facts["headquarters"].to_s.split(",").first.to_s.strip
+    from = item.facts["headquarters comes from"].to_s
+    return [] if city.blank? || from.blank? || from == "the company's own website"
+
+    text.split(/(?<=[.!?])\s+/).filter_map do |sentence|
+      next unless sentence.include?(city) && sentence.match?(OWN_SITE_PHRASE)
+
+      "it puts the headquarters under the company's website, but the headquarters comes from #{from}: give it in its own sentence, from that source"
+    end
+  end
+
+  # An @ account in a post is only the company's own verified X handle (GTM's list, #883): never another account, never on LinkedIn.
+  def tags(text, item)
+    allowed = item.facts["x_handle"].to_s.downcase
+    text.scan(/@\w+/).uniq.filter_map { |tag| "it tags #{tag}, which isn't this company's verified handle" unless tag.downcase == allowed }
+  end
+
   # Two or more capitalised words in a row are a name: allowed only for a company, plant or place the directory knows,
   # the facts' own companies and publisher, a month or a state; anything else may be a person (Founder 3.7).
   def people(text, item)
     known = [ item.facts["companies"], item.facts["name"], item.facts["publisher"] ].compact.join(" ").downcase
     text.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/).uniq.filter_map do |found|
       # An article isn't a name, nor evidence of an organisation (Copilot: "The Jane Doe statement").
-      words = found.split.drop_while { |word| ARTICLES.include?(word) }
+      words = found.split.drop_while { |word| ARTICLES.include?(word) || (item.kind == "spotlight" && SocialAgent::Openers.first_words.include?(word)) }
       next if words.size < 2
 
       phrase = words.join(" ")
