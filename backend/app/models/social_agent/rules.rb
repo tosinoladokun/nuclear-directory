@@ -142,10 +142,10 @@ module SocialAgent::Rules
     "not disclosed", "undisclosed", "gave no details", "nothing else", "no details were given", "no details were provided",
     "gave no figure", "gave a figure", "did not give", "didn't give", "declined to", "has not said", "hasn't said", "has not disclosed" ]
     .map { |phrase| /\b#{Regexp.escape(phrase)}\b/i } + [ /\bneither\b[^.]{0,40}\bgave\b/i ])
-  QUALIFIERS = { /memorandum of understanding|\bMOU\b/i => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
+  QUALIFIERS = { /(?i:memorandum of understanding)|\bMOU\b/ => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
                  /framework agreement/i => "framework agreement", /\bproposed\b/i => "proposed", /\bplanned\b/i => "planned" }.freeze
   # A deal word in the post must be the source's own word (DQ: "a collaboration" for a signed MOU).
-  DEAL_WORDS = { "an MOU" => /\bMOUs?\b|memorand(?:um|a) of understanding/i, "a framework" => /\bframeworks?\b/i,
+  DEAL_WORDS = { "an MOU" => /\bMOUs?\b|(?i:memorand(?:um|a) of understanding)/, "a framework" => /\bframeworks?\b/i,
     "an agreement" => /\bagreements?\b/i, "a partnership" => /\bpartnerships?\b/i, "a collaboration" => /\bcollaborations?\b/i,
     "a contract" => /\bcontracts?\b/i, "a deal" => /\bdeals?\b/i, "an alliance" => /\balliances?\b/i, "a venture" => /\bventures?\b/i }.freeze
   def qualifiers(text, item)
@@ -162,9 +162,10 @@ module SocialAgent::Rules
       # dropped by it. The voice check and the graders read what the post does say about each link it names (GTM, Helion and NuScale).
       next if item.kind == "spotlight"
 
-      # Only the item's own words count, like the sensitivity check: the page's other strings around it have their own MOUs, plans and letters of intent (PM, 24 Nov:
-      # TerraPower's Meta agreement was said to leave out an "MOU" that neither source page contains).
-      said = item.own_text
+      # A spotlight's facts are its records' own descriptions, which carry the stage words, so only they count (PM, 24 Nov: TerraPower's Meta agreement was
+      # said to leave out an "MOU" neither source page contains); a news or link item still reads its article text too (DQ: a lede two sentences from the
+      # chosen quote can say "non-binding").
+      said = item.kind == "spotlight" ? item.own_text : item.source_text
       found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
     end
     found

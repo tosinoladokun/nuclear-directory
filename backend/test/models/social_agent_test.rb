@@ -1019,11 +1019,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_includes SocialAgent::Picker.holds.keys, "energy-northwest"
   end
 
-  test "a qualifier counts only when it is in the item's own words, not in the page's other text around it (PM, TerraPower/Meta false positive)" do
-    item = ->(quote, page) { SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: quote, page_text: page) }
-    around = "Elsewhere on the page: Acme signed an MOU with a utility; a non-binding letter of intent was also announced."
-    assert_empty SocialAgent::Rules.qualifiers("Meta agreed to fund early development of two Natrium units.", item.("Meta agreed to fund early development of two Natrium units.", around))
-    assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme signed a paper with a utility.", item.("Acme signed an MOU with a utility.", around)),
-      "its own MOU still has to be said"
+  test "a spotlight reads only its own words for a qualifier; a news or link item still reads its article text; MOU is an uppercase acronym (DQ, PM)" do
+    around = "Elsewhere on the page: a non-binding letter of intent was announced. The mou of a village."
+    build = ->(kind, quote, page) { SocialAgent::Item.new(subject: @news, kind:, facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: quote, page_text: page) }
+    post = "Meta agreed to fund early development of two Natrium units."
+    assert_empty SocialAgent::Rules.qualifiers(post, build.("spotlight", post, around)), "a spotlight's other page text isn't its link's stage"
+    assert_equal [ "it leaves out the source's qualifier (non-binding)", "it leaves out the source's qualifier (letter of intent)" ],
+      SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", around)), "a news item whose article has 'non-binding' still has to say it"
+    assert_empty SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "The mou of a village and an amount of money.")), "'mou' in lower case or inside 'amount' isn't an MOU"
+    assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "Acme signed an MOU with a utility."))
   end
 end
