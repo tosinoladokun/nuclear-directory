@@ -35,6 +35,11 @@ Rails.application.routes.draw do
   # Data Quality's matching actions (#548): token only, 404 without one configured.
   # Autopilot alerts with their owner session, for the Mac poller (#811).
   get "api/autopilot/alerts" => "api/autopilot/alerts#index", defaults: { format: :json }, as: :api_autopilot_alerts
+  # GTM-approved spotlight drafts, with their own token (#896).
+  scope "api/social", module: "api/social", defaults: { format: :json } do
+    post "approved_drafts" => "approved_drafts#create", as: :api_social_approved_drafts
+  end
+
   scope "api/dq", module: "api/dq", defaults: { format: :json } do
     get "matching" => "matching#index", as: :api_dq_matching
     post "matching" => "matching#create"
@@ -42,6 +47,7 @@ Rails.application.routes.draw do
     get "completeness" => "completeness#show", as: :api_dq_completeness
     # The social agent's drafts and posts, for Data Quality's read (#769 shadow).
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
+    post "social_approvals" => "social_approvals#create", as: :api_dq_social_approvals
     get "checker" => "checker#index", as: :api_dq_checker
     # Data Quality's text fixes (#863): edit only, with reason and source, undoable.
     get "edits" => "edits#index", as: :api_dq_edits
@@ -73,6 +79,7 @@ Rails.application.routes.draw do
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     post "social/draft_now" => "social#draft_now", as: :social_draft_now
     post "social/posts/:id/send" => "social#send_draft", as: :social_send_draft
+    post "social/posts/:id/cancel" => "social#cancel_queued", as: :social_cancel_queued
     post "social/by_hand" => "social#by_hand", as: :social_by_hand
     post "social/posts/:id/reconcile" => "social#reconcile", as: :social_reconcile
     # Change your password (#783).

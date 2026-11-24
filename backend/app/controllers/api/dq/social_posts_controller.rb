@@ -9,6 +9,7 @@ class Api::Dq::SocialPostsController < ActionController::API
   # Not a list that could go stale (Infra): a post that wasn't stopped passed every check in SocialAgent::Check,
   # SocialAgent::Rules and the voice check, as they stood when it ran.
   PASSED = "passed every check (SocialAgent::Check, SocialAgent::Rules, voice)".freeze
+  GRADED = "approved by the graders (GTM, Founder, DQ) against the exact hash; the content checks' findings were returned as warnings, not a refusal".freeze
   MANUAL = "recorded by hand: Tosin posted it himself; the automated checks did not run on it".freeze
 
   def index
@@ -16,7 +17,7 @@ class Api::Dq::SocialPostsController < ActionController::API
     posts = SocialPost.where(created_at: since.beginning_of_day..).order(:created_at).limit(MAX).map do |post|
       { id: post.id, at: post.created_at.iso8601, platform: post.platform, status: post.status, text: post.text, link: post.link,
         source_url: post.source_url, reason: post.reason, permalink: post.permalink, subject: "#{post.subject_type} #{post.subject_id}",
-        by_hand: post.by_hand?, checks: (post.by_hand? ? MANUAL : (post.status.in?(%w[blocked failed]) ? nil : PASSED)) }
+        by_hand: post.by_hand?, checks: (post.by_hand? ? MANUAL : post.graded? ? GRADED : (post.status.in?(%w[blocked failed]) ? nil : PASSED)) }
     end
     # Runs that wrote no post, with why (PM: never silence).
     runs = CrawlRun.where(source_kind: SocialAgent::STOPPED, started_at: since.beginning_of_day..).where("stats ? 'stopped'")

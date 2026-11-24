@@ -71,7 +71,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     assert_select "head > title", "Alabama Power: plants | Nuclear Directory"
     assert_equal "Alabama Power is a utility in Birmingham, AL, with 3 plants.", meta_description
-    assert_equal "Alabama Power: Utility in Birmingham, AL. Owns Farley and 2 other plants. Operates Farley.", description
+    assert_equal "Alabama Power: Utility in Birmingham, AL. 3 plants.", description
     assert_equal description, og_description
     assert_no_match(/Plants, sites and deals/, description)
   end
@@ -98,7 +98,39 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     assert_select "head > title", "Helion Energy: investors | Nuclear Directory"
     assert_match(/\AHelion Energy: Develops fusion power plants\. 1 investor\.\z/, meta_description)
-    assert_equal "Helion Energy: Develops fusion power plants. Investors include Lightspeed.", description
+    assert_equal "Helion Energy: Develops fusion power plants.", description
+  end
+
+  test "the card text never states a link flat: no 'Supplies X', 'Invests in Y', 'Investors include Z' or 'Operates P', whatever the link is (PM, 21 Nov: NuScale, Samsung C&T, Prometheus, Dominion)" do
+    nuscale = cite!(company("NuScale", description: "Small modular reactor company."))
+    plan = cite!(link(nuscale, "supplies", cite!(company("Standard Power"))))
+    plan.update!(description: "Announced plan (Oct 2023): NuScale to provide 24 modules for planned SMR plants in Ohio and Pennsylvania")
+    get company_path(slug: nuscale.slug)
+    assert_equal "NuScale: Small modular reactor company.", description
+    assert_equal description, og_description
+
+    # Even a plain signed supply link isn't stated as a bare verb on the card.
+    plan.update!(description: "Supplies 24 modules under a signed supply contract")
+    get company_path(slug: nuscale.slug)
+    assert_no_match(/Supplies/, description)
+
+    # Samsung C&T -> Kairos: a term sheet; Prometheus <- Oklo: a letter of intent; Dominion -> CFS: a collaboration and lease.
+    samsung = cite!(company("Samsung C&T", description: "Engineering and construction company."))
+    cite!(link(samsung, "invests_in", cite!(company("Kairos Power Co")))).update!(description: "Binding term sheet (Sept 2026): up to $100 million, subject to approvals")
+    prometheus = cite!(company("Prometheus Hyperscale", description: "Develops data centers."))
+    cite!(link(cite!(company("Oklo")), "supplies", prometheus)).update!(description: "Non-binding letter of intent to supply 100 MW")
+    dominion = cite!(company("Dominion Energy", description: "Regulated electricity service."))
+    cite!(link(dominion, "supplies", cite!(company("Commonwealth Fusion Systems")))).update!(description: "Collaboration and site lease at the ARC campus")
+    [ samsung, prometheus, dominion ].each do |company|
+      get company_path(slug: company.slug)
+      assert_no_match(/\b(Supplies|Invests in|Investors include|Offtakes from|Operates|Owns)\b/, description, company.name)
+      assert_equal description, og_description
+    end
+
+    holtec = cite!(company("Holtec", description: "Makes spent fuel storage systems."))
+    cite!(link(holtec, "operates", cite!(plant("Palisades", facility_type: "power_reactor", status: "operating"))))
+    get company_path(slug: holtec.slug)
+    assert_equal "Holtec: Makes spent fuel storage systems. 1 plant.", description, "counts and the lead, no 'Operates Palisades'"
   end
 
   test "an ended deal isn't present tense, and an unpublished plant type isn't called a plant" do
@@ -111,7 +143,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     assert_no_match(/Supplies/, description)
 
     get company_path(slug: owner.slug)
-    assert_match(/and 1 other site\./, description)
+    assert_equal "Owner Co: Owns things. 2 sites.", description
   end
 
   test "a mine or fuel plant among them makes them sites, not plants" do
@@ -121,7 +153,7 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
 
     get company_path(slug: miner.slug)
 
-    assert_equal "Energy Fuels: Produces uranium. Owns Pinyon Plain Mine and 1 other site.", description
+    assert_equal "Energy Fuels: Produces uranium. 2 sites.", description
   end
 
   test "the title's role is the one the company's category is for" do

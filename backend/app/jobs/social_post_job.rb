@@ -8,7 +8,9 @@ class SocialPostJob < ApplicationJob
   # drafts_only: Admin > Posts' Draft now (PM, 20 Nov): today's draft, never sent.
   def perform(drafts_only: false)
     SocialChannel::PLATFORMS.each do |platform|
-      SocialAgent.run(platform, drafts_only:)
+      SocialAgent.send_scheduled(platform) unless drafts_only
+      # The server only DRAFTS what the agent writes (never sends it): what goes out is the graders' approved queue, sent first (PM, #897).
+      SocialAgent.run(platform, drafts_only: true)
     rescue StandardError => error
       Rails.error.report(error, context: { social_platform: platform })
     end
