@@ -217,7 +217,8 @@ module SocialAgent
     if post.graded?
       # The text must still be the one the graders approved, with Data Quality's recorded PASS of that hash on file, and its own hard problems
       # (a raw URL, a hashtag, an emoji, a placeholder, length) re-checked: a changed row never goes out.
-      shapes = [ post.text.to_s.strip, "#{post.text.to_s.strip}\n\n#{post.link}" ].map { |shape| Digest::SHA256.hexdigest(shape) }
+      text = post.text.to_s.strip
+      shapes = (post.exact_text ? [ text ] : [ text, "#{text}\n\n#{post.link}" ]).map { |shape| Digest::SHA256.hexdigest(shape) }
       return "its text no longer matches the hash the graders approved" unless post.approved_sha256.present? && shapes.include?(post.approved_sha256)
       return "Data Quality's approval of its hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.approved_sha256)
 
@@ -231,7 +232,12 @@ module SocialAgent
         return "Data Quality's approval of its content hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.content_payload_sha256)
       end
 
-      hard = SocialAgent::ApprovedDraft.hard_problems(post.text.to_s.strip, post.platform)
+      # An exact X text carries our URL once, and its weighted length fits; its prose is checked without the URL (Copilot).
+      if post.exact_text
+        return "its text no longer carries our link exactly once" unless text.scan(%r{https?://\S+}i) == [ post.link ]
+        return "it is over X's weighted length now" if SocialAgent::ApprovedDraft.x_weight(text) > SocialAgent::ApprovedDraft::X_WEIGHT
+      end
+      hard = SocialAgent::ApprovedDraft.hard_problems(post.exact_text ? SocialAgent::ApprovedDraft.exact_prose(text, post.link) : text, post.platform)
       return "its text no longer passes: #{hard.to_sentence}" if hard.any?
       return if post.source_url.blank?
 

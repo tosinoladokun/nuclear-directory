@@ -24,6 +24,12 @@ class SocialAgent::ApprovedDraft
     SocialAgent::Check.problems(text, item, platform:).grep(HARD)
   end
 
+  # X's weight: each of our URLs counts 23, every other character 1 (ASCII text; GTM's weighted_length rule).
+  def self.x_weight(text) = text.gsub(%r{https?://\S+}, "x" * X_URL_WEIGHT).length
+
+  # An exact X text's prose without our URL, the part the content checks read (at creation and again at send).
+  def self.exact_prose(text, link) = text.sub(link, "").squeeze("\n").strip
+
   def self.call(**args) = new(**args).call
   class << self
     attr_writer :fetcher
@@ -58,7 +64,7 @@ class SocialAgent::ApprovedDraft
     err.("sha256", "sha256 matches neither the text nor the text + blank line + link") unless shapes.map { |shape| Digest::SHA256.hexdigest(shape) }.include?(@sha)
     err.("url_in_text", "the text carries a URL other than our own link (on X, our link exactly once; on LinkedIn none: the card carries it)") if !exact && @text.match?(%r{https?://}i)
     err.("url_in_text", "the text carries a second URL") if exact && @text.scan(%r{https?://\S+}i).size > 1
-    err.("length", "over X's 280 weighted characters (the URL counts as 23): #{x_weight(@text)}") if exact && x_weight(@text) > X_WEIGHT
+    err.("length", "over X's 280 weighted characters (the URL counts as 23): #{self.class.x_weight(@text)}") if exact && self.class.x_weight(@text) > X_WEIGHT
     card, annotations = validate_native(err)
     err.("opener_repeat", "that opener pattern was used in the last #{OPENER_RECENT} posts on #{@platform}") if @opener && opener_recent(@opener)
     # Data Quality's recorded PASS of exactly this hash (POST /api/dq/social_approvals): "graders: DQ" is a fact on file, not the caller's word.
@@ -76,6 +82,8 @@ class SocialAgent::ApprovedDraft
     SocialChannel.transaction do
       SocialChannel.for(@platform).lock!
       again = used_by_another(company, send_on)
+      # The opener rule is read again under the lock too: two overlapping submissions with the same opener can't both pass (Copilot).
+      again << [ "opener_repeat", "that opener pattern was used in the last #{OPENER_RECENT} posts on #{@platform}" ] if @opener && opener_recent(@opener)
       next if again.any?
 
       post = SocialPost.create!(platform: @platform, status: "drafted", subject: company, text: @text, link: @link, source_url: @source_url.presence || company.website,
@@ -124,8 +132,10 @@ class SocialAgent::ApprovedDraft
   # A class method: computed again at send from the stored row (SocialAgent.recheck).
   def self.content_hash(text:, link:, annotations:, card:)
     card = card.to_h.stringify_keys
-    payload = { "text" => text, "metadata" => { "linkedin" => { "annotations" => Array(annotations), "linkAttachment" => { "url" => link, "title" => card["title"],
-      "description" => card["description"], "thumbnail" => { "url" => card["image_url"] } } } } }
+    # No mentions: the key is left out, as the sender leaves it out, so what is hashed is what is sent (Copilot).
+    linkedin = { "linkAttachment" => { "url" => link, "title" => card["title"], "description" => card["description"], "thumbnail" => { "url" => card["image_url"] } } }
+    linkedin["annotations"] = Array(annotations) if Array(annotations).any?
+    payload = { "text" => text, "metadata" => { "linkedin" => linkedin } }
     Digest::SHA256.hexdigest(JSON.generate(canonical(payload)))
   end
 
@@ -137,11 +147,9 @@ class SocialAgent::ApprovedDraft
     end
   end
 
-  # X's weight: each of our URLs counts 23, every other character 1 (ASCII text; GTM's weighted_length rule).
-  def x_weight(text) = text.gsub(%r{https?://\S+}, "x" * X_URL_WEIGHT).length
-
   def opener_recent(id)
-    SocialPost.where(platform: @platform).where.not(opener_pattern_id: nil).where.not(status: %w[cancelled blocked failed]).order(id: :desc).limit(OPENER_RECENT).pluck(:opener_pattern_id).include?(id)
+    # The five most recent posts that count (not cancelled), by the day they go or went out, then their openers: a post with no opener still takes a place in the five.
+    SocialPost.where(platform: @platform).where.not(status: "cancelled").order(Arel.sql("COALESCE(sent_on, send_on, created_at::date) DESC"), id: :desc).limit(OPENER_RECENT).pluck(:opener_pattern_id).include?(id)
   end
 
   private
@@ -189,7 +197,7 @@ class SocialAgent::ApprovedDraft
       ready, pre = SocialAgent.prepare(item, fetcher)
       found = pre.map { |problem| "source: #{problem}" }
       # The checks read the post's prose: with our URL inside an exact X text, they read it without the URL (its length is checked separately).
-      prose = exact ? @text.sub(@link, "").squeeze("\n").strip : @text
+      prose = exact ? self.class.exact_prose(@text, @link) : @text
       found.concat(SocialAgent::Check.problems(prose, ready, platform: @platform).reject { |problem| exact && problem.match?(/too long/) })
       found.concat(SocialAgent::Rules.problems(prose, ready, platform: @platform, fetcher:)) if found.none? { |problem| problem.match?(HARD) }
       found

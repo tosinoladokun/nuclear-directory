@@ -614,4 +614,41 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     travel_to(FRIDAY) { approve({ platform: "linkedin", link:, sha256: Digest::SHA256.hexdigest(TEXT), send_on: "2026-11-23" }) }
     assert_response :created
   end
+
+  test "Copilot (#900): an exact X draft passes the send-time recheck (its prose is read without our URL), and a changed URL or hash is refused" do
+    terrapower!
+    sha = Digest::SHA256.hexdigest(TERRA_X)
+    travel_to(FRIDAY) { approve({ slug: "terrapower", text: TERRA_X, link: TERRA_URL_X, sha256: sha, send_on: "2026-11-23" }) }
+    assert_response :created, response.parsed_body.inspect
+    post = SocialPost.last
+    assert post.exact_text
+    assert_nil SocialAgent.recheck(post, FRIDAY, PAGE.new), "the exact text, its link once, its weight and its prose still pass"
+
+    post.update_columns(text: "#{TERRA_X}\nhttps://example.org/x")
+    assert_match(/no longer matches the hash/, SocialAgent.recheck(post.reload, FRIDAY, PAGE.new), "a second URL changes the hash")
+    post.update_columns(text: TERRA_X.sub("TerraPower", "TerraPowe"))
+    assert_match(/no longer matches the hash/, SocialAgent.recheck(post.reload, FRIDAY, PAGE.new))
+  end
+
+  test "Copilot (#900): a card-only LinkedIn payload hashes what the sender sends: no annotations key at all" do
+    card = TERRA_CARD
+    with_none = SocialAgent::ApprovedDraft.content_hash(text: "x", link: "https://nuclear-directory.org/a", annotations: [], card:)
+    assert_equal with_none, SocialAgent::ApprovedDraft.content_hash(text: "x", link: "https://nuclear-directory.org/a", annotations: nil, card:)
+    refute_equal with_none, SocialAgent::ApprovedDraft.content_hash(text: "x", link: "https://nuclear-directory.org/a", annotations: [ TERRA_ANNOTATION ], card:)
+  end
+
+  test "Copilot (#900): the readback's last-sent list follows the day each went out, not the order they were loaded" do
+    travel_to(FRIDAY) { load_row(platform: "x", send_on: "2026-11-23") }
+    first = SocialPost.last
+    other = Organization.create!(name: "Energy Northwest", slug: "energy-northwest", verification_status: "verified", verified_by: BY, verified_at: 1.year.ago)
+    link = "https://nuclear-directory.org/companies/energy-northwest?utm_source=x&utm_medium=social&utm_campaign=energy-northwest"
+    text = "Energy Northwest: it owns and operates Columbia Generating Station."
+    travel_to(FRIDAY) { approve({ slug: "energy-northwest", link:, text:, sha256: Digest::SHA256.hexdigest("#{text}\n\n#{link}"), send_on: "2026-11-24" }) }
+    second = SocialPost.last
+    assert_equal other, second.subject
+    first.update_columns(status: SocialPost::SENT.first, sent_on: Date.new(2026, 11, 25))
+    second.update_columns(status: SocialPost::SENT.first, sent_on: Date.new(2026, 11, 23))
+    get api_social_approved_drafts_path, headers: { "Authorization" => "Bearer #{TOKEN}" }
+    assert_equal [ first.id, second.id ], response.parsed_body["sent"].map { |row| row["id"] }, "the later send day first, though it was loaded first"
+  end
 end

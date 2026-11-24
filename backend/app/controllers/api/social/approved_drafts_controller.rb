@@ -28,7 +28,7 @@ class Api::Social::ApprovedDraftsController < ActionController::API
     row = ->(post) { { id: post.id, send_on: post.send_on, platform: post.platform, company: post.subject.try(:slug), status: post.status, text_sha256: Digest::SHA256.hexdigest(post.text.to_s),
                        approved_sha256: post.approved_sha256, content_payload_sha256: post.content_payload_sha256, opener_pattern_id: post.opener_pattern_id, exact_text: post.exact_text,
                        warnings: post.warnings.to_s.split("\n") } }
-    sent = SocialPost.where.not(approved_sha256: nil).where(status: SocialPost::SENT).order(id: :desc).limit(10).includes(:subject).map do |post|
+    sent = SocialPost.where.not(approved_sha256: nil).where(status: SocialPost::SENT).order(Arel.sql("COALESCE(sent_on, created_at::date) DESC"), id: :desc).limit(10).includes(:subject).map do |post|
       { id: post.id, platform: post.platform, company: post.subject.try(:slug), status: post.status, sent_on: post.sent_on, permalink: post.permalink }
     end
     render json: { queue: SocialPost.waiting.includes(:subject).order(:send_on, :platform).map(&row), sent: }
