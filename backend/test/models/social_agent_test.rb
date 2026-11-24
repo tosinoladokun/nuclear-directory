@@ -674,4 +674,15 @@ class SocialAgentTest < ActiveSupport::TestCase
       summary: "NASA's Space Biology Program investigates how living systems respond to spaceflight stressors, including microgravity and ionizing radiation.")
     assert_nil SocialAgent::Picker.new(platform: "x", now: MONDAY).call
   end
+
+  test "a date is found in the source in either order, with any space (a non-breaking one too) and an abbreviated month; the year must still match (#901)" do
+    item = ->(quote) { SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: quote) }
+    [ "Cameco said on November 7, 2023 it agreed.", "Cameco said on November\u00A07, 2023 it agreed.", "Cameco said on Nov. 7, 2023 it agreed.", "Cameco said on 7 Nov 2023." ].each do |quote|
+      assert_empty SocialAgent::Rules.dates("It closed on 7 November 2023.", item.(quote)), quote
+      assert_empty SocialAgent::Rules.dates("It closed on November 7.", item.(quote)), quote
+    end
+    assert_empty SocialAgent::Rules.dates("It closed on 7 September.", item.("Closed Sept. 7, 2023."))
+    assert_equal [ "the date 7 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 7 November 2022.", item.("Cameco said on November 7, 2023."))
+    assert_equal [ "the date 17 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 17 November.", item.("Cameco said on November 7, 2023.")), "7 isn't 17"
+  end
 end
