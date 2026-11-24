@@ -407,7 +407,8 @@ module SocialAgent::Rules
     # The page's own words too: an MOU the title doesn't mention is still an MOU (rehearsal, 20 Nov).
     return [] unless item && text
 
-    page = item.with(source_quote: [ item.source_quote, ActionController::Base.helpers.strip_tags(response.body.to_s).squish.first(20_000) ].join("\n"))
+    # Kept in page_text, not the quote: a spotlight reads only its own words, so a sidebar's MOU can't block it (Copilot).
+    page = item.with(page_text: [ item.page_text, ActionController::Base.helpers.strip_tags(response.body.to_s).squish.first(20_000) ].compact.join("\n"))
     qualifiers(text, page).reject { |problem| problem.start_with?("it calls it", "it says") }
   rescue StandardError => error
     [ "its source didn't answer (#{error.class})" ]

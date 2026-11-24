@@ -376,6 +376,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.people("NANO Nuclear signed with Surbana Jurong Infrastructure Pte. Ltd.", item), "a legal name isn't a person"
   end
 
+  test "a fetched page's qualifiers don't block a spotlight, which reads only its own words (Copilot, #907)" do
+    page = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200,
+      body: "<p>Sidebar: NANO signed a non-binding MOU with a utility.</p>", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+    item = ->(kind) { SocialAgent::Item.new(subject: @news, kind:, facts: {}, source_url: "https://example.org/x", path: "/", organization_ids: [], source_quote: "Meta agreed to fund two units.") }
+    assert_empty SocialAgent::Rules.source_problems("https://example.org/x", page.new(200), item: item.("spotlight"), text: "Meta agreed to fund two units.")
+    assert_includes SocialAgent::Rules.source_problems("https://example.org/x", page.new(200), item: item.("news"), text: "Meta agreed to fund two units."), "it leaves out the source's qualifier (MOU)"
+  end
+
   test "a stopped draft gets one revision with what stopped it, then every check again (rehearsal)" do
     drafts = [ "Acme Fission won 2 DOE awards.", DRAFT ]
     seen = []
