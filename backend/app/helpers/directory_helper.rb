@@ -478,9 +478,10 @@ module DirectoryHelper
     sites.all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site"
   end
 
-  # The sites a company is linked to today: a link that has ended or not yet started isn't one (as company_description).
+  # The sites a company owns or operates today, for the count in its summary and card: a link that has ended or not yet started isn't one, and a
+  # vendor or offtake link isn't a site it has ("34 sites" on a supplier's card read as plants it owns; DQ).
   def company_current_sites(profile)
-    profile.plant_links.select { |l| (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
+    profile.plant_links.select { |l| %w[owns operates].include?(l.relationship_type) && (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
       .map { |l| l.facility.parent || l.facility }.uniq
   end
 

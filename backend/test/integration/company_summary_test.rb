@@ -43,6 +43,17 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     assert_match(/1 investor/, css_select("meta[name='description']").first["content"], "the meta still counts investors the sentence doesn't say")
   end
 
+  test "plants a vendor supplies are not counted as sites it has: the count is owns and operates only (DQ)" do
+    vendor = cite!(company("Vendor Co", roles: [ role("reactor_vendor") ], city: "Cranberry", state: "PA"))
+    2.times { |index| cite!(link(vendor, "vendor_for", cite!(plant("Vendor Plant #{index}", facility_type: "power_reactor")))) }
+    cite!(link(vendor, "owns", cite!(plant("Own Plant", facility_type: "power_reactor"))))
+
+    get company_path(slug: vendor.slug)
+
+    assert_select ".nd-pagehead__about", /with 1 plant\./
+    assert_no_match(/\b3 plants\b/, css_select("meta[name='description']").first["content"])
+  end
+
   test "a role with no plain company noun is skipped, not inserted" do
     odd = cite!(company("Salt Co", roles: [ role("molten_salt", parent: role("coolant")) ], city: "Reston", state: "VA"))
     get company_path(slug: odd.slug)
