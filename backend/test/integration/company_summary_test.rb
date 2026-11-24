@@ -64,6 +64,13 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     assert_equal "site", helper_noun(owner)
   end
 
+  test "a planned site isn't counted as one the company has (Commonwealth Fusion's Fall Line; DQ)" do
+    fusion = cite!(company("Fusion Co", roles: [ role("reactor_vendor") ], city: "Devens", state: "MA"))
+    cite!(link(fusion, "owns", cite!(plant("Planned Station", facility_type: "power_reactor", status: "planned"))))
+    get company_path(slug: fusion.slug)
+    assert_select ".nd-pagehead__about", text: /site|plant/, count: 0
+  end
+
   test "a role with no plain company noun is skipped, not inserted" do
     odd = cite!(company("Salt Co", roles: [ role("molten_salt", parent: role("coolant")) ], city: "Reston", state: "VA"))
     get company_path(slug: odd.slug)

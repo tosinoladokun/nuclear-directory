@@ -88,7 +88,7 @@ class LinkCardTest < ActiveSupport::TestCase
   Company = Struct.new(:name, :hq_city, :hq_state, :shown_roles, :plant_links, :deals, :category, keyword_init: true) do
     def counted_deals = deals
   end
-  Link = Struct.new(:relationship_type, :facility, :started_on, :ended_on)
+  Link = Struct.new(:relationship_type, :facility, :started_on, :ended_on, :ownership_pct)
 
   def link(type, started_on: nil, ended_on: nil) = Link.new(type, Facility.new(name: "Site #{rand}"), started_on, ended_on)
 
@@ -103,7 +103,16 @@ class LinkCardTest < ActiveSupport::TestCase
   test "a company card doesn't say it operates a plant that isn't operating (Holtec's Palisades)" do
     idle = Link.new("operates", Facility.new(name: "Palisades", status: "not_operating"), nil, nil)
     card = LinkCard.for_company(kairos(plant_links: [ idle, link("owns") ]))
-    assert_equal "Owns stakes in 1 plant · 3 deals", card.footer_right
+    assert_equal "Owns 1 plant · 3 deals", card.footer_right
+  end
+
+  test "'Owns' says stakes only when a link is a part share, and a planned site isn't counted (DQ: Energy Northwest, Commonwealth Fusion)" do
+    part = Link.new("owns", Facility.new(name: "Shared"), nil, nil, 40)
+    assert_equal "Owns stakes in 2 plants · 3 deals", LinkCard.for_company(kairos(plant_links: [ part, link("owns") ])).footer_right
+    whole = Link.new("owns", Facility.new(name: "Whole"), nil, nil, 100)
+    assert_equal "Owns 1 plant · 3 deals", LinkCard.for_company(kairos(plant_links: [ whole ])).footer_right
+    planned = Link.new("owns", Facility.new(name: "Fall Line", status: "planned"), nil, nil, nil)
+    assert_equal "3 deals", LinkCard.for_company(kairos(plant_links: [ planned ])).footer_right, "a planned site isn't counted"
   end
 
   test "a company card: role and HQ, then up to two facts in order" do
@@ -111,7 +120,7 @@ class LinkCardTest < ActiveSupport::TestCase
 
     card = LinkCard.for_company(profile)
 
-    assert_equal [ "Reactor designer · Alameda, CA", "Operates 1 plant · Owns stakes in 2 plants" ], [ card.label, card.footer_right ]
+    assert_equal [ "Reactor designer · Alameda, CA", "Operates 1 plant · Owns 2 plants" ], [ card.label, card.footer_right ]
     assert_equal [ LinkCard::CATEGORY_COLORS["reactor-developers"] ], card.squares
 
     profile.category = nil
@@ -124,7 +133,8 @@ class LinkCardTest < ActiveSupport::TestCase
   end
 
   test "the footer drops a whole fact rather than cut one, as drawn" do
-    card = LinkCard.for_company(kairos)
+    shares = [ link("operates"), Link.new("owns", Facility.new(name: "A"), nil, nil, 40), Link.new("owns", Facility.new(name: "B"), nil, nil, 40) ]
+    card = LinkCard.for_company(kairos(plant_links: shares))
 
     assert_equal "Operates 1 plant · Owns stakes in 2 plants", card.footer_right, "both facts, for the alt text"
     assert_equal "Operates 1 plant", card.send(:footer_drawn).last, "the second doesn't fit beside the wordmark"
@@ -144,7 +154,7 @@ class LinkCardTest < ActiveSupport::TestCase
     links = [ link("operates", started_on: 1.year.from_now.to_date), link("operates", ended_on: Date.current), link("owns", ended_on: 1.day.from_now.to_date),
       link("owns", started_on: Date.current) ]
 
-    assert_equal "Owns stakes in 2 plants · 3 deals", LinkCard.for_company(kairos(plant_links: links)).footer_right
+    assert_equal "Owns 2 plants · 3 deals", LinkCard.for_company(kairos(plant_links: links)).footer_right
   end
 
   test "a name that's one word too wide for a line is cut, with no empty second line" do
