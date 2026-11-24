@@ -293,4 +293,25 @@ class DataQuality::FetcherTest < ActiveSupport::TestCase
     stub_request(:get, %r{\Ahttps://www\.federalregister\.gov/api/v1/documents/2026-11111\.json\?}).to_return(body: "<html>maintenance</html>")
     assert_equal :error, fetcher.get("https://www.federalregister.gov/d/2026-11111").kind
   end
+
+  test "robots.txt redirected within the site (www to the bare domain) is followed; to another site it isn't (RFC 9309; Site, 21 Nov)" do
+    stub_request(:get, "https://www.oklo.example/robots.txt").to_return(status: 308, headers: { "Location" => "https://oklo.example/robots.txt" })
+    stub_request(:get, "https://oklo.example/robots.txt").to_return(body: "User-agent: *\nDisallow: /private\n")
+    stub_request(:get, "https://www.oklo.example/").to_return(body: "<html>Oklo</html>")
+    fetcher = DataQuality::Fetcher.new(sleeper: ->(_) { })
+    assert_equal :ok, fetcher.get("https://www.oklo.example/").kind
+    assert_equal :disallowed, fetcher.get("https://www.oklo.example/private").kind, "the redirected robots.txt's rules apply"
+
+    stub_request(:get, "https://www.away.example/robots.txt").to_return(status: 301, headers: { "Location" => "https://other.example/robots.txt" })
+    assert_equal :error, DataQuality::Fetcher.new(sleeper: ->(_) { }).get("https://www.away.example/").kind
+    assert_not_requested :get, "https://other.example/robots.txt"
+  end
+
+  test "a redirecting robots.txt that is a bot challenge is a block, never followed (Copilot)" do
+    stub_request(:get, "https://www.walled.example/robots.txt").to_return(status: 302,
+      headers: { "Location" => "https://walled.example/robots.txt", "cf-mitigated" => "challenge" })
+    stub_request(:get, "https://walled.example/robots.txt").to_return(status: 404)
+    assert_equal :blocked, DataQuality::Fetcher.new(sleeper: ->(_) { }).get("https://www.walled.example/").kind
+    assert_not_requested :get, "https://walled.example/robots.txt"
+  end
 end
