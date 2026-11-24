@@ -867,6 +867,7 @@ class SocialAgentTest < ActiveSupport::TestCase
     end
     assert_empty SocialAgent::Rules.dates("It closed on 7 September.", item.("Closed Sept. 7, 2023."))
     assert_equal [ "the date 7 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 7 November 2022.", item.("Cameco said on November 7, 2023."))
+    assert_equal [ "the date 7 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 7 November.", item.("The plant trained 7 novice operators.")), "'Nov' inside 'novice' isn't the month (Copilot)"
     assert_equal [ "the date 17 November isn't in the source" ], SocialAgent::Rules.dates("It closed on 17 November.", item.("Cameco said on November 7, 2023.")), "7 isn't 17"
   end
 

@@ -100,7 +100,7 @@ module SocialAgent::Rules
       # The item's own date (and year), or a date its source states the same way (a deadline, a closing date).
       # The month may be abbreviated in the source ("Nov. 7, 2023", "Sept. 7"), either order; the year must match when the post gives one.
       month_form = "(?:#{name}|#{month == 9 ? 'Sept?' : name[0, 3]}\\.?)"
-      stated = source.match?(/\b(?:#{day}(?:st|nd|rd|th)?\s+#{month_form}#{year_part}|#{month_form}\s+#{day}(?:st|nd|rd|th)?#{year_part})(?!\d)/i)
+      stated = source.match?(/\b(?:#{day}(?:st|nd|rd|th)?\s+#{month_form}#{year_part}|#{month_form}\s+#{day}(?:st|nd|rd|th)?#{year_part})(?!\w)/i)
       own_date = item.kind == "news" && own && own.day == day && own.month == month && (year.nil? || year.to_i == own.year)
       next if stated || own_date
 
