@@ -198,6 +198,9 @@ class DataQuality::Fetcher
       fetched = nil
       (ROBOTS_REDIRECTS + 1).times do
         fetched = request(robots_uri, {}, max_bytes: 1.megabyte)
+        # A bot challenge is a block whatever its status, never a redirect to follow (Copilot).
+        break if challenge?(fetched.http)
+
         location = fetched.http["location"] if (300..399).cover?(fetched.http.code.to_i)
         break unless location
 

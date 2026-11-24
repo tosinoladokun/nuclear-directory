@@ -306,4 +306,12 @@ class DataQuality::FetcherTest < ActiveSupport::TestCase
     assert_equal :error, DataQuality::Fetcher.new(sleeper: ->(_) { }).get("https://www.away.example/").kind
     assert_not_requested :get, "https://other.example/robots.txt"
   end
+
+  test "a redirecting robots.txt that is a bot challenge is a block, never followed (Copilot)" do
+    stub_request(:get, "https://www.walled.example/robots.txt").to_return(status: 302,
+      headers: { "Location" => "https://walled.example/robots.txt", "cf-mitigated" => "challenge" })
+    stub_request(:get, "https://walled.example/robots.txt").to_return(status: 404)
+    assert_equal :blocked, DataQuality::Fetcher.new(sleeper: ->(_) { }).get("https://www.walled.example/").kind
+    assert_not_requested :get, "https://walled.example/robots.txt"
+  end
 end
