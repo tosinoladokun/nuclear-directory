@@ -1018,4 +1018,12 @@ class SocialAgentTest < ActiveSupport::TestCase
     SocialAgent::Picker.holds = nil
     assert_includes SocialAgent::Picker.holds.keys, "energy-northwest"
   end
+
+  test "a qualifier counts only when it is in the item's own words, not in the page's other text around it (PM, TerraPower/Meta false positive)" do
+    item = ->(quote, page) { SocialAgent::Item.new(subject: @news, kind: "link", facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: quote, page_text: page) }
+    around = "Elsewhere on the page: Acme signed an MOU with a utility; a non-binding letter of intent was also announced."
+    assert_empty SocialAgent::Rules.qualifiers("Meta agreed to fund early development of two Natrium units.", item.("Meta agreed to fund early development of two Natrium units.", around))
+    assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme signed a paper with a utility.", item.("Acme signed an MOU with a utility.", around)),
+      "its own MOU still has to be said"
+  end
 end

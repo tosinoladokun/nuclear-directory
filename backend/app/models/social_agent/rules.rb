@@ -162,8 +162,9 @@ module SocialAgent::Rules
       # dropped by it. The voice check and the graders read what the post does say about each link it names (GTM, Helion and NuScale).
       next if item.kind == "spotlight"
 
-      # "Proposed" and "planned" count only in the item's own words: a page's other stories have their own plans.
-      said = %w[proposed planned].include?(name) ? item.own_text : item.source_text
+      # Only the item's own words count, like the sensitivity check: the page's other strings around it have their own MOUs, plans and letters of intent (PM, 24 Nov:
+      # TerraPower's Meta agreement was said to leave out an "MOU" that neither source page contains).
+      said = item.own_text
       found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
     end
     found
