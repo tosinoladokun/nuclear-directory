@@ -474,13 +474,21 @@ module DirectoryHelper
   # "plant" only when every site the company is linked to is a published power plant; a mine or a fuel plant makes
   # them "sites" (VOICE.md), as in company_description.
   def company_places_noun(profile)
-    sites = company_current_sites(profile)
+    # The noun follows every site the page shows a link to today, not only the owned or operated ones counted: a vendor linked to a research reactor is "sites".
+    sites = company_linked_sites(profile)
     sites.all? { |site| profile.plant_facts?(site) && site.facility_type == "power_reactor" } ? "plant" : "site"
   end
 
-  # The sites a company is linked to today: a link that has ended or not yet started isn't one (as company_description).
-  def company_current_sites(profile)
+  # Every site a company is linked to today, whatever the link (what the page shows).
+  def company_linked_sites(profile)
     profile.plant_links.select { |l| (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
+      .map { |l| l.facility.parent || l.facility }.uniq
+  end
+
+  # The sites a company owns or operates today, for the count in its summary and card: a link that has ended or not yet started isn't one, and a
+  # vendor or offtake link isn't a site it has ("34 sites" on a supplier's card read as plants it owns; DQ).
+  def company_current_sites(profile)
+    profile.plant_links.select { |l| %w[owns operates].include?(l.relationship_type) && (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
       .map { |l| l.facility.parent || l.facility }.uniq
   end
 

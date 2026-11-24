@@ -43,6 +43,27 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     assert_match(/1 investor/, css_select("meta[name='description']").first["content"], "the meta still counts investors the sentence doesn't say")
   end
 
+  test "plants a vendor supplies are not counted as sites it has: the count is owns and operates only (DQ)" do
+    vendor = cite!(company("Vendor Co", roles: [ role("reactor_vendor") ], city: "Cranberry", state: "PA"))
+    2.times { |index| cite!(link(vendor, "vendor_for", cite!(plant("Vendor Plant #{index}", facility_type: "power_reactor")))) }
+    cite!(link(vendor, "owns", cite!(plant("Own Plant", facility_type: "power_reactor"))))
+
+    get company_path(slug: vendor.slug)
+
+    assert_select ".nd-pagehead__about", /with 1 plant\./
+    assert_no_match(/\b3 plants\b/, css_select("meta[name='description']").first["content"])
+  end
+
+  test "the title says 'site', not 'plant', for a vendor linked only to a research reactor, though none is counted (Copilot)" do
+    vendor = cite!(company("Research Vendor Co", roles: [ role("reactor_vendor") ], city: "Cranberry", state: "PA"))
+    cite!(link(vendor, "vendor_for", cite!(plant("Research Plant", facility_type: "research_reactor"))))
+    assert_equal "site", helper_noun(vendor)
+    owner = cite!(company("Mixed Owner Co", roles: [ role("utility") ], city: "Cranberry", state: "PA"))
+    cite!(link(owner, "owns", cite!(plant("Power Plant", facility_type: "power_reactor"))))
+    cite!(link(owner, "vendor_for", cite!(plant("Research Plant 2", facility_type: "research_reactor"))))
+    assert_equal "site", helper_noun(owner)
+  end
+
   test "a role with no plain company noun is skipped, not inserted" do
     odd = cite!(company("Salt Co", roles: [ role("molten_salt", parent: role("coolant")) ], city: "Reston", state: "VA"))
     get company_path(slug: odd.slug)
@@ -58,4 +79,10 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     get company_path(slug: bare.slug)
     assert_select ".nd-pagehead__about", 0
   end
+
+  private
+    def helper_noun(organization)
+      view = ActionController::Base.new.view_context.extend(DirectoryHelper)
+      view.company_places_noun(CompanyProfile.new(organization))
+    end
 end
