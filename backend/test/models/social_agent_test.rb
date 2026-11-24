@@ -1028,5 +1028,6 @@ class SocialAgentTest < ActiveSupport::TestCase
       SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", around)), "a news item whose article has 'non-binding' still has to say it"
     assert_empty SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "The mou of a village and an amount of money.")), "'mou' in lower case or inside 'amount' isn't an MOU"
     assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "Acme signed an MOU with a utility."))
+    assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "Acme signed a MoU with a utility.")), "'MoU' counts too"
   end
 end

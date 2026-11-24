@@ -142,10 +142,10 @@ module SocialAgent::Rules
     "not disclosed", "undisclosed", "gave no details", "nothing else", "no details were given", "no details were provided",
     "gave no figure", "gave a figure", "did not give", "didn't give", "declined to", "has not said", "hasn't said", "has not disclosed" ]
     .map { |phrase| /\b#{Regexp.escape(phrase)}\b/i } + [ /\bneither\b[^.]{0,40}\bgave\b/i ])
-  QUALIFIERS = { /(?i:memorandum of understanding)|\bMOU\b/ => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
+  QUALIFIERS = { /(?i:memorandum of understanding)|\b(?:MOU|MoU)s?\b/ => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
                  /framework agreement/i => "framework agreement", /\bproposed\b/i => "proposed", /\bplanned\b/i => "planned" }.freeze
   # A deal word in the post must be the source's own word (DQ: "a collaboration" for a signed MOU).
-  DEAL_WORDS = { "an MOU" => /\bMOUs?\b|(?i:memorand(?:um|a) of understanding)/, "a framework" => /\bframeworks?\b/i,
+  DEAL_WORDS = { "an MOU" => /\b(?:MOU|MoU)s?\b|(?i:memorand(?:um|a) of understanding)/, "a framework" => /\bframeworks?\b/i,
     "an agreement" => /\bagreements?\b/i, "a partnership" => /\bpartnerships?\b/i, "a collaboration" => /\bcollaborations?\b/i,
     "a contract" => /\bcontracts?\b/i, "a deal" => /\bdeals?\b/i, "an alliance" => /\balliances?\b/i, "a venture" => /\bventures?\b/i }.freeze
   def qualifiers(text, item)
