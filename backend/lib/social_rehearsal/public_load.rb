@@ -75,7 +75,82 @@ module SocialRehearsal
       end
     end
 
+    # 'Meet a company' (#883): up to `limit` company pages as the directory publishes them: its one-line description, headquarters,
+    # website, what it works on (tags) and its deals with their own quotes and sources. Public data only, like the news above.
+    # Only companies that show a description, a website and at least one deal; spread across the index, not just the first ones.
+    def load_spotlights(limit = 20, slugs: [])
+      items = JSON.parse(get(INDEX).to_s)["items"].select { |item| item["k"] == "c" }
+      loaded = 0
+      # A spread across the index first (every 5th), then the rest, until `limit` pages have what a spotlight needs.
+      # slugs: these companies first, in this order (GTM's priority accounts).
+      named = slugs.filter_map { |slug| items.find { |item| item["s"] == slug } }
+      ordered = named + items.each_slice(5).map(&:first) + items.each_with_index.reject { |_, index| (index % 5).zero? }.map(&:first)
+      ordered.each do |item|
+        break if loaded >= limit
+
+        loaded += 1 if load_spotlight("#{SITE}/companies/#{item['s']}")
+      rescue StandardError => error
+        warn "spotlight #{item['s']}: #{error.class}: #{error.message.to_s.first(100)}"
+      end
+      loaded
+    end
+
     private
+      def load_spotlight(page)
+        doc = Nokogiri::HTML(get(page).to_s)
+        name = doc.at_css("h1.nd-pagehead__name")&.[]("title").to_s.squish.presence or return false
+        about = doc.at_css(".nd-pagehead__about")&.text.to_s.squish.presence or return false
+        site = doc.at_css("a[data-outbound='company_website']")&.[]("href").to_s.sub(/\?.*\z/, "").presence or return false
+        hq = doc.css(".nd-glance__fact").find { |fact| fact.at_css("dt")&.text == "Headquarters" }&.at_css("dd")&.text.to_s.squish
+        city, state = hq.to_s.split(", ", 2)
+        rows = doc.css("li.nd-crow").filter_map do |row|
+          who = row.at_css(".nd-crow__who")&.[]("title").to_s.squish
+          verb = VERBS.keys.find { |word| who.include?(" #{word} ") } or next
+          left, right = who.split(" #{verb} ", 2)
+          quote = row.at_css(".nd-quote")&.text.to_s.gsub(/[“”]/, "").squish.presence
+          url = row.at_css("a.nd-src")&.[]("href").to_s.presence
+          detail = row.at_css("p.type-body")&.text.to_s.squish.presence
+          type = VERBS.fetch(verb)
+          type = "offtake_with" if type == "offtakes_from"
+          [ left, type, right, quote, url, detail ] if quote && url && detail && (left == name || right == name) && Relationship.relationship_types.key?(type)
+        end
+        return false if rows.empty?
+
+        slug = page[%r{/companies/([a-z0-9-]+)}, 1]
+        existing = Organization.find_by(slug:)
+        return false if existing&.description.present?
+
+        attrs = { website: site, domain: URI(site).host.to_s.delete_prefix("www."), description: about, hq_city: city, hq_state: state }
+        org = existing ? existing.tap { |row| row.update!(attrs) } : Organization.create!(name: CGI.unescapeHTML(name), slug:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago, **attrs)
+        site_source = Source.find_or_create_by!(url: site) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }
+        Evidence.create!(subject: org, source: site_source, quote: about, found_by: "human", fields: %w[description])
+        # The public page is the only place the rehearsal finds the headquarters: the directory's own record, not the company's website (Founder, round 13).
+        Evidence.create!(subject: org, source: Source.find_or_create_by!(url: page) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }, quote: hq, found_by: "human", fields: %w[hq_city hq_state]) if hq.present?
+        # The page's own role tag (its first tag, e.g. "Reactor designer"); the Government and research bucket is the agency role, so the
+        # picker can tell an agency from a company.
+        role_label = doc.at_css(".nd-pagehead__tags span.nd-tag")&.text.to_s.squish.presence
+        if role_label
+          key = doc.at_css(".nd-pagehead__tags .nd-bucket--government-research") ? "government_agency" : role_label.parameterize(separator: "_")
+          role = Role.find_or_create_by!(key:) { |row| row.name = role_label }
+          link = OrganizationRole.create!(organization: org, role:, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          Evidence.create!(subject: link, source: site_source, quote: about, found_by: "human")
+        end
+        doc.css("a.nd-tag--link").first(3).each do |tag|
+          label = tag.text.squish
+          tech = Technology.find_or_create_by!(key: label.parameterize(separator: "_")) { |row| row.name = label }
+          link = OrganizationTechnology.find_or_create_by!(organization: org, technology: tech) { |row| row.verification_status = "verified"; row.verified_by = BY; row.verified_at = 30.days.ago }
+          Evidence.create!(subject: link, source: site_source, quote: about, found_by: "human")
+        end
+        rows.each do |left, type, right, quote, url, detail|
+          other_name = left == name ? right : left
+          other = Organization.find_by(name: other_name) || Organization.create!(name: other_name, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          from, to = left == name ? [ org, other ] : [ other, org ]
+          deal = Relationship.create!(from_organization: from, to_organization: to, relationship_type: type, description: detail, verification_status: "verified", verified_by: BY, verified_at: 30.days.ago)
+          Evidence.create!(subject: deal, source: Source.find_or_create_by!(url: url) { |row| row.source_kind = "web_page"; row.crawl_status = "ok" }, quote:, found_by: "human")
+        end
+        true
+      end
+
       def get(url)
         cached = CACHE.join(Digest::SHA256.hexdigest(url)) if url.start_with?(SITE)
         return File.binread(cached).force_encoding("UTF-8") if cached&.exist? && cached.size.positive? && cached.mtime > 1.day.ago

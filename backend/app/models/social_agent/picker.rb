@@ -19,7 +19,29 @@ class SocialAgent::Picker
   LINK_VERBS = %w[supplies invests_in offtake_with subsidiary_of].freeze
 
   # fresh: how far back counts as new (a rehearsal looks back further; social:rehearse).
-  def initialize(platform:, now: Time.current, fresh: FRESH)
+  # kinds: what the agent posts about (SOCIAL_POST_KINDS, comma-separated; Tosin, 21 Nov, #883: company spotlights are the default and
+  # news posts are an occasional extra for later). news, link, new_company and spotlight.
+  def self.kinds = ENV.fetch("SOCIAL_POST_KINDS", "spotlight").split(",").map(&:strip).compact_blank
+  ALL_KINDS = %w[news link new_company spotlight].freeze
+  SPOTLIGHT_COOLDOWN = 8.weeks
+  # The agent tries the first TRIES (5) usable candidates, so ten eligible spotlights are plenty; and no more than SPOTLIGHT_MAX_TRIES companies are built
+  # (each builds a CompanyProfile: a few queries), bounding a run (Infra).
+  SPOTLIGHT_POOL = 10
+  SPOTLIGHT_MAX_TRIES = 80
+  # Not a company to introduce (DQ, 21 Nov): agencies, labs, universities, investors and data-center buyers (these only through their nuclear deals).
+  GOVERNMENT_ROLES = %w[government_agency national_lab university research_organization venture_capital data_center_offtaker].freeze
+  # Companies whose X/LinkedIn accounts GTM verified (config/social_tags.yml): picked first, and on X tagged with their handle.
+  def self.tags = @tags ||= YAML.safe_load_file(Rails.root.join("config/social_tags.yml")) || {}
+  def self.taggable = tags.keys
+  # Companies parked from the generator (config/social_spotlight_holds.yml: slug => reason).
+  def self.holds = @holds ||= YAML.safe_load_file(Rails.root.join("config/social_spotlight_holds.yml")) || {}
+  def self.holds=(value)
+    @holds = value
+  end
+
+  def initialize(platform:, now: Time.current, fresh: FRESH, kinds: self.class.kinds, except: nil)
+    @kinds = kinds
+    @except = except
     @platform = platform
     @now = now
     @fresh = fresh
@@ -30,7 +52,7 @@ class SocialAgent::Picker
   # Every usable candidate, best first.
   def usable = candidates.select { |item| usable?(item) }
 
-  def candidates = news + links + companies
+  def candidates = @kinds.flat_map { |kind| { "spotlight" => :spotlights, "news" => :news, "link" => :links, "new_company" => :companies }.fetch(kind, :none).then { |name| name == :none ? [] : send(name) } }
 
   private
     def news
@@ -97,6 +119,103 @@ class SocialAgent::Picker
           source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}",
           organization_ids: [ company.id ])
       end
+    end
+
+    # 'Meet a company' (#883): a published company whose page has a sourced description and website, complete profiles first
+    # (a description, headquarters, what it works on and a deal, each sourced), then the most connected, then the newest. Never one
+    # spotlighted in the last eight weeks. Its facts are only what the page shows (CompanyProfile) and its source is the company's own site.
+    def spotlights
+      recent = SocialPost.where.not(id: @except).where.not(status: %w[cancelled blocked failed]).where(subject_type: "Organization", created_at: (@now - SPOTLIGHT_COOLDOWN)..).select(:subject_id)
+      # And never one this platform already sent (any age): the one-send index (index_social_posts_one_send) would refuse its second send, so a
+      # repeat after eight weeks needs its own send identity first (tracked: #895).
+      sent = SocialPost.where.not(id: @except).where(subject_type: "Organization", platform: @platform, status: SocialPost::SENT).select(:subject_id)
+      # Nothing open on it (DQ): no candidate waiting for review and no pending take-off proposal.
+      open = Candidate.where(subject_type: "Organization", status: %w[new matched needs_review]).select(:subject_id)
+      proposed = TakeoffProposal.where(subject_type: "Organization", status: "pending").select(:subject_id)
+      pool = Organization.published.where.not(description: [ nil, "" ]).where.not(website: [ nil, "" ]).where.not(slug: self.class.holds.keys).where.not(id: recent).where.not(id: sent).where.not(id: open).where.not(id: proposed).to_a
+      return [] if pool.empty?
+
+      links = Relationship.published.where(from_organization_id: pool.map(&:id)).group(:from_organization_id).count
+        .merge(Relationship.published.where(to_organization_id: pool.map(&:id)).group(:to_organization_id).count) { |_, from, to| from + to }
+      # Verified-account companies first, then the most connected, then the newest; the limit counts ELIGIBLE spotlights, so a thin profile
+      # above a complete one never hides it (Copilot).
+      ordered = pool.sort_by { |company| [ self.class.taggable.include?(company.slug) ? 0 : 1, -links.fetch(company.id, 0), -company.verified_at.to_i ] }
+      items = []
+      ordered.first(SPOTLIGHT_MAX_TRIES).each do |company|
+        break if items.size >= SPOTLIGHT_POOL
+
+        item = spotlight(company)
+        items << item if item
+      end
+      items
+    end
+
+    def spotlight(company)
+      profile = CompanyProfile.new(company)
+      return unless profile.sourced? && profile.description.present? && profile.website.present?
+      # A company, not an agency, lab or university ('Meet a company', #883).
+      return if profile.roles.empty? || profile.roles.all? { |row| GOVERNMENT_ROLES.include?(row.role.key) }
+
+      evidence = company.evidence.includes(:source).order(:id).to_a
+      described = evidence.find { |row| Array(row.fields).include?("description") || row.quote.to_s.include?(company.description) } or return
+      located = evidence.find { |row| Directory::QuoteBacking.place?([ row.quote ], city: company.hq_city, state: company.hq_state) }
+      # Each link in its own words (DQ, #884): the record's description at its strength (an announced plan stays a plan, a loan a loan), its
+      # date and where it comes from, never a bare verb; a link with no description of its own isn't told. No "works on" line: roles and
+      # technologies aren't quotes from the company.
+      # A "supplies" link whose description doesn't speak of supply, fuel or services isn't a supply link (DQ: Dominion and CFS is a lease).
+      supply = /suppl|fuel|service|provid|deliver|procure|offtak|purchase/i
+      told = profile.deals.select { |deal| SocialAgent::Picker.current_links(Relationship.where(id: deal.id), @now.to_date).exists? && deal.description.present? &&
+        # An undated link isn't told (DQ: "ARPA-E research funding" with no year reads as a present state).
+        (profile.deal_date(deal) || deal.description.match?(/\b(?:19|20)\d{2}\b/)) &&
+        (deal.relationship_type != "supplies" || deal.description.match?(supply)) }.first(@platform == "x" ? 1 : 2)
+      deals = told.map do |deal|
+        # The date isn't repeated when the description already carries a year ("closed Sept 2024 (September 2024)").
+        date = profile.deal_date(deal)&.strftime("%B %Y") unless deal.description.to_s.match?(/\b(?:19|20)\d{2}\b/)
+        support = best_evidence(deal)
+        from = support&.source&.url
+        party = named_party(support&.quote)
+        stage = " [stage: #{deal.stage_label.downcase}]" if deal.stage
+        "#{deal.from_organization.name} and #{deal.to_organization.name}: #{deal.description.squish.delete_suffix('.')}#{" (#{date})" if date}#{stage}#{" [the source names the party as: #{party}]" if party}#{" [source: #{source_label(from, company)}]" if from}"
+      end
+      headquarters = [ company.hq_city, company.hq_state ].compact_blank.join(", ") if located
+      facts = { "name" => company.name, "description" => company.description, "description comes from" => source_label(described.source&.url, company),
+                "headquarters" => headquarters.presence, "headquarters comes from" => (source_label(located.source&.url, company) if located),
+                "records of its links" => deals.join("; ").presence,
+                "x_handle" => (self.class.tags.dig(company.slug, "x") if @platform == "x") }.compact_blank
+      # The opener this post must start with: the first pattern not used in the last five posts on the platform.
+      pattern = SocialAgent::Openers.patterns[SocialAgent::Openers.next_for(@platform, except: @except)]
+      facts["required opener"] = SocialAgent::Openers.fill(pattern, company.name) if pattern
+      # The page its description rests on when that is the company's own site (a redirect on the bare homepage doesn't stop it), else the site.
+      own = described.source.url if described.source&.url.present? && source_label(described.source.url, company) == "the company's own website"
+      item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: own || company.website,
+        source_quote: [ described.quote, located&.quote ].compact.uniq.join("\n"), path: "/companies/#{company.slug}", organization_ids: [ company.id, *told.flat_map { |deal| [ deal.from_organization_id, deal.to_organization_id ] } ].uniq)
+      # Complete only (DQ): a role, a website, a description, a sourced headquarters and at least one current link to a published company.
+      item if headquarters.present? && deals.any?
+    end
+
+    # The source whose quote states what the link's description says (Founder: the loan is on energy.gov, not on the USAspending page that
+    # supports a different award): the evidence row whose quote shares the most of the description's words and figures, else the first.
+    def best_evidence(deal)
+      wanted = deal.description.to_s.downcase.scan(/[[:alnum:]$.,]+/).reject { |word| word.length < 3 }.uniq
+      rows = deal.evidence.select { |row| row.source&.url.present? }
+      rows.max_by { |row| quote = row.quote.to_s.downcase; wanted.count { |word| quote.include?(word) } }
+    end
+
+    # The party the supporting quote itself names as the recipient, owner or borrower ("Owners: Holtec Palisades, LLC"): the loan is to
+    # that entity, not to the company's parent (DQ, Holtec).
+    def named_party(quote)
+      quote.to_s[/\b(?:Owners?|Recipients?|Borrowers?|Awardees?)\s*:\s*([^|\n;]+?)\s*(?:\||\n|;|\z)/i, 1]&.squish.presence
+    end
+
+    # Where a fact really comes from, in words: the company's own website only when it is, else the page's site (DQ: never "its website" for a DOE or SEC page).
+    def source_label(url, company)
+      host = SocialAgent::Rules.host(url).to_s.delete_prefix("www.")
+      return "an unnamed page" if host.blank?
+      # Our own page for the company is the directory's record, not a source outside it (the writer says "the directory lists").
+      return "the directory's own record" if host == "nuclear-directory.org"
+
+      own = [ company.domain, company.website ].compact.map { |site| (site.include?("/") ? SocialAgent::Rules.host(site) : site).to_s.delete_prefix("www.") }.reject(&:blank?)
+      own.any? { |site| host == site || host.end_with?(".#{site}") } ? "the company's own website" : "a page on #{host}"
     end
 
     def rejected_news
