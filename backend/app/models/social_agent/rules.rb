@@ -91,13 +91,16 @@ module SocialAgent::Rules
   DATE = /\b(?:(\d{1,2})\s+(#{MONTH})|(#{MONTH})\s+(\d{1,2}))(?:,?\s+(\d{4}))?\b/
   def dates(text, item)
     own = Date.parse(item.facts["date"].to_s) rescue nil
-    source = [ item.source_quote, item.page_text ].compact.join("\n")
+    # Any kind of space counts as one (a page's "November&nbsp;7, 2023" is a non-breaking space, which \s doesn't match).
+    source = [ item.source_quote, item.page_text ].compact.join("\n").gsub(/[[:space:]]+/, " ")
     text.scan(DATE).filter_map do |day_first, month_a, month_b, day_last, year|
       day, month = (day_first || day_last).to_i, Date::MONTHNAMES.index(month_a || month_b)
       name = Date::MONTHNAMES[month]
       year_part = year ? ",?\\s+#{year}" : ""
       # The item's own date (and year), or a date its source states the same way (a deadline, a closing date).
-      stated = source.match?(/\b(?:#{day}\s+#{name}#{year_part}|#{name}\s+#{day}#{year_part})\b/i)
+      # The month may be abbreviated in the source ("Nov. 7, 2023", "Sept. 7"), either order; the year must match when the post gives one.
+      month_form = "(?:#{name}|#{month == 9 ? 'Sept?' : name[0, 3]}\\.?)"
+      stated = source.match?(/\b(?:#{day}(?:st|nd|rd|th)?\s+#{month_form}#{year_part}|#{month_form}\s+#{day}(?:st|nd|rd|th)?#{year_part})(?!\w)/i)
       own_date = item.kind == "news" && own && own.day == day && own.month == month && (year.nil? || year.to_i == own.year)
       next if stated || own_date
 
