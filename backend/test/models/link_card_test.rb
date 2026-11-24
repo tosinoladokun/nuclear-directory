@@ -115,6 +115,11 @@ class LinkCardTest < ActiveSupport::TestCase
     assert_equal "3 deals", LinkCard.for_company(kairos(plant_links: [ planned ])).footer_right, "a planned site isn't counted"
   end
 
+  test "a unit with no status of a planned site isn't counted on the card (Copilot)" do
+    unit = Link.new("owns", Facility.new(name: "Unit 1", parent: Facility.new(name: "Site", status: "planned")), nil, nil, nil)
+    assert_equal "3 deals", LinkCard.for_company(kairos(plant_links: [ unit ])).footer_right
+  end
+
   test "a company card: role and HQ, then up to two facts in order" do
     profile = kairos
 

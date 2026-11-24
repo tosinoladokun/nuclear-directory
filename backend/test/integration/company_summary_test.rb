@@ -71,6 +71,15 @@ class CompanySummaryTest < ActionDispatch::IntegrationTest
     assert_select ".nd-pagehead__about", text: /site|plant/, count: 0
   end
 
+  test "a unit with no status of a planned site isn't counted either (Copilot)" do
+    fusion = cite!(company("Unit Fusion Co", roles: [ role("reactor_vendor") ], city: "Devens", state: "MA"))
+    site = plant("Planned Site", facility_type: "power_reactor", status: "planned")
+    unit = plant("Planned Unit 1", facility_type: "power_reactor", parent: site)
+    cite!(link(fusion, "owns", unit))
+    get company_path(slug: fusion.slug)
+    assert_select ".nd-pagehead__about", text: /site|plant/, count: 0
+  end
+
   test "a role with no plain company noun is skipped, not inserted" do
     odd = cite!(company("Salt Co", roles: [ role("molten_salt", parent: role("coolant")) ], city: "Reston", state: "VA"))
     get company_path(slug: odd.slug)
