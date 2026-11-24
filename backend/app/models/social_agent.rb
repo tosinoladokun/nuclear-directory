@@ -7,7 +7,7 @@ module SocialAgent
 
   # Publishers by platform, each ->(text, link) returning { id:, due_at: } (queued) or { id:, permalink: } (sent).
   # Both go through Buffer (PM, 18 Nov); swap one here to change how a platform is published.
-  def self.senders = @senders ||= SocialChannel::PLATFORMS.to_h { |platform| [ platform, ->(text, link) { publisher.call(platform, text, link) } ] }
+  def self.senders = @senders ||= SocialChannel::PLATFORMS.to_h { |platform| [ platform, ->(text, link, **payload) { publisher.call(platform, text, link, **payload) } ] }
   def self.publisher = SocialAgent::Buffer.new
 
   # Sending is on only when SOCIAL_POSTING_ENABLED is "on" (Render dashboard; Infra): otherwise Live drafts too.
@@ -158,7 +158,11 @@ module SocialAgent
       return post.tap { |gone| gone.update!(status: "blocked", cost_usd: 0, reason: "its #{{ 'NewsItem' => 'news item', 'Relationship' => 'link' }.fetch(post.subject_type, 'company')} is no longer published") }
     end
     sender = senders[post.platform] or return post.tap { |failed| failed.update!(status: "failed", reason: "#{post.platform} isn't connected") }
-    sent = sender.call(post.text, post.link)
+    # A graders-approved post goes out exactly as approved: the text verbatim when it carries its own URL, the approved card and native mentions,
+    # and no fallback of any kind (strict). Anything else keeps the plain call.
+    sent = post.graded? ? sender.call(post.text, post.link, exact: post.exact_text, card: post.card, annotations: post.annotations, strict: true) : sender.call(post.text, post.link)
+    # An actual fallback is recorded on the post (the row and the DQ API show it), never silent.
+    post.update!(warnings: [ post.warnings.presence, "FALLBACK: #{sent[:fallback]}" ].compact.join("\n")) if sent[:fallback]
     if sent[:permalink]
       post.tap { |done| done.update!(status: "posted", external_id: sent[:id], permalink: sent[:permalink], posted_at: Time.current) }
     else
@@ -213,11 +217,27 @@ module SocialAgent
     if post.graded?
       # The text must still be the one the graders approved, with Data Quality's recorded PASS of that hash on file, and its own hard problems
       # (a raw URL, a hashtag, an emoji, a placeholder, length) re-checked: a changed row never goes out.
-      shapes = [ post.text.to_s.strip, "#{post.text.to_s.strip}\n\n#{post.link}" ].map { |shape| Digest::SHA256.hexdigest(shape) }
+      text = post.text.to_s.strip
+      shapes = (post.exact_text ? [ text ] : [ text, "#{text}\n\n#{post.link}" ]).map { |shape| Digest::SHA256.hexdigest(shape) }
       return "its text no longer matches the hash the graders approved" unless post.approved_sha256.present? && shapes.include?(post.approved_sha256)
       return "Data Quality's approval of its hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.approved_sha256)
 
-      hard = SocialAgent::ApprovedDraft.hard_problems(post.text.to_s.strip, post.platform)
+      # A LinkedIn post goes out with the card and mentions DQ approved: the content hash is recomputed from what is stored and must still be the one on
+      # file, with DQ's approval of it, or nothing is sent.
+      if post.platform == "linkedin"
+        return "its card or content hash is missing, so it can't be sent as approved" if post.card.blank? || post.content_payload_sha256.blank?
+
+        content = SocialAgent::ApprovedDraft.content_hash(text: post.text.to_s.strip, link: post.link, annotations: post.annotations, card: post.card)
+        return "its content no longer matches the content hash the graders approved" unless content == post.content_payload_sha256
+        return "Data Quality's approval of its content hash is no longer on file" unless SocialApproval.exists?(platform: post.platform, slug: post.subject.try(:slug).to_s, sha256: post.content_payload_sha256)
+      end
+
+      # An exact X text carries our URL once, and its weighted length fits; its prose is checked without the URL (Copilot).
+      if post.exact_text
+        return "its text no longer carries our link exactly once" unless text.scan(%r{https?://\S+}i) == [ post.link ]
+        return "it is over X's weighted length now" if SocialAgent::ApprovedDraft.x_weight(text) > SocialAgent::ApprovedDraft::X_WEIGHT
+      end
+      hard = SocialAgent::ApprovedDraft.hard_problems(post.exact_text ? SocialAgent::ApprovedDraft.exact_prose(text, post.link) : text, post.platform)
       return "its text no longer passes: #{hard.to_sentence}" if hard.any?
       return if post.source_url.blank?
 

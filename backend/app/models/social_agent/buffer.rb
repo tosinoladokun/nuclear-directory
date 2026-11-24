@@ -17,6 +17,8 @@ class SocialAgent::Buffer
   GQL
 
   class Error < StandardError; end
+  # A refusal that is about the link card itself (Buffer's wording isn't documented): only then may an approved post fall back to its URL inline.
+  CARD_REFUSAL = /attach|thumbnail|link|image|card|preview|url/i
 
   # Buffer Free allows 1,000 requests a channel per 30 days (2 channels: 2,000); we stop at 80% and say so (PM).
   MONTHLY_REQUESTS = ENV.fetch("BUFFER_MONTHLY_REQUESTS", "2000").to_i
@@ -40,11 +42,37 @@ class SocialAgent::Buffer
   # LinkedIn only draws a preview card for a link attachment, not for a URL in the text (PM, 21 Nov: the first live post had none): the
   # attachment carries our page's own title, description and card image, and the text then has no raw URL. X builds its card from the
   # URL in the text (its metadata has no link attachment). When the page can't be read, the URL stays in the text, so the post still goes.
-  def call(platform, text, link)
+  # exact: the text is sent verbatim (our URL is already inside it); card / annotations: the graders' approved LinkedIn card and native mentions;
+  # strict: no silent fallback of any kind (a changed body is a different post): a card that can't be read, or a request Buffer refuses, is an error
+  # and nothing is posted. The last three are what a graders-approved post is sent with.
+  def call(platform, text, link, exact: false, card: nil, annotations: nil, strict: false)
     due = @now.call + DELAY
-    card = @card.call(link) if platform == "linkedin"
-    input = { text: card ? text : "#{text}\n\n#{link}", channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
-    input[:metadata] = { linkedin: { linkAttachment: card } } if card
+    card = card.to_h.deep_symbolize_keys.presence
+    # The approved card is {title, description, image_url}; Buffer's link attachment is {url, title, description, thumbnail: {url}} with our tracked link.
+    card = { url: link, title: card[:title], description: card[:description], thumbnail: { url: card[:image_url] } } if card && card[:image_url]
+    card ||= @card.call(link) if platform == "linkedin"
+    raise Error, "its link card couldn't be read, so nothing was posted" if strict && platform == "linkedin" && card.nil?
+
+    annotations = Array(annotations).map { |annotation| annotation.to_h.deep_symbolize_keys }.presence if platform == "linkedin"
+    body = exact || card ? text : "#{text}\n\n#{link}"
+    input = { text: body, channelId: channel_id(platform), schedulingType: "automatic", mode: "customScheduled", dueAt: due.utc.iso8601 }
+    metadata = { annotations:, linkAttachment: card }.compact
+    input[:metadata] = { linkedin: metadata } if platform == "linkedin" && metadata.any?
+    if strict
+      begin
+        return finish(create(input), due)
+      rescue Error => error
+        # PM: a graders-approved post may go out with its URL inline ONLY after a definite refusal of the card attachment, with the native mentions kept and the
+        # fallback reported (the sender's caller records it on the post). Any other refusal, and every uncertain reply, is never retried.
+        raise unless platform == "linkedin" && card && error.message.match?(CARD_REFUSAL)
+
+        retry_input = input.merge(text: "#{text}\n\n#{link}")
+        retry_input[:metadata] = { linkedin: { annotations: }.compact } if annotations
+        retry_input.delete(:metadata) unless annotations
+        return finish(create(retry_input), due).merge(fallback: "Buffer refused the card (#{error.message.truncate(120)}): posted with the URL inline#{' and the mentions kept' if annotations}")
+      end
+    end
+
     result =
       begin
         create(input)
@@ -55,6 +83,10 @@ class SocialAgent::Buffer
 
         create(input.except(:metadata).merge(text: "#{text}\n\n#{link}"))
       end
+    finish(result, due)
+  end
+
+  def finish(result, due)
     id = result.dig("post", "id") or raise SocialAgent::Uncertain, "Buffer didn't return the post's id"
     { id:, due_at: Time.zone.parse(result.dig("post", "dueAt").to_s) || due }
   end
