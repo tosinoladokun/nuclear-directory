@@ -568,9 +568,12 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
   - Rendered by a renderer that never runs scripts or fetches.
 - **Raster quality:** the trimmed mark is at least 3× its display size on both sides, so the output is never enlarged.
 - **Kept with each logo:**
-  - the original file, unchanged;
-  - its source URL and the date it was fetched;
+  - only the processed mask, at most 50 KB;
+  - the file's URL and the page it was found on;
+  - the date it was fetched and the original's sha256;
   - each processing step that was applied.
+- **The original file isn't stored,** so a logo never costs more than 50 KB.
+- **Re-processing** fetches the file's URL again. If the source is gone, the current logo stays and the admin gives a plain reason.
 
 **Reject rules.** Any one of these means no logo, with the reason recorded:
 1. The file type, size or SVG content breaks a rule under Files.
@@ -581,7 +584,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 6. A part of the mark is thinner than 1.5px at display size all the way through. In the 3× mask, a connected shape vanishes entirely when eroded with a disc 4.5px across. Sharp corners and serifs that thin out at their ends don't count.
 7. The one-ink version is empty, for example a white logo made for dark backgrounds.
 
-**Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original from its source beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
+**Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original, loaded from its source URL, beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
 
 ## Accessibility
 
