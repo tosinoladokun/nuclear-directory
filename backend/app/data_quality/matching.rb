@@ -507,6 +507,12 @@ module DataQuality::Matching
       site = directory.facility(id: found.id)
       raise Abort, "#{site.name} is a unit; propose its site's fields instead" if site.parent_id
       raise Abort, "#{site.name} isn't published yet" unless site.verification_status == "verified"
+      # A docketed record is an NRC unit (Facility refuses it an EIA plant ID), even one with no site above it yet:
+      # the ID would be refused at Tosin's Yes (25 Nov). Its coordinates are fine.
+      if fields.key?("eia_plant_id") && site.nrc_docket.present?
+        raise Abort, "#{site.name} is an NRC unit (docket #{site.nrc_docket}) with no site above it, and an EIA plant ID goes on a site; " \
+          "propose its coordinates without the EIA plant ID"
+      end
       if (plant = fields["eia_plant_id"]) && (holder = directory.facility(eia_plant_id: plant)) && holder.id != site.id
         raise Abort, "EIA plant ID #{plant} is already #{holder.name}'s (##{holder.id})"
       end

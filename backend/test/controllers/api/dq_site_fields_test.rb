@@ -109,6 +109,30 @@ class Api::DqSiteFieldsTest < ActionDispatch::IntegrationTest
     assert results[3]["ok"], results.inspect
   end
 
+  test "a docketed record with no site above it takes coordinates, never an EIA plant ID, so Tosin's Yes is never refused (25 Nov)" do
+    unit = Facility.create!(name: "Callaway", nrc_docket: "05000483", facility_type: "power_reactor", status: "operating", state: "MO",
+      verification_status: "verified", verified_by: "human:tosin")
+    act(propose(coordinates.merge(eia_plant_id: "68635"), target: unit.id), propose(coordinates, target: unit.id))
+    assert_match "Callaway is an NRC unit (docket 05000483) with no site above it", results[0]["error"]
+    assert_match "propose its coordinates without the EIA plant ID", results[0]["error"]
+    assert results[1]["ok"], results.inspect
+
+    fill = Candidate.find(results[1]["id"])
+    match!
+    assert_equal [ "Facility", unit.id ], fill.reload.values_at(:subject_type, :subject_id), fill.notes
+    assert DataQuality::Review.approve([ fill.id ], by: "human:tosin").sole.ok?
+    assert_equal [ BigDecimal("41.705993"), BigDecimal("-110.5603") ], unit.reload.values_at(:latitude, :longitude)
+
+    # Proposed while still a site, given a docket before matching: review, never Tosin's Yes and a refusal.
+    late = Facility.create!(name: "Late Docket", facility_type: "power_reactor", verification_status: "verified", verified_by: "human:tosin")
+    act(propose(coordinates.merge(eia_plant_id: "68635"), target: late.id))
+    held = Candidate.find(results.sole["id"])
+    late.update_columns(nrc_docket: "05000999")
+    match!
+    assert_nil held.reload.subject_id
+    assert_match "proposed for Late Docket, which is an NRC unit (docket 05000999); an EIA plant ID goes on a site", held.notes
+  end
+
   test "found by the site Data Quality named, even renamed since; review when that site closed or its EIA plant ID is another's" do
     act(propose(coordinates))
     renamed = Candidate.find(results.sole["id"])

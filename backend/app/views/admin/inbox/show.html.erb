@@ -111,6 +111,10 @@
               data-bulk-select-target="box" data-action="click->bulk-select#pick" aria-label="Select #<%= item.candidate_id %>">
           <% end %>
           <div class="nd-wait__what">
+            <%# A refused Yes, on its own row (PM, 25 Nov). %>
+            <% if (refused = flash[:refused].to_h[item.candidate_id.to_s]) %>
+              <div class="nd-flash" role="alert"><%= icon("warning-circle") %><p class="type-body-strong m-0"><%= refused %></p></div>
+            <% end %>
             <% if key == "new_record" %>
               <p class="m-0"><span class="nd-tag"><%= item.kind == "facility" ? "Plant" : "Company" %></span></p>
             <% end %>
