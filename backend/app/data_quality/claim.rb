@@ -31,6 +31,8 @@ module DataQuality::Claim
     "hq_city" => "headquarters city", "hq_state" => "headquarters state", "capacity_mw" => "capacity", "thermal_power_kw" => "thermal power",
     "amount_usd" => "amount", "amount_offered_usd" => "amount offered", "external_id" => "external ID", "link_name" => "belongs to",
     "sec_cik" => "SEC CIK", "parent_name" => "site" }.freeze
+  # A plant link that ended, in its own words (#930): "Energy Harbor stopped operating the plant Davis-Besse on 1 Mar 2024".
+  ENDED_VERBS = { "operates" => "operating", "owns" => "owning", "offtakes_from" => "buying power from" }.freeze
   # A Form D round's fields in its own words (#129): what it sold, and when it first sold.
   ROUND_LABELS = { "amount_usd" => "amount sold", "starts_on" => "first sale on", "external_id" => "filing" }.freeze
 
@@ -64,6 +66,12 @@ module DataQuality::Claim
     # Links carry every detail approval would publish (ownership %, dates,
     # description), so nothing is published that the verifier didn't check.
     when "facility_relationship"
+      # A link that ends (#930): said as an end, so neither the verifier nor Tosin reads it as the link going on.
+      if (ended = (Date.iso8601(payload["ended_on"].to_s) rescue nil))
+        doing = ENDED_VERBS.fetch(payload["relationship_type"].to_s) { "its #{verb(payload['relationship_type'])} link to" }
+        rest = details(payload.except("organization", "facility", "relationship_type", "ended_on"))
+        return "#{name_of(payload['organization'])} stopped #{doing} the plant #{facility_name(payload['facility'])} on #{ended.strftime('%-d %b %Y')}#{rest}."
+      end
       "#{name_of(payload['organization'])} #{verb(payload['relationship_type'])} the plant " \
         "#{facility_name(payload['facility'])}#{details(payload.except('organization', 'facility', 'relationship_type'))}."
     when "relationship"

@@ -117,6 +117,9 @@ module DataQuality::Review
   # class (PM, 18 Oct): a person decides it, or accepts Data Quality's call on it.
   BY_A_PERSON = "a deal term is decided by a person".freeze
   DECIDED = "it would change a record a person decided".freeze
+  # Data Quality's operator change (#930): ending a plant's operator and adding the new one are Tosin's, one at a time,
+  # never in a bulk Yes, whatever Data Quality says and whoever verified the old link.
+  OPERATOR_CHANGE = "it changes a plant's operator; decide it on its own".freeze
   # The holds a person's Accept of Data Quality's reviewed list lifts.
   REVIEWED_HOLDS = [ FIRST_BATCH, BY_A_PERSON ].freeze
   # A trade-press item (#127): a pointer for Data Quality to the primary
@@ -124,6 +127,9 @@ module DataQuality::Review
   LEAD = "it's a lead: Data Quality finds the primary source".freeze
 
   def self.lead?(candidate) = candidate.payload.is_a?(Hash) && candidate.payload["lead"] == true
+  # One of the two claims of Data Quality's operator change (#930).
+  def self.operator_change?(candidate) =
+    candidate.kind == "facility_relationship" && DqAction.where(candidate_id: candidate.id, action: "propose_link", target_type: "Facility").exists?
   # A decision that collided with a merge of the same records (#325).
   BUSY = "someone was merging this just then; try again".freeze
 
@@ -210,6 +216,7 @@ module DataQuality::Review
     def held_reason(candidate, directory: DataQuality::DirectoryClient.new, record: :lookup, firsts: first_batches, decided: nil)
       return LEAD if lead?(candidate)
       return "it isn't attached to a record yet" unless candidate.subject_id
+      return OPERATOR_CHANGE if operator_change?(candidate)
 
       if decided.nil?
         record = directory.attached_record(candidate) if record == :lookup

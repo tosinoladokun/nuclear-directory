@@ -349,6 +349,12 @@ class DataQuality::Stages::Match < DataQuality::Stage
         end
       end
 
+      # Data Quality's operator change (#930) is for the plant it named: another plant of that name goes to review.
+      if candidate.kind == "facility_relationship" &&
+          (plant = DqAction.where(candidate:, action: "propose_link", target_type: "Facility").pick(:target_id)) && attributes[:facility_id] != plant
+        return review(candidate, "proposed for plant ##{plant}, but facility matches plant ##{attributes[:facility_id]}")
+      end
+
       # A deal term's one end is its link: the company, for a round; for a
       # deal, the open link its ends and verb name (#256), which must exist
       # first. A term never creates or reopens its link.
@@ -368,7 +374,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # A link a human rejected or unpublished, or one whose company or plant
       # was, isn't written to. The same claim again is confirmed (it stays as
       # decided); anything else goes to review (#240).
-      existing = directory.existing_fact(candidate.kind, attributes) || site_link(candidate.kind, attributes)
+      # An operator change (#930) is for the exact plant or unit it named, never its site's link (Copilot).
+      existing = directory.existing_fact(candidate.kind, attributes) ||
+        (site_link(candidate.kind, attributes) unless DataQuality::Review.operator_change?(candidate))
       if existing && (existing.closed? || closed_end)
         reason = closed_end&.reason || "#{existing.name.upcase_first} was #{existing.decision}. The same thing again?"
         return settle_closed(candidate, existing, reason)
@@ -477,6 +485,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # own page) supersedes the earlier one, so there's nothing to combine.
     def self.other_page_on(candidate, existing, directory:)
       return if candidate.kind_deal_term?
+      # Data Quality's operator change (#930) replaces what the other page says on purpose, and Tosin decides it on its own.
+      return if DataQuality::Review.operator_change?(candidate)
 
       cited = directory.evidence(type: existing.type, id: existing.id).map(&:source_id)
       # An earlier edition of this document is superseded by it, not another page.
