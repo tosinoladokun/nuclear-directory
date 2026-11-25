@@ -291,10 +291,12 @@
   .nd-siteicon__square { fill: var(--nd-ink); }
   .nd-siteicon__orbits { stroke: var(--nd-paper); }
   .nd-siteicon__nucleus { fill: var(--nd-paper); }
+  /* 1100 is longer than an orbit (about 930 units), so one dash covers it. Not pathLength: some browsers ignore it on
+     an ellipse, which left the orbits as faint 1px dashes. */
   @media (prefers-reduced-motion: no-preference) {
-    .nd-siteicon__orbit { stroke-dasharray: 1; animation: nd-siteicon-draw 2.25s ease-out both; }
+    .nd-siteicon__orbit { stroke-dasharray: 1100; animation: nd-siteicon-draw 2.25s ease-out both; }
   }
-  @keyframes nd-siteicon-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes nd-siteicon-draw { from { stroke-dashoffset: 1100; } to { stroke-dashoffset: 0; } }
   .nd-home__search { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 14px; }
   /* Compact, as before the cards (Tosin, 19 Oct): never wider than 960px, centred. */
   .nd-home__cats { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
