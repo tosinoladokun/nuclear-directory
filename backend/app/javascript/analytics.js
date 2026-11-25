@@ -122,7 +122,9 @@ function trackHome(event) {
     return
   }
   if (event.type === "auxclick" && event.button !== 1) return
-  // B's chart cards and its download link.
+  // B's chart cards and its download link. A tap on the map's dots, or one that only hides a dot's label, isn't a click
+  // on the card: it doesn't open the page (#940).
+  if (event.target.closest?.(".nd-chartmap__dot, .nd-chartmap-wrap[data-label-open], .nd-chartmap-wrap[data-map-tap]")) return
   const chart = event.target.closest?.("a[data-home-chart]")
   if (chart) return ready.capture("home_chart_click", { chart: chart.dataset.homeChart, ...variant }, { send_instantly: true })
   if (event.target.closest?.("a[data-home-download]")) return ready.capture("home_download_click", variant, { send_instantly: true })
