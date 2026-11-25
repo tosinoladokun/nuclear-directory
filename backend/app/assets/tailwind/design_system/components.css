@@ -437,8 +437,9 @@
   .nd-chart:hover, .nd-chart:focus-visible { border-color: var(--nd-ink); }
   .nd-chart__title, .nd-chart__sub { margin: 0; }
   .nd-chart__sub { color: var(--nd-ink-muted); }
-  .nd-chart__foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: var(--nd-space-3); min-width: 0; }
-  .nd-chart__src { color: var(--nd-ink-muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The source line is a sentence of domains: it may take a second line, as the subtitle does, never an ellipsis. */
+  .nd-chart__foot { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--nd-space-3); min-width: 0; }
+  .nd-chart__src { color: var(--nd-ink-muted); min-width: 0; }
   .nd-chart__more { flex: none; font-size: 14px; white-space: nowrap; }
   .nd-chart:hover .nd-chart__more, .nd-chart:focus-visible .nd-chart__more { text-decoration: underline; }
   /* One line each: names take their short form past 22 characters, then the ellipsis (one-line law). */
@@ -473,9 +474,8 @@
   @media (max-width: 639px) {
     .nd-chart { padding: 20px; }
     .nd-chart__title { font-size: 19px; }
-    /* The source line above the link, whole: it may run to a second line, as the subtitle does. */
+    /* The source line above the link. */
     .nd-chart__foot { flex-direction: column; align-items: flex-start; gap: var(--nd-space-2); }
-    .nd-chart__src { white-space: normal; }
     /* The fuel chain's four steps as two rows of two on phones, the arrows dropped. */
     .nd-chart__chain { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--nd-space-4); }
     .nd-chart__arrow { display: none; }

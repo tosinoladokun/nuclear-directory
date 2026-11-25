@@ -19,6 +19,8 @@ class HomeBLayoutTest < ApplicationSystemTestCase
   def assert_one_line(width)
     tall = page.evaluate_script("[...document.querySelectorAll('.nd-chart__name, .nd-chart__barname, .nd-chart__newstitle, .nd-chart__more, .nd-home__downloadlink span')].filter(e => e.getBoundingClientRect().height > 30).map(e => e.textContent)")
     assert_empty tall, "at #{width}: one line each"
+    cut = page.evaluate_script("[...document.querySelectorAll('.nd-chart__src, .nd-chart__more, .nd-chart__title')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    assert_empty cut, "at #{width}: source lines, links and titles are never cut"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth - innerWidth"), :<=, 0, "at #{width}: no sideways scroll"
   end
 
