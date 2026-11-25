@@ -1,5 +1,0 @@
-<%= render layout: "home/chart_card", locals: { key: "buyers", size:, url: directory_url_for(category: Category.find("power-buyers")),
-      title: "Who buys nuclear power", subtitle: "Signed power deals, by buyer.",
-      sources: chart_sources(data[:sources], limit: size == :large ? 3 : 2), link: "Power buyers" } do %>
-  <%= render "home/charts/bars", rows: data[:rows], unit: %w[deal deals], bucket: Category.find("power-buyers") %>
-<% end %>

@@ -1,0 +1,17 @@
+<%# One bar split into parts (#909), each part's name and count under it. No axes: the parts add up to the whole.
+    Parts: { label:, value: }, largest first. %>
+<% total = data[:parts].sum { |part| part[:value] } %>
+<div class="nd-chartsplit">
+  <span class="nd-chartsplit__bar" aria-hidden="true">
+    <% data[:parts].each_with_index do |part, i| %><span class="nd-chartsplit__part nd-chartsplit__part--<%= [ i, 2 ].min %>" style="--w: <%= chart_pct_of(part[:value], total) %>%"></span><% end %>
+  </span>
+  <ul class="nd-chartsplit__key">
+    <% data[:parts].each_with_index do |part, i| %>
+      <li class="nd-chartsplit__row">
+        <span class="nd-chartsplit__swatch nd-chartsplit__part--<%= [ i, 2 ].min %>" aria-hidden="true"></span>
+        <span class="nd-chartsplit__label type-small"><%= part[:label] %></span>
+        <span class="nd-chartsplit__value type-data"><%= part[:value] %></span>
+      </li>
+    <% end %>
+  </ul>
+</div>

@@ -1,0 +1,26 @@
+<%# Columns (#909): one column per band, its value on top; the y axis named above its ticks, the x axis named under
+    the column labels. Columns: { label:, value: } in the axis's order; edges: the labels between bands (optional). %>
+<% max = data[:columns].map { |column| column[:value] }.max %>
+<% top, ticks = chart_axis(max, chart_step(max)) %>
+<div class="nd-chartcols" role="group" aria-label="<%= question.axes[:y] %> by <%= question.axes[:x].downcase %>" style="--cols: <%= data[:columns].size %>; --ticks: <%= ticks.size - 1 %>">
+  <span class="nd-axis__name nd-chartcols__yname type-data-sm"><%= question.axes[:y] %></span>
+  <span class="nd-chartcols__yticks type-data-sm" aria-hidden="true">
+    <% ticks.each do |tick| %><span class="nd-chartcols__ytick" style="--at: <%= chart_pct_of(tick, top) %>%"><%= tick %></span><% end %>
+  </span>
+  <span class="nd-chartcols__plot">
+    <% data[:columns].each do |column| %>
+      <span class="nd-chartcols__col" style="--h: <%= chart_pct_of(column[:value], top) %>%"><span class="nd-chartcols__value type-data-sm"><%= column[:value] %><span class="sr-only"> <%= question.axes[:y].downcase %>, <%= column[:label] %></span></span><span class="nd-chartcols__bar"></span></span>
+    <% end %>
+  </span>
+  <% if data[:edges] %>
+    <%# Bands are labelled on the edges between them (600, 900, ...), so each label stays short enough for a phone. %>
+    <span class="nd-chartcols__xedges type-data-sm" aria-hidden="true">
+      <% data[:edges].each_with_index do |edge, i| %><span class="nd-chartcols__xedge" style="--at: <%= chart_pct_of(i + 1, data[:columns].size) %>%"><%= edge %></span><% end %>
+    </span>
+  <% else %>
+    <span class="nd-chartcols__xlabels type-data-sm" aria-hidden="true">
+      <% data[:columns].each do |column| %><span class="nd-chartcols__xlabel"><%= column[:label] %></span><% end %>
+    </span>
+  <% end %>
+  <span class="nd-axis__name nd-chartcols__xname type-data-sm"><%= question.axes[:x] %></span>
+</div>

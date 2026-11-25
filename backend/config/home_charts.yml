@@ -1,0 +1,86 @@
+# Homepage B's questions (#909, Tosin 25 Nov: "we will shuffle that 6, and keep generating").
+#
+# Each entry is one card: a question the directory's published facts answer completely, checked by Data Quality
+# against an authority (EIA, NRC) with the verdict and query recorded on #909. A question joins only after that check.
+#
+# To add one: an entry here, a query method of the same name in HomeCharts (unless `query:` names an existing one), and
+# a test in test/models/home_charts_test.rb that its numbers match the source's. The chart kinds are drawn by
+# app/views/home/charts/_<chart>.html.erb.
+#
+#   key:       the card's name in the analytics (home_chart_click) and the query method
+#   question:  the title. %{count} is the chart's count (map only)
+#   short:     the title when the card is too narrow for the question on one line
+#   chart:     map, bars (ranked, top 8), columns, or split (one bar in parts)
+#   sizes:     large and/or small: the slots the card can take
+#   axes:      bars: category (the names' axis), value (with its unit); columns: x, y
+#   tick:      bars: the value axis's tick step
+#   decimals:  bars: the value beside each bar (default 0)
+#   not_with:  keys never shown on the same screen
+
+- key: plant_map
+  question: "Where are the %{count} operating US nuclear plants?"
+  short: Where are US plants?
+  chart: map
+  sizes: [large]
+
+- key: state_power
+  question: Which states have the most nuclear power?
+  short: Nuclear power by state
+  chart: bars
+  sizes: [large, small]
+  axes: { category: State, value: "Capacity (GW, net summer)" }
+  tick: 4
+  decimals: 1
+
+- key: largest_plants
+  question: Which are the largest US nuclear plants?
+  short: The largest US plants
+  chart: bars
+  sizes: [large, small]
+  axes: { category: Plant, value: "Capacity (GW, net summer)" }
+  tick: 1
+  decimals: 1
+
+- key: reactor_sizes
+  question: How big are US reactors?
+  short: How big are reactors?
+  chart: columns
+  sizes: [small]
+  axes: { x: "Reactor size (MW, net summer)", y: Reactors }
+
+- key: reactors_per_plant
+  question: How many reactors does each plant have?
+  short: Reactors per plant
+  chart: columns
+  sizes: [small]
+  axes: { x: Reactors at the plant, y: Plants }
+
+- key: reactor_types
+  question: What kind of reactors does the US run?
+  short: What kind of reactors?
+  chart: split
+  sizes: [small]
+
+- key: state_reactors
+  question: Which states have the most reactors?
+  short: Reactors by state
+  chart: bars
+  sizes: [small]
+  axes: { category: State, value: Reactors }
+  tick: 2
+  not_with: [state_power]
+
+- key: reactor_vendors
+  question: Whose reactor designs does the US run?
+  short: Whose reactor designs?
+  chart: bars
+  sizes: [small]
+  axes: { category: Company, value: Reactors }
+  tick: 20
+
+- key: reactor_status
+  question: How many US power reactors still run?
+  short: How many still run?
+  chart: split
+  sizes: [small]
+  not_with: [reactor_types]
