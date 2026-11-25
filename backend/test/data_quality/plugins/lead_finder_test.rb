@@ -381,4 +381,18 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal :unconfirmed, Plugin.call(lead("Capped", url: home).id, finder: finder).outcome
     assert_not_requested :get, "#{home}/nuclear"
   end
+
+  test "a published company with no website is searched too, after the pending ones (PM, 24 Nov)" do
+    pending = Organization.create!(name: "Fresh Fission")
+    listed = Organization.create!(name: "Steady Fission", verification_status: "verified", verified_by: "human:tosin")
+    Organization.create!(name: "Sited Fission", website: "https://sited.example", verification_status: "verified", verified_by: "human:tosin")
+    ids = DataQuality::DirectoryClient.new.organizations_without_website(limit: 1_000).map(&:first)
+    assert ids.index(pending.id) < ids.index(listed.id), "pending first"
+    refute_includes ids, Organization.find_by!(name: "Sited Fission").id
+
+    searched = []
+    site_finder = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(query) { searched << query; [] })
+    site_finder.find_sites
+    assert(searched.any? { |query| query.include?("Steady Fission") })
+  end
 end

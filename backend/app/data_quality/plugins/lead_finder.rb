@@ -82,7 +82,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       .pluck(Arel.sql("(stats->>'#{SITE_FOR}')::bigint")).to_set
     # A pending company whose proposing claim DQ rejected is junk: never searched for (DQ, 19 Nov).
     rejected = Candidate.where(kind: "organization", subject_type: "Organization", dq_recommendation: "reject").pluck(:subject_id).to_set
-    due = @directory.pending_organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) || rejected.include?(id) }.first(limit)
+    due = @directory.organizations_without_website(limit: 200).reject { |id, _| tried.include?(id) || rejected.include?(id) }.first(limit)
     due.to_h { |id, name| [ id, find_site(id, name) ] }
   end
 
