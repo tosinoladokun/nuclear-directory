@@ -22,6 +22,18 @@ class HomeCategories
 
   def self.cards = new.cards
 
+  # The search box's Browse list (#909): the same list as the cards, each
+  # category with companies, then Plants and sites always last, with its
+  # count. Built once per data version, as the cards are.
+  Browse = Data.define(:category, :count)
+  # Longer names than this drop to 13px on phones, and to their short name under 360px (Design's measures, #917).
+  BROWSE_NAME_FITS = 25
+  def self.browse
+    counts = Rails.cache.fetch([ "home-browse/v1", DataVersion.current ]) { DirectoryListing.category_counts.transform_values(&:to_i) }
+    buckets = Category.buckets.select { |category| counts[category.key].to_i.positive? }
+    (buckets + [ Category.find("plants") ]).map { |category| Browse.new(category:, count: counts[category.key].to_i) }
+  end
+
   def cards
     counts = DirectoryListing.category_counts
     buckets = Category.buckets.select { |category| counts[category.key].to_i.positive? }

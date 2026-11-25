@@ -155,7 +155,7 @@ Text inside a box (a card title, chip, pill, button, tab, badge, table header, m
 - Focus: a `focus-width` ring in `focus`, offset 2px. Never removed.
 
 ### Motion
-- 120ms ease-out for hover and press, 200ms for panels opening. No entrance animations. Graph nodes settle once on load and then stay put. Respect `prefers-reduced-motion` by cutting all of it.
+- 120ms ease-out for hover and press, 200ms for panels opening. No entrance animations, with one exception: the site icon beside the home wordmark draws its two orbits in once on load (2.25s, ease-out, both together), then holds (#909). Graph nodes settle once on load and then stay put. Respect `prefers-reduced-motion` by cutting all of it.
 
 ## Key screens
 
@@ -202,7 +202,7 @@ What each page type is for, in order of importance. Build and review pages again
 Start a search, or browse the industry by category. **For:** Anyone arriving from a link or a search engine; returning visitors who know what they want.
 
 - **Questions, in order:** 1. Can I find this company or plant here? 2. What does the directory cover? 3. Who are the main companies in each area?
-- **Sections, top to bottom:** Wordmark; Search box; Category cards: 9 categories + Plants and sites; the card title, with its count, is the one link to the list, underlined on hover and focus (a compact grid, 960px at most and centred: two columns from 640px, titles 17px from 1024px, 14px below and 13px under 375px, 24px between rows; an open, collapsible stack on phones, where a 44px caret button beside the title collapses the card; no chevrons, no "See all"; without JavaScript every card stays open); Footer (the one row of links, as on every page).
+- **Sections, top to bottom:** Site icon and wordmark (the icon as tall as the name's font size, a gap of 0.28 of it, centred; the pair stays on one line down to 320); Search box (the empty, focused box opens Browse: the categories with their counts, Plants and sites last); Category cards: 9 categories + Plants and sites; the card title, with its count, is the one link to the list, underlined on hover and focus (a compact grid, 960px at most and centred: two columns from 640px, titles 17px from 1024px, 14px below and 13px under 375px, 24px between rows; an open, collapsible stack on phones, where a 44px caret button beside the title collapses the card; no chevrons, no "See all"; without JavaScript every card stays open); Footer (the one row of links, as on every page).
 - **Above the fold:** at 390, wordmark, search, the first category card and the top of the second. At 1440, wordmark, search and the first two rows of cards. The page scrolls on a laptop screen (about 1157px tall at 1440×900): Tosin chose the compact grid over the old no-scroll fit (19 Oct). The last card can sit alone on its row.
 - **Key facts and sources:** Count per category: published companies (plants for Plants and sites); Top 3 per category: most sourced connections; investors by funded companies; Cost: the top 3 per category can sit behind a fragment cache keyed on the latest fact update, if it slows.
 - **Links in:** Search engines and shared links; The wordmark on every page. **Links out:** Category pages (the card title); Company and plant profiles (card rows); Search results.
@@ -483,7 +483,7 @@ Square brackets mark a component shown only when its data exists, or one that's 
 - **Company profile:** header; breadcrumb; profile header; key facts (Type, record facts, roles, technology, headquarters, founded, parents, subsidiaries, source line); [connections map: after key facts on phones; on desktop it runs full width under the profile header, above key facts and the lists]; the category's own sections; Deals and links; Plants and sites; [missing facts]; Sources with the cite line; Report a correction; Similar companies (up to five, in the shared bare company row, no count); footer.
 - **Plant profile:** header; breadcrumb; profile header; [owner and operator sentence]; key facts ("About this plant" line); [connections map: after key facts on phones; on desktop it runs full width under the profile header, above key facts and the lists]; Companies; units table; [missing facts]; Sources; footer.
 - **Unit:** its row on the plant page, highlighted.
-- **Search:** instant results (group label, rows with a 32px mark); no results, or All results.
+- **Search:** instant results (group label, rows with a 32px mark); no results, or All results. On the home page the empty, focused box shows Browse: the label, then a row per category (28px category square, the full name as on the cards, count on the right in `type-data` mono; 52px rows on phones; the two long names drop to 13px on phones and to their short names under 360px), Plants and sites last, ink on `paper-sunken` (#909).
 - **Report a correction:** [alert]; what you're correcting; the form; Send; back link.
 - **Today (admin):** admin shell; date head; stage tiles; [counts per source]; [step 3 lists, #373].
 
@@ -495,11 +495,11 @@ Square brackets mark a component shown only when its data exists, or one that's 
 - Icons take `currentColor`: `ink` by default, `ink-muted` beside metadata, `on-inverse` on the banner. Inline the SVG so the colour follows the text.
 - Fixed meanings: `magnifying-glass` search · `sliders-horizontal` filters · `graph` relationship map · `buildings` organization · `factory` facility · `link` source · `arrow-square-out` opens a source · `check` verified · `clock` pending · `x` rejected · `map-pin` location · `coins` investment · `plug` power and offtake · `flag` report a correction · `download-simple` export · `warning-circle` something that didn't go through: an admin action, or a failed pipeline run (always next to words; never for an advisory notice such as the 80% budget line). Don't reuse one for another meaning.
 - Icons support a word; they never replace one. Status and relationship types are always written out.
-- Never use atom, radiation or lightning icons. The one exception is the site icon (favicon and home-screen icon): a nucleus with two crossed orbits, paper on ink, drawn by `backend/script/build_site_icon.py`.
+- Never use atom, radiation or lightning icons. The one exception is the site icon: a nucleus with two crossed orbits, paper on ink, drawn by `backend/script/build_site_icon.py`. It appears in two places only: the favicon and home-screen icon (still), and beside the wordmark on the home page (`shared/_site_icon`, #909), where its orbits draw in once on load and it takes the `ink` and `paper` tokens, so it flips with the theme. Nowhere else, and never as an icon for nuclear power.
 
 ## Logos
 
-- There is no Nuclear Directory logo yet. The name is set in Anton, uppercase, "NUCLEAR DIRECTORY", and served as an SVG of the letter outlines (`shared/_wordmark`, built by `script/build_fonts.py`) so the font never delays the header. Put the name beside it as text for screen readers.
+- There is no Nuclear Directory logo yet; on the home page only, the site icon sits beside the wordmark (see Iconography). The name is set in Anton, uppercase, "NUCLEAR DIRECTORY", and served as an SVG of the letter outlines (`shared/_wordmark`, built by `script/build_fonts.py`) so the font never delays the header. Put the name beside it as text for screen readers.
 - Fonts are self-hosted Latin subsets (`shared/_fonts`); only Roboto Serif is preloaded.
 - Organizations get a **monogram**: their initials in `mono` on a `paper-sunken` square with a `rule` border. Their own logos are inconsistent in quality, so monograms keep the directory even. If logos are added later, show them grayscale.
 

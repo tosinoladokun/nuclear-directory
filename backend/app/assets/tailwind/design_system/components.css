@@ -280,16 +280,30 @@
   /* Tablets, 640 to 1023px: two-column cards are narrower, so less side padding; from 640 to 739px a tighter gap and no count, to keep the longest title on one line (a test checks 320 to 1440). */
   @media (min-width: 640px) and (max-width: 1023px) { .nd-home { padding-inline: var(--nd-space-4); } }
   @media (min-width: 640px) and (max-width: 739px) { .nd-home { padding-inline: var(--nd-space-2); } .nd-home .nd-catcard { padding-inline: 8px; } .nd-home .nd-catcard__link { gap: 6px; } .nd-home .nd-catgrid { column-gap: 8px; } .nd-home .nd-catcard__link .nd-catcard__count { display: none; } }
-  .nd-home__wordmark { margin: 0; display: flex; justify-content: center; color: var(--nd-ink); }
-  /* 48px tall (60px at 1440 and up); 34px on phones (#362). */
-  .nd-home__wordmark .nd-wordmark__svg { height: 48px; max-width: 100%; }
+  /* --nd-wm is the name's cap height: 48px (60px at 1440 and up); 34px on phones (#362), less below 390 so mark and
+     name stay on one line. The mark beside it (#909) is as tall as the name's font size (cap / 0.859, Anton), centred,
+     with a gap of 0.28 of the font size (Design, 25 Nov). */
+  .nd-home__wordmark { --nd-wm: 48px; margin: 0; display: flex; justify-content: center; align-items: center; gap: calc(var(--nd-wm) * .326); color: var(--nd-ink); }
+  .nd-home__wordmark .nd-wordmark__svg { flex: none; height: var(--nd-wm); }
+  .nd-home__wordmark .nd-siteicon { flex: none; width: calc(var(--nd-wm) * 1.164); height: calc(var(--nd-wm) * 1.164); }
+  /* The site icon (DESIGN.md, Iconography): ink square, paper orbits and nucleus, so it flips with the theme. The orbits
+     draw themselves in once (2.25s, ease-out, together), then hold; with reduced motion they are drawn from the start. */
+  .nd-siteicon__square { fill: var(--nd-ink); }
+  .nd-siteicon__orbits { stroke: var(--nd-paper); }
+  .nd-siteicon__nucleus { fill: var(--nd-paper); }
+  /* 1100 is longer than an orbit (about 930 units), so one dash covers it. Not pathLength: some browsers ignore it on
+     an ellipse, which left the orbits as faint 1px dashes. */
+  @media (prefers-reduced-motion: no-preference) {
+    .nd-siteicon__orbit { stroke-dasharray: 1100; animation: nd-siteicon-draw 2.25s ease-out both; }
+  }
+  @keyframes nd-siteicon-draw { from { stroke-dashoffset: 1100; } to { stroke-dashoffset: 0; } }
   .nd-home__search { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 14px; }
   /* Compact, as before the cards (Tosin, 19 Oct): never wider than 960px, centred. */
   .nd-home__cats { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
   .nd-home .nd-searchbox--large .nd-search { height: 52px; }
   @media (min-width: 1440px) {
     .nd-home { padding: 40px 120px 14px; }
-    .nd-home__wordmark .nd-wordmark__svg { height: 60px; }
+    .nd-home__wordmark { --nd-wm: 60px; }
     .nd-home .nd-searchbox--large .nd-search { height: 56px; }
   }
 
@@ -380,7 +394,8 @@
        outside them, so the focus ring goes inside the row: it stays whole. */
     .nd-catcard--stack .nd-catcard__row:focus-visible { outline-offset: -2px; }
     .nd-home__search { gap: var(--nd-space-4); }
-    .nd-home__wordmark .nd-wordmark__svg { height: 34px; }
+    /* Mark, gap and name come to 10.2 x the cap height; 32px is the page's side padding. */
+    .nd-home__wordmark { --nd-wm: min(34px, calc((100vw - 32px) / 10.3)); }
     /* Search near the top, so the keyboard doesn't cover the results. */
     .nd-home { padding: max(var(--nd-space-6), env(safe-area-inset-top)) var(--nd-space-4) var(--nd-space-4); gap: var(--nd-space-4); }
     .nd-home .nd-searchbox--large .nd-search { height: 48px; }
@@ -407,6 +422,14 @@
   .nd-instant__all kbd { border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); padding: 2px 6px; }
   .nd-instant__note { margin: 0; padding: var(--nd-space-3) var(--nd-space-4) 0; color: var(--nd-ink-muted); }
   .nd-instant__empty { margin: 0; padding: var(--nd-space-4); }
+  /* Browse (#909): the empty field lists the categories, the count on the right in mono. Plants and sites (no bucket)
+     is ink on paper-sunken. */
+  .nd-browse__row .nd-catsq { width: 28px; height: 28px; }
+  .nd-browse__row .nd-catsq:not([class*="nd-bucket--"]) { color: var(--nd-ink); }
+  .nd-browse__row .nd-instant__text { flex: 1 1 auto; }
+  .nd-browse__count { flex: none; margin-left: auto; color: var(--nd-ink-muted); }
+  .nd-browse__short { display: none; }
+  @media (max-width: 359px) { .nd-browse__name[data-long] .nd-browse__full { display: none; } .nd-browse__name[data-long] .nd-browse__short { display: inline; } }
 
 }
 
@@ -414,6 +437,7 @@
 @layer components {
   @media (max-width: 560px) {
     .nd-searchbox__results { max-height: 60vh; }
+    .nd-searchbox__results .nd-browse__row { min-height: 52px; } /* beats the 44px touch rule below */
     .nd-searchbox--large .nd-search { height: 52px; padding: 0 var(--nd-space-4); gap: var(--nd-space-3); }
     /* One scrolling row of pills, faded at the edge so more is visible. */
     .nd-pills { flex-wrap: nowrap; scroll-snap-type: x proximity; padding-right: var(--nd-space-8);
@@ -1669,3 +1693,5 @@
 /* A long name in the dropdown drops to 13px before it is cut (one-line law). Outside the layers on purpose: the type-body-strong
    utility on the name would otherwise win over a components rule. */
 .nd-instant__text > b[data-fit="small"] { font-size: 13px; line-height: 24px; }
+/* Browse's two long category names drop to 13px on phones (#917); outside the layers, as above, to beat type-body-strong. */
+@media (max-width: 559px) { .nd-browse__name[data-long] { font-size: 13px; } }

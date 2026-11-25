@@ -9,10 +9,11 @@
 <% end %>
 <%# The home page has the one-line footer: the wordmark above is enough, and the cards already list the directory. %>
 <main class="nd-home">
-  <h1 class="nd-home__wordmark"><span class="sr-only">Nuclear Directory</span><%= render "shared/wordmark" %></h1>
+  <h1 class="nd-home__wordmark"><span class="sr-only">Nuclear Directory</span><%= render "shared/site_icon" %><%= render "shared/wordmark" %></h1>
 
   <div class="nd-home__search">
-    <%= render "shared/search_box", size: :large %>
+    <%# The empty field opens Browse: the ten categories with their counts (#909). %>
+    <%= render "shared/search_box", size: :large, browse: HomeCategories.browse %>
   </div>
 
   <div class="nd-home__cats">

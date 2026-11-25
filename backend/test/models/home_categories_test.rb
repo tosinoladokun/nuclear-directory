@@ -91,4 +91,24 @@ class HomeCategoriesTest < ActiveSupport::TestCase
     assert_not_includes names("plants"), "Hidden Site"
     assert_not card("reactor-developers").more?
   end
+
+  test "browse: every category with companies, in the cards' order, Plants and sites last, with real counts (#909)" do
+    cite!(company("Kairos Power", roles: [ @vendor ]))
+    cite!(company("Oklo", roles: [ @vendor ]))
+    cite!(company("Centrus", roles: [ role("fuel") ]))
+
+    browse = HomeCategories.browse
+    assert_equal %w[reactor-developers fuel plants], browse.map { |row| row.category.key }
+    assert_equal [ 2, 1, 1 ], browse.map(&:count)
+    assert_equal HomeCategories.cards.map { |card| [ card.category.key, card.count ] }, browse.map { |row| [ row.category.key, row.count ] },
+      "Browse and the cards agree"
+  end
+
+  test "browse keeps Plants and sites last even with none published, as the cards do (#917 review)" do
+    Facility.delete_all
+    cite!(company("Oklo", roles: [ @vendor ]))
+
+    assert_equal [ [ "reactor-developers", 1 ], [ "plants", 0 ] ], HomeCategories.browse.map { |row| [ row.category.key, row.count ] }
+    assert_equal HomeCategories.cards.map { |card| card.category.key }, HomeCategories.browse.map { |row| row.category.key }
+  end
 end
