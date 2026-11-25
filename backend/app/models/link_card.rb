@@ -79,12 +79,14 @@ class LinkCard
     running = ->(link) { link.relationship_type != "operates" || link.facility.status.nil? || link.facility.status == "operating" }
     # A planned site isn't one it has yet (Commonwealth Fusion's Fall Line; DQ).
     links = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && (link.facility.status || link.facility.parent&.status) != "planned" && current.call(link) && running.call(link) } }
-    sites = ->(type) { links.call(type).map { |link| link.facility.parent || link.facility }.uniq.size }
-    operates, owns, deals = sites.call("operates"), sites.call("owns"), profile.counted_deals.size
+    places = ->(type) { links.call(type).map { |link| link.facility.parent || link.facility }.uniq }
+    operates, owns, deals = places.call("operates").size, places.call("owns").size, profile.counted_deals.size
+    # "plant" only when every one is a power plant, else "site" (a fuel facility isn't a plant; the og text and the page say the same).
+    noun = ->(type) { places.call(type).all? { |place| place.facility_type == "power_reactor" } ? "plant" : "site" }
     # "Owns" when no ownership link is a part share; "stakes in" once one is (an ownership_pct under 100; Energy Northwest owns Columbia outright; DQ).
     stakes = links.call("owns").any? { |link| link.ownership_pct && link.ownership_pct < 100 }
-    facts = [ ("Operates #{helpers.pluralize(operates, 'plant')}" if operates.positive?),
-              ("Owns #{'stakes in ' if stakes}#{helpers.pluralize(owns, 'plant')}" if owns.positive?),
+    facts = [ ("Operates #{helpers.pluralize(operates, noun.call('operates'))}" if operates.positive?),
+              ("Owns #{'stakes in ' if stakes}#{helpers.pluralize(owns, noun.call('owns'))}" if owns.positive?),
               (helpers.pluralize(deals, "deal") if deals.positive?) ].compact.first(2).join(" · ").presence
     new(squares: [ CATEGORY_COLORS[profile.category&.key] || PAPER ], label:, name: profile.name, footer_right: facts)
   end
