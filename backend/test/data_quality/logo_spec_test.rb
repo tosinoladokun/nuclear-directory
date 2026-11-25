@@ -54,11 +54,24 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
     assert_equal [ 48.0, 24.0 ], process(two_to_one).then { |r| [ r.width, r.height ] }, "2:1 is 48 × 24 (height cap)"
   end
 
-  test "a symbol's longest side is at most 36px" do
-    tall = svg('<rect x="0" y="0" width="20" height="96"/><rect x="40" y="0" width="20" height="96"/>', view: "0 0 60 96")
-    result = process(tall)
+  test "sizes are targets; a cap scales the mark down evenly (#945 b37afd2e)" do
+    # 1.6:1: √(w·h) = 30 would make it 37.9 wide, so it's scaled down evenly to 36 × 22.5.
+    wide = svg('<rect x="0" y="0" width="60" height="100"/><rect x="100" y="0" width="60" height="100"/>', view: "0 0 160 100")
+    result = process(wide)
     assert result.ok?, result.reason
-    assert_in_delta 36.0, result.height, 0.1
+    assert_equal [ "symbol", 36.0, 22.5 ], [ result.kind, result.width, result.height ]
+    tall = svg('<rect x="0" y="0" width="100" height="60"/><rect x="0" y="100" width="100" height="60"/>', view: "0 0 100 160")
+    assert_equal [ 22.5, 36.0 ], process(tall).then { |r| [ r.width, r.height ] }, "the longer side is 36, either way round"
+    six = svg('<rect x="0" y="0" width="250" height="100"/><rect x="350" y="0" width="250" height="100"/>', view: "0 0 600 100")
+    assert_equal [ 108.0, 18.0 ], process(six).then { |r| [ r.width.round, r.height.round ] }, "6:1 is under the cap: 108 × 18"
+  end
+
+  test "an SVG has no pixel size: rule 3 doesn't apply, and it's rendered straight at the output size" do
+    result = process(svg(DISC, view: "0 0 10 10", attrs: 'width="10" height="10"').sub('cx="50" cy="50" r="40"', 'cx="5" cy="5" r="4"'))
+    assert result.ok?, result.reason
+    assert_equal [ 90, 90 ], Vips::Image.new_from_buffer(result.png, "").then { |png| [ png.width, png.height ] }
+    assert_includes result.steps, "rendered the SVG at the output size"
+    assert_not result.steps.include?("scaled down evenly"), "an SVG is never resampled"
   end
 
   test "rule 4: wider than 6:1 or more than 1.6 times taller than wide" do
@@ -72,10 +85,17 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
     assert_rejected process(svg(ring)), /covers \d%/
   end
 
-  test "rule 6: a part thinner than 1.5px all the way through; corners don't count" do
-    # A disc and a separate bar 3 units wide: 2.7px in the 90px mask, under 4.5px.
-    thin = '<circle cx="40" cy="50" r="40"/><rect x="95" y="10" width="3" height="80"/>'
-    assert_rejected process(svg(thin)), /thinner than 1\.5px/
+  # In these 100-unit symbols, 1 display px is about 3.3 units.
+  test "rule 6: thinner than 1.5px all the way through fails; pointed ends and tapering serifs pass" do
+    disc = '<circle cx="50" cy="42" r="40"/>'
+    underline = disc + '<rect x="10" y="96.6" width="80" height="3.4"/>' # 1px, separate
+    assert_rejected process(svg(underline)), /thinner than 1\.5px/
+    dot = disc + '<circle cx="95" cy="96" r="2"/>' # 1.2px across
+    assert_rejected process(svg(dot)), /thinner than 1\.5px/
+    stroke = disc + '<polygon points="5,92 50,87 95,92 50,97"/>' # 3px at its middle, pointed ends
+    assert process(svg(stroke)).ok?, "a 3px stroke with pointed ends"
+    serif = '<circle cx="50" cy="40" r="38"/><rect x="44" y="70" width="12" height="30"/><polygon points="20,100 44,92 44,100"/>'
+    assert process(svg(serif)).ok?, "a serif that tapers into a stem"
     assert process(svg('<polygon points="0,0 100,50 0,100"/>')).ok?, "a sharp point thins out but the shape stays"
   end
 

@@ -80,13 +80,13 @@ module DataQuality::LogoSpec
     source = { source_type: type, source_sha256: Digest::SHA256.hexdigest(bytes) }
     raise Reject, "The file is #{bytes.bytesize / 1024} KB, over the 500 KB limit. Find a smaller SVG or PNG." if bytes.bytesize > MAX_BYTES
 
-    image = case type
+    image, rerender = case type
     when "svg" then render_svg(bytes, steps)
-    when "png", "webp" then read_raster(bytes, type, steps)
+    when "png", "webp" then [ read_raster(bytes, type, steps), nil ]
     else raise Reject, "#{type_name(type)} isn't allowed: use SVG, or PNG or WebP with transparency"
     end
 
-    finish(image, vector: type == "svg", steps: steps, **source)
+    finish(image, rerender: rerender, steps: steps, **source)
   rescue Reject => e
     Result.new(reason: e.message, png: nil, kind: nil, width: nil, height: nil, steps: steps, multicolour: nil,
       source_type: source&.dig(:source_type), source_sha256: source&.dig(:source_sha256))
@@ -128,8 +128,14 @@ module DataQuality::LogoSpec
     raise Reject, "the SVG has no size" if long.zero?
     scale = SVG_RENDER_SIDE.to_f / long
     image = Vips::Image.svgload_buffer(clean, scale: scale)
-    steps << "rendered the SVG at #{format('%.2f', scale)}× (#{image.width} × #{image.height}px)"
-    srgb_with_alpha(image)
+    steps << "rendered the SVG at #{format('%.2f', scale)}× (#{image.width} × #{image.height}px) to measure it"
+    # The spec: an SVG is rendered straight at the output size, never resampled.
+    # factor is relative to the measuring render.
+    rerender = lambda do |factor|
+      Vips.block("VipsForeignLoadSvgBuffer", false)
+      srgb_with_alpha(Vips::Image.svgload_buffer(clean, scale: scale * factor))
+    end
+    [ srgb_with_alpha(image), rerender ]
   end
 
   def self.clean_svg(bytes)
@@ -214,16 +220,21 @@ module DataQuality::LogoSpec
 
   # --- One ink, trim, size, checks ----------------------------------------
 
-  def self.finish(image, vector:, steps:, source_type:, source_sha256:)
+  # One ink: alpha of 8% or more and L* of 90 or less keeps its alpha; the rest is transparent.
+  def self.one_ink(image)
     rgb = image.extract_band(0, n: 3)
     alpha = image.extract_band(3)
     lightness = rgb.colourspace(:lab).extract_band(0)
     ink = (alpha >= INK_ALPHA) & (lightness <= INK_LIGHTNESS)
-    mask = ink.ifthenelse(alpha, 0).cast(:uchar)
+    [ ink.ifthenelse(alpha, 0).cast(:uchar), rgb, ink & (alpha >= 128) ]
+  end
+
+  def self.finish(image, rerender:, steps:, source_type:, source_sha256:)
+    mask, rgb, solid = one_ink(image)
     steps << "one ink: kept pixels with alpha of 8% or more and L* of 90 or less"
     raise Reject, "the one-ink version is empty (a logo made for dark backgrounds?)" if mask.max.zero?
 
-    multicolour = multicolour?(rgb, ink & (alpha >= 128))
+    multicolour = multicolour?(rgb, solid)
     left, top, width, height = mask.find_trim(threshold: 0, background: [ 0 ])
     mask = mask.crop(left, top, width, height)
     steps << "trimmed to the ink (#{width} × #{height}px)"
@@ -240,14 +251,25 @@ module DataQuality::LogoSpec
     out_w = (display_w * SCALE).round
     out_h = (display_h * SCALE).round
     steps << "#{kind}, #{format('%.2f', ratio)}:1, shown at #{format('%.1f', display_w)} × #{format('%.1f', display_h)}px"
-    if !vector && (width < out_w || height < out_h)
+    if rerender.nil? && (width < out_w || height < out_h)
       raise Reject, "the mark is #{width} × #{height}px; it needs at least #{out_w} × #{out_h}px (3× its display size), and it's never enlarged"
     end
 
-    mask = mask.resize(out_w.to_f / width, vscale: out_h.to_f / height, kernel: :lanczos3)
+    # Scaling is even: one factor for both sides. Rounding to whole pixels can
+    # leave a pixel's difference, which is cropped or padded, never stretched.
+    factor = display_w * SCALE / width
+    if rerender
+      mask = one_ink(rerender.call(factor)).first
+      left, top, trimmed_w, trimmed_h = mask.find_trim(threshold: 0, background: [ 0 ])
+      mask = mask.crop(left, top, trimmed_w, trimmed_h)
+      steps << "rendered the SVG at the output size"
+    else
+      mask = mask.resize(factor, kernel: :lanczos3)
+      steps << "scaled down evenly"
+    end
     mask = mask.crop(0, 0, [ mask.width, out_w ].min, [ mask.height, out_h ].min)
     mask = mask.embed(0, 0, out_w, out_h) if mask.width < out_w || mask.height < out_h
-    steps << "scaled to #{out_w} × #{out_h}px (3×)"
+    steps << "#{out_w} × #{out_h}px mask (3×)"
 
     coverage = mask.avg / 255.0
     if coverage < MIN_COVERAGE || coverage > MAX_COVERAGE
@@ -265,8 +287,9 @@ module DataQuality::LogoSpec
       multicolour: multicolour, source_type: source_type, source_sha256: source_sha256)
   end
 
-  # The spec's optical sizes: a symbol to √(w·h) = 30 with no side over 36; a
-  # wordmark to √(w·h) = 44 with its height capped at 24.
+  # The spec's optical sizes are targets: a symbol to √(w·h) = 30, a wordmark to
+  # √(w·h) = 44. A cap (a symbol's longer side 36, a wordmark's height 24) only
+  # ever scales the mark down evenly from its target.
   def self.display_size(kind, width, height)
     optical = kind == "symbol" ? SYMBOL_OPTICAL : WORDMARK_OPTICAL
     scale = optical / Math.sqrt(width * height)
@@ -275,8 +298,9 @@ module DataQuality::LogoSpec
     [ width * scale, height * scale ]
   end
 
-  # Rule 6: a connected shape that vanishes entirely under erosion by the
-  # 4.5px disc is thinner than 1.5px at display size all the way through.
+  # Rule 6: thresholded at alpha 50%, a connected shape that vanishes entirely
+  # under erosion by the 4.5px disc is thinner than 1.5px at display size all
+  # the way through. A shape that only thins out at its ends keeps its core.
   def self.thin_part?(mask)
     # A clear margin, so a shape touching the trimmed edge erodes from that side too.
     solid = (mask >= 128).embed(3, 3, mask.width + 6, mask.height + 6)
