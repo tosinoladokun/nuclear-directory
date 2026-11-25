@@ -517,6 +517,26 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "two capital letters", results.second["error"]
   end
 
+  test "propose_fields takes a short name (#909): 30 characters at most, stated in the quote" do
+    quote = "Holtec International (HI) designs and builds spent fuel storage."
+    @page.update!(content_text: quote)
+    act({ action: "propose_fields", target: @holtec.id, fields: { short_name: "HI" }, quote:, source_url: @page.url, reason: "Their about page" },
+      { action: "propose_fields", target: @holtec.id, fields: { short_name: "H" * 31 }, quote: "H" * 31, source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { short_name: "H" * 30 }, quote: "Also known as #{"H" * 30}.", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { short_name: "Holt" }, quote:, source_url: @page.url, reason: "r" })
+    assert results.first["ok"], results.inspect
+    assert_match "30 characters at most", results.second["error"]
+    assert results.third["ok"], "exactly 30 is allowed: #{results.third.inspect}"
+    assert_match "must contain the short name Holt", results.fourth["error"], "Holtec isn't Holt: whole word"
+    claim = Candidate.find(results.first["id"])
+    assert_equal "HI", claim.payload["short_name"]
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    assert_equal [ "Organization", @holtec.id ], claim.reload.values_at(:subject_type, :subject_id), claim.notes
+    assert_equal "change", DataQuality::Review.inbox_kind(claim)
+    assert DataQuality::Review.approve([ claim.id ], by: "human:tosin").sole.ok?
+    assert_equal "HI", @holtec.reload.short_name
+  end
+
   test "propose_link: a sourced link between two companies becomes a link claim, decided like any other; undo closes it" do
     westinghouse = Organization.create!(name: "Westinghouse Electric Company", verification_status: "verified", verified_by: "human:tosin")
     @page.update!(content_text: "Holtec International holds a 49% interest in Westinghouse Electric Company.")

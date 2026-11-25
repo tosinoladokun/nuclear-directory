@@ -30,7 +30,9 @@ module DataQuality::Matching
   # What Data Quality may fill on a published company (PM, 30 Oct: complete companies).
   # Plus a legal name and the country (PM, 18 Nov: Cameco is Canadian), as two capital letters.
   # Plus a public company's ticker and its exchange (#874; a 10-K or annual-report cover), always together: the table needs both or neither.
-  FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code ticker exchange].freeze
+  # Plus the short name a chart or tight label shows ("TVA", "FPL"; #909), 30 characters at most, as the column allows.
+  FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code ticker exchange short_name].freeze
+  MAX_SHORT_NAME = 30
   TICKER = /\A[A-Z0-9][A-Z0-9.\-]{0,7}\z/
   EXCHANGE = /\A[A-Za-z][A-Za-z .&-]{1,19}\z/
   # What a cover calls an exchange, besides its short name: the quote must name the ticker AND the exchange, so a ticker can't ride on an
@@ -262,6 +264,13 @@ module DataQuality::Matching
       return fail_with.call("give a value for every field") if fields.values.any?(&:blank?)
       return fail_with.call("a short description is #{ShortDescription::MAX} characters at most") if fields["short_description"].to_s.length > ShortDescription::MAX
       return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if fields["description"].to_s.length > MAX_DESCRIPTION
+      if fields.key?("short_name")
+        return fail_with.call("a short name is #{MAX_SHORT_NAME} characters at most") if fields["short_name"].length > MAX_SHORT_NAME
+        # The source must use the short name itself, as a whole word, so it can't ride on an unrelated quote.
+        unless quote.match?(/(?<![[:alnum:]])#{Regexp.escape(fields['short_name'])}(?![[:alnum:]])/)
+          return fail_with.call("the quote must contain the short name #{fields['short_name']}")
+        end
+      end
       # Only a website people can open (https with a host): never a javascript: or broken link (Infra).
       return fail_with.call("the website must be a full https:// address") if fields.key?("website") && !directory.readable_website?(fields["website"])
       return fail_with.call("a country is two capital letters (ISO 3166, e.g. CA)") if fields.key?("country_code") && !fields["country_code"].match?(/\A[A-Z]{2}\z/)
