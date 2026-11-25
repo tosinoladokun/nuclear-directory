@@ -398,8 +398,9 @@ module DataQuality::Matching
       source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
       raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
 
-      # What finds the site (its own docket and plant ID), then what's proposed.
-      payload = { "name" => site.name, "nrc_docket" => site.nrc_docket.presence, "eia_plant_id" => site.eia_plant_id.presence }.compact.merge(fields)
+      # Its name (for the person deciding) and the proposed fields only: match finds the site by this action's
+      # target, so its own docket or plant ID would only be more for the verifier to check (DQ, 25 Nov).
+      payload = { "name" => site.name }.merge(fields)
       claim = Candidate.create!(source_id: source.ref.id, kind: "facility", status: "new", quote:, payload:, notes: "Data Quality proposed it: #{reason}")
       DqAction.create!(candidate: claim, action: "propose_site_fields", target_type: "Facility", target_id: site.id, reason:,
         before: {}, created: [], by: BY, request_key: key, after: stamp_of(claim))

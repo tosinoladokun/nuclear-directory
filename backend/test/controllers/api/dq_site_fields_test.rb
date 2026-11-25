@@ -109,25 +109,44 @@ class Api::DqSiteFieldsTest < ActionDispatch::IntegrationTest
     assert results[3]["ok"], results.inspect
   end
 
-  test "a different match goes to review, never to that site" do
+  test "found by the site Data Quality named, even renamed since; review when that site closed or its EIA plant ID is another's" do
     act(propose(coordinates))
-    claim = Candidate.find(results.sole["id"])
-    # Renamed before matching, and another plant now has the old name: not that one.
+    renamed = Candidate.find(results.sole["id"])
     @site.update!(name: "Natrium Kemmerer")
-    other = Facility.create!(name: "Kemmerer Power Station", facility_type: "other", verification_status: "verified", verified_by: "human:tosin")
+    Facility.create!(name: "Kemmerer Power Station", facility_type: "other", verification_status: "verified", verified_by: "human:tosin")
     match!
-    assert_nil claim.reload.subject_id
-    assert_match "proposed for site ##{@site.id}, but it matches Kemmerer Power Station (by name)", claim.notes
-    assert_nil other.reload.latitude
+    assert_equal [ "Facility", @site.id ], renamed.reload.values_at(:subject_type, :subject_id), "never a same-named plant"
 
-    # Matching nothing goes to review too, never proposing a new plant.
-    act(propose(coordinates))
-    lost = Candidate.find(results.sole["id"])
-    lost.update!(payload: lost.payload.merge("name" => "Nowhere"))
+    taken = Facility.create!(name: "Other Plant", facility_type: "power_reactor", verification_status: "verified", verified_by: "human:tosin")
+    act(propose(coordinates.merge(eia_plant_id: "68635")))
+    late = Candidate.find(results.sole["id"])
+    taken.update!(eia_plant_id: "68635")
+    gone = Facility.create!(name: "Gone Site", facility_type: "power_reactor", verification_status: "verified", verified_by: "human:tosin")
+    act(propose(coordinates, target: gone.id))
+    closed = Candidate.find(results.sole["id"])
+    gone.update_columns(verification_status: "unpublished", verified_by: "human:tosin")
     assert_no_difference -> { Facility.count } do
       match!
     end
-    assert_match "proposed for site ##{@site.id}, but it doesn't match that site", lost.reload.notes
+    assert_nil late.reload.subject_id
+    assert_match "EIA plant ID 68635 is Other Plant's (##{taken.id}) by now", late.notes
+    assert_nil closed.reload.subject_id
+    assert_match "proposed for Gone Site, which was unpublished", closed.notes
+  end
+
+  test "the claim carries only the site's name and the proposed fields, never its own docket or plant ID (DQ, 25 Nov)" do
+    docketed = Facility.create!(name: "Fort Calhoun", facility_type: "power_reactor", nrc_docket: "05000285", state: "NE",
+      verification_status: "verified", verified_by: "human:tosin")
+    eia_site = Facility.create!(name: "Pilgrim", facility_type: "power_reactor", eia_plant_id: "1590", state: "MA",
+      verification_status: "verified", verified_by: "human:tosin")
+    act(propose({ latitude: "41.5206", longitude: "-96.0778" }, target: docketed.id, quote: "2289,Fort Calhoun,1,NE,Washington,,,,41.5206,-96.0778,OPPD,Retired"),
+      propose({ latitude: "41.9442", longitude: "-70.5786" }, target: eia_site.id, quote: "1590,Pilgrim,1,MA,Plymouth,,,,41.9442,-70.5786,Entergy,Retired"))
+    claims = results.map { |result| Candidate.find(result["id"]) }
+    assert_equal [ { "name" => "Fort Calhoun", "latitude" => "41.5206", "longitude" => "-96.0778" },
+                   { "name" => "Pilgrim", "latitude" => "41.9442", "longitude" => "-70.5786" } ], claims.map(&:payload)
+    claims.each { |claim| assert_no_match(/docket|05000285|1590/, DataQuality::Claim.describe(claim), "nothing it doesn't propose") }
+    match!
+    assert_equal [ [ "Facility", docketed.id ], [ "Facility", eia_site.id ] ], claims.map { |claim| claim.reload.values_at(:subject_type, :subject_id) }
   end
 
   test "a site with no docket or plant ID is found among sites, never an older unit of the same name" do

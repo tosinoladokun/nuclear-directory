@@ -266,19 +266,14 @@ class DataQuality::Stages::Match < DataQuality::Stage
     end
 
     def match_record(candidate, payload, found: nil)
-      # Data Quality's site fields (#916) name a site: found among sites, never a same-named unit (Copilot).
+      # Data Quality's site fields (#916) are found by the site it named, never by name or docket: the claim
+      # carries only its name and the proposed fields, so the verifier checks nothing else (DQ, 25 Nov).
       site = DqAction.where(candidate:, action: "propose_site_fields").pick(:target_id) if candidate.kind == "facility"
-      found ||= resolve(candidate.kind.to_sym, payload, closed: :found, site_only: site.present?)
+      found ||= site ? proposed_site(site, payload) : resolve(candidate.kind.to_sym, payload, closed: :found)
       # Data Quality's proposal is for the company it named; if its CIK is
       # another's by now, it goes to review, never to that company (#693).
       if found.is_a?(Found) && (proposed = DqAction.where(candidate:, action: "propose_fields").pick(:target_id)) && proposed != found.record.id
         found = Review.new("proposed for company ##{proposed}, but it matches #{found.record.name} (by #{found.by})")
-      end
-      # Data Quality's site fields (#916) are for the site it named, and only that site: any other
-      # match, or none (which would propose a new plant), goes to review.
-      if site && !found.is_a?(Review) && !(found.is_a?(Found) && found.record.id == site)
-        found = Review.new("proposed for site ##{site}, but " +
-          (found.is_a?(Found) ? "it matches #{found.record.name} (by #{found.by})" : "it doesn't match that site"))
       end
       case found
       when Review then review(candidate, found.reason)
@@ -503,9 +498,21 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # human unpublished, is never attached to: the candidate goes to review.
     # closed: :found hands such a record back as Found, for a caller that
     # first checks whether the source just says the same thing again.
-    # site_only: a name finds only a site (no parent, no docket), as for an EIA plant.
-    def resolve(type, payload, closed: :review, site_only: false)
-      found = type == :organization ? resolve_organization(payload) : resolve_facility(payload, site_only:)
+    # The site Data Quality named for its fields (#916): that site while it's open, else review; and review when the
+    # EIA plant ID it proposes is another site's by now, never a second site with it.
+    def proposed_site(id, payload)
+      site = directory.facility(id:)
+      return Review.new("proposed for site ##{id}, which no longer exists") unless site
+      return Review.new("proposed for #{site.name}, which was #{site.decision}") if site.closed?
+
+      holder = (plant = payload["eia_plant_id"].presence) && directory.facility(eia_plant_id: plant)
+      return Review.new("proposed for #{site.name}, but EIA plant ID #{plant} is #{holder.name}'s (##{holder.id}) by now") if holder && holder.id != site.id
+
+      Found.new(site, "the site Data Quality named")
+    end
+
+    def resolve(type, payload, closed: :review)
+      found = type == :organization ? resolve_organization(payload) : resolve_facility(payload)
       if found.is_a?(Found) && found.record.closed? && closed == :review
         return Review.new(closed_reason(found))
       end
@@ -604,7 +611,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       directory.existing_fact(kind, attributes.merge(facility_id: unit.parent_id)) if unit&.parent_id
     end
 
-    def resolve_facility(payload, site_only: false)
+    def resolve_facility(payload)
       name, docket, eia_plant = payload.values_at("name", "nrc_docket", "eia_plant_id").map(&:presence)
       # EIA's plant ID is exact: the site for that plant, already proposed or linked.
       by_eia = directory.facility(eia_plant_id: eia_plant) if eia_plant
@@ -613,7 +620,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       by_docket = directory.facility(nrc_docket: docket) if docket
       # An EIA plant is a site; an NRC unit of the same name ("Palisades")
       # isn't it, and mustn't hide a site of that name either.
-      eia_site = (eia_plant || site_only) && !docket
+      eia_site = eia_plant && !docket
       by = ->(other) { eia_site ? directory.facility(site_name: other) : directory.facility(name: other) }
       by_name = by.call(name) if name
       # A candidate's other names find its plant here, so it's attached
