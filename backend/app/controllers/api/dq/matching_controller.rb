@@ -8,6 +8,8 @@
 #
 #   POST /api/dq/matching       [{ "id": 12, "action": "same_as", "target": 40, "reason": "…" }, …]
 #                               (or { "actions": [...] }) => { "results": [{ id, ok, error, created_ids }] }
+#                               Proposals (propose_role, propose_fields, propose_link, propose_site_fields)
+#                               take no id: see DataQuality::Matching.
 #   POST /api/dq/matching/undo  { "action_id": 7 } => { "ok": true } or { "ok": false, "error": "…" }
 #   GET  /api/dq/matching       the last 100 actions
 class Api::Dq::MatchingController < ActionController::API

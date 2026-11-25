@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_21_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_24_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -206,7 +206,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_190000) do
     t.index ["created_at"], name: "index_dq_actions_on_created_at", order: :desc
     t.index ["request_key"], name: "index_dq_actions_on_request_key", unique: true, where: "(request_key IS NOT NULL)"
     t.check_constraint "(target_type IS NULL) = (target_id IS NULL)", name: "dq_actions_target_check"
-    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying::text, 'subsidiary_of'::character varying::text, 'new'::character varying::text, 'close'::character varying::text, 'recommend'::character varying::text, 'propose_role'::character varying::text, 'propose_fields'::character varying::text, 'propose_link'::character varying::text])", name: "dq_actions_action_check"
+    t.check_constraint "action::text = ANY (ARRAY['same_as'::character varying::text, 'subsidiary_of'::character varying::text, 'new'::character varying::text, 'close'::character varying::text, 'recommend'::character varying::text, 'propose_role'::character varying::text, 'propose_fields'::character varying::text, 'propose_link'::character varying::text, 'propose_site_fields'::character varying::text])", name: "dq_actions_action_check"
     t.check_constraint "by::text ~~ 'agent:%'::text OR by::text ~~ 'human:%'::text", name: "dq_actions_by_check"
     t.check_constraint "char_length(btrim(reason)) > 0", name: "dq_actions_reason_check"
   end

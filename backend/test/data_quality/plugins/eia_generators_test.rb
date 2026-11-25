@@ -814,4 +814,105 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
     assert site.reload.latitude.present?
     assert_nil site.capacity_mw, "capacity stays per unit"
   end
+
+  # #916: a workbook with the three sheets, as inline strings. sheets: { "Planned" => [[title, value], …] rows }.
+  # Each sheet has its own header; Retired has no Status column, as in EIA's file.
+  def three_sheet_workbook(sheets)
+    ns = %(xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+    cell = ->(col, row, value) do
+      value.is_a?(Numeric) ? %(<c r="#{col}#{row}"><v>#{value}</v></c>) : %(<c r="#{col}#{row}" t="inlineStr"><is><t>#{value}</t></is></c>)
+    end
+    cols = ("A".."Z").to_a
+    Zip::OutputStream.write_buffer do |zip|
+      zip.put_next_entry("xl/workbook.xml")
+      zip.write(%(<workbook #{ns} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>) +
+        sheets.keys.each_with_index.map { |name, i| %(<sheet name="#{name}" sheetId="#{i + 1}" r:id="rId#{i + 1}"/>) }.join + "</sheets></workbook>")
+      zip.put_next_entry("xl/_rels/workbook.xml.rels")
+      zip.write(%(<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">) +
+        sheets.keys.each_with_index.map { |_, i| %(<Relationship Id="rId#{i + 1}" Target="worksheets/sheet#{i + 1}.xml"/>) }.join + "</Relationships>")
+      sheets.values.each_with_index do |(header, *rows), i|
+        next if header.nil?
+
+        lines = [ header, *rows ].each_with_index.map { |values, r| %(<row r="#{r + 1}">#{values.each_with_index.map { |v, c| cell.(cols[c], r + 1, v) }.join}</row>) }
+        zip.put_next_entry("xl/worksheets/sheet#{i + 1}.xml")
+        zip.write(%(<worksheet #{ns}><sheetData>#{lines.join}</sheetData></worksheet>))
+      end
+    end.string
+  end
+
+  FULL_HEADER = [ "Plant ID", "Plant Name", "Generator ID", "Plant State", "County", "Net Summer Capacity (MW)",
+    "Nameplate Capacity (MW)", "Status", "Latitude", "Longitude", "Entity Name", "Technology" ].freeze
+  RETIRED_HEADER = [ "Plant ID", "Plant Name", "Generator ID", "Plant State", "County", "Net Summer Capacity (MW)",
+    "Nameplate Capacity (MW)", "Latitude", "Longitude", "Entity Name", "Technology", "Retirement Year" ].freeze
+  def three_sheets(retired: true) = {
+    "Operating" => [ FULL_HEADER, [ 649, "Vogtle", "1", "GA", "Burke", 1150, 1215, "(OP) Operating", 33.142, -81.762, "Georgia Power", "Nuclear" ] ],
+    "Planned" => [ FULL_HEADER, [ 68635, "Kemmerer Unit 1", "1", "WY", "Lincoln", 345, 345, "(P) Planned", 41.705993, -110.5603, "TerraPower", "Nuclear" ],
+                   [ 99999, "Some Gas Plant", "1", "WY", "Lincoln", 50, 50, "(P) Planned", 41.1, -110.1, "Gas Co", "Natural Gas Fired Combined Cycle" ] ],
+    "Retired" => (retired ? [ RETIRED_HEADER, [ 8907, "Indian Point 2", "2", "NY", "Westchester", 1012, 1013, 41.2697, -73.9522, "Entergy", "Nuclear", 2020 ] ] : [ nil ])
+  }
+
+  test "#916: the Planned and Retired sheets' nuclear rows are read too, each with its sheet; Retired needs no Status" do
+    rows, skipped = Workbook.nuclear_rows(three_sheet_workbook(three_sheets))
+
+    assert_equal({}, skipped)
+    assert_equal [ %w[Vogtle Operating], [ "Kemmerer Unit 1", "Planned" ], [ "Indian Point 2", "Retired" ] ], rows.map { |r| r.values_at("plant_name", "sheet") }
+    assert_equal [ "41.705993", "-110.5603" ], rows.second.values_at("latitude", "longitude")
+    assert_nil rows.third["status"]
+    assert_equal [ "Vogtle" ], Workbook.nuclear_generators(three_sheet_workbook(three_sheets)).map { |g| g["plant_name"] }, "the Operating reader is unchanged"
+  end
+
+  test "#916: a missing or unreadable Planned or Retired sheet is skipped with its reason; the Operating sheet still fails loudly" do
+    rows, skipped = Workbook.nuclear_rows(three_sheet_workbook(three_sheets(retired: false)))
+    assert_equal %w[Operating Planned], rows.map { |r| r["sheet"] }
+    assert_match "Missing", skipped["Retired"]
+
+    rows, skipped = Workbook.nuclear_rows(file_fixture("eia/real_trimmed.xlsx").binread)
+    assert_equal 96, rows.size, "the trimmed copy keeps only the Operating sheet's file"
+    assert_equal %w[Planned Retired], skipped.keys
+
+    assert_raises(Workbook::Unreadable) { Workbook.nuclear_rows(three_sheet_workbook(three_sheets.except("Operating"))) }
+  end
+
+  test "#916: crawl stores every sheet's nuclear rows with a sheet column; only Operating rows are extracted, so a Planned or Retired plant creates nothing" do
+    stub_request(:get, FILE).to_return(body: three_sheet_workbook(three_sheets))
+    stats = crawl!
+
+    assert_equal [ 1, 1, 1 ], stats.values_at("generators", "planned", "retired")
+    assert_nil stats["sheets_skipped"]
+    lines = source.content_text.lines.map(&:chomp)
+    assert_equal "eia_plant_id,plant_name,generator_id,state,county,net_summer_capacity_mw,nameplate_capacity_mw,status,latitude,longitude,entity_name,sheet", lines.first
+    assert_equal "68635,Kemmerer Unit 1,1,WY,Lincoln,345,345,(P) Planned,41.705993,-110.5603,TerraPower,Planned", lines.third
+    assert_equal "8907,Indian Point 2,2,NY,Westchester,1012,1013,,41.2697,-73.9522,Entergy,Retired", lines.fourth
+    assert plugin.quote_in_source?(source, lines.fourth), "a Data Quality quote of a Retired row is checked against the stored copy"
+
+    extracted = plugin.extract(source, nil)
+    assert extracted.all? { |c| (c[:payload]["identify"] || c[:payload])["name"] == "Vogtle" }, extracted.inspect
+    assert_equal "649,Vogtle,1,GA,Burke,1150,1215,(OP) Operating,33.142,-81.762,Georgia Power", extracted.first[:quote], "the same quote as before #916"
+    assert plugin.quote_in_source?(source, extracted.first[:quote])
+
+    match_and_verify!
+    assert_not Facility.where("name ILIKE ?", "%Kemmerer%").or(Facility.where("name ILIKE ?", "%Indian Point%")).exists?
+  end
+
+  test "#916: a file stored before the sheet column reads all its rows as Operating" do
+    old = Source.create!(url: FILE, source_kind: "eia_generators", crawl_status: "ok",
+      content_text: "eia_plant_id,plant_name,generator_id,state,county,net_summer_capacity_mw,nameplate_capacity_mw,status,latitude,longitude,entity_name\n" \
+        "649,Vogtle,1,GA,Burke,1150,1215,(OP) Operating,33.142,-81.762,Georgia Power\n")
+    extracted = plugin.extract(old, nil)
+    assert_equal 2, extracted.size, "the unit's enrichment and its site"
+    assert_equal "649,Vogtle,1,GA,Burke,1150,1215,(OP) Operating,33.142,-81.762,Georgia Power", extracted.first[:quote]
+  end
+
+  test "#916: Data Quality's site fields quoting an older file aren't superseded by a newer month (dropped: reconfirm_test)" do
+    july = Source.create!(url: "https://www.eia.gov/electricity/data/eia860m/xls/july_generator2026.xlsx",
+      source_kind: "eia_generators", crawl_status: "ok")
+    site = Facility.create!(name: "Indian Point", facility_type: "power_reactor", verification_status: "verified", verified_by: "human:tosin")
+    proposed = Candidate.create!(source: july, kind: "facility", quote: "8907,Indian Point 2,2,NY", payload: { "name" => "Indian Point", "latitude" => "41.270", "longitude" => "-73.952" })
+    DqAction.create!(candidate: proposed, action: "propose_site_fields", target_type: "Facility", target_id: site.id, reason: "r", by: DqAction::BY, before: {}, created: [])
+    crawled = Candidate.create!(source: july, kind: "facility", quote: "old row", payload: { "identify" => { "name" => "Vogtle" } })
+
+    crawl!
+    assert proposed.reload.status_new?, "not withdrawn by a newer month"
+    assert crawled.reload.status_rejected?
+  end
 end
