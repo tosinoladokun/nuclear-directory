@@ -52,6 +52,10 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
       new_source.title = "EIA-860M generator inventory, #{url[FILE_LINK, 1].capitalize} #{url[FILE_LINK, 2]}"
     end
 
+    # A copy stored before #916 has no sheet column: the file is fetched whole once (no validators), so EIA's
+    # "not modified" doesn't keep it without its Planned and Retired rows until the next monthly file.
+    source.update!(etag: nil, last_modified: nil) if stored_before_sheets?(source)
+
     # The shared Fetcher keeps every fetch, redirects included, on public https
     # addresses of the starting host (#114).
     skipped = {}
@@ -113,6 +117,11 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
 
   private
     def stored_rows(source) = CSV.parse(source.content_text.to_s, headers: true)
+
+    def stored_before_sheets?(source)
+      header = source.content_text.to_s.lines.first or return false
+      !CSV.parse_line(header).to_a.include?(Workbook::SHEET_COLUMN)
+    end
 
     def sheet_of(row) = row[Workbook::SHEET_COLUMN].presence || Workbook::SHEET
 

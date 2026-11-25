@@ -915,4 +915,32 @@ class DataQuality::Plugins::EiaGeneratorsTest < ActiveSupport::TestCase
     assert proposed.reload.status_new?, "not withdrawn by a newer month"
     assert crawled.reload.status_rejected?
   end
+
+  test "#916: a copy stored before the sheet column is fetched whole once, so 'not modified' can't keep it without Planned and Retired rows" do
+    old_csv = "eia_plant_id,plant_name,generator_id,state,county,net_summer_capacity_mw,nameplate_capacity_mw,status,latitude,longitude,entity_name\n" \
+      "649,Vogtle,1,GA,Burke,1150,1215,(OP) Operating,33.142,-81.762,Georgia Power\n"
+    Source.create!(url: FILE, source_kind: "eia_generators", crawl_status: "ok", content_text: old_csv, content_sha256: "old",
+      etag: %("abc"), last_modified: "Mon, 03 Nov 2026 00:00:00 GMT", fetched_at: 1.day.ago,
+      title: "EIA-860M generator inventory, August 2026")
+    stub_request(:get, FILE).with(headers: { "If-None-Match" => %("abc") }).to_return(status: 304)
+    stub_request(:get, FILE).with { |request| request.headers["If-None-Match"].nil? }.to_return(body: three_sheet_workbook(three_sheets))
+
+    stats = crawl!
+
+    assert_equal [ 1, 1, 1 ], stats.values_at("generators", "planned", "retired")
+    assert_includes source.content_text.lines.first, ",sheet"
+  end
+
+  test "#916: a copy that already has the sheet column keeps its validators, so an unchanged file is 'not modified'" do
+    stub_request(:get, FILE).to_return(body: three_sheet_workbook(three_sheets), headers: { "ETag" => %("v1") })
+    crawl!
+    stored = source.content_text
+    source.update_columns(fetched_at: 1.day.ago)
+    stub_request(:get, FILE).with(headers: { "If-None-Match" => %("v1") }).to_return(status: 304)
+
+    crawl!
+
+    assert_equal %("v1"), source.reload.etag
+    assert_equal stored, source.content_text
+  end
 end
