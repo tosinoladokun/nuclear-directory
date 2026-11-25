@@ -39,6 +39,16 @@ module DirectoryBuilders
     Facility.create!(name:, **verification(verified), **attributes)
   end
 
+  # A sourced power plant with operating units, as EIA-860M lists them: units: [[net summer MW, reactor type], ...].
+  # Enough for homepage B's charts to have something to show (#909).
+  def operating_plant(name, state: "IL", latitude: 41.0, longitude: -88.0, units: [ [ 1100.0, "PWR" ] ])
+    site = cite!(plant(name, state:, latitude:, longitude:))
+    units.each_with_index do |(mw, type), i|
+      cite!(plant("#{name} #{i + 1}", parent: site, facility_type: "power_reactor", status: "operating", capacity_mw: mw, reactor_type: type))
+    end
+    site
+  end
+
   def link(from, type, to, verified: true)
     if to.is_a?(Facility)
       FacilityRelationship.create!(organization: from, facility: to, relationship_type: type, **verification(verified))

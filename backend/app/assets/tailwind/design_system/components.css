@@ -430,66 +430,84 @@
   .nd-home__downloadlink:hover span, .nd-home__downloadlink:focus-visible span { text-decoration: underline; }
   .nd-charts { width: 100%; max-width: 1280px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nd-space-4); }
   @media (min-width: 1024px) {
-    .nd-charts { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto auto; gap: 24px; }
+    .nd-charts { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: 1fr 1fr; gap: 24px; }
     .nd-chart--large { grid-row: 1 / span 2; }
   }
-  .nd-chart { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); text-decoration: none; transition: border-color 120ms ease-out; }
+  /* A card is a question and its chart, nothing else (Tosin, 25 Nov). The title shows its short form when the card is
+     too narrow for the question on one line: a container query, so it follows the card, not the screen. */
+  .nd-chart { container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); text-decoration: none; transition: border-color 120ms ease-out; }
   .nd-chart:hover, .nd-chart:focus-visible { border-color: var(--nd-ink); }
-  .nd-chart__title, .nd-chart__sub { margin: 0; }
-  .nd-chart__title { white-space: nowrap; }
+  .nd-chart__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-width: 0; }
+  /* One line; the ellipsis only as a last resort (the full question is in the title attribute). */
+  .nd-chart__title { flex: 1 1 auto; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-chart__tshort { display: none; }
-  .nd-chart__sub { color: var(--nd-ink-muted); }
-  /* The source line is a sentence of domains: it may take a second line, as the subtitle does, never an ellipsis. */
-  .nd-chart__foot { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--nd-space-3); min-width: 0; }
-  .nd-chart__src { color: var(--nd-ink-muted); min-width: 0; }
-  .nd-chart__more { flex: none; font-size: 14px; white-space: nowrap; }
-  .nd-chart:hover .nd-chart__more, .nd-chart:focus-visible .nd-chart__more { text-decoration: underline; }
-  /* One line each: names take their short form past 22 characters, then the ellipsis (one-line law). */
-  /* A Newest sentence may take two lines, never an ellipsis (Design, #920). */
-  .nd-chart__newstitle { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 20px; }
-  .nd-chart__barname { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
-  .nd-chart__bars, .nd-chart__names, .nd-chart__news, .nd-chart__owners, .nd-chart__chain { list-style: none; margin: 0; padding: 0; }
-  /* The columns belong to the list, so every bar starts at the same place; a row is only its three cells. */
-  .nd-chart__bars { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center; gap: 8px var(--nd-space-3); }
-  .nd-chart__bars--labels { grid-template-columns: max-content minmax(0, 1fr) auto; }
-  .nd-chart__nshort { display: none; }
-  .nd-chart__barrow { display: contents; }
-  .nd-chart__bar { height: 12px; width: var(--w); min-width: 2px; background: var(--nd-cat, var(--nd-ink)); border-radius: var(--nd-radius-sm); }
-  .nd-chart__count { text-align: right; }
-  /* The fuel chain: one step per row, its label on the left and its companies as chips that wrap, so no name is cut
-     (Design, #920). Phones put the label above. A chip is 40px at 15px; a long name 13px, or its short name. */
-  .nd-chart__chain { display: grid; gap: var(--nd-space-4); }
-  @media (min-width: 1024px) { .nd-chart__chain { gap: 24px; } }
-  .nd-chart__step { display: grid; grid-template-columns: 168px minmax(0, 1fr); align-items: start; gap: var(--nd-space-3); min-width: 0; }
-  .nd-chart__steplabel { display: flex; align-items: center; gap: 6px; min-height: 40px; white-space: nowrap; }
-  .nd-chart__arrow { display: flex; color: var(--nd-control); }
-  .nd-chart__steplabel .type-data-sm { color: var(--nd-ink-muted); }
-  .nd-chart__names { display: flex; flex-wrap: wrap; gap: 8px; }
-  /* Last resort, a long name with no short one on a narrow phone: the ellipsis, the full name in its title (record names, DESIGN.md rule 5). */
-  .nd-chart__name { display: block; max-width: 100%; height: 40px; padding: 0 12px; font: 400 15px/40px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--nd-cat-fuel-tint); border-radius: var(--nd-radius-sm); }
-  @media (max-width: 359px) { .nd-chart__name { font-size: 13px; } } /* the narrowest phones: 13px before any cut */
-  .nd-chart__news { display: grid; gap: 12px; }
-  .nd-chart__newsrow { display: flex; flex-direction: column; min-width: 0; }
-  .nd-chart__newsmeta { color: var(--nd-ink-muted); }
-  .nd-chart__stack { display: flex; height: 12px; margin-bottom: 12px; overflow: hidden; border-radius: var(--nd-radius-sm); }
-  .nd-chart__stack .nd-chart__share { width: var(--w); }
-  .nd-chart__owners { display: grid; gap: 8px; }
-  .nd-chart__owner { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: var(--nd-space-2); }
-  .nd-chart__swatch { width: 12px; height: 12px; border-radius: 2px; }
-  /* Four ink greys for the owners' shares, largest darkest. */
-  .nd-chart__share--0 { background: var(--nd-ink); }
-  .nd-chart__share--1 { background: var(--nd-ink-muted); }
-  .nd-chart__share--2 { background: var(--nd-control); }
-  .nd-chart__share--3 { background: var(--nd-rule); }
-  @media (max-width: 639px) {
-    .nd-chart { padding: 20px; }
+  /* Fit to the card: the title's own size, or smaller down to 15px (0.6: Roboto Serif semibold's average width, with
+     room to spare; 24px: the ↗ and its gap). */
+  .nd-chart__fit { font-size: clamp(15px, calc((100cqi - 24px) / (var(--chars) * 0.6)), 1em); }
+  @container (max-width: 520px) {
     .nd-chart__tfull { display: none; }
     .nd-chart__tshort { display: inline; }
-    /* The source line above the link. */
-    .nd-chart__foot { flex-direction: column; align-items: flex-start; gap: var(--nd-space-2); }
-    .nd-chart__step { grid-template-columns: minmax(0, 1fr); gap: var(--nd-space-2); }
-    .nd-chart__steplabel { min-height: 0; }
-    .nd-chart__name { height: 34px; line-height: 34px; }
+  }
+  .nd-chart__go { flex: none; display: flex; padding-top: 6px; color: var(--nd-ink-muted); }
+  .nd-chart:hover .nd-chart__go, .nd-chart:focus-visible .nd-chart__go { color: var(--nd-ink); }
+  /* The chart sits 16px under the title; a card stretched past its chart keeps the spare room at the bottom. */
+  .nd-chart__body { min-width: 0; }
+  /* Axis names: the category axis above the names, the value axis under its ticks, both muted mono. */
+  .nd-axis__name { color: var(--nd-ink-muted); white-space: nowrap; }
+
+  /* Ranked bars: names, then the track with the value axis's gridlines, then each bar's value. The columns belong to
+     the whole chart, so every bar starts at the same place. Names keep a column as wide as the longest, up to 45%. */
+  .nd-chartbars { --track: 28px; --bar: 14px; display: grid; grid-template-columns: fit-content(45%) minmax(0, 1fr) auto; align-items: center; column-gap: 12px; }
+  .nd-chart--large .nd-chartbars { --track: 40px; --bar: 20px; }
+  .nd-chartbars--ours { grid-template-columns: max-content minmax(0, 1fr) auto; }
+  .nd-chartbars__catname { grid-column: 1; margin-bottom: 4px; }
+  .nd-chartbars__label { grid-column: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nd-chartbars__track { grid-column: 2; display: flex; align-items: center; height: var(--track);
+    background: linear-gradient(to right, var(--nd-rule) 1px, transparent 1px) 0 0 / calc(100% / var(--ticks)) 100%,
+                linear-gradient(to left, var(--nd-rule) 1px, transparent 1px); }
+  .nd-chartbars__bar { height: var(--bar); width: var(--w); min-width: 2px; background: var(--nd-cat-utilities); border-radius: 0 var(--nd-radius-sm) var(--nd-radius-sm) 0; }
+  .nd-chartbars__value { grid-column: 3; text-align: right; }
+  .nd-chartbars__ticks { grid-column: 2; position: relative; height: 16px; margin-top: 4px; color: var(--nd-ink-muted); }
+  .nd-chartbars__tick { position: absolute; left: var(--at); transform: translateX(-50%); white-space: nowrap; }
+  .nd-chartbars__valname { grid-column: 2; margin-top: 4px; text-align: center; }
+
+  /* Columns: the y axis's name above its ticks, the plot with horizontal gridlines, each column's value on top, then
+     the x labels (under each column, or on the edges between them for size bands) and the x axis's name. */
+  .nd-chartcols { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 140px auto auto; column-gap: 8px; }
+  .nd-chart--large .nd-chartcols { grid-template-rows: auto 240px auto auto; }
+  .nd-chartcols__yname { grid-column: 1 / -1; margin-bottom: 8px; }
+  .nd-chartcols__yticks { grid-column: 1; grid-row: 2; position: relative; min-width: 2ch; color: var(--nd-ink-muted); }
+  .nd-chartcols__ytick { position: absolute; right: 0; bottom: var(--at); transform: translateY(50%); }
+  .nd-chartcols__plot { grid-column: 2; grid-row: 2; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px; align-items: end; border-bottom: var(--nd-hairline) solid var(--nd-ink-muted);
+    background: linear-gradient(to top, var(--nd-rule) 1px, transparent 1px) 0 100% / 100% calc(100% / var(--ticks)); }
+  .nd-chartcols__col { position: relative; height: 100%; display: flex; align-items: flex-end; }
+  .nd-chartcols__bar { width: 100%; height: var(--h); min-height: 1px; background: var(--nd-cat-utilities); border-radius: var(--nd-radius-sm) var(--nd-radius-sm) 0 0; }
+  .nd-chartcols__value { position: absolute; left: 0; right: 0; bottom: calc(var(--h) + 2px); text-align: center; }
+  .nd-chartcols__xlabels { grid-column: 2; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px; margin-top: 4px; color: var(--nd-ink-muted); }
+  .nd-chartcols__xlabel { text-align: center; white-space: nowrap; }
+  .nd-chartcols__xedges { grid-column: 2; position: relative; height: 16px; margin-top: 4px; color: var(--nd-ink-muted); }
+  .nd-chartcols__xedge { position: absolute; left: var(--at); transform: translateX(-50%); white-space: nowrap; }
+  .nd-chartcols__xname { grid-column: 2; margin-top: 4px; text-align: center; }
+
+  /* One bar split into parts, then a key: swatch, name, count. */
+  .nd-chartsplit__bar { display: flex; height: 24px; gap: 2px; overflow: hidden; border-radius: var(--nd-radius-sm); }
+  .nd-chartsplit__part { width: var(--w); min-width: 2px; }
+  .nd-chartsplit__part--0 { background: var(--nd-cat-utilities); }
+  .nd-chartsplit__part--1 { background: var(--nd-ink-muted); }
+  .nd-chartsplit__part--2 { background: var(--nd-control); }
+  .nd-chartsplit__key { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
+  .nd-chartsplit__row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: var(--nd-space-2); }
+  .nd-chartsplit__swatch { width: 12px; height: 12px; border-radius: 2px; }
+  .nd-chartsplit__label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* The plants map: the contiguous states in sunken paper with hairline borders, a dot per plant. */
+  .nd-chartmap { display: block; width: 100%; height: auto; }
+  .nd-chartmap__land { fill: var(--nd-paper-sunken); stroke: var(--nd-control); stroke-width: 1; }
+  .nd-chartmap__borders { fill: none; stroke: var(--nd-rule); stroke-width: 1; }
+  .nd-chartmap__dot { fill: var(--nd-cat-utilities); stroke: var(--nd-paper-raised); stroke-width: 2; }
+
+  @media (max-width: 639px) {
+    .nd-chart { padding: 20px; }
   }
 
   /* Browse (#909): the empty field lists the categories, the count on the right in mono. Plants and sites (no bucket)
@@ -1775,23 +1793,9 @@
 /* Browse's two long category names drop to 13px on phones (#917); outside the layers, as above, to beat type-body-strong. */
 @media (max-width: 559px) { .nd-browse__name[data-long] { font-size: 13px; } }
 /* Homepage B's charts (#909): sizes that beat the type utilities on the same elements, so outside the layers. Card titles
-   are 17px on phones (one line at 320, with the short title); the large card's bars get more room (Design, #920). */
+   are 17px on phones and 16px below 360, so the short titles fit on one line at 320. The large card's bar names are
+   15px, 13px when the card is under 520px wide. */
 @media (max-width: 639px) { .nd-chart__title { font-size: 17px; line-height: 24px; } }
-@media (max-width: 359px) { .nd-chart__title { font-size: 16px; } } /* "Where US fuel comes from" fits at 320 */
-.nd-chart--large .nd-chart__barname { font-size: 16px; line-height: 44px; }
-.nd-chart--large .nd-chart__bars { row-gap: 0; }
-.nd-chart--large .nd-chart__bar { height: 20px; }
-/* Bars on phones (Design, #920): names at 15px in a column as wide as the longest (up to 60%), so none is cut; below
-   360px, 13px and the short names. */
-@media (max-width: 639px) {
-  .nd-chart__bars { grid-template-columns: fit-content(60%) minmax(0, 1fr) auto; }
-  .nd-chart__bars--labels { grid-template-columns: max-content minmax(0, 1fr) auto; }
-  .nd-chart__barname, .nd-chart--large .nd-chart__barname { font-size: 15px; }
-  .nd-chart__barname[data-long] .nd-chart__nfull { display: none; }
-  .nd-chart__barname[data-long] .nd-chart__nshort { display: inline; }
-}
-@media (max-width: 359px) {
-  .nd-chart__barname, .nd-chart--large .nd-chart__barname { font-size: 13px; }
-  .nd-chart__nfull { display: none; }
-  .nd-chart__nshort { display: inline; }
-}
+@media (max-width: 359px) { .nd-chart__title { font-size: 16px; } }
+.nd-chart--large .nd-chartbars__label { font-size: 15px; }
+@container (max-width: 520px) { .nd-chart--large .nd-chartbars__label { font-size: 13px; } } /* as on the small cards (Design, #935) */

@@ -1,0 +1,8 @@
+<%# The operating plants on a map of the contiguous states (#909): one dot per plant, in the power plants' colour.
+    Dots: { name:, x:, y: } in HomeMap's 600 by 370 box. %>
+<svg class="nd-chartmap" viewBox="0 0 <%= HomeMap::WIDTH %> <%= HomeMap::HEIGHT %>" role="img" aria-label="Map of the <%= data[:count] %> operating US nuclear plants" xmlns="http://www.w3.org/2000/svg">
+  <%= render "home/charts/us_outline" %>
+  <g class="nd-chartmap__dots">
+    <% data[:dots].each do |dot| %><circle class="nd-chartmap__dot" cx="<%= dot[:x] %>" cy="<%= dot[:y] %>" r="7"><title><%= dot[:name] %></title></circle><% end %>
+  </g>
+</svg>

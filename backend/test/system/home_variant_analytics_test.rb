@@ -8,9 +8,7 @@ class HomeVariantAnalyticsTest < ApplicationSystemTestCase
 
   setup do
     cite!(company("Kairos Power", roles: [ role("reactor_vendor") ]))
-    fuel = role("fuel")
-    cite!(company("Centrus Energy", roles: [ role("enrichment", parent: fuel) ])) # a whole chart set, so B shows (#909)
-    %w[mining conversion fabrication].each { |key| role(key, parent: fuel) }
+    operating_plant("Byron") # charts to show, so B shows (#909)
   end
 
   def run_module(body)

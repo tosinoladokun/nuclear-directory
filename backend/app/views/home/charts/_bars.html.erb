@@ -1,17 +1,18 @@
-<%# Horizontal bars: rows of { name:, short:, count: }, longest first. Locals: rows, unit (singular, plural), bucket (the
-    category whose accent fills the bars, or nil to use each row's own key), labels: true when the names are ours
-    (categories): their column fits the longest, since a label we write never takes an ellipsis. %>
-<% max = rows.map { |row| row[:count] }.max %>
-<ol class="nd-chart__bars<% if local_assigns[:labels] %> nd-chart__bars--labels<% end %>">
-  <% rows.each do |row| %>
-    <% category = local_assigns[:bucket] || Category.find(row[:key]) %>
-    <li class="nd-chart__barrow <%= bucket_class(category) if category %>">
-      <%# The full name; a short one, where there is one, takes over on phones for a name past 22 characters and below
-          360px for every name (Design, #920). %>
-      <% short = row[:short].presence if row[:short].presence != row[:name] %>
-      <span class="nd-chart__barname type-small" title="<%= row[:name] %>"<% if short && row[:name].length > 22 %> data-long<% end %>><% if short %><span class="nd-chart__nfull"><%= row[:name] %></span><span class="nd-chart__nshort"><%= short %></span><% else %><%= row[:name] %><% end %></span>
-      <span class="nd-chart__bar" style="--w: <%= chart_bar_width(row[:count], max) %>%" aria-hidden="true"></span>
-      <span class="nd-chart__count type-data"><%= row[:count] %><span class="sr-only"> <%= row[:count] == 1 ? unit.first : unit.last %></span></span>
-    </li>
+<%# Ranked bars (#909): the category axis named above the names, the value axis's gridlines, ticks and unit under the bars,
+    and each bar's value beside it. Rows: { label:, title: (a record's full name, for records only), value: }, largest first. %>
+<% top, ticks = chart_axis(data[:rows].first[:value], question.tick) %>
+<%# Names we write (states) keep a column as wide as the longest, so none is ever cut. %>
+<div class="nd-chartbars<% if data[:rows].none? { |row| row[:title] } %> nd-chartbars--ours<% end %>" role="group" aria-label="<%= question.axes[:value] %> by <%= question.axes[:category].downcase %>" style="--ticks: <%= ticks.size - 1 %>">
+  <span class="nd-axis__name nd-chartbars__catname type-data-sm"><%= question.axes[:category] %></span>
+  <% data[:rows].each do |row| %>
+    <%# A record's name (a plant, a company) may end in an ellipsis as a last resort, its full name in the title
+        (DESIGN.md, one line, rule 5); a state's name is ours and always fits. %>
+    <span class="nd-chartbars__label type-small"<% if row[:title] %> title="<%= row[:title] %>" data-truncate<% end %>><%= row[:label] %></span>
+    <span class="nd-chartbars__track"><span class="nd-chartbars__bar" style="--w: <%= chart_pct_of(row[:value], top) %>%"></span></span>
+    <span class="nd-chartbars__value type-data"><%= chart_value(row[:value], question.decimals) %></span>
   <% end %>
-</ol>
+  <span class="nd-chartbars__ticks type-data-sm" aria-hidden="true">
+    <% ticks.each do |tick| %><span class="nd-chartbars__tick" style="--at: <%= chart_pct_of(tick, top) %>%"><%= chart_value(tick, 0) %></span><% end %>
+  </span>
+  <span class="nd-axis__name nd-chartbars__valname type-data-sm"><%= question.axes[:value] %></span>
+</div>
