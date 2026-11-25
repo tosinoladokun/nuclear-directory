@@ -47,6 +47,7 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
 
     post admin_inbox_decide_path(refused.id, "yes"), params: { ids: [ refused.id ] }
     assert_nil plant.reload.eia_plant_id
+    assert_equal "Not done: Eia plant belongs on the site, not a unit.", flash[:alert], "no model prefix at the top either"
     follow_redirect!
     assert_select "#inbox-item-#{refused.id} [role=alert]", text: "Couldn't apply: Eia plant belongs on the site, not a unit."
     assert_select "#inbox-item-#{@change.id} [role=alert]", 0, "only the row he clicked"
