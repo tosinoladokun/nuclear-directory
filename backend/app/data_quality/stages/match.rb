@@ -517,6 +517,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # Moved under another site since (a merge, #554): a unit now, and units get no site fields (Copilot).
       return Review.new("proposed for #{site.name}, which is a unit under site ##{site.parent_id} now") if site.parent_id
 
+      # Given a docket since (or proposed before that was refused): a unit, which holds no EIA plant ID (25 Nov).
+      if payload["eia_plant_id"].present? && site.nrc_docket.present?
+        return Review.new("proposed for #{site.name}, which is an NRC unit (docket #{site.nrc_docket}); an EIA plant ID goes on a site. " \
+          "Propose its coordinates without the EIA plant ID")
+      end
       holder = (plant = payload["eia_plant_id"].presence) && directory.facility(eia_plant_id: plant)
       return Review.new("proposed for #{site.name}, but EIA plant ID #{plant} is #{holder.name}'s (##{holder.id}) by now") if holder && holder.id != site.id
 
