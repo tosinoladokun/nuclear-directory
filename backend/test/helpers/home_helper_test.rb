@@ -21,4 +21,10 @@ class HomeHelperTest < ActionView::TestCase
     assert_equal "45.7%", chart_pct(45.7)
     assert_equal "30.0%", chart_pct(30.0), "one decimal on every share, so they line up"
   end
+
+  test "a chart names a company by its short name when it has one (PM, #909)" do
+    assert_equal "Southern Nuclear", chart_name(name: "Southern Nuclear Operating Co., Inc.", short: "Southern Nuclear")
+    assert_equal "Constellation", chart_name(name: "Constellation", short: nil)
+    assert_equal "Constellation", chart_name(name: "Constellation", short: "")
+  end
 end

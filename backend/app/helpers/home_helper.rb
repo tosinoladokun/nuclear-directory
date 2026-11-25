@@ -17,6 +17,10 @@ module HomeHelper
     "#{label}: #{list}"
   end
 
+  # How a chart names a company: its short name when it has one ("Southern Nuclear", not "Southern Nuclear Operating
+  # Co., Inc."; PM, #909), else its name. The full name goes in the title.
+  def chart_name(row) = row[:short].presence || row[:name]
+
   # A bar's length, as a share of the longest bar in its chart.
   def chart_bar_width(count, max) = max.to_i.positive? ? (100.0 * count / max).round(1) : 0
 

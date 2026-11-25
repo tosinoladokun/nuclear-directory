@@ -52,4 +52,18 @@ class HomeBTest < ActionDispatch::IntegrationTest
     get "/privacy"
     assert_includes response.body, "which category, chart or download link you clicked"
   end
+
+  test "the owners card names the operator, and every company, by its short name, the full one in the title (#909)" do
+    vogtle = cite!(plant("Plant Vogtle"))
+    { "Georgia Power Company" => [ 45.7, "Georgia Power" ], "Oglethorpe Power" => [ 54.3, nil ] }.each do |name, (pct, short)|
+      cite!(link(cite!(company(name, short_name: short)), "owns", vogtle)).update!(ownership_pct: pct)
+    end
+    cite!(link(cite!(company("Southern Nuclear Operating Co., Inc.", short_name: "Southern Nuclear")), "operates", vogtle))
+    html = ApplicationController.render(partial: "home/charts/owners", locals: { data: HomeCharts.new.owners, size: :small })
+    card = Nokogiri::HTML.fragment(html)
+
+    assert_equal "Each owner's share. Southern Nuclear runs it.", card.at_css(".nd-chart__sub").text
+    assert_equal [ "Oglethorpe Power", "Georgia Power" ], card.css(".nd-chart__barname").map(&:text), "largest share first"
+    assert_equal "Georgia Power Company", card.css(".nd-chart__barname").last["title"]
+  end
 end
