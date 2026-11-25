@@ -130,6 +130,18 @@ class Api::DqSiteFieldsTest < ActionDispatch::IntegrationTest
     assert_match "proposed for site ##{@site.id}, but it doesn't match that site", lost.reload.notes
   end
 
+  test "a site with no docket or plant ID is found among sites, never an older unit of the same name" do
+    holder = Facility.create!(name: "Other Site", facility_type: "research_reactor", verification_status: "verified", verified_by: "human:tosin")
+    unit = Facility.create!(name: "Lone Site", facility_type: "research_reactor", parent: holder, nrc_docket: "05000999",
+      verification_status: "verified", verified_by: "human:tosin")
+    site = Facility.create!(name: "Lone Site", facility_type: "research_reactor", verification_status: "verified", verified_by: "human:tosin")
+    assert_operator unit.id, :<, site.id
+    act(propose(coordinates, target: site.id))
+    claim = Candidate.find(results.sole["id"])
+    match!
+    assert_equal [ "Facility", site.id ], claim.reload.values_at(:subject_type, :subject_id), claim.notes
+  end
+
   test "a blank fill with Data Quality's approve joins Yes to all; a change to Tosin's coordinates stays his own" do
     Evidence.create!(subject: @site, source: @page, quote: QUOTE, found_by: "human")
     other = Facility.create!(name: "Shirley Basin", facility_type: "uranium_mine", latitude: 42.1, longitude: -106.2,

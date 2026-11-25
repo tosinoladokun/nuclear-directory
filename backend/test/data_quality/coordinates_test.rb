@@ -42,5 +42,8 @@ class DataQuality::CoordinatesTest < ActiveSupport::TestCase
     assert stated?(%(37°32.175' N), "37.53625"), "degrees and decimal minutes"
     assert_not stated?(%(37°61'10" N), "38.019"), "61 minutes isn't a minute count"
     assert_not stated?(%(Kemmerer, Wyoming), "41.706")
+    assert_not stated?(%(37°32.175' N), "32.175"), "a minute count isn't a latitude"
+    assert_not stated?(%(37°32'10.490" W), "10.490"), "nor a second count, on the other axis"
+    assert stated?(%(37°32'10.49" N, 41.705993 N), "41.705993"), "a decimal beside a DMS one still counts"
   end
 end

@@ -32,8 +32,9 @@ module DataQuality::Coordinates
     decimal?(quote.to_s, proposed, places, axis) || dms?(quote.to_s, proposed, places, axis)
   end
 
+  # Degrees, minutes and seconds are read whole by dms?, never their minutes or seconds as a decimal (Copilot).
   def self.decimal?(quote, proposed, places, axis)
-    quote.to_enum(:scan, DECIMAL).map { Regexp.last_match }.any? do |match|
+    quote.gsub(DMS, " ").to_enum(:scan, DECIMAL).map { Regexp.last_match }.any? do |match|
       sign = sign_of(match, axis) or next false
       written = match[:number]
       next false if written[/\.(\d+)\z/, 1].size < places
