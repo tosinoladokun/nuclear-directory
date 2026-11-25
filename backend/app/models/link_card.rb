@@ -77,10 +77,16 @@ class LinkCard
     current = ->(link) { (link.started_on.nil? || link.started_on <= Date.current) && (link.ended_on.nil? || link.ended_on > Date.current) }
     # "Operates" only counts a plant that is operating today (a plant not operating, shut down or being decommissioned isn't "operated"; Holtec's Palisades).
     running = ->(link) { link.relationship_type != "operates" || link.facility.status.nil? || link.facility.status == "operating" }
-    sites = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && current.call(link) && running.call(link) }.map { |link| link.facility.parent || link.facility }.uniq.size }
-    operates, owns, deals = sites.call("operates"), sites.call("owns"), profile.counted_deals.size
-    facts = [ ("Operates #{helpers.pluralize(operates, 'plant')}" if operates.positive?),
-              ("Owns stakes in #{helpers.pluralize(owns, 'plant')}" if owns.positive?),
+    # A planned site isn't one it has yet (Commonwealth Fusion's Fall Line; DQ).
+    links = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && (link.facility.status || link.facility.parent&.status) != "planned" && current.call(link) && running.call(link) } }
+    places = ->(type) { links.call(type).map { |link| link.facility.parent || link.facility }.uniq }
+    operates, owns, deals = places.call("operates").size, places.call("owns").size, profile.counted_deals.size
+    # "plant" only when every one is a power plant, else "site" (a fuel facility isn't a plant; the og text and the page say the same).
+    noun = ->(type) { places.call(type).all? { |place| place.facility_type == "power_reactor" } ? "plant" : "site" }
+    # "Owns" when no ownership link is a part share; "stakes in" once one is (an ownership_pct under 100; Energy Northwest owns Columbia outright; DQ).
+    stakes = links.call("owns").any? { |link| link.ownership_pct && link.ownership_pct < 100 }
+    facts = [ ("Operates #{helpers.pluralize(operates, noun.call('operates'))}" if operates.positive?),
+              ("Owns #{'stakes in ' if stakes}#{helpers.pluralize(owns, noun.call('owns'))}" if owns.positive?),
               (helpers.pluralize(deals, "deal") if deals.positive?) ].compact.first(2).join(" · ").presence
     new(squares: [ CATEGORY_COLORS[profile.category&.key] || PAPER ], label:, name: profile.name, footer_right: facts)
   end

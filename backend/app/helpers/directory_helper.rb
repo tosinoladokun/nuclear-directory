@@ -486,9 +486,9 @@ module DirectoryHelper
   end
 
   # The sites a company owns or operates today, for the count in its summary and card: a link that has ended or not yet started isn't one, and a
-  # vendor or offtake link isn't a site it has ("34 sites" on a supplier's card read as plants it owns; DQ).
+  # vendor or offtake link isn't a site it has ("34 sites" on a supplier's card read as plants it owns; DQ), nor is a planned one (Commonwealth Fusion's Fall Line).
   def company_current_sites(profile)
-    profile.plant_links.select { |l| %w[owns operates].include?(l.relationship_type) && (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
+    profile.plant_links.select { |l| %w[owns operates].include?(l.relationship_type) && (l.facility.status || l.facility.parent&.status) != "planned" && (l.started_on.nil? || l.started_on <= Date.current) && (l.ended_on.nil? || l.ended_on > Date.current) }
       .map { |l| l.facility.parent || l.facility }.uniq
   end
 
