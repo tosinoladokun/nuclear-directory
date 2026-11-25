@@ -545,8 +545,9 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
   - Anything else is rejected.
 
 **Size (optical, not by box)**
-- **Symbol:** scaled so √(width × height) = 30px, with no side over 36px. A square symbol is 30 × 30.
-- **Wordmark:** scaled so √(width × height) = 44px, with the height capped at 24px. At 2:1 it's 48 × 24, at 4:1 it's 88 × 22, and at 6:1 it's 108 × 18.
+- **Symbol:** the target is √(width × height) = 30px. If that would make either side longer than 36px, the mark is scaled down evenly until its longer side is 36px. A square symbol is 30 × 30, and a 1.6:1 symbol is 36 × 22.5.
+- **Wordmark:** the target is √(width × height) = 44px. If that would make it taller than 24px, it's scaled down evenly to 24px tall. At 2:1 it's 48 × 24 (capped), at 4:1 it's 88 × 22, and at 6:1 it's 108 × 18.
+- Scaling always keeps the mark's proportions. A cap only ever makes a mark smaller than its target.
 - The mask is trimmed to the ink with no padding. Its size is the mark's display size, and it's stored at 3× (a 30px symbol is 90px).
 
 **Files**
@@ -566,7 +567,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
   - Rejected for anything else: `script`, `style`, `image`, `text`, `use`, `foreignObject`, filters, masks, patterns, gradients and animation.
   - Rejected for any `on*` attribute, and for any `href` or `url()` that points outside the file.
   - Rendered by a renderer that never runs scripts or fetches.
-- **Raster quality:** the trimmed mark is at least 3× its display size on both sides, so the output is never enlarged.
+- **Raster quality:** in a PNG or WebP, the trimmed mark is at least 3× its display size on both sides, so the output is never enlarged. An SVG is rendered at the output size.
 - **Kept with each logo:**
   - only the processed mask, at most 50 KB;
   - the file's URL and the page it was found on;
@@ -578,10 +579,10 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 **Reject rules.** Any one of these means no logo, with the reason recorded:
 1. The file type, size or SVG content breaks a rule under Files.
 2. A raster has an opaque pixel in any of its four corners (a background, not transparency).
-3. The trimmed mark is smaller than 3× its display size.
+3. A PNG or WebP's trimmed mark is smaller than 3× its display size. An SVG has no pixel size, so it's rendered straight at the 3× output size and this rule doesn't apply to it.
 4. The trimmed mark is wider than 6:1, or more than 1.6 times taller than wide.
 5. The ink covers less than 15% or more than 85% of the trimmed area: a hairline, or a solid badge or app icon.
-6. A part of the mark is thinner than 1.5px at display size all the way through. In the 3× mask, a connected shape vanishes entirely when eroded with a disc 4.5px across. Sharp corners and serifs that thin out at their ends don't count.
+6. A part of the mark is thinner than 1.5px at display size all the way through. In the 3× mask, a connected shape vanishes entirely when eroded with a disc 4.5px across. Sharp corners and serifs that thin out at their ends don't count. The mask is thresholded at alpha 50% before eroding. Passes: a 3px stroke with pointed ends, or a serif that tapers into a stem. Fails: a separate 1px underline, or a dot under 1.5px across.
 7. The one-ink version is empty, for example a white logo made for dark backgrounds.
 
 **Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original, from the pending copy, beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
