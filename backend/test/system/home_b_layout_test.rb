@@ -21,6 +21,8 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     assert_empty tall, "at #{width}: one line each"
     cut = page.evaluate_script("[...document.querySelectorAll('.nd-chart__src, .nd-chart__more, .nd-chart__title')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
     assert_empty cut, "at #{width}: source lines, links and titles are never cut"
+    sizes = page.evaluate_script("[...new Set([...document.querySelectorAll('.nd-chart__name')].map(e => getComputedStyle(e).fontSize))]")
+    assert_equal [ width < 360 ? "13px" : "15px" ], sizes, "at #{width}: one chip size (Design, #920)"
     chips = page.evaluate_script("[...document.querySelectorAll('.nd-chart__name')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
     assert_operator chips, :all?, ->(name) { name.start_with?("enCore") }, "at #{width}: only a name too long for the phone, with no short name, is cut: #{chips}"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth - innerWidth"), :<=, 0, "at #{width}: no sideways scroll"

@@ -10,8 +10,8 @@
         <span class="nd-chart__steplabel nd-label"><% if i.positive? %><span class="nd-chart__arrow" aria-hidden="true"><%= icon("arrow-right", size: 12) %></span><% end %><%= labels.fetch(step[:step]) %> <span class="type-data-sm"><%= step[:count] %></span></span>
         <ul class="nd-chart__names">
           <% step[:companies].each do |row| %>
-            <% text, small = line_name(row[:name], row[:short]) %>
-            <li class="nd-chart__name" title="<%= row[:name] %>"<% if small %> data-fit="small"<% end %>><%= text %></li>
+            <%# One chip size in a row (Design, #920): the full name at 15px, its short name only past 31 characters. %>
+            <li class="nd-chart__name" title="<%= row[:name] %>"><%= line_name(row[:name], row[:short]).first %></li>
           <% end %>
         </ul>
       </li>
