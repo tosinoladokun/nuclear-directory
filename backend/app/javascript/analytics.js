@@ -87,30 +87,60 @@ export function categoryClickProperties(anchor, here = window.location) {
 }
 
 let ready = null
-// Turbo gives each page view a new body, so "once per home view" is once per body.
-let viewedFor = null
-let searchedFor = null
-function trackHomeView() {
+
+// Home events wait here until PostHog has loaded (it loads when the browser is idle), so a search or a click made
+// before then still counts, after its page's home_viewed. Each keeps the version of the page it happened on.
+const homeQueue = []
+function sendHome(name, properties, options) {
+  ready ? ready.capture(name, properties, options) : homeQueue.push([ name, properties, options ])
+}
+
+// Once per home view: the mark is on the body, so Turbo's copy of the page, restored by Back, carries it and isn't
+// counted again (the layout counts a restored page as no new view either).
+function once(mark) {
+  if (document.body.dataset[mark]) return false
+  document.body.dataset[mark] = "true"
+  return true
+}
+
+export function trackHomeView() {
   const variant = homeVariantProperties()
-  if (!variant || !ready || viewedFor === document.body) return
-  viewedFor = document.body
-  ready.capture("home_viewed", variant)
+  if (variant && once("homeViewed")) sendHome("home_viewed", variant)
 }
 
 function trackHome(event) {
   const variant = homeVariantProperties()
-  if (!variant || !ready) return
+  if (!variant) return
   if (event.type === "input") {
-    if (searchedFor === document.body || !event.target.matches?.(".nd-home input[type=search]") || !event.target.value.trim()) return
-    searchedFor = document.body
-    ready.capture("home_search_started", variant)
+    if (!event.target.matches?.(".nd-home input[type=search]") || !event.target.value.trim() || !once("homeSearched")) return
+    trackHomeView()
+    sendHome("home_search_started", variant)
     return
   }
   if (event.type === "auxclick" && event.button !== 1) return
   const anchor = event.target.closest?.("a[data-home-click]")
   const properties = anchor && categoryClickProperties(anchor)
-  if (properties) ready.capture("home_category_click", { ...properties, ...variant }, { send_instantly: true })
+  if (!properties) return
+  trackHomeView()
+  sendHome("home_category_click", { ...properties, ...variant }, { send_instantly: true })
 }
+
+// Listens from the start, before PostHog loads.
+export function installHomeTracking() {
+  document.addEventListener("click", trackHome, true)
+  document.addEventListener("auxclick", trackHome, true)
+  document.addEventListener("input", trackHome, true)
+  document.addEventListener("turbo:load", trackHomeView)
+  trackHomeView()
+}
+
+// PostHog is ready: send what waited, in order, then send directly.
+export function homeReady(posthog) {
+  ready = posthog
+  homeQueue.splice(0).forEach(([ name, properties, options ]) => posthog.capture(name, properties, options))
+}
+
+export const pendingHomeEvents = () => homeQueue.map(([ name, properties ]) => [ name, properties ])
 
 function trackOutbound(event) {
   // auxclick also fires for the right button (the context menu): only the middle button opens the link.
@@ -138,15 +168,10 @@ function start(key, host) {
       disable_surveys: true,
       before_send: sanitize,
     })
-    ready = posthog
-    trackHomeView()
+    homeReady(posthog)
   })
   document.addEventListener("click", trackOutbound, true)
   document.addEventListener("auxclick", trackOutbound, true) // a middle click opens a tab too
-  document.addEventListener("click", trackHome, true)
-  document.addEventListener("auxclick", trackHome, true)
-  document.addEventListener("input", trackHome, true)
-  document.addEventListener("turbo:load", trackHomeView)
 }
 
 if (typeof document !== "undefined") {
@@ -154,6 +179,7 @@ if (typeof document !== "undefined") {
   const host = meta("posthog-host")
   if (key && host && !window.posthogStarted) {
     window.posthogStarted = true
+    installHomeTracking()
     const begin = () => start(key, host)
     "requestIdleCallback" in window ? requestIdleCallback(begin) : setTimeout(begin, 1)
   }
