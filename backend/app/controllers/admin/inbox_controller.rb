@@ -34,6 +34,8 @@ class Admin::InboxController < Admin::BaseController
       flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour) if !yes && undoable.all? && undoable.size <= 20
     else
       flash[:alert] = "Not done: #{stopped.flat_map(&:errors).uniq.to_sentence}."
+      # Also on the row itself, where he clicked (PM, 25 Nov: a refused Yes looked like nothing happened).
+      flash[:refused] = { ids.first.to_s => refusal_text(stopped) } if yes
     end
     redirect_to admin_inbox_path
   end
@@ -142,6 +144,12 @@ class Admin::InboxController < Admin::BaseController
   end
 
   private
+    # "Couldn't apply: …" in plain words: a record's own validation error loses its "Facility: " prefix.
+    def refusal_text(stopped)
+      reasons = stopped.flat_map(&:errors).uniq.map { |error| error.to_s.sub(/\A(?:Facility|Organization): /, "").upcase_first.chomp(".") }
+      "Couldn't apply: #{reasons.to_sentence}."
+    end
+
     def lead_label(lead)
       site = lead.sources.reverse.find { |source| source["key"].to_s.start_with?(CompanySuggestion::KEY) }&.dig("url")
       host = site && (URI.parse(site).host.to_s.delete_prefix("www.") rescue nil)

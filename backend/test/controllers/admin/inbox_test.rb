@@ -38,6 +38,23 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_select "nav a[href=?]", admin_inbox_path, text: /Today\s*#{total}/
   end
 
+  test "a refused Yes says why on its own row, in plain words, not only at the top (PM, 25 Nov)" do
+    # A record that refuses the write: its own validation error, as a docketed plant refused an EIA plant ID.
+    plant = Facility.create!(name: "Callaway", nrc_docket: "05000483", facility_type: "power_reactor",
+      verification_status: "verified", verified_by: "human:tosin")
+    refused = Candidate.create!(source: @page, crawl_run: @run, kind: "facility", payload: { "name" => "Callaway", "eia_plant_id" => "6153" },
+      quote: "q", status: "matched", subject_type: "Facility", subject_id: plant.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+
+    post admin_inbox_decide_path(refused.id, "yes"), params: { ids: [ refused.id ] }
+    assert_nil plant.reload.eia_plant_id
+    follow_redirect!
+    assert_select "#inbox-item-#{refused.id} [role=alert]", text: "Couldn't apply: Eia plant belongs on the site, not a unit."
+    assert_select "#inbox-item-#{@change.id} [role=alert]", 0, "only the row he clicked"
+
+    get admin_inbox_path
+    assert_select "#inbox-item-#{refused.id} [role=alert]", 0, "gone on the next visit"
+  end
+
   test "Create publishes; No says no and can be undone from Recently decided" do
     post admin_inbox_decide_path(@create.id, "yes"), params: { ids: [ @create.id ] }
     assert @new_co.reload.verified?
