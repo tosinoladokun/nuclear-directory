@@ -3,6 +3,7 @@
     size:  :large or :compact (default :compact)
     query: fills the field (optional)
     id:    unique id when a page has two search boxes of the same size (optional)
+    browse: HomeCategories::Browse list; the empty, focused field then shows them under "Browse" (#909, home only)
     Without JavaScript it's a plain form: Enter goes to the directory's full results. %>
 <% size = local_assigns.fetch(:size, :compact) %>
 <% field_id = local_assigns[:id] || "search-#{size}" %>
@@ -22,6 +23,24 @@
   </form>
   <div id="<%= field_id %>-results" class="nd-searchbox__results" role="dialog" aria-label="Search results" data-instant-search-target="results"
        data-action="keydown->instant-search#navigate turbo:before-frame-render->instant-search#beforeRender turbo:frame-load->instant-search#loaded turbo:fetch-request-error->instant-search#failed turbo:frame-missing->instant-search#failed" hidden>
+    <% if (browse = local_assigns[:browse]).present? %>
+      <div class="nd-instant nd-browse" data-instant-search-target="browse" hidden>
+        <div class="nd-label nd-instant__group" id="<%= field_id %>-browse">Browse</div>
+        <ul class="nd-instant__list" aria-labelledby="<%= field_id %>-browse">
+          <% browse.each do |row| %>
+            <% noun = row.category.plants ? pluralize(row.count, "plant or site", plural: "plants and sites") : pluralize(row.count, "company", plural: "companies") %>
+            <li>
+              <%= link_to directory_url_for(category: row.category), class: "nd-instant__row nd-browse__row", aria: { label: "#{row.category.name}, #{noun}" }, data: { home_click: "category" } do %>
+                <span class="nd-catsq <%= bucket_class(row.category) %>" aria-hidden="true"><%= bucket_icon(row.category, size: 16) %></span>
+                <%# The short name where the full one is long, as the list pages' index (a label we write never takes an ellipsis). %>
+                <span class="nd-instant__text"><b class="type-body-strong" title="<%= row.category.name %>"><%= row.category.list_name %></b></span>
+                <span class="nd-browse__count type-data" aria-hidden="true"><%= row.count %></span>
+              <% end %>
+            </li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
     <turbo-frame id="<%= field_id %>-frame" target="_top" data-instant-search-target="frame"></turbo-frame>
   </div>
   <p id="<%= field_id %>-status" class="sr-only" role="status" aria-live="polite" data-instant-search-target="status"></p>

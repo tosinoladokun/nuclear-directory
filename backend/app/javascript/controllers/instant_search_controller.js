@@ -13,8 +13,10 @@ const INDEX_LIFETIME = 10 * 60 * 1000
 //
 // With an index URL (#696) the results are filtered in the browser from a compact index fetched on first focus, so
 // there is no wait per keystroke. Until the index is there, or if it can't be fetched, typing loads /search as before.
+//
+// With a browse target (the home page, #909) the empty, focused field opens Browse: the categories with their counts.
 export default class extends Controller {
-  static targets = ["input", "results", "frame", "status"]
+  static targets = ["input", "results", "frame", "status", "browse"]
   static values = { url: String, indexUrl: String, allUrl: String, minimum: { type: Number, default: 2 }, delay: { type: Number, default: 150 }, shortPlaceholder: String, tinyPlaceholder: String, longPlaceholder: String, nameFull: { type: Number, default: 26 }, nameSmall: { type: Number, default: 31 } }
 
   // Below 380px the full placeholder doesn't fit at 16px (iOS zooms below
@@ -54,6 +56,7 @@ export default class extends Controller {
     this.pending = false
     this.dismissed = false
     this.fetchIndex()
+    if (this.showBrowse()) return
     if (this.index) return this.renderLocal()
 
     this.markStale()
@@ -91,10 +94,11 @@ export default class extends Controller {
     clearTimeout(this.timer)
     this.pending = false
     const text = this.inputTarget.value.trim()
-    if (text.length < this.minimumValue) return this.close()
+    if (text.length < this.minimumValue) return this.showBrowse() || this.close()
 
     const found = search(this.index, text)
     const total = found.topics.length + found.companies.length + found.plants.length
+    this.hideBrowse()
     this.frameTarget.replaceChildren(this.panel(text, found, total))
     this.statusTarget.textContent = total === 0 ? "No results" : `${found.fuzzy ? "No exact match. " : ""}${total} ${found.fuzzy ? (total === 1 ? "close name" : "close names") : (total === 1 ? "result" : "results")}, use the down arrow to browse`
     this.markFresh()
@@ -196,7 +200,7 @@ export default class extends Controller {
 
   load() {
     const query = this.inputTarget.value.trim()
-    if (query.length < this.minimumValue) return this.close()
+    if (query.length < this.minimumValue) return this.showBrowse() || this.close()
 
     this.pending = true
     const url = new URL(this.urlValue, window.location.origin)
@@ -216,6 +220,7 @@ export default class extends Controller {
     this.markFresh()
     const panel = this.frameTarget.querySelector("[data-instant-search-count]")
     if (!panel) return this.close()
+    this.hideBrowse()
 
     const count = Number(panel.dataset.instantSearchCount)
     const close = panel.dataset.instantSearchFuzzy === "true"
@@ -262,6 +267,26 @@ export default class extends Controller {
     this.close()
   }
 
+  // Browse, when the page has it and the field is empty: true if it's showing.
+  showBrowse() {
+    if (!this.hasBrowseTarget || this.inputTarget.value.trim() !== "") return false
+    clearTimeout(this.timer)
+    this.pending = false
+    this.markFresh()
+    this.frameTarget.hidden = true
+    this.browseTarget.hidden = false
+    const count = this.browseTarget.querySelectorAll("a").length
+    this.statusTarget.textContent = `Browse ${count} categories, use the down arrow to browse`
+    this.open()
+    return true
+  }
+
+  hideBrowse() {
+    if (!this.hasBrowseTarget) return
+    this.browseTarget.hidden = true
+    this.frameTarget.hidden = false
+  }
+
   open() {
     this.resultsTarget.hidden = false
     this.inputTarget.setAttribute("aria-expanded", "true")
@@ -270,8 +295,9 @@ export default class extends Controller {
   // A failed request closes the old results rather than leaving them up.
   failed(event) {
     if (event?.type === "turbo:frame-missing") event.preventDefault()
-    // A late failure of the fallback request must not dismiss the local results.
-    if (this.index) return
+    // A late failure of the fallback request must not dismiss the local results, and the failure of a request
+    // that's no longer wanted (the field was cleared, so Browse is up) must not close what's showing now.
+    if (this.index || !this.pending) return
     this.pending = false
     this.close()
   }
@@ -310,6 +336,7 @@ export default class extends Controller {
   }
 
   get links() {
-    return Array.from(this.frameTarget.querySelectorAll("a"))
+    const shown = this.hasBrowseTarget && !this.browseTarget.hidden ? this.browseTarget : this.frameTarget
+    return Array.from(shown.querySelectorAll("a"))
   }
 }
