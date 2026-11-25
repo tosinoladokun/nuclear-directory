@@ -376,6 +376,14 @@ class SocialAgentTest < ActiveSupport::TestCase
     assert_empty SocialAgent::Rules.people("NANO Nuclear signed with Surbana Jurong Infrastructure Pte. Ltd.", item), "a legal name isn't a person"
   end
 
+  test "a fetched page's qualifiers don't block a spotlight, which reads only its own words (Copilot, #907)" do
+    page = Struct.new(:status) { def get(_url) = DataQuality::Fetcher::Response.new(url: "", kind: :ok, status: 200,
+      body: "<p>Sidebar: NANO signed a non-binding MOU with a utility.</p>", etag: nil, last_modified: nil, reason: "x", block_reference: nil, content_type: "text/html", truncated: false) }
+    item = ->(kind) { SocialAgent::Item.new(subject: @news, kind:, facts: {}, source_url: "https://example.org/x", path: "/", organization_ids: [], source_quote: "Meta agreed to fund two units.") }
+    assert_empty SocialAgent::Rules.source_problems("https://example.org/x", page.new(200), item: item.("spotlight"), text: "Meta agreed to fund two units.")
+    assert_includes SocialAgent::Rules.source_problems("https://example.org/x", page.new(200), item: item.("news"), text: "Meta agreed to fund two units."), "it leaves out the source's qualifier (MOU)"
+  end
+
   test "a stopped draft gets one revision with what stopped it, then every check again (rehearsal)" do
     drafts = [ "Acme Fission won 2 DOE awards.", DRAFT ]
     seen = []
@@ -1032,5 +1040,17 @@ class SocialAgentTest < ActiveSupport::TestCase
   ensure
     SocialAgent::Picker.holds = nil
     assert_includes SocialAgent::Picker.holds.keys, "energy-northwest"
+  end
+
+  test "a spotlight reads only its own words for a qualifier; a news or link item still reads its article text; MOU is an uppercase acronym (DQ, PM)" do
+    around = "Elsewhere on the page: a non-binding letter of intent was announced. The mou of a village."
+    build = ->(kind, quote, page) { SocialAgent::Item.new(subject: @news, kind:, facts: {}, source_url: nil, path: "/", organization_ids: [], source_quote: quote, page_text: page) }
+    post = "Meta agreed to fund early development of two Natrium units."
+    assert_empty SocialAgent::Rules.qualifiers(post, build.("spotlight", post, around)), "a spotlight's other page text isn't its link's stage"
+    assert_equal [ "it leaves out the source's qualifier (non-binding)", "it leaves out the source's qualifier (letter of intent)" ],
+      SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", around)), "a news item whose article has 'non-binding' still has to say it"
+    assert_empty SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "The mou of a village and an amount of money.")), "'mou' in lower case or inside 'amount' isn't an MOU"
+    assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "Acme signed an MOU with a utility."))
+    assert_equal [ "it leaves out the source's qualifier (MOU)" ], SocialAgent::Rules.qualifiers("Acme will build Y.", build.("news", "Acme will build Y.", "Acme signed a MoU with a utility.")), "'MoU' counts too"
   end
 end

@@ -145,10 +145,10 @@ module SocialAgent::Rules
     "not disclosed", "undisclosed", "gave no details", "nothing else", "no details were given", "no details were provided",
     "gave no figure", "gave a figure", "did not give", "didn't give", "declined to", "has not said", "hasn't said", "has not disclosed" ]
     .map { |phrase| /\b#{Regexp.escape(phrase)}\b/i } + [ /\bneither\b[^.]{0,40}\bgave\b/i ])
-  QUALIFIERS = { /memorandum of understanding|\bMOU\b/i => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
+  QUALIFIERS = { /(?i:memorandum of understanding)|\b(?:MOU|MoU)s?\b/ => "MOU", /non-binding/i => "non-binding", /letter of intent|\bLOI\b/i => "letter of intent",
                  /framework agreement/i => "framework agreement", /\bproposed\b/i => "proposed", /\bplanned\b/i => "planned" }.freeze
   # A deal word in the post must be the source's own word (DQ: "a collaboration" for a signed MOU).
-  DEAL_WORDS = { "an MOU" => /\bMOUs?\b|memorand(?:um|a) of understanding/i, "a framework" => /\bframeworks?\b/i,
+  DEAL_WORDS = { "an MOU" => /\b(?:MOU|MoU)s?\b|(?i:memorand(?:um|a) of understanding)/, "a framework" => /\bframeworks?\b/i,
     "an agreement" => /\bagreements?\b/i, "a partnership" => /\bpartnerships?\b/i, "a collaboration" => /\bcollaborations?\b/i,
     "a contract" => /\bcontracts?\b/i, "a deal" => /\bdeals?\b/i, "an alliance" => /\balliances?\b/i, "a venture" => /\bventures?\b/i }.freeze
   def qualifiers(text, item)
@@ -165,8 +165,10 @@ module SocialAgent::Rules
       # dropped by it. The voice check and the graders read what the post does say about each link it names (GTM, Helion and NuScale).
       next if item.kind == "spotlight"
 
-      # "Proposed" and "planned" count only in the item's own words: a page's other stories have their own plans.
-      said = %w[proposed planned].include?(name) ? item.own_text : item.source_text
+      # A spotlight's facts are its records' own descriptions, which carry the stage words, so only they count (PM, 24 Nov: TerraPower's Meta agreement was
+      # said to leave out an "MOU" neither source page contains); a news or link item still reads its article text too (DQ: a lede two sentences from the
+      # chosen quote can say "non-binding").
+      said = item.kind == "spotlight" ? item.own_text : item.source_text
       found << "it leaves out the source's qualifier (#{name})" if said.match?(pattern) && !text.match?(pattern)
     end
     found
@@ -408,7 +410,8 @@ module SocialAgent::Rules
     # The page's own words too: an MOU the title doesn't mention is still an MOU (rehearsal, 20 Nov).
     return [] unless item && text
 
-    page = item.with(source_quote: [ item.source_quote, ActionController::Base.helpers.strip_tags(response.body.to_s).squish.first(20_000) ].join("\n"))
+    # Kept in page_text, not the quote: a spotlight reads only its own words, so a sidebar's MOU can't block it (Copilot).
+    page = item.with(page_text: [ item.page_text, ActionController::Base.helpers.strip_tags(response.body.to_s).squish.first(20_000) ].compact.join("\n"))
     qualifiers(text, page).reject { |problem| problem.start_with?("it calls it", "it says") }
   rescue StandardError => error
     [ "its source didn't answer (#{error.class})" ]
