@@ -340,12 +340,16 @@ module DataQuality::Matching
 
   PROPOSALS = %w[propose_role propose_fields propose_link propose_site_fields].freeze
 
-  # propose_operator_change (#930): a plant's operator replaced, from a source that names the new one. Two link
-  # claims, each Tosin's to decide on its own (Review::OPERATOR_CHANGE): the current "from operates plant" link
-  # gets ended_on: since (a change on that link), and "to operates plant" is added with started_on: since.
+  # propose_operator_change (#930): a plant's operator replaced, from a source that names the new one. Each claim is
+  # Tosin's to decide on its own (Review::OPERATOR_CHANGE): the current "from operates plant" link gets ended_on: since
+  # (a change on that link), and "to operates plant" is added with started_on: since.
   #   { action: "propose_operator_change", target: plant or unit (id, slug or page address), from: company, to: company,
-  #     since: "2024-03-01", quote:, source_url:, reason:, request_key: (optional) }
-  # Recorded as two propose_link actions on the plant (no new action kind); each claim can be undone.
+  #     since: "2024-03-01", quote:, source_url:, since_quote: (optional), since_source_url: (optional), reason:, request_key: }
+  # The quote names the new operator. The date is stated by the quote, or by since_quote, a second quote from its own
+  # source (since_source_url, else source_url; PM, 25 Nov). With since_quote, each quote is its own claim, so each is
+  # checked against its own source and becomes evidence: "to operates plant" (quote), the same link with started_on
+  # (since_quote), and the old link's ended_on (since_quote, the quote that states when).
+  # Recorded as propose_link actions on the plant (no new action kind); each claim can be undone.
   def self.propose_operator_change(row, directory, requeue)
     reason, quote = row["reason"].to_s.squish, row["quote"].to_s.squish
     fail_with = ->(why) { Row.new(id: nil, ok: false, error: why, created_ids: []) }
@@ -355,13 +359,19 @@ module DataQuality::Matching
     since = (Date.iso8601(row["since"].to_s) rescue nil)
     return fail_with.call("since is the date the new operator took over, like 2024-03-01") unless since
     return fail_with.call("since can't be in the future") if since > Date.current
+    since_quote = row["since_quote"].to_s.squish.presence
+    if since_quote
+      return fail_with.call("the since quote must state the date #{since.strftime('%-d %B %Y')}") unless date_stated?(since_quote, since)
+    elsif !date_stated?(quote, since)
+      return fail_with.call("the quote must state the date #{since.strftime('%-d %B %Y')}, or give it in since_quote with its source")
+    end
     return fail_with.call("give from (the current operator) and to (the new one): an id or slug") if row["from"].blank? || row["to"].blank?
 
     key = row["request_key"].presence&.to_s
-    if key && (done = DqAction.where(request_key: [ key, "#{key}:end" ]).order(:id).to_a).any?
+    if key && (done = DqAction.where(request_key: [ key, "#{key}:end", "#{key}:date" ]).order(:id).to_a).any?
       return Row.new(id: done.first.candidate_id, ok: true, error: nil, created_ids: done.map(&:candidate_id))
     end
-    if DqAction.where(action: "propose_link", created_at: Time.current.all_day).count + 2 > DAILY_ROLES
+    if DqAction.where(action: "propose_link", created_at: Time.current.all_day).count + (since_quote ? 3 : 2) > DAILY_ROLES
       return fail_with.call("today's limit of #{DAILY_ROLES} is reached for propose_link; ask Backend")
     end
 
@@ -390,27 +400,46 @@ module DataQuality::Matching
 
       source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
       raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
+      dated = since_quote ? DataQuality::Sources.find_or_create(url: (row["since_source_url"].presence || row["source_url"]).to_s) : source
+      raise Abort, "the since source: #{dated.errors.to_sentence}" unless dated.ok?
 
       ends = ->(company) { { "organization" => { "name" => company.name }, "facility" => { "name" => plant.name }, "relationship_type" => "operates" } }
       note = "Data Quality proposed it: #{to.name} operates #{plant.name} from #{since.iso8601}, replacing #{from.name}. #{reason}"
-      added = Candidate.create!(source_id: source.ref.id, kind: "facility_relationship", status: "new", quote:, notes: note,
-        payload: ends.call(to).merge("started_on" => since.iso8601))
-      ended = Candidate.create!(source_id: source.ref.id, kind: "facility_relationship", status: "new", quote:, notes: note,
-        payload: ends.call(from).merge("ended_on" => since.iso8601))
-      [ [ added, key ], [ ended, key && "#{key}:end" ] ].each do |claim, request_key|
-        DqAction.create!(candidate: claim, action: "propose_link", target_type: "Facility", target_id: plant.id, reason:,
-          before: {}, created: [], by: BY, request_key:, after: stamp_of(claim))
+      note += " Named by: \"#{quote.truncate(300)}\"" if since_quote
+      claim = ->(on, text, payload) { Candidate.create!(source_id: on.ref.id, kind: "facility_relationship", status: "new", quote: text, notes: note, payload:) }
+      # Without since_quote the quote states both; with it, the date goes on the claims its quote supports.
+      added = claim.call(source, quote, since_quote ? ends.call(to) : ends.call(to).merge("started_on" => since.iso8601))
+      ended = claim.call(dated, since_quote || quote, ends.call(from).merge("ended_on" => since.iso8601))
+      started = claim.call(dated, since_quote, ends.call(to).merge("started_on" => since.iso8601)) if since_quote
+      [ [ added, key ], [ ended, key && "#{key}:end" ], [ started, key && "#{key}:date" ] ].each do |made, request_key|
+        next unless made
+
+        DqAction.create!(candidate: made, action: "propose_link", target_type: "Facility", target_id: plant.id, reason:,
+          before: {}, created: [], by: BY, request_key:, after: stamp_of(made))
       end
-      requeue << source.ref.source_kind
-      Row.new(id: added.id, ok: true, error: nil, created_ids: [ added.id, ended.id ])
+      requeue << source.ref.source_kind << dated.ref.source_kind
+      Row.new(id: added.id, ok: true, error: nil, created_ids: [ added, ended, started ].compact.map(&:id))
     end
   rescue Abort => e
     Row.new(id: nil, ok: false, error: e.message, created_ids: [])
   rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
-    won = key && DqAction.where(request_key: [ key, "#{key}:end" ]).order(:id).to_a
+    won = key && DqAction.where(request_key: [ key, "#{key}:end", "#{key}:date" ]).order(:id).to_a
     raise e if won.blank?
 
     Row.new(id: won.first.candidate_id, ok: true, error: nil, created_ids: won.map(&:candidate_id))
+  end
+
+  MONTHS = Date::MONTHNAMES.compact.freeze
+
+  # Whether a quote states this date (#930): 2024-03-01, March 1, 2024 (or Mar. 1 / 1st), 1 March 2024; a date on the
+  # 1st also as March 2024, as DATA.md stores a month-only date.
+  def self.date_stated?(quote, date)
+    month = "(?:#{Regexp.escape(MONTHS[date.month - 1])}|#{Regexp.escape(MONTHS[date.month - 1][0, 3])}\\.?)"
+    day = "0?#{date.day}(?:st|nd|rd|th)?"
+    forms = [ Regexp.escape(date.iso8601), "#{month}\\s+#{day},?\\s+#{date.year}", "#{day}\\s+#{month},?\\s+#{date.year}" ]
+    # Month-only, never the tail of a full date ("11 March 2024" doesn't state 1 March).
+    forms << "(?<!\\d\\s)(?<!\\d[a-z]{2}\\s)#{month},?\\s+#{date.year}" if date.day == 1
+    quote.match?(/(?<![[:alnum:]])(?:#{forms.join('|')})(?![[:alnum:]])/i)
   end
 
   # propose_site_fields (#916): a published site's coordinates, as a pair, and its EIA plant ID, from a

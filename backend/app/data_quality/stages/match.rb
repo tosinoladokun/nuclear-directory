@@ -488,6 +488,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
     # own page) supersedes the earlier one, so there's nothing to combine.
     def self.other_page_on(candidate, existing, directory:)
       return if candidate.kind_deal_term?
+      # Data Quality's operator change (#930) replaces what the other page says on purpose, and Tosin decides it on its own.
+      return if DataQuality::Review.operator_change?(candidate)
 
       cited = directory.evidence(type: existing.type, id: existing.id).map(&:source_id)
       # An earlier edition of this document is superseded by it, not another page.
