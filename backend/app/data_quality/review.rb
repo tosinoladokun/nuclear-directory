@@ -1335,7 +1335,9 @@ module DataQuality::Review
           return Result.new(candidate_id: nil, ref: nil, errors: [ "it has no source; add one before publishing it" ])
         end
 
-        result = directory.decide_fact(type.to_s.underscore, id:, status:, by:, reason:, attributes:)
+        # Marked as a person's decision in the admin, so a later seed run keeps
+        # any value it set (#947; the seed's own writes carry no context).
+        result = directory.decide_fact(type.to_s.underscore, id:, status:, by:, reason:, attributes:, context: { "by_hand" => true })
         Result.new(candidate_id: nil, ref: result.ref, errors: result.errors)
       end
 

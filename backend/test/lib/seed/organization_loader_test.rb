@@ -108,6 +108,52 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_empty Seed::OrganizationLoader.new(@dir).load!.kept, "a file brought into line keeps nothing"
   end
 
+  test "a hand edit in the admin stands too (Infra, #947)" do
+    doc = org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "CO", source_url: "https://example.com/a", quote: "Lakewood, CO" })
+    write_file("acme-fuel", doc)
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    result = DataQuality::Review.approve_fact(type: "Organization", id: acme.id, by: "human:tosin", attributes: { hq_city: "Denver" })
+    assert result.ok?, result.errors.inspect
+    assert_equal({ "by_hand" => true }, VerificationEvent.where(subject: acme).order(:id).last.context)
+
+    loader = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Denver", acme.reload.hq_city
+    assert_match(/kept organization #{acme.id}'s hq_city "Denver"/, loader.kept.join("\n"))
+  end
+
+  test "the seed's own writes have no context or reason; any other human change stands, an agent's doesn't (Database, #947)" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "CO" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    last = VerificationEvent.where(subject: acme).order(:id).last
+    assert_equal [ {}, nil ], [ last.context, last.reason ]
+
+    # A data-step correction: a human, a reason, no context.
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Golden" },
+      verification: { status: "verified", by: "human:tosin", reason: "Fix HQ; deploy abc1234, PR #9" })
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Golden", acme.reload.hq_city, "a data-step write stands"
+
+    # The seed's write: a human, no context and no reason.
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Arvada" }, verification: { status: "verified", by: "human:tosin" })
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Lakewood", acme.reload.hq_city, "the seed's own earlier write is the seed's to change"
+
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Aurora" }, verification: { status: "verified", by: "agent:verifier/x", reason: "Seen on the site" })
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Lakewood", acme.reload.hq_city, "an agent's change isn't a person's decision"
+  end
+
+  test "a number the file writes differently is the same value, never a false Kept (Database, #947)" do
+    write_file("plant-co", org("Plant Co", website: "https://plantco.example"))
+    loader = Seed::OrganizationLoader.new(@dir)
+    assert loader.send(:same_value?, 50, BigDecimal("50.0"))
+    assert loader.send(:same_value?, "50", 50.0)
+    assert_not loader.send(:same_value?, 50, BigDecimal("50.5"))
+    assert_not loader.send(:same_value?, "Denver", "Lakewood")
+  end
+
   test "a relationship description a person approved stands; a null one never clears it (#947)" do
     write_file("microsoft", org("Microsoft", website: "https://microsoft.com"))
     link = item(to: "Microsoft", type: "supplies", description: "Signed fusion PPA (May 2023)")

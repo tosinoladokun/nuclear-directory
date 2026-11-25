@@ -20,6 +20,9 @@ module Seed
   class OrganizationLoader
     class Error < StandardError; end
 
+    # No reason and no context: that's how the audit trail tells the seed's
+    # writes from a person's (#947). A context would also log an event on
+    # every re-seed (FactWriter records a same decision that names one).
     VERIFICATION = { status: "verified", by: "human:tosin" }.freeze
     # A row's state across its writes: the first listed wins.
     STATES = %i[created changed unchanged].freeze
@@ -688,7 +691,7 @@ module Seed
 
         approved_fields(record).each do |field|
           key = field.to_sym
-          next unless attributes.key?(key) && attributes[key].to_s != record.public_send(field).to_s
+          next unless attributes.key?(key) && !same_value?(attributes[key], record.public_send(field))
 
           stated = attributes.delete(key)
           @kept << "#{slug}: kept #{record.class.name.underscore.humanize(capitalize: false)} #{record.id}'s #{field} " \
@@ -697,16 +700,29 @@ module Seed
       end
 
       # The fields whose latest change was a person's decision rather than a
-      # seed write: an approval from Today or the inbox (it names its
-      # candidate), or a restore of one (#947). The seed's own writes carry
-      # no such context.
+      # seed write (Database's review, #947): any change by a human that isn't
+      # the seed's: an approval from Today, the inbox or Enrich, an edit in the
+      # admin (by_hand), a data-step correction (a reason) or a restore. The
+      # seed's own writes have no context and no reason; a `seed` context is
+      # read the same way. An agent's change is never kept. An admin edit
+      # made before by_hand (25 Nov) without a note looks like the seed's.
       def approved_fields(record)
         last = {}
-        VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context).each do |changed, context|
-          person = context.to_h.key?("candidate_id") || context.to_h.key?("restores_event")
-          changed.to_h.each_key { |field| last[field] = person }
+        VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context, :reason, :by).each do |changed, context, reason, by|
+          context = context.to_h
+          seed = context.key?("seed") || (context.empty? && reason.nil?)
+          changed.to_h.each_key { |field| last[field] = by.to_s.start_with?("human:") && !seed }
         end
         last.select { |field, person| person && record.has_attribute?(field) }.keys
+      end
+
+      # The same value, a number however it's written (50 and 50.0).
+      def same_value?(stated, stored)
+        return true if stated.to_s == stored.to_s
+
+        BigDecimal(stated.to_s) == BigDecimal(stored.to_s)
+      rescue ArgumentError, TypeError
+        false
       end
 
       def write(slug, kind, attributes, evidence, pending: false, hold: nil, remove_aliases: [])
