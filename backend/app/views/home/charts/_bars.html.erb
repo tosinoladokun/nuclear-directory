@@ -1,7 +1,8 @@
 <%# Horizontal bars: rows of { name:, short:, count: }, longest first. Locals: rows, unit (singular, plural), bucket (the
-    category whose accent fills the bars, or nil to use each row's own key). %>
+    category whose accent fills the bars, or nil to use each row's own key), labels: true when the names are ours
+    (categories): their column fits the longest, since a label we write never takes an ellipsis. %>
 <% max = rows.map { |row| row[:count] }.max %>
-<ol class="nd-chart__bars">
+<ol class="nd-chart__bars<% if local_assigns[:labels] %> nd-chart__bars--labels<% end %>">
   <% rows.each do |row| %>
     <% category = local_assigns[:bucket] || Category.find(row[:key]) %>
     <li class="nd-chart__barrow <%= bucket_class(category) if category %>">

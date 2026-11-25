@@ -3,8 +3,9 @@
       title: "Where US reactor fuel comes from", subtitle: "Companies at each step, from the uranium mine to the fuel plant.",
       sources: chart_sources(data[:sources]), link: "Fuel and materials" } do %>
   <ol class="nd-chart__chain">
-    <% data[:steps].each do |step| %>
+    <% data[:steps].each_with_index do |step, i| %>
       <li class="nd-chart__step">
+        <% if i.positive? %><span class="nd-chart__arrow" aria-hidden="true"><%= icon("arrow-right", size: 12) %></span><% end %>
         <span class="nd-chart__steplabel nd-label"><%= labels.fetch(step[:step]) %> <span class="type-data-sm"><%= step[:count] %></span></span>
         <ul class="nd-chart__names">
           <% step[:companies].each do |row| %>

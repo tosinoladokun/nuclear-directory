@@ -444,13 +444,15 @@
   /* One line each: names take their short form past 22 characters, then the ellipsis (one-line law). */
   .nd-chart__barname, .nd-chart__name, .nd-chart__newstitle { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
   .nd-chart__bars, .nd-chart__names, .nd-chart__news, .nd-chart__owners, .nd-chart__chain { list-style: none; margin: 0; padding: 0; }
-  .nd-chart__bars { display: grid; gap: 8px; }
-  .nd-chart__barrow { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center; gap: var(--nd-space-3); }
+  /* The columns belong to the list, so every bar starts at the same place; a row is only its three cells. */
+  .nd-chart__bars { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center; gap: 8px var(--nd-space-3); }
+  .nd-chart__bars--labels { grid-template-columns: max-content minmax(0, 1fr) auto; }
+  .nd-chart__barrow { display: contents; }
   .nd-chart__bar { height: 12px; width: var(--w); min-width: 2px; background: var(--nd-cat, var(--nd-ink)); border-radius: var(--nd-radius-sm); }
   .nd-chart__count { text-align: right; }
   .nd-chart__chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
   .nd-chart__step { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .nd-chart__step + .nd-chart__step::before { content: "→"; position: absolute; left: -16px; top: 0; color: var(--nd-control); }
+  .nd-chart__arrow { position: absolute; left: -16px; top: 2px; display: flex; color: var(--nd-control); }
   .nd-chart__steplabel { display: flex; gap: 6px; white-space: nowrap; }
   .nd-chart__steplabel .type-data-sm { color: var(--nd-ink-muted); }
   .nd-chart__names { display: grid; gap: 6px; }
@@ -471,9 +473,12 @@
   @media (max-width: 639px) {
     .nd-chart { padding: 20px; }
     .nd-chart__title { font-size: 19px; }
+    /* The source line above the link, whole: it may run to a second line, as the subtitle does. */
+    .nd-chart__foot { flex-direction: column; align-items: flex-start; gap: var(--nd-space-2); }
+    .nd-chart__src { white-space: normal; }
     /* The fuel chain's four steps as two rows of two on phones, the arrows dropped. */
     .nd-chart__chain { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--nd-space-4); }
-    .nd-chart__step + .nd-chart__step::before { content: none; }
+    .nd-chart__arrow { display: none; }
   }
 
   /* Browse (#909): the empty field lists the categories, the count on the right in mono. Plants and sites (no bucket)
