@@ -452,6 +452,7 @@
   /* The columns belong to the list, so every bar starts at the same place; a row is only its three cells. */
   .nd-chart__bars { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center; gap: 8px var(--nd-space-3); }
   .nd-chart__bars--labels { grid-template-columns: max-content minmax(0, 1fr) auto; }
+  .nd-chart__nshort { display: none; }
   .nd-chart__barrow { display: contents; }
   .nd-chart__bar { height: 12px; width: var(--w); min-width: 2px; background: var(--nd-cat, var(--nd-ink)); border-radius: var(--nd-radius-sm); }
   .nd-chart__count { text-align: right; }
@@ -1776,3 +1777,17 @@
 .nd-chart--large .nd-chart__barname { font-size: 16px; line-height: 44px; }
 .nd-chart--large .nd-chart__bars { row-gap: 0; }
 .nd-chart--large .nd-chart__bar { height: 20px; }
+/* Bars on phones (Design, #920): names at 15px in a column as wide as the longest (up to 60%), so none is cut; below
+   360px, 13px and the short names. */
+@media (max-width: 639px) {
+  .nd-chart__bars { grid-template-columns: fit-content(60%) minmax(0, 1fr) auto; }
+  .nd-chart__bars--labels { grid-template-columns: max-content minmax(0, 1fr) auto; }
+  .nd-chart__barname, .nd-chart--large .nd-chart__barname { font-size: 15px; }
+  .nd-chart__barname[data-long] .nd-chart__nfull { display: none; }
+  .nd-chart__barname[data-long] .nd-chart__nshort { display: inline; }
+}
+@media (max-width: 359px) {
+  .nd-chart__barname, .nd-chart--large .nd-chart__barname { font-size: 13px; }
+  .nd-chart__nfull { display: none; }
+  .nd-chart__nshort { display: inline; }
+}

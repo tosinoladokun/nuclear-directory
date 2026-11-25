@@ -22,7 +22,7 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     cut = page.evaluate_script("[...document.querySelectorAll('.nd-chart__src, .nd-chart__more, .nd-chart__title')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
     assert_empty cut, "at #{width}: source lines, links and titles are never cut"
     sizes = page.evaluate_script("[...new Set([...document.querySelectorAll('.nd-chart__name')].map(e => getComputedStyle(e).fontSize))]")
-    assert_equal [ width < 360 ? "13px" : "15px" ], sizes, "at #{width}: one chip size (Design, #920)"
+    assert_equal [ width < 360 ? "13px" : "15px" ], sizes, "at #{width}: one chip size (Design, #920)" if sizes.any?
     chips = page.evaluate_script("[...document.querySelectorAll('.nd-chart__name')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
     assert_operator chips, :all?, ->(name) { name.start_with?("enCore") }, "at #{width}: only a name too long for the phone, with no short name, is cut: #{chips}"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth - innerWidth"), :<=, 0, "at #{width}: no sideways scroll"
@@ -45,6 +45,36 @@ class HomeBLayoutTest < ApplicationSystemTestCase
       cards = boxes
       assert_equal "fuel", cards.first[0], "at #{width}: large first"
       assert_equal 1, cards.map { |card| card[1] }.uniq.size, "at #{width}: one column"
+      assert_one_line(width)
+    end
+  end
+
+  test "the operators set: no bar name is cut at 1440, 390 or 320 (Design, #920)" do
+    OrganizationRole.delete_all # the fuel set has nothing to show, so the other set does
+    offtaker = role("data_center_offtaker")
+    { "Constellation" => 3, "Dominion Energy" => 2, "NextEra Energy" => 2, "Southern Nuclear" => 2, "Duke Energy" => 1,
+      "Tennessee Valley Authority" => 1 }.each do |name, n|
+      org = cite!(company(name, short_name: (name == "Tennessee Valley Authority" ? "TVA" : nil)))
+      n.times do |i|
+        site = cite!(plant("#{name} plant #{i}"))
+        cite!(link(org, "operates", cite!(Facility.create!(name: "#{name} #{i} unit", parent: site, facility_type: "power_reactor", status: "operating", **verification(true)))))
+      end
+    end
+    seller = cite!(company("Kairos Power"))
+    %w[Amazon Microsoft].each do |name|
+      cite!(link(cite!(company(name, roles: [ offtaker ])), "offtake_with", seller).tap { |deal| deal.update!(description: "Signed a power purchase agreement") })
+    end
+    vogtle = cite!(plant("Plant Vogtle"))
+    { "Georgia Power" => 45.7, "Oglethorpe Power" => 30.0, "MEAG Power" => 22.7, "Dalton Utilities" => 1.6 }.each do |name, pct|
+      cite!(link(cite!(company(name)), "owns", vogtle)).update!(ownership_pct: pct)
+    end
+
+    [ 1440, 390, 320 ].each do |width|
+      resize_viewport(width, 844)
+      visit root_path(home: "b")
+      assert_equal "operators", boxes.first[0], "at #{width}"
+      cut = page.evaluate_script("[...document.querySelectorAll('.nd-chart__barname')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+      assert_empty cut, "at #{width}: every operator, buyer and owner name whole"
       assert_one_line(width)
     end
   end

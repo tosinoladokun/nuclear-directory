@@ -6,7 +6,10 @@
   <% rows.each do |row| %>
     <% category = local_assigns[:bucket] || Category.find(row[:key]) %>
     <li class="nd-chart__barrow <%= bucket_class(category) if category %>">
-      <span class="nd-chart__barname type-small" title="<%= row[:name] %>"><%= row[:short].presence && row[:name].length > 22 ? row[:short] : row[:name] %></span>
+      <%# The full name; a short one, where there is one, takes over on phones for a name past 22 characters and below
+          360px for every name (Design, #920). %>
+      <% short = row[:short].presence if row[:short].presence != row[:name] %>
+      <span class="nd-chart__barname type-small" title="<%= row[:name] %>"<% if short && row[:name].length > 22 %> data-long<% end %>><% if short %><span class="nd-chart__nfull"><%= row[:name] %></span><span class="nd-chart__nshort"><%= short %></span><% else %><%= row[:name] %><% end %></span>
       <span class="nd-chart__bar" style="--w: <%= chart_bar_width(row[:count], max) %>%" aria-hidden="true"></span>
       <span class="nd-chart__count type-data"><%= row[:count] %><span class="sr-only"> <%= row[:count] == 1 ? unit.first : unit.last %></span></span>
     </li>
