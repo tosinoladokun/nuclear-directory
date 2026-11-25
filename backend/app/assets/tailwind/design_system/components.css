@@ -1338,6 +1338,9 @@
   .nd-page--company { max-width: 1280px; }
   .nd-company { display: flex; flex-direction: column; gap: var(--nd-space-10); }
   .nd-company__index { display: none; }
+  /* The head's lines share the page head's 8px rhythm (#921): a plant's status line, owner sentence and See all sit after
+     page_head, not inside it, and stacked by line height alone they touched. A company's head holds page_head only. */
+  .nd-company__head { display: flex; flex-direction: column; gap: var(--nd-space-2); min-width: 0; }
   .nd-company__main { display: flex; flex-direction: column; gap: var(--nd-space-10); min-width: 0; }
   @media (min-width: 1024px) {
     /* The last row takes the slack, so a tall key facts panel never opens a gap under the name (a company with no deals). */
@@ -1581,6 +1584,8 @@
 /* The About set's frame (#660): a 40px title (30px on phones), the summary as a 19px sentence, short sections under 22px
    headings with a 1px rule between (an ink rule above the first), a code box with Copy, and a mono "Last updated". */
 @layer components {
+  /* The info pages' head keeps its own spacing (the summary's 12px margin), not the profile head's gap (#921). */
+  .nd-info__head { gap: 0; }
   .nd-info__title { margin: 0; font: 600 40px/46px var(--font-text); }
   .nd-info__summary { margin: var(--nd-space-3) 0 0; max-width: 640px; font: 400 19px/29px var(--font-text); color: var(--nd-ink); }
   .nd-info__body { gap: 0; }
