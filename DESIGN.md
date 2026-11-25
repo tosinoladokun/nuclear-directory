@@ -555,6 +555,10 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 - **Size:** at most 2 MB.
 - **SVG safety (a security rule):**
   - Parsed against an allow-list: `svg`, `g`, `defs`, `clipPath`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline` and `polygon`, with only their geometry, fill, stroke and transform attributes.
+  - Also allowed, because they draw nothing:
+    - `title`, `desc` and `metadata`, which are read for checking and dropped before rendering;
+    - on `svg`, the attributes `xmlns` and `xmlns:*`, `version`, `id`, `viewBox`, `width`, `height` and `preserveAspectRatio`.
+  - `style` and `class` attributes are still rejected.
   - Rejected for anything else: `script`, `style`, `image`, `text`, `use`, `foreignObject`, filters, masks, patterns, gradients and animation.
   - Rejected for any `on*` attribute, and for any `href` or `url()` that points outside the file.
   - Rendered by a renderer that never runs scripts or fetches.
@@ -570,7 +574,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 3. The trimmed mark is smaller than 3× its display size.
 4. The trimmed mark is wider than 6:1, or more than 1.6 times taller than wide.
 5. The ink covers less than 15% or more than 85% of the trimmed area: a hairline, or a solid badge or app icon.
-6. The thinnest part of the mark is under 1.5px at display size (under 4.5px in the 3× mask).
+6. A part of the mark is thinner than 1.5px at display size all the way through. In the 3× mask, a connected shape vanishes entirely when eroded with a disc 4.5px across. Sharp corners and serifs that thin out at their ends don't count.
 7. The one-ink version is empty, for example a white logo made for dark backgrounds.
 
 **Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original from its source beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
