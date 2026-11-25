@@ -1,0 +1,10 @@
+<%# Homepage B (#909): under the search, one link to the open data, then one large and two small chart cards (one set
+    per visit, HomeCharts). Phones show the large card first. Locals: charts, [[key, data], ...] large first. %>
+<p class="nd-home__download">
+  <%= link_to data_path, class: "nd-home__downloadlink type-body", data: { home_download: true } do %><%= icon("download-simple", size: 16) %><span>Download the data</span><% end %>
+</p>
+<div class="nd-charts">
+  <% charts.each_with_index do |(key, data), i| %>
+    <%= render "home/charts/#{key}", data:, size: i.zero? ? :large : :small %>
+  <% end %>
+</div>

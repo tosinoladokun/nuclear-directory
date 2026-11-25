@@ -14,10 +14,14 @@
     <%= render "shared/search_box", size: :large, browse: HomeCategories.browse %>
   </div>
 
-  <div class="nd-home__cats">
-    <%# Built once per data version (PM, 2 Nov: speed). %>
-    <% cache [ "home-cards/v2", DataVersion.current ] do %>
-      <%= render "shared/category_cards", cards: HomeCategories.cards %>
-    <% end %>
-  </div>
+  <% if @home_variant.b? %>
+    <%= render "home/b", charts: @charts %>
+  <% else %>
+    <div class="nd-home__cats">
+      <%# Built once per data version (PM, 2 Nov: speed). %>
+      <% cache [ "home-cards/v2", DataVersion.current ] do %>
+        <%= render "shared/category_cards", cards: HomeCategories.cards %>
+      <% end %>
+    </div>
+  <% end %>
 </main>

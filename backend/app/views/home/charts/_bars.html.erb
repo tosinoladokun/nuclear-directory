@@ -1,0 +1,13 @@
+<%# Horizontal bars: rows of { name:, short:, count: }, longest first. Locals: rows, unit (singular, plural), bucket (the
+    category whose accent fills the bars, or nil to use each row's own key). %>
+<% max = rows.map { |row| row[:count] }.max %>
+<ol class="nd-chart__bars">
+  <% rows.each do |row| %>
+    <% category = local_assigns[:bucket] || Category.find(row[:key]) %>
+    <li class="nd-chart__barrow <%= bucket_class(category) if category %>">
+      <span class="nd-chart__barname type-small" title="<%= row[:name] %>"><%= row[:short].presence && row[:name].length > 22 ? row[:short] : row[:name] %></span>
+      <span class="nd-chart__bar" style="--w: <%= chart_bar_width(row[:count], max) %>%" aria-hidden="true"></span>
+      <span class="nd-chart__count type-data"><%= row[:count] %><span class="sr-only"> <%= row[:count] == 1 ? unit.first : unit.last %></span></span>
+    </li>
+  <% end %>
+</ol>

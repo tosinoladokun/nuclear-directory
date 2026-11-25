@@ -99,7 +99,7 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_select "meta[name=home-variant][content=A]:not([data-forced])"
 
     get root_path(home: "b")
-    assert_select "meta[name=home-variant][content=B][data-forced=true]"
+    assert_select "meta[name=home-variant][data-forced=true]", message: "B itself, and its fallback to A without charts: home_b_test"
     assert_select "link[rel=canonical][href='http://www.example.com/']", message: "a preview link is not another page"
   end
 

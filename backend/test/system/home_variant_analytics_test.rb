@@ -6,7 +6,12 @@ require_relative "../support/directory_builders"
 class HomeVariantAnalyticsTest < ApplicationSystemTestCase
   include DirectoryBuilders
 
-  setup { cite!(company("Kairos Power", roles: [ role("reactor_vendor") ])) }
+  setup do
+    cite!(company("Kairos Power", roles: [ role("reactor_vendor") ]))
+    fuel = role("fuel")
+    cite!(company("Centrus Energy", roles: [ role("enrichment", parent: fuel) ])) # a whole chart set, so B shows (#909)
+    %w[mining conversion fabrication].each { |key| role(key, parent: fuel) }
+  end
 
   def run_module(body)
     page.evaluate_async_script(<<~JS)

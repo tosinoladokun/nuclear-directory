@@ -5,5 +5,8 @@
 class HomeController < ApplicationController
   def show
     @home_variant = HomeVariant.pick(request, forced: params[:home], bot: bot?)
+    # B: search and charts. Without a whole set of charts to show, the page stays A.
+    @charts = HomeCharts.cards_for(request) if @home_variant.b?
+    @home_variant = HomeVariant.new("A", forced: @home_variant.forced?) if @home_variant.b? && @charts.nil?
   end
 end

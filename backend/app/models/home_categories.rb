@@ -48,6 +48,11 @@ class HomeCategories
     category.plants ? top_plants : top_companies(category, skip)
   end
 
+  # The most connected companies in a scope, ties by name (the cards' ranking; HomeCharts' fuel steps).
+  def most_connected(scope, limit)
+    scope.select("organizations.*", "(#{company_links_sql}) AS home_score").order(Arel.sql("home_score DESC"), :name).limit(limit).to_a
+  end
+
   private
     def top_companies(category, skip)
       score = category.key == "investors" ? funded_companies_sql : company_links_sql

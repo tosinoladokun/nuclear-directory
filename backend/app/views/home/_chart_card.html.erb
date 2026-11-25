@@ -1,0 +1,13 @@
+<%# One chart card on homepage B (#909): a question as its title, a one-line subtitle, the chart, then the source line
+    and the link text at the bottom. The whole card is one link. Locals:
+    key: the chart (for the analytics), size: :large or :small, url:, title:, subtitle:, sources: the source line (or
+    nil), link: the link text. The block is the chart. %>
+<%= link_to url, class: "nd-chart nd-chart--#{size}", data: { home_chart: key } do %>
+  <h2 class="nd-chart__title type-title-md"><%= title %></h2>
+  <p class="nd-chart__sub type-small"><%= subtitle %></p>
+  <div class="nd-chart__body"><%= yield %></div>
+  <div class="nd-chart__foot">
+    <% if sources %><span class="nd-chart__src type-data-sm"><%= sources %></span><% end %>
+    <span class="nd-chart__more type-ui"><%= link %> →</span>
+  </div>
+<% end %>

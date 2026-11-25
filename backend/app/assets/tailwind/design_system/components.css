@@ -420,6 +420,60 @@
   .nd-instant__all kbd { border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-sm); padding: 2px 6px; }
   .nd-instant__note { margin: 0; padding: var(--nd-space-3) var(--nd-space-4) 0; color: var(--nd-ink-muted); }
   .nd-instant__empty { margin: 0; padding: var(--nd-space-4); }
+  /* Homepage B (#909): the download link under the search, then the chart cards: one large and two small, the large on
+     the left (2fr) with the small ones stacked to its right and stretched to its height; one column on phones, large
+     first. The whole card is one link. */
+  .nd-home__download { margin: 0; display: flex; justify-content: center; }
+  .nd-home__downloadlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; color: var(--nd-ink); text-decoration: none; }
+  .nd-home__downloadlink:hover span, .nd-home__downloadlink:focus-visible span { text-decoration: underline; }
+  .nd-charts { width: 100%; max-width: 1280px; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nd-space-4); }
+  @media (min-width: 1024px) {
+    .nd-charts { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto auto; gap: 24px; }
+    .nd-chart--large { grid-row: 1 / span 2; }
+  }
+  .nd-chart { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); text-decoration: none; transition: border-color 120ms ease-out; }
+  .nd-chart:hover, .nd-chart:focus-visible { border-color: var(--nd-ink); }
+  .nd-chart__title, .nd-chart__sub { margin: 0; }
+  .nd-chart__sub { color: var(--nd-ink-muted); }
+  .nd-chart__foot { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; gap: var(--nd-space-3); min-width: 0; }
+  .nd-chart__src { color: var(--nd-ink-muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nd-chart__more { flex: none; font-size: 14px; white-space: nowrap; }
+  .nd-chart:hover .nd-chart__more, .nd-chart:focus-visible .nd-chart__more { text-decoration: underline; }
+  /* One line each: names take their short form past 22 characters, then the ellipsis (one-line law). */
+  .nd-chart__barname, .nd-chart__name, .nd-chart__newstitle { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
+  .nd-chart__bars, .nd-chart__names, .nd-chart__news, .nd-chart__owners, .nd-chart__chain { list-style: none; margin: 0; padding: 0; }
+  .nd-chart__bars { display: grid; gap: 8px; }
+  .nd-chart__barrow { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center; gap: var(--nd-space-3); }
+  .nd-chart__bar { height: 12px; width: var(--w); min-width: 2px; background: var(--nd-cat, var(--nd-ink)); border-radius: var(--nd-radius-sm); }
+  .nd-chart__count { text-align: right; }
+  .nd-chart__chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  .nd-chart__step { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .nd-chart__step + .nd-chart__step::before { content: "→"; position: absolute; left: -16px; top: 0; color: var(--nd-control); }
+  .nd-chart__steplabel { display: flex; gap: 6px; white-space: nowrap; }
+  .nd-chart__steplabel .type-data-sm { color: var(--nd-ink-muted); }
+  .nd-chart__names { display: grid; gap: 6px; }
+  .nd-chart__name { padding: 4px 8px; background: var(--nd-cat-fuel-tint); border-radius: var(--nd-radius-sm); }
+  .nd-chart__news { display: grid; gap: 12px; }
+  .nd-chart__newsrow { display: flex; flex-direction: column; min-width: 0; }
+  .nd-chart__newsmeta { color: var(--nd-ink-muted); }
+  .nd-chart__stack { display: flex; height: 12px; overflow: hidden; border-radius: var(--nd-radius-sm); }
+  .nd-chart__stack .nd-chart__share { width: var(--w); }
+  .nd-chart__owners { display: grid; gap: 8px; }
+  .nd-chart__owner { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: var(--nd-space-2); }
+  .nd-chart__swatch { width: 12px; height: 12px; border-radius: 2px; }
+  /* Four ink greys for the owners' shares, largest darkest. */
+  .nd-chart__share--0 { background: var(--nd-ink); }
+  .nd-chart__share--1 { background: var(--nd-ink-muted); }
+  .nd-chart__share--2 { background: var(--nd-control); }
+  .nd-chart__share--3 { background: var(--nd-rule); }
+  @media (max-width: 639px) {
+    .nd-chart { padding: 20px; }
+    .nd-chart__title { font-size: 19px; }
+    /* The fuel chain's four steps as two rows of two on phones, the arrows dropped. */
+    .nd-chart__chain { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--nd-space-4); }
+    .nd-chart__step + .nd-chart__step::before { content: none; }
+  }
+
   /* Browse (#909): the empty field lists the categories, the count on the right in mono. Plants and sites (no bucket)
      is ink on paper-sunken. */
   .nd-browse__row .nd-catsq { width: 28px; height: 28px; }
