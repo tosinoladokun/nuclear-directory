@@ -103,4 +103,12 @@ class HomeCategoriesTest < ActiveSupport::TestCase
     assert_equal HomeCategories.cards.map { |card| [ card.category.key, card.count ] }, browse.map { |row| [ row.category.key, row.count ] },
       "Browse and the cards agree"
   end
+
+  test "browse keeps Plants and sites last even with none published, as the cards do (#917 review)" do
+    Facility.delete_all
+    cite!(company("Oklo", roles: [ @vendor ]))
+
+    assert_equal [ [ "reactor-developers", 1 ], [ "plants", 0 ] ], HomeCategories.browse.map { |row| [ row.category.key, row.count ] }
+    assert_equal HomeCategories.cards.map { |card| card.category.key }, HomeCategories.browse.map { |row| row.category.key }
+  end
 end

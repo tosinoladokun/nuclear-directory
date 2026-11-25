@@ -43,6 +43,21 @@ class HomeBrowseTest < ApplicationSystemTestCase
     assert_equal "false", field["aria-expanded"]
   end
 
+  test "a late failure of a search that was cleared doesn't close Browse (#917 review)" do
+    visit root_path
+    field.click
+    assert_selector ".nd-browse"
+    # Index unavailable: typing goes to /search. Then clear the field before the request fails.
+    page.execute_script("document.querySelector('[data-controller=instant-search]').dataset.instantSearchIndexUrlValue = ''")
+    field.send_keys("kai")
+    field.send_keys([ :control, "a" ], :backspace)
+    assert_selector ".nd-browse__row", text: "Reactor developers"
+    page.execute_script("document.querySelector('#search-large-results').dispatchEvent(new CustomEvent('turbo:fetch-request-error', { bubbles: true }))")
+
+    assert_selector ".nd-browse__row", text: "Reactor developers"
+    assert_equal "true", field["aria-expanded"]
+  end
+
   test "one letter, below the two needed for results, closes Browse" do
     visit root_path
     field.click

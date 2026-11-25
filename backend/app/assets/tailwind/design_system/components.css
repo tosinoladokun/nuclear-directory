@@ -433,7 +433,7 @@
 @layer components {
   @media (max-width: 560px) {
     .nd-searchbox__results { max-height: 60vh; }
-    .nd-browse__row { min-height: 52px; }
+    .nd-searchbox__results .nd-browse__row { min-height: 52px; } /* beats the 44px touch rule below */
     .nd-searchbox--large .nd-search { height: 52px; padding: 0 var(--nd-space-4); gap: var(--nd-space-3); }
     /* One scrolling row of pills, faded at the edge so more is visible. */
     .nd-pills { flex-wrap: nowrap; scroll-snap-type: x proximity; padding-right: var(--nd-space-8);

@@ -116,6 +116,21 @@ class HomeTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a long category name shows its short name in Browse, with the full name in its title and label (#917 review)" do
+    rows = [ HomeCategories::Browse.new(category: Category.find("utilities"), count: 36) ]
+    html = ApplicationController.render(partial: "shared/search_box", locals: { size: :large, browse: rows })
+    row = Nokogiri::HTML.fragment(html).at_css("a.nd-browse__row")
+    assert_equal "Plant operators", row.at_css("b").text
+    assert_equal "Power plant owners and operators", row.at_css("b")["title"]
+    assert_equal "Power plant owners and operators, 36 companies", row["aria-label"]
+  end
+
+  test "Browse rows keep 52px on touch phones: their rule outranks the 44px touch-target rule (#917 review)" do
+    css = Rails.root.join("app/assets/tailwind/design_system/components.css").read
+    assert_includes css, ".nd-searchbox__results .nd-browse__row { min-height: 52px; }"
+    assert_includes css, ".nd-pill, .nd-select, .nd-instant__row, .nd-instant__all { min-height: 44px; }", "the rule it has to outrank (one class)"
+  end
+
   test "the site icon sits beside the wordmark, decorative, and draws in only without reduced motion (#909)" do
     get root_path
 

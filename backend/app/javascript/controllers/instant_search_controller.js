@@ -295,8 +295,9 @@ export default class extends Controller {
   // A failed request closes the old results rather than leaving them up.
   failed(event) {
     if (event?.type === "turbo:frame-missing") event.preventDefault()
-    // A late failure of the fallback request must not dismiss the local results.
-    if (this.index) return
+    // A late failure of the fallback request must not dismiss the local results, and the failure of a request
+    // that's no longer wanted (the field was cleared, so Browse is up) must not close what's showing now.
+    if (this.index || !this.pending) return
     this.pending = false
     this.close()
   }
