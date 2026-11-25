@@ -74,6 +74,14 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
     assert_not result.steps.include?("scaled down evenly"), "an SVG is never resampled"
   end
 
+  test "a small mark on a large SVG canvas is refused before it's drawn at the output size (Infra, #946)" do
+    tiny = svg('<circle cx="10" cy="10" r="8"/>', view: "0 0 5000 5000", attrs: 'width="5000" height="5000"')
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    result = process(tiny)
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 5
+    assert_rejected result, /small part of a large SVG canvas \(\d+ × \d+px at the output size\); use a file cropped to the logo/
+  end
+
   test "rule 4: wider than 6:1 or more than 1.6 times taller than wide" do
     assert_rejected process(svg('<rect x="0" y="0" width="700" height="100"/>', view: "0 0 700 100")), /7\.0:1 wide/
     assert_rejected process(svg('<rect x="0" y="0" width="50" height="100"/>', view: "0 0 50 100")), /taller than wide/

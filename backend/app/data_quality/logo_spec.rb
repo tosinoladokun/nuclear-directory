@@ -132,6 +132,14 @@ module DataQuality::LogoSpec
     # The spec: an SVG is rendered straight at the output size, never resampled.
     # factor is relative to the measuring render.
     rerender = lambda do |factor|
+      # The whole canvas is drawn, so a small mark on a large canvas would be
+      # drawn huge (a factor of 45 is about 108,000px a side): refused first (Infra, #946).
+      width = (natural.width * scale * factor).ceil
+      height = (natural.height * scale * factor).ceil
+      if width * height > MAX_PIXELS
+        raise Reject, "the mark is a small part of a large SVG canvas (#{width} × #{height}px at the output size); " \
+          "use a file cropped to the logo"
+      end
       Vips.block("VipsForeignLoadSvgBuffer", false)
       srgb_with_alpha(Vips::Image.svgload_buffer(clean, scale: scale * factor))
     end
