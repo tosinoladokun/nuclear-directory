@@ -58,6 +58,7 @@ module DataQuality::Matching
   end
 
   def self.apply_one(row, directory, requeue = Set.new)
+    return propose_site_fields(row, directory, requeue) if row["action"].to_s == "propose_site_fields"
     return propose_role(row, directory, requeue) if PROPOSALS.include?(row["action"].to_s)
 
     id, action, reason = row["id"].to_i, row["action"].to_s, row["reason"].to_s.squish
@@ -327,7 +328,83 @@ module DataQuality::Matching
     Row.new(id: won.candidate_id, ok: true, error: nil, created_ids: [ won.candidate_id ])
   end
 
-  PROPOSALS = %w[propose_role propose_fields propose_link].freeze
+  PROPOSALS = %w[propose_role propose_fields propose_link propose_site_fields].freeze
+
+  # propose_site_fields (#916): a published site's coordinates, as a pair, and its EIA plant ID, from a
+  # source that states them, as one plant claim matched to that site and decided by Tosin (old → new):
+  #   { action: "propose_site_fields", target: site id, slug or page address,
+  #     fields: { "latitude" => "41.705993", "longitude" => "-110.5603", "eia_plant_id" => "68635" },
+  #     quote:, source_url:, reason: }
+  # Only a published top-level site (never a unit). Coordinates have 3 to 6 decimals (the directory keeps 6),
+  # and the quote states each one: as a decimal, written as proposed (the source may give more digits), or in
+  # degrees, minutes and seconds or degrees and decimal minutes, within the source's own precision. An EIA plant
+  # ID is digits, in the quote, and no other site's.
+  SITE_FIELDS = %w[latitude longitude eia_plant_id].freeze
+  COORDINATE = /\A-?\d{1,3}\.\d{3,6}\z/
+
+  def self.propose_site_fields(row, directory, requeue)
+    reason, quote = row["reason"].to_s.squish, row["quote"].to_s.squish
+    fields = row["fields"].is_a?(Hash) ? row["fields"].transform_keys(&:to_s).transform_values { |value| value.to_s.strip } : {}
+    fail_with = ->(why) { Row.new(id: nil, ok: false, error: why, created_ids: []) }
+    return fail_with.call("give a reason") if reason.blank?
+    return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
+    return fail_with.call("give the quote that states it") if quote.blank?
+    return fail_with.call("give fields: one or more of #{SITE_FIELDS.join(', ')}") if fields.empty?
+    return fail_with.call("only #{SITE_FIELDS.join(', ')} can be proposed for a site") unless (fields.keys - SITE_FIELDS).empty?
+    return fail_with.call("give a value for every field") if fields.values.any?(&:blank?)
+    return fail_with.call("latitude and longitude go together: give both") if fields.key?("latitude") != fields.key?("longitude")
+    { "latitude" => 90, "longitude" => 180 }.each do |name, limit|
+      next unless fields.key?(name)
+
+      value = fields[name]
+      return fail_with.call("#{name} is a decimal with 3 to 6 decimal places (e.g. 41.705993)") unless value.match?(COORDINATE)
+      return fail_with.call("#{name} must be between -#{limit} and #{limit}") unless BigDecimal(value).abs <= limit
+      return fail_with.call("the quote must state the #{name} #{value}") unless DataQuality::Coordinates.stated?(quote, value, axis: name)
+    end
+    if fields.key?("eia_plant_id")
+      return fail_with.call("an EIA plant ID is digits (e.g. 68635)") unless fields["eia_plant_id"].match?(/\A\d{1,7}\z/)
+      return fail_with.call("the quote must contain the EIA plant ID #{fields['eia_plant_id']}") unless quote.match?(/(?<!\d)(?<!\d\.)#{fields['eia_plant_id']}(?!\.?\d)/)
+    end
+    # A retry (same request_key) is answered first, whatever today's count.
+    key = row["request_key"].presence&.to_s
+    if key && (done = DqAction.find_by(request_key: key))
+      return Row.new(id: done.candidate_id, ok: true, error: nil, created_ids: [ done.candidate_id ])
+    end
+    if DqAction.where(action: "propose_site_fields", created_at: Time.current.all_day).count >= DAILY_ROLES
+      return fail_with.call("today's limit of #{DAILY_ROLES} is reached for propose_site_fields; ask Backend")
+    end
+
+    Candidate.transaction do
+      found, error = target(row, directory, type: "Facility")
+      raise Abort, error if error
+
+      # Its own name, parent, docket and plant ID (a fact's record carries only its label and decision).
+      site = directory.facility(id: found.id)
+      raise Abort, "#{site.name} is a unit; propose its site's fields instead" if site.parent_id
+      raise Abort, "#{site.name} isn't published yet" unless site.verification_status == "verified"
+      if (plant = fields["eia_plant_id"]) && (holder = directory.facility(eia_plant_id: plant)) && holder.id != site.id
+        raise Abort, "EIA plant ID #{plant} is already #{holder.name}'s (##{holder.id})"
+      end
+
+      source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
+      raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
+
+      # What finds the site (its own docket and plant ID), then what's proposed.
+      payload = { "name" => site.name, "nrc_docket" => site.nrc_docket.presence, "eia_plant_id" => site.eia_plant_id.presence }.compact.merge(fields)
+      claim = Candidate.create!(source_id: source.ref.id, kind: "facility", status: "new", quote:, payload:, notes: "Data Quality proposed it: #{reason}")
+      DqAction.create!(candidate: claim, action: "propose_site_fields", target_type: "Facility", target_id: site.id, reason:,
+        before: {}, created: [], by: BY, request_key: key, after: stamp_of(claim))
+      requeue << source.ref.source_kind
+      Row.new(id: claim.id, ok: true, error: nil, created_ids: [ claim.id ])
+    end
+  rescue Abort => e
+    Row.new(id: nil, ok: false, error: e.message, created_ids: [])
+  rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
+    won = key && DqAction.find_by(request_key: key)
+    raise e unless won
+
+    Row.new(id: won.candidate_id, ok: true, error: nil, created_ids: [ won.candidate_id ])
+  end
 
   # Undoing a proposed role: the claim closes, and a pending role it
   # proposed is taken off, while no person has decided either.

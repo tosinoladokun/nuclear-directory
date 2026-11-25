@@ -20,6 +20,26 @@ class HomeVariantAnalyticsTest < ApplicationSystemTestCase
     JS
   end
 
+  test "home events wait for PostHog, in order; once per view; Back's restored copy is no new view (#918 review)" do
+    visit root_path
+    result = JSON.parse(run_module(<<~JS))
+      m.installHomeTracking()
+      const field = document.querySelector("#search-large")
+      for (const text of ["k", "ka"]) { field.value = text; field.dispatchEvent(new Event("input", { bubbles: true })) }
+      const before = m.pendingHomeEvents().map((event) => event[0])
+      document.documentElement.replaceChild(document.body.cloneNode(true), document.body) // what Back restores
+      m.trackHomeView()
+      const afterBack = m.pendingHomeEvents().length
+      const sent = []
+      m.homeReady({ capture: (name, properties) => sent.push([ name, properties.home_variant ]) })
+      return { before, afterBack, sent, left: m.pendingHomeEvents().length }
+    JS
+    assert_equal %w[home_viewed home_search_started], result["before"], "a search before PostHog loads waits, after the view"
+    assert_equal 2, result["afterBack"], "the restored copy carries its mark"
+    assert_equal [ %w[home_viewed A], %w[home_search_started A] ], result["sent"]
+    assert_equal 0, result["left"]
+  end
+
   test "the home page view and a card click carry the version; a forced visit says so; other pages carry none" do
     visit root_path
     result = JSON.parse(run_module(<<~JS))

@@ -1,8 +1,9 @@
 require "csv"
 
 # Reads the nuclear generators from EIA's monthly generator inventory
-# (Form EIA-860M, an .xlsx). Only the "Operating" sheet, only rows whose
-# Technology is "Nuclear". The sheet has ~28,000 rows (a 56 MB XML file), so
+# (Form EIA-860M, an .xlsx). Only rows whose Technology is "Nuclear": from the
+# "Operating" sheet, and (#916) from the "Planned" and "Retired" sheets, kept
+# only so a quote from them can be checked against the stored copy. The sheet has ~28,000 rows (a 56 MB XML file), so
 # it's streamed rather than loaded whole, and it runs inside the web service's
 # 512 MB (#188): the file is read from a temp file rather than memory, and the
 # sheet and shared strings are walked node by node, with no document built for
@@ -14,6 +15,11 @@ class DataQuality::Plugins::EiaGenerators::Workbook
   class Unreadable < StandardError; end
 
   SHEET = "Operating"
+  # The other sheets whose nuclear rows are stored too (#916), each row with
+  # its sheet's name. Only Operating rows enrich units or propose sites.
+  OTHER_SHEETS = %w[Planned Retired].freeze
+  # The stored CSV's last column: which sheet a row is from.
+  SHEET_COLUMN = "sheet"
   # Our name => EIA's column header.
   COLUMNS = {
     "eia_plant_id" => "Plant ID",
@@ -60,8 +66,42 @@ class DataQuality::Plugins::EiaGenerators::Workbook
     raise Unreadable, "The workbook is damaged: #{error.class}: #{error.message}"
   end
 
+  # Every nuclear row of the Operating sheet, then of the Planned and Retired
+  # sheets, each with SHEET_COLUMN naming its sheet. Operating is read as
+  # strictly as nuclear_generators. The other two only add rows: one that's
+  # missing or can't be read is skipped, and its reason is in skipped
+  # ({ "Planned" => "…" }), never failing the Operating rows.
+  def self.nuclear_rows(bytes)
+    Tempfile.create([ "eia860m", ".xlsx" ], binmode: true) do |file|
+      file.write(bytes)
+      file.flush
+      rows, skipped = [], {}
+      ([ SHEET ] + OTHER_SHEETS).each do |name|
+        workbook = new(file.path, sheet: name)
+        begin
+          rows.concat(name == SHEET ? workbook.nuclear_generators : workbook.nuclear_generators(strict: false))
+        rescue Unreadable, Nokogiri::XML::SyntaxError, Zip::Error, Zlib::Error => error
+          raise if name == SHEET
+
+          skipped[name] = error.message
+        ensure
+          workbook.close
+        end
+      end
+      [ rows.each { |row| row[SHEET_COLUMN] ||= SHEET }, skipped ]
+    end
+  rescue Nokogiri::XML::SyntaxError, Zip::Error, Zlib::Error => error
+    raise Unreadable, "The workbook is damaged: #{error.class}: #{error.message}"
+  end
+
+  # Rows from nuclear_rows carry their sheet in the last column; rows from
+  # nuclear_generators are the Operating sheet's.
   def self.to_csv(generators)
-    CSV.generate { |csv| csv << COLUMNS.keys; generators.each { |g| csv << g.values_at(*COLUMNS.keys) } }
+    columns = COLUMNS.keys + [ SHEET_COLUMN ]
+    CSV.generate do |csv|
+      csv << columns
+      generators.each { |g| csv << COLUMNS.keys.map { |key| g[key] } + [ g[SHEET_COLUMN] || SHEET ] }
+    end
   end
 
   # sheet: the sheet to read (EIA-860's Plant file has a "Plant" sheet).
@@ -75,15 +115,21 @@ class DataQuality::Plugins::EiaGenerators::Workbook
 
   def close = @zip&.close
 
-  def nuclear_generators
+  # strict: false (the Planned and Retired sheets, #916): only the columns
+  # that identify a generator and its technology must be there (those
+  # sheets' layouts differ: Retired has no Status), and a sheet with no
+  # nuclear rows is just empty. Rows are tagged with their sheet.
+  def nuclear_generators(strict: true)
     generators = []
-    each_record(marker: COLUMNS["eia_plant_id"], titles: COLUMNS.values + [ TECHNOLOGY ]) do |cells|
+    titles = strict ? COLUMNS.values : COLUMNS.values_at(*IDENTITY)
+    each_record(marker: COLUMNS["eia_plant_id"], titles: titles + [ TECHNOLOGY ]) do |cells|
       next unless cells[TECHNOLOGY].to_s.strip == NUCLEAR
 
       generators << COLUMNS.transform_values { |title| cells[title]&.strip.presence }
         .tap { |row| check_identity!(row) && check_numbers!(row) }
+        .tap { |row| row[SHEET_COLUMN] = @sheet unless strict }
     end
-    raise Unreadable, "No nuclear generators on the #{@sheet} sheet" if generators.empty?
+    raise Unreadable, "No nuclear generators on the #{@sheet} sheet" if generators.empty? && strict
 
     generators
   end

@@ -81,6 +81,21 @@ class DataQuality::ReconfirmTest < ActiveSupport::TestCase
     assert_equal checked, evidence.pluck(:id, :last_confirmed_at).to_h, "the old quotes are gone, so nothing was re-checked"
   end
 
+  test "#916: a site Data Quality gave fields from this source isn't 'no longer in' it on the next read" do
+    first_read_approved!
+    site = Facility.create!(name: "Zephyr Site", facility_type: "power_reactor", verification_status: "verified", verified_by: BY)
+    claim = Candidate.create!(source:, kind: "facility", status: "merged", quote: ROWS.first, payload: { "name" => "Zephyr Site", "latitude" => "41.000" },
+      subject_type: "Facility", subject_id: site.id)
+    DqAction.create!(candidate: claim, action: "propose_site_fields", target_type: "Facility", target_id: site.id, reason: "r",
+      by: DqAction::BY, before: {}, created: [])
+
+    read!(ROWS.reverse, on: 1.hour.ago)
+    pipeline!
+
+    assert_not Candidate.where(subject_type: "Facility", subject_id: site.id, review_origin: "dropped").exists?
+    assert_empty queue
+  end
+
   test "a second read of an unchanged table queues nothing and records when it was checked" do
     first_read_approved!
     events = VerificationEvent.count
