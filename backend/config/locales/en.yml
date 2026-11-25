@@ -42,3 +42,9 @@ en:
     reviewers:
       checker: "Joy"
       reviewer: "Aminah"
+  # How a record's own errors name its fields (#933 follow-up): "EIA plant ID", never Rails' "Eia plant".
+  activerecord:
+    attributes:
+      facility:
+        eia_plant_id: "EIA plant ID"
+        nrc_docket: "NRC docket"
