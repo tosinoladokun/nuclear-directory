@@ -38,6 +38,8 @@ class RestoreSeedRevertedApprovals < DeployData::Migration
     EVENTS.each do |event_id, (type, id, approval_id, fields)|
       record = type.constantize.find_by(id:)
       next say("#{type} #{id} is gone; nothing to restore for event #{event_id}") unless record
+      # Taken off, rejected or sent back since: a restore must never publish it again (Copilot, #948).
+      next say("#{label(record)} is #{record.verification_status} now; left as it is") unless record.verification_status == "verified"
       next say("Event #{event_id} isn't the seed's revert of #{type} #{id} as read on 25 Nov; #{type} #{id} left as it is") unless pinned?(event_id, type, id, fields)
 
       current = fields.keys.to_h { |field| [ field, record.public_send(field) ] }

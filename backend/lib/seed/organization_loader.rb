@@ -291,7 +291,12 @@ module Seed
             attributes[:aliases] = Array(attributes[:aliases]).reject { |name| OrganizationAlias.normalize(name.to_s) == unquoted }
           end
         end
-        keep_approved(slug, Organization.find_by(id: Directory::Lookup.organization(slug:)&.id), attributes)
+        # The company the write will land on, found as FactWriter finds it (CIK,
+        # EIA ID, name or alias, domain), never by the file's slug alone. When a
+        # kept field is dropped (a website, say), the write names it by id so it
+        # can't miss it and make another (Copilot, #948).
+        existing = Organization.find_by(id: Directory::FactWriter.existing(:organization, attributes))
+        attributes[:id] = existing.id if keep_approved(slug, existing, attributes).any?
         write(slug, :organization, attributes, quotes, pending:,
           remove_aliases: legal || pending ? [] : Array(doc["legal_name"]))
       end
@@ -687,33 +692,54 @@ module Seed
       # `kept`, so the file can be brought into line. Only the fields a person
       # decided are kept; the rest of the record is written as usual.
       def keep_approved(slug, record, attributes)
-        return unless record
+        return [] unless record
 
-        approved_fields(record).each do |field|
+        approved_fields(record).filter_map do |field|
           key = field.to_sym
           next unless attributes.key?(key) && !same_value?(attributes[key], record.public_send(field))
 
           stated = attributes.delete(key)
           @kept << "#{slug}: kept #{record.class.name.underscore.humanize(capitalize: false)} #{record.id}'s #{field} " \
             "#{record.public_send(field).inspect}, approved after the seed wrote it; the file says #{stated.inspect}"
+          key
         end
       end
 
-      # The fields whose latest change was a person's decision rather than a
-      # seed write (Database's review, #947): any change by a human that isn't
-      # the seed's: an approval from Today, the inbox or Enrich, an edit in the
-      # admin (by_hand), a data-step correction (a reason) or a restore. The
-      # seed's own writes have no context and no reason; a `seed` context is
-      # read the same way. An agent's change is never kept. An admin edit
-      # made before by_hand (25 Nov) without a note looks like the seed's.
+      # Keys an approval's claim names that are the record's identity, never a
+      # value the approval decided (a matched company keeps its own name).
+      IDENTITY_KEYS = %w[id name slug aliases relationship_type from_organization_id to_organization_id organization_id facility_id].freeze
+
+      # The fields a person decided, as of now (Database's and Copilot's
+      # reviews, #948). Read from the record's audit trail, oldest first:
+      # - A human's write that isn't the seed's decides each field it changed:
+      #   an approval from Today, the inbox or Enrich (its candidate_id), an
+      #   edit in the admin (by_hand), a data-step correction (its reason), a
+      #   restore. An approval also decides the fields its claim stated that
+      #   already matched (an HQ approval that changed only the city decides
+      #   the state too).
+      # - The seed's own write (no context and no reason; a `seed` context is
+      #   read the same way) undoes that, unless it wrote the value the person
+      #   decided (the seed putting back an approved value keeps it decided).
+      # - An agent's change undoes it.
+      # An admin edit made before by_hand (25 Nov) without a note looks like
+      # the seed's; the rehearsal on a restored backup lists what would change.
       def approved_fields(record)
-        last = {}
-        VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context, :reason, :by).each do |changed, context, reason, by|
+        events = VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context, :reason, :by)
+        claims = Candidate.where(id: events.filter_map { |_, context, _, _| context.to_h["candidate_id"] }).pluck(:id, :payload).to_h
+        decided = {}
+        protected = {}
+        events.each do |changed, context, reason, by|
           context = context.to_h
+          changed = changed.to_h.transform_values { |change| Array(change).last }
           seed = context.key?("seed") || (context.empty? && reason.nil?)
-          changed.to_h.each_key { |field| last[field] = by.to_s.start_with?("human:") && !seed }
+          if by.to_s.start_with?("human:") && !seed
+            stated = claims[context["candidate_id"]].to_h.except(*IDENTITY_KEYS).select { |field, _| record.has_attribute?(field) }
+            stated.merge(changed).each { |field, value| decided[field] = value; protected[field] = true }
+          else
+            changed.each { |field, value| protected[field] = !by.to_s.start_with?("agent:") && decided.key?(field) && same_value?(value, decided[field]) }
+          end
         end
-        last.select { |field, person| person && record.has_attribute?(field) }.keys
+        protected.select { |field, kept| kept && record.has_attribute?(field) }.keys
       end
 
       # The same value, a number however it's written (50 and 50.0).

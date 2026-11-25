@@ -64,6 +64,14 @@ class RestoreSeedRevertedApprovalsTest < ActiveSupport::TestCase
     FileUtils.remove_entry(dir) if dir
   end
 
+  test "a record taken off since is never published again (Copilot, #948)" do
+    @power.update_columns(verification_status: "unpublished")
+    output = run_it.output
+    assert_nil @power.reload.website
+    assert_equal "unpublished", @power.verification_status
+    assert_includes output, "Standard Power (Organization 129) is unpublished now; left as it is"
+  end
+
   test "a record decided again since the seed run is left as it is and said; an event that isn't the one read is left" do
     @bridge12.update_columns(hq_city: "Boston")
     VerificationEvent.find(4259).delete

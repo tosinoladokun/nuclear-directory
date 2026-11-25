@@ -145,6 +145,46 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal "Lakewood", acme.reload.hq_city, "an agent's change isn't a person's decision"
   end
 
+  # Copilot's review of #948.
+  test "an approval decides the fields its claim stated, even unchanged; a seed putting back the approved value keeps it decided" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Denver", state: "CO" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    source = Source.create!(url: "https://acmefuel.com/contact", source_kind: "web_page")
+    claim = Candidate.create!(source:, kind: "organization", payload: { "name" => "Acme Fuel, Inc.", "hq_city" => "Lakewood", "hq_state" => "CO" }, quote: "Lakewood, CO")
+    assert Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Lakewood", hq_state: "CO" },
+      verification: { status: "verified", by: "human:tosin", reason: "Approved in Today", context: { "candidate_id" => claim.id } }).ok?
+    assert_not VerificationEvent.where(subject: acme).order(:id).last.changed_values.key?("hq_state"), "the state didn't change"
+
+    # A file that moves the state: the approval decided it too, so it stays CO.
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "UT" }))
+    loader = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal [ "Lakewood", "CO" ], acme.reload.attributes.values_at("hq_city", "hq_state")
+    assert_match(/hq_state "CO".*the file says "UT"/, loader.kept.join("\n"))
+    assert_equal "Acme Fuel, Inc.", acme.name, "a claim's name is identity, never decided"
+
+    # An old seed run reverts the city, then the seed puts the approved city back: it's decided again.
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: nil }, verification: { status: "verified", by: "human:tosin" })
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Lakewood" }, verification: { status: "verified", by: "human:tosin" })
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Denver", state: "CO" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Lakewood", acme.reload.hq_city
+  end
+
+  test "the guard finds the company as the write does, not by its file's slug; a kept website can't lose the match" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com"))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    approve(acme, website: "https://acme.example")
+
+    FileUtils.rm(File.join(@dir, "acme-fuel.yml"))
+    write_file("acme", org("Acme Fuel, Inc.", website: "https://acmefuel.com"))
+    assert_no_difference "Organization.count" do
+      Seed::OrganizationLoader.new(@dir).load!
+    end
+    assert_equal "https://acme.example", acme.reload.website
+  end
+
   test "a number the file writes differently is the same value, never a false Kept (Database, #947)" do
     write_file("plant-co", org("Plant Co", website: "https://plantco.example"))
     loader = Seed::OrganizationLoader.new(@dir)
