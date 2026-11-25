@@ -274,8 +274,11 @@ module Directory
     # lead finder looks for their sites so Enrich can read them; DQ, 19 Nov).
     # Pending or published companies with no website, pending first (#816;
     # verified ones too, PM 24 Nov: all 75 missing one were verified).
-    def organizations_without_website(limit: 50)
+    # except: ids to leave out, dropped before the limit so they never crowd
+    # out the rest.
+    def organizations_without_website(limit: 50, except: [])
       Organization.where(verification_status: %w[pending verified]).where("COALESCE(website, '') = ''")
+        .where.not(id: except.to_a)
         .order(Arel.sql("verification_status = 'pending' DESC"), :id).limit(limit).pluck(:id, :name)
     end
 

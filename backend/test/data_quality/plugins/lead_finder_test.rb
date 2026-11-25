@@ -395,4 +395,26 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     site_finder.find_sites
     assert(searched.any? { |query| query.include?("Steady Fission") })
   end
+
+  test "200 resting or rejected pending companies never hide a published one with no website (Copilot)" do
+    source = Source.create!(url: "https://www.nrc.gov/junk", source_kind: "nrc_adams", crawl_status: "ok")
+    200.times do |i|
+      org = Organization.create!(name: "Shelved Fission #{i}")
+      if i.even?
+        CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", status: "succeeded", stats: { "site_for" => org.id })
+      else
+        Candidate.create!(source:, kind: "organization", payload: { "name" => org.name }, quote: org.name, subject: org,
+          status: "matched", dq_recommendation: "reject", dq_reason: "a document title")
+      end
+    end
+    listed = Organization.create!(name: "Steady Fission", verification_status: "verified", verified_by: "human:tosin")
+
+    searched = []
+    site_finder = Plugin.new(search_key: nil, search: ->(query) { searched << query; [] })
+    open = Organization.where(verification_status: %w[pending verified], website: [ nil, "" ]).where.not("name LIKE 'Shelved Fission%'")
+    found = site_finder.find_sites(limit: open.count)
+    assert_includes found.keys, listed.id
+    assert_empty found.keys & Organization.where("name LIKE 'Shelved Fission%'").ids
+    assert_empty searched.grep(/Shelved Fission/)
+  end
 end
