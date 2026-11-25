@@ -725,7 +725,8 @@ module Seed
       # the seed's; the rehearsal on a restored backup lists what would change.
       def approved_fields(record)
         events = VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context, :reason, :by)
-        claims = Candidate.where(id: events.filter_map { |_, context, _, _| context.to_h["candidate_id"] }).pluck(:id, :payload).to_h
+        claim_ids = events.filter_map { |_, context, _, _| context.to_h["candidate_id"] }
+        claims = claim_ids.any? ? Candidate.where(id: claim_ids).pluck(:id, :payload).to_h : {}
         decided = {}
         protected = {}
         events.each do |changed, context, reason, by|
