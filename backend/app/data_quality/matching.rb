@@ -464,7 +464,7 @@ module DataQuality::Matching
   # and the quote states each one: as a decimal, written as proposed (the source may give more digits), or in
   # degrees, minutes and seconds or degrees and decimal minutes, within the source's own precision. An EIA plant
   # ID is digits, in the quote, and no other site's.
-  SITE_FIELDS = %w[latitude longitude eia_plant_id].freeze
+  SITE_FIELDS = %w[latitude longitude eia_plant_id short_name].freeze
   COORDINATE = /\A-?\d{1,3}\.\d{3,6}\z/
 
   def self.propose_site_fields(row, directory, requeue)
@@ -485,6 +485,14 @@ module DataQuality::Matching
       return fail_with.call("#{name} is a decimal with 3 to 6 decimal places (e.g. 41.705993)") unless value.match?(COORDINATE)
       return fail_with.call("#{name} must be between -#{limit} and #{limit}") unless BigDecimal(value).abs <= limit
       return fail_with.call("the quote must state the #{name} #{value}") unless DataQuality::Coordinates.stated?(quote, value, axis: name)
+    end
+    # A plant's short name (#935), as #927's for a company: the card's label, so 30 characters at most, in the quote as a whole word.
+    if fields.key?("short_name")
+      fields["short_name"] = fields["short_name"].squish # as Facility stores it
+      return fail_with.call("a short name is #{MAX_SHORT_NAME} characters at most") if fields["short_name"].length > MAX_SHORT_NAME
+      unless quote.match?(/(?<![[:alnum:]])#{Regexp.escape(fields['short_name'])}(?![[:alnum:]])/)
+        return fail_with.call("the quote must contain the short name #{fields['short_name']}")
+      end
     end
     if fields.key?("eia_plant_id")
       return fail_with.call("an EIA plant ID is digits (e.g. 68635)") unless fields["eia_plant_id"].match?(/\A\d{1,7}\z/)
