@@ -368,9 +368,10 @@ module DataQuality::Matching
     return fail_with.call("give from (the current operator) and to (the new one): an id or slug") if row["from"].blank? || row["to"].blank?
 
     key = row["request_key"].presence&.to_s
-    if key && (done = DqAction.where(request_key: [ key, "#{key}:end", "#{key}:date" ]).order(:id).to_a).any?
-      return Row.new(id: done.first.candidate_id, ok: true, error: nil, created_ids: done.map(&:candidate_id))
-    end
+    # The claims' own keys are key, key:end and key:date, so a caller's key never ends in those (Copilot).
+    return fail_with.call("a request_key can't end in :end or :date") if key&.match?(/:(?:end|date)\z/)
+    done = key && operator_change_done(key)
+    return done if done
     if DqAction.where(action: "propose_link", created_at: Time.current.all_day).count + (since_quote ? 3 : 2) > DAILY_ROLES
       return fail_with.call("today's limit of #{DAILY_ROLES} is reached for propose_link; ask Backend")
     end
@@ -423,10 +424,22 @@ module DataQuality::Matching
   rescue Abort => e
     Row.new(id: nil, ok: false, error: e.message, created_ids: [])
   rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
-    won = key && DqAction.where(request_key: [ key, "#{key}:end", "#{key}:date" ]).order(:id).to_a
-    raise e if won.blank?
+    won = key && operator_change_done(key)
+    raise e unless won
 
-    Row.new(id: won.first.candidate_id, ok: true, error: nil, created_ids: won.map(&:candidate_id))
+    won
+  end
+
+  # A retry of an operator change: its result when key is that change's own (its first claim's key), else nil.
+  # Only the change that made key counts; another action holding the key is a conflict, never a success.
+  def self.operator_change_done(key)
+    first = DqAction.find_by(request_key: key) or return
+    unless first.action == "propose_link" && first.target_type == "Facility"
+      return Row.new(id: nil, ok: false, error: "request_key #{key.inspect} is another action's", created_ids: [])
+    end
+
+    ids = DqAction.where(request_key: [ key, "#{key}:end", "#{key}:date" ]).order(:id).pluck(:candidate_id)
+    Row.new(id: first.candidate_id, ok: true, error: nil, created_ids: ids)
   end
 
   MONTHS = Date::MONTHNAMES.compact.freeze

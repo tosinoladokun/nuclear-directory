@@ -379,7 +379,9 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # A link a human rejected or unpublished, or one whose company or plant
       # was, isn't written to. The same claim again is confirmed (it stays as
       # decided); anything else goes to review (#240).
-      existing = directory.existing_fact(candidate.kind, attributes) || site_link(candidate.kind, attributes)
+      # An operator change (#930) is for the exact plant or unit it named, never its site's link (Copilot).
+      existing = directory.existing_fact(candidate.kind, attributes) ||
+        (site_link(candidate.kind, attributes) unless DataQuality::Review.operator_change?(candidate))
       if existing && (existing.closed? || closed_end)
         reason = closed_end&.reason || "#{existing.name.upcase_first} was #{existing.decision}. The same thing again?"
         return settle_closed(candidate, existing, reason)

@@ -151,6 +151,40 @@ class Api::DqOperatorChangeTest < ActionDispatch::IntegrationTest
     assert_equal %w[rejected rejected], Candidate.where(id: ids).order(:id).pluck(:status)
   end
 
+  test "a unit's change adds the unit's own link, never attaches to its site's link (Copilot)" do
+    unit = Facility.create!(name: "Davis-Besse 1", facility_type: "power_reactor", parent: @plant, nrc_docket: "05000346",
+      verification_status: "verified", verified_by: "human:tosin")
+    FacilityRelationship.create!(organization: @harbor, facility: unit, relationship_type: "operates", verification_status: "verified", verified_by: "human:tosin")
+    site_link = FacilityRelationship.create!(organization: @vistra, facility: @plant, relationship_type: "operates", verification_status: "verified",
+      verified_by: "human:tosin")
+    act(change(target: unit.id, quote: "On March 1, 2024 Vistra took over Davis-Besse 1."))
+    assert results.sole["ok"], results.inspect
+    added = Candidate.find(results.sole["id"])
+    match!
+    assert added.reload.subject_id, added.notes
+    assert_not_equal site_link.id, added.subject_id
+    assert_equal unit.id, FacilityRelationship.find(added.subject_id).facility_id
+  end
+
+  test "request keys: a caller's key never ends in :end or :date, and a key another action holds is a conflict, never a success (Copilot)" do
+    act(change(request_key: "op-1:end"))
+    assert_match "can't end in :end or :date", results.sole["error"]
+    holtec = Organization.create!(name: "Holtec", verification_status: "verified", verified_by: "human:tosin")
+    holtec.aliases.create!(alias: "Holtec")
+    act({ action: "propose_fields", target: holtec.id, fields: { hq_city: "Camden" }, quote: "Holtec is in Camden.", source_url: @page.url,
+      reason: "r", request_key: "shared" })
+    assert results.sole["ok"], results.inspect
+    act(change(request_key: "shared"))
+    assert_match "is another action's", results.sole["error"]
+    assert_nil @old.reload.ended_on
+  end
+
+  test "an ended link's sentence keeps its other details for the verifier (Copilot)" do
+    claim = Candidate.new(kind: "facility_relationship", payload: { "organization" => { "name" => "Energy Harbor" }, "facility" => { "name" => "Davis-Besse" },
+      "relationship_type" => "operates", "ended_on" => "2024-03-01", "description" => "through its nuclear subsidiary" })
+    assert_match(/\AEnergy Harbor stopped operating the plant Davis-Besse on 1 Mar 2024.+through its nuclear subsidiary/, DataQuality::Claim.describe(claim))
+  end
+
   test "another plant of the same name goes to review, never that plant" do
     act(change)
     claims = results.sole["created_ids"].map { |id| Candidate.find(id) }

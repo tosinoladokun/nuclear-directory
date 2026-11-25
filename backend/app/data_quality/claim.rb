@@ -69,7 +69,8 @@ module DataQuality::Claim
       # A link that ends (#930): said as an end, so neither the verifier nor Tosin reads it as the link going on.
       if (ended = (Date.iso8601(payload["ended_on"].to_s) rescue nil))
         doing = ENDED_VERBS.fetch(payload["relationship_type"].to_s) { "its #{verb(payload['relationship_type'])} link to" }
-        return "#{name_of(payload['organization'])} stopped #{doing} the plant #{facility_name(payload['facility'])} on #{ended.strftime('%-d %b %Y')}."
+        rest = details(payload.except("organization", "facility", "relationship_type", "ended_on"))
+        return "#{name_of(payload['organization'])} stopped #{doing} the plant #{facility_name(payload['facility'])} on #{ended.strftime('%-d %b %Y')}#{rest}."
       end
       "#{name_of(payload['organization'])} #{verb(payload['relationship_type'])} the plant " \
         "#{facility_name(payload['facility'])}#{details(payload.except('organization', 'facility', 'relationship_type'))}."
