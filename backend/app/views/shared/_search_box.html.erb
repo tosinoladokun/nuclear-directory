@@ -32,8 +32,10 @@
             <li>
               <%= link_to directory_url_for(category: row.category), class: "nd-instant__row nd-browse__row", aria: { label: "#{row.category.name}, #{noun}" }, data: { home_click: "category" } do %>
                 <span class="nd-catsq <%= bucket_class(row.category) %>" aria-hidden="true"><%= bucket_icon(row.category, size: 16) %></span>
-                <%# The short name where the full one is long, as the list pages' index (a label we write never takes an ellipsis). %>
-                <span class="nd-instant__text"><b class="type-body-strong" title="<%= row.category.name %>"><%= row.category.list_name %></b></span>
+                <%# The full name, as on the cards (Design, #917): 15px, 13px on phones for the two long ones, and their short
+                    name only where 13px doesn't fit (under 360px). A label we write never takes an ellipsis. %>
+                <% long = row.category.name.length > HomeCategories::BROWSE_NAME_FITS && row.category.short_name != row.category.name %>
+                <span class="nd-instant__text"><b class="type-body-strong nd-browse__name" title="<%= row.category.name %>"<% if long %> data-long<% end %>><span class="nd-browse__full"><%= row.category.name %></span><% if long %><span class="nd-browse__short"><%= row.category.short_name %></span><% end %></b></span>
                 <span class="nd-browse__count type-data" aria-hidden="true"><%= row.count %></span>
               <% end %>
             </li>
