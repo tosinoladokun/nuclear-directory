@@ -37,13 +37,37 @@ class SocialQueueWatchJobTest < ActiveSupport::TestCase
     assert_empty @alerts.resolved
   end
 
-  test "the stopped run's reason is added when the 8:30 job said why" do
-    post(status: "drafted", send_on: MONDAY.to_date)
-    CrawlRun.create!(source_kind: SocialAgent::STOPPED, stage: "verify", status: "succeeded", started_at: MONDAY - 30.minutes, finished_at: MONDAY - 30.minutes,
-      stats: { "platform" => "x", "stopped" => "approved draft 7 not sent: its source page no longer answers (404)" })
+  def stopped_run(platform, why, at: MONDAY - 30.minutes)
+    CrawlRun.create!(source_kind: SocialAgent::STOPPED, stage: "verify", status: "succeeded", started_at: at, finished_at: at,
+      stats: { "platform" => platform, "stopped" => why })
+  end
+
+  test "the stopped run's reason is added to its own row only, the latest run for that row winning" do
+    x_row = post(status: "drafted", send_on: MONDAY.to_date)
+    linkedin_row = post(platform: "linkedin", status: "drafted", send_on: MONDAY.to_date)
+    stopped_run("x", "approved draft #{x_row.id} not sent: it's a holiday", at: MONDAY - 40.minutes)
+    stopped_run("x", "approved draft #{x_row.id} not sent: its source page no longer answers (404)")
+    stopped_run("linkedin", "approved draft #{x_row.id + 1000} not sent: sending is off on the server (SOCIAL_POSTING_ENABLED)")
+    stopped_run("x", "approved draft #{linkedin_row.id} not sent: this month's 20 posts are done")
     run_job
 
-    assert_includes @alerts.raised.sole[2], "its source page no longer answers (404)"
+    lines = @alerts.raised.sole[2].lines
+    assert_includes lines.grep(/Row #{x_row.id} /).sole, "is still a draft: its source page no longer answers (404)."
+    assert_includes lines.grep(/Row #{linkedin_row.id} /).sole, "is still a draft."
+    body = lines.join
+    %w[holiday SOCIAL_POSTING_ENABLED month].each { |unrelated| assert_not_includes body, unrelated }
+  end
+
+  test "a stopped reason that isn't fixed wording (an error, a Buffer reply) is never forwarded" do
+    row = post(status: "drafted", send_on: MONDAY.to_date)
+    stopped_run("x", "approved draft #{row.id} not sent: RuntimeError: Buffer said A secret text token=abc123")
+    blocked = post(platform: "linkedin", status: "blocked", approved_sha256: "b" * 64, send_on: MONDAY.to_date, reason: "Faraday::Error: A secret text token=abc123")
+    run_job
+
+    body = @alerts.raised.sole[2]
+    assert_includes body, "Row #{row.id} (x, acme-fission) was due 2026-11-23 and is still a draft: see Admin > Posts for why."
+    assert_includes body, "Row #{blocked.id} (linkedin, acme-fission) is an approved post that a check blocked: see Admin > Posts for why"
+    %w[secret token abc123 RuntimeError Faraday].each { |leak| assert_not_includes body, leak }
   end
 
   test "a row sent today that failed or is unknown is named; unknown says to check the account" do
@@ -57,13 +81,25 @@ class SocialQueueWatchJobTest < ActiveSupport::TestCase
   end
 
   test "an approved row that a check blocked is named with its reason; a blocked agent draft is not" do
-    blocked = post(status: "blocked", approved_sha256: "a" * 64, send_on: MONDAY.to_date, reason: "its checks no longer pass: x")
+    blocked = post(status: "blocked", approved_sha256: "a" * 64, send_on: MONDAY.to_date, reason: "its checks no longer pass: A secret text")
     post(platform: "linkedin", status: "blocked", reason: "the agent's own draft")
     run_job
 
     body = @alerts.raised.sole[2]
-    assert_includes body, "Row #{blocked.id} (x, acme-fission) is an approved post that a check blocked: its checks no longer pass: x"
+    assert_includes body, "Row #{blocked.id} (x, acme-fission) is an approved post that a check blocked: its checks no longer pass"
+    assert_not_includes body, "secret"
     assert_equal 1, body.scan("Row ").size
+  end
+
+  test "a row claimed for sending today that send_post then blocked (the month's cap) is named, approved by hand or by graders" do
+    by_hand = post(status: "blocked", sent_on: MONDAY.to_date, reason: "this month's 20 posts are done")
+    graded = post(platform: "linkedin", status: "blocked", approved_sha256: "c" * 64, send_on: MONDAY.to_date, sent_on: MONDAY.to_date, reason: "this month's cap of $5.0 is reached")
+    run_job
+
+    body = @alerts.raised.sole[2]
+    assert_includes body, "Row #{by_hand.id} (x, acme-fission) is an approved post that a check blocked: this month's 20 posts are done"
+    assert_includes body, "Row #{graded.id} (linkedin, acme-fission) is an approved post that a check blocked: this month's cap of $5.0 is reached"
+    assert_empty @alerts.resolved
   end
 
   test "a queued row more than 30 minutes past its Buffer due time is named; a recent one is not" do
