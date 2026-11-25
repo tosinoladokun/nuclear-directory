@@ -135,6 +135,15 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     Seed::OrganizationLoader.new(@dir).load!
     assert_equal "Golden", acme.reload.hq_city, "a data-step write stands"
 
+    # The seed's hold: pending, with its reason and no context; not a person's decision (Database).
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Littleton" },
+      verification: { status: "pending", by: "human:tosin", reason: "Needs a direct quote" })
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Lakewood", acme.reload.hq_city, "the seed's hold is the seed's"
+    acme.verify!(by: "human:tosin")
+    Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Golden" },
+      verification: { status: "verified", by: "human:tosin", reason: "Fix HQ; deploy abc1234, PR #9" })
+
     # The seed's write: a human, no context and no reason.
     Directory::FactWriter.write(:organization, { id: acme.id, hq_city: "Arvada" }, verification: { status: "verified", by: "human:tosin" })
     Seed::OrganizationLoader.new(@dir).load!

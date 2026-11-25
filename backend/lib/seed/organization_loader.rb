@@ -724,15 +724,16 @@ module Seed
       # An admin edit made before by_hand (25 Nov) without a note looks like
       # the seed's; the rehearsal on a restored backup lists what would change.
       def approved_fields(record)
-        events = VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context, :reason, :by)
-        claim_ids = events.filter_map { |_, context, _, _| context.to_h["candidate_id"] }
+        events = VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context, :reason, :by, :to_status)
+        claim_ids = events.filter_map { |_, context, _, _, _| context.to_h["candidate_id"] }
         claims = claim_ids.any? ? Candidate.where(id: claim_ids).pluck(:id, :payload).to_h : {}
         decided = {}
         protected = {}
-        events.each do |changed, context, reason, by|
+        events.each do |changed, context, reason, by, to_status|
           context = context.to_h
           changed = changed.to_h.transform_values { |change| Array(change).last }
-          seed = context.key?("seed") || (context.empty? && reason.nil?)
+          # The seed's hold (pending, with its pending_reason) has no context either; a person's edit always has one.
+          seed = context.key?("seed") || (context.empty? && (reason.nil? || to_status == "pending"))
           if by.to_s.start_with?("human:") && !seed
             stated = claims[context["candidate_id"]].to_h.except(*IDENTITY_KEYS).select { |field, _| record.has_attribute?(field) }
             stated.merge(changed).each { |field, value| decided[field] = value; protected[field] = true }
