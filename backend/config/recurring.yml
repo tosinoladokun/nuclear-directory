@@ -44,6 +44,10 @@ production:
   social_post:
     class: SocialPostJob
     schedule: "30 8 * * 1-5 America/Los_Angeles"
+  # Says so the same morning when an approved post didn't go out (#912), after the 8:30 run and again once Buffer has had time.
+  social_queue_watch:
+    class: SocialQueueWatchJob
+    schedule: "0,45 9 * * 1-5 America/Los_Angeles"
   # Takes back queued posts when switched off, and reads back the ones that went out (#769).
   social_sync:
     class: SocialSyncJob

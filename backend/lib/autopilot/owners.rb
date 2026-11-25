@@ -8,7 +8,7 @@ module Autopilot
       "company-pages-failing" => "Crawl",
       "pending-without-role" => "DQ", "pending-without-website" => "DQ", "unchecked-claims" => "DQ", "stuck-leads" => "DQ", "finds-unconfirmed" => "DQ",
       "no-creates" => "DQ",
-      "social-silent" => "Backend", "posts-unknown" => "Backend",
+      "social-silent" => "Backend", "posts-unknown" => "Backend", "social-queue" => "Infra",
       "budget" => "PM"
     }.freeze
 
