@@ -33,7 +33,7 @@
               <%= link_to directory_url_for(category: row.category), class: "nd-instant__row nd-browse__row", aria: { label: "#{row.category.name}, #{noun}" }, data: { home_click: "category" } do %>
                 <span class="nd-catsq <%= bucket_class(row.category) %>" aria-hidden="true"><%= bucket_icon(row.category, size: 16) %></span>
                 <span class="nd-instant__text"><b class="type-body-strong"><%= row.category.name %></b></span>
-                <span class="nd-browse__count type-data-sm" aria-hidden="true"><%= row.count %></span>
+                <span class="nd-browse__count type-data" aria-hidden="true"><%= row.count %></span>
               <% end %>
             </li>
           <% end %>
