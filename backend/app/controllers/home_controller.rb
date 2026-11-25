@@ -7,6 +7,7 @@ class HomeController < ApplicationController
     @home_variant = HomeVariant.pick(request, forced: params[:home], bot: bot?)
     # B: search and charts. Without a whole set of charts to show, the page stays A.
     @charts = HomeCharts.cards_for(request) if @home_variant.b?
-    @home_variant = HomeVariant.new("A", forced: @home_variant.forced?) if @home_variant.b? && @charts.nil?
+    # B without a whole set of charts draws A's page, still named B with a fallback flag (PM), so the readout can leave it out.
+    @home_fallback = @home_variant.b? && @charts.nil?
   end
 end

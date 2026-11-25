@@ -1,15 +1,17 @@
 <% labels = { "mining" => "Mining", "conversion" => "Conversion", "enrichment" => "Enrichment", "fabrication" => "Fuel fabrication" } %>
 <%= render layout: "home/chart_card", locals: { key: "fuel", size:, url: directory_url_for(category: Category.find("fuel")),
-      title: "Where US reactor fuel comes from", subtitle: "Companies at each step, from the uranium mine to the fuel plant.",
-      sources: chart_sources(data[:sources]), link: "Fuel and materials" } do %>
+      title: "Where US reactor fuel comes from", short_title: "Where US fuel comes from",
+      subtitle: "Companies at each step, from the uranium mine to the fuel plant.",
+      sources: chart_sources(data[:sources], limit: size == :large ? 3 : 2), link: "Fuel and materials" } do %>
+  <%# One step per row, the names as chips that wrap: a name is never cut (Design, #920). %>
   <ol class="nd-chart__chain">
     <% data[:steps].each_with_index do |step, i| %>
       <li class="nd-chart__step">
-        <% if i.positive? %><span class="nd-chart__arrow" aria-hidden="true"><%= icon("arrow-right", size: 12) %></span><% end %>
-        <span class="nd-chart__steplabel nd-label"><%= labels.fetch(step[:step]) %> <span class="type-data-sm"><%= step[:count] %></span></span>
+        <span class="nd-chart__steplabel nd-label"><% if i.positive? %><span class="nd-chart__arrow" aria-hidden="true"><%= icon("arrow-right", size: 12) %></span><% end %><%= labels.fetch(step[:step]) %> <span class="type-data-sm"><%= step[:count] %></span></span>
         <ul class="nd-chart__names">
           <% step[:companies].each do |row| %>
-            <li class="nd-chart__name type-small" title="<%= row[:name] %>"><%= row[:short].presence && row[:name].length > 22 ? row[:short] : row[:name] %></li>
+            <% text, small = line_name(row[:name], row[:short]) %>
+            <li class="nd-chart__name" title="<%= row[:name] %>"<% if small %> data-fit="small"<% end %>><%= text %></li>
           <% end %>
         </ul>
       </li>

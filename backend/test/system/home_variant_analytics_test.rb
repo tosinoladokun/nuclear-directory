@@ -59,6 +59,9 @@ class HomeVariantAnalyticsTest < ApplicationSystemTestCase
     visit root_path(home: "b")
     assert_equal({ "home_variant" => "B", "home_variant_forced" => true }, JSON.parse(run_module("return m.homeVariantProperties()")))
 
+    page.execute_script("document.querySelector('meta[name=home-variant]').dataset.fallback = 'true'") # what the server writes when B falls back
+    assert_equal({ "home_variant" => "B", "home_variant_forced" => true, "home_fallback" => true }, JSON.parse(run_module("return m.homeVariantProperties()")))
+
     visit "/companies"
     assert_nil JSON.parse(run_module("return m.homeVariantProperties()"))
   end

@@ -21,7 +21,8 @@ class HomeBTest < ActionDispatch::IntegrationTest
     assert_select ".nd-home__download a[href='/data'][data-home-download]", text: "Download the data"
     assert_select ".nd-charts > a.nd-chart", 3
     assert_select ".nd-charts > a.nd-chart:first-child.nd-chart--large[data-home-chart=fuel][href='/companies?category=fuel']" do
-      assert_select "h2", "Where US reactor fuel comes from"
+      assert_select "h2 .nd-chart__tfull", "Where US reactor fuel comes from"
+      assert_select "h2 .nd-chart__tshort", "Where US fuel comes from", "phones' title"
       assert_select ".nd-chart__src", "Source: nrc.gov"
       assert_select ".nd-chart__more", "Fuel and materials →"
       assert_select ".nd-chart__name", "Centrus Energy"
@@ -31,10 +32,10 @@ class HomeBTest < ActionDispatch::IntegrationTest
     assert_select "a.nd-chart a", count: 0, message: "no link inside a card link"
   end
 
-  test "B with no whole set of charts stays A, still marked forced" do
+  test "B with no whole set of charts draws A's page, named B with a fallback flag so the readout can leave it out" do
     get root_path(home: "b")
 
-    assert_select "meta[name=home-variant][content=A][data-forced=true]"
+    assert_select "meta[name=home-variant][content=B][data-forced=true][data-fallback=true]"
     assert_select ".nd-charts", count: 0
     assert_select ".nd-home__cats"
   end

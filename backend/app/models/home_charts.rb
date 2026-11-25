@@ -59,7 +59,8 @@ class HomeCharts
 
   # Where US reactor fuel comes from: each step with its count and the most connected companies at it.
   def fuel
-    roles = Role.where(key: FUEL_STEPS)
+    steps_roles = Role.where(key: FUEL_STEPS)
+    roles = Role.where(id: steps_roles.select(:id)).or(Role.where(parent_id: steps_roles.select(:id))) # as Bucket counts them
     steps = FUEL_STEPS.map do |step|
       scope = Organization.published.where(id: Bucket.role_member_ids(step))
       { step:, count: scope.count, companies: HomeCategories.new.most_connected(scope, FUEL_NAMES).map { |org| company(org) } }
@@ -77,15 +78,29 @@ class HomeCharts
     { rows:, sources: sources(links.where(organization_id: rows.map { |row| row[:id] })) }
   end
 
-  # Who buys nuclear power: buyers by their sourced, signed power deals (a framework or MoU doesn't count).
+  # Who buys nuclear power: buyers by their signed power deals (DATA.md): each verified term that counts (a signed,
+  # active or completed PPA, supply agreement or tariff subscription with no open condition) is one deal, so two
+  # agreements with one seller are two; a sourced link without terms counts once when its words say "Signed", as the
+  # company page reads it. Frameworks, MoUs, announced and conditional deals don't count.
   def buyers
     buyers = Organization.published.where(id: Bucket.organization_ids(Category.find("power-buyers"))).select(:id)
-    deals = sourced(Relationship.published.offtake_with.signed_or_unstaged).where(from_organization_id: buyers)
-    plant_deals = sourced(FacilityRelationship.published.offtakes_from.signed_or_unstaged).where(organization_id: buyers)
-    counts = deals.group(:from_organization_id).count.merge(plant_deals.group(:organization_id).count) { |_, a, b| a + b }
+    links = sourced(Relationship.published.offtake_with).where(from_organization_id: buyers).includes(:deal_terms).to_a +
+      sourced(FacilityRelationship.published.offtakes_from).where(organization_id: buyers).includes(:deal_terms).to_a
+    counts = Hash.new(0)
+    behind = Hash.new { |hash, key| hash[key] = [] }
+    links.each do |link|
+      buyer = link.try(:from_organization_id) || link.organization_id
+      terms = link.deal_terms.select { |term| term.verification_status == "verified" }
+      signed = terms.any? ? terms.select(&:counted?) : (link.description.to_s.strip.match?(/\ASigned\b/i) ? [ nil ] : [])
+      next if signed.empty?
+
+      counts[buyer] += signed.size
+      behind[buyer] << link
+      behind[buyer].concat(signed.compact)
+    end
     rows = ranked(counts, SHOWN)
-    ids = rows.map { |row| row[:id] }
-    { rows:, sources: sources(deals.where(from_organization_id: ids), plant_deals.where(organization_id: ids)) }
+    facts = rows.flat_map { |row| behind[row[:id]] }.group_by { |fact| fact.class }
+    { rows:, sources: sources(*facts.map { |model, records| model.where(id: records.map(&:id)) }) }
   end
 
   # What the companies do: each category with companies, by its count, and how many companies in all.
@@ -97,9 +112,11 @@ class HomeCharts
 
   # Newest in the directory: the latest facts a person approved, as What's new lists them, with the day and source.
   def newest
-    Updates.new.entries(limit: NEWEST).map do |entry|
-      { title: entry.title, page: entry.page, date: entry.at.to_date, domain: domain(entry.source_url) }
-    end
+    # Sourced facts only: What's new can list one without a source, so it reads further than four and keeps the
+    # first four with a source domain.
+    Updates.new.entries(limit: NEWEST * 5).filter_map do |entry|
+      (host = domain(entry.source_url)) && { title: entry.title, page: entry.page, date: entry.at.to_date, domain: host }
+    end.first(NEWEST)
   end
 
   # Who owns a plant: the public plant with the most owners, where every current, sourced owns link states a share
@@ -113,13 +130,15 @@ class HomeCharts
       .max_by { |facility, rows| [ rows.size, facility.name ] }
     return {} unless plant
 
-    operator = current(sourced(FacilityRelationship.published.operates)).where(organization_id: Organization.published.select(:id))
-      .where(facility_id: Facility.where(id: plant.id).or(Facility.published.where(parent_id: plant.id)).select(:id))
-      .includes(:organization).map(&:organization).uniq
-    runs = operator.one? && shares.none? { |row| row.organization_id == operator.first.id } ? company(operator.first) : nil
-    { plant: plant.name, slug: plant.slug, operator: runs,
+    operates = current(sourced(FacilityRelationship.published.operates)).where(organization_id: Organization.published.select(:id))
+      .where(facility_id: Facility.where(id: plant.id).or(Facility.published.where(parent_id: plant.id)).select(:id)).includes(:organization).to_a
+    operators = operates.map(&:organization).uniq
+    # The one company that runs it, owner or not; its links' sources join the card's.
+    runs = operators.one? ? operators.first : nil
+    shown = shares + (runs ? operates : [])
+    { plant: plant.name, short: plant.short_name, slug: plant.slug, operator: runs && company(runs),
       owners: shares.sort_by { |row| [ -row.ownership_pct, row.organization.name ] }.map { |row| company(row.organization).merge(pct: row.ownership_pct.to_f) },
-      sources: sources(FacilityRelationship.where(id: shares.map(&:id))) }
+      sources: sources(FacilityRelationship.where(id: shown.map(&:id))) }
   end
 
   private

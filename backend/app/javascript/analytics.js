@@ -74,7 +74,10 @@ export function outboundProperties(anchor, here = window.location) {
 export function homeVariantProperties(doc = document) {
   const tag = doc.querySelector('meta[name="home-variant"]')
   if (!tag?.content) return null
-  return tag.dataset.forced === "true" ? { home_variant: tag.content, home_variant_forced: true } : { home_variant: tag.content }
+  const properties = { home_variant: tag.content }
+  if (tag.dataset.forced === "true") properties.home_variant_forced = true
+  if (tag.dataset.fallback === "true") properties.home_fallback = true // B drawn as A: no whole set of charts
+  return properties
 }
 
 export function categoryClickProperties(anchor, here = window.location) {

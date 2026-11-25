@@ -436,6 +436,8 @@
   .nd-chart { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); text-decoration: none; transition: border-color 120ms ease-out; }
   .nd-chart:hover, .nd-chart:focus-visible { border-color: var(--nd-ink); }
   .nd-chart__title, .nd-chart__sub { margin: 0; }
+  .nd-chart__title { white-space: nowrap; }
+  .nd-chart__tshort { display: none; }
   .nd-chart__sub { color: var(--nd-ink-muted); }
   /* The source line is a sentence of domains: it may take a second line, as the subtitle does, never an ellipsis. */
   .nd-chart__foot { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--nd-space-3); min-width: 0; }
@@ -443,7 +445,7 @@
   .nd-chart__more { flex: none; font-size: 14px; white-space: nowrap; }
   .nd-chart:hover .nd-chart__more, .nd-chart:focus-visible .nd-chart__more { text-decoration: underline; }
   /* One line each: names take their short form past 22 characters, then the ellipsis (one-line law). */
-  .nd-chart__barname, .nd-chart__name, .nd-chart__newstitle { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
+  .nd-chart__barname, .nd-chart__newstitle { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
   .nd-chart__bars, .nd-chart__names, .nd-chart__news, .nd-chart__owners, .nd-chart__chain { list-style: none; margin: 0; padding: 0; }
   /* The columns belong to the list, so every bar starts at the same place; a row is only its three cells. */
   .nd-chart__bars { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center; gap: 8px var(--nd-space-3); }
@@ -451,17 +453,22 @@
   .nd-chart__barrow { display: contents; }
   .nd-chart__bar { height: 12px; width: var(--w); min-width: 2px; background: var(--nd-cat, var(--nd-ink)); border-radius: var(--nd-radius-sm); }
   .nd-chart__count { text-align: right; }
-  .nd-chart__chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
-  .nd-chart__step { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .nd-chart__arrow { position: absolute; left: -16px; top: 2px; display: flex; color: var(--nd-control); }
-  .nd-chart__steplabel { display: flex; gap: 6px; white-space: nowrap; }
+  /* The fuel chain: one step per row, its label on the left and its companies as chips that wrap, so no name is cut
+     (Design, #920). Phones put the label above. A chip is 40px at 15px; a long name 13px, or its short name. */
+  .nd-chart__chain { display: grid; gap: var(--nd-space-4); }
+  .nd-chart__step { display: grid; grid-template-columns: 168px minmax(0, 1fr); align-items: start; gap: var(--nd-space-3); min-width: 0; }
+  .nd-chart__steplabel { display: flex; align-items: center; gap: 6px; min-height: 40px; white-space: nowrap; }
+  .nd-chart__arrow { display: flex; color: var(--nd-control); }
   .nd-chart__steplabel .type-data-sm { color: var(--nd-ink-muted); }
-  .nd-chart__names { display: grid; gap: 6px; }
-  .nd-chart__name { padding: 4px 8px; background: var(--nd-cat-fuel-tint); border-radius: var(--nd-radius-sm); }
+  .nd-chart__names { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* Last resort, a long name with no short one on a narrow phone: the ellipsis, the full name in its title (record names, DESIGN.md rule 5). */
+  .nd-chart__name { display: block; max-width: 100%; height: 40px; padding: 0 12px; font: 400 15px/40px var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--nd-cat-fuel-tint); border-radius: var(--nd-radius-sm); }
+  .nd-chart__name[data-fit="small"] { font-size: 13px; }
+  @media (max-width: 359px) { .nd-chart__name { font-size: 13px; } } /* the narrowest phones: 13px before any cut */
   .nd-chart__news { display: grid; gap: 12px; }
   .nd-chart__newsrow { display: flex; flex-direction: column; min-width: 0; }
   .nd-chart__newsmeta { color: var(--nd-ink-muted); }
-  .nd-chart__stack { display: flex; height: 12px; overflow: hidden; border-radius: var(--nd-radius-sm); }
+  .nd-chart__stack { display: flex; height: 12px; margin-bottom: 12px; overflow: hidden; border-radius: var(--nd-radius-sm); }
   .nd-chart__stack .nd-chart__share { width: var(--w); }
   .nd-chart__owners { display: grid; gap: 8px; }
   .nd-chart__owner { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: var(--nd-space-2); }
@@ -473,12 +480,12 @@
   .nd-chart__share--3 { background: var(--nd-rule); }
   @media (max-width: 639px) {
     .nd-chart { padding: 20px; }
-    .nd-chart__title { font-size: 19px; }
+    .nd-chart__tfull { display: none; }
+    .nd-chart__tshort { display: inline; }
     /* The source line above the link. */
     .nd-chart__foot { flex-direction: column; align-items: flex-start; gap: var(--nd-space-2); }
-    /* The fuel chain's four steps as two rows of two on phones, the arrows dropped. */
-    .nd-chart__chain { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--nd-space-4); }
-    .nd-chart__arrow { display: none; }
+    .nd-chart__step { grid-template-columns: minmax(0, 1fr); gap: var(--nd-space-2); }
+    .nd-chart__steplabel { min-height: 0; }
   }
 
   /* Browse (#909): the empty field lists the categories, the count on the right in mono. Plants and sites (no bucket)
@@ -1754,3 +1761,10 @@
 .nd-instant__text > b[data-fit="small"] { font-size: 13px; line-height: 24px; }
 /* Browse's two long category names drop to 13px on phones (#917); outside the layers, as above, to beat type-body-strong. */
 @media (max-width: 559px) { .nd-browse__name[data-long] { font-size: 13px; } }
+/* Homepage B's charts (#909): sizes that beat the type utilities on the same elements, so outside the layers. Card titles
+   are 17px on phones (one line at 320, with the short title); the large card's bars get more room (Design, #920). */
+@media (max-width: 639px) { .nd-chart__title { font-size: 17px; line-height: 24px; } }
+@media (max-width: 359px) { .nd-chart__title { font-size: 16px; } } /* "Where US fuel comes from" fits at 320 */
+.nd-chart--large .nd-chart__barname { font-size: 16px; line-height: 44px; }
+.nd-chart--large .nd-chart__bars { row-gap: 0; }
+.nd-chart--large .nd-chart__bar { height: 20px; }

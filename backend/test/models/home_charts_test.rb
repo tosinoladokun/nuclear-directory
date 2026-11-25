@@ -49,14 +49,20 @@ class HomeChartsTest < ActiveSupport::TestCase
     amazon = cite!(company("Amazon", roles: [ offtaker ]))
     kairos = cite!(company("Kairos Power"))
     x = cite!(company("X-energy"))
-    cite!(link(amazon, "offtake_with", kairos), source: source("aboutamazon.com"))
-    cite!(link(amazon, "offtake_with", x), source: source("x-energy.com"))
-    framework = cite!(company("Framework Buyer", roles: [ offtaker ]))
-    deal = cite!(link(framework, "offtake_with", kairos))
-    DealTerm.create!(link: deal, term_type: "offtake", agreement: "framework", **verification(true))
+    # Two signed agreements with one seller are two deals; a link without terms counts when its words say "Signed".
+    two = cite!(link(amazon, "offtake_with", kairos), source: source("aboutamazon.com"))
+    2.times { |i| cite!(DealTerm.create!(link: two, term_type: "offtake", agreement: "ppa", status: "signed", capacity_mw: 100 + i, **verification(true))) }
+    cite!(link(amazon, "offtake_with", x).tap { |deal| deal.update!(description: "Signed a power purchase agreement") }, source: source("x-energy.com"))
+    google = cite!(company("Google", roles: [ offtaker ]))
+    framework = cite!(link(google, "offtake_with", kairos))
+    DealTerm.create!(link: framework, term_type: "offtake", agreement: "framework", **verification(true))
+    pending = cite!(link(google, "offtake_with", x))
+    DealTerm.create!(link: pending, term_type: "offtake", agreement: "ppa", status: "signed", capacity_mw: 50, conditions: "NRC approval", **verification(true))
+    cite!(link(google, "offtake_with", cite!(company("Elementl")))) # no terms, no "Signed": not counted
 
-    rows = charts.buyers[:rows]
-    assert_equal [ [ "Amazon", 2 ] ], rows.map { |row| [ row[:name], row[:count] ] }, "the framework deal isn't counted"
+    data = charts.buyers
+    assert_equal [ [ "Amazon", 3 ] ], data[:rows].map { |row| [ row[:name], row[:count] ] }, "frameworks, conditional and unsigned deals don't count"
+    assert_equal %w[aboutamazon.com example.org x-energy.com], data[:sources][:domains].sort, "the links' and the counted terms' sources"
   end
 
   test "owners: the plant with the most owners whose stated shares add up to 100%, and who runs it" do
@@ -64,7 +70,7 @@ class HomeChartsTest < ActiveSupport::TestCase
     { "Georgia Power" => 45.7, "Oglethorpe Power" => 30.0, "MEAG Power" => 22.7, "Dalton Utilities" => 1.6 }.each do |name, pct|
       cite!(link(cite!(company(name)), "owns", vogtle), source: source("georgiapower.com")).update!(ownership_pct: pct)
     end
-    cite!(link(cite!(company("Southern Nuclear")), "operates", vogtle))
+    cite!(link(cite!(company("Southern Nuclear")), "operates", vogtle), source: source("nrc.gov"))
     partial = cite!(plant("Half Known"))
     cite!(link(cite!(company("Owner A")), "owns", partial)).update!(ownership_pct: 50)
     cite!(link(cite!(company("Owner B")), "owns", partial)) # no share stated: the plant can't be shown
@@ -74,7 +80,37 @@ class HomeChartsTest < ActiveSupport::TestCase
     assert_equal [ [ "Georgia Power", 45.7 ], [ "Oglethorpe Power", 30.0 ], [ "MEAG Power", 22.7 ], [ "Dalton Utilities", 1.6 ] ],
       data[:owners].map { |row| [ row[:name], row[:pct] ] }
     assert_equal "Southern Nuclear", data[:operator][:name]
-    assert_equal [ "georgiapower.com" ], data[:sources][:domains]
+    assert_equal %w[georgiapower.com nrc.gov], data[:sources][:domains], "the operator's source joins the card's"
+  end
+
+  test "owners: an operator that also owns a share still runs it (#920 review)" do
+    plant = cite!(plant("North Anna Power Station"))
+    dominion = cite!(company("Dominion Energy"))
+    cite!(link(dominion, "owns", plant)).update!(ownership_pct: 88.4)
+    cite!(link(cite!(company("Old Dominion Electric Cooperative")), "owns", plant)).update!(ownership_pct: 11.6)
+    cite!(link(dominion, "operates", plant))
+
+    assert_equal "Dominion Energy", charts.owners[:operator][:name]
+  end
+
+  test "fuel: a company in a step through a sub-role brings its source too (#920 review)" do
+    fuel = role("fuel")
+    enrichment = role("enrichment", parent: fuel)
+    %w[mining conversion fabrication].each { |key| role(key, parent: fuel) }
+    laser = role("laser_enrichment", parent: enrichment)
+    cite!(company("Global Laser Enrichment", roles: [ laser ]), source: source("gle-us.com"))
+
+    data = charts.fuel
+    assert_equal [ "Global Laser Enrichment" ], data[:steps].find { |row| row[:step] == "enrichment" }[:companies].map { |row| row[:name] }
+    assert_equal [ "gle-us.com" ], data[:sources][:domains]
+  end
+
+  test "newest: sourced facts only (#920 review)" do
+    cite!(company("Kairos Power"), source: source("kairospower.com"))
+    company("Unsourced Co")
+
+    assert charts.newest.all? { |row| row[:domain].present? }
+    assert_not charts.newest.any? { |row| row[:title].include?("Unsourced Co") }
   end
 
   test "categories: each category with companies, largest first, and the companies in all" do
