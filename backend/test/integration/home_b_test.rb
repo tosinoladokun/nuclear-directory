@@ -25,7 +25,8 @@ class HomeBTest < ActionDispatch::IntegrationTest
       assert_select "svg.nd-chartmap[aria-label='Map of the 3 operating US nuclear plants'] circle.nd-chartmap__dot", 3
     end
     assert_select "a.nd-chart--small[data-home-chart=reactor_sizes]" do
-      assert_select "h2 .nd-chart__tfull", "How big are US reactors?"
+      assert_select "h2", "How big are US reactors?"
+      assert_select "h2 .nd-chart__tshort", count: 0, message: "the whole question fits at 320, so it has no short form (Design, #935)"
       assert_equal [ "Reactors", "Reactor size (MW, net summer)" ], css_select(".nd-axis__name").map(&:text)
       assert_equal %w[600 900 1,100 1,300], css_select(".nd-chartcols__xedge").map(&:text)
     end

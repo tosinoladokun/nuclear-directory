@@ -42,12 +42,21 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     assert_operator second[2], :>, first[4], "stacked"
     assert_in_delta large[4], second[4], 1, "the column is as tall as the large card"
 
+    visit root_path(home: "b", charts: "largest_plants,state_reactors,reactor_sizes")
+    gaps = page.evaluate_script("[...document.querySelectorAll('.nd-chart')].map(c => Math.round(c.querySelector('.nd-chart__body').getBoundingClientRect().top - c.querySelector('.nd-chart__head').getBoundingClientRect().bottom))")
+    assert_equal [ 16, 16, 16 ], gaps, "every chart 16px under its title, the large one too (Design, #935)"
+
     [ 390, 320 ].each do |width|
       resize_viewport(width, 844)
       visit root_path(home: "b", charts: "plant_map,state_power,reactor_sizes")
       cards = boxes
       assert_equal "plant_map", cards.first[0], "at #{width}: large first"
       assert_equal 1, cards.map { |card| card[1] }.uniq.size, "at #{width}: one column"
+      visit root_path(home: "b", charts: "largest_plants,state_reactors,reactor_sizes")
+      sizes = page.evaluate_script("[...new Set([...document.querySelectorAll('.nd-chartbars__label')].map(e => getComputedStyle(e).fontSize))]")
+      assert_equal [ "13px" ], sizes, "at #{width}: bar names 13px on every card under 520px (Design, #935)"
+      shown = page.evaluate_script("getComputedStyle(document.querySelector('[data-home-chart=reactor_sizes] .nd-chart__title')).display !== 'none' && document.querySelector('[data-home-chart=reactor_sizes] .nd-chart__title').innerText")
+      assert_equal "How big are US reactors?", shown, "at #{width}: the whole question where it fits"
     end
   end
 

@@ -47,7 +47,8 @@ class HomeChartsTest < ActiveSupport::TestCase
       assert_includes HomeCharts::CHARTS, question.chart
       assert File.exist?(Rails.root.join("app/views/home/charts/_#{question.chart}.html.erb")), question.chart
       assert question.sizes.any? && (question.sizes - %i[large small]).empty?, question.key
-      assert_operator format(question.short, count: 54).length, :<=, 22, "#{question.key}: the short title fits one line on a 320px phone"
+      assert_operator format(question.short, count: 54).length, :<=, 24, "#{question.key}: the title on a phone fits one line at 320"
+      assert format(question.short, count: 54).end_with?("?"), "#{question.key}: the short title is still a question (Design, #935)"
       assert (question.not_with - keys).empty?, question.key
       assert question.axes.values_at(:category, :value).all?(&:present?), "#{question.key}: both axes named" if question.chart == :bars
       assert question.axes.values_at(:x, :y).all?(&:present?), "#{question.key}: both axes named" if question.chart == :columns

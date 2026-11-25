@@ -9,7 +9,7 @@
 #
 #   key:       the card's name in the analytics (home_chart_click) and the query method
 #   question:  the title. %{count} is the chart's count (map only)
-#   short:     the title when the card is too narrow for the question on one line
+#   short:     a shorter question, for a card too narrow for the whole one (only when it doesn't fit at 320)
 #   chart:     map, bars (ranked, top 8), columns, or split (one bar in parts)
 #   sizes:     large and/or small: the slots the card can take
 #   axes:      bars: category (the names' axis), value (with its unit); columns: x, y
@@ -25,7 +25,7 @@
 
 - key: state_power
   question: Which states have the most nuclear power?
-  short: Nuclear power by state
+  short: Most power by state?
   chart: bars
   sizes: [large, small]
   axes: { category: State, value: "Capacity (GW, net summer)" }
@@ -34,7 +34,7 @@
 
 - key: largest_plants
   question: Which are the largest US nuclear plants?
-  short: The largest US plants
+  short: Largest US plants?
   chart: bars
   sizes: [large, small]
   axes: { category: Plant, value: "Capacity (GW, net summer)" }
@@ -43,14 +43,13 @@
 
 - key: reactor_sizes
   question: How big are US reactors?
-  short: How big are reactors?
   chart: columns
   sizes: [small]
   axes: { x: "Reactor size (MW, net summer)", y: Reactors }
 
 - key: reactors_per_plant
   question: How many reactors does each plant have?
-  short: Reactors per plant
+  short: Reactors per plant?
   chart: columns
   sizes: [small]
   axes: { x: Reactors at the plant, y: Plants }
@@ -63,7 +62,7 @@
 
 - key: state_reactors
   question: Which states have the most reactors?
-  short: Reactors by state
+  short: Reactors by state?
   chart: bars
   sizes: [small]
   axes: { category: State, value: Reactors }
