@@ -94,6 +94,25 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_select "#search-large-status[role=status][aria-live=polite]"
   end
 
+  test "the page names its A/B version for the analytics: A while the test is off, a preview link forces one (#909)" do
+    get root_path
+    assert_select "meta[name=home-variant][content=A]:not([data-forced])"
+
+    get root_path(home: "b")
+    assert_select "meta[name=home-variant][content=B][data-forced=true]"
+    assert_select "link[rel=canonical][href='http://www.example.com/']", message: "a preview link is not another page"
+  end
+
+  test "each card title is marked as a category click for the A/B readout (#909)" do
+    get root_path
+    assert_select "a.nd-catcard__link[data-home-click=category]", minimum: 2
+  end
+
+  test "the privacy page says how the homepage version is chosen (#909)" do
+    get "/privacy"
+    assert_includes response.body, "We use your IP address and browser type, without storing them, to choose which version of the homepage you see."
+  end
+
   test "the site header on other pages uses the same instant search" do
     get companies_path
 

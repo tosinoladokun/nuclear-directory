@@ -36,6 +36,7 @@ export function sanitize(event) {
   for (const [name, value] of Object.entries(properties)) properties[name] = withoutQuery(value)
   if (event.$set) for (const [name, value] of Object.entries(event.$set)) event.$set[name] = withoutQuery(value)
   if (event.$set_once) for (const [name, value] of Object.entries(event.$set_once)) event.$set_once[name] = withoutQuery(value)
+  if (event.event === "$pageview" && properties.$pathname === "/") Object.assign(properties, homeVariantProperties() || {})
   return event
 }
 
@@ -61,7 +62,56 @@ export function outboundProperties(anchor, here = window.location) {
   }
 }
 
+// The home page A/B test (#909): the page names its version in a meta tag, and every home event carries it as
+// home_variant (with home_variant_forced when a preview link chose it, so the readout can leave it out):
+// - home_viewed, once the home page has rendered (its first load or a Turbo visit), the readout's count of home visits:
+//   a Turbo visit can send its $pageview before the new page's head is in, so the page view alone can't be trusted
+//   to name the version. The $pageview of "/" carries it too when the tag is already there.
+// - home_search_started: the first keystroke in the search box, once per home view.
+// - home_category_click: a click on a category, a card title in A or a Browse row, with the category's slug and
+//   where it was clicked.
+export function homeVariantProperties(doc = document) {
+  const tag = doc.querySelector('meta[name="home-variant"]')
+  if (!tag?.content) return null
+  return tag.dataset.forced === "true" ? { home_variant: tag.content, home_variant_forced: true } : { home_variant: tag.content }
+}
+
+export function categoryClickProperties(anchor, here = window.location) {
+  let url
+  try {
+    url = new URL(anchor.href, here.href)
+  } catch {
+    return null
+  }
+  return { category: url.searchParams.get("category"), from: anchor.closest(".nd-browse") ? "browse" : "card" }
+}
+
 let ready = null
+// Turbo gives each page view a new body, so "once per home view" is once per body.
+let viewedFor = null
+let searchedFor = null
+function trackHomeView() {
+  const variant = homeVariantProperties()
+  if (!variant || !ready || viewedFor === document.body) return
+  viewedFor = document.body
+  ready.capture("home_viewed", variant)
+}
+
+function trackHome(event) {
+  const variant = homeVariantProperties()
+  if (!variant || !ready) return
+  if (event.type === "input") {
+    if (searchedFor === document.body || !event.target.matches?.(".nd-home input[type=search]") || !event.target.value.trim()) return
+    searchedFor = document.body
+    ready.capture("home_search_started", variant)
+    return
+  }
+  if (event.type === "auxclick" && event.button !== 1) return
+  const anchor = event.target.closest?.("a[data-home-click]")
+  const properties = anchor && categoryClickProperties(anchor)
+  if (properties) ready.capture("home_category_click", { ...properties, ...variant }, { send_instantly: true })
+}
+
 function trackOutbound(event) {
   // auxclick also fires for the right button (the context menu): only the middle button opens the link.
   if (event.type === "auxclick" && event.button !== 1) return
@@ -89,9 +139,14 @@ function start(key, host) {
       before_send: sanitize,
     })
     ready = posthog
+    trackHomeView()
   })
   document.addEventListener("click", trackOutbound, true)
   document.addEventListener("auxclick", trackOutbound, true) // a middle click opens a tab too
+  document.addEventListener("click", trackHome, true)
+  document.addEventListener("auxclick", trackHome, true)
+  document.addEventListener("input", trackHome, true)
+  document.addEventListener("turbo:load", trackHomeView)
 }
 
 if (typeof document !== "undefined") {
