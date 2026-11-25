@@ -71,7 +71,7 @@ Build order: #558, #559, #560, then #556, #557, #561. Homepage: no change (kept 
   | Planned | dotted grey |
 
 - **Sources are quiet:** an opened row shows its description, the quote, the source's domain as one muted link, then "Open <company>" (#655); one source mark per row, and one quiet line at the end of a page ("13 sources · Cite this page · Report a correction"). No Verified badge, no checked date in the panel, no per-row Report a correction.
-- **No logos for now.** Page heads align left.
+- **Logos on a company's own page only** (#944), to the spec under Logos. Everywhere else a company is text. Page heads align left.
 - **Removals approved on 25 Oct**, as exceptions to "Nothing live is removed":
   - on profiles: "Not verified yet", the Verified badge and checked date, per-row Report a correction, boxed source numbers;
   - on list rows: the initials mark, the description sentence (replaced by the short description) and the connection count;
@@ -268,7 +268,7 @@ Everything sourced about one company, and who it deals with. **For:** Someone ch
     - **Desktop:** a section index on the left (160px) and one middle column (header, Latest with 3 items at most, Connections map #561, Deals and links, Plants and sites, the quiet line). Key facts sit on the right in the soft white panel, value first with a small label.
     - **Phones:** no section index, and key facts come after the header.
   - **Rows:** Deals and links are one line each, with a short deal line built from deal terms ("$80M ARDP award"). One source mark per row.
-  - **No logo**; the head aligns left. The role tags stay under the summary.
+  - **Logo** beside the name when the company has an approved one (Logos, #944). Otherwise there's no mark, and the head aligns left. The role tags stay under the summary.
 - **Keep:** description, the role tags, key facts, Latest, Deals and links, Plants and sites, Sources (behind "N sources" in the quiet line), Cite this page, Report a correction (one, in the quiet line). **Removed (approved 25 Oct):** "Not verified yet", the Verified badge and checked date, per-row Report a correction, boxed source numbers.
 - **Spec:** #363, #369, #556
 
@@ -516,7 +516,64 @@ Square brackets mark a component shown only when its data exists, or one that's 
 
 - There is no Nuclear Directory logo yet; on the home page only, the site icon sits beside the wordmark (see Iconography). The name is set in Anton, uppercase, "NUCLEAR DIRECTORY", and served as an SVG of the letter outlines (`shared/_wordmark`, built by `script/build_fonts.py`) so the font never delays the header. Put the name beside it as text for screen readers.
 - Fonts are self-hosted Latin subsets (`shared/_fonts`); only Roboto Serif is preloaded.
-- Organizations get a **monogram**: their initials in `mono` on a `paper-sunken` square with a `rule` border. Their own logos are inconsistent in quality, so monograms keep the directory even. If logos are added later, show them grayscale.
+- Organizations get a **monogram**: their initials in `mono` on a `paper-sunken` square with a `rule` border. Their own logos are inconsistent in quality, so monograms keep the directory even. A company's own logo follows the spec below.
+
+### Company logos (#944)
+
+A company's logo shows **on its own page only**, beside its name (Tosin, 25 Nov). Lists, search, the map and the homepage stay text. A company with no logo that passes every rule here shows no mark, and its page looks as it does today. A logo identifies the company and never suggests it endorses us. A company can ask for its logo to come off through Report a correction.
+
+Every rule is exact, so the processing step can enforce it in code. A logo either passes all of them or isn't shown. It's never stretched, redrawn or loosened to fit.
+
+**Where it sits**
+- In the page head's name row, left of the name (where a list page puts its category square), 12px (`space-3`) from the name. Its left edge lines up with the breadcrumb, and it's centred on the name row.
+- Same size at every width, light and dark.
+- No box, border, background or shadow: the mark sits on the paper.
+- It isn't a link. It's decorative to screen readers (`alt=""`), because the name is beside it.
+
+**One ink**
+- Every logo is drawn in `ink`, the text colour, in both themes. No other colour, tint, opacity or gradient.
+- The stored file is a one-colour alpha mask (PNG), drawn with `mask-image` over `background: var(--nd-ink)`, so it flips with the theme.
+- Converting to one ink keeps the shapes and drops the colour. Any pixel with alpha of 8% or more and lightness (L*) of 90 or less becomes ink. Everything else becomes transparent, so a white knockout inside a mark stays a hole.
+
+**Symbol or wordmark**
+- Use the company's symbol when it publishes one on its own: in its brand guide, its press kit, or alone on its site. Otherwise use its wordmark.
+- Never both together, and never a symbol cut out of a lockup.
+- Use the version made for a light background.
+- After trimming, the mark's shape decides which rules apply:
+  - **Symbol:** from 1.6 times taller than wide to 1.6 times wider than tall.
+  - **Wordmark:** from 1.6 to 6 times wider than tall.
+  - Anything else is rejected.
+
+**Size (optical, not by box)**
+- **Symbol:** scaled so √(width × height) = 30px, with no side over 36px. A square symbol is 30 × 30.
+- **Wordmark:** scaled so √(width × height) = 44px, with the height capped at 24px. At 2:1 it's 48 × 24, at 4:1 it's 88 × 22, and at 6:1 it's 108 × 18.
+- The mask is trimmed to the ink with no padding. Its size is the mark's display size, and it's stored at 3× (a 30px symbol is 90px).
+
+**Files**
+- **Source:** the company's own website, brand page or press kit, with its URL recorded like any other source. Never a logo service, a search result, Wikipedia or a screenshot.
+- **Types:** SVG (preferred), or PNG or WebP with transparency. JPEG, GIF, ICO, PDF and EPS are rejected.
+- **Size:** at most 2 MB.
+- **SVG safety (a security rule):**
+  - Parsed against an allow-list: `svg`, `g`, `defs`, `clipPath`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline` and `polygon`, with only their geometry, fill, stroke and transform attributes.
+  - Rejected for anything else: `script`, `style`, `image`, `text`, `use`, `foreignObject`, filters, masks, patterns, gradients and animation.
+  - Rejected for any `on*` attribute, and for any `href` or `url()` that points outside the file.
+  - Rendered by a renderer that never runs scripts or fetches.
+- **Raster quality:** the trimmed mark is at least 3× its display size on both sides, so the output is never enlarged.
+- **Kept with each logo:**
+  - the original file, unchanged;
+  - its source URL and the date it was fetched;
+  - each processing step that was applied.
+
+**Reject rules.** Any one of these means no logo, with the reason recorded:
+1. The file type, size or SVG content breaks a rule under Files.
+2. A raster has an opaque pixel in any of its four corners (a background, not transparency).
+3. The trimmed mark is smaller than 3× its display size.
+4. The trimmed mark is wider than 6:1, or more than 1.6 times taller than wide.
+5. The ink covers less than 15% or more than 85% of the trimmed area: a hairline, or a solid badge or app icon.
+6. The thinnest part of the mark is under 1.5px at display size (under 4.5px in the 3× mask).
+7. The one-ink version is empty, for example a white logo made for dark backgrounds.
+
+**Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original from its source beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
 
 ## Accessibility
 
