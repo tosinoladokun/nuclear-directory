@@ -98,6 +98,32 @@ class HomeTest < ActionDispatch::IntegrationTest
     get companies_path
 
     assert_select "header.nd-sitebar .nd-searchbox[data-controller=instant-search] input#search-compact"
+    assert_select "[data-instant-search-target=browse]", count: 0, message: "Browse is the home page's only"
+  end
+
+  test "the empty home search box has Browse: each category with companies, with its count, Plants and sites last (#909)" do
+    cite!(plant("Plant Vogtle", facility_type: "power_reactor", status: "operating"))
+    get root_path
+
+    assert_select "#search-large-results .nd-browse[data-instant-search-target=browse][hidden]" do
+      assert_select ".nd-label", "Browse"
+      rows = css_select("a.nd-browse__row")
+      assert_equal [ "Reactor developers", "Power buyers", "Plants and sites" ], rows.map { |row| row.at_css("b").text }
+      assert_equal %w[4 1 1], rows.map { |row| row.at_css(".nd-browse__count").text }
+      assert_equal [ "/companies?category=reactor-developers", "/companies?category=power-buyers", "/companies?category=plants" ], rows.map { |row| row["href"] }, "the cards' own links"
+      assert_equal "Reactor developers, 4 companies", rows.first["aria-label"]
+      assert_equal "Plants and sites, 1 plant or site", rows.last["aria-label"]
+    end
+  end
+
+  test "the site icon sits beside the wordmark, decorative, and draws in only without reduced motion (#909)" do
+    get root_path
+
+    assert_select "h1.nd-home__wordmark > svg.nd-siteicon[aria-hidden=true] + svg.nd-wordmark__svg"
+    assert_select "svg.nd-siteicon ellipse.nd-siteicon__orbit[pathLength='1']", 2
+    css = Rails.root.join("app/assets/tailwind/design_system/components.css").read
+    assert_match(/@media \(prefers-reduced-motion: no-preference\) \{\s*\.nd-siteicon__orbit \{[^}]*animation: nd-siteicon-draw 2\.25s ease-out both/, css,
+      "the drawing runs only when motion is welcome; otherwise the orbits are simply there")
   end
 
   test "controllers are loaded on demand: no modulepreload of every controller on each page" do

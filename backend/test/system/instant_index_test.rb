@@ -280,7 +280,7 @@ class InstantIndexTest < ApplicationSystemTestCase
         field.send_keys([ :control, "a" ], :backspace)
         field.send_keys(query)
         assert_selector ".nd-instant__row b[title]", wait: 15
-        name = page.evaluate_script("(() => { const b = document.querySelector('.nd-instant__text > b'); return [b.textContent, b.dataset.fit || '', b.getBoundingClientRect().height, getComputedStyle(b).fontSize] })()")
+        name = page.evaluate_script("(() => { const b = document.querySelector('turbo-frame .nd-instant__text > b'); return [b.textContent, b.dataset.fit || '', b.getBoundingClientRect().height, getComputedStyle(b).fontSize] })()")
         assert_equal shown, name[0], "at #{width}: the short name stands in for a very long one when there is one" if query == "carolina"
         assert_equal "small", name[1], "at #{width}: a long name drops to 13px"
         assert_equal "13px", name[3], "at #{width}: #{query}: the 13px rule wins over the utility's 15px"
