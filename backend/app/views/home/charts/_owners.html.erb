@@ -1,4 +1,6 @@
-<% subtitle = [ "Each owner's share.", ("#{chart_name(data[:operator])} runs it." if data[:operator]) ].compact.join(" ") %>
+<%# The operator by its short name, its full name in a title as everywhere in the charts. %>
+<% operator = data[:operator] && safe_join([ tag.span(chart_name(data[:operator]), title: data[:operator][:name]), " runs it." ]) %>
+<% subtitle = safe_join([ "Each owner's share.", operator ].compact, " ") %>
 <%# On phones the title takes the plant's short name when the full one wouldn't fit on one line, else "this plant". %>
 <% short_plant = [ data[:plant], data[:short] ].compact.find { |name| "Who owns #{name}".length <= HomeHelper::PHONE_TITLE_FITS } %>
 <%= render layout: "home/chart_card", locals: { key: "owners", size:, url: plant_path(slug: data[:slug]),

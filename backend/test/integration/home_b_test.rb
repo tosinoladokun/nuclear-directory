@@ -63,6 +63,7 @@ class HomeBTest < ActionDispatch::IntegrationTest
     card = Nokogiri::HTML.fragment(html)
 
     assert_equal "Each owner's share. Southern Nuclear runs it.", card.at_css(".nd-chart__sub").text
+    assert_equal "Southern Nuclear Operating Co., Inc.", card.at_css(".nd-chart__sub span[title]")["title"], "the operator's full name on hover (#928 review)"
     assert_equal [ "Oglethorpe Power", "Georgia Power" ], card.css(".nd-chart__barname").map(&:text), "largest share first"
     assert_equal "Georgia Power Company", card.css(".nd-chart__barname").last["title"]
   end
