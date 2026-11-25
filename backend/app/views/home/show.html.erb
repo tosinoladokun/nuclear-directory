@@ -5,7 +5,7 @@
   <meta name="description" content="Search the US nuclear industry: who makes the fuel, builds the reactors, runs the plants, buys the power and funds it.">
   <link rel="canonical" href="<%= root_url %>">
   <%# The A/B test's version (#909), added to the page view and the home events by analytics.js. %>
-  <meta name="home-variant" content="<%= home_variant.name %>"<% if home_variant.forced? %> data-forced="true"<% end %>>
+  <meta name="home-variant" content="<%= home_variant.name %>"<% if home_variant.forced? %> data-forced="true"<% end %><% if @home_fallback %> data-fallback="true"<% end %>>
 <% end %>
 <%# The home page has the one-line footer: the wordmark above is enough, and the cards already list the directory. %>
 <main class="nd-home">
@@ -16,10 +16,14 @@
     <%= render "shared/search_box", size: :large, browse: HomeCategories.browse %>
   </div>
 
-  <div class="nd-home__cats">
-    <%# Built once per data version (PM, 2 Nov: speed). %>
-    <% cache [ "home-cards/v2", DataVersion.current ] do %>
-      <%= render "shared/category_cards", cards: HomeCategories.cards %>
-    <% end %>
-  </div>
+  <% if home_variant.b? && !@home_fallback %>
+    <%= render "home/b", charts: @charts %>
+  <% else %>
+    <div class="nd-home__cats">
+      <%# Built once per data version (PM, 2 Nov: speed). %>
+      <% cache [ "home-cards/v2", DataVersion.current ] do %>
+        <%= render "shared/category_cards", cards: HomeCategories.cards %>
+      <% end %>
+    </div>
+  <% end %>
 </main>

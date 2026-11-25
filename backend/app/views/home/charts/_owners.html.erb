@@ -1,0 +1,19 @@
+<% subtitle = [ "Each owner's share.", ("#{data[:operator][:name]} runs it." if data[:operator]) ].compact.join(" ") %>
+<%# On phones the title takes the plant's short name when the full one wouldn't fit on one line, else "this plant". %>
+<% short_plant = [ data[:plant], data[:short] ].compact.find { |name| "Who owns #{name}".length <= HomeHelper::PHONE_TITLE_FITS } %>
+<%= render layout: "home/chart_card", locals: { key: "owners", size:, url: plant_path(slug: data[:slug]),
+      title: "Who owns #{data[:plant]}", short_title: "Who owns #{short_plant || "this plant"}", subtitle:,
+      sources: chart_sources(data[:sources], limit: size == :large ? 3 : 2), link: data[:plant] } do %>
+  <span class="nd-chart__stack" aria-hidden="true">
+    <% data[:owners].each_with_index do |row, i| %><span class="nd-chart__share nd-chart__share--<%= [ i, 3 ].min %>" style="--w: <%= row[:pct] %>%"></span><% end %>
+  </span>
+  <ul class="nd-chart__owners">
+    <% data[:owners].each_with_index do |row, i| %>
+      <li class="nd-chart__owner">
+        <span class="nd-chart__swatch nd-chart__share--<%= [ i, 3 ].min %>" aria-hidden="true"></span>
+        <span class="nd-chart__barname type-small" title="<%= row[:name] %>"><%= row[:short].presence && row[:name].length > 22 ? row[:short] : row[:name] %></span>
+        <span class="nd-chart__count type-data"><%= chart_pct(row[:pct]) %></span>
+      </li>
+    <% end %>
+  </ul>
+<% end %>

@@ -70,10 +70,14 @@ export function outboundProperties(anchor, here = window.location) {
 // - home_search_started: the first keystroke in the search box, once per home view.
 // - home_category_click: a click on a category, a card title in A or a Browse row, with the category's slug and
 //   where it was clicked.
+// - home_chart_click (with the chart's name) and home_download_click: B's chart cards and its "Download the data" link.
 export function homeVariantProperties(doc = document) {
   const tag = doc.querySelector('meta[name="home-variant"]')
   if (!tag?.content) return null
-  return tag.dataset.forced === "true" ? { home_variant: tag.content, home_variant_forced: true } : { home_variant: tag.content }
+  const properties = { home_variant: tag.content }
+  if (tag.dataset.forced === "true") properties.home_variant_forced = true
+  if (tag.dataset.fallback === "true") properties.home_fallback = true // B drawn as A: no whole set of charts
+  return properties
 }
 
 export function categoryClickProperties(anchor, here = window.location) {
@@ -118,6 +122,10 @@ function trackHome(event) {
     return
   }
   if (event.type === "auxclick" && event.button !== 1) return
+  // B's chart cards and its download link.
+  const chart = event.target.closest?.("a[data-home-chart]")
+  if (chart) return ready.capture("home_chart_click", { chart: chart.dataset.homeChart, ...variant }, { send_instantly: true })
+  if (event.target.closest?.("a[data-home-download]")) return ready.capture("home_download_click", variant, { send_instantly: true })
   const anchor = event.target.closest?.("a[data-home-click]")
   const properties = anchor && categoryClickProperties(anchor)
   if (!properties) return

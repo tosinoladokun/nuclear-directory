@@ -1,0 +1,17 @@
+<%# Horizontal bars: rows of { name:, short:, count: }, longest first. Locals: rows, unit (singular, plural), bucket (the
+    category whose accent fills the bars, or nil to use each row's own key), labels: true when the names are ours
+    (categories): their column fits the longest, since a label we write never takes an ellipsis. %>
+<% max = rows.map { |row| row[:count] }.max %>
+<ol class="nd-chart__bars<% if local_assigns[:labels] %> nd-chart__bars--labels<% end %>">
+  <% rows.each do |row| %>
+    <% category = local_assigns[:bucket] || Category.find(row[:key]) %>
+    <li class="nd-chart__barrow <%= bucket_class(category) if category %>">
+      <%# The full name; a short one, where there is one, takes over on phones for a name past 22 characters and below
+          360px for every name (Design, #920). %>
+      <% short = row[:short].presence if row[:short].presence != row[:name] %>
+      <span class="nd-chart__barname type-small" title="<%= row[:name] %>"<% if short && row[:name].length > 22 %> data-long<% end %>><% if short %><span class="nd-chart__nfull"><%= row[:name] %></span><span class="nd-chart__nshort"><%= short %></span><% else %><%= row[:name] %><% end %></span>
+      <span class="nd-chart__bar" style="--w: <%= chart_bar_width(row[:count], max) %>%" aria-hidden="true"></span>
+      <span class="nd-chart__count type-data"><%= row[:count] %><span class="sr-only"> <%= row[:count] == 1 ? unit.first : unit.last %></span></span>
+    </li>
+  <% end %>
+</ol>

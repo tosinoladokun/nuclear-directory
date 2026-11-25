@@ -1,0 +1,5 @@
+<%= render layout: "home/chart_card", locals: { key: "operators", size:, url: directory_url_for(category: Category.find("utilities")),
+      title: "Who runs the most US nuclear plants", short_title: "Who runs the most plants", subtitle: "Plants and sites each company operates.",
+      sources: chart_sources(data[:sources], limit: size == :large ? 3 : 2), link: "Plant owners and operators" } do %>
+  <%= render "home/charts/bars", rows: data[:rows], unit: %w[plant plants], bucket: Category.find("utilities") %>
+<% end %>

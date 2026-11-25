@@ -1,0 +1,5 @@
+<%= render layout: "home/chart_card", locals: { key: "categories", size:, url: directory_url_for,
+      title: "What the companies do", subtitle: "#{number_with_delimiter(data[:total])} companies by category. Some are in more than one.",
+      sources: "Source: Nuclear Directory", link: "All companies" } do %>
+  <%= render "home/charts/bars", rows: data[:rows], unit: %w[company companies], labels: true %>
+<% end %>
