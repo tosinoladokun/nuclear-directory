@@ -40,7 +40,11 @@ class SeedsTest < ActiveSupport::TestCase
       plain = (items.reject { |item| item["site"].present? }.map { |item| key.(item["name"]) } + @plants.map { |plant| key.(plant["name"]) }).uniq
       units.size + sites.size + plain.count { |name| !sites.include?(name) && units.none? { |unit, _| unit == name } }
     end
-    def facility_aliases = @plants.sum { |plant| Array(plant["other_names"]).size }
+    # An other name that normalizes to the plant's own name (only case or
+    # punctuation differs, e.g. "James A Fitzpatrick") isn't stored as an alias.
+    def facility_aliases
+      @plants.sum { |plant| Array(plant["other_names"]).count { |name| FacilityAlias.normalize(name) != FacilityAlias.normalize(plant["name"]) } }
+    end
 
     # [verified, pending]: a link stated pending in any file waits.
     def plant_links
@@ -96,6 +100,13 @@ class SeedsTest < ActiveSupport::TestCase
     expected.instance_variable_set(:@plants, [ { "name" => "Indian Point" } ])
 
     assert_equal 4, expected.facilities, "Callaway site and unit; Indian Point and its unit 2, named plainly too"
+  end
+
+  test "an other name that only changes case or punctuation isn't counted as an alias" do
+    expected = Expected.new
+    expected.instance_variable_set(:@plants, [ { "name" => "James A. FitzPatrick", "other_names" => [ "James A Fitzpatrick", "FitzPatrick Nuclear Power Plant" ] } ])
+
+    assert_equal 1, expected.facility_aliases
   end
 
   test "the expected counts are read from the seed files, and aren't empty" do
