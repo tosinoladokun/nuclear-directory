@@ -504,12 +504,11 @@
   .nd-chartmap { display: block; width: 100%; height: auto; }
   .nd-chartmap__land { fill: var(--nd-paper-sunken); stroke: var(--nd-control); stroke-width: 1; }
   .nd-chartmap__borders { fill: none; stroke: var(--nd-rule); stroke-width: 1; }
-  .nd-chartmap__dot { fill: var(--nd-cat-utilities); stroke: var(--nd-paper-raised); stroke-width: 2; cursor: default; outline: none; transition: r 120ms ease-out; }
-  /* #940: a dot under the pointer, in focus or tapped grows (r 7 to 9) and darkens; its label sits just above it. */
-  .nd-chartmap__dot:hover, .nd-chartmap__dot:focus-visible, .nd-chartmap__dot.is-active { r: 9px; fill: color-mix(in oklab, var(--nd-cat-utilities) 70%, var(--nd-ink)); }
-  .nd-chartmap__dot:focus-visible { stroke: var(--nd-ink); }
+  .nd-chartmap__dot { fill: var(--nd-cat-utilities); stroke: var(--nd-paper-raised); stroke-width: 2; cursor: default; transition: r 120ms ease-out; }
+  /* #940: a dot under the pointer or tapped grows (r 7 to 9) and darkens; its label sits just above it. */
+  .nd-chartmap__dot:hover, .nd-chartmap__dot.is-active { r: 9px; fill: color-mix(in oklab, var(--nd-cat-utilities) 70%, var(--nd-ink)); }
   .nd-chartmap-wrap { position: relative; }
-  .nd-chartmap__label { position: absolute; left: 0; top: 0; z-index: 1; display: flex; flex-direction: column; max-width: 100%; padding: 4px 8px; background: var(--nd-paper-raised); border: 1px solid var(--nd-rule); border-radius: var(--nd-radius-md); white-space: nowrap; pointer-events: none; }
+  .nd-chartmap__label { position: absolute; left: 0; top: 0; z-index: 1; display: flex; flex-direction: column; max-width: 100%; padding: 4px 8px; background: var(--nd-paper-raised); border: 1px solid var(--nd-rule); border-radius: var(--nd-radius-md); white-space: nowrap; }
   .nd-chartmap__label[hidden] { display: none; }
   .nd-chartmap__name { color: var(--nd-ink); overflow: hidden; text-overflow: ellipsis; }
   .nd-chartmap__state { color: var(--nd-ink-muted); overflow: hidden; text-overflow: ellipsis; }

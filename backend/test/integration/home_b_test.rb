@@ -23,8 +23,10 @@ class HomeBTest < ActionDispatch::IntegrationTest
       assert_select "h2 .nd-chart__tfull", "Where are the 3 operating US nuclear plants?"
       assert_select "h2 .nd-chart__tshort", "Where are US plants?"
       assert_select "svg.nd-chartmap[aria-label='Map of the 3 operating US nuclear plants'] circle.nd-chartmap__dot", 3
-      # #940: each dot is focusable and named by its plant and state; the label is filled in on hover, focus or tap.
-      assert_select "circle.nd-chartmap__dot[tabindex='0'][aria-label='Byron, Illinois'][data-name='Byron'][data-state='Illinois']"
+      # #940: each dot carries its plant and state for the label, filled in on hover or tap.
+      assert_select "circle.nd-chartmap__dot[data-name='Byron'][data-state='Illinois']"
+      assert_select "svg.nd-chartmap[role=img] circle.nd-chartmap__dot[tabindex], circle.nd-chartmap__dot[aria-label]", count: 0,
+        message: "the card is one link: nothing inside it is focusable (Design, #941)"
       assert_select "circle.nd-chartmap__dot title", count: 0, message: "no browser tooltip on top of the label"
       assert_select ".nd-chartmap-wrap[data-controller=home-map] .nd-chartmap__label[hidden][aria-hidden=true]"
     end
