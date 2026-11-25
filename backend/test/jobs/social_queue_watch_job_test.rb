@@ -56,6 +56,16 @@ class SocialQueueWatchJobTest < ActiveSupport::TestCase
     assert_includes body, "Row #{unknown.id} (linkedin, acme-fission) is unknown (it may have gone out: check the account)."
   end
 
+  test "an approved row that a check blocked is named with its reason; a blocked agent draft is not" do
+    blocked = post(status: "blocked", approved_sha256: "a" * 64, send_on: MONDAY.to_date, reason: "its checks no longer pass: x")
+    post(platform: "linkedin", status: "blocked", reason: "the agent's own draft")
+    run_job
+
+    body = @alerts.raised.sole[2]
+    assert_includes body, "Row #{blocked.id} (x, acme-fission) is an approved post that a check blocked: its checks no longer pass: x"
+    assert_equal 1, body.scan("Row ").size
+  end
+
   test "a queued row more than 30 minutes past its Buffer due time is named; a recent one is not" do
     late = post(status: "queued", posted_at: MONDAY - 40.minutes, sent_on: MONDAY.to_date)
     post(platform: "linkedin", status: "queued", posted_at: MONDAY - 10.minutes, sent_on: MONDAY.to_date)

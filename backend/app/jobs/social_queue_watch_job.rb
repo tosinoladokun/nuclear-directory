@@ -1,6 +1,6 @@
 # Weekday mornings (config/recurring.yml), after the 8:30 social job (#912): if an approved post didn't go out, say so the same
 # morning through Autopilot::Alert (one email to hello@ and a Sentry error, again only after 20 h; "back to normal" when it clears).
-# Reads only: ids and company slugs in the text, never a post's words. Nothing is sent or changed here.
+# Reads only: ids, company slugs and a check's reason in the text, never a post's words. Nothing is sent or changed here.
 class SocialQueueWatchJob < ApplicationJob
   queue_as :default
 
@@ -34,6 +34,9 @@ class SocialQueueWatchJob < ApplicationJob
     [].tap do |found|
       posts.waiting.where(send_on: ..day).order(:id).each do |post|
         found << "Row #{post.id} (#{post.platform}, #{slug(post)}) was due #{post.send_on} and is still a draft#{": #{stopped.join('; ')}" if stopped.any? && post.send_on == day}."
+      end
+      posts.where(status: "blocked").where.not(approved_sha256: nil).where("send_on <= :day OR sent_on = :day", day:).order(:id).each do |post|
+        found << "Row #{post.id} (#{post.platform}, #{slug(post)}) is an approved post that a check blocked: #{post.reason.to_s.truncate(120)}"
       end
       posts.where(sent_on: day, status: %w[failed unknown]).order(:id).each do |post|
         found << "Row #{post.id} (#{post.platform}, #{slug(post)}) is #{post.status}#{' (it may have gone out: check the account)' if post.status == 'unknown'}."
