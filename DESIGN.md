@@ -552,7 +552,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 **Files**
 - **Source:** the company's own website, brand page or press kit, with its URL recorded like any other source. Never a logo service, a search result, Wikipedia or a screenshot.
 - **Types:** SVG (preferred), or PNG or WebP with transparency. JPEG, GIF, ICO, PDF and EPS are rejected.
-- **Size:** at most 2 MB. A PNG or WebP is also limited to 25 million pixels (width × height), so a small file can't decode to gigabytes.
+- **Size:** at most 500 KB. A larger file is rejected with "The file is N KB, over the 500 KB limit. Find a smaller SVG or PNG." A PNG or WebP is also limited to 25 million pixels (width × height), so a small file can't decode to gigabytes.
 - **SVG safety (a security rule):**
   - Parsed against an allow-list: `svg`, `g`, `defs`, `clipPath`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline` and `polygon`, with only their geometry, fill, stroke and transform attributes.
   - Also allowed, because they draw nothing:
