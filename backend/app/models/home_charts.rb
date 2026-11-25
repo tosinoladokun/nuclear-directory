@@ -28,6 +28,8 @@ class HomeCharts
   CHARTS = %i[map bars columns split].freeze
   POOL = YAML.load_file(Rails.root.join("config/home_charts.yml")).map { |entry| Question.from(entry) }.freeze
   TOP = 8
+  # Map dots closer than this (in HomeMap's 600 by 370 box) are drawn as one.
+  SAME_SPOT = 1.0
 
   # Reactor sizes as Data Quality counted them (MW, net summer): under 600, then 600 to 899, and so on.
   SIZE_BANDS = [ [ 0, 600, "<600" ], [ 600, 900, "600–899" ], [ 900, 1100, "900–1,099" ], [ 1100, 1300, "1,100–1,299" ], [ 1300, nil, "1,300+" ] ].freeze
@@ -88,16 +90,23 @@ class HomeCharts
   # A chart's data, plain values only so the cache can hold it.
   def self.data(key)
     question = find(key) or raise ArgumentError, "no home chart #{key}"
-    Rails.cache.fetch([ "home-charts/v2", question.key, DataVersion.current ]) { new.public_send(question.key) }
+    Rails.cache.fetch([ "home-charts/v3", question.key, DataVersion.current ]) { new.public_send(question.key) }
   end
 
   # 1. Where are the operating US nuclear plants: each site with an operating power reactor, at its published
-  # coordinates. Every one must have them, or the map would leave plants out.
+  # coordinates. Every one must have them, or the map would leave plants out. Plants drawn on the same spot (within a
+  # pixel, as Hope Creek and Salem are) share one dot and one label (#940). A dot's state is the plant's own; a plant
+  # with none shows its name alone.
   def plant_map
-    plants = sites.order(:name).pluck(:name, :short_name, :latitude, :longitude)
+    plants = sites.order(:name).pluck(:name, :short_name, :state, :latitude, :longitude)
     return {} if plants.empty? || plants.any? { |*, lat, lon| lat.nil? || lon.nil? }
 
-    { count: plants.size, dots: plants.map { |name, short, lat, lon| x, y = HomeMap.point(lon, lat); { name: short.presence || name, x:, y: } } }
+    spots = plants.map { |name, short, state, lat, lon| [ HomeMap.point(lon, lat), short.presence || name, state.presence && state_name(state) ] }
+    groups = spots.each_with_object([]) do |spot, found|
+      group = found.find { |(x, y), *| Math.hypot(x - spot[0][0], y - spot[0][1]) <= SAME_SPOT }
+      group ? group << spot : found << [ spot[0], spot ]
+    end
+    { count: plants.size, dots: groups.map { |(x, y), *members| dot(x, y, members) } }
   end
 
   # 2. Which states have the most nuclear power: operating units' net summer capacity, summed by their site's state.
@@ -186,6 +195,13 @@ class HomeCharts
     def unit_rows(value, column)
       units.joins("INNER JOIN facilities sites ON sites.id = facilities.parent_id")
         .pluck(Arel.sql(value.is_a?(Symbol) ? "facilities.#{value}" : value), Arel.sql(column))
+    end
+
+    # One dot for the plants on one spot: "Hope Creek and Salem", "New Jersey".
+    def dot(x, y, members)
+      join = ->(words) { words.to_sentence(two_words_connector: " and ", last_word_connector: " and ") }
+      states = members.map(&:last)
+      { name: join[members.map { |_, name, _| name }.sort], state: (join[states.uniq] if states.all?), x:, y: }
     end
 
     def incomplete?(rows) = rows.empty? || rows.flatten.any?(&:blank?)

@@ -23,6 +23,10 @@ class HomeBTest < ActionDispatch::IntegrationTest
       assert_select "h2 .nd-chart__tfull", "Where are the 3 operating US nuclear plants?"
       assert_select "h2 .nd-chart__tshort", "Where are US plants?"
       assert_select "svg.nd-chartmap[aria-label='Map of the 3 operating US nuclear plants'] circle.nd-chartmap__dot", 3
+      # #940: each dot is focusable and named by its plant and state; the label is filled in on hover, focus or tap.
+      assert_select "circle.nd-chartmap__dot[tabindex='0'][aria-label='Byron, Illinois'][data-name='Byron'][data-state='Illinois']"
+      assert_select "circle.nd-chartmap__dot title", count: 0, message: "no browser tooltip on top of the label"
+      assert_select ".nd-chartmap-wrap[data-controller=home-map] .nd-chartmap__label[hidden][aria-hidden=true]"
     end
     assert_select "a.nd-chart--small[data-home-chart=reactor_sizes]" do
       assert_select "h2", "How big are US reactors?"

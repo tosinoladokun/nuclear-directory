@@ -66,6 +66,22 @@ class HomeChartsTest < ActiveSupport::TestCase
     assert_equal EIA.map(&:first).uniq.size, data[:count]
     assert_equal EIA.map(&:first).uniq.sort, data[:dots].map { |dot| dot[:name] }.sort
     assert_equal HomeMap.point(-89.2817, 42.0742), data[:dots].find { |dot| dot[:name] == "Byron" }.values_at(:x, :y)
+    assert_equal "Illinois", data[:dots].find { |dot| dot[:name] == "Byron" }[:state], "the full state name, from the plant's record (#940)"
+  end
+
+  test "1. plants on the same spot share one dot and one label; a plant's state is never guessed (#940)" do
+    build_eia
+    # Hope Creek and Salem, 400m apart: the same pixel on the map.
+    operating_plant("PSEG Salem Generating Station", state: "NJ", latitude: 39.4625, longitude: -75.5358).update_columns(short_name: "Salem")
+    operating_plant("PSEG Hope Creek Generating Station", state: "NJ", latitude: 39.4666, longitude: -75.5377).update_columns(short_name: "Hope Creek")
+    operating_plant("No State", state: nil, latitude: 45.0, longitude: -100.0)
+
+    data = charts.plant_map
+    assert_equal EIA.map(&:first).uniq.size + 3, data[:count], "the title still counts every plant"
+    shared = data[:dots].find { |dot| dot[:name] == "Hope Creek and Salem" }
+    assert_equal "New Jersey", shared[:state]
+    assert_equal 1, data[:dots].count { |dot| dot[:name].include?("Salem") }
+    assert_nil data[:dots].find { |dot| dot[:name] == "No State" }[:state]
   end
 
   test "1. the map sits out when a plant has no coordinates, rather than leave it off" do
