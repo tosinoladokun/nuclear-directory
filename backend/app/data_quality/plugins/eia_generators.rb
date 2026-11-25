@@ -11,7 +11,10 @@
 #
 # Crawl reads EIA's 860M page to find the newest monthly file, fetches it,
 # and stores just its nuclear rows as CSV (one source per monthly file, so
-# evidence points at the exact file). Extract turns each row into a facility
+# evidence points at the exact file). The Planned and Retired sheets' nuclear
+# rows are stored too, with a last column naming the sheet (#916), so Data
+# Quality's quotes from them can be checked; they create, rename and enrich
+# nothing. Only Operating rows are extracted. Extract turns each row into a facility
 # candidate whose payload carries "identify" (how to find the unit) and the
 # values to set. The match stage finds the unit by state, name and unit
 # number; see app/data_quality/README.md.
@@ -51,10 +54,15 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
 
     # The shared Fetcher keeps every fetch, redirects included, on public https
     # addresses of the starting host (#114).
+    skipped = {}
     result = DataQuality::Snapshot.take(source, fetcher: @fetcher, binary: true) do |bytes|
-      Workbook.to_csv(Workbook.nuclear_generators(bytes))
+      rows, skipped = Workbook.nuclear_rows(bytes)
+      Workbook.to_csv(rows)
     end
-    { "index" => index_read, "file" => url, "snapshot" => result.to_s, "generators" => [ CSV.parse(source.reload.content_text.to_s).size - 1, 0 ].max,
+    by_sheet = stored_rows(source.reload).group_by { |row| sheet_of(row) }.transform_values(&:size)
+    { "index" => index_read, "file" => url, "snapshot" => result.to_s, "generators" => by_sheet.fetch(Workbook::SHEET, 0),
+      "planned" => by_sheet[Workbook::OTHER_SHEETS[0]], "retired" => by_sheet[Workbook::OTHER_SHEETS[1]],
+      "sheets_skipped" => skipped.presence,
       "superseded" => (supersede_older_files(source, run) if source.crawl_ok?),
       "operator_claims_withdrawn" => (withdrawn if withdrawn.positive?) }.compact
   rescue Workbook::Unreadable => error
@@ -66,20 +74,25 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
   # service…) is left blank rather than guessed.
   STATUSES = { "OP" => "operating" }.freeze
 
-  # The stored CSV keeps only nuclear rows of the Operating sheet and drops
-  # the Technology column, so the verifier is told what every row is.
+  # The stored CSV keeps only nuclear rows and drops the Technology column,
+  # so the verifier is told what every row is.
   def source_facts(source)
     return unless source.source_kind == source_kind
 
-    "This is the Operating sheet of EIA's monthly generator inventory (Form EIA-860M), kept to " \
+    "These are rows of EIA's monthly generator inventory (Form EIA-860M), kept to " \
       "generators whose technology is Nuclear. Every row is a nuclear power reactor (plant type: " \
       "power reactor) at a plant in the US (country code US). Columns, in order: " \
-      "#{Workbook::COLUMNS.values.join(', ')}. Status is EIA's status for the unit, e.g. " \
-      "\"(OP) Operating\". Entity Name is the entity that reports the generator to EIA."
+      "#{Workbook::COLUMNS.values.join(', ')}, Sheet. Sheet names the workbook sheet the row is from: " \
+      "Operating, Planned or Retired; a row with no Sheet is from the Operating sheet. Status is EIA's " \
+      "status for the unit, e.g. \"(OP) Operating\". Entity Name is the entity that reports the generator to EIA."
   end
 
+  # Only the Operating sheet's rows (#916: Planned and Retired rows are kept
+  # for quotes, never extracted). A file stored before #916 has no sheet
+  # column: all its rows are Operating.
   def extract(source, _run)
-    rows = CSV.parse(source.content_text.to_s, headers: true).reject { |row| row["state"].blank? || row["plant_name"].blank? }
+    rows = stored_rows(source).select { |row| sheet_of(row) == Workbook::SHEET }
+      .reject { |row| row["state"].blank? || row["plant_name"].blank? }
     rows.map { |row| enrichment(row) } + rows.group_by { |row| row["eia_plant_id"] }.flat_map { |_, plant| plant_candidates(plant) }
   end
 
@@ -99,6 +112,14 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
   end
 
   private
+    def stored_rows(source) = CSV.parse(source.content_text.to_s, headers: true)
+
+    def sheet_of(row) = row[Workbook::SHEET_COLUMN].presence || Workbook::SHEET
+
+    # A row's quote is its EIA columns, without the sheet column: the same
+    # quote as before #916, and still a part of its stored line.
+    def quote_of(row) = row.fields.first(Workbook::COLUMNS.size).to_csv.chomp
+
     # A generator's capacity and place, for its NRC unit (#61).
     def enrichment(row)
       {
@@ -113,7 +134,7 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
           "latitude" => number(row["latitude"], 6),
           "longitude" => number(row["longitude"], 6)
         }.compact,
-        quote: row.to_csv.chomp
+        quote: quote_of(row)
       }
     end
 
@@ -123,7 +144,7 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
     # Nuclear), so NRC's list stays the only source of operators (#227).
     def plant_candidates(rows)
       row = rows.first
-      quote = row.to_csv.chomp
+      quote = quote_of(row)
       site = { "name" => row["plant_name"], "eia_plant_id" => row["eia_plant_id"] }
       [ {
         kind: "facility",
@@ -176,7 +197,8 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
       # One transaction: a run stopped part-way leaves the candidates
       # unwithdrawn, so the next run retries their retirements too.
       Candidate.transaction do
-        waiting = Candidate.where(source_id: older.map(&:id))
+        # Data Quality's site fields (#916) cite their own row of the file they quote; a newer month doesn't withdraw them.
+        waiting = Candidate.where(source_id: older.map(&:id)).where.not(id: DqAction.where(action: "propose_site_fields").select(:candidate_id))
         waiting.where(status: "needs_review").where.not("notes LIKE ?", "%A newer EIA file exists%")
           .update_all([ "notes = COALESCE(notes || '. ', '') || ?, updated_at = ?", "A newer EIA file exists: #{source.title}", Time.current ])
         withdrawn = waiting.where(status: %w[new matched]).to_a
@@ -197,7 +219,8 @@ class DataQuality::Plugins::EiaGenerators < DataQuality::Plugin
     # one supersession, a later month's candidate attaches without proposing.
     # source: nil when withdrawing operator claims (no file to compare).
     def retire_orphans(candidates, source, run)
-      plants = CSV.parse(source&.content_text.to_s, headers: true).map { |row| row["eia_plant_id"] }.to_set
+      # Only the Operating sheet counts (#916): a plant now on the Retired sheet isn't still listed.
+      plants = (source ? stored_rows(source) : []).select { |row| sheet_of(row) == Workbook::SHEET }.map { |row| row["eia_plant_id"] }.to_set
       directory = DataQuality::DirectoryClient.new
       candidates.uniq { |c| [ c.subject_type, c.subject_id ] }.each do |candidate|
         next if kept?(candidate, plants)

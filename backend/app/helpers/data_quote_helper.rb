@@ -32,11 +32,13 @@ module DataQuoteHelper
 
     def eia_fields(quote)
       cells = CSV.parse_line(quote) rescue nil
-      return unless cells&.size == 11
+      # A whole stored row ends with its sheet (#916): "Retired sheet".
+      return unless [ 11, 12 ].include?(cells&.size)
 
-      plant_id, plant, generator, state, county, summer, nameplate, status, _lat, _lng, entity = cells.map { |cell| cell.to_s.strip }
+      plant_id, plant, generator, state, county, summer, nameplate, status, _lat, _lng, entity, sheet = cells.map { |cell| cell.to_s.strip }
       [ "#{plant}, generator #{generator}", "EIA plant #{plant_id}", [ county.presence && "#{county} County", state ].compact.join(", "),
-        mw(summer, "net summer"), mw(nameplate, "nameplate"), status.sub(/\A\([A-Z]+\)\s*/, ""), entity ].compact_blank
+        mw(summer, "net summer"), mw(nameplate, "nameplate"), status.sub(/\A\([A-Z]+\)\s*/, ""), entity,
+        ("#{sheet} sheet" if sheet.present?) ].compact_blank
     end
 
     # "1224.9000000000001" => "1,224.9 MW nameplate"; display only.

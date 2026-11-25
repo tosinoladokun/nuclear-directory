@@ -115,6 +115,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # What this source, or an earlier edition of it, supported.
       history = Candidate.where(source_id: [ source.id, *plugin.earlier_editions(source) ])
       history = history.where(review_origin: nil).or(history.where.not(review_origin: "dropped"))
+      # Data Quality's site fields (#916) quote rows a read doesn't extract (EIA's Retired sheet): never "dropped".
+      history = history.where.not(id: DqAction.where(action: "propose_site_fields").select(:candidate_id))
       supported = history.where(status: %w[merged confirmed]).where.not(subject_id: nil).distinct.pluck(:subject_type, :subject_id)
       dropped = supported.reject { |pair| listed.include?(pair) }.select { |type, id| directory.published?(type:, id:) }
       return checked_dropped(source) if dropped.empty?
@@ -269,6 +271,13 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # another's by now, it goes to review, never to that company (#693).
       if found.is_a?(Found) && (proposed = DqAction.where(candidate:, action: "propose_fields").pick(:target_id)) && proposed != found.record.id
         found = Review.new("proposed for company ##{proposed}, but it matches #{found.record.name} (by #{found.by})")
+      end
+      # Data Quality's site fields (#916) are for the site it named, and only that site: any other
+      # match, or none (which would propose a new plant), goes to review.
+      if candidate.kind == "facility" && !found.is_a?(Review) && (site = DqAction.where(candidate:, action: "propose_site_fields").pick(:target_id)) &&
+          !(found.is_a?(Found) && found.record.id == site)
+        found = Review.new("proposed for site ##{site}, but " +
+          (found.is_a?(Found) ? "it matches #{found.record.name} (by #{found.by})" : "it doesn't match that site"))
       end
       case found
       when Review then review(candidate, found.reason)
