@@ -92,7 +92,7 @@ facilities:
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: Dresden 3 | 05000249 | DPR-25 | BWR | 25 miles SW of Joliet, IL | Constellation Energy Generation, LLC | 3
   confidence: 1.0
-- name: James A Fitzpatrick
+- name: James A. FitzPatrick
   type: owns
   source_url: https://www.nrc.gov/facilities-safety/operating-reactors/list-power-reactor-units
   quote: FitzPatrick | 05000333 | DPR-59 | BWR | 6 miles NE of Oswego, NY | Constellation Energy Generation, LLC | 1

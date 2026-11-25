@@ -395,6 +395,23 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal old.id, Directory::Lookup.facility(name: "Acme Plant (Oak Ridge, TN)").id
   end
 
+  test "a verified site whose name only changes case and punctuation is renamed in place" do
+    old = Facility.create!(name: "Acme A Plantworks", verification_status: "verified", verified_by: "human:tosin")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme A. PlantWorks", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme A. PlantWorks", "other_names" => [ "Acme A Plantworks" ] } ] }.to_yaml)
+
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+
+    assert_equal [ old.id ], Facility.where("LOWER(name) LIKE ?", "acme a%").pluck(:id), "renamed, not created again"
+    assert_equal [ "Acme A. PlantWorks", "acme-a-plantworks", "verified" ], [ old.reload.name, old.slug, old.verification_status ]
+    assert_equal 1, old.facility_relationships.count
+    # The old spelling normalizes to the new name, so FactWriter doesn't keep
+    # it as an alias (a plant's own name isn't stored as one).
+    assert_empty old.aliases
+    assert_equal old.id, Directory::Lookup.facility(name: "acme a. plantworks").id
+  end
+
   test "a plant's EIA plant ID is loaded, so EIA's crawl finds the seed site (#229)" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
     File.write(facilities_file, { "facilities" => [ { "name" => "Acme Plant", "eia_plant_id" => "649" } ] }.to_yaml)
