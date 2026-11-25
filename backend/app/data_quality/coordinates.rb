@@ -5,9 +5,11 @@
 # Two ways a source may write it:
 # - A decimal, as proposed: the same digits, or more digits that round to it
 #   (41.7059934 states 41.705993), with the same sign. A minus sign or the
-#   hemisphere letter (110.5603 W) gives the sign; neither means positive.
+#   hemisphere (110.5603 W, or the word: "west longitude") gives the sign;
+#   neither means positive. A minus with W or S agrees (-103.947° W).
 # - Degrees, minutes and seconds (37°32'10.49" N) or degrees and decimal
-#   minutes (37°32.175' N): converted, and the proposed value must be within
+#   minutes (37°32.175' N), also in words with commas ("42 degrees, 8.06
+#   minutes North latitude"): converted, and the proposed value must be within
 #   the source's own precision (half its last digit) plus the proposal's
 #   rounding. A hemisphere letter or minus sign must agree; with neither,
 #   the degrees are compared without a sign.
@@ -15,14 +17,16 @@
 module DataQuality::Coordinates
   HEMISPHERES = { "latitude" => { "N" => 1, "S" => -1 }, "longitude" => { "E" => 1, "W" => -1 } }.freeze
   MINUS = "[-−]"
-  HEMI = "[NSEW](?![A-Za-z])"
-  PRE = "(?:(?<![A-Za-z])(?<pre>[NSEW])\\s*)?"
+  # A hemisphere: its letter on its own, or its word (DQ: "North latitude", "west longitude").
+  HEMI = "(?<![A-Za-z])(?:[NSEW]|(?i:north|south|east|west))(?![A-Za-z])"
+  PRE = "(?:(?<pre>#{HEMI})\\s*)?"
   POST = "\\s*°?\\s*(?<post>#{HEMI})?"
   # A number on its own: not the tail of a longer one, and a full stop after it ends a sentence.
   DECIMAL = /#{PRE}(?<!\d)(?<!\d\.)(?<sign>#{MINUS})?(?<number>\d{1,3}\.\d+)(?!\.?\d)#{POST}/
-  DEGREE = "(?:°|º|˚|\\s*deg(?:rees)?\\.?)"
-  MINUTE = "(?:'|′|’|‘|\\s*min\\.?)"
-  SECOND = "(?:\"|″|”|“|''|′′|’’|\\s*sec\\.?)"
+  # Each mark or word may be followed by a comma ("42 degrees, 8.06 minutes").
+  DEGREE = "(?:°|º|˚|\\s*deg(?:rees?)?\\.?),?"
+  MINUTE = "(?:'|′|’|‘|\\s*min(?:utes?)?\\.?),?"
+  SECOND = "(?:\"|″|”|“|''|′′|’’|\\s*sec(?:onds?)?\\.?),?"
   DMS = /#{PRE}(?<!\d)(?<!\d\.)(?<sign>#{MINUS})?(?<deg>\d{1,3})\s*#{DEGREE}\s*(?<min>\d{1,2}(?:\.\d+)?)\s*#{MINUTE}\s*(?:(?<sec>\d{1,2}(?:\.\d+)?)\s*#{SECOND})?\s*(?<post>#{HEMI})?/
 
   # value: the proposed decimal, as a string ("-110.5603"). axis: "latitude" or "longitude".
@@ -59,15 +63,17 @@ module DataQuality::Coordinates
     end
   end
 
-  # +1 or -1 from a minus sign or a hemisphere letter of this axis; unsigned when it has neither; nil when a
-  # letter names the other axis, or two signs disagree.
+  # +1 or -1 from a minus sign or a hemisphere (letter or word) of this axis; unsigned when it has neither; nil
+  # when it names the other axis, or a minus disagrees with it (a minus with N or E; with S or W it agrees).
   def self.sign_of(match, axis, unsigned: 1)
-    letters = [ match[:pre], match[:post] ].compact
+    letters = [ match[:pre], match[:post] ].compact.map { |hemisphere| hemisphere[0].upcase }
     return if letters.size > 1 || letters.any? { |letter| !HEMISPHERES.fetch(axis).key?(letter) }
 
     minus = match[:sign].present?
-    return if letters.any? && minus
-    return HEMISPHERES.fetch(axis).fetch(letters.first) if letters.any?
+    if letters.any?
+      sign = HEMISPHERES.fetch(axis).fetch(letters.first)
+      return minus && sign.positive? ? nil : sign
+    end
 
     minus ? -1 : unsigned
   end

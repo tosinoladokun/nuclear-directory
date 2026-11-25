@@ -27,8 +27,27 @@ class DataQuality::CoordinatesTest < ActiveSupport::TestCase
     assert stated?("41.705993 N", "41.705993")
     assert_not stated?("41.705993 S", "41.705993")
     assert_not stated?("110.5603 W", "-110.5603"), "W is a longitude, not a latitude"
-    assert_not stated?("-110.5603 W", "-110.5603", axis: "longitude"), "two signs"
+    assert stated?("-110.5603 W", "-110.5603", axis: "longitude"), "a minus and W agree"
+    assert_not stated?("-110.5603 E", "-110.5603", axis: "longitude"), "a minus and E disagree"
+    assert_not stated?("-41.705993 N", "-41.705993"), "a minus and N disagree"
+    assert stated?("110.5603 west longitude", "-110.5603", axis: "longitude"), "the hemisphere as a word"
+    assert_not stated?("41.705993 Northern", "-41.705993"), "a longer word isn't a hemisphere"
     assert_not stated?("41.705993 North", "-41.705993"), "a word isn't a letter, so it's unsigned: positive"
+  end
+
+  # Data Quality's real quotes (#916 review on #919).
+  test "real sources: degrees and minutes in words with commas, and a minus with W" do
+    lost_creek = "It is centered at approximately 42 degrees, 8.06 minutes North latitude and 107 degrees, 51.7 minutes West longitude."
+    assert stated?(lost_creek, "42.134333")
+    assert stated?(lost_creek, "-107.861667", axis: "longitude")
+    assert_not stated?(lost_creek, "-42.134333"), "North gives the sign"
+    shirley = "It is centered at approximately 42 degrees, 22 minutes north latitude and 106 degrees, 11 minutes west longitude"
+    assert stated?(shirley, "42.366667")
+    assert stated?(shirley, "-106.183333", axis: "longitude")
+    assert_not stated?(shirley, "106.183333", axis: "longitude"), "west gives the sign"
+    dewey = "Project Coordinates: Latitude 43.462° N, Longitude -103.947° W"
+    assert stated?(dewey, "43.462")
+    assert stated?(dewey, "-103.947", axis: "longitude")
   end
 
   test "degrees, minutes and seconds, or decimal minutes, within the source's precision" do
