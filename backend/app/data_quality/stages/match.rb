@@ -504,6 +504,8 @@ class DataQuality::Stages::Match < DataQuality::Stage
       site = directory.facility(id:)
       return Review.new("proposed for site ##{id}, which no longer exists") unless site
       return Review.new("proposed for #{site.name}, which was #{site.decision}") if site.closed?
+      # Moved under another site since (a merge, #554): a unit now, and units get no site fields (Copilot).
+      return Review.new("proposed for #{site.name}, which is a unit under site ##{site.parent_id} now") if site.parent_id
 
       holder = (plant = payload["eia_plant_id"].presence) && directory.facility(eia_plant_id: plant)
       return Review.new("proposed for #{site.name}, but EIA plant ID #{plant} is #{holder.name}'s (##{holder.id}) by now") if holder && holder.id != site.id

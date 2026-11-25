@@ -132,6 +132,15 @@ class Api::DqSiteFieldsTest < ActionDispatch::IntegrationTest
     assert_match "EIA plant ID 68635 is Other Plant's (##{taken.id}) by now", late.notes
     assert_nil closed.reload.subject_id
     assert_match "proposed for Gone Site, which was unpublished", closed.notes
+
+    # Moved under another site between the proposal and the match: a unit now, so review, never attached (Copilot).
+    moved = Facility.create!(name: "Moved Site", facility_type: "power_reactor", verification_status: "verified", verified_by: "human:tosin")
+    act(propose(coordinates, target: moved.id))
+    reparented = Candidate.find(results.sole["id"])
+    moved.update_columns(parent_id: @site.id)
+    match!
+    assert_nil reparented.reload.subject_id
+    assert_match "proposed for Moved Site, which is a unit under site ##{@site.id} now", reparented.notes
   end
 
   test "the claim carries only the site's name and the proposed fields, never its own docket or plant ID (DQ, 25 Nov)" do
