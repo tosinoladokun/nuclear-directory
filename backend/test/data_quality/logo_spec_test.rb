@@ -154,7 +154,7 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
     assert_rejected process("%PDF-1.7".b), /PDF isn't allowed/
     assert_rejected process("%!PS-Adobe-3.0 EPSF".b), /EPS isn't allowed/
     assert process(svg(DISC), "text/plain").ok?, "an SVG served as text is still an SVG"
-    assert_rejected process(svg(DISC + "<!-- #{'x' * (2 * 1024 * 1024)} -->")), /limit is 2 MB/
+    assert_rejected process(svg(DISC + "<!-- #{'x' * 500 * 1024} -->")), /over the 500 KB limit; find a smaller SVG or PNG/
     assert_rejected process("<svg xmlns='http://www.w3.org/2000/svg'><g>"), /well-formed/
   end
 end

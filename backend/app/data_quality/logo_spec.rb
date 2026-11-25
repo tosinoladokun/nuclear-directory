@@ -19,7 +19,9 @@
 # the buffer SVG loader is unblocked, right before it renders a cleaned copy.
 # PNG and WebP are read by their own loaders, never by sniffing.
 module DataQuality::LogoSpec
-  MAX_BYTES = 2 * 1024 * 1024
+  # Infra (25 Nov): the original is stored with the logo, so 500 KB at most
+  # (a fetch may still download up to 2 MB before it gets here).
+  MAX_BYTES = 500 * 1024
   # Not in the spec: a 2 MB PNG can decode to gigabytes on a 512 MB instance.
   MAX_PIXELS = 25_000_000
   # Infra (25 Nov): the stored mask is at most 50 KB.
@@ -78,7 +80,7 @@ module DataQuality::LogoSpec
     bytes = bytes.to_s.b
     type = sniff(bytes, content_type)
     source = { source_type: type, source_sha256: Digest::SHA256.hexdigest(bytes) }
-    raise Reject, "the file is #{bytes.bytesize / 1024} KB, and the limit is 2 MB" if bytes.bytesize > MAX_BYTES
+    raise Reject, "the file is #{bytes.bytesize / 1024} KB, over the 500 KB limit; find a smaller SVG or PNG" if bytes.bytesize > MAX_BYTES
 
     image = case type
     when "svg" then render_svg(bytes, steps)
