@@ -60,6 +60,7 @@ module DataQuality::Matching
   end
 
   def self.apply_one(row, directory, requeue = Set.new)
+    return propose_operator_change(row, directory, requeue) if row["action"].to_s == "propose_operator_change"
     return propose_site_fields(row, directory, requeue) if row["action"].to_s == "propose_site_fields"
     return propose_role(row, directory, requeue) if PROPOSALS.include?(row["action"].to_s)
 
@@ -338,6 +339,79 @@ module DataQuality::Matching
   end
 
   PROPOSALS = %w[propose_role propose_fields propose_link propose_site_fields].freeze
+
+  # propose_operator_change (#930): a plant's operator replaced, from a source that names the new one. Two link
+  # claims, each Tosin's to decide on its own (Review::OPERATOR_CHANGE): the current "from operates plant" link
+  # gets ended_on: since (a change on that link), and "to operates plant" is added with started_on: since.
+  #   { action: "propose_operator_change", target: plant or unit (id, slug or page address), from: company, to: company,
+  #     since: "2024-03-01", quote:, source_url:, reason:, request_key: (optional) }
+  # Recorded as two propose_link actions on the plant (no new action kind); each claim can be undone.
+  def self.propose_operator_change(row, directory, requeue)
+    reason, quote = row["reason"].to_s.squish, row["quote"].to_s.squish
+    fail_with = ->(why) { Row.new(id: nil, ok: false, error: why, created_ids: []) }
+    return fail_with.call("give a reason") if reason.blank?
+    return fail_with.call("keep the reason under #{MAX_REASON} characters") if reason.length > MAX_REASON
+    return fail_with.call("give the quote that names the new operator") if quote.blank?
+    since = (Date.iso8601(row["since"].to_s) rescue nil)
+    return fail_with.call("since is the date the new operator took over, like 2024-03-01") unless since
+    return fail_with.call("since can't be in the future") if since > Date.current
+    return fail_with.call("give from (the current operator) and to (the new one): an id or slug") if row["from"].blank? || row["to"].blank?
+
+    key = row["request_key"].presence&.to_s
+    if key && (done = DqAction.where(request_key: [ key, "#{key}:end" ]).order(:id).to_a).any?
+      return Row.new(id: done.first.candidate_id, ok: true, error: nil, created_ids: done.map(&:candidate_id))
+    end
+    if DqAction.where(action: "propose_link", created_at: Time.current.all_day).count + 2 > DAILY_ROLES
+      return fail_with.call("today's limit of #{DAILY_ROLES} is reached for propose_link; ask Backend")
+    end
+
+    Candidate.transaction do
+      found, error = target(row, directory, type: "Facility")
+      raise Abort, error if error
+
+      plant = directory.facility(id: found.id)
+      from, error = target({ "target" => row["from"] }, directory)
+      raise Abort, "from: #{error}" if error
+      to, error = target({ "target" => row["to"] }, directory)
+      raise Abort, "to: #{error}" if error
+      raise Abort, "from and to are the same company" if from.id == to.id
+
+      link = ->(company) { directory.existing_fact("facility_relationship", organization_id: company.id, facility_id: plant.id, relationship_type: "operates") }
+      old = link.call(from)
+      unless old && %w[verified pending].include?(old.verification_status) && old.values.to_h["ended_on"].blank?
+        raise Abort, "#{from.name} has no current operates link to #{plant.name}"
+      end
+      raise Abort, "#{to.name} already has an operates link to #{plant.name} (#{link.call(to).decision}); ask Backend" if link.call(to)
+
+      names = [ *directory.organization_names(to.id), directory.fact(type: "Organization", id: to.id)&.values.to_h["short_name"] ].compact_blank.uniq
+      unless names.any? { |name| quote.match?(/(?<![[:alnum:]])#{Regexp.escape(name)}(?![[:alnum:]])/i) }
+        raise Abort, "the quote must name the new operator (#{names.join(' or ')})"
+      end
+
+      source = DataQuality::Sources.find_or_create(url: row["source_url"].to_s)
+      raise Abort, "the source: #{source.errors.to_sentence}" unless source.ok?
+
+      ends = ->(company) { { "organization" => { "name" => company.name }, "facility" => { "name" => plant.name }, "relationship_type" => "operates" } }
+      note = "Data Quality proposed it: #{to.name} operates #{plant.name} from #{since.iso8601}, replacing #{from.name}. #{reason}"
+      added = Candidate.create!(source_id: source.ref.id, kind: "facility_relationship", status: "new", quote:, notes: note,
+        payload: ends.call(to).merge("started_on" => since.iso8601))
+      ended = Candidate.create!(source_id: source.ref.id, kind: "facility_relationship", status: "new", quote:, notes: note,
+        payload: ends.call(from).merge("ended_on" => since.iso8601))
+      [ [ added, key ], [ ended, key && "#{key}:end" ] ].each do |claim, request_key|
+        DqAction.create!(candidate: claim, action: "propose_link", target_type: "Facility", target_id: plant.id, reason:,
+          before: {}, created: [], by: BY, request_key:, after: stamp_of(claim))
+      end
+      requeue << source.ref.source_kind
+      Row.new(id: added.id, ok: true, error: nil, created_ids: [ added.id, ended.id ])
+    end
+  rescue Abort => e
+    Row.new(id: nil, ok: false, error: e.message, created_ids: [])
+  rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
+    won = key && DqAction.where(request_key: [ key, "#{key}:end" ]).order(:id).to_a
+    raise e if won.blank?
+
+    Row.new(id: won.first.candidate_id, ok: true, error: nil, created_ids: won.map(&:candidate_id))
+  end
 
   # propose_site_fields (#916): a published site's coordinates, as a pair, and its EIA plant ID, from a
   # source that states them, as one plant claim matched to that site and decided by Tosin (old → new):

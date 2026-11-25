@@ -354,6 +354,12 @@ class DataQuality::Stages::Match < DataQuality::Stage
         end
       end
 
+      # Data Quality's operator change (#930) is for the plant it named: another plant of that name goes to review.
+      if candidate.kind == "facility_relationship" &&
+          (plant = DqAction.where(candidate:, action: "propose_link", target_type: "Facility").pick(:target_id)) && attributes[:facility_id] != plant
+        return review(candidate, "proposed for plant ##{plant}, but facility matches plant ##{attributes[:facility_id]}")
+      end
+
       # A deal term's one end is its link: the company, for a round; for a
       # deal, the open link its ends and verb name (#256), which must exist
       # first. A term never creates or reopens its link.

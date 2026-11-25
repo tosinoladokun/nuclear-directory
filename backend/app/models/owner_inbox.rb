@@ -174,9 +174,10 @@ class OwnerInbox
 
   # Judged for a bulk Yes (#777): Data Quality's own approve, still current, never contradicted, its quote still in its
   # page. Yes to all and Approve selected take only these; anything else is decided on its own row.
+  # An operator change (#930) is never ticked: Tosin decides each of its two claims on its own.
   def self.judged?(candidate)
     candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate) &&
-      !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate)
+      !DataQuality::Review.contradicted?(candidate) && quote_in_source?(candidate) && !DataQuality::Review.operator_change?(candidate)
   end
 
   def self.quote_in_source?(candidate)
