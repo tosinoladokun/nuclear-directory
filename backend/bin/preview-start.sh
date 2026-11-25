@@ -7,10 +7,13 @@
 # an earlier preview, including tables from another PR's migrations, survives.
 set -euo pipefail
 
-case "${DATABASE_URL:-}" in
-  */nuclear_directory_preview|*/nuclear_directory_preview\?*) ;;
-  *) echo "preview-start: DATABASE_URL must point at nuclear_directory_preview; refusing to reset it." >&2; exit 1 ;;
-esac
+# Render adds a random suffix to new databases' names (nuclear_directory_preview_uf9q,
+# 25 Nov), and the free preview database is recreated every month, so the
+# suffix is allowed. Production's database is never named *_preview*.
+if [[ ! "${DATABASE_URL:-}" =~ /nuclear_directory_preview(_[a-z0-9]+)?(\?.*)?$ ]]; then
+  echo "preview-start: DATABASE_URL must point at nuclear_directory_preview; refusing to reset it." >&2
+  exit 1
+fi
 
 # preview_app's 5-second statement_timeout protects the shared database from
 # the running preview; the setup below can take longer on the free instance,
