@@ -212,6 +212,24 @@ class Api::DqSiteFieldsTest < ActionDispatch::IntegrationTest
     assert_equal "change", DataQuality::Review.inbox_kind(change.reload)
   end
 
+  test "a short name for the card (#935): 30 characters at most, in the quote as a whole word, written on Tosin's Yes" do
+    @page.update!(content_text: "#{QUOTE} Kemmerer, as everyone calls it.")
+    long = "K" * 31
+    act(propose({ short_name: long }, quote: "#{long} station"), propose({ short_name: "Kemmerer" }, quote: "Kemmerer2 Power Station"),
+      propose({ short_name: "  Kemmerer  " }, quote: "Kemmerer, as everyone calls it."))
+    assert_match "a short name is 30 characters at most", results[0]["error"]
+    assert_match "the quote must contain the short name Kemmerer", results[1]["error"], "a whole word, never part of another"
+    assert results[2]["ok"], results.inspect
+
+    claim = Candidate.find(results[2]["id"])
+    assert_equal({ "name" => "Kemmerer Power Station", "short_name" => "Kemmerer" }, claim.payload, "stored as Facility stores it")
+    match!
+    assert_equal [ "Facility", @site.id ], claim.reload.values_at(:subject_type, :subject_id), claim.notes
+    assert_nil @site.reload.short_name, "nothing written before Tosin decides"
+    assert DataQuality::Review.approve([ claim.id ], by: "human:tosin").sole.ok?
+    assert_equal "Kemmerer", @site.reload.short_name
+  end
+
   test "the same daily limit as the other proposals, and a retry with its request_key is answered first" do
     act(propose(coordinates, request_key: "k1"))
     first = results.sole["id"]
