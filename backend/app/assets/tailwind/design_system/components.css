@@ -1232,6 +1232,10 @@
   .nd-pagehead__count { font: 400 14px/20px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--nd-ink-muted); }
   .nd-pagehead__about { margin: 0; font: 400 15px/24px var(--font-text); color: var(--nd-ink-muted); max-width: var(--nd-prose-max); }
   .nd-pagehead__tags { display: flex; gap: var(--nd-space-2); flex-wrap: wrap; }
+  /* A plant's tags and its status on one line (#923). Where both don't fit, the status drops under the tags; it never
+     wraps itself, and a tag never breaks. */
+  .nd-pagehead__line { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--nd-space-3); row-gap: var(--nd-space-2); }
+  .nd-pagehead__status { margin: 0; font: 400 15px/24px var(--font-text); white-space: nowrap; }
   /* A square tag with an icon: a role in its category's colour, a technology in ink. */
   .nd-tag--icon { display: inline-flex; align-items: center; gap: 5px; }
   .nd-tag--icon .nd-ic { flex: none; color: var(--nd-cat, var(--nd-ink-muted)); }
@@ -1335,12 +1339,14 @@
 
 /* The company page (#556): index left, the page in one column, key facts right. */
 @layer components {
-  .nd-page--company { max-width: 1280px; }
+  /* Breadcrumb, then 12px, then the name (#923); a page's only other child is the profile below. */
+  .nd-page--company { max-width: 1280px; row-gap: var(--nd-space-3); }
   .nd-company { display: flex; flex-direction: column; gap: var(--nd-space-10); }
   .nd-company__index { display: none; }
-  /* The head's lines share the page head's 8px rhythm (#921): a plant's status line, owner sentence and See all sit after
-     page_head, not inside it, and stacked by line height alone they touched. A company's head holds page_head only. */
+  /* The head's lines share the page head's 8px rhythm (#921), so anything placed after page_head never touches it. */
   .nd-company__head { display: flex; flex-direction: column; gap: var(--nd-space-2); min-width: 0; }
+  /* The Tidy head (#923): 12px under a profile's name, 8px between every line after it. */
+  .nd-company__head .nd-pagehead__row + * { margin-top: var(--nd-space-1); }
   .nd-company__main { display: flex; flex-direction: column; gap: var(--nd-space-10); min-width: 0; }
   @media (min-width: 1024px) {
     /* The last row takes the slack, so a tall key facts panel never opens a gap under the name (a company with no deals). */
@@ -1470,7 +1476,6 @@
 
 /* The plant page (#557): the company page's layout plus the status line, the owner sentence, share bars and the units table. */
 @layer components {
-  .nd-plantstatus { margin: 0; font: 400 15px/24px var(--font-text); }
   .nd-sentence--narrow { display: none; }
   @media (max-width: 639px) { .nd-sentence--wide { display: none; } .nd-sentence--narrow { display: block; } }
   .nd-glance__note { display: block; }
@@ -1644,7 +1649,6 @@
   .nd-breadcrumb li > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   /* Touch: the 44px tap target comes from padding, so the link stays a block that can end in an ellipsis. */
   @media (pointer: coarse) { .nd-breadcrumb a { padding-block: 13px; } }
-  .nd-pagehead__more { margin: 0; font: 400 14px/20px var(--font-text); }
 }
 
 /* The narrowest phones: the longest title stays on one line at the 13px floor below 375px, and below 341px the icon gives its room. */

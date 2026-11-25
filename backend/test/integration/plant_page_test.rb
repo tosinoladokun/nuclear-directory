@@ -53,13 +53,17 @@ class PlantPageTest < ActionDispatch::IntegrationTest
     assert_select "h1.nd-pagehead__name", "Plant Vogtle"
     assert_select ".nd-pagehead__tags .nd-tag", "Power plant"
     assert_select ".nd-pagehead__tags .nd-tag", "AP1000"
-    assert_select ".nd-plantstatus .nd-st--filled", /Operating/
-    assert_select ".nd-plantstatus", /2 units/
+    assert_select ".nd-pagehead__line .nd-pagehead__status .nd-st--filled", /Operating/
+    assert_select ".nd-pagehead__line .nd-pagehead__status", /2 units/
     assert_select ".nd-breadcrumb a[href=?]", "/companies?category=plants", text: "Plants and sites"
     assert_equal [ "Nuclear Directory", "Plants and sites" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }
-    assert_select ".nd-pagehead__more a[href=?]", "/companies?category=plants", "See all plants and sites ›"
+    # The Tidy head (#923): name, the owner sentence, then the tags and the status on one line; no See all (the breadcrumb links there).
+    assert_select ".nd-pagehead__more", 0
+    assert_select "a", text: /See all/, count: 0
     head = response.body[/<div class="nd-company__head".*?<div class="nd-company__glance"/m]
-    assert_operator head.index("nd-plantstatus"), :<, head.index("nd-pagehead__more"), "See all comes after the status, so the type and status stay together"
+    order = %w[nd-pagehead__name nd-pagehead__about nd-pagehead__tags nd-pagehead__status].map { |name| head.index(name) }
+    assert_equal order.sort, order, "name, sentence, tags, status"
+    assert_select ".nd-pagehead__about .nd-sentence--wide", "Owned by Georgia Power. Operated by Southern Nuclear, a different company."
     list = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"].find { |node| node["@type"] == "BreadcrumbList" }
     assert_equal [ "Nuclear Directory", "Plants and sites", "Plant Vogtle" ], list["itemListElement"].map { |item| item["name"] }
   end
@@ -374,7 +378,7 @@ class PlantPageTest < ActionDispatch::IntegrationTest
 
     assert_select ".nd-glance dd", text: /\A2,228 MWe\b/
     assert_select ".nd-glance dt", text: /operating units, net summer \(EIA\)/
-    assert_select ".nd-plantstatus", /2 of 3 units/
+    assert_select ".nd-pagehead__status", /2 of 3 units/
     assert_select "td[data-col=capacity]", "900 MWe", "the units table still lists every unit"
     assert_select "tr#unit-unit-1 td[data-col=status]", /Being decommissioned/
   end

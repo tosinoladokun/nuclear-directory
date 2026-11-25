@@ -45,13 +45,14 @@ class CompanyPageTest < ActionDispatch::IntegrationTest
     assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", text: "Reactor developers"
   end
 
-  test "the trail reads Nuclear Directory > category, with a See all link, and the structured data keeps the full trail (#708)" do
+  test "the trail reads Nuclear Directory > category, with no See all link (#923: the crumb is it), and the structured data keeps the full trail (#708)" do
     get company_path(slug: "kairos-power")
 
     assert_equal [ "Nuclear Directory", "Reactor developers" ], css_select(".nd-breadcrumb li").map { |node| node.text.strip }, "the page's own name is the heading below, not repeated (#700)"
     assert_select ".nd-breadcrumb li a[href='/']", "Nuclear Directory"
     assert_select ".nd-breadcrumb [aria-current]", 0
-    assert_select ".nd-pagehead__more a[href=?]", "/companies?category=reactor-developers", "See all reactor developers ›"
+    assert_select ".nd-breadcrumb a[href=?]", "/companies?category=reactor-developers", "Reactor developers"
+    assert_select ".nd-pagehead__more", 0
 
     graph = JSON.parse(css_select("script[type='application/ld+json']").first.text)["@graph"]
     list = graph.find { |node| node["@type"] == "BreadcrumbList" }
