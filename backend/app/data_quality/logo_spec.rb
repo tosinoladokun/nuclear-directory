@@ -149,6 +149,7 @@ module DataQuality::LogoSpec
     doc.internal_subset&.remove
     doc.xpath("//processing-instruction()").each(&:remove)
     check_node(root)
+    check_clip_references(root)
     root.xpath(".//svg:title | .//svg:desc | .//svg:metadata | .//comment()", "svg" => SVG_NS).each(&:remove)
     root.to_xml
   rescue Nokogiri::XML::SyntaxError => e
@@ -167,6 +168,23 @@ module DataQuality::LogoSpec
       check_node(child)
     end
     check_attributes(node) if node.name == "svg" && node.parent.is_a?(Nokogiri::XML::Document)
+  end
+
+  # A url() may only be a clip-path pointing at a clipPath in the same file
+  # (#945): a missing target, or one that isn't a clipPath, is rejected.
+  def self.check_clip_references(root)
+    clip_ids = root.xpath(".//svg:clipPath[@id]", "svg" => SVG_NS).map { |node| node["id"] }
+    root.xpath("descendant-or-self::*[@*[contains(., 'url(')]]").each do |element|
+      element.attribute_nodes.select { |attr| attr.value.include?("url(") }.each do |attr|
+        unless attr.name == "clip-path"
+          raise Reject, "the SVG has a url() in #{attr.name} on <#{element.name}>; only a clip-path may point inside the file"
+        end
+        target = attr.value[/#([\w.:-]+)/, 1]
+        unless clip_ids.include?(target)
+          raise Reject, "the SVG's clip-path on <#{element.name}> points to ##{target}, which isn't a clipPath in the file"
+        end
+      end
+    end
   end
 
   def self.check_attributes(element)
@@ -220,21 +238,23 @@ module DataQuality::LogoSpec
 
   # --- One ink, trim, size, checks ----------------------------------------
 
-  # One ink: alpha of 8% or more and L* of 90 or less keeps its alpha; the rest is transparent.
+  # One ink: a pixel with alpha of 8% or more and L* of 90 or less becomes ink,
+  # fully opaque (the spec allows no opacity); the rest is transparent. A
+  # raster's edges are smoothed again by the scaling step.
   def self.one_ink(image)
     rgb = image.extract_band(0, n: 3)
     alpha = image.extract_band(3)
     lightness = rgb.colourspace(:lab).extract_band(0)
     ink = (alpha >= INK_ALPHA) & (lightness <= INK_LIGHTNESS)
-    [ ink.ifthenelse(alpha, 0).cast(:uchar), rgb, ink & (alpha >= 128) ]
+    [ ink.ifthenelse(255, 0).cast(:uchar), rgb, ink ]
   end
 
   def self.finish(image, rerender:, steps:, source_type:, source_sha256:)
-    mask, rgb, solid = one_ink(image)
+    mask, rgb, ink = one_ink(image)
     steps << "one ink: kept pixels with alpha of 8% or more and L* of 90 or less"
     raise Reject, "the one-ink version is empty (a logo made for dark backgrounds?)" if mask.max.zero?
 
-    multicolour = multicolour?(rgb, solid)
+    multicolour = multicolour?(rgb, ink)
     left, top, width, height = mask.find_trim(threshold: 0, background: [ 0 ])
     mask = mask.crop(left, top, width, height)
     steps << "trimmed to the ink (#{width} × #{height}px)"
@@ -314,23 +334,31 @@ module DataQuality::LogoSpec
     before.each_with_index.any? { |count, i| count.positive? && after[i].to_f.zero? }
   end
 
-  # More than one colour among the ink (flagged for Tosin at approval). The
-  # ink's colours are counted in buckets of CIELAB; a colour that makes up at
-  # least 3% of the ink counts, and two count as different when they're over
-  # 20 apart (ΔE76).
-  def self.multicolour?(rgb, solid)
+  # More than one colour among the ink (flagged for Tosin at approval). Every
+  # ink pixel counts. Colours are grouped by distance in CIELAB: a colour joins
+  # the first group whose centre is within 10 (ΔE76) and otherwise starts its
+  # own, so two colours over 20 apart never share a group. A group that makes
+  # up at least 3% of the ink counts, and two counted groups over 20 apart
+  # make the source multicolour.
+  def self.multicolour?(rgb, ink)
     small = 256.0 / [ rgb.width, rgb.height ].max
     if small < 1
       rgb = rgb.resize(small, kernel: :nearest)
-      solid = solid.resize(small, kernel: :nearest)
+      ink = ink.resize(small, kernel: :nearest)
     end
     lab = rgb.colourspace(:lab)
-    pixels = lab.bandjoin(solid).to_a.flatten(1).select { |px| px[3].to_i >= 128 }
+    pixels = lab.bandjoin(ink).to_a.flatten(1).select { |px| px[3].to_i >= 128 }.map { |px| px.first(3) }
     return false if pixels.empty?
-    buckets = pixels.group_by { |l, a, b, _| [ (l / 16).floor, (a / 16).floor, (b / 16).floor ] }
-    colours = buckets.values.select { |group| group.size >= pixels.size * 0.03 }.map do |group|
-      3.times.map { |i| group.sum { |px| px[i] } / group.size }
+    # Exact colours first, most common first, so a group's centre is its main colour.
+    colours = pixels.tally.sort_by { |_, count| -count }
+    groups = []
+    colours.each do |colour, count|
+      group = groups.find { |g| distance(g[:centre], colour) <= 10 }
+      group ? group[:count] += count : groups << { centre: colour, count: count }
     end
-    colours.combination(2).any? { |c1, c2| Math.sqrt(c1.zip(c2).sum { |x, y| (x - y)**2 }) > 20 }
+    counted = groups.select { |g| g[:count] >= pixels.size * 0.03 }.map { |g| g[:centre] }
+    counted.combination(2).any? { |c1, c2| distance(c1, c2) > 20 }
   end
+
+  def self.distance(c1, c2) = Math.sqrt(c1.zip(c2).sum { |x, y| (x - y)**2 })
 end

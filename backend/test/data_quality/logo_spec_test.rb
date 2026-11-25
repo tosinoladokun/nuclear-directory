@@ -111,8 +111,12 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
     assert_equal 0, Vips::Image.new_from_buffer(result.png, "").extract_band(1).getpoint(45, 45).first
   end
 
-  test "more than one colour is flagged" do
-    assert process(svg('<rect x="0" y="0" width="35" height="100" fill="#000"/><rect x="65" y="0" width="35" height="100" fill="#c00"/>')).multicolour
+  test "more than one colour is flagged, from every ink pixel, however close in a coarse grid (Copilot, #946)" do
+    two = ->(left, right, opacity = 1) { svg(%(<rect x="0" y="0" width="35" height="100" fill="#{left}" fill-opacity="#{opacity}"/><rect x="65" y="0" width="35" height="100" fill="#{right}" fill-opacity="#{opacity}"/>)) }
+    assert process(two.call("#000", "#c00")).multicolour
+    assert process(two.call("#000", "#c00", 0.4)).multicolour, "translucent colours are ink too"
+    assert process(two.call("#000", "#382213")).multicolour, "black and dark brown are about 23 apart (ΔE76)"
+    assert_not process(two.call("#000", "#111")).multicolour, "near-black and black are one colour"
   end
 
   test "SVG allow-list: elements" do
@@ -141,10 +145,27 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
     assert_rejected process(entity), /entities/
   end
 
+  test "a clip-path must point to a clipPath in the file; no other url() (Copilot, #946)" do
+    clip = '<defs><clipPath id="c"><rect x="0" y="0" width="100" height="85"/></clipPath></defs>'
+    assert_rejected process(svg(clip + '<circle cx="50" cy="50" r="40" clip-path="url(#missing)"/>')), /points to #missing, which isn't a clipPath/
+    assert_rejected process(svg(clip + '<circle cx="50" cy="50" r="40" clip-path="url(#logo)"/>', attrs: 'id="logo"')), /points to #logo, which isn't a clipPath/
+    assert_rejected process(svg(clip + '<circle cx="50" cy="50" r="40" fill="url(#c)"/>')), /url\(\) in fill on <circle>; only a clip-path/
+    assert process(svg(clip + '<circle cx="50" cy="50" r="40" clip-path="url(#c)"/>')).ok?
+  end
+
+  test "ink is fully opaque: source opacity never thins the mark (Copilot, #946)" do
+    faint = process(svg('<circle cx="50" cy="50" r="40" fill="#000" fill-opacity="0.25"/>'))
+    solid = process(svg(DISC))
+    assert faint.ok?, faint.reason
+    mask = Vips::Image.new_from_buffer(faint.png, "").extract_band(1)
+    assert_equal 255, mask.getpoint(45, 45).first
+    assert_in_delta Vips::Image.new_from_buffer(solid.png, "").extract_band(1).avg, mask.avg, 2.5, "about the same coverage as the opaque disc (1% of 255)"
+  end
+
   test "SVG allow-list: what draws nothing is allowed and dropped, and a clipPath inside the file works" do
     doctype = %(<?xml version="1.0"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">)
     body = '<title>Acme</title><desc>Logo</desc><metadata><x xmlns="urn:x">y</x></metadata><!-- c -->' \
-      '<defs><clipPath id="c"><rect x="0" y="0" width="100" height="70"/></clipPath></defs>' \
+      '<defs><clipPath id="c"><rect x="0" y="0" width="100" height="85"/></clipPath></defs>' \
       '<g transform="translate(0 0)"><circle cx="50" cy="50" r="40" clip-path="url(#c)" fill-rule="evenodd"/></g>'
     result = process(doctype + svg(body, attrs: 'xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" id="logo" width="100" height="100" preserveAspectRatio="xMidYMid"'))
     assert result.ok?, result.reason
