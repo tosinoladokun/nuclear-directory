@@ -552,13 +552,17 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 **Files**
 - **Source:** the company's own website, brand page or press kit, with its URL recorded like any other source. Never a logo service, a search result, Wikipedia or a screenshot.
 - **Types:** SVG (preferred), or PNG or WebP with transparency. JPEG, GIF, ICO, PDF and EPS are rejected.
-- **Size:** at most 2 MB.
+- **Size:** at most 2 MB. A PNG or WebP is also limited to 25 million pixels (width × height), so a small file can't decode to gigabytes.
 - **SVG safety (a security rule):**
   - Parsed against an allow-list: `svg`, `g`, `defs`, `clipPath`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline` and `polygon`, with only their geometry, fill, stroke and transform attributes.
   - Also allowed, because they draw nothing:
     - `title`, `desc` and `metadata`, which are read for checking and dropped before rendering;
     - on `svg`, the attributes `xmlns` and `xmlns:*`, `version`, `id`, `viewBox`, `width`, `height` and `preserveAspectRatio`.
   - `style` and `class` attributes are still rejected.
+  - Clipping is allowed inside the file:
+    - `id` and `clipPathUnits` on `clipPath`;
+    - `clip-path` and `clip-rule` on shapes, where `clip-path` is a `url(#id)` that points to a `clipPath` in the same file.
+  - A plain DOCTYPE, as Illustrator exports carry, is dropped. A DOCTYPE that declares entities is rejected.
   - Rejected for anything else: `script`, `style`, `image`, `text`, `use`, `foreignObject`, filters, masks, patterns, gradients and animation.
   - Rejected for any `on*` attribute, and for any `href` or `url()` that points outside the file.
   - Rendered by a renderer that never runs scripts or fetches.
