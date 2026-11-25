@@ -572,7 +572,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
   - the file's URL and the page it was found on;
   - the date it was fetched and the original's sha256;
   - each processing step that was applied.
-- **The original file isn't stored,** so a logo never costs more than 50 KB.
+- **The original is kept only while the logo is pending** (500 KB at most). It's deleted when the logo is approved or rejected, so an approved logo never costs more than 50 KB and keeps only the original's sha256.
 - **Re-processing** fetches the file's URL again. If the source is gone, the current logo stays and the admin gives a plain reason.
 
 **Reject rules.** Any one of these means no logo, with the reason recorded:
@@ -584,7 +584,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 6. A part of the mark is thinner than 1.5px at display size all the way through. In the 3× mask, a connected shape vanishes entirely when eroded with a disc 4.5px across. Sharp corners and serifs that thin out at their ends don't count.
 7. The one-ink version is empty, for example a white logo made for dark backgrounds.
 
-**Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original, loaded from its source URL, beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
+**Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original, from the pending copy, beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
 
 ## Accessibility
 
