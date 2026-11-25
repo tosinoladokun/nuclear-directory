@@ -108,7 +108,7 @@ class HomeTest < ActionDispatch::IntegrationTest
     assert_select "#search-large-results .nd-browse[data-instant-search-target=browse][hidden]" do
       assert_select ".nd-label", "Browse"
       rows = css_select("a.nd-browse__row")
-      assert_equal [ "Reactor developers", "Power buyers", "Plants and sites" ], rows.map { |row| row.at_css("b").text }
+      assert_equal [ "Reactor developers", "Power buyers", "Plants and sites" ], rows.map { |row| row.at_css(".nd-browse__full").text }
       assert_equal %w[4 1 1], rows.map { |row| row.at_css(".nd-browse__count").text }
       assert_equal [ "/companies?category=reactor-developers", "/companies?category=power-buyers", "/companies?category=plants" ], rows.map { |row| row["href"] }, "the cards' own links"
       assert_equal "Reactor developers, 4 companies", rows.first["aria-label"]
@@ -116,12 +116,15 @@ class HomeTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "a long category name shows its short name in Browse, with the full name in its title and label (#917 review)" do
-    rows = [ HomeCategories::Browse.new(category: Category.find("utilities"), count: 36) ]
+  test "Browse shows the full category name, as the cards do; a long one carries its short name for narrow phones (#917)" do
+    rows = [ HomeCategories::Browse.new(category: Category.find("utilities"), count: 36), HomeCategories::Browse.new(category: Category.find("fuel"), count: 3) ]
     html = ApplicationController.render(partial: "shared/search_box", locals: { size: :large, browse: rows })
-    row = Nokogiri::HTML.fragment(html).at_css("a.nd-browse__row")
-    assert_equal "Plant operators", row.at_css("b").text
+    row, short = Nokogiri::HTML.fragment(html).css("a.nd-browse__row").to_a
+    assert_equal "Power plant owners and operators", row.at_css(".nd-browse__full").text
+    assert_equal "Plant operators", row.at_css("b[data-long] .nd-browse__short").text, "shown only under 360px"
     assert_equal "Power plant owners and operators", row.at_css("b")["title"]
+    assert_equal "Fuel and materials", short.at_css("b").text
+    assert_nil short.at_css("b[data-long]"), "a name that fits has no second name"
     assert_equal "Power plant owners and operators, 36 companies", row["aria-label"]
   end
 

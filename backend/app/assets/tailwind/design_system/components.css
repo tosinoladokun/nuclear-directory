@@ -428,6 +428,8 @@
   .nd-browse__row .nd-catsq:not([class*="nd-bucket--"]) { color: var(--nd-ink); }
   .nd-browse__row .nd-instant__text { flex: 1 1 auto; }
   .nd-browse__count { flex: none; margin-left: auto; color: var(--nd-ink-muted); }
+  .nd-browse__short { display: none; }
+  @media (max-width: 359px) { .nd-browse__name[data-long] .nd-browse__full { display: none; } .nd-browse__name[data-long] .nd-browse__short { display: inline; } }
 
 }
 
@@ -1691,3 +1693,5 @@
 /* A long name in the dropdown drops to 13px before it is cut (one-line law). Outside the layers on purpose: the type-body-strong
    utility on the name would otherwise win over a components rule. */
 .nd-instant__text > b[data-fit="small"] { font-size: 13px; line-height: 24px; }
+/* Browse's two long category names drop to 13px on phones (#917); outside the layers, as above, to beat type-body-strong. */
+@media (max-width: 559px) { .nd-browse__name[data-long] { font-size: 13px; } }

@@ -58,6 +58,30 @@ class HomeBrowseTest < ApplicationSystemTestCase
     assert_equal "true", field["aria-expanded"]
   end
 
+  # Design's measures (#917): full names at 15px; 13px on phones for the two long ones; their short names under 360px.
+  test "every Browse name is on one line and whole at 320, 390 and 1440 (no-wrap)" do
+    components = role("components")
+    utility = role("utility")
+    cite!(company("Curtiss-Wright", roles: [ components ]))
+    operator = cite!(company("Constellation", roles: [ utility ]))
+    reactor = cite!(plant("Byron Unit 1", facility_type: "power_reactor", status: "operating"))
+    cite!(link(operator, "operates", reactor))
+    { 1440 => [ "15px", "Power plant owners and operators" ], 390 => [ "13px", "Power plant owners and operators" ], 320 => [ "13px", "Plant operators" ] }.each do |width, (size, shown)|
+      resize_viewport(width, 800)
+      visit root_path
+      field.click
+      assert_selector ".nd-browse__row", text: "Components"
+      names = page.evaluate_script("[...document.querySelectorAll('.nd-browse__name')].map(b => [b.innerText, getComputedStyle(b).fontSize, b.getBoundingClientRect().height, b.scrollWidth - b.clientWidth])")
+      long = names.find { |name, *| name.start_with?("Power plant", "Plant operators") }
+      assert long, "at #{width}: the plant operators row is listed"
+      assert_equal [ shown, size ], long.first(2), "at #{width}"
+      names.each do |name, _, height, overflow|
+        assert_operator height, :<, 30, "at #{width}: #{name} is one line"
+        assert_operator overflow, :<=, 0, "at #{width}: #{name} is whole"
+      end
+    end
+  end
+
   test "one letter, below the two needed for results, closes Browse" do
     visit root_path
     field.click
