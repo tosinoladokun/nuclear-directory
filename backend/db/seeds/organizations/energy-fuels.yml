@@ -8,10 +8,10 @@ website: https://www.energyfuels.com
 hq:
 - city: null
   state: CO
-- city: Denver
+- city: Lakewood
   state: CO
   source_url: https://www.energyfuels.com
-  quote: Denver-based, Energy Fuels is a global critical mineral company
+  quote: 225 Union Blvd., Suite 600, Lakewood, Colorado 80228
   confidence: 1.0
 country_code: US
 status: active

@@ -38,9 +38,9 @@ relationships:
   confidence: 1.0
 - type: offtake_with
   to: Helion Energy
-  description: 'Signed fusion PPA (May 2023): Helion to supply Microsoft electricity from its first fusion plant, 50 MW+ targeted from 2028.'
+  description: 'Announced agreement (May 2023): Helion to supply Microsoft electricity from its first fusion plant, expected to be online by 2028 and to target 50 MW or greater after a 1-year ramp-up.'
   source_url: https://www.helionenergy.com/newsroom/helion-announces-worlds-first-fusion-ppa-with-microsoft
-  quote: Helion Energy (Helion) today announced an agreement to provide Microsoft electricity from its first fusion power plant.
+  quote: Helion Energy (Helion) today announced an agreement to provide Microsoft electricity from its first fusion power plant. Constellation will serve as the power marketer and will manage transmission for the project. The plant is expected to be online by 2028 and will target power generation of 50 MW or greater after a 1-year ramp up period.
   published: '2023-05-10'
   confidence: 1.0
 facilities:

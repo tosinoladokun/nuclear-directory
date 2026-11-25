@@ -40,7 +40,7 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 1, 2), Source.find_by!(url: "https://example.com/news").published_on
   end
 
-  test "a file that states no field leaves it; a null description clears it; a source-only description leaves the text" do
+  test "a file that states no field leaves it; a null description leaves it too (#947); a source-only description leaves the text" do
     write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", description: { text: "By hand", source_url: "https://example.com/a", quote: "By hand" }))
     Seed::OrganizationLoader.new(@dir).load!
     acme = Organization.find_by!(slug: "acme-fuel")
@@ -58,7 +58,71 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
 
     write_file("acme-fuel", sparse.merge(description: nil))
     Seed::OrganizationLoader.new(@dir).load!
-    assert_nil acme.reload.description
+    assert_equal "By hand", acme.reload.description, "null is not stated, never clear it (#947)"
+  end
+
+  # #947: the 25 Nov seed run cleared HQs and a website Tosin had approved that day, from files that said null.
+  test "null or blank in a file never clears a value" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Natick", state: "MA" },
+      short_description: { text: "Fuel maker", source_url: "https://example.com/a", quote: "Fuel maker" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+
+    [ { website: nil, hq: nil, short_description: nil, legal_name: nil, country_code: nil },
+      { website: "", hq: { city: "", state: "" }, short_description: { text: "" }, legal_name: "", country_code: "" } ].each do |blanks|
+      write_file("acme-fuel", org("Acme Fuel, Inc.", website: nil, **blanks))
+      Seed::OrganizationLoader.new(@dir).load!
+      assert_equal [ "https://acmefuel.com", "Natick", "MA", "Fuel maker", "US" ],
+        acme.reload.attributes.values_at("website", "hq_city", "hq_state", "short_description", "country_code"), blanks.inspect
+    end
+  end
+
+  def approve(record, **values)
+    result = Directory::FactWriter.write(record.class.name.underscore.to_sym, values.merge(id: record.id),
+      verification: { status: "verified", by: "human:tosin", reason: "Approved in Today", context: { "candidate_id" => 1 } })
+    assert result.ok?, result.errors.inspect
+  end
+
+  test "a value a person approved after the seed wrote it stands; the file's other values still load (#947)" do
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "CO" },
+      description: { text: "Old text", source_url: "https://example.com/a", quote: "Old text" }))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(slug: "acme-fuel")
+    approve(acme, hq_city: "Denver", website: "https://acme.example")
+
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "CO" },
+      description: { text: "New text", source_url: "https://example.com/a", quote: "New text" }))
+    loader = Seed::OrganizationLoader.new(@dir).load!
+    acme.reload
+    assert_equal [ "Denver", "CO", "https://acme.example" ], acme.attributes.values_at("hq_city", "hq_state", "website"), "approved: kept"
+    assert_equal "New text", acme.description, "not decided by a person since: the file's value loads"
+    assert_equal 2, loader.kept.size
+    assert_match(/acme-fuel: kept organization #{acme.id}'s hq_city "Denver", approved after the seed wrote it; the file says "Lakewood"/, loader.kept.join("\n"))
+
+    again = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Denver", acme.reload.hq_city, "still kept on every later run"
+    assert_equal 0, again.results[:organization][:changed]
+
+    write_file("acme-fuel", org("Acme Fuel, Inc.", website: "https://acme.example", hq: { city: "Denver", state: "CO" },
+      description: { text: "New text", source_url: "https://example.com/a", quote: "New text" }))
+    assert_empty Seed::OrganizationLoader.new(@dir).load!.kept, "a file brought into line keeps nothing"
+  end
+
+  test "a relationship description a person approved stands; a null one never clears it (#947)" do
+    write_file("microsoft", org("Microsoft", website: "https://microsoft.com"))
+    link = item(to: "Microsoft", type: "supplies", description: "Signed fusion PPA (May 2023)")
+    write_file("helion", org("Helion", website: "https://helionenergy.com", relationships: [ link ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    relationship = Relationship.sole
+    approve(relationship, description: "Fusion PPA for 50 MW from 2028")
+
+    loader = Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Fusion PPA for 50 MW from 2028", relationship.reload.description
+    assert_equal 1, loader.kept.size
+
+    write_file("helion", org("Helion", website: "https://helionenergy.com", relationships: [ link.merge(description: nil) ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    assert_equal "Fusion PPA for 50 MW from 2028", relationship.reload.description
   end
 
   test "a re-seed counts what it changed apart from what it only restated (#301)" do

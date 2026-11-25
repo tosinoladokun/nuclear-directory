@@ -3,7 +3,12 @@ name: Old Dominion Electric Cooperative
 aliases:
 - ODEC
 website: https://www.odec.com
-hq: null
+hq:
+  city: Glen Allen
+  state: VA
+  source_url: https://www.odec.com
+  quote: '4201 Dominion Boulevard Glen Allen, VA 23060'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

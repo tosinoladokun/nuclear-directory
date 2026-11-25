@@ -6,10 +6,13 @@ aliases:
 - Type One Energy Group
 website: https://typeoneenergy.com
 hq:
-  city: Madison
-  state: WI
-  source_url: https://content.govdelivery.com/accounts/USDOEOS/bulletins/35d8483
+# No city or state: this entry is the quote that states the legal name (#947 moved the HQ to Knoxville, Tosin's approval).
+- source_url: https://content.govdelivery.com/accounts/USDOEOS/bulletins/35d8483
   quote: Type One Energy Group (Madison, WI)
+- city: Knoxville
+  state: TN
+  source_url: https://typeoneenergy.com/insights-announcements/tva-type-one-energy-accelerate-fusion-commercialization-tennessee/
+  quote: Knoxville (Headquarters) 2410 Cherahala Blvd. Knoxville, TN 37931
 country_code: US
 status: active
 roles:

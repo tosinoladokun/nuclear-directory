@@ -34,12 +34,16 @@ module Seed
       # What happened to each row written: { [kind, id] => :created | :changed | :unchanged }.
       @rows = {}
       @errors = []
+      # Values a person approved that the file disagrees with (#947), one line each.
+      @kept = []
     end
 
     # Per kind, the rows the seed created, changed (an existing fact it
     # changed) and left unchanged (only restated), so a re-seed's report
     # shows what moved (#301). Each row counts once, however many writes it
     # took: created over changed over unchanged.
+    attr_reader :kept
+
     def results
       @rows.each_with_object(Hash.new { |h, kind| h[kind] = { created: 0, changed: 0, unchanged: 0 } }) do |((kind, _id), state), counts|
         counts[kind][state] += 1
@@ -233,15 +237,15 @@ module Seed
           country_code: doc["country_code"], status: doc["status"], description: description["text"],
           hq_city: hq.filter_map { |entry| entry["city"].presence }.last, hq_state: hq.filter_map { |entry| entry["state"].presence }.last
         }
-        # A field the file doesn't state at all is left as it is, so a role-only
-        # seed never blanks what the admin, Enrich or an earlier seed filled in
-        # (Copilot, #501). A key stated as null still clears it.
-        { website: "website", country_code: "country_code", legal_name: "legal_name", hq_city: "hq", hq_state: "hq" }.each do |attribute, key|
-          attributes.delete(attribute) unless doc.key?(key)
+        # A field the file doesn't state, or states as null or blank, is left as
+        # it is (#947): a seed file never clears a value. A role-only seed never
+        # blanks what the admin, Enrich or an earlier seed filled in (Copilot,
+        # #501), and `hq: null` or `website: null` is "not stated", never "clear
+        # it" (the 25 Nov seed run cleared 13 values Tosin had approved that day).
+        # Taking a value off is a person's decision, made in the admin.
+        %i[website country_code legal_name hq_city hq_state description].each do |attribute|
+          attributes.delete(attribute) if attributes[attribute].blank?
         end
-        # A description stated as null, or with `text: null`, clears it; one with only a source and quote (no text key) leaves the text alone.
-        states_text = doc.key?("description") && (doc["description"].nil? || doc["description"].respond_to?(:key?) && doc["description"].key?("text"))
-        attributes.delete(:description) unless states_text
         attributes[:domain] = nil if shared.include?(Organization.domain_from(doc["website"]))
         # An identifier, set only when the file gives it: a seed without one
         # never clears a CIK set in the admin (#129).
@@ -250,10 +254,8 @@ module Seed
         # A display label, set only when the file gives one: a seed without
         # it never clears a short name set in the admin.
         attributes[:short_name] = doc["short_name"] if doc["short_name"].present?
-        # Stated: set (null or text: null clears); not stated: left as it is.
-        if doc.key?("short_description") && (doc["short_description"].nil? || short_description_item(doc)&.key?("text"))
-          attributes[:short_description] = short_description_item(doc)&.dig("text")
-        end
+        # Set when the file gives the text; null or no text leaves it as it is (#947).
+        attributes[:short_description] = short_description_item(doc)["text"] if short_description_item(doc)&.dig("text").present?
 
         # Which fields each quote backs (#398), by where it sits in the file.
         backs = Hash.new { |hash, item| hash[item] = [] }
@@ -286,6 +288,7 @@ module Seed
             attributes[:aliases] = Array(attributes[:aliases]).reject { |name| OrganizationAlias.normalize(name.to_s) == unquoted }
           end
         end
+        keep_approved(slug, Organization.find_by(id: Directory::Lookup.organization(slug:)&.id), attributes)
         write(slug, :organization, attributes, quotes, pending:,
           remove_aliases: legal || pending ? [] : Array(doc["legal_name"]))
       end
@@ -322,8 +325,10 @@ module Seed
           existing = Relationship.find_by(from_organization_id: organization.id, to_organization_id: other.id, relationship_type: item["type"])
           next if item["pending"] && existing&.closed?
 
-          link = write(slug, :relationship, { from_organization_id: organization.id, to_organization_id: other.id,
-            relationship_type: item["type"], description: item["description"] }.compact,
+          values = { from_organization_id: organization.id, to_organization_id: other.id,
+            relationship_type: item["type"], description: item["description"].presence }.compact
+          keep_approved(slug, existing, values)
+          link = write(slug, :relationship, values,
             evidence(item, sources), pending: item["pending"], hold: held_link_reason(existing, item))
           write_terms(slug, "Relationship", link, item, sources)
         end
@@ -338,8 +343,10 @@ module Seed
           # entry about the same owns-link that omits a share doesn't
           # clear the share another entry set, which was rewriting the
           # value and logging four verification events on every re-seed.
-          link = write(slug, :facility_relationship, { organization_id: organization.id, facility_id: facility.id,
-            relationship_type: item["type"], description: item["note"], ownership_pct: item["ownership_pct"] }.compact,
+          values = { organization_id: organization.id, facility_id: facility.id,
+            relationship_type: item["type"], description: item["note"].presence, ownership_pct: item["ownership_pct"] }.compact
+          keep_approved(slug, FacilityRelationship.find_by(organization_id: organization.id, facility_id: facility.id, relationship_type: item["type"]), values)
+          link = write(slug, :facility_relationship, values,
             evidence(item, sources), pending: item["pending"], hold: hold_reason(organization.id, facility.id, item))
           write_terms(slug, "FacilityRelationship", link, item, sources)
         end
@@ -670,6 +677,36 @@ module Seed
 
       def closed_link?(organization_id, facility_id, type)
         FacilityRelationship.find_by(organization_id:, facility_id:, relationship_type: type)&.closed?
+      end
+
+      # A value a person approved after the seed last wrote it stands (#947):
+      # the file's different value is dropped from the write and listed in
+      # `kept`, so the file can be brought into line. Only the fields a person
+      # decided are kept; the rest of the record is written as usual.
+      def keep_approved(slug, record, attributes)
+        return unless record
+
+        approved_fields(record).each do |field|
+          key = field.to_sym
+          next unless attributes.key?(key) && attributes[key].to_s != record.public_send(field).to_s
+
+          stated = attributes.delete(key)
+          @kept << "#{slug}: kept #{record.class.name.underscore.humanize(capitalize: false)} #{record.id}'s #{field} " \
+            "#{record.public_send(field).inspect}, approved after the seed wrote it; the file says #{stated.inspect}"
+        end
+      end
+
+      # The fields whose latest change was a person's decision rather than a
+      # seed write: an approval from Today or the inbox (it names its
+      # candidate), or a restore of one (#947). The seed's own writes carry
+      # no such context.
+      def approved_fields(record)
+        last = {}
+        VerificationEvent.where(subject: record).order(:id).pluck(:changed_values, :context).each do |changed, context|
+          person = context.to_h.key?("candidate_id") || context.to_h.key?("restores_event")
+          changed.to_h.each_key { |field| last[field] = person }
+        end
+        last.select { |field, person| person && record.has_attribute?(field) }.keys
       end
 
       def write(slug, kind, attributes, evidence, pending: false, hold: nil, remove_aliases: [])

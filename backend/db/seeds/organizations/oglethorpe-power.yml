@@ -5,7 +5,12 @@ aliases:
 - Oglethorpe Power
 - Oglethorpe Power Corporation
 website: https://opc.com
-hq: null
+hq:
+  city: Tucker
+  state: GA
+  source_url: https://opc.com/contact
+  quote: 'Headquarters Oglethorpe Power Corporation 2100 East Exchange Place Tucker, GA 30084'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

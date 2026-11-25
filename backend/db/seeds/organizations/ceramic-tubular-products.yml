@@ -5,7 +5,12 @@ aliases:
 - CERAMIC TUBULAR PRODUCTS LLC
 - CTP
 website: https://ctp-usa.com
-hq: null
+hq:
+  city: Lynchburg
+  state: VA
+  source_url: https://ctp-usa.com/about
+  quote: 'company headquartered in Lynchburg, VA.'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

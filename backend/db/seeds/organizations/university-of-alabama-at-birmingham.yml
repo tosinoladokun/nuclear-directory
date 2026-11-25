@@ -4,7 +4,12 @@ website: https://www.uab.edu
 aliases:
 - UAB
 - University of Alabama-Birmingham
-hq: null
+hq:
+  city: Birmingham
+  state: AL
+  source_url: https://www.uab.edu
+  quote: 'The University of Alabama at Birmingham 1720 2nd Ave South Birmingham, AL 35294'
+  confidence: 1.0
 country_code: null
 status: active
 roles:
