@@ -154,7 +154,8 @@ class HomeTest < ActionDispatch::IntegrationTest
     get root_path
 
     assert_select "h1.nd-home__wordmark > svg.nd-siteicon[aria-hidden=true] + svg.nd-wordmark__svg"
-    assert_select "svg.nd-siteicon ellipse.nd-siteicon__orbit[pathLength='1']", 2
+    assert_select "svg.nd-siteicon ellipse.nd-siteicon__orbit", 2
+    assert_select "svg.nd-siteicon ellipse[pathLength]", 0, "some browsers ignore pathLength on an ellipse: the dash is in user units"
     css = Rails.root.join("app/assets/tailwind/design_system/components.css").read
     assert_match(/@media \(prefers-reduced-motion: no-preference\) \{\s*\.nd-siteicon__orbit \{[^}]*animation: nd-siteicon-draw 2\.25s ease-out both/, css,
       "the drawing runs only when motion is welcome; otherwise the orbits are simply there")
