@@ -18,6 +18,9 @@ description:
   - source_url: https://www.advancedconductor.com
     quote: "Advanced Conductor Technologies LLC"
 short_description:
-  text: 'Cable technology for magnets'
+  text: "Superconducting cables, fusion magnets"
   source_url: https://www.advancedconductor.com
   quote: 'We provide the cable technology that enables compact power cables needed in for instance future electric aircraft and superconducting magnets for particle accelerators and fusion reactors.'
+  also:
+  - source_url: https://www.advancedconductor.com
+    quote: "Advanced Conductor Technologies LLC manufactures high-temperature superconducting (HTS) Conductor on Round Core (CORC ® ) cables and wires for high-current power cable systems and high-field magnets. We provide the cable technology that enables compact power cables needed in for instance future electric aircraft and superconducting magnets for particle accelerators and fusion reactors."

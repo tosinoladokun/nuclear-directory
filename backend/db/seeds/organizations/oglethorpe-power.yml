@@ -36,9 +36,12 @@ facilities:
   note: "Plant Vogtle is co-owned by Georgia Power, Oglethorpe Power, MEAG Power and Dalton Utilities; the ownership shares are for Units 3 and 4."
 notes: Generation cooperative owned by Georgia EMCs. HQ not verified this session (opc.com/about-us returned 404). Stake % from 2018 WNN; not re-confirmed by a post-2023 fetched page.
 description:
-  text: Georgia electric power producer that generates power for the state's electric membership corporations (EMCs)
+  text: "We’re a cooperative that operates on a not-for-profit basis, part of the electric cooperative model in Georgia and owned by the 38 EMCs we serve, instead of individual shareholders."
   source_url: https://opc.com
   quote: Oglethorpe Power is one of the largest energy producers in Georgia, generating much of the electric power that electric membership corporations (EMCs) deliver to the millions of Georgians they serve.
+  also:
+  - source_url: https://opc.com/about/
+    quote: "We’re a cooperative that operates on a not-for-profit basis, part of the electric cooperative model in Georgia and owned by the 38 EMCs we serve, instead of individual shareholders."
 short_description:
   text: 'Power supplier to Georgia cooperatives'
   source_url: https://opc.com
