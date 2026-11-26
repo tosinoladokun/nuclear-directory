@@ -163,6 +163,31 @@ class InstantIndexTest < ApplicationSystemTestCase
     assert_no_text "STALE SERVER ANSWER"
   end
 
+  # #976: the server's answer passed Turbo's before-render check while the index was still loading, then the index arrived
+  # in the repaint before Turbo swapped the frame, and the swap covered the local results (topics and all) for good.
+  test "an index that arrives between Turbo's before-render check and the swap keeps the local results" do
+    visit root_path
+    page.execute_script(<<~JS)
+      window.__requests = []
+      const real = window.fetch
+      window.fetch = (url, options) => {
+        window.__requests.push(String(url))
+        if (String(url).includes("/search/index.json")) return new Promise((resolve) => {
+          window.__releaseIndex = () => resolve(new Response(#{INDEX.to_json.to_json}, { headers: { "Content-Type": "application/json" } }))
+        })
+        return real(url, options)
+      }
+      document.addEventListener("turbo:before-frame-render", () => window.__releaseIndex(), { once: true })
+    JS
+    stub_slow_server(delay: 100)
+    field = find("input[type=search]")
+    field.send_keys("oklo")
+    assert_selector ".nd-instant__row b", text: "Oklo", wait: 10
+    sleep 1
+    assert_selector ".nd-instant__row b", text: "Oklo"
+    assert_no_text "STALE SERVER ANSWER"
+  end
+
   test "Escape on the server's results while the index is still loading keeps them closed" do
     visit root_path
     stub_index(delay: 2000)

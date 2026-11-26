@@ -87,10 +87,13 @@ export default class extends Controller {
   }
 
   // A /search response that arrives after the local results took over must not replace them (Turbo can't cancel the request).
+  // Turbo swaps the frame a repaint after this event, and the index can arrive in between (#976), so the check runs at
+  // the swap, not here. Never preventDefault: that would pause the frame's load, leaving it busy.
   beforeRender(event) {
-    if (!this.index) return
-    // Let the no-op render complete (no preventDefault: that would pause the frame's load, leaving it busy).
-    event.detail.render = () => {}
+    const render = event.detail.render
+    event.detail.render = (current, next) => {
+      if (!this.index) render(current, next)
+    }
   }
 
   renderLocal() {
