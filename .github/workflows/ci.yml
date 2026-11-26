@@ -79,6 +79,9 @@ jobs:
       - name: Test the backup ordering
         run: .github/scripts/backup_order_test.sh
 
+      - name: Test the restore filter (pg_attver column options)
+        run: .github/scripts/restore_filter_test.sh
+
       - name: Test who holds the preview slot
         run: .github/scripts/preview_slot_test.sh
 
