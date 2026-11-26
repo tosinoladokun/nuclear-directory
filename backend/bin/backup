@@ -46,6 +46,17 @@ query "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY;" > /dev/null
 snapshot="$(query "SELECT pg_export_snapshot();")"
 [[ "$snapshot" =~ ^[0-9A-F-]+$ ]] || { echo "Couldn't export a snapshot: ${snapshot}" >&2; exit 1; }
 
+# A pg_dump older than the server copies options only the newer server knows
+# into the dump (#968: Postgres 16.16 tags every column with pg_attver;
+# 16.16's own pg_dump leaves it out, 16.15's doesn't). restore.sh removes
+# that one, but say so here, so the image gets rebuilt with current tools.
+server_num="$(query "SELECT current_setting('server_version_num');")"
+dump_num="$(pg_dump --version | awk '{ split($3, v, "."); printf "%d%04d", v[1], v[2] }')"
+echo "Server ${server_num}, pg_dump ${dump_num} ($(pg_dump --version))."
+if (( dump_num < server_num )); then
+  echo "Warning: pg_dump is older than the server; rebuild the image without its cache so it gets the current client." >&2
+fi
+
 echo "Row counts at backup time:"
 query "
   SELECT table_name,

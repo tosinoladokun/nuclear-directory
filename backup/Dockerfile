@@ -11,6 +11,7 @@ RUN apt-get update -qq && \
 # which runs it before a data deploy (#301, bin/deploy-data).
 COPY backend/bin/backup /usr/local/bin/backup
 COPY backup/restore.sh /usr/local/bin/restore
+COPY backup/strip_attver.pl /usr/local/bin/strip-attver
 COPY backend/lib/backup/*.jq /usr/local/share/backup/
 
 USER postgres
