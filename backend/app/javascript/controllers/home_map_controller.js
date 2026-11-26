@@ -33,6 +33,9 @@ export default class extends Controller {
     this.ringTarget.setAttribute("visibility", "hidden")
     delete this.element.dataset.labelOpen
     delete this.element.dataset.mapTap
+    // Stimulus reconnects the same instance (a Turbo restore, the controller removed and put back): forget its last state.
+    this.active = this.spot = this.intent = null
+    this.pinned = false
     // One tab stop: the first plant, or the one last focused.
     this.links.forEach((link, i) => link.setAttribute("tabindex", i ? "-1" : "0"))
 
@@ -92,6 +95,12 @@ export default class extends Controller {
     if (this.intent) this.element.dataset.mapTap = ""
   }
 
+  // A press that turned into a scroll, or a key pressed before its click: no click of the map's will follow.
+  cancel() {
+    this.intent = this.spot = null
+    delete this.element.dataset.mapTap
+  }
+
   click(event) {
     const { intent, spot } = this
     this.intent = this.spot = null
@@ -102,7 +111,11 @@ export default class extends Controller {
     event.preventDefault()
     if (intent === "show" || intent === "pin") this.show(spot, { pinned: intent === "pin" })
     else if (intent === "hide") this.hide()
-    else if (intent === "open") this.labelTarget.querySelector("a")?.click()
+    // The label may have closed between the press and the click (the dot lost focus), so it's drawn again first.
+    else if (intent === "open") {
+      this.show(spot)
+      this.labelTarget.querySelector("a")?.click()
+    }
   }
 
   focus(event) {
@@ -125,6 +138,7 @@ export default class extends Controller {
   }
 
   key(event) {
+    this.cancel()
     const link = event.target.closest?.(".nd-chartmap__link")
     if (!link) return
     const links = this.links

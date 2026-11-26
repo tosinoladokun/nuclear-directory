@@ -3,7 +3,7 @@
     share a dot (#940). Each plant is a link to its page (#949): a spot holds one link per plant, each with its own
     circle, drawn on top of each other, so without JavaScript every dot is a plain link. HomeMapController adds the
     label (a link too; a chooser for a shared dot), the touch taps and one tab stop with arrow keys. %>
-<div class="nd-chartmap-wrap" data-controller="home-map" data-action="pointerdown->home-map#down click->home-map#click auxclick->home-map#click pointerover->home-map#over pointerout->home-map#out focusin->home-map#focus focusout->home-map#blur keydown->home-map#key">
+<div class="nd-chartmap-wrap" data-controller="home-map" data-action="pointerdown->home-map#down pointercancel->home-map#cancel click->home-map#click auxclick->home-map#click pointerover->home-map#over pointerout->home-map#out focusin->home-map#focus focusout->home-map#blur keydown->home-map#key">
   <svg class="nd-chartmap" viewBox="0 0 <%= HomeMap::WIDTH %> <%= HomeMap::HEIGHT %>" role="group" aria-label="Map of the <%= data[:count] %> operating US nuclear plants" xmlns="http://www.w3.org/2000/svg" data-home-map-target="svg">
     <g aria-hidden="true"><%= render "home/charts/us_outline" %></g>
     <g class="nd-chartmap__dots">

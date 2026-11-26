@@ -197,13 +197,14 @@ class HomeMapLabelsTest < ApplicationSystemTestCase
     open_map(1440)
     dot("Salem").click
     assert label
+    find(".nd-chart__title", match: :first).hover # the pointer off the dot, or the restored page's hover reopens its label
     page.execute_script("Turbo.visit('/privacy')")
     assert_current_path "/privacy"
     page.go_back
     assert_selector ".nd-chartmap-wrap[data-controller=home-map]"
     # Whether Turbo or the browser's back cache restores the page, a label still showing can be dismissed.
     page.execute_script("document.body.click()")
-    assert_nil label
+    assert_no_selector ".nd-chartmap__label:not([hidden])"
     assert_no_selector ".nd-chartmap__spot.is-active"
 
     # A Turbo snapshot taken with a label open comes back closed.
@@ -215,6 +216,40 @@ class HomeMapLabelsTest < ApplicationSystemTestCase
     page.execute_script("document.querySelector('.nd-chartmap-wrap').setAttribute('data-controller', 'home-map')")
     assert_no_selector ".nd-chartmap__label:not([hidden])"
     assert_no_selector ".nd-chartmap__spot.is-active"
+    # The same instance reconnects; it forgets the dot it had open, so hovering that dot opens it again (Copilot, #953).
+    find(".nd-chart__title", match: :first).hover
+    dot("Salem").hover
+    assert_equal [ "Hope Creek", "Salem", "New Jersey" ], label["text"]
+  end
+
+  test "a touch that turns into a scroll leaves nothing behind: Enter on a focused plant opens it (Copilot, #953)" do
+    open_map(375)
+    page.execute_script(<<~JS)
+      const box = document.querySelector("a[data-name='Byron'] circle").getBoundingClientRect()
+      const x = box.left + box.width / 2, y = box.top + box.height / 2, target = document.elementFromPoint(x, y)
+      target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", button: 0, clientX: x, clientY: y }))
+      target.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerType: "touch" }))
+    JS
+    assert_no_selector "[data-map-tap]"
+    find("[data-home-chart=plant_map] .nd-chart__head").send_keys(:tab)
+    page.send_keys(:end)
+    assert_equal "Seabrook", focused
+    page.send_keys(:enter)
+    assert_current_path "/plants/#{slug('Seabrook')}"
+  end
+
+  test "touch: a second tap beside the dot opens it even if the dot lost focus in between (Copilot, #953)" do
+    open_map(375)
+    touch("Byron")
+    page.execute_script(<<~JS)
+      document.querySelector("a[data-name='Byron']").focus()
+      const box = document.querySelector("a[data-name='Byron'] circle").getBoundingClientRect()
+      const x = box.left + box.width / 2 + 10, y = box.top + box.height / 2, target = document.elementFromPoint(x, y)
+      target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", button: 0, clientX: x, clientY: y }))
+      document.activeElement.blur() // the tap beside the dot takes focus off it, which closes the label
+      target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: x, clientY: y }))
+    JS
+    assert_current_path "/plants/#{slug('Byron')}"
   end
 
   test "an open label moves with the map when the window narrows" do
