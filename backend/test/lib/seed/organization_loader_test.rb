@@ -456,6 +456,20 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 0, Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.results.dig(:facility, :changed).to_i, "still kept on every later run"
   end
 
+  test "a plant found by an alias keeps its name when a kept field pins the write to its id (Copilot, #963)" do
+    plant = Facility.create!(name: "Acme Plant", status: "planned")
+    plant.aliases.create!(alias: "Acme Station")
+    approve(plant, status: "under_construction")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com",
+      facilities: [ item(name: "Acme Station", type: "owns", status: "planned", state: "TN") ]))
+
+    Seed::OrganizationLoader.new(@dir).load!
+
+    plant.reload
+    assert_equal [ "Acme Plant", "under_construction", "TN" ], plant.attributes.values_at("name", "status", "state")
+    assert_equal 1, Facility.where(name: [ "Acme Plant", "Acme Station" ]).count, "no second plant"
+  end
+
   test "a unit value a person approved after the seed wrote it stands; the unit's other values still load (#960)" do
     write_file("holtec", org("Holtec International", website: "https://holtec.com",
       facilities: [ item(name: "Indian Point 2", site: "Indian Point", type: "owns", status: "operating", state: "NY") ]))

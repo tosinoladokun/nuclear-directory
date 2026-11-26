@@ -633,7 +633,12 @@ module Seed
       def write_plant(slug, item, sources)
         attributes = facility_attributes(item)
         existing = Facility.find_by(id: Directory::FactWriter.existing(:facility, attributes))
-        attributes[:id] = existing.id if keep_approved(slug, existing, attributes).any?
+        if keep_approved(slug, existing, attributes).any?
+          # Named by id so the write can't miss it; without the file's name, so a
+          # plant found by an alias keeps its own, as a write by name does (Copilot, #963).
+          attributes[:id] = existing.id
+          attributes.delete(:name)
+        end
         write(slug, :facility, attributes, evidence(item, sources))
       end
 
