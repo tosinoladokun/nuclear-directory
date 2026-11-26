@@ -29,6 +29,10 @@ class RestoreSeedRevertedApprovalsTest < ActiveSupport::TestCase
     @link = Relationship.create!(id: 36, from_organization: microsoft, to_organization: helion, relationship_type: "offtake_with",
       description: seed_text, verification_status: "verified", verified_by: BY)
     revert_event(4269, @link, { "description" => RestoreSeedRevertedApprovals::EVENTS[4269][3]["description"] })
+    # The events above take production's ids; every event written after them
+    # gets a higher one, as in production (main's CI, 26 Nov: a lower id made
+    # the seed's revert look like the latest decision).
+    %w[verification_events organizations relationships].each { |table| ActiveRecord::Base.connection.reset_pk_sequence!(table) }
   end
 
   def run_it = RestoreSeedRevertedApprovals.new(reason: "deploy abc1234, PR #1").tap(&:up)
