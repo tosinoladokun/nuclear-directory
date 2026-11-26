@@ -29,6 +29,9 @@ export default class extends Controller {
     if (entry && (entry.failed || Date.now() - entry.at > INDEX_LIFETIME)) delete indexes[this.indexUrlValue]
     this.index = null
     this.fetching = false
+    // The controller loads lazily, so a visitor may have focused the field, or typed in it, before it connected (#964):
+    // pick that up as if the focus had just happened, Browse for an empty field and results for one with text.
+    if (this.inputTarget === document.activeElement) this.search()
     if (!this.shortPlaceholderValue || !this.longPlaceholderValue) return
     this.longPlaceholder = this.longPlaceholderValue
     this.narrow = window.matchMedia("(max-width: 379px)")
