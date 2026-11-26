@@ -25,12 +25,13 @@ class DatasetRelease < ApplicationRecord
   def rebuildable? = !published? && commit_sha.blank?
   def publishable? = !published? && built_at.present?
 
-  # The tables the next release includes: the five core tables, as in
-  # v2026.11, plus deal_terms or licensing_stages only when DATASET_TABLES
-  # names them on purpose (Data Quality, #951; it decides at each sign-off).
+  # The tables the next release includes: all seven (Data Quality's answer
+  # for v2026.12, via PM), or without deal_terms or licensing_stages when
+  # DATASET_TABLES lists the tables and leaves them out. The five core
+  # tables are always in.
   def self.tables_setting
-    listed = ENV["DATASET_TABLES"].to_s.split(/[\s,]+/)
-    Dataset::Export::TABLES.keys & (listed | Dataset::Export::CORE_TABLES)
+    listed = ENV["DATASET_TABLES"].presence&.split(/[\s,]+/)
+    listed ? Dataset::Export::TABLES.keys & (listed | Dataset::Export::CORE_TABLES) : Dataset::Export::TABLES.keys
   end
 
   # Publishing needs the data repo token (Tosin adds it on Render). Never
