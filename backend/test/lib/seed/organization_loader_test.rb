@@ -171,7 +171,8 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert result.ok?, result.errors.inspect
 
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: file_name, type: "owns"),
-      item(name: "Acme Station 1", site: file_name, type: "operates") ]))
+      item(name: "Acme Station 1", site: file_name, type: "operates") ],
+      licensing: [ licensing(facility: file_name, nrc_docket: "50-9999") ]))
     details = { "facilities" => [ { "name" => file_name, "other_names" => other_names,
       "state" => { "value" => "TN", "source_url" => "https://example.com/where", "quote" => "In Tennessee." } } ] }
     File.write(facilities_file, details.to_yaml)
@@ -184,6 +185,7 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ site.id ], Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").pluck(:id), "no second site"
     assert_equal [ site.id ], Facility.where(name: "Acme Station 1").pluck(:parent_id), "its unit stays under it"
     assert_equal 2, site.facility_relationships.count + Facility.find_by!(name: "Acme Station 1").facility_relationships.count
+    assert_equal site.id, LicensingStage.sole.facility_id, "a licensing stage naming it by the file's name finds it (Copilot)"
   end
 
   test "a site a person renamed keeps its name when the file brings in a new one; the load finds it by id (Copilot, #970)" do

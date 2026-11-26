@@ -446,6 +446,8 @@ module Seed
           # name can belong to an older site as well as the docketed unit.
           docket = LicensingStage.normalize_docket(item["nrc_docket"])
           facility = (Directory::Lookup.facility(nrc_docket: docket) if docket) ||
+            # A site whose person-given name was kept, by the file's name (#967, Copilot).
+            (kept_site(item["facility"]) if item["facility"].present?) ||
             (Directory::Lookup.facility(name: item["facility"]) if item["facility"].present?)
           unless facility
             @errors << "#{slug}: licensing: unknown facility #{item["facility"].inspect}"
