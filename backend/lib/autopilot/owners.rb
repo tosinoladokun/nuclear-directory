@@ -9,6 +9,7 @@ module Autopilot
       "pending-without-role" => "DQ", "pending-without-website" => "DQ", "unchecked-claims" => "DQ", "stuck-leads" => "DQ", "finds-unconfirmed" => "DQ",
       "no-creates" => "DQ",
       "social-silent" => "Backend", "posts-unknown" => "Backend", "social-queue" => "Infra",
+      "dataset-draft-failed" => "Infra", "dataset-doi" => "Infra", "dataset-release-late" => "Infra", "dataset-draft-ready" => "DQ",
       "budget" => "PM"
     }.freeze
 

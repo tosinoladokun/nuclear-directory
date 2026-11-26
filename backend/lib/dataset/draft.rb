@@ -11,7 +11,10 @@ require "tmpdir"
 #   Dataset::Draft.build!(version: "2026.12")
 module Dataset
   class Draft
+    # A draft that mustn't be built now (published, or publishing started): logged, not alerted.
     class Refused < StandardError; end
+    # Something the build needs is missing (the previous tag's manifest.json): a failed build (Copilot, #952).
+    class MissingInput < StandardError; end
 
     def self.build!(version: Date.current.strftime("%Y.%m"), github: Github.new, tables: DatasetRelease.tables_setting)
       new(version:, github:, tables:).build!
@@ -60,7 +63,7 @@ module Dataset
 
       # The previous release's manifest.json and CHANGELOG.md, as Export reads them.
       def fetch_previous(tag, dir)
-        manifest = @github.file("manifest.json", ref: tag) or raise Refused, "#{tag} has no manifest.json"
+        manifest = @github.file("manifest.json", ref: tag) or raise MissingInput, "#{tag} has no manifest.json"
         FileUtils.mkdir_p(dir)
         File.write(File.join(dir, "manifest.json"), manifest)
         changelog = @github.file("CHANGELOG.md", ref: tag)

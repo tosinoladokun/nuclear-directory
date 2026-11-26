@@ -70,16 +70,44 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_equal "https://doi.org/10.5281/zenodo.23703377", ld["identifier"]
     assert_equal "https://creativecommons.org/licenses/by/4.0/", ld["license"]
     assert_operator ld["description"].length, :>=, 50
-    assert_equal StructuredDataHelper::PUBLISHED_TABLES.size * 2, ld["distribution"].size, "each published table as CSV and JSON"
+    assert_equal StructuredDataHelper::PUBLISHED_TABLES.size * 2, ld["distribution"].size, "each table of v2026.11 (no release row yet) as CSV and JSON"
     assert_empty StructuredDataHelper::PUBLISHED_TABLES - Dataset::Export::TABLES.keys, "only tables the export knows, so the schema list has their columns"
     assert_select "main a[href*=?]", "deal_terms", count: 0
     assert_select "main a[href*=?]", "licensing_stages", count: 0
-    assert ld["distribution"].all? { |file| file["contentUrl"].start_with?("https://raw.githubusercontent.com/") }
+    assert ld["distribution"].all? { |file| file["contentUrl"].start_with?("https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.11/") },
+      "pinned to the release's tag, never main (Copilot, #952)"
+    assert_select "main a[href=?]", "https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.11/companies.csv"
+    assert_select "main a[href^='https://raw.githubusercontent.com/'][href*='/main/']", count: 0
 
     get sitemap_path
     assert_includes response.body, data_url
     get about_path
     assert_select "a[href=?]", data_path
+  end
+
+  test "the data and about pages show the newest published release and only its tables (#950)" do
+    get data_path
+    assert_select "main", text: /v2026\.11/, minimum: 1
+    assert_select "main", text: /Five tables/
+    assert_select "main", text: /October 2026/
+    assert_select "main a[href=?]", "https://github.com/tosinoladokun/nuclear-directory-data/blob/v2026.11/DATA-DICTIONARY.md"
+
+    DatasetRelease.create!(version: "2026.12", status: "published", published_at: Time.zone.local(2026, 12, 2, 10), tables_included: Dataset::Export::TABLES.keys)
+    DatasetRelease.create!(version: "2027.01", status: "draft", tables_included: Dataset::Export::TABLES.keys)
+    get data_path
+    assert_select "main", text: /v2026\.12/, minimum: 1
+    assert_select "main", text: /Seven tables/
+    assert_select "main", text: /December 2026/, minimum: 1, message: "Last updated follows the release (Design QA)"
+    assert_select "main", text: /October 2026/, count: 0
+    assert_select "main a[href=?]", "https://github.com/tosinoladokun/nuclear-directory-data/blob/v2026.12/DATA-DICTIONARY.md"
+    assert_select "main a[href$=?]", "deal_terms.csv", count: 1
+    assert_select "main a[href=?]", "https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.12/deal_terms.csv"
+    ld = JSON.parse(css_select("script[type='application/ld+json']").first.text)
+    assert_equal 14, ld["distribution"].size
+    assert ld["distribution"].all? { |file| file["contentUrl"].include?("/v2026.12/") }
+    get about_path
+    assert_select "main", text: /v2026\.12/, minimum: 1
+    assert_select "main", text: /v2027\.01/, count: 0
   end
 
   test "the about page has the licences and the dataset DOI" do

@@ -12,12 +12,26 @@ module StructuredDataHelper
   # The open dataset as schema.org Dataset (#185), so Google Dataset Search can index the /data page. Name, description,
   # licence, creator and downloads, from what the release files themselves say (Dataset::Export).
   DATASET_DOI = "10.5281/zenodo.23703377".freeze
-  # The tables the published release has (the data repo's latest.json, 2026.11). The export knows seven; the page
-  # lists, links and describes only what is downloadable today, so no link is broken. Add a table here when a release
-  # publishes it.
+  # v2026.11, published by hand before releases had a row (#950), and its five tables. The pages fall back to it until
+  # a release is published from Admin > Dataset releases.
+  FIRST_RELEASE = "2026.11".freeze
   PUBLISHED_TABLES = %w[companies facilities relationships sources evidence].freeze
+  TABLE_COUNT_WORDS = { 5 => "Five", 6 => "Six", 7 => "Seven" }.freeze
+  # The Data page's "Last updated" while v2026.11 is the newest release.
+  FIRST_RELEASE_UPDATED = "October 2026".freeze
+
+  # The newest published release's version and tables (#950), in the export's table order. The pages list, link and
+  # describe only what that release has, so no download link is broken.
+  def published_dataset
+    @published_dataset ||= begin
+      release = DatasetRelease.where(status: "published").newest_first.first
+      tables = release ? Dataset::Export::TABLES.keys & release.tables_included : PUBLISHED_TABLES
+      { version: release&.version || FIRST_RELEASE, tables:, count_word: TABLE_COUNT_WORDS.fetch(tables.size, tables.size.to_s),
+        updated: release&.published_at&.strftime("%B %Y") || FIRST_RELEASE_UPDATED }
+    end
+  end
   def dataset_json_ld(page_url:, description:)
-    base = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/main"
+    base = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/v#{published_dataset[:version]}" # the release's tag, not main
     {
       "@context" => "https://schema.org", "@type" => "Dataset", "@id" => "#{page_url}#dataset", "name" => Dataset::Export::TITLE,
       "description" => description, "url" => page_url, "identifier" => "https://doi.org/#{DATASET_DOI}", "sameAs" => "https://doi.org/#{DATASET_DOI}",
@@ -25,7 +39,7 @@ module StructuredDataHelper
       "spatialCoverage" => "United States",
       "creator" => { "@type" => "Person", "name" => "#{Dataset::Export::AUTHOR[:given]} #{Dataset::Export::AUTHOR[:family]}" },
       "publisher" => { "@type" => "Organization", "name" => Dataset::Export::PUBLISHER, "url" => Dataset::Export::SITE },
-      "distribution" => PUBLISHED_TABLES.flat_map do |table|
+      "distribution" => published_dataset[:tables].flat_map do |table|
         [ { "@type" => "DataDownload", "encodingFormat" => "text/csv", "name" => "#{table}.csv", "contentUrl" => "#{base}/#{table}.csv" },
           { "@type" => "DataDownload", "encodingFormat" => "application/json", "name" => "#{table}.json", "contentUrl" => "#{base}/#{table}.json" } ]
       end
