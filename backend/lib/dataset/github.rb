@@ -22,8 +22,11 @@ module Dataset
       end
     end
 
-    def initialize(token: ENV["DATASET_GITHUB_TOKEN"].presence)
+    # timeout: seconds per call. A dry run from the admin page uses a short
+    # one, so a slow GitHub can't hold a web thread for long (Infra).
+    def initialize(token: ENV["DATASET_GITHUB_TOKEN"].presence, timeout: TIMEOUT)
       @token = token
+      @timeout = timeout
     end
 
     def token? = @token.present?
@@ -98,7 +101,7 @@ module Dataset
           request["Content-Type"] = "application/json"
           request.body = JSON.generate(body)
         end
-        response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: TIMEOUT, read_timeout: TIMEOUT, write_timeout: TIMEOUT) do |http|
+        response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: @timeout, read_timeout: @timeout, write_timeout: @timeout) do |http|
           http.request(request)
         end
         status = response.code.to_i

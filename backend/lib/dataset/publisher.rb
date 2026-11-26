@@ -14,6 +14,8 @@
 module Dataset
   class Publisher
     class Refused < StandardError; end
+    # A second Publish of a release that's already out: nothing went wrong.
+    class AlreadyPublished < Refused; end
 
     BRANCH = "main".freeze
     # Files a release owns. One the repo has that this release doesn't write
@@ -27,8 +29,15 @@ module Dataset
 
     # Refusals before anything is read leave the release as it was; a failure
     # after marks it failed, with the reason, until it's published again.
-    def publish!
-      raise Refused, "v#{@release.version} is already published" if @release.published?
+    # built_at: the draft's build time when Publish was pressed. If the draft
+    # was rebuilt since, its counts aren't the ones Data Quality signed off,
+    # so it isn't published (Infra).
+    def publish!(built_at: nil)
+      raise AlreadyPublished, "v#{@release.version} is already published" if @release.published?
+      if built_at && built_at != Publisher.stamp(@release.built_at)
+        raise Refused, "v#{@release.version} was rebuilt after the page was loaded; check the new counts, then publish again"
+      end
+
       raise Refused, "publishing isn't set up: DATASET_GITHUB_TOKEN is missing" unless @github.token?
       raise Refused, "v#{@release.version} has no files; rebuild it" unless @release.publishable?
 
@@ -71,6 +80,9 @@ module Dataset
       @release.update!(dry_run: result)
       result
     end
+
+    # A build time as the Publish form sends it, to the microsecond.
+    def self.stamp(time) = time&.utc&.iso8601(6)
 
     def release_body
       counts = @release.ordered_counts.map { |table, count| "#{ActiveSupport::NumberHelper.number_to_delimited(count)} #{NOUNS.fetch(table, table)}" }

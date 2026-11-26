@@ -133,9 +133,23 @@ class Dataset::PublisherTest < ActiveSupport::TestCase
     assert_not_requested @ref
   end
 
+  test "a draft rebuilt after Publish was pressed isn't published" do
+    pressed = Dataset::Publisher.stamp(@release.built_at)
+    @release.update!(built_at: 1.minute.from_now)
+
+    assert_raises(Dataset::Publisher::Refused) { publisher.publish!(built_at: pressed) }
+    assert_not_requested :any, /api.github.com/
+  end
+
+  test "the job logs a second Publish of a published release, without an alert" do
+    @release.update!(status: "published")
+    assert_nothing_raised { DatasetPublishJob.perform_now(@release.id) }
+    assert_equal "published", @release.reload.status
+  end
+
   test "a published release is never published again" do
     @release.update!(status: "published")
-    assert_raises(Dataset::Publisher::Refused) { publisher.publish! }
+    assert_raises(Dataset::Publisher::AlreadyPublished) { publisher.publish! }
     assert_not_requested :any, /api.github.com/
   end
 

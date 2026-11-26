@@ -3,6 +3,9 @@
 # Data Quality's OK). Building and publishing run as jobs; a dry run only
 # reads the data repo, so it runs here.
 class Admin::DatasetReleasesController < Admin::BaseController
+  # Seconds per GitHub call in a dry run, which runs in the web request (Infra).
+  DRY_RUN_TIMEOUT = 10
+
   def show
     @releases = DatasetRelease.newest_first.limit(36).to_a
     @release = @releases.find { |release| !release.published? }
@@ -27,7 +30,7 @@ class Admin::DatasetReleasesController < Admin::BaseController
 
   def dry_run
     release = DatasetRelease.find(params[:id])
-    Dataset::Publisher.new(release).dry_run
+    Dataset::Publisher.new(release, github: Dataset::Github.new(timeout: DRY_RUN_TIMEOUT)).dry_run
     redirect_to admin_dataset_releases_path(anchor: "dry-run"), notice: "Dry run done. Nothing was sent to GitHub."
   rescue Dataset::Github::Error => e
     redirect_to admin_dataset_releases_path, alert: "Dry run failed: #{e.message}"
@@ -37,10 +40,12 @@ class Admin::DatasetReleasesController < Admin::BaseController
     release = DatasetRelease.find(params[:id])
     refused = if !DatasetRelease.publishing_set_up? then "Publishing isn't set up yet."
     elsif !release.publishable? then "v#{release.version} can't be published: #{release.published? ? "it's published already" : "it has no files"}."
+    elsif params[:built_at] != Dataset::Publisher.stamp(release.built_at)
+      "v#{release.version} was rebuilt after this page was loaded. Check the new counts, then publish."
     end
     return redirect_to(admin_dataset_releases_path, alert: refused) if refused
 
-    DatasetPublishJob.perform_later(release.id)
+    DatasetPublishJob.perform_later(release.id, params[:built_at])
     redirect_to admin_dataset_releases_path, notice: "Publishing v#{release.version}. It takes about a minute; refresh to see the release link."
   end
 end

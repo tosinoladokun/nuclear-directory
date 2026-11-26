@@ -41,7 +41,35 @@ class Admin::DatasetReleasesTest < ActionDispatch::IntegrationTest
     assert_select "#dataset-not-set-up", false
     assert_select "#dataset-publish:not([disabled])"
     assert_not_includes response.body, "github_pat_secret"
-    assert_enqueued_with(job: DatasetPublishJob, args: [ @release.id ]) { post admin_dataset_release_publish_path(@release) }
+    stamp = Dataset::Publisher.stamp(@release.built_at)
+    assert_select "input[name=built_at][value=?]", stamp
+    assert_enqueued_with(job: DatasetPublishJob, args: [ @release.id, stamp ]) { post admin_dataset_release_publish_path(@release), params: { built_at: stamp } }
+  end
+
+  test "Publish is refused when the draft was rebuilt after the page loaded" do
+    ENV["DATASET_GITHUB_TOKEN"] = "github_pat_secret"
+    loaded = Dataset::Publisher.stamp(@release.built_at)
+    @release.update!(built_at: 1.minute.from_now)
+
+    assert_no_enqueued_jobs { post admin_dataset_release_publish_path(@release), params: { built_at: loaded } }
+    assert_match "was rebuilt after this page was loaded", flash[:alert]
+  end
+
+  test "the dry run uses a short timeout, since it runs in the request" do
+    timeouts = []
+    original = Net::HTTP.method(:start)
+    Net::HTTP.define_singleton_method(:start) do |*args, **options, &block|
+      timeouts << options[:read_timeout]
+      original.call(*args, **options, &block)
+    end
+    stub_request(:get, %r{api.github.com}).to_timeout
+
+    post admin_dataset_release_dry_run_path(@release)
+
+    assert_match "Dry run failed: GitHub didn't answer", flash[:alert]
+    assert_equal [ 10 ], timeouts.uniq
+  ensure
+    Net::HTTP.define_singleton_method(:start, original) if original
   end
 
   test "a published release can't be published or rebuilt again" do

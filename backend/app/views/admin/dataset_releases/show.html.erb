@@ -53,7 +53,7 @@
         <%= button_to "Rebuild", admin_dataset_releases_build_path, params: { version: @release.version }, class: "nd-btn nd-btn--outline type-ui",
               disabled: !@release.rebuildable?, title: ("Publishing has started, so the files are fixed" unless @release.rebuildable?) %>
         <%= button_to "Dry run", admin_dataset_release_dry_run_path(@release), class: "nd-btn nd-btn--outline type-ui", disabled: !@release.publishable? %>
-        <%= button_to "Publish v#{@release.version}", admin_dataset_release_publish_path(@release), class: "nd-btn nd-btn--primary type-ui",
+        <%= button_to "Publish v#{@release.version}", admin_dataset_release_publish_path(@release), params: { built_at: Dataset::Publisher.stamp(@release.built_at) }, class: "nd-btn nd-btn--primary type-ui",
               disabled: !(@set_up && @release.publishable?), id: "dataset-publish",
               form: { data: { turbo_confirm: "Publish v#{@release.version} to GitHub? Zenodo archives it and gives it a DOI, so it can't be taken back." } } %>
       </div>
