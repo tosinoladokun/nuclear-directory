@@ -23,10 +23,12 @@ check "leaves a column option stock Postgres knows alone" \
   "$(printf 'ALTER TABLE ONLY public.t ALTER COLUMN id SET (n_distinct=-1);\n' | strip)" \
   "ALTER TABLE ONLY public.t ALTER COLUMN id SET (n_distinct=-1);"
 
-copy=$'COPY public.notes (id, body) FROM stdin;\n1\tALTER TABLE ONLY public.t ALTER COLUMN id SET (pg_attver=3);\n\\.\nALTER TABLE ONLY public.t ALTER COLUMN id SET (pg_attver=3);'
-check "never touches COPY data, even text that looks like the option" \
+# A text column whose row is exactly the statement the filter removes: only the
+# COPY guard keeps it (Copilot, #969), so dropping the guard fails this check.
+copy=$'COPY public.notes (body) FROM stdin;\nALTER TABLE ONLY public.t ALTER COLUMN id SET (pg_attver=3);\n\\.\nALTER TABLE ONLY public.t ALTER COLUMN id SET (pg_attver=3);'
+check "never touches COPY data, even a row that is exactly the option's statement" \
   "$(printf '%s\n' "$copy" | strip)" \
-  $'COPY public.notes (id, body) FROM stdin;\n1\tALTER TABLE ONLY public.t ALTER COLUMN id SET (pg_attver=3);\n\\.'
+  $'COPY public.notes (body) FROM stdin;\nALTER TABLE ONLY public.t ALTER COLUMN id SET (pg_attver=3);\n\\.'
 
 check "says how many options it removed" \
   "$(printf 'ALTER TABLE ONLY public.t ALTER COLUMN a SET (pg_attver=1);\nALTER TABLE ONLY public.t ALTER COLUMN b SET (pg_attver=2);\n' | perl backup/strip_attver.pl 2>&1 >/dev/null)" \

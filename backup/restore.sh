@@ -35,12 +35,21 @@ decrypt | pg_restore --list | grep -E '^;\s+Dumped (from|by)' || true
 
 # The dump goes through SQL so column options the target may not know can be
 # removed (strip-attver, #968: Postgres 16.16's pg_attver, which
-# 16.16's own pg_dump leaves out and older servers refuse). One
-# transaction: if anything fails, the target is left empty, ready to retry.
-decrypt \
-  | pg_restore --no-owner --no-acl --file=- \
-  | strip-attver \
-  | psql "$target" --no-psqlrc --quiet --single-transaction --set ON_ERROR_STOP=1 > /dev/null
+# 16.16's own pg_dump leaves out and older servers refuse).
+# One transaction, committed only once decryption, pg_restore and the filter
+# have all finished cleanly: if any of them fails partway, no COMMIT is sent,
+# psql's session ends inside the transaction and it rolls back, so the
+# target is left empty, ready to retry (Copilot, #969). An SQL error stops
+# psql at once (ON_ERROR_STOP), which also rolls back.
+{
+  echo "BEGIN;"
+  if decrypt | pg_restore --no-owner --no-acl --file=- | strip-attver; then
+    echo "COMMIT;"
+  else
+    echo "restore: reading the backup failed partway; nothing was committed." >&2
+    exit 1
+  fi
+} | psql "$target" --no-psqlrc --quiet --set ON_ERROR_STOP=1 > /dev/null
 
 echo "Restored. Row counts:"
 psql "$target" --no-psqlrc --quiet --tuples-only --no-align --field-separator=' ' --command "
