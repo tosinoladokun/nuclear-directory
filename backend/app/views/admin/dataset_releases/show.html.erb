@@ -1,5 +1,5 @@
 <% content_for :title, "Dataset releases" %>
-<% day = ->(time) { time.in_time_zone("America/Los_Angeles").strftime("%-d %b %Y, %-l:%M %P") } %>
+<% day = ->(time) { time.in_time_zone("America/Los_Angeles").strftime("%b %-d, %Y, %-l:%M %P") } %>
 <div class="nd-stack">
   <h1 class="type-admin-h1 m-0">Dataset releases</h1>
   <p class="type-body m-0">The open dataset, published to GitHub once a month after Data Quality checks the counts. Zenodo archives each release and gives it a DOI.</p>
@@ -13,7 +13,7 @@
       <h2 id="dataset-draft" class="type-admin-h2 m-0">v<%= @release.version %>, <%= @release.failed? ? "not published yet" : "draft" %></h2>
       <p class="type-small text-ink-muted m-0">
         <%= @release.built_at ? "Built #{day.(@release.built_at)}" : "Not built yet" %>
-        · <%= @release.previous_version ? "compared with #{@release.previous_version}" : "first release" %>
+        · <%= @release.previous_version ? "compared with v#{@release.previous_version}" : "first release" %>
         · <%= pluralize(@release.tables_included.size, "table") %>
       </p>
       <% if @release.error.present? %>
@@ -56,7 +56,7 @@
               disabled: !@release.rebuildable?, title: ("Publishing has started, so the files are fixed" unless @release.rebuildable?) %>
         <%= button_to "Dry run", admin_dataset_release_dry_run_path(@release), class: "nd-btn nd-btn--outline type-ui", disabled: !@release.publishable? %>
         <%= button_to "Publish v#{@release.version}", admin_dataset_release_publish_path(@release), params: { built_at: Dataset::Publisher.stamp(@release.built_at) }, class: "nd-btn nd-btn--primary type-ui",
-              disabled: !(@set_up && @release.publishable?), id: "dataset-publish",
+              disabled: !(@set_up && @release.publishable?), id: "dataset-publish", "aria-describedby": ("dataset-not-set-up" unless @set_up),
               form: { data: { turbo_confirm: "Publish v#{@release.version} to GitHub? Zenodo archives it and gives it a DOI, so it can't be taken back." } } %>
       </div>
 
@@ -95,7 +95,7 @@
         <tbody>
           <% @published.each do |release| %>
             <tr>
-              <th scope="row" class="type-data"><%= release.version %></th>
+              <th scope="row" class="type-data">v<%= release.version %></th>
               <td class="type-data"><%= release.published_at&.then { |at| at.to_date.iso8601 } %></td>
               <td class="type-data nd-num"><%= number_with_delimiter(release.counts["companies"]) %></td>
               <td><%= link_to "On GitHub ↗", release.release_url, class: "nd-link type-ui whitespace-nowrap", target: "_blank", rel: "noopener" if release.release_url %></td>

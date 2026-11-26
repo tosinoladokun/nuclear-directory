@@ -29,7 +29,7 @@ class Admin::DatasetReleasesTest < ActionDispatch::IntegrationTest
     get admin_dataset_releases_path
 
     assert_select "#dataset-not-set-up", /isn't set up/
-    assert_select "#dataset-publish[disabled]"
+    assert_select "#dataset-publish[disabled][aria-describedby=dataset-not-set-up]"
     assert_no_enqueued_jobs(only: DatasetPublishJob) { post admin_dataset_release_publish_path(@release) }
     assert_equal "Publishing isn't set up yet.", flash[:alert]
   end
@@ -79,7 +79,7 @@ class Admin::DatasetReleasesTest < ActionDispatch::IntegrationTest
     assert_no_enqueued_jobs { post admin_dataset_release_publish_path(@release) }
     assert_no_enqueued_jobs { post admin_dataset_releases_build_path, params: { version: "2026.12" } }
     get admin_dataset_releases_path
-    assert_select "#dataset-published-list tr", text: /2026.12/
+    assert_select "#dataset-published-list th", "v2026.12"
   end
 
   test "Rebuild queues the build for that version" do

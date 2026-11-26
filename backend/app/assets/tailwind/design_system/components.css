@@ -26,10 +26,11 @@
 
   /* Button */
   .nd-btn { white-space: nowrap; font: 500 14px/20px var(--font-text); height: 36px; padding: 0 var(--nd-space-4); display: inline-flex; align-items: center; gap: var(--nd-space-2); border-radius: var(--nd-radius-sm); border: var(--nd-hairline) solid var(--nd-control); background: var(--nd-paper-raised); color: var(--nd-ink); cursor: pointer; transition: background .12s ease-out; }
-  .nd-btn:hover { background: var(--nd-paper-sunken); }
+  .nd-btn:hover:not(:disabled) { background: var(--nd-paper-sunken); }
   .nd-btn--primary { background: var(--nd-inverse); border-color: var(--nd-inverse); color: var(--nd-on-inverse); }
-  .nd-btn--primary:hover { background: var(--nd-inverse); opacity: .88; }
-  .nd-btn:disabled, .nd-btn:disabled:hover { opacity: .45; cursor: not-allowed; }
+  .nd-btn--primary:hover:not(:disabled) { background: var(--nd-inverse); opacity: .88; }
+  /* Disabled: 45% opacity, not-allowed cursor; say why next to it (#951). */
+  .nd-btn:disabled { opacity: .45; cursor: not-allowed; }
   .nd-btn--ghost { border-color: transparent; background: transparent; }
   .nd-btn--sm { height: 28px; padding: 0 var(--nd-space-3); font-size: 13px; }
 
@@ -662,7 +663,7 @@
   /* Square controls at 44px (canvas A). */
   .nd-shell .nd-btn { border-radius: 0; height: auto; min-height: 44px; padding: 0 var(--nd-space-4); }
   .nd-btn--outline { background: transparent; border-color: var(--nd-ink); }
-  .nd-btn--outline:hover { background: var(--nd-paper-sunken); }
+  .nd-btn--outline:hover:not(:disabled) { background: var(--nd-paper-sunken); }
   .nd-btn--danger { background: transparent; border-color: var(--nd-critical); color: var(--nd-critical); }
 
   /* Stage tiles and counts */
@@ -678,6 +679,8 @@
   .nd-numtable td { text-align: right; padding: 12px 14px; border-top: var(--nd-hairline) solid var(--nd-rule); white-space: nowrap; }
   .nd-numtable th:first-child, .nd-numtable td:first-child { text-align: left; }
   .nd-numtable td:first-child { white-space: normal; }
+  /* A row header reads like the row's first cell, not a column header (#951). */
+  .nd-numtable tbody th { text-align: left; padding: 12px 14px; border-top: var(--nd-hairline) solid var(--nd-rule); background: none; font: inherit; letter-spacing: normal; text-transform: none; color: var(--nd-ink); }
 
   /* Filter chips with counts; the current one has an ink edge. */
   .nd-fchips { display: flex; flex-wrap: wrap; gap: var(--nd-space-2); }
