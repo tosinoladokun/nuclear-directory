@@ -8,8 +8,8 @@
 # app/views/home/charts/_<chart>.html.erb.
 #
 #   key:       the card's name in the analytics (home_chart_click) and the query method
-#   question:  the title. %{count} is the chart's count (map only)
-#   short:     a shorter question, for a card too narrow for the whole one (only when it doesn't fit at 320)
+#   question:  the title, the whole question on every card (two lines at most on narrow cards, #961). %{count} is
+#              the chart's count (map only)
 #   chart:     map, bars (ranked, top 8), columns, or split (one bar in parts)
 #   sizes:     large and/or small: the slots the card can take
 #   axes:      bars: category (the names' axis), value (with its unit); columns: x, y
@@ -19,13 +19,11 @@
 
 - key: plant_map
   question: "Where are the %{count} operating US nuclear plants?"
-  short: Where are US plants?
   chart: map
   sizes: [large]
 
 - key: state_power
   question: Which states have the most nuclear power?
-  short: Most power by state?
   chart: bars
   sizes: [large, small]
   axes: { category: State, value: "Capacity (GW, net summer)" }
@@ -33,8 +31,7 @@
   decimals: 1
 
 - key: largest_plants
-  question: Which are the largest US nuclear plants?
-  short: Largest US plants?
+  question: Which US nuclear plants are the largest?
   chart: bars
   sizes: [large, small]
   axes: { category: Plant, value: "Capacity (GW, net summer)" }
@@ -49,20 +46,17 @@
 
 - key: reactors_per_plant
   question: How many reactors does each plant have?
-  short: Reactors per plant?
   chart: columns
   sizes: [small]
   axes: { x: Reactors at the plant, y: Plants }
 
 - key: reactor_types
-  question: What kind of reactors does the US run?
-  short: What kind of reactors?
+  question: What kinds of reactors does the US run?
   chart: split
   sizes: [small]
 
 - key: state_reactors
   question: Which states have the most reactors?
-  short: Reactors by state?
   chart: bars
   sizes: [small]
   axes: { category: State, value: Reactors }
@@ -71,15 +65,13 @@
 
 - key: reactor_vendors
   question: Whose reactor designs does the US run?
-  short: Whose reactor designs?
   chart: bars
   sizes: [small]
   axes: { category: Company, value: Reactors }
   tick: 20
 
 - key: reactor_status
-  question: How many US power reactors still run?
-  short: How many still run?
+  question: How many US power reactors are still running?
   chart: split
   sizes: [small]
   not_with: [reactor_types]

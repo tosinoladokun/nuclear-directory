@@ -433,24 +433,20 @@
     .nd-charts { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: 1fr 1fr; gap: 24px; }
     .nd-chart--large { grid-row: 1 / span 2; }
   }
-  /* A card is a question and its chart, nothing else (Tosin, 25 Nov). The title shows its short form when the card is
-     too narrow for the question on one line: a container query, so it follows the card, not the screen. */
+  /* A card is a question and its chart, nothing else (Tosin, 25 Nov). The whole question shows on every card (#961). */
   .nd-chart { container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); }
   /* The title row is the card's link (#949): underlined on hover and focus, its ↗ in ink, as the category cards' titles.
      The card itself doesn't change, or hovering a row would light up the whole card. */
   .nd-chart__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-width: 0; color: inherit; text-decoration: none; }
   .nd-chart__head:hover .nd-chart__title, .nd-chart__head:focus-visible .nd-chart__title { text-decoration: underline; text-underline-offset: 2px; }
-  /* One line; the ellipsis only as a last resort (the full question is in the title attribute). */
-  .nd-chart__title { flex: 1 1 auto; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nd-chart__tshort { display: none; }
-  /* Fit to the card: the title's own size, or smaller down to 15px (0.6: Roboto Serif semibold's average width, with
-     room to spare; 24px: the ↗ and its gap). */
-  .nd-chart__fit { font-size: clamp(15px, calc((100cqi - 24px) / (var(--chars) * 0.6)), 1em); }
-  @container (max-width: 520px) {
-    .nd-chart__tfull { display: none; }
-    .nd-chart__tshort { display: inline; }
-  }
+  /* The question whole, on two lines at most on a narrow card, balanced, never cut (#961: an exception to "Text in a
+     box stays on one line", for chart card questions only). */
+  .nd-chart__title { flex: 1 1 auto; min-width: 0; margin: 0; text-wrap: balance; }
+  /* The ↗ beside the first line: centred on a 28px line; 24px and 22px lines below. */
   .nd-chart__go { flex: none; display: flex; padding-top: 6px; color: var(--nd-ink-muted); }
+  @container (max-width: 519px) { .nd-chart__go { padding-top: 4px; } }
+  @media (max-width: 359px) { .nd-chart__go { padding-top: 3px; } }
+  @container (max-width: 239px) { .nd-chart__go { padding-top: 2px; } }
   .nd-chart__head:hover .nd-chart__go, .nd-chart__head:focus-visible .nd-chart__go { color: var(--nd-ink); }
   /* The chart sits 16px under the title; a card stretched past its chart keeps the spare room at the bottom. */
   .nd-chart__body { min-width: 0; }
@@ -1823,10 +1819,14 @@
 .nd-instant__text > b[data-fit="small"] { font-size: 13px; line-height: 24px; }
 /* Browse's two long category names drop to 13px on phones (#917); outside the layers, as above, to beat type-body-strong. */
 @media (max-width: 559px) { .nd-browse__name[data-long] { font-size: 13px; } }
-/* Homepage B's charts (#909): sizes that beat the type utilities on the same elements, so outside the layers. Card titles
-   are 17px on phones and 16px below 360, so the short titles fit on one line at 320. The large card's bar names are
+/* Homepage B's charts (#909): sizes that beat the type utilities on the same elements, so outside the layers. A card's
+   question is 20px on cards 520px and wider, 17px on narrower ones (the small cards, and every card on a phone), and
+   15px on screens under 360, where the map's question misses two lines at 16px, and 14px on a card narrower than 240px
+   (#961). The large card's bar names are
    15px, 13px when the card is under 520px wide. */
-@media (max-width: 639px) { .nd-chart__title { font-size: 17px; line-height: 24px; } }
-@media (max-width: 359px) { .nd-chart__title { font-size: 16px; } }
+@container (max-width: 519px) { .nd-chart__title { font-size: 17px; line-height: 24px; } }
+@media (max-width: 359px) { .nd-chart__title { font-size: 15px; line-height: 22px; } }
+/* A card narrower than 240px (a 320 window with a classic scrollbar): 14px, so the map's question stays on two lines (#972). */
+@container (max-width: 239px) { .nd-chart__title { font-size: 14px; line-height: 20px; } }
 .nd-chart--large .nd-chartbars__label { font-size: 15px; }
 @container (max-width: 520px) { .nd-chart--large .nd-chartbars__label { font-size: 13px; } } /* as on the small cards (Design, #935) */
