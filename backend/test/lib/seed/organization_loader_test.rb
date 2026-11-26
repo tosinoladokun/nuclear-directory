@@ -108,6 +108,105 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_empty Seed::OrganizationLoader.new(@dir).load!.kept, "a file brought into line keeps nothing"
   end
 
+  test "a company a person renamed keeps its name; the file's old name still finds it (#967)" do
+    [ "https://acmefuel.com", nil ].each do |website|
+      Organization.where("name ILIKE 'Acme%'").destroy_all
+      doc = org("Acme Fuel", website:, description: { text: "Makes fuel.", source_url: "https://example.com/a", quote: "Acme makes fuel." })
+      write_file("acme-fuel", doc)
+      Seed::OrganizationLoader.new(@dir).load!
+      acme = Organization.find_by!(name: "Acme Fuel")
+      result = DataQuality::Review.approve_fact(type: "Organization", id: acme.id, by: "human:tosin", attributes: { name: "Acme Nuclear" })
+      assert result.ok?, result.errors.inspect
+
+      loader = Seed::OrganizationLoader.new(@dir).load!
+
+      assert_equal "Acme Nuclear", acme.reload.name, "website #{website.inspect}"
+      assert_equal 1, Organization.where("name ILIKE 'Acme%'").count, "no second company"
+      assert_match(/acme-fuel: kept organization #{acme.id}'s name "Acme Nuclear", approved after the seed wrote it; the file says "Acme Fuel"/, loader.kept.join("\n"))
+      assert_equal 0, Seed::OrganizationLoader.new(@dir).load!.results[:organization][:changed], "every later run keeps it"
+
+      write_file("acme-fuel", doc.merge(name: "Acme Nuclear"))
+      assert_empty Seed::OrganizationLoader.new(@dir).load!.kept, "a file brought into line keeps nothing"
+    end
+  end
+
+  test "a company an agent renamed takes the file's name back (#967)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com"))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(name: "Acme Fuel")
+    Directory::FactWriter.write(:organization, { id: acme.id, name: "Acme Fuel Co" }, verification: { status: "verified", by: "agent:crawler" })
+
+    assert_empty Seed::OrganizationLoader.new(@dir).load!.kept
+    assert_equal "Acme Fuel", acme.reload.name
+  end
+
+  test "a site a person renamed back to one of the file's former names isn't renamed again (#967)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns"),
+      item(name: "Acme Station 1", site: "Acme Station", type: "operates") ]))
+    details = { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ],
+      "state" => { "value" => "TN", "source_url" => "https://example.com/where", "quote" => "In Tennessee." } } ] }
+    File.write(facilities_file, details.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    site = Facility.find_by!(name: "Acme Station", parent_id: nil)
+    result = DataQuality::Review.approve_fact(type: "Facility", id: site.id, by: "human:tosin", attributes: { name: "Acme Plant" })
+    assert result.ok?, result.errors.inspect
+    assert_equal "Acme Plant", site.reload.name
+
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+
+    assert_equal [ "Acme Plant", "TN" ], site.reload.attributes.values_at("name", "state")
+    assert_equal 1, Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").count, "no second site"
+    assert_match(/facilities.yml: kept facility #{site.id}'s name "Acme Plant"/, loader.kept.join("\n"))
+    assert_equal [ site.id ], Facility.where(name: "Acme Station 1").pluck(:parent_id), "its unit stays under it, found by the file's name (Copilot)"
+  end
+
+  # A site a person renamed, with its unit and details, loaded again from facilities.yml.
+  def renamed_site(person_name, file_name: "Acme Station", other_names: [ "Acme Plant" ])
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns"),
+      item(name: "Acme Station 1", site: "Acme Station", type: "operates") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ] } ] }.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    site = Facility.find_by!(name: "Acme Station", parent_id: nil)
+    result = DataQuality::Review.approve_fact(type: "Facility", id: site.id, by: "human:tosin", attributes: { name: person_name })
+    assert result.ok?, result.errors.inspect
+
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: file_name, type: "owns"),
+      item(name: "Acme Station 1", site: file_name, type: "operates") ],
+      licensing: [ licensing(facility: file_name, nrc_docket: "50-9999") ]))
+    details = { "facilities" => [ { "name" => file_name, "other_names" => other_names,
+      "state" => { "value" => "TN", "source_url" => "https://example.com/where", "quote" => "In Tennessee." } } ] }
+    File.write(facilities_file, details.to_yaml)
+    site
+  end
+
+  def assert_one_site(site, name)
+    assert_nothing_raised { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load! }
+    assert_equal [ name, "TN" ], site.reload.attributes.values_at("name", "state")
+    assert_equal [ site.id ], Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").pluck(:id), "no second site"
+    assert_equal [ site.id ], Facility.where(name: "Acme Station 1").pluck(:parent_id), "its unit stays under it"
+    assert_equal 2, site.facility_relationships.count + Facility.find_by!(name: "Acme Station 1").facility_relationships.count
+    assert_equal site.id, LicensingStage.sole.facility_id, "a licensing stage naming it by the file's name finds it (Copilot)"
+  end
+
+  test "a site a person renamed keeps its name when the file brings in a new one; the load finds it by id (Copilot, #970)" do
+    site = renamed_site("Acme Plant", file_name: "Acme Works", other_names: [ "Acme Station", "Acme Plant" ])
+    assert_one_site(site, "Acme Plant")
+  end
+
+  test "a site a person renamed only in punctuation keeps its name; the file's spelling still finds it (Copilot, #970)" do
+    site = renamed_site("Acme-Station", other_names: [])
+    assert_one_site(site, "Acme-Station")
+  end
+
+  test "a site found under a former name only through a lookup is guarded from its record (Copilot, #970)" do
+    site = Facility.create!(name: "Acme Plant", nrc_docket: "07000001")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ] } ] }.to_yaml)
+    approve(site, state: "NM")
+
+    assert_nothing_raised { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load! }
+  end
+
   test "a hand edit in the admin stands too (Infra, #947)" do
     doc = org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "CO", source_url: "https://example.com/a", quote: "Lakewood, CO" })
     write_file("acme-fuel", doc)
@@ -1050,6 +1149,17 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     Seed::OrganizationLoader.new(@dir).load!
     assert_equal Facility.find_by!(name: "San Onofre").id, loose.reload.parent_id, "taken in by its alias, keeping its name"
     assert_not Facility.exists?(name: "SONGS 2")
+  end
+
+  test "a site spelled with other punctuation holds its EIA plant ID without a false collision; the preflight finds it as the load does (Copilot, #970)" do
+    old = Facility.create!(name: "Acme-Station", eia_plant_id: "649")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station", "eia_plant_id" => "649" } ] }.to_yaml)
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file)
+    assert_empty loader.plant_id_collisions
+    loader.load!
+    assert_equal [ old.id ], Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").pluck(:id), "no second site"
+    assert_equal [ "Acme Station", "649" ], old.reload.attributes.values_at("name", "eia_plant_id"), "nobody chose the other spelling: the file's stands"
   end
 
   test "a site under a former name is found beside a same-name NRC unit, in the preflight and the rename" do

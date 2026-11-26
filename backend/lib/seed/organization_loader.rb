@@ -39,6 +39,9 @@ module Seed
       @errors = []
       # Values a person approved that the file disagrees with (#947), one line each.
       @kept = []
+      # Sites whose person-given name stood over the file's (#967), by the
+      # file's name normalized: the rest of the load finds them by id.
+      @kept_sites = {}
     end
 
     # Per kind, the rows the seed created, changed (an existing fact it
@@ -116,8 +119,21 @@ module Seed
     def site_named(name) = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(:id).first
 
     def plant_named(name)
-      Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
+      kept_site(name) ||
+        Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
         Directory::Lookup.facility(name:)
+    end
+
+    # A site whose name differs from this one only in case and punctuation
+    # ("Acme-Station" for "Acme Station"): no alias keeps such a spelling.
+    def site_spelled(name)
+      normalized = FacilityAlias.normalize(name)
+      Facility.where(parent_id: nil, nrc_docket: nil).order(:id).find { |site| FacilityAlias.normalize(site.name) == normalized }
+    end
+
+    # A site whose person-given name was kept, found by the file's name.
+    def kept_site(name)
+      id = @kept_sites[FacilityAlias.normalize(name)] and Facility.find_by(id:)
     end
 
     # An EIA plant ID another site holds (#229): merge that site in first.
@@ -129,7 +145,8 @@ module Seed
         # name, then by a former one (rename_from_former_name).
         # A site under its name or a former one comes before a same-name NRC unit.
         names = [ entry["name"], *entry["other_names"] ].compact_blank
-        target = names.lazy.filter_map { |name| site_named(name) }.first || names.lazy.filter_map { |name| plant_named(name) }.first
+        target = names.lazy.filter_map { |name| site_named(name) }.first || site_spelled(entry["name"]) ||
+          names.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -430,6 +447,8 @@ module Seed
           # name can belong to an older site as well as the docketed unit.
           docket = LicensingStage.normalize_docket(item["nrc_docket"])
           facility = (Directory::Lookup.facility(nrc_docket: docket) if docket) ||
+            # A site whose person-given name was kept, by the file's name (#967, Copilot).
+            (kept_site(item["facility"]) if item["facility"].present?) ||
             (Directory::Lookup.facility(name: item["facility"]) if item["facility"].present?)
           unless facility
             @errors << "#{slug}: licensing: unknown facility #{item["facility"].inspect}"
@@ -504,12 +523,24 @@ module Seed
         # A site under a former name is renamed, even beside a same-name NRC
         # unit (a docketed Callaway and the site once called Callaway Energy Center).
         former = Array(entry["other_names"]).lazy.filter_map { |name| site_named(name) }.first
+        # Or one whose name differs only in case and punctuation ("Acme-Station"):
+        # no alias keeps the file's spelling then, so no lookup finds it (Copilot).
+        former ||= site_spelled(entry["name"])
         unless former
           return if Directory::Lookup.facility(name: entry["name"])
 
           former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
         end
         attributes = { id: former.id, name: entry["name"] }
+        # A name a person gave the site after the seed wrote it stands (#967),
+        # even when it's one of the file's former names. Read from the record,
+        # not a lookup's reference (Copilot). The file's name may then find
+        # nothing, so the rest of the load finds the site by id (Copilot).
+        if keep_approved("facilities.yml", Facility.find_by(id: former.id), attributes).any?
+          @kept_sites[FacilityAlias.normalize(entry["name"])] = former.id
+          return
+        end
+
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)
         write("facilities.yml", :facility, attributes, [])
@@ -596,7 +627,11 @@ module Seed
       # sourced but never matched elsewhere. An existing unit keeps its name.
       def write_unit(slug, item, sources)
         site_name, name = item["site"].to_s.strip, item["name"].to_s.strip
-        site = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", site_name).first
+        sites = Facility.where(parent_id: nil, nrc_docket: nil)
+        # By name, else by another name it goes by: a site a person renamed
+        # keeps the file's name as an alias (#967, Copilot), so its units stay under it.
+        site = kept_site(site_name) || sites.where("LOWER(name) = LOWER(?)", site_name).first ||
+          sites.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(site_name)).select(:facility_id)).order(:id).first
         unless site
           # A new site, sourced and decided like any written by this load.
           site = Facility.create!(name: site_name)
@@ -635,7 +670,8 @@ module Seed
       # minus any field a person decided after the seed wrote it (#960).
       def write_plant(slug, item, sources)
         attributes = facility_attributes(item)
-        existing = Facility.find_by(id: Directory::FactWriter.existing(:facility, attributes))
+        # A site whose person-given name was kept is found by id (#967).
+        existing = kept_site(item["name"]) || Facility.find_by(id: Directory::FactWriter.existing(:facility, attributes))
         if keep_approved(slug, existing, attributes).any?
           # Named by id so the write can't miss it; without the file's name, so a
           # plant found by an alias keeps its own, as a write by name does (Copilot, #963).
