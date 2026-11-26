@@ -17,10 +17,12 @@ relationships: []
 facilities: []
 notes: Only nuclear work found is the DOE Fortis cask railcar (it builds the railcar; it doesn't transport waste), so components at 0.8.
 description:
-  text: Engineering company in aerospace, national security, rail and cybersecurity; contracted by DOE to build and test a spent-fuel railcar prototype.
+  text: "ENSCO, Inc., and its wholly owned subsidiaries, represent a $190 million international technology enterprise with 700+ employees headquartered in the Washington, D.C., area."
   source_url: https://www.ensco.com/news-media/press-releases/us-department-of-energy-awards-contract-to-ensco-to-build-and-test-fortis-railcar
   quote: ENSCO operates in the aerospace, national security, surface transportation and cybersecurity sectors and focuses on technologies, products, and services to support the safety, security, reliability, and efficiency of customer missions.
   also:
+  - source_url: https://www.ensco.com/about
+    quote: "ENSCO, Inc., and its wholly owned subsidiaries, represent a $190 million international technology enterprise with 700+ employees headquartered in the Washington, D.C., area."
   - quote: Company will fabricate and test prototype railcar to transport spent nuclear fuel, high-level radioactive waste
 short_description:
   text: 'Spent fuel railcar prototype maker'

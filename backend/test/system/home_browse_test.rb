@@ -58,6 +58,24 @@ class HomeBrowseTest < ApplicationSystemTestCase
     assert_equal "true", field["aria-expanded"]
   end
 
+  test "a field focused, or typed in, before the controller connected still opens Browse or shows results (#964)" do
+    visit root_path
+    assert_selector "[data-controller=instant-search]"
+    # What a slow load looks like: the controller isn't there yet when the visitor focuses the field and types.
+    detach = "document.querySelector('.nd-searchbox--large').removeAttribute('data-controller')"
+    attach = "document.querySelector('.nd-searchbox--large').setAttribute('data-controller', 'instant-search')"
+    page.execute_script(detach)
+    field.click
+    page.execute_script(attach)
+    assert_selector ".nd-browse__row", text: "Reactor developers"
+    assert_equal "true", field["aria-expanded"]
+
+    page.execute_script(detach)
+    field.send_keys("kairos")
+    page.execute_script(attach)
+    assert_selector ".nd-instant__row", text: "Kairos Power", wait: 20
+  end
+
   # Design's measures (#917): full names at 15px; 13px on phones for the two long ones; their short names under 360px.
   test "every Browse name is on one line and whole at 320, 390 and 1440 (no-wrap)" do
     components = role("components")

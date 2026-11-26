@@ -17,10 +17,12 @@ relationships: []
 facilities: []
 notes: East Lansing, MI (not set as HQ).
 description:
-  text: Develops fiber-optic sensors for harsh environments, including fusion plasma diagnostics.
+  text: "Nusenics develops fiber-optic sensing technologies for measurement environments where conventional electronic sensors face practical limits."
   source_url: https://nusenics.com
   quote: Nusenics develops advanced fiber-optic sensing technologies for demanding environments where conventional electronic sensors face limits from electromagnetic interference, high temperature, or difficult access.
   also:
+  - source_url: https://nusenics.com/about.html
+    quote: "Nusenics develops fiber-optic sensing technologies for measurement environments where conventional electronic sensors face practical limits."
   - quote: Fiber-optic bolometer technology for fusion plasma radiation measurement, supporting compact, optically interrogated diagnostics in environments where EMI and sensor packaging constraints limit conventional electronic systems.
 short_description:
   text: 'Fiber-optic sensors for harsh settings'

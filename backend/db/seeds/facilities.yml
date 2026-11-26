@@ -636,27 +636,6 @@ facilities:
     quote: 'Iowa''s only nuclear facility, which is located in Palo'
     published: '2025-10-27'
     confidence: 1.0
-- name: Louisiana Energy Services (LES)
-  facility_type:
-    value: enrichment
-    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
-    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
-    confidence: 1.0
-  status:
-    value: operating
-    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
-    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
-    confidence: 1.0
-  city:
-    value: Eunice
-    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
-    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
-    confidence: 1.0
-  state:
-    value: NM
-    source_url: https://www.nrc.gov/facilities-safety/facility-finder/fc/urenco-enrichment-fac-nm-lc
-    quote: 'Louisiana Energy Services (LES) | Location: Eunice, NM | Licensee: URENCO–USA | Docket Number: 07003103 | Facility Type: Uranium Enrichment – Gas Centrifuge | Facility Status: Operational'
-    confidence: 1.0
 - name: BWXT
   facility_type:
     value: fuel_facility
