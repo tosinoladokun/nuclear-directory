@@ -44,7 +44,7 @@ class DatasetReleaseWatchJob < ApplicationJob
       overdue = missing.select { |release| release.published_at && release.published_at < now - DOI_WAIT }
       if overdue.any?
         helper.raise!(NO_DOI, title: "No Zenodo DOI for dataset #{overdue.map(&:tag).join(', ')}",
-          body: overdue.map { |release| "#{release.tag} was published #{release.published_at.utc.strftime('%-d %b %H:%M UTC')} (#{release.release_url}). " \
+          body: overdue.map { |release| "#{release.tag} was published #{release.published_at.utc.strftime('%b %-d, %H:%M UTC')} (#{release.release_url}). " \
             "Zenodo hasn't shown a version DOI that resolves." }.join("\n") +
             "\n\nCheck the Zenodo webhook on the data repo, and the upload's status on Zenodo.")
       else

@@ -17,6 +17,8 @@ module StructuredDataHelper
   FIRST_RELEASE = "2026.11".freeze
   PUBLISHED_TABLES = %w[companies facilities relationships sources evidence].freeze
   TABLE_COUNT_WORDS = { 5 => "Five", 6 => "Six", 7 => "Seven" }.freeze
+  # The Data page's "Last updated" while v2026.11 is the newest release.
+  FIRST_RELEASE_UPDATED = "October 2026".freeze
 
   # The newest published release's version and tables (#950), in the export's table order. The pages list, link and
   # describe only what that release has, so no download link is broken.
@@ -24,7 +26,8 @@ module StructuredDataHelper
     @published_dataset ||= begin
       release = DatasetRelease.where(status: "published").newest_first.first
       tables = release ? Dataset::Export::TABLES.keys & release.tables_included : PUBLISHED_TABLES
-      { version: release&.version || FIRST_RELEASE, tables:, count_word: TABLE_COUNT_WORDS.fetch(tables.size, tables.size.to_s) }
+      { version: release&.version || FIRST_RELEASE, tables:, count_word: TABLE_COUNT_WORDS.fetch(tables.size, tables.size.to_s),
+        updated: release&.published_at&.strftime("%B %Y") || FIRST_RELEASE_UPDATED }
     end
   end
   def dataset_json_ld(page_url:, description:)

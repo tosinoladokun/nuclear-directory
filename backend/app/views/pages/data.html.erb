@@ -11,7 +11,7 @@
 <% end %>
 <% summary = "Every fact in the directory is free to download as CSV or JSON, with the documents it comes from. Reuse it with credit." %>
 <%= json_ld_tag(dataset_json_ld(page_url: data_url, description:)) %>
-<%= render layout: "pages/frame", locals: { current: :data, title: "Our data", updated: "October 2026", summary:,
+<%= render layout: "pages/frame", locals: { current: :data, title: "Our data", updated: published_dataset[:updated], summary:,
       facts: [ { label: "Release", value: "v#{published_dataset[:version]}" }, { label: "Formats", value: "CSV and JSON" },
                { label: "Tables", value: published_dataset[:tables].size.to_s }, { label: "Licence", value: "CC BY 4.0" },
                { label: "DOI", value: StructuredDataHelper::DATASET_DOI, wide: true } ] } do %>
@@ -40,7 +40,7 @@
         <li><strong><%= table.tr("_", " ").upcase_first %>:</strong> <%= Dataset::Export::TABLES.fetch(table).keys.join(", ") %></li>
       <% end %>
     </ul>
-    <p>Each column is described in the release's <%= link_to "data dictionary", "#{repo}/blob/main/DATA-DICTIONARY.md", class: "nd-link", rel: "noopener noreferrer" %>.</p>
+    <p>Each column is described in the release's <%= link_to "data dictionary", "#{repo}/blob/v#{published_dataset[:version]}/DATA-DICTIONARY.md", class: "nd-link", rel: "noopener noreferrer" %>.</p>
   </section>
 
   <section class="nd-info__sec" aria-labelledby="licence">

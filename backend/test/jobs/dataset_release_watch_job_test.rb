@@ -59,6 +59,7 @@ class DatasetReleaseWatchJobTest < ActiveSupport::TestCase
     key, title, body = @alerts.raised.sole
     assert_equal [ DatasetReleaseWatchJob::NO_DOI, "No Zenodo DOI for dataset v2026.12" ], [ key, title ]
     assert_includes body, "releases/tag/v2026.12"
+    assert_match(/published Dec \d{1,2}, \d\d:\d\d UTC/, body, "month first, as VOICE.md writes dates")
   end
 
   test "a Zenodo error counts as not found yet, never as a crash" do

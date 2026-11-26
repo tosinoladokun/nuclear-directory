@@ -89,12 +89,17 @@ class PagesTest < ActionDispatch::IntegrationTest
     get data_path
     assert_select "main", text: /v2026\.11/, minimum: 1
     assert_select "main", text: /Five tables/
+    assert_select "main", text: /October 2026/
+    assert_select "main a[href=?]", "https://github.com/tosinoladokun/nuclear-directory-data/blob/v2026.11/DATA-DICTIONARY.md"
 
-    DatasetRelease.create!(version: "2026.12", status: "published", published_at: Time.current, tables_included: Dataset::Export::TABLES.keys)
+    DatasetRelease.create!(version: "2026.12", status: "published", published_at: Time.zone.local(2026, 12, 2, 10), tables_included: Dataset::Export::TABLES.keys)
     DatasetRelease.create!(version: "2027.01", status: "draft", tables_included: Dataset::Export::TABLES.keys)
     get data_path
     assert_select "main", text: /v2026\.12/, minimum: 1
     assert_select "main", text: /Seven tables/
+    assert_select "main", text: /December 2026/, minimum: 1, message: "Last updated follows the release (Design QA)"
+    assert_select "main", text: /October 2026/, count: 0
+    assert_select "main a[href=?]", "https://github.com/tosinoladokun/nuclear-directory-data/blob/v2026.12/DATA-DICTIONARY.md"
     assert_select "main a[href$=?]", "deal_terms.csv", count: 1
     assert_select "main a[href=?]", "https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.12/deal_terms.csv"
     ld = JSON.parse(css_select("script[type='application/ld+json']").first.text)
