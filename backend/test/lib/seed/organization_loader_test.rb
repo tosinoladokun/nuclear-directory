@@ -1062,6 +1062,17 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_not Facility.exists?(name: "SONGS 2")
   end
 
+  test "a site spelled with other punctuation holds its EIA plant ID without a false collision; the preflight finds it as the load does (Copilot, #970)" do
+    old = Facility.create!(name: "Acme-Station", eia_plant_id: "649")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station", "eia_plant_id" => "649" } ] }.to_yaml)
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file)
+    assert_empty loader.plant_id_collisions
+    loader.load!
+    assert_equal [ old.id ], Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").pluck(:id), "no second site"
+    assert_equal [ "Acme Station", "649" ], old.reload.attributes.values_at("name", "eia_plant_id"), "nobody chose the other spelling: the file's stands"
+  end
+
   test "a site under a former name is found beside a same-name NRC unit, in the preflight and the rename" do
     Facility.create!(name: "Callaway", nrc_docket: "05000483")
     old = Facility.create!(name: "Callaway Energy Center", eia_plant_id: "6153")

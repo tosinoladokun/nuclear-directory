@@ -124,6 +124,13 @@ module Seed
         Directory::Lookup.facility(name:)
     end
 
+    # A site whose name differs from this one only in case and punctuation
+    # ("Acme-Station" for "Acme Station"): no alias keeps such a spelling.
+    def site_spelled(name)
+      normalized = FacilityAlias.normalize(name)
+      Facility.where(parent_id: nil, nrc_docket: nil).order(:id).find { |site| FacilityAlias.normalize(site.name) == normalized }
+    end
+
     # A site whose person-given name was kept, found by the file's name.
     def kept_site(name)
       id = @kept_sites[FacilityAlias.normalize(name)] and Facility.find_by(id:)
@@ -138,7 +145,8 @@ module Seed
         # name, then by a former one (rename_from_former_name).
         # A site under its name or a former one comes before a same-name NRC unit.
         names = [ entry["name"], *entry["other_names"] ].compact_blank
-        target = names.lazy.filter_map { |name| site_named(name) }.first || names.lazy.filter_map { |name| plant_named(name) }.first
+        target = names.lazy.filter_map { |name| site_named(name) }.first || site_spelled(entry["name"]) ||
+          names.lazy.filter_map { |name| plant_named(name) }.first
         next if holder.id == target&.id
 
         "facilities.yml: #{entry['name'].inspect}'s EIA plant ID #{entry['eia_plant_id']} already belongs to " \
@@ -524,8 +532,7 @@ module Seed
         former = Array(entry["other_names"]).lazy.filter_map { |name| site_named(name) }.first
         # Or one whose name differs only in case and punctuation ("Acme-Station"):
         # no alias keeps the file's spelling then, so no lookup finds it (Copilot).
-        former ||= Facility.where(parent_id: nil, nrc_docket: nil).order(:id)
-          .find { |site| FacilityAlias.normalize(site.name) == FacilityAlias.normalize(entry["name"]) }
+        former ||= site_spelled(entry["name"])
         unless former
           return if Directory::Lookup.facility(name: entry["name"])
 
