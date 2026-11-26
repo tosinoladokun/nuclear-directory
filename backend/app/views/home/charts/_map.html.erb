@@ -1,16 +1,19 @@
 <%# The operating plants on a map of the contiguous states (#909): one dot per plant, in the power plants' colour.
-    Dots: { name:, state:, x:, y: } in HomeMap's 600 by 370 box; plants on one spot share a dot.
-    Hovering or tapping a dot shows its name and state above it (#940); a dot is not a link, so clicking it
-    doesn't open the card's page. %>
-<div class="nd-chartmap-wrap" data-controller="home-map" data-action="pointerdown->home-map#down click->home-map#click auxclick->home-map#click pointerover->home-map#over pointerout->home-map#out">
-  <svg class="nd-chartmap" viewBox="0 0 <%= HomeMap::WIDTH %> <%= HomeMap::HEIGHT %>" role="img" aria-label="Map of the <%= data[:count] %> operating US nuclear plants" xmlns="http://www.w3.org/2000/svg" data-home-map-target="svg">
-    <%= render "home/charts/us_outline" %>
+    Dots: { plants: [{ name:, slug: }], state:, x:, y: } in HomeMap's 600 by 370 box, west to east; plants on one spot
+    share a dot (#940). Each plant is a link to its page (#949): a spot holds one link per plant, each with its own
+    circle, drawn on top of each other, so without JavaScript every dot is a plain link. HomeMapController adds the
+    label (a link too; a chooser for a shared dot), the touch taps and one tab stop with arrow keys. %>
+<div class="nd-chartmap-wrap" data-controller="home-map" data-action="pointerdown->home-map#down pointercancel->home-map#cancel click->home-map#click auxclick->home-map#click pointerover->home-map#over pointerout->home-map#out focusin->home-map#focus focusout->home-map#blur keydown->home-map#key">
+  <svg class="nd-chartmap" viewBox="0 0 <%= HomeMap::WIDTH %> <%= HomeMap::HEIGHT %>" role="group" aria-label="Map of the <%= data[:count] %> operating US nuclear plants" xmlns="http://www.w3.org/2000/svg" data-home-map-target="svg">
+    <g aria-hidden="true"><%= render "home/charts/us_outline" %></g>
     <g class="nd-chartmap__dots">
-      <% data[:dots].each do |dot| %><circle class="nd-chartmap__dot" cx="<%= dot[:x] %>" cy="<%= dot[:y] %>" r="7" data-name="<%= dot[:name] %>"<% if dot[:state] %> data-state="<%= dot[:state] %>"<% end %>></circle><% end %>
+      <% data[:dots].each do |dot| %>
+        <g class="nd-chartmap__spot"<% if dot[:state] %> data-state="<%= dot[:state] %>"<% end %>>
+          <% dot[:plants].each do |plant| %><a class="nd-chartmap__link" href="<%= plant_path(slug: plant[:slug]) %>" aria-label="<%= [ plant[:name], dot[:state] ].compact.join(", ") %>" data-name="<%= plant[:name] %>" data-home-record="plant"><circle class="nd-chartmap__dot" cx="<%= dot[:x] %>" cy="<%= dot[:y] %>" r="7"></circle></a><% end %>
+        </g>
+      <% end %>
     </g>
+    <circle class="nd-chartmap__ring" r="12" data-home-map-target="ring" visibility="hidden"></circle>
   </svg>
-  <div class="nd-chartmap__label" data-home-map-target="label" aria-hidden="true" hidden>
-    <span class="nd-chartmap__name type-ui" data-home-map-target="name"></span>
-    <span class="nd-chartmap__state type-small" data-home-map-target="state"></span>
-  </div>
+  <div class="nd-chartmap__label" data-home-map-target="label" aria-hidden="true" hidden></div>
 </div>

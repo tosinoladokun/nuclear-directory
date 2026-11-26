@@ -424,7 +424,7 @@
   .nd-instant__empty { margin: 0; padding: var(--nd-space-4); }
   /* Homepage B (#909): the download link under the search, then the chart cards: one large and two small, the large on
      the left (2fr) with the small ones stacked to its right and stretched to its height; one column on phones, large
-     first. The whole card is one link. */
+     first. The title row links to the operating plants list; rows and dots that are one record link to its page (#949). */
   .nd-home__download { margin: 0; display: flex; justify-content: center; }
   .nd-home__downloadlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; color: var(--nd-ink); text-decoration: none; }
   .nd-home__downloadlink:hover span, .nd-home__downloadlink:focus-visible span { text-decoration: underline; }
@@ -435,9 +435,11 @@
   }
   /* A card is a question and its chart, nothing else (Tosin, 25 Nov). The title shows its short form when the card is
      too narrow for the question on one line: a container query, so it follows the card, not the screen. */
-  .nd-chart { container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); text-decoration: none; transition: border-color 120ms ease-out; }
-  .nd-chart:hover, .nd-chart:focus-visible { border-color: var(--nd-ink); }
-  .nd-chart__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-width: 0; }
+  .nd-chart { container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 28px; background: var(--nd-paper-raised); border: var(--nd-hairline) solid var(--nd-rule); border-radius: var(--nd-radius-lg); color: var(--nd-ink); }
+  /* The title row is the card's link (#949): underlined on hover and focus, its ↗ in ink, as the category cards' titles.
+     The card itself doesn't change, or hovering a row would light up the whole card. */
+  .nd-chart__head { display: flex; align-items: flex-start; gap: var(--nd-space-2); min-width: 0; color: inherit; text-decoration: none; }
+  .nd-chart__head:hover .nd-chart__title, .nd-chart__head:focus-visible .nd-chart__title { text-decoration: underline; text-underline-offset: 2px; }
   /* One line; the ellipsis only as a last resort (the full question is in the title attribute). */
   .nd-chart__title { flex: 1 1 auto; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-chart__tshort { display: none; }
@@ -449,7 +451,7 @@
     .nd-chart__tshort { display: inline; }
   }
   .nd-chart__go { flex: none; display: flex; padding-top: 6px; color: var(--nd-ink-muted); }
-  .nd-chart:hover .nd-chart__go, .nd-chart:focus-visible .nd-chart__go { color: var(--nd-ink); }
+  .nd-chart__head:hover .nd-chart__go, .nd-chart__head:focus-visible .nd-chart__go { color: var(--nd-ink); }
   /* The chart sits 16px under the title; a card stretched past its chart keeps the spare room at the bottom. */
   .nd-chart__body { min-width: 0; }
   /* Axis names: the category axis above the names, the value axis under its ticks, both muted mono. */
@@ -461,6 +463,18 @@
   .nd-chart--large .nd-chartbars { --track: 40px; --bar: 20px; }
   .nd-chartbars--ours { grid-template-columns: max-content minmax(0, 1fr) auto; }
   .nd-chartbars__catname { grid-column: 1; margin-bottom: 4px; }
+  /* A row spans the chart's three columns on a subgrid, so a linked row keeps them exactly (#949). A row that is a
+     record is one link: on hover it fills with sunken paper and its bar mixes with ink; on focus, the standard ring. */
+  .nd-chartbars__row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; min-width: 0; color: inherit; text-decoration: none; }
+  /* The fill and the ring sit on a ::before 8px past the name and the value, so the text isn't cramped against them and
+     the columns don't move (Design QA, #953). */
+  a.nd-chartbars__row { position: relative; isolation: isolate; }
+  a.nd-chartbars__row::before { content: ""; position: absolute; inset: 0 -8px; z-index: -1; border-radius: var(--nd-radius-sm); transition: background-color 120ms ease-out; }
+  a.nd-chartbars__row:hover::before { background: var(--nd-paper-sunken); }
+  a.nd-chartbars__row:focus-visible { outline: none; }
+  a.nd-chartbars__row:focus-visible::before { outline: var(--nd-focus-width) solid var(--nd-focus); outline-offset: 2px; }
+  .nd-chartbars__bar { transition: background-color 120ms ease-out; }
+  a.nd-chartbars__row:hover .nd-chartbars__bar, a.nd-chartbars__row:focus-visible .nd-chartbars__bar { background: color-mix(in oklab, var(--nd-cat-utilities) 70%, var(--nd-ink)); }
   .nd-chartbars__label { grid-column: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nd-chartbars__track { grid-column: 2; display: flex; align-items: center; height: var(--track);
     background: linear-gradient(to right, var(--nd-rule) 1px, transparent 1px) 0 0 / calc(100% / var(--ticks)) 100%,
@@ -504,13 +518,22 @@
   .nd-chartmap { display: block; width: 100%; height: auto; }
   .nd-chartmap__land { fill: var(--nd-paper-sunken); stroke: var(--nd-control); stroke-width: 1; }
   .nd-chartmap__borders { fill: none; stroke: var(--nd-rule); stroke-width: 1; }
-  .nd-chartmap__dot { fill: var(--nd-cat-utilities); stroke: var(--nd-paper-raised); stroke-width: 2; cursor: default; transition: r 120ms ease-out; }
-  /* #940: a dot under the pointer or tapped grows (r 7 to 9) and darkens; its label sits just above it. */
-  .nd-chartmap__dot:hover, .nd-chartmap__dot.is-active { r: 9px; fill: color-mix(in oklab, var(--nd-cat-utilities) 70%, var(--nd-ink)); }
+  .nd-chartmap__dot { fill: var(--nd-cat-utilities); stroke: var(--nd-paper-raised); stroke-width: 2; transition: r 120ms ease-out; }
+  /* #940: a dot under the pointer, tapped or focused grows (r 7 to 9) and darkens; its label sits just above it. */
+  .nd-chartmap__spot:hover .nd-chartmap__dot, .nd-chartmap__spot.is-active .nd-chartmap__dot { r: 9px; fill: color-mix(in oklab, var(--nd-cat-utilities) 70%, var(--nd-ink)); }
+  /* #949: each dot is a link. The focused one gets a ring drawn in the SVG (r 12), as outlines on SVG links aren't
+     reliable in Safari; without JavaScript, the dot's own edge turns the focus colour. */
+  .nd-chartmap__link:focus-visible { outline: none; }
+  .nd-chartmap__link:focus-visible .nd-chartmap__dot { stroke: var(--nd-focus); }
+  .nd-chartmap__ring { fill: none; stroke: var(--nd-focus); stroke-width: var(--nd-focus-width); pointer-events: none; }
   .nd-chartmap-wrap { position: relative; }
   .nd-chartmap__label { position: absolute; left: 0; top: 0; z-index: 1; display: flex; flex-direction: column; max-width: 100%; padding: 4px 8px; background: var(--nd-paper-raised); border: 1px solid var(--nd-rule); border-radius: var(--nd-radius-md); white-space: nowrap; }
   .nd-chartmap__label[hidden] { display: none; }
+  /* The label is a link to the plant; a shared dot's is a chooser, a linked name per line, the state once under them. */
+  .nd-chartmap__label a { color: inherit; text-decoration: none; }
+  .nd-chartmap__plant { display: flex; flex-direction: column; min-width: 0; }
   .nd-chartmap__name { color: var(--nd-ink); overflow: hidden; text-overflow: ellipsis; }
+  .nd-chartmap__name.is-muted { color: var(--nd-ink-muted); }
   .nd-chartmap__state { color: var(--nd-ink-muted); overflow: hidden; text-overflow: ellipsis; }
   .nd-chartmap__state:empty { display: none; }
 

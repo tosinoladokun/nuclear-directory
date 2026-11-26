@@ -90,23 +90,24 @@ class HomeCharts
   # A chart's data, plain values only so the cache can hold it.
   def self.data(key)
     question = find(key) or raise ArgumentError, "no home chart #{key}"
-    Rails.cache.fetch([ "home-charts/v3", question.key, DataVersion.current ]) { new.public_send(question.key) }
+    Rails.cache.fetch([ "home-charts/v4", question.key, DataVersion.current ]) { new.public_send(question.key) }
   end
 
   # 1. Where are the operating US nuclear plants: each site with an operating power reactor, at its published
   # coordinates. Every one must have them, or the map would leave plants out. Plants drawn on the same spot (within a
   # pixel, as Hope Creek and Salem are) share one dot and one label (#940). A dot's state is the plant's own; a plant
-  # with none shows its name alone.
+  # with none shows its name alone. Each plant keeps its slug, for its link (#949). Dots run west to east, the order the
+  # arrow keys take.
   def plant_map
-    plants = sites.order(:name).pluck(:name, :short_name, :state, :latitude, :longitude)
+    plants = sites.order(:name).pluck(:name, :short_name, :slug, :state, :latitude, :longitude)
     return {} if plants.empty? || plants.any? { |*, lat, lon| lat.nil? || lon.nil? }
 
-    spots = plants.map { |name, short, state, lat, lon| [ HomeMap.point(lon, lat), short.presence || name, state.presence && state_name(state) ] }
+    spots = plants.map { |name, short, slug, state, lat, lon| [ HomeMap.point(lon, lat), { name: short.presence || name, slug: }, state.presence && state_name(state) ] }
     groups = spots.each_with_object([]) do |spot, found|
       group = found.find { |(x, y), *| Math.hypot(x - spot[0][0], y - spot[0][1]) <= SAME_SPOT }
       group ? group << spot : found << [ spot[0], spot ]
     end
-    { count: plants.size, dots: groups.map { |(x, y), *members| dot(x, y, members) } }
+    { count: plants.size, dots: groups.map { |(x, y), *members| dot(x, y, members) }.sort_by { |dot| [ dot[:x], dot[:y] ] } }
   end
 
   # 2. Which states have the most nuclear power: operating units' net summer capacity, summed by their site's state.
@@ -117,13 +118,14 @@ class HomeCharts
     { rows: top(rows.group_by(&:last).map { |state, units| { label: state_name(state), value: gw(units.sum(&:first)) } }) }
   end
 
-  # 3. Which are the largest US nuclear plants: operating units' net summer capacity, summed by site.
+  # 3. Which are the largest US nuclear plants: operating units' net summer capacity, summed by site. Each row is a
+  # plant, so it links to the plant's page (#949).
   def largest_plants
     rows = unit_rows(:capacity_mw, "sites.id")
     return {} if incomplete?(rows)
 
-    names = sites.pluck(:id, :name, :short_name).to_h { |id, name, short| [ id, [ name, short ] ] }
-    { rows: top(rows.group_by(&:last).map { |id, units| name, short = names.fetch(id); { label: short.presence || name, title: name, value: gw(units.sum(&:first)) } }) }
+    names = sites.pluck(:id, :name, :short_name, :slug).to_h { |id, *rest| [ id, rest ] }
+    { rows: top(rows.group_by(&:last).map { |id, units| name, short, slug = names.fetch(id); { label: short.presence || name, title: name, plant: slug, value: gw(units.sum(&:first)) } }) }
   end
 
   # 4. How big are US reactors: operating units counted in Data Quality's size bands.
@@ -171,7 +173,7 @@ class HomeCharts
     return {} if vendors.empty? || vendors.any? { |orgs| orgs.size != 1 }
 
     orgs = Organization.where(id: vendors.flatten.uniq).index_by(&:id)
-    { rows: top(vendors.flatten.tally.map { |id, n| { label: orgs[id].short_name.presence || orgs[id].name, title: orgs[id].name, value: n } }) }
+    { rows: top(vendors.flatten.tally.map { |id, n| { label: orgs[id].short_name.presence || orgs[id].name, title: orgs[id].name, company: orgs[id].slug, value: n } }) }
   end
 
   # 9. How many US power reactors still run: power reactors by status, as the NRC words it. A reactor is a unit, or a
@@ -197,11 +199,11 @@ class HomeCharts
         .pluck(Arel.sql(value.is_a?(Symbol) ? "facilities.#{value}" : value), Arel.sql(column))
     end
 
-    # One dot for the plants on one spot: "Hope Creek and Salem", "New Jersey".
+    # One dot for the plants on one spot: Hope Creek and Salem, in New Jersey.
     def dot(x, y, members)
-      join = ->(words) { words.to_sentence(two_words_connector: " and ", last_word_connector: " and ") }
       states = members.map(&:last)
-      { name: join[members.map { |_, name, _| name }.sort], state: (join[states.uniq] if states.all?), x:, y: }
+      { plants: members.map { |_, plant, _| plant }.sort_by { |plant| plant[:name] },
+        state: (states.uniq.to_sentence(two_words_connector: " and ", last_word_connector: " and ") if states.all?), x:, y: }
     end
 
     def incomplete?(rows) = rows.empty? || rows.flatten.any?(&:blank?)
