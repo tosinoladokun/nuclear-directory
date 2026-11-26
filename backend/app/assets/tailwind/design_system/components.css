@@ -29,6 +29,7 @@
   .nd-btn:hover { background: var(--nd-paper-sunken); }
   .nd-btn--primary { background: var(--nd-inverse); border-color: var(--nd-inverse); color: var(--nd-on-inverse); }
   .nd-btn--primary:hover { background: var(--nd-inverse); opacity: .88; }
+  .nd-btn:disabled, .nd-btn:disabled:hover { opacity: .45; cursor: not-allowed; }
   .nd-btn--ghost { border-color: transparent; background: transparent; }
   .nd-btn--sm { height: 28px; padding: 0 var(--nd-space-3); font-size: 13px; }
 

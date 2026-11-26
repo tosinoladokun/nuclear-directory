@@ -43,7 +43,19 @@ module Dataset
       "doe_isotope_sites" => "DOE Isotope Program sites"
     }.freeze
 
-    def initialize(version:, released_on:, counts:, manifest:, previous:, crawled: [])
+    # What each table holds, for the README's list of files.
+    HOLDS = {
+      "companies" => "One row per company, by brand",
+      "facilities" => "Sites (power plants, fuel plants, test reactors, mines, fusion plants) and the reactor units under them",
+      "relationships" => "Links between two companies, and companies' roles at facilities",
+      "deal_terms" => "The terms of a deal: a power deal's MW, form and status, an award's or loan's amount, a funding round",
+      "licensing_stages" => "Each stage a reactor project or design has reached with the NRC, dated, from NRC records",
+      "sources" => "The public documents the facts come from",
+      "evidence" => "Which source states each fact"
+    }.freeze
+
+    def initialize(version:, released_on:, counts:, manifest:, previous:, crawled: [], held_back: [])
+      @held_back = held_back
       @crawled = CRAWLED.select { |kind, _| crawled.include?(kind) }.values
       @version = version
       @released_on = released_on
@@ -68,13 +80,7 @@ module Dataset
 
         | Table | Rows | Holds |
         |---|---|---|
-        | `companies` | #{@counts["companies"]} | One row per company, by brand |
-        | `facilities` | #{@counts["facilities"]} | Sites (power plants, fuel plants, test reactors, mines, fusion plants) and the reactor units under them |
-        | `relationships` | #{@counts["relationships"]} | Links between two companies, and companies' roles at facilities |
-        | `deal_terms` | #{@counts["deal_terms"]} | The terms of a deal: a power deal's MW, form and status, an award's or loan's amount, a funding round |
-        | `licensing_stages` | #{@counts["licensing_stages"]} | Each stage a reactor project or design has reached with the NRC, dated, from NRC records |
-        | `sources` | #{@counts["sources"]} | The public documents the facts come from |
-        | `evidence` | #{@counts["evidence"]} | Which source states each fact |
+        #{@counts.map { |table, count| "| `#{table}` | #{count} | #{HOLDS.fetch(table)} |" }.join("\n")}
 
         Other files: `DATA-DICTIONARY.md`, `CITATION.cff`, `LICENSE`, `CHANGELOG.md` and `manifest.json`.
 
@@ -82,15 +88,11 @@ module Dataset
 
         | Table | Columns |
         |---|---|
-        #{Export::TABLES.map { |table, columns| "| `#{table}` | #{columns.keys.map { |column| "`#{column}`" }.join(", ")} |" }.join("\n")}
+        #{tables.map { |table, columns| "| `#{table}` | #{columns.keys.map { |column| "`#{column}`" }.join(", ")} |" }.join("\n")}
 
         ### How the tables join
 
-        - `facilities.site_slug` is the `slug` of a unit's site.
-        - `relationships.from_slug` is a company `slug`. `relationships.to_slug` is a `slug` in `companies` or `facilities`, as `to_table` says.
-        - `deal_terms.attached_key` is a `relationships.id`, or a company `slug` for a company's own funding round, as `attached_to` says.
-        - `licensing_stages.facility_slug` is a facility `slug`; `company_slug` is a company `slug` (a design approval).
-        - `evidence.fact_table` and `evidence.fact_key` point at a row in `companies`, `facilities`, `relationships`, `deal_terms` or `licensing_stages`, and `evidence.source_id` is a `sources.id`. For a company's category or technology, `fact_part` says which one (`role:<key>` or `technology:<key>`).
+        #{joins.join("\n")}
 
         ## How it's collected
 
@@ -145,7 +147,7 @@ module Dataset
     end
 
     def dictionary
-      tables = Export::TABLES.map do |table, columns|
+      tables = self.tables.map do |table, columns|
         rows = columns.map { |column, about| "| `#{column}` | #{about} |" }.join("\n")
         "## #{table}\n\n| Column | Holds |\n|---|---|\n#{rows}\n"
       end
@@ -239,6 +241,7 @@ module Dataset
         lines << "| `#{table}` | #{count} | #{before ? (new - old).size : count} | #{before ? (old - new).size : 0} |"
       end
       lines << "" << (before ? "Compared with #{before["version"]}." : "First release.")
+      lines << "" << "Held back from this release: #{@held_back.map { |table| "`#{table}`" }.to_sentence}." if @held_back.any?
       if before
         %w[companies facilities].each do |table|
           old, new = before.dig("keys", table).to_a, @manifest.dig("keys", table)
@@ -251,6 +254,20 @@ module Dataset
     end
 
     private
+      def tables = Export::TABLES.slice(*@counts.keys)
+
+      def joins
+        facts = %w[companies facilities relationships deal_terms licensing_stages] & @counts.keys
+        [
+          "- `facilities.site_slug` is the `slug` of a unit's site.",
+          "- `relationships.from_slug` is a company `slug`. `relationships.to_slug` is a `slug` in `companies` or `facilities`, as `to_table` says.",
+          ("- `deal_terms.attached_key` is a `relationships.id`, or a company `slug` for a company's own funding round, as `attached_to` says." if @counts.key?("deal_terms")),
+          ("- `licensing_stages.facility_slug` is a facility `slug`; `company_slug` is a company `slug` (a design approval)." if @counts.key?("licensing_stages")),
+          "- `evidence.fact_table` and `evidence.fact_key` point at a row in #{facts.map { |table| "`#{table}`" }.to_sentence(two_words_connector: " or ", last_word_connector: " or ")}, " \
+            "and `evidence.source_id` is a `sources.id`. For a company's category or technology, `fact_part` says which one (`role:<key>` or `technology:<key>`)."
+        ].compact
+      end
+
       def concept_doi = ENV["DATASET_CONCEPT_DOI"].presence
       def orcid = ENV["DATASET_AUTHOR_ORCID"].presence
       def orcid_url = orcid && "https://orcid.org/#{orcid}"

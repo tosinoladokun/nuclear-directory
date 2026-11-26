@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_24_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -139,6 +139,39 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_180000) do
     t.text "output"
     t.datetime "ran_at", null: false
     t.index ["version"], name: "index_data_migrations_on_version", unique: true
+  end
+
+  create_table "dataset_release_files", force: :cascade do |t|
+    t.bigint "dataset_release_id", null: false
+    t.string "path", null: false
+    t.binary "content_gz", null: false
+    t.integer "bytes", null: false
+    t.string "git_sha", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dataset_release_id", "path"], name: "index_dataset_release_files_on_dataset_release_id_and_path", unique: true
+  end
+
+  create_table "dataset_releases", force: :cascade do |t|
+    t.string "version", null: false
+    t.string "status", default: "draft", null: false
+    t.string "tables_included", default: [], null: false, array: true
+    t.jsonb "counts", default: {}, null: false
+    t.string "previous_version"
+    t.jsonb "previous_counts"
+    t.text "changelog"
+    t.string "unknown_publishers", default: [], null: false, array: true
+    t.datetime "built_at"
+    t.datetime "published_at"
+    t.string "commit_sha"
+    t.string "release_url"
+    t.string "version_doi"
+    t.text "error"
+    t.jsonb "dry_run"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["version"], name: "index_dataset_releases_on_version", unique: true
+    t.check_constraint "status::text = ANY (ARRAY['draft'::character varying, 'published'::character varying, 'failed'::character varying]::text[])", name: "dataset_releases_status"
   end
 
   create_table "deal_terms", force: :cascade do |t|
@@ -585,7 +618,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_180000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["platform", "slug", "sha256"], name: "index_social_approvals_on_platform_and_slug_and_sha256", unique: true
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_approvals_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_approvals_platform_check"
     t.check_constraint "sha256::text ~ '^[0-9a-f]{64}$'::text", name: "social_approvals_sha256_check"
   end
 
@@ -854,7 +887,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_180000) do
     t.datetime "updated_at", null: false
     t.index ["status", "batch"], name: "index_takeoff_proposals_on_status_and_batch"
     t.index ["subject_type", "subject_id"], name: "index_takeoff_proposals_on_subject_type_and_subject_id"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'taken_off'::character varying, 'kept'::character varying]::text[])", name: "takeoff_proposals_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'taken_off'::character varying::text, 'kept'::character varying::text])", name: "takeoff_proposals_status_check"
   end
 
   create_table "technologies", force: :cascade do |t|
@@ -909,6 +942,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_180000) do
   add_foreign_key "candidates", "crawl_runs", column: "verify_run_id"
   add_foreign_key "candidates", "sources"
   add_foreign_key "checker_verdicts", "candidates", on_delete: :cascade
+  add_foreign_key "dataset_release_files", "dataset_releases", on_delete: :cascade
   add_foreign_key "dq_actions", "candidates"
   add_foreign_key "evidence", "crawl_runs"
   add_foreign_key "evidence", "sources"

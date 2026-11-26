@@ -77,6 +77,11 @@ Rails.application.routes.draw do
     get "social" => "social#show", as: :social
     # Whether the pipeline runs alone (#811).
     get "health" => "health#show", as: :health
+    # The monthly open dataset release (#950): the draft, Rebuild, Dry run and Publish.
+    get "dataset-releases" => "dataset_releases#show", as: :dataset_releases
+    post "dataset-releases/build" => "dataset_releases#build", as: :dataset_releases_build
+    post "dataset-releases/:id/dry-run" => "dataset_releases#dry_run", as: :dataset_release_dry_run, constraints: { id: /\d+/ }
+    post "dataset-releases/:id/publish" => "dataset_releases#publish", as: :dataset_release_publish, constraints: { id: /\d+/ }
     patch "social/:platform" => "social#update", as: :social_channel, constraints: { platform: /x|linkedin/ }
     post "social/draft_now" => "social#draft_now", as: :social_draft_now
     post "social/posts/:id/send" => "social#send_draft", as: :social_send_draft

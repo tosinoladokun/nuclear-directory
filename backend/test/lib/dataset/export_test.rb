@@ -268,4 +268,35 @@ class Dataset::ExportTest < ActiveSupport::TestCase
     assert_includes evidence, [ "licensing_stages", "stage-#{stage.id}" ]
     assert_match "| `deal_terms` | 1 |", file("README.md")
   end
+
+  test "with deal_terms and licensing_stages held back (#950): five tables, no evidence or source only they cite, and the files say so" do
+    nrc = Source.create!(url: "https://www.nrc.gov/reactors/non-power/hermes.html", source_kind: "web_page", domain: "nrc.gov", title: "Hermes")
+    stage = LicensingStage.create!(facility: @site, stage: "construction_permit", nrc_docket: "50-7513", effective_on: "2023-12-14",
+      verification_status: "pending")
+    stage.evidence.create!(source: nrc, quote: "NRC issued a construction permit for Hermes.", found_by: "human", confidence: 1)
+    stage.verify!(by: BY)
+    previous = Dir.mktmpdir("previous")
+    File.write(File.join(previous, "manifest.json"), JSON.generate("version" => "2026.11", "counts" => {}, "keys" => {}))
+
+    result = export(tables: Export::CORE_TABLES, previous:)
+
+    assert_equal %w[companies facilities relationships sources evidence], result[:counts].keys
+    assert_not File.exist?(File.join(@dir, "licensing_stages.csv"))
+    assert_not File.exist?(File.join(@dir, "deal_terms.json"))
+    assert_not_includes read("evidence").map { |row| row["fact_table"] }, "licensing_stages"
+    assert_not_includes read("sources").map { |row| row["url"] }, nrc.url, "a source only a held-back table cites goes with it"
+    assert_equal Export::CORE_TABLES.sort, JSON.parse(file("manifest.json"))["counts"].keys.sort
+    readme = file("README.md")
+    assert_no_match "deal_terms", readme
+    assert_no_match "licensing_stages", readme
+    assert_no_match "## deal_terms", file("DATA-DICTIONARY.md")
+    assert_match "Held back from this release: `deal_terms` and `licensing_stages`.", file("CHANGELOG.md")
+  ensure
+    FileUtils.rm_rf(previous) if previous
+  end
+
+  test "the five core tables are always in, whatever the setting names" do
+    assert_equal %w[companies facilities relationships deal_terms sources evidence], export(tables: %w[deal_terms])[:counts].keys
+    assert_match "Held back from this release: `licensing_stages`.", file("CHANGELOG.md")
+  end
 end
