@@ -347,8 +347,12 @@ class SeedsTest < ActiveSupport::TestCase
     end
     assert_equal "H3D", Organization.find_by!(slug: "h3d").name
 
+    # Urenco operates the Eunice plant once: through the site, not also
+    # through its NRC unit (LES), which listed the plant twice (#957).
     eunice = Facility.find_by!(name: "Urenco USA enrichment facility")
-    assert_equal eunice.id, Facility.find_by!(name: "Louisiana Energy Services (LES)").parent_id, "LES is the NRC unit of the Eunice site, not a second plant"
+    urenco = Organization.find_by!(slug: "urenco")
+    assert_equal [ eunice.id ], urenco.facility_relationships.operates.pluck(:facility_id)
+    assert_nil Facility.find_by(name: "Louisiana Energy Services (LES)"), "the seed doesn't make the NRC unit; the crawl and a person do"
   end
 
   test "is safe to re-run" do
