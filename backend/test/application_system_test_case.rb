@@ -1,4 +1,5 @@
 require "test_helper"
+require_relative "support/chrome_storage_reset"
 
 # Tests that need a real browser: layout measured on the page (heights,
 # overlaps, scrolling) and JavaScript (#362, #363). Headless Chrome, which

@@ -22,8 +22,8 @@ class HomeBTest < ActionDispatch::IntegrationTest
     assert_select ".nd-charts > div.nd-chart", 3
     assert_select ".nd-charts > div.nd-chart:first-child.nd-chart--large[data-home-chart=plant_map]" do
       assert_select "a.nd-chart__head[data-home-chart-link][href='/companies?category=plants&status=operating']" do
-        assert_select "h2 .nd-chart__tfull", "Where are the 3 operating US nuclear plants?"
-        assert_select "h2 .nd-chart__tshort", "Where are US plants?"
+        assert_select "h2.nd-chart__title", "Where are the 3 operating US nuclear plants?"
+        assert_select "h2 span, h2[title]", count: 0, message: "the whole question, one form only (#961)"
         assert_select ".nd-chart__go svg"
       end
       assert_select "svg.nd-chartmap[role=group][aria-label='Map of the 3 operating US nuclear plants'] circle.nd-chartmap__dot", 3
@@ -37,7 +37,6 @@ class HomeBTest < ActionDispatch::IntegrationTest
     end
     assert_select "div.nd-chart--small[data-home-chart=reactor_sizes]" do
       assert_select "h2", "How big are US reactors?"
-      assert_select "h2 .nd-chart__tshort", count: 0, message: "the whole question fits at 320, so it has no short form (Design, #935)"
       assert_equal [ "Reactors", "Reactor size (MW, net summer)" ], css_select(".nd-axis__name").map(&:text)
       assert_equal %w[600 900 1,100 1,300], css_select(".nd-chartcols__xedge").map(&:text)
     end

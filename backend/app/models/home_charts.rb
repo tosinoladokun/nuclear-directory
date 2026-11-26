@@ -13,10 +13,10 @@
 # plus the day number, so it changes every day, and the next day's set is never the same one. The hash only picks the
 # set: it's never stored or sent.
 class HomeCharts
-  Question = Data.define(:key, :question, :short, :chart, :sizes, :axes, :tick, :decimals, :not_with) do
+  Question = Data.define(:key, :question, :chart, :sizes, :axes, :tick, :decimals, :not_with) do
     def self.from(entry)
       entry = entry.symbolize_keys
-      new(key: entry.fetch(:key).to_sym, question: entry.fetch(:question), short: entry[:short] || entry[:question],
+      new(key: entry.fetch(:key).to_sym, question: entry.fetch(:question),
         chart: entry.fetch(:chart).to_sym, sizes: entry.fetch(:sizes).map(&:to_sym), axes: (entry[:axes] || {}).symbolize_keys,
         tick: entry[:tick], decimals: entry[:decimals] || 0, not_with: Array(entry[:not_with]).map(&:to_sym))
     end
