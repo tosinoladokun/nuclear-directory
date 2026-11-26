@@ -12,6 +12,7 @@ class Dataset::DraftTest < ActiveSupport::TestCase
     manifest = { "version" => "2026.11", "released_on" => "2026-10-27", "counts" => { "companies" => 1, "sources" => 1 },
       "keys" => { "companies" => [ "old-co" ] } }
     stub_request(:get, "#{REPO}/releases/latest").to_return(status: 200, body: { tag_name: "v2026.11" }.to_json)
+    stub_request(:get, "#{REPO}/git/ref/tags/v2026.12").to_return(status: 404, body: "{}")
     stub_request(:get, "#{REPO}/contents/manifest.json?ref=v2026.11").to_return(status: 200, body: manifest.to_json)
     stub_request(:get, "#{REPO}/contents/CHANGELOG.md?ref=v2026.11").to_return(status: 200, body: "# Changelog\n\n## 2026.11 (2026-10-27)\n\nFirst release.\n")
     @github = Dataset::Github.new(token: nil)
@@ -75,9 +76,15 @@ class Dataset::DraftTest < ActiveSupport::TestCase
     assert_equal "abc1234", release.reload.commit_sha
   end
 
-  test "refuses a version already released on GitHub" do
-    stub_request(:get, "#{REPO}/releases/latest").to_return(status: 200, body: { tag_name: "v2026.12" }.to_json)
-    assert_raises(Dataset::Draft::Refused) { build }
+  test "refuses a version already tagged on GitHub, released or not, latest or not (Copilot)" do
+    stub_request(:get, "#{REPO}/git/ref/tags/v2026.12").to_return(status: 200, body: { object: { type: "commit", sha: "abc" } }.to_json)
+    error = assert_raises(Dataset::Draft::Refused) { build }
+    assert_equal "v2026.12 is already tagged on GitHub", error.message
     assert_not DatasetRelease.exists?(version: "2026.12")
+  end
+
+  test "stores the tables it exported, the core ones included (Copilot)" do
+    release = build(tables: %w[deal_terms])
+    assert_equal %w[companies facilities relationships deal_terms sources evidence].sort, release.tables_included.sort
   end
 end

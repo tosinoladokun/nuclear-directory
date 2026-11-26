@@ -38,6 +38,7 @@ class Dataset::PublisherTest < ActiveSupport::TestCase
     @tree = stub_request(:post, "#{REPO}/git/trees").to_return(json("sha" => "tree2"))
     @commit = stub_request(:post, "#{REPO}/git/commits").with(body: hash_including("message" => "Release 2026.12", "tree" => "tree2", "parents" => [ "head1" ]))
       .to_return(json("sha" => "commit2"))
+    @compare = stub_request(:get, "#{REPO}/compare/head1...commit2").to_return(json("status" => "ahead"))
     @move = stub_request(:patch, "#{REPO}/git/refs/heads/main").with(body: { sha: "commit2", force: false }.to_json).to_return(json({}))
     @tag = stub_request(:post, "#{REPO}/git/tags").with(body: hash_including("tag" => "v2026.12", "object" => "commit2", "type" => "commit"))
       .to_return(json("sha" => "tagobj"))
@@ -147,6 +148,58 @@ class Dataset::PublisherTest < ActiveSupport::TestCase
     assert_equal "published", @release.reload.status
   end
 
+  test "main having diverged from the saved commit drops it without trying to move main" do
+    @release.update!(commit_sha: "commit2", status: "failed")
+    stub_repo
+    stub_writes
+    stub_request(:get, "#{REPO}/compare/head1...commit2").to_return(json("status" => "diverged"))
+
+    assert_raises(Dataset::Publisher::Refused) { publisher.publish! }
+
+    assert_nil @release.reload.commit_sha
+    assert_not_requested @move
+    assert_not_requested @ref
+  end
+
+  test "main that already has the saved commit isn't moved; the tag and release follow" do
+    @release.update!(commit_sha: "commit2", status: "failed")
+    stub_repo
+    stub_writes
+    stub_request(:get, "#{REPO}/compare/head1...commit2").to_return(json("status" => "behind"))
+
+    publisher.publish!
+
+    assert_equal "published", @release.reload.status
+    assert_not_requested @move
+    assert_not_requested @commit
+    assert_requested @ref, times: 1
+  end
+
+  test "a dry run after a partial publish shows only the steps left (Copilot)" do
+    @release.update!(commit_sha: "commit2", status: "failed")
+    stub_repo
+    stub_writes
+
+    run = publisher.dry_run
+
+    assert_equal [ %w[move_main tag release], nil, [] ], run.values_at("steps", "blocked", "changed")
+    assert_not_requested :get, "#{REPO}/git/trees/tree1?recursive=1"
+    [ @blobs, @commit, @move, @ref, @made ].each { |stub| assert_not_requested stub }
+  end
+
+  test "a dry run with the tag already made shows only the release; with main diverged it says publishing would stop" do
+    @release.update!(commit_sha: "commit2", status: "failed")
+    stub_repo(tag: "commit2")
+    stub_writes
+    assert_equal %w[release], publisher.dry_run["steps"]
+
+    stub_repo
+    stub_request(:get, "#{REPO}/compare/head1...commit2").to_return(json("status" => "diverged"))
+    run = publisher.dry_run
+    assert_equal [], run["steps"]
+    assert_match "main moved on since commit commit2", run["blocked"]
+  end
+
   test "a published release is never published again" do
     @release.update!(status: "published")
     assert_raises(Dataset::Publisher::AlreadyPublished) { publisher.publish! }
@@ -160,6 +213,7 @@ class Dataset::PublisherTest < ActiveSupport::TestCase
     run = publisher.dry_run
 
     assert_equal [ [ "manifest.json" ], [ "companies.csv" ], [ "deal_terms.csv" ], 1, nil ], run.values_at("added", "changed", "removed", "unchanged", "blocked")
+    assert_equal Dataset::Publisher::STEPS, run["steps"]
     assert_equal [ "Release 2026.12", "v2026.12", "2026.12" ], run.values_at("commit_message", "tag", "release_name")
     assert_equal run, @release.reload.dry_run
     assert_equal "draft", @release.status

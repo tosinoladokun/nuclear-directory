@@ -52,7 +52,7 @@ module Dataset
 
       unless tagged
         make_commit unless @release.commit_sha
-        move_main
+        move_main(@github.branch_sha(BRANCH))
         @github.create_tag(@release.tag, sha: @release.commit_sha, message: "Release #{@release.version}")
       end
       found = @github.release(@release.tag) || @github.create_release(tag: @release.tag, name: @release.version, body: release_body)
@@ -64,18 +64,21 @@ module Dataset
     end
     private :publish_steps
 
-    # What publishing would do, from the repo as it is now. Saved on the row.
+    # What publishing would do, from the repo as it is now: only the steps
+    # left, after a partial publish too (Copilot). Saved on the row.
     def dry_run
       head = @github.branch_sha(BRANCH)
-      current = @github.tree_files(@github.commit(head).dig("tree", "sha"))
-      added, changed, removed = changes(current).values_at(:added, :changed, :removed)
       tagged = @github.tag_commit(@release.tag)
-      blocked = if @release.published? then "it's already published"
-      elsif tagged && tagged != @release.commit_sha then "#{@release.tag} already exists at commit #{tagged.first(7)}"
-      elsif !@github.token? then "DATASET_GITHUB_TOKEN is missing"
+      steps, blocked = remaining(head, tagged)
+      diff = if steps.include?("commit")
+        changes(@github.tree_files(@github.commit(head).dig("tree", "sha")))
+      else
+        { added: [], changed: [], removed: [] }
       end
-      result = { "checked_at" => Time.current.iso8601, "main" => head, "added" => added, "changed" => changed, "removed" => removed,
-        "unchanged" => @release.files.size - added.size - changed.size, "commit_message" => "Release #{@release.version}",
+      blocked ||= "DATASET_GITHUB_TOKEN is missing" unless @github.token?
+      result = { "checked_at" => Time.current.iso8601, "main" => head, "commit" => @release.commit_sha, "steps" => steps,
+        "added" => diff[:added], "changed" => diff[:changed], "removed" => diff[:removed],
+        "unchanged" => @release.files.size - diff[:added].size - diff[:changed].size, "commit_message" => "Release #{@release.version}",
         "tag" => @release.tag, "release_name" => @release.version, "release_body" => release_body, "blocked" => blocked }
       @release.update!(dry_run: result)
       result
@@ -94,7 +97,35 @@ module Dataset
     NOUNS = { "companies" => "companies", "facilities" => "facilities (sites and reactor units)", "relationships" => "relationships",
       "deal_terms" => "deal terms", "licensing_stages" => "licensing stages", "sources" => "sources", "evidence" => "evidence rows" }.freeze
 
+    STEPS = %w[commit move_main tag release].freeze
+
     private
+      # [steps left, why publishing would stop (or nil)], as publish! would go.
+      def remaining(head, tagged)
+        return [ [], "it's already published" ] if @release.published?
+        return [ [], "#{@release.tag} already exists at commit #{tagged.first(7)}, which isn't this release's" ] if tagged && tagged != @release.commit_sha
+        return [ @github.release(@release.tag) ? [] : %w[release], nil ] if tagged
+        return [ STEPS, nil ] unless @release.commit_sha
+
+        case main_against(head)
+        when :there then [ %w[tag release], nil ]
+        when :ahead then [ %w[move_main tag release], nil ]
+        else [ [], "main moved on since commit #{@release.commit_sha.first(7)}; the next Publish drops it and stops, and the one after commits on top" ]
+        end
+      end
+
+      # Where main stands against the saved release commit: :there (main has
+      # it), :ahead (main can move forward to it) or :diverged.
+      def main_against(head)
+        return :there if head == @release.commit_sha
+
+        case @github.compare(head, @release.commit_sha)
+        when "ahead" then :ahead
+        when "behind", "identical" then :there
+        else :diverged
+        end
+      end
+
       def changes(current)
         files = @release.files.to_a
         { added: files.reject { |file| current.key?(file.path) }.map(&:path),
@@ -113,16 +144,22 @@ module Dataset
         @release.update!(commit_sha: @github.create_commit(message: "Release #{@release.version}", tree:, parent: head))
       end
 
-      # main to the release commit, unless it's there already. If main moved
-      # on since the commit was made, the commit is dropped so the next run
-      # makes a new one on top (no tag points at it yet).
-      def move_main
-        return if @github.branch_sha(BRANCH) == @release.commit_sha
-
-        @github.move_branch(BRANCH, @release.commit_sha)
+      # main to the release commit, unless main already has it. If main moved
+      # on another way since the commit was made, the commit is dropped so the
+      # next run makes a new one on top (no tag points at it yet).
+      def move_main(head)
+        case main_against(head)
+        when :there then nil
+        when :ahead then @github.move_branch(BRANCH, @release.commit_sha)
+        else drop_commit!
+        end
       rescue Github::Error => e
         raise unless e.status == 422
 
+        drop_commit!
+      end
+
+      def drop_commit!
         @release.update!(commit_sha: nil)
         raise Refused, "main moved on since the release commit was made; publish again to commit on top of it"
       end

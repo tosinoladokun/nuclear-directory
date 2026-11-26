@@ -26,8 +26,10 @@ module Dataset
     def build!
       release = DatasetRelease.find_or_initialize_by(version: @version)
       refuse!(release)
+      # Any tag for this version, released or not, or older than the latest (Copilot).
+      raise Refused, "v#{@version} is already tagged on GitHub" if @github.tag_commit("v#{@version}")
+
       previous_tag = @github.latest_tag
-      raise Refused, "v#{@version} is already released on GitHub" if previous_tag == "v#{@version}"
 
       Dir.mktmpdir("dataset-#{@version}") do |tmp|
         previous = previous_tag && fetch_previous(previous_tag, File.join(tmp, "previous"))
@@ -41,7 +43,7 @@ module Dataset
           release.lock! if release.persisted?
           refuse!(release)
           release.files.delete_all if release.persisted?
-          release.update!(status: "draft", tables_included: @tables, counts: result[:counts], unknown_publishers: result[:unknown_publishers],
+          release.update!(status: "draft", tables_included: result[:counts].keys, counts: result[:counts], unknown_publishers: result[:unknown_publishers],
             previous_version: manifest&.fetch("version"), previous_counts: manifest&.fetch("counts"),
             changelog: File.read(File.join(out, "CHANGELOG.md")), built_at: Time.current, error: nil, dry_run: nil)
           files.each { |file| file.release = release }.each(&:save!)

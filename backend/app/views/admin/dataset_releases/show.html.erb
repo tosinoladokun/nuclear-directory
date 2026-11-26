@@ -64,11 +64,20 @@
         <div class="nd-stack" id="dry-run">
           <h3 class="type-body-strong m-0">Dry run, <%= day.(Time.zone.parse(run["checked_at"])) %></h3>
           <% if run["blocked"] %><p class="type-body text-critical m-0">Publishing would stop: <%= run["blocked"] %>.</p><% end %>
-          <p class="type-body m-0">
-            On main (<%= run["main"].to_s.first(7) %>), the commit "<%= run["commit_message"] %>" would add <%= pluralize(run["added"].size, "file") %>,
-            change <%= run["changed"].size %> and delete <%= run["removed"].size %>; <%= run["unchanged"] %> stay the same.
-            Then the tag <%= run["tag"] %> and the release "<%= run["release_name"] %>".
-          </p>
+          <% steps = run["steps"] || Dataset::Publisher::STEPS %>
+          <% if steps.include?("commit") %>
+            <p class="type-body m-0">
+              On main (<%= run["main"].to_s.first(7) %>), the commit "<%= run["commit_message"] %>" would add <%= pluralize(run["added"].size, "file") %>,
+              change <%= run["changed"].size %> and delete <%= run["removed"].size %>; <%= run["unchanged"] %> stay the same.
+              Then the tag <%= run["tag"] %> and the release "<%= run["release_name"] %>".
+            </p>
+          <% elsif steps.any? %>
+            <% left = { "move_main" => "move main (#{run["main"].to_s.first(7)}) to the release commit #{run["commit"].to_s.first(7)}",
+                        "tag" => "make the tag #{run["tag"]}", "release" => "make the release \"#{run["release_name"]}\"" } %>
+            <p class="type-body m-0" id="dry-run-left">An earlier Publish got partway. Publishing would only <%= steps.map { |step| left.fetch(step) }.to_sentence %>.</p>
+          <% elsif !run["blocked"] %>
+            <p class="type-body m-0">Nothing is left to do on GitHub.</p>
+          <% end %>
           <% { "Added" => run["added"], "Changed" => run["changed"], "Deleted" => run["removed"] }.each do |label, paths| %>
             <% if paths.any? %><p class="type-data-sm m-0"><%= label %>: <%= paths.join(", ") %></p><% end %>
           <% end %>

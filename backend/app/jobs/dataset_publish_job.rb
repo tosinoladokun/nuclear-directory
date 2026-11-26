@@ -1,8 +1,10 @@
 # Publishes a dataset release (#950), after Tosin's Publish on the admin page.
 # The publisher records a failure on the release; publishing again resumes.
+# One group with DatasetBuildDraftJob (Solid Queue's group defaults to the
+# job class), so a rebuild never runs while a publish is uploading (Copilot).
 class DatasetPublishJob < ApplicationJob
   queue_as :default
-  limits_concurrency to: 1, key: "dataset_release", duration: 30.minutes if respond_to?(:limits_concurrency)
+  limits_concurrency to: 1, key: "dataset_release", group: "dataset_release", duration: 30.minutes if respond_to?(:limits_concurrency)
 
   def perform(release_id, built_at = nil)
     Dataset::Publisher.new(DatasetRelease.find(release_id)).publish!(built_at:)

@@ -3,7 +3,7 @@
 # (published, or publishing started) is logged and recorded, not retried.
 class DatasetBuildDraftJob < ApplicationJob
   queue_as :default
-  limits_concurrency to: 1, key: "dataset_release", duration: 30.minutes if respond_to?(:limits_concurrency)
+  limits_concurrency to: 1, key: "dataset_release", group: "dataset_release", duration: 30.minutes if respond_to?(:limits_concurrency)
 
   def perform(version = Date.current.strftime("%Y.%m"))
     Dataset::Draft.build!(version:)
