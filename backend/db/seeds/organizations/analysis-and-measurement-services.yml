@@ -21,6 +21,9 @@ description:
   text: "AMS provides test equipment, training, and services to verify the performance of instrumentation and control systems (I&C) of nuclear facilities."
   source_url: https://www.ams-corp.com/who-we-are/
   quote: We are a nuclear engineering consulting firm specializing in testing the instrumentation and control systems of nuclear facilities.
+  also:
+  - source_url: https://www.ams-corp.com/who-we-are/
+    quote: "AMS provides test equipment, training, and services to verify the performance of instrumentation and control systems (I&C) of nuclear facilities."
 short_description:
   text: 'Nuclear instrumentation testing'
   source_url: https://www.ams-corp.com/who-we-are/

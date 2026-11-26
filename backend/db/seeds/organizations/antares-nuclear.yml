@@ -23,6 +23,9 @@ description:
   text: "We design and manufacture modular, transportable reactors for strategic energy applications on Earth and in space."
   source_url: https://antaresindustries.com
   quote: Fission microreactors to enable strategic energy for critical mission capabilities on Earth, in space, and underwater.
+  also:
+  - source_url: https://antaresindustries.com
+    quote: "We design and manufacture modular, transportable reactors for strategic energy applications on Earth and in space."
 short_description:
   text: Fission microreactor developer
   source_url: https://antaresindustries.com
