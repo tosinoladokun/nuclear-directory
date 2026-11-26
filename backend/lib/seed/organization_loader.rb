@@ -510,6 +510,10 @@ module Seed
           former = Array(entry["other_names"]).lazy.filter_map { |name| Directory::Lookup.facility(name:) }.first or return
         end
         attributes = { id: former.id, name: entry["name"] }
+        # A name a person gave the site after the seed wrote it stands (#967),
+        # even when it's one of the file's former names.
+        return if keep_approved("facilities.yml", former, attributes).any?
+
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)
         write("facilities.yml", :facility, attributes, [])

@@ -108,6 +108,56 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_empty Seed::OrganizationLoader.new(@dir).load!.kept, "a file brought into line keeps nothing"
   end
 
+  test "a company a person renamed keeps its name; the file's old name still finds it (#967)" do
+    [ "https://acmefuel.com", nil ].each do |website|
+      Organization.where("name ILIKE 'Acme%'").destroy_all
+      doc = org("Acme Fuel", website:, description: { text: "Makes fuel.", source_url: "https://example.com/a", quote: "Acme makes fuel." })
+      write_file("acme-fuel", doc)
+      Seed::OrganizationLoader.new(@dir).load!
+      acme = Organization.find_by!(name: "Acme Fuel")
+      result = DataQuality::Review.approve_fact(type: "Organization", id: acme.id, by: "human:tosin", attributes: { name: "Acme Nuclear" })
+      assert result.ok?, result.errors.inspect
+
+      loader = Seed::OrganizationLoader.new(@dir).load!
+
+      assert_equal "Acme Nuclear", acme.reload.name, "website #{website.inspect}"
+      assert_equal 1, Organization.where("name ILIKE 'Acme%'").count, "no second company"
+      assert_match(/acme-fuel: kept organization #{acme.id}'s name "Acme Nuclear", approved after the seed wrote it; the file says "Acme Fuel"/, loader.kept.join("\n"))
+      assert_equal 0, Seed::OrganizationLoader.new(@dir).load!.results[:organization][:changed], "every later run keeps it"
+
+      write_file("acme-fuel", doc.merge(name: "Acme Nuclear"))
+      assert_empty Seed::OrganizationLoader.new(@dir).load!.kept, "a file brought into line keeps nothing"
+    end
+  end
+
+  test "a company an agent renamed takes the file's name back (#967)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com"))
+    Seed::OrganizationLoader.new(@dir).load!
+    acme = Organization.find_by!(name: "Acme Fuel")
+    Directory::FactWriter.write(:organization, { id: acme.id, name: "Acme Fuel Co" }, verification: { status: "verified", by: "agent:crawler" })
+
+    assert_empty Seed::OrganizationLoader.new(@dir).load!.kept
+    assert_equal "Acme Fuel", acme.reload.name
+  end
+
+  test "a site a person renamed back to one of the file's former names isn't renamed again (#967)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    details = { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ],
+      "state" => { "value" => "TN", "source_url" => "https://example.com/where", "quote" => "In Tennessee." } } ] }
+    File.write(facilities_file, details.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    site = Facility.find_by!(name: "Acme Station", parent_id: nil)
+    result = DataQuality::Review.approve_fact(type: "Facility", id: site.id, by: "human:tosin", attributes: { name: "Acme Plant" })
+    assert result.ok?, result.errors.inspect
+    assert_equal "Acme Plant", site.reload.name
+
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+
+    assert_equal [ "Acme Plant", "TN" ], site.reload.attributes.values_at("name", "state")
+    assert_equal 1, Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").count, "no second site"
+    assert_match(/facilities.yml: kept facility #{site.id}'s name "Acme Plant"/, loader.kept.join("\n"))
+  end
+
   test "a hand edit in the admin stands too (Infra, #947)" do
     doc = org("Acme Fuel, Inc.", website: "https://acmefuel.com", hq: { city: "Lakewood", state: "CO", source_url: "https://example.com/a", quote: "Lakewood, CO" })
     write_file("acme-fuel", doc)
