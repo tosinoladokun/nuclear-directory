@@ -618,7 +618,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["platform", "slug", "sha256"], name: "index_social_approvals_on_platform_and_slug_and_sha256", unique: true
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_approvals_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_approvals_platform_check"
     t.check_constraint "sha256::text ~ '^[0-9a-f]{64}$'::text", name: "social_approvals_sha256_check"
   end
 
@@ -630,7 +630,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.datetime "updated_at", null: false
     t.index ["platform"], name: "index_social_channels_on_platform", unique: true
     t.check_constraint "mode::text = ANY (ARRAY['off'::character varying::text, 'drafts'::character varying::text, 'live'::character varying::text])", name: "social_channels_mode_check"
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_channels_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_channels_platform_check"
   end
 
   create_table "social_posts", force: :cascade do |t|
@@ -664,7 +664,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.index ["platform", "sent_on"], name: "index_social_posts_one_send_per_platform_day", unique: true, where: "((sent_on IS NOT NULL) AND ((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text])))"
     t.index ["platform", "subject_type", "subject_id"], name: "index_social_posts_one_send", unique: true, where: "((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text]))"
     t.index ["subject_type", "subject_id"], name: "index_social_posts_on_subject_type_and_subject_id"
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_posts_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_posts_platform_check"
     t.check_constraint "status::text = ANY (ARRAY['drafted'::character varying::text, 'sending'::character varying::text, 'queued'::character varying::text, 'posted'::character varying::text, 'unknown'::character varying::text, 'cancelled'::character varying::text, 'blocked'::character varying::text, 'failed'::character varying::text])", name: "social_posts_status_check"
   end
 
@@ -887,7 +887,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.datetime "updated_at", null: false
     t.index ["status", "batch"], name: "index_takeoff_proposals_on_status_and_batch"
     t.index ["subject_type", "subject_id"], name: "index_takeoff_proposals_on_subject_type_and_subject_id"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'taken_off'::character varying::text, 'kept'::character varying::text])", name: "takeoff_proposals_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'taken_off'::character varying, 'kept'::character varying]::text[])", name: "takeoff_proposals_status_check"
   end
 
   create_table "technologies", force: :cascade do |t|
