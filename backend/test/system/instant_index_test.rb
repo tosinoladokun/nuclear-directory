@@ -229,6 +229,19 @@ class InstantIndexTest < ApplicationSystemTestCase
     assert_equal 1, requests.count { |url| url.include?("/search/index.json") }
   end
 
+  # The search controller's state and the search requests the page made, for a failure message.
+  def search_state = page.evaluate_script(<<~JS)
+    JSON.stringify({
+      boxes: [...document.querySelectorAll("[data-controller~=instant-search]")].map((element) => {
+        const search = Stimulus.getControllerForElementAndIdentifier(element, "instant-search")
+        return search && { index: !!search.index, fetching: search.fetching, dismissed: search.dismissed, pending: search.pending,
+          value: search.inputTarget.value, focused: search.inputTarget === document.activeElement }
+      }),
+      requests: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("/search"))
+        .map((entry) => [ entry.name.replace(location.origin, ""), Math.round(entry.startTime), Math.round(entry.duration), entry.responseStatus ])
+    })
+  JS
+
   test "against the real index endpoint, with no stub: a topic, a company and a plant show, with their icons" do
     smr = technology("smr", "Small modular reactor")
     cite!(company("Real Smr Co", techs: [ smr ], roles: [ role("reactor_vendor") ], description: "Designs small modular reactors."))
@@ -236,7 +249,12 @@ class InstantIndexTest < ApplicationSystemTestCase
     visit root_path
     field = find("input[type=search]")
     field.send_keys("smr")
-    assert_selector ".nd-instant__group", text: /topics/i, wait: 15
+    begin
+      assert_selector ".nd-instant__group", text: /topics/i, wait: 15
+    rescue Minitest::Assertion => error
+      # A rare CI failure (#976): the server's results showed and the index never took over. Say why, then fail.
+      raise error, "#{error.message}\n#{search_state}"
+    end
     assert_selector ".nd-instant__row b", text: "Small modular reactors"
     assert_selector ".nd-instant__row b", text: "Real Smr Co"
     assert_selector ".nd-instant__row .nd-catsq svg", minimum: 2

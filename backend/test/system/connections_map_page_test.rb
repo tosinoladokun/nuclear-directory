@@ -104,6 +104,8 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
   test "the folded plants open in place and fold back, and the opened map is checked too" do
     visit "/companies/#{build_constellation.slug}"
     assert_selector ".nd-map__view[data-view=folded] .nd-map__svg .nd-map__name", text: "13 plants"
+    # The server draws the map; the controller (lazy-loaded) handles the click. Wait for it: it marks the drawing laid out.
+    assert_selector ".nd-map__view[data-view=folded] .nd-map__svg[data-laid-out=true]"
 
     find(".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold").click
     assert_selector ".nd-map__view[data-view=opened] .nd-map__svg[data-laid-out=true]"
