@@ -554,7 +554,8 @@ module Seed
         end
         # An identifier, like its names: EIA's crawl finds the site by it
         # instead of proposing a second one (#229).
-        if entry["eia_plant_id"].present?
+        # A person's later EIA ID stands too (Data Quality, #963).
+        if entry["eia_plant_id"].present? && keep_approved("facilities.yml", facility, { eia_plant_id: entry["eia_plant_id"].to_s }, approved:).empty?
           write("facilities.yml", :facility, { id: facility.id, eia_plant_id: entry["eia_plant_id"].to_s }, [])
         end
       end

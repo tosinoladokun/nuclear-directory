@@ -456,6 +456,24 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal 0, Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.results.dig(:facility, :changed).to_i, "still kept on every later run"
   end
 
+  test "a plant's EIA ID and short name a person approved after the seed wrote them stand (Data Quality, #963)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Plant", "eia_plant_id" => "649", "short_name" => "Acme" } ] }.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    plant = Facility.find_by!(name: "Acme Plant")
+    approve(plant, eia_plant_id: "650", short_name: "Acme 1")
+
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+
+    assert_equal [ "650", "Acme 1" ], plant.reload.attributes.values_at("eia_plant_id", "short_name")
+    kept = loader.kept.join("\n")
+    assert_match(/facilities.yml: kept facility #{plant.id}'s eia_plant_id "650", approved after the seed wrote it; the file says "649"/, kept)
+    assert_match(/facilities.yml: kept facility #{plant.id}'s short_name "Acme 1"/, kept)
+
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Plant", "eia_plant_id" => "650", "short_name" => "Acme 1" } ] }.to_yaml)
+    assert_empty Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.kept, "a file in line with the approval keeps nothing"
+  end
+
   test "a plant found by an alias keeps its name when a kept field pins the write to its id (Copilot, #963)" do
     plant = Facility.create!(name: "Acme Plant", status: "planned")
     plant.aliases.create!(alias: "Acme Station")
