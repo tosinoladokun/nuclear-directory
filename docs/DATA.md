@@ -27,6 +27,7 @@ Sections 1–5 say what to record. Section 6 lists every rule as a check, marked
 - **A site** has no parent. It holds the EIA plant ID, the location and the operator links. A single-unit plant can stand alone as one record until its EIA site exists (Columbia today).
 - Unit capacity, coordinates and state come from EIA's generator row. A unit's state should equal its site's (audited).
 - **In a company's seed file,** a link to one unit gives its site too: `- name: Indian Point 2` with `site: Indian Point`. The loader finds the site among sites by name (or makes it), then the unit under it by name (or makes it there). A same-name plant with no site becomes that unit; one already under another site fails the load. Write the site's name exactly as the directory has it (Indian Point, San Onofre, Duane Arnold Energy Center): a variant makes a second site. Without `site:`, the entry is a plant of its own, so use it only for a site or a single-unit plant.
+- **A seed file never clears a value, and never overwrites a person's later decision (#947).** `null` or a blank value means "not stated" and leaves the value as it is. Taking a value off is a person's decision, made in the admin. A field whose latest change was a person's approval (from Today or the inbox) keeps that value, even when the file says something else. The deploy log lists each one as "Kept", so the file can be brought into line.
 
 ### The same record
 

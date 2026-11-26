@@ -4,7 +4,12 @@ name: Brookhaven Technology Group
 aliases:
 - BROOKHAVEN TECHNOLOGY GROUP INC
 website: https://brookhaventech.com
-hq: null
+hq:
+  city: Stony Brook
+  state: NY
+  source_url: https://brookhaventech.com/contact
+  quote: 'Brookhaven Technology Group Inc. 1000 Innovation Road Stony Brook, NY 11794'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

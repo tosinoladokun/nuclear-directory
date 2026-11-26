@@ -2,7 +2,12 @@
 name: Dalton Utilities
 aliases: []
 website: https://www.dutil.com
-hq: null
+hq:
+  city: Dalton
+  state: GA
+  source_url: https://www.dutil.com
+  quote: '1200 V D Parrott Jr Pkwy Dalton, GA 30721'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

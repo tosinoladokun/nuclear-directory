@@ -3,7 +3,12 @@ name: Brookhaven National Laboratory
 aliases:
 - BNL
 website: https://www.bnl.gov
-hq: null
+hq:
+  city: Upton
+  state: NY
+  source_url: https://www.bnl.gov
+  quote: 'Brookhaven National Laboratory PO Box 5000 Upton, NY 11973-5000'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

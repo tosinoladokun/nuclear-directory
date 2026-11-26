@@ -1,7 +1,10 @@
 # Seed research for #253 batch 2 (hyperscaler power deals) - 2026-10-15. Quotes copied from raw page text fetched this session.
 name: Standard Power
 aliases: []
-website: null
+website: https://standardpower.com
+website_quote:
+  source_url: https://standardpower.com
+  quote: Home - Standard Power
 hq: null
 country_code: null
 status: active

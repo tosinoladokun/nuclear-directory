@@ -3,7 +3,12 @@ name: Pacific Northwest National Laboratory
 aliases:
 - PNNL
 website: https://www.pnnl.gov
-hq: null
+hq:
+  city: Richland
+  state: WA
+  source_url: https://www.pnnl.gov/contact
+  quote: 'P.O. Box 999 Richland, WA 99352'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

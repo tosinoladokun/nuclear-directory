@@ -4,7 +4,12 @@ name: Bridge12
 aliases:
 - BRIDGE 12 TECHNOLOGIES, INC.
 website: https://www.bridge12.com
-hq: null
+hq:
+  city: Natick
+  state: MA
+  source_url: https://www.bridge12.com/contact
+  quote: 'Bridge12 Technologies, Inc. 11 Michigan Drive Ste. 2 Natick, MA 01760'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

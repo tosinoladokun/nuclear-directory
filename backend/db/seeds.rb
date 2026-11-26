@@ -66,6 +66,8 @@ unless Rails.env.test?
   counts.each do |kind, row|
     puts format("%-24s %3d created, %3d changed, %3d unchanged", kind, row[:created], row[:changed], row[:unchanged])
   end
+  # Approved values the files disagree with (#947): kept, and listed so the files can be brought into line.
+  loader.kept.each { |line| puts "Kept: #{line}" }
   # For bin/deploy-data (#301), which posts them for Data Quality to check.
   File.write(Rails.root.join("tmp/seed_counts.json"), JSON.pretty_generate(counts))
   puts JSON.generate(counts) if ENV["SEED_COUNTS_JSON"] == "1"

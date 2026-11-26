@@ -4,7 +4,12 @@ name: Plasma Processes
 aliases:
 - PLASMA PROCESSES, LLC
 website: https://plasmapros.com
-hq: null
+hq:
+  city: Huntsville
+  state: AL
+  source_url: https://plasmapros.com/contact
+  quote: '4908A Moores Mill Rd. Huntsville, AL 35811'
+  confidence: 1.0
 country_code: US
 status: active
 roles:

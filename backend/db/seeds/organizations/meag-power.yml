@@ -2,7 +2,12 @@
 name: MEAG Power
 aliases: []
 website: https://www.meagpower.org
-hq: null
+hq:
+  city: Atlanta
+  state: GA
+  source_url: https://www.meagpower.org
+  quote: 'MEAG Power 1470 Riveredge Parkway, NW, Atlanta, GA 30328-4640'
+  confidence: 1.0
 country_code: US
 status: active
 roles:
