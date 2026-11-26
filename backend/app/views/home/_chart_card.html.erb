@@ -1,14 +1,16 @@
 <%# One chart card on homepage B (#909): the question as its title, then its chart. No subtitle and no source line: the
-    page the card opens keeps the sources. The whole card is one link; a small ↗ is its only sign. When the question
-    won't fit the card on one line, it shrinks to fit (down to 15px); a question too long for that has a short form, shown (a container query, so it follows the card's
-    width, not the screen's). Locals: question (HomeCharts::Question), data, size: :large or :small. %>
+    page the title opens keeps the sources. The title row (the question and a small ↗) links to the operating plants
+    list; rows and dots that are one record link to its page (#949), so the card itself isn't a link (links can't nest).
+    When the question won't fit the card on one line, it shrinks to fit (down to 15px); a question too long for that
+    has a short form, shown (a container query, so it follows the card's width, not the screen's). Locals: question
+    (HomeCharts::Question), data, size: :large or :small. %>
 <% title = format(question.question, count: data[:count]) %>
 <% short = format(question.short, count: data[:count]) %>
-<%= link_to directory_url_for(category: Category.find("plants"), status: "operating"), class: "nd-chart nd-chart--#{size} nd-chart--#{question.chart}", data: { home_chart: question.key } do %>
-  <div class="nd-chart__head">
+<div class="nd-chart nd-chart--<%= size %> nd-chart--<%= question.chart %>" data-home-chart="<%= question.key %>">
+  <%= link_to directory_url_for(category: Category.find("plants"), status: "operating"), class: "nd-chart__head", data: { home_chart_link: true } do %>
     <%# Each form shrinks to fit the card (DESIGN.md, one line, rule 2) before the short one takes over. %>
     <h2 class="nd-chart__title type-title-md"<% if short != title %> title="<%= title %>"<% end %>><% if short != title %><span class="nd-chart__tfull nd-chart__fit" style="--chars: <%= title.length %>"><%= title %></span><span class="nd-chart__tshort nd-chart__fit" style="--chars: <%= short.length %>"><%= short %></span><% else %><span class="nd-chart__fit" style="--chars: <%= title.length %>"><%= title %></span><% end %></h2>
     <span class="nd-chart__go"><%= icon("arrow-up-right", size: 16) %></span>
-  </div>
+  <% end %>
   <div class="nd-chart__body"><%= render "home/charts/#{question.chart}", question:, data:, size: %></div>
-<% end %>
+</div>

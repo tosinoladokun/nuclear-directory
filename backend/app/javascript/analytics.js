@@ -122,11 +122,14 @@ function trackHome(event) {
     return
   }
   if (event.type === "auxclick" && event.button !== 1) return
-  // B's chart cards and its download link. A tap on the map's dots, or one that only hides a dot's label, isn't a click
-  // on the card: it doesn't open the page (#940).
-  if (event.target.closest?.(".nd-chartmap__dot, .nd-chartmap-wrap[data-label-open], .nd-chartmap-wrap[data-map-tap]")) return
-  const chart = event.target.closest?.("a[data-home-chart]")
-  if (chart) return ready.capture("home_chart_click", { chart: chart.dataset.homeChart, ...variant }, { send_instantly: true })
+  // B's chart cards and its download link. A tap the map keeps (one that shows or hides a dot's label) opens nothing
+  // (#940). A row or dot that is one plant or company opens its page: home_record_click, with the card and the kind
+  // of record, never which one (#949). The card's title opens the list: home_chart_click.
+  if (event.target.closest?.("[data-map-tap]")) return
+  const card = event.target.closest?.("[data-home-chart]")
+  const record = card && event.target.closest("a[data-home-record]")
+  if (record) return sendHome("home_record_click", { chart: card.dataset.homeChart, kind: record.dataset.homeRecord, ...variant }, { send_instantly: true })
+  if (card && event.target.closest("a[data-home-chart-link]")) return sendHome("home_chart_click", { chart: card.dataset.homeChart, ...variant }, { send_instantly: true })
   if (event.target.closest?.("a[data-home-download]")) return ready.capture("home_download_click", variant, { send_instantly: true })
   const anchor = event.target.closest?.("a[data-home-click]")
   const properties = anchor && categoryClickProperties(anchor)

@@ -1,15 +1,19 @@
 <%# Ranked bars (#909): the category axis named above the names, the value axis's gridlines, ticks and unit under the bars,
-    and each bar's value beside it. Rows: { label:, title: (a record's full name, for records only), value: }, largest first. %>
+    and each bar's value beside it. Rows: { label:, title: (a record's full name, for records only), plant: or company: (its slug), value: }, largest first.
+    A row that is a record links to its page, the whole row one link (#949); rows we name ourselves (states) stay plain. %>
 <% top, ticks = chart_axis(data[:rows].first[:value], question.tick) %>
 <%# Names we write (states) keep a column as wide as the longest, so none is ever cut. %>
 <div class="nd-chartbars<% if data[:rows].none? { |row| row[:title] } %> nd-chartbars--ours<% end %>" role="group" aria-label="<%= question.axes[:value] %> by <%= question.axes[:category].downcase %>" style="--ticks: <%= ticks.size - 1 %>">
   <span class="nd-axis__name nd-chartbars__catname type-data-sm"><%= question.axes[:category] %></span>
   <% data[:rows].each do |row| %>
-    <%# A record's name (a plant, a company) may end in an ellipsis as a last resort, its full name in the title
-        (DESIGN.md, one line, rule 5); a state's name is ours and always fits. %>
-    <span class="nd-chartbars__label type-small"<% if row[:title] %> title="<%= row[:title] %>" data-truncate<% end %>><%= row[:label] %></span>
-    <span class="nd-chartbars__track"><span class="nd-chartbars__bar" style="--w: <%= chart_pct_of(row[:value], top) %>%"></span></span>
-    <span class="nd-chartbars__value type-data"><%= chart_value(row[:value], question.decimals) %></span>
+    <% href = row[:plant] ? plant_path(slug: row[:plant]) : (company_path(slug: row[:company]) if row[:company]) %>
+    <%= tag.public_send(href ? :a : :span, href:, class: "nd-chartbars__row", data: ({ home_record: row[:plant] ? "plant" : "company" } if href)) do %>
+      <%# A record's name (a plant, a company) may end in an ellipsis as a last resort, its full name in the title
+          (DESIGN.md, one line, rule 5); a state's name is ours and always fits. %>
+      <span class="nd-chartbars__label type-small"<% if row[:title] %> title="<%= row[:title] %>" data-truncate<% end %>><%= row[:label] %></span>
+      <span class="nd-chartbars__track"><span class="nd-chartbars__bar" style="--w: <%= chart_pct_of(row[:value], top) %>%"></span></span>
+      <span class="nd-chartbars__value type-data"><%= chart_value(row[:value], question.decimals) %></span>
+    <% end %>
   <% end %>
   <span class="nd-chartbars__ticks type-data-sm" aria-hidden="true">
     <% ticks.each do |tick| %><span class="nd-chartbars__tick" style="--at: <%= chart_pct_of(tick, top) %>%"><%= chart_value(tick, 0) %></span><% end %>
