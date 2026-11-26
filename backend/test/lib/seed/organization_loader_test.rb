@@ -432,6 +432,47 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_includes plant.evidence.pluck(:quote), "Running since 2020."
   end
 
+  test "a plant value a person approved after the seed wrote it stands, in facilities.yml and in a company's file (#960)" do
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns", status: "planned", state: "TN") ]))
+    details = { "facilities" => [ {
+      "name" => "Acme Plant",
+      "city" => { "value" => "Oak Ridge", "source_url" => "https://example.com/where", "quote" => "In Oak Ridge." },
+      "thermal_power_kw" => { "value" => 100, "source_url" => "https://example.com/power", "quote" => "100 kWt." }
+    } ] }
+    File.write(facilities_file, details.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    plant = Facility.find_by!(name: "Acme Plant")
+    approve(plant, city: "Kingston", thermal_power_kw: 250, status: "under_construction")
+
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+
+    plant.reload
+    assert_equal [ "Kingston", 250, "under_construction", "TN" ], plant.attributes.values_at("city", "thermal_power_kw", "status", "state")
+    kept = loader.kept.join("\n")
+    assert_match(/facilities.yml: kept facility #{plant.id}'s city "Kingston", approved after the seed wrote it; the file says "Oak Ridge"/, kept)
+    assert_match(/facilities.yml: kept facility #{plant.id}'s thermal_power_kw 250/, kept)
+    assert_match(/acme-fuel: kept facility #{plant.id}'s status "under_construction"/, kept)
+    assert_not plant.evidence.where(quote: "100 kWt.").where("created_at > ?", 1.minute.ago).count > 1, "no second citation for the file's power"
+    assert_equal 0, Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.results.dig(:facility, :changed).to_i, "still kept on every later run"
+  end
+
+  test "a unit value a person approved after the seed wrote it stands; the unit's other values still load (#960)" do
+    write_file("holtec", org("Holtec International", website: "https://holtec.com",
+      facilities: [ item(name: "Indian Point 2", site: "Indian Point", type: "owns", status: "operating", state: "NY") ]))
+    Seed::OrganizationLoader.new(@dir).load!
+    unit = Facility.find_by!(name: "Indian Point 2")
+    approve(unit, status: "shut_down")
+
+    write_file("holtec", org("Holtec International", website: "https://holtec.com",
+      facilities: [ item(name: "Indian Point 2", site: "Indian Point", type: "owns", status: "operating", state: "NY", city: "Buchanan") ]))
+    loader = Seed::OrganizationLoader.new(@dir).load!
+
+    unit.reload
+    assert_equal [ "shut_down", "Buchanan" ], unit.attributes.values_at("status", "city")
+    assert_equal unit.parent_id, Facility.find_by!(name: "Indian Point", parent_id: nil).id
+    assert_match(/holtec: kept facility #{unit.id}'s status "shut_down"/, loader.kept.join("\n"))
+  end
+
   test "facilities.yml thermal_power_kw (#721) is written with its quote, marked as stating that field" do
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Plant", type: "owns") ]))
     File.write(facilities_file, { "facilities" => [ {
