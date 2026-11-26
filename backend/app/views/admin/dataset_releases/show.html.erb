@@ -20,8 +20,9 @@
         <p class="type-body text-critical m-0" id="dataset-error">Last try failed: <%= @release.error %></p>
       <% end %>
 
+      <div class="overflow-x-auto">
       <table class="nd-numtable" id="dataset-counts">
-        <thead><tr><th scope="col">Table</th><th scope="col">Rows</th><th scope="col">Change<%= " since #{@release.previous_version}" if @release.previous_version %></th></tr></thead>
+        <thead><tr><th scope="col">Table</th><th scope="col">Rows</th><th scope="col">Change</th></tr></thead>
         <tbody>
           <% @release.ordered_counts.each do |table, count| %>
             <% before = @release.previous_counts&.dig(table) %>
@@ -33,6 +34,7 @@
           <% end %>
         </tbody>
       </table>
+      </div>
       <% held = Dataset::Export::TABLES.keys - @release.tables_included %>
       <% if held.any? %>
         <p class="type-body m-0" id="dataset-held-back">Held back: <%= held.to_sentence %> (DATASET_TABLES). The changelog says so.</p>
@@ -87,6 +89,7 @@
   <section class="nd-stack" aria-labelledby="dataset-published">
     <h2 id="dataset-published" class="type-admin-h2 m-0">Published</h2>
     <% if @published.any? %>
+      <div class="overflow-x-auto">
       <table class="nd-numtable" id="dataset-published-list">
         <thead><tr><th scope="col">Version</th><th scope="col">Published</th><th scope="col">Companies</th><th scope="col">Release</th><th scope="col">DOI</th></tr></thead>
         <tbody>
@@ -101,6 +104,7 @@
           <% end %>
         </tbody>
       </table>
+      </div>
     <% else %>
       <p class="type-body m-0">None from here yet. v2026.11 was published by hand.</p>
     <% end %>
