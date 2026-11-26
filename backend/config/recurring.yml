@@ -53,6 +53,17 @@ production:
     class: SocialSyncJob
     schedule: every 5 minutes
 
+  # The monthly open dataset release (#950): this month's draft is built on the
+  # 1st and Data Quality is emailed to check it; Tosin publishes it from
+  # Admin > Dataset releases. The watch saves each release's Zenodo DOI and
+  # alerts when none appears, or when the month's release isn't out by the 7th.
+  dataset_monthly_draft:
+    class: DatasetMonthlyDraftJob
+    schedule: "0 6 1 * * America/Los_Angeles"
+  dataset_release_watch:
+    class: DatasetReleaseWatchJob
+    schedule: every hour at minute 20
+
   # Marks runs cut off by a restart as failed, and queues the daily crawl
   # again (once a day per source) for a source whose run was cut off (#188).
   # Rebuilds cached pages after a data change, before visitors ask (#707).
