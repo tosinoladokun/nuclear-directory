@@ -63,10 +63,13 @@ class HomeChartsTest < ActiveSupport::TestCase
     end
 
     data = charts.plant_map
+    byron = data[:dots].find { |dot| dot[:plants].map { |plant| plant[:name] } == [ "Byron" ] }
     assert_equal EIA.map(&:first).uniq.size, data[:count]
-    assert_equal EIA.map(&:first).uniq.sort, data[:dots].map { |dot| dot[:name] }.sort
-    assert_equal HomeMap.point(-89.2817, 42.0742), data[:dots].find { |dot| dot[:name] == "Byron" }.values_at(:x, :y)
-    assert_equal "Illinois", data[:dots].find { |dot| dot[:name] == "Byron" }[:state], "the full state name, from the plant's record (#940)"
+    assert_equal EIA.map(&:first).uniq.sort, data[:dots].flat_map { |dot| dot[:plants].map { |plant| plant[:name] } }.sort
+    assert_equal HomeMap.point(-89.2817, 42.0742), byron.values_at(:x, :y)
+    assert_equal "Illinois", byron[:state], "the full state name, from the plant's record (#940)"
+    assert_equal Facility.find_by(name: "Byron", parent_id: nil).slug, byron[:plants].first[:slug], "the plant's slug, for its link (#949)"
+    assert_equal data[:dots].sort_by { |dot| dot[:x] }, data[:dots], "west to east, the arrow keys' order (#949)"
   end
 
   test "1. plants on the same spot share one dot and one label; a plant's state is never guessed (#940)" do
@@ -78,10 +81,12 @@ class HomeChartsTest < ActiveSupport::TestCase
 
     data = charts.plant_map
     assert_equal EIA.map(&:first).uniq.size + 3, data[:count], "the title still counts every plant"
-    shared = data[:dots].find { |dot| dot[:name] == "Hope Creek and Salem" }
+    names = ->(dot) { dot[:plants].map { |plant| plant[:name] } }
+    shared = data[:dots].find { |dot| names[dot].include?("Salem") }
+    assert_equal [ "Hope Creek", "Salem" ], names[shared], "one dot, each plant with its own link (#949)"
     assert_equal "New Jersey", shared[:state]
-    assert_equal 1, data[:dots].count { |dot| dot[:name].include?("Salem") }
-    assert_nil data[:dots].find { |dot| dot[:name] == "No State" }[:state]
+    assert_equal 2, shared[:plants].map { |plant| plant[:slug] }.uniq.size
+    assert_nil data[:dots].find { |dot| names[dot] == [ "No State" ] }[:state]
   end
 
   test "1. the map sits out when a plant has no coordinates, rather than leave it off" do
@@ -111,6 +116,7 @@ class HomeChartsTest < ActiveSupport::TestCase
     rows = charts.largest_plants[:rows]
     assert_equal expected.map(&:first), rows.map { |row| row[:title] }
     assert_equal "Vogtle", rows.find { |row| row[:title] == "Plant Vogtle" }[:label]
+    assert_equal Facility.find_by(name: "Plant Vogtle", parent_id: nil).slug, rows.find { |row| row[:title] == "Plant Vogtle" }[:plant], "each row links to its plant (#949)"
     assert_equal expected.map(&:last), rows.map { |row| row[:value] }
   end
 
@@ -163,6 +169,7 @@ class HomeChartsTest < ActiveSupport::TestCase
     assert_equal [ [ "Westinghouse", 7 ], [ "GE Vernova", 5 ] ], rows.map { |row| row.values_at(:label, :value) }
     assert_equal EIA.size, rows.sum { |row| row[:value] }
     assert_equal "Westinghouse Electric Company", rows.first[:title]
+    assert_equal [ westinghouse.slug, ge.slug ], rows.map { |row| row[:company] }, "each row links to its company (#949)"
   end
 
   test "8. a unit with no design company, from itself or its site, takes the card out" do
@@ -228,7 +235,7 @@ class HomeChartsTest < ActiveSupport::TestCase
 
   private
     def sample(chart)
-      { map: { count: 1, dots: [ { name: "A", x: 1, y: 1 } ] }, bars: { rows: [ { label: "A", value: 1 } ] },
+      { map: { count: 1, dots: [ { plants: [ { name: "A", slug: "a" } ], x: 1, y: 1 } ] }, bars: { rows: [ { label: "A", value: 1 } ] },
         columns: { columns: [ { label: "1", value: 1 } ] }, split: { parts: [ { label: "A", value: 1 }, { label: "B", value: 1 } ] } }.fetch(chart)
     end
 end

@@ -17,6 +17,9 @@ class RestoreSeedRevertedApprovalsTest < ActiveSupport::TestCase
   end
 
   setup do
+    # Production's later events have ids above the pinned ones; a fresh test database's sequence starts below them, so
+    # "the newest event" would be the pinned revert. Start the sequence above them, as in production.
+    ActiveRecord::Base.connection.execute("SELECT setval('verification_events_id_seq', GREATEST(10000, (SELECT last_value FROM verification_events_id_seq)))")
     @bridge12 = organization(115, "Bridge12")
     revert_event(4254, @bridge12, { "hq_city" => [ "Natick", nil ], "hq_state" => [ "MA", nil ] })
     @fuels = organization(11, "Energy Fuels", hq_city: "Denver", hq_state: "CO")
