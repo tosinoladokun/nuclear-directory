@@ -39,6 +39,9 @@ module Seed
       @errors = []
       # Values a person approved that the file disagrees with (#947), one line each.
       @kept = []
+      # Sites whose person-given name stood over the file's (#967), by the
+      # file's name normalized: the rest of the load finds them by id.
+      @kept_sites = {}
     end
 
     # Per kind, the rows the seed created, changed (an existing fact it
@@ -116,8 +119,14 @@ module Seed
     def site_named(name) = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(:id).first
 
     def plant_named(name)
-      Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
+      kept_site(name) ||
+        Facility.where(parent_id: nil).where("LOWER(name) = LOWER(?)", name.to_s).order(Arel.sql("nrc_docket IS NOT NULL"), :id).first ||
         Directory::Lookup.facility(name:)
+    end
+
+    # A site whose person-given name was kept, found by the file's name.
+    def kept_site(name)
+      id = @kept_sites[FacilityAlias.normalize(name)] and Facility.find_by(id:)
     end
 
     # An EIA plant ID another site holds (#229): merge that site in first.
@@ -342,7 +351,14 @@ module Seed
         end
 
         Array(doc["facilities"]).each do |item|
-          facility = item["site"].present? ? write_unit(slug, item, sources) : write(slug, :facility, facility_attributes(item), evidence(item, sources))
+          facility = if item["site"].present?
+            write_unit(slug, item, sources)
+          elsif (kept = kept_site(item["name"]))
+            # Its kept name stands: written by id, under the name it has (#967).
+            write(slug, :facility, facility_attributes(item).except(:name).merge(id: kept.id), evidence(item, sources))
+          else
+            write(slug, :facility, facility_attributes(item), evidence(item, sources))
+          end
           next unless facility&.ok?
           # A pending link a human has since rejected or unpublished stays decided.
           next if item["pending"] && closed_link?(organization.id, facility.id, item["type"])
@@ -504,6 +520,10 @@ module Seed
         # A site under a former name is renamed, even beside a same-name NRC
         # unit (a docketed Callaway and the site once called Callaway Energy Center).
         former = Array(entry["other_names"]).lazy.filter_map { |name| site_named(name) }.first
+        # Or one whose name differs only in case and punctuation ("Acme-Station"):
+        # no alias keeps the file's spelling then, so no lookup finds it (Copilot).
+        former ||= Facility.where(parent_id: nil, nrc_docket: nil).order(:id)
+          .find { |site| FacilityAlias.normalize(site.name) == FacilityAlias.normalize(entry["name"]) }
         unless former
           return if Directory::Lookup.facility(name: entry["name"])
 
@@ -512,8 +532,12 @@ module Seed
         attributes = { id: former.id, name: entry["name"] }
         # A name a person gave the site after the seed wrote it stands (#967),
         # even when it's one of the file's former names. Read from the record,
-        # not a lookup's reference (Copilot).
-        return if keep_approved("facilities.yml", Facility.find_by(id: former.id), attributes).any?
+        # not a lookup's reference (Copilot). The file's name may then find
+        # nothing, so the rest of the load finds the site by id (Copilot).
+        if keep_approved("facilities.yml", Facility.find_by(id: former.id), attributes).any?
+          @kept_sites[FacilityAlias.normalize(entry["name"])] = former.id
+          return
+        end
 
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)
@@ -597,7 +621,7 @@ module Seed
         sites = Facility.where(parent_id: nil, nrc_docket: nil)
         # By name, else by another name it goes by: a site a person renamed
         # keeps the file's name as an alias (#967, Copilot), so its units stay under it.
-        site = sites.where("LOWER(name) = LOWER(?)", site_name).first ||
+        site = kept_site(site_name) || sites.where("LOWER(name) = LOWER(?)", site_name).first ||
           sites.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(site_name)).select(:facility_id)).order(:id).first
         unless site
           # A new site, sourced and decided like any written by this load.

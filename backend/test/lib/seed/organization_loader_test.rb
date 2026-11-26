@@ -160,6 +160,42 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ site.id ], Facility.where(name: "Acme Station 1").pluck(:parent_id), "its unit stays under it, found by the file's name (Copilot)"
   end
 
+  # A site a person renamed, with its unit and details, loaded again from facilities.yml.
+  def renamed_site(person_name, file_name: "Acme Station", other_names: [ "Acme Plant" ])
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns"),
+      item(name: "Acme Station 1", site: "Acme Station", type: "operates") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ] } ] }.to_yaml)
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    site = Facility.find_by!(name: "Acme Station", parent_id: nil)
+    result = DataQuality::Review.approve_fact(type: "Facility", id: site.id, by: "human:tosin", attributes: { name: person_name })
+    assert result.ok?, result.errors.inspect
+
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: file_name, type: "owns"),
+      item(name: "Acme Station 1", site: file_name, type: "operates") ]))
+    details = { "facilities" => [ { "name" => file_name, "other_names" => other_names,
+      "state" => { "value" => "TN", "source_url" => "https://example.com/where", "quote" => "In Tennessee." } } ] }
+    File.write(facilities_file, details.to_yaml)
+    site
+  end
+
+  def assert_one_site(site, name)
+    assert_nothing_raised { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load! }
+    assert_equal [ name, "TN" ], site.reload.attributes.values_at("name", "state")
+    assert_equal [ site.id ], Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").pluck(:id), "no second site"
+    assert_equal [ site.id ], Facility.where(name: "Acme Station 1").pluck(:parent_id), "its unit stays under it"
+    assert_equal 2, site.facility_relationships.count + Facility.find_by!(name: "Acme Station 1").facility_relationships.count
+  end
+
+  test "a site a person renamed keeps its name when the file brings in a new one; the load finds it by id (Copilot, #970)" do
+    site = renamed_site("Acme Plant", file_name: "Acme Works", other_names: [ "Acme Station", "Acme Plant" ])
+    assert_one_site(site, "Acme Plant")
+  end
+
+  test "a site a person renamed only in punctuation keeps its name; the file's spelling still finds it (Copilot, #970)" do
+    site = renamed_site("Acme-Station", other_names: [])
+    assert_one_site(site, "Acme-Station")
+  end
+
   test "a site found under a former name only through a lookup is guarded from its record (Copilot, #970)" do
     site = Facility.create!(name: "Acme Plant", nrc_docket: "07000001")
     write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
