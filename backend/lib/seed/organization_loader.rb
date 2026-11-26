@@ -526,7 +526,9 @@ module Seed
         return @errors << "facilities.yml: #{name.inspect} isn't in any organization file" unless in_docs.include?(name)
 
         # Its organization-file write failed (already in @errors): nothing to fill.
-        facility = plant_named(name) or return
+        # The record, not a lookup's reference (a plant found only by an alias):
+        # its audit trail is read below (#963).
+        facility = Facility.find_by(id: plant_named(name)&.id) or return
         approved = approved_fields(facility)
 
         FACILITY_FIELDS.each do |field|

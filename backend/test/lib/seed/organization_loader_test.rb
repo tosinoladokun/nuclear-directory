@@ -474,6 +474,22 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_empty Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!.kept, "a file in line with the approval keeps nothing"
   end
 
+  test "facilities.yml details for a plant found only by an alias are written, and guarded (#963)" do
+    plant = Facility.create!(name: "Acme Plant", state: "TN")
+    plant.aliases.create!(alias: "Acme Station")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station",
+      "city" => { "value" => "Oak Ridge", "source_url" => "https://example.com/where", "quote" => "In Oak Ridge." } } ] }.to_yaml)
+
+    Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    assert_equal [ "Acme Plant", "Oak Ridge" ], plant.reload.attributes.values_at("name", "city")
+
+    approve(plant, city: "Kingston")
+    loader = Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load!
+    assert_equal "Kingston", plant.reload.city
+    assert_match(/facilities.yml: kept facility #{plant.id}'s city "Kingston"/, loader.kept.join("\n"))
+  end
+
   test "a plant found by an alias keeps its name when a kept field pins the write to its id (Copilot, #963)" do
     plant = Facility.create!(name: "Acme Plant", status: "planned")
     plant.aliases.create!(alias: "Acme Station")
