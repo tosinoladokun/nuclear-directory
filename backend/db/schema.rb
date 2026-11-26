@@ -630,7 +630,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.datetime "updated_at", null: false
     t.index ["platform"], name: "index_social_channels_on_platform", unique: true
     t.check_constraint "mode::text = ANY (ARRAY['off'::character varying::text, 'drafts'::character varying::text, 'live'::character varying::text])", name: "social_channels_mode_check"
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_channels_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_channels_platform_check"
   end
 
   create_table "social_posts", force: :cascade do |t|
@@ -664,7 +664,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.index ["platform", "sent_on"], name: "index_social_posts_one_send_per_platform_day", unique: true, where: "((sent_on IS NOT NULL) AND ((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text])))"
     t.index ["platform", "subject_type", "subject_id"], name: "index_social_posts_one_send", unique: true, where: "((status)::text = ANY (ARRAY[('sending'::character varying)::text, ('queued'::character varying)::text, ('posted'::character varying)::text, ('unknown'::character varying)::text]))"
     t.index ["subject_type", "subject_id"], name: "index_social_posts_on_subject_type_and_subject_id"
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_posts_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_posts_platform_check"
     t.check_constraint "status::text = ANY (ARRAY['drafted'::character varying::text, 'sending'::character varying::text, 'queued'::character varying::text, 'posted'::character varying::text, 'unknown'::character varying::text, 'cancelled'::character varying::text, 'blocked'::character varying::text, 'failed'::character varying::text])", name: "social_posts_status_check"
   end
 
