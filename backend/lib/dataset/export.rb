@@ -154,7 +154,13 @@ module Dataset
       "doe_programs" => "government_page", "doe_isotope_sites" => "government_page" }.freeze
     PUBLICATION_HOSTS = %w[federalregister.gov govinfo.gov].freeze
 
-    def initialize(dir, version: Date.current.strftime("%Y.%m"), previous: nil, released_on: Date.current)
+    # The tables every release has. deal_terms and licensing_stages can be
+    # held back (#950: Data Quality decides at each sign-off); their rows'
+    # evidence and the sources only they cite go with them.
+    CORE_TABLES = %w[companies facilities relationships sources evidence].freeze
+
+    def initialize(dir, version: Date.current.strftime("%Y.%m"), previous: nil, released_on: Date.current, tables: TABLES.keys)
+      @tables = TABLES.keys & (tables.map(&:to_s) | CORE_TABLES)
       @dir = Pathname(dir)
       @version = version
       @previous = previous && Pathname(previous)
@@ -227,7 +233,7 @@ module Dataset
         end
 
         evidence = evidence_rows(companies: companies.select { |c| sourced?(c) }, facilities: [ *shown_sites, *sourced_units ], company_links:,
-          plant_links:, roles:, technologies:, terms:, stages:)
+          plant_links:, roles:, technologies:, terms:, stages:).select { |row| @tables.include?(row["fact_table"]) }
         sources = Source.where(id: evidence.map { |row| row["source_id"] }.uniq).order(:id).to_a
 
         {
@@ -238,7 +244,7 @@ module Dataset
           "licensing_stages" => stages.map { |stage| stage_row(stage, facility_slugs, company_slugs) },
           "sources" => source_rows(sources),
           "evidence" => evidence
-        }
+        }.select { |name, _| @tables.include?(name) }
       end
 
       def sourced?(record) = @sourced[record.class.polymorphic_name].include?(record.id)
@@ -406,7 +412,8 @@ module Dataset
       end
 
       def write_docs(counts, manifest, previous)
-        docs = Docs.new(version: @version, released_on: @released_on, counts:, manifest:, previous:, crawled: @source_kinds.to_a)
+        docs = Docs.new(version: @version, released_on: @released_on, counts:, manifest:, previous:, crawled: @source_kinds.to_a,
+          held_back: TABLES.keys - @tables)
         File.write(@dir.join("README.md"), docs.readme)
         File.write(@dir.join("DATA-DICTIONARY.md"), docs.dictionary)
         File.write(@dir.join("CITATION.cff"), docs.citation)

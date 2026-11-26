@@ -1,0 +1,121 @@
+<% content_for :title, "Dataset releases" %>
+<% day = ->(time) { time.in_time_zone("America/Los_Angeles").strftime("%b %-d, %Y, %-l:%M %P") } %>
+<div class="nd-stack">
+  <h1 class="type-admin-h1 m-0">Dataset releases</h1>
+  <p class="type-body m-0">The open dataset, published to GitHub once a month after Data Quality checks the counts. Zenodo archives each release and gives it a DOI.</p>
+
+  <% unless @set_up %>
+    <div class="nd-flash" role="alert" id="dataset-not-set-up"><%= icon("warning-circle") %><p class="type-body-strong m-0">Publishing isn't set up: the server has no DATASET_GITHUB_TOKEN. Drafts and dry runs still work.</p></div>
+  <% end %>
+
+  <% if @release %>
+    <section class="nd-stack" aria-labelledby="dataset-draft" id="dataset-release-<%= @release.version %>">
+      <h2 id="dataset-draft" class="type-admin-h2 m-0">v<%= @release.version %>, <%= @release.failed? ? "not published yet" : "draft" %></h2>
+      <p class="type-small text-ink-muted m-0">
+        <%= @release.built_at ? "Built #{day.(@release.built_at)}" : "Not built yet" %>
+        · <%= @release.previous_version ? "compared with v#{@release.previous_version}" : "first release" %>
+        · <%= pluralize(@release.tables_included.size, "table") %>
+      </p>
+      <% if @release.error.present? %>
+        <p class="type-body text-critical m-0" id="dataset-error">Last try failed: <%= @release.error %></p>
+      <% end %>
+
+      <div class="overflow-x-auto">
+      <table class="nd-numtable" id="dataset-counts">
+        <thead><tr><th scope="col">Table</th><th scope="col">Rows</th><th scope="col">Change</th></tr></thead>
+        <tbody>
+          <% @release.ordered_counts.each do |table, count| %>
+            <% before = @release.previous_counts&.dig(table) %>
+            <tr>
+              <th scope="row" class="type-data"><%= table %></th>
+              <td class="type-data nd-num"><%= number_with_delimiter(count) %></td>
+              <td class="type-data nd-num"><%= before ? format("%+d", count - before).sub("+0", "0") : "new" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+      </div>
+      <% held = Dataset::Export::TABLES.keys - @release.tables_included %>
+      <% if held.any? %>
+        <p class="type-body m-0" id="dataset-held-back">Held back: <%= held.to_sentence %>, because DATASET_TABLES leaves them out. The changelog says so. To include them, unset DATASET_TABLES or list them in it, then rebuild.</p>
+      <% end %>
+
+      <h3 class="type-body-strong m-0">Domains with no publisher name</h3>
+      <% if @release.unknown_publishers.any? %>
+        <p class="type-body m-0">Shown as the domain in the sources table. Add them to lib/dataset/publishers.yml, then rebuild.</p>
+        <ul class="m-0" id="dataset-unknown-publishers"><% @release.unknown_publishers.each do |host| %><li class="type-data"><%= host %></li><% end %></ul>
+      <% else %>
+        <p class="type-body m-0" id="dataset-unknown-publishers">None.</p>
+      <% end %>
+
+      <h3 class="type-body-strong m-0">Changelog</h3>
+      <pre class="nd-code type-data-sm" id="dataset-changelog"><%= @release.changelog %></pre>
+
+      <div class="flex flex-wrap gap-2">
+        <%= button_to "Rebuild", admin_dataset_releases_build_path, params: { version: @release.version }, class: "nd-btn nd-btn--outline type-ui",
+              disabled: !@release.rebuildable?, title: ("Publishing has started, so the files are fixed" unless @release.rebuildable?) %>
+        <%= button_to "Dry run", admin_dataset_release_dry_run_path(@release), class: "nd-btn nd-btn--outline type-ui", disabled: !@release.publishable? %>
+        <%= button_to "Publish v#{@release.version}", admin_dataset_release_publish_path(@release), params: { built_at: Dataset::Publisher.stamp(@release.built_at) }, class: "nd-btn nd-btn--primary type-ui",
+              disabled: !(@set_up && @release.publishable?), id: "dataset-publish", "aria-describedby": ("dataset-not-set-up" unless @set_up),
+              form: { data: { turbo_confirm: "Publish v#{@release.version} to GitHub? Zenodo archives it and gives it a DOI, so it can't be taken back." } } %>
+      </div>
+
+      <% if (run = @release.dry_run) %>
+        <div class="nd-stack" id="dry-run">
+          <h3 class="type-body-strong m-0">Dry run, <%= day.(Time.zone.parse(run["checked_at"])) %></h3>
+          <% if run["blocked"] %><p class="type-body text-critical m-0">Publishing would stop: <%= run["blocked"] %>.</p><% end %>
+          <% steps = run["steps"] || Dataset::Publisher::STEPS %>
+          <% if steps.include?("commit") %>
+            <p class="type-body m-0">
+              On main (<%= run["main"].to_s.first(7) %>), the commit "<%= run["commit_message"] %>" would add <%= pluralize(run["added"].size, "file") %>,
+              change <%= run["changed"].size %> and delete <%= run["removed"].size %>; <%= run["unchanged"] %> stay the same.
+              Then the tag <%= run["tag"] %> and the release "<%= run["release_name"] %>".
+            </p>
+          <% elsif steps.any? %>
+            <% left = { "move_main" => "move main (#{run["main"].to_s.first(7)}) to the release commit #{run["commit"].to_s.first(7)}",
+                        "tag" => "make the tag #{run["tag"]}", "release" => "make the release \"#{run["release_name"]}\"" } %>
+            <p class="type-body m-0" id="dry-run-left">An earlier Publish stopped partway. Publishing would only <%= steps.map { |step| left.fetch(step) }.to_sentence %>.</p>
+          <% elsif !run["blocked"] %>
+            <p class="type-body m-0">Nothing is left to do on GitHub.</p>
+          <% end %>
+          <% { "Added" => run["added"], "Changed" => run["changed"], "Deleted" => run["removed"] }.each do |label, paths| %>
+            <% if paths.any? %><p class="type-data-sm m-0"><%= label %>: <%= paths.join(", ") %></p><% end %>
+          <% end %>
+          <pre class="nd-code type-data-sm"><%= run["release_body"] %></pre>
+        </div>
+      <% end %>
+    </section>
+  <% else %>
+    <section class="nd-stack" aria-labelledby="dataset-draft">
+      <h2 id="dataset-draft" class="type-admin-h2 m-0">Draft</h2>
+      <p class="type-body m-0" id="dataset-no-draft">No draft. The next one is built on the 1st.</p>
+      <% unless @published.any? { |release| release.version == @this_month } %>
+        <div><%= button_to "Build v#{@this_month} now", admin_dataset_releases_build_path, params: { version: @this_month }, class: "nd-btn nd-btn--outline type-ui" %></div>
+      <% end %>
+    </section>
+  <% end %>
+
+  <section class="nd-stack" aria-labelledby="dataset-published">
+    <h2 id="dataset-published" class="type-admin-h2 m-0">Published</h2>
+    <% if @published.any? %>
+      <div class="overflow-x-auto">
+      <table class="nd-numtable" id="dataset-published-list">
+        <thead><tr><th scope="col">Version</th><th scope="col">Published</th><th scope="col">Companies</th><th scope="col">Release</th><th scope="col">DOI</th></tr></thead>
+        <tbody>
+          <% @published.each do |release| %>
+            <tr>
+              <th scope="row" class="type-data">v<%= release.version %></th>
+              <td class="type-data"><%= release.published_at&.then { |at| at.to_date.iso8601 } %></td>
+              <td class="type-data nd-num"><%= number_with_delimiter(release.counts["companies"]) %></td>
+              <td><%= link_to "On GitHub ↗", release.release_url, class: "nd-link type-ui whitespace-nowrap", target: "_blank", rel: "noopener" if release.release_url %></td>
+              <td class="type-data"><%= release.version_doi ? link_to(release.version_doi, "https://doi.org/#{release.version_doi}", class: "nd-link", target: "_blank", rel: "noopener") : "Not yet" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+      </div>
+    <% else %>
+      <p class="type-body m-0">None from here yet. v2026.11 was published by hand.</p>
+    <% end %>
+  </section>
+</div>
