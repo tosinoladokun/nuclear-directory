@@ -21,7 +21,7 @@ class HomeChartLinksTest < ApplicationSystemTestCase
       heights: [...chart.querySelectorAll(".nd-chartbars__row")].map((e) => e.getBoundingClientRect().height) }))
   JS
 
-  def style(selector, property) = page.evaluate_script("getComputedStyle(document.querySelector(#{selector.to_json})).#{property}")
+  def style(selector, property, pseudo = nil) = page.evaluate_script("getComputedStyle(document.querySelector(#{selector.to_json}), #{pseudo.to_json}).#{property}")
 
   test "a linked row keeps the chart's columns; hover fills it and darkens its bar; focus rings it; a click opens the plant" do
     [ 1440, 375 ].each do |width|
@@ -40,14 +40,15 @@ class HomeChartLinksTest < ApplicationSystemTestCase
     plain = style("#{row} .nd-chartbars__bar", "backgroundColor")
     find(row, match: :first).hover
     sleep 0.2 # the 120ms fade
-    assert_not_equal "rgba(0, 0, 0, 0)", style(row, "backgroundColor"), "the row fills on hover"
+    assert_not_equal "rgba(0, 0, 0, 0)", style(row, "backgroundColor", "::before"), "the row fills on hover"
+    assert_equal %w[-8px -8px], [ style(row, "left", "::before"), style(row, "right", "::before") ], "the fill 8px past the name and the value (Design QA, #953)"
     assert_not_equal plain, style("#{row} .nd-chartbars__bar", "backgroundColor"), "its bar mixes with ink"
     assert_equal "none", style(row, "textDecorationLine"), "no underline"
-    assert_equal "rgba(0, 0, 0, 0)", style("[data-home-chart=state_power] .nd-chartbars__row", "backgroundColor"), "a state row stays plain"
+    assert_equal "none", style("[data-home-chart=state_power] .nd-chartbars__row", "content", "::before"), "a state row stays plain"
 
     find("[data-home-chart=largest_plants] .nd-chart__head").send_keys(:tab)
     assert page.evaluate_script("document.activeElement.matches('a.nd-chartbars__row:focus-visible')"), "the first row is the next stop"
-    assert_equal "solid", style(row, "outlineStyle"), "the standard ring"
+    assert_equal [ "none", "solid" ], [ style(row, "outlineStyle"), style(row, "outlineStyle", "::before") ], "the standard ring, on the fill's box"
 
     first = Facility.find_by(name: "Plant Vogtle", parent_id: nil)
     find(row, match: :first).click
