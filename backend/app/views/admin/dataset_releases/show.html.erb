@@ -74,7 +74,7 @@
           <% elsif steps.any? %>
             <% left = { "move_main" => "move main (#{run["main"].to_s.first(7)}) to the release commit #{run["commit"].to_s.first(7)}",
                         "tag" => "make the tag #{run["tag"]}", "release" => "make the release \"#{run["release_name"]}\"" } %>
-            <p class="type-body m-0" id="dry-run-left">An earlier Publish got partway. Publishing would only <%= steps.map { |step| left.fetch(step) }.to_sentence %>.</p>
+            <p class="type-body m-0" id="dry-run-left">An earlier Publish stopped partway. Publishing would only <%= steps.map { |step| left.fetch(step) }.to_sentence %>.</p>
           <% elsif !run["blocked"] %>
             <p class="type-body m-0">Nothing is left to do on GitHub.</p>
           <% end %>
