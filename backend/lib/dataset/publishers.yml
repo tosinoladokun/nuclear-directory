@@ -21,6 +21,8 @@ bpa.gov: { name: "Bonneville Power Administration", kind: agency }
 isotopes.gov: { name: "U.S. Department of Energy Isotope Program", kind: agency }
 sbir.gov: { name: "SBIR.gov (U.S. Small Business Administration)", kind: agency }
 fs.usda.gov: { name: "USDA Forest Service", kind: agency }
+deq.nc.gov: { name: "North Carolina Department of Environmental Quality", kind: agency }
+permits.performance.gov: { name: "Federal Permitting Improvement Steering Council", kind: agency }
 
 # News and trade press
 world-nuclear-news.org: { name: "World Nuclear News", kind: news }
@@ -29,11 +31,17 @@ powermag.com: { name: "POWER", kind: news }
 bicmagazine.com: { name: "BIC Magazine", kind: news }
 businessreport.com: { name: "Greater Baton Rouge Business Report", kind: news }
 
+# Press-release wires: the release is the issuing company's own statement (DATA.md, sources: the party itself)
+prnewswire.com: { name: "PR Newswire", kind: company }
+
 # Shared hosts, by the start of the path (host and path, no scheme): each
 # account or folder belongs to a different publisher. Checked before domains.
 content.govdelivery.com/accounts/USDOEINL/: { name: "Idaho National Laboratory", kind: agency }
 content.govdelivery.com/accounts/USDOEOS/: { name: "U.S. Department of Energy, Office of Science", kind: agency }
 s205.q4cdn.com/611413639/: { name: "Dominion Energy", kind: company }
+s202.q4cdn.com/586283047/: { name: "Xcel Energy", kind: company }
+d1io3yog0oux5.cloudfront.net/_9556f57229966db9ffd948dbfb32a46f/urenergy/: { name: "Ur-Energy", kind: company }
+d1io3yog0oux5.cloudfront.net/_f01d57847efe5ebf0eadd25c01d07417/urenergy/: { name: "Ur-Energy", kind: company }
 
 # Companies whose pages live on another domain, or that aren't in the directory
 x-energy.com: { name: "X-energy", kind: company }
@@ -53,3 +61,8 @@ goodenergycollective.org: { name: "Good Energy Collective", kind: company }
 h3dgamma.com: { name: "H3D", kind: company }
 news.duke-energy.com: { name: "Duke Energy", kind: company }
 pkmj.com: { name: "PKMJ Technical Services", kind: company }
+3keysoft.com: { name: "WSC, Inc.", kind: company }
+camecoresources.com: { name: "Cameco Resources", kind: company }
+ge.com: { name: "General Electric", kind: company }
+moltexenergyltd.com: { name: "Moltex Energy", kind: company }
+nj.pseg.com: { name: "PSE&G", kind: company }
