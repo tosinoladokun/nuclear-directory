@@ -37,7 +37,7 @@
       </div>
       <% held = Dataset::Export::TABLES.keys - @release.tables_included %>
       <% if held.any? %>
-        <p class="type-body m-0" id="dataset-held-back">Held back: <%= held.to_sentence %> (DATASET_TABLES). The changelog says so.</p>
+        <p class="type-body m-0" id="dataset-held-back">Held back: <%= held.to_sentence %>. The changelog says so. To include them, list them in DATASET_TABLES and rebuild.</p>
       <% end %>
 
       <h3 class="type-body-strong m-0">Domains with no publisher name</h3>

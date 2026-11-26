@@ -45,8 +45,10 @@ class Dataset::DraftTest < ActiveSupport::TestCase
     assert_match "Held back from this release: `deal_terms` and `licensing_stages`.", release.changelog
   end
 
-  test "the setting comes from DATASET_TABLES, and the five core tables are always in" do
-    assert_equal Dataset::Export::TABLES.keys, DatasetRelease.tables_setting
+  test "the setting comes from DATASET_TABLES: the five core tables unless it names the other two (DQ)" do
+    assert_equal Dataset::Export::CORE_TABLES, DatasetRelease.tables_setting
+    ENV["DATASET_TABLES"] = "deal_terms"
+    assert_equal %w[companies facilities relationships deal_terms sources evidence].sort, DatasetRelease.tables_setting.sort
     ENV["DATASET_TABLES"] = "companies, evidence"
     assert_equal Dataset::Export::CORE_TABLES, DatasetRelease.tables_setting
     ENV["DATASET_TABLES"] = "deal_terms licensing_stages"
