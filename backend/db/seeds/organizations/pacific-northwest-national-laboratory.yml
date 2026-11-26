@@ -25,9 +25,12 @@ relationships: []
 facilities: []
 notes: 'HQ left blank: the pages read state none.'
 description:
-  text: National laboratory for scientific discovery in chemistry, data analytics and Earth science, and for energy resilience and national security.
+  text: "PNNL advances the frontiers of knowledge, taking on some of the world’s greatest science and technology challenges."
   source_url: https://www.pnnl.gov
   quote: Pacific Northwest National Laboratory is a leading center for scientific discovery in chemistry, data analytics, and Earth science, and for technological innovation in energy resilience and national security.
+  also:
+  - source_url: https://www.pnnl.gov/about
+    quote: "PNNL advances the frontiers of knowledge, taking on some of the world’s greatest science and technology challenges."
 short_description:
   text: 'Lab for chemistry and Earth science'
   source_url: https://www.pnnl.gov

@@ -23,14 +23,14 @@ technologies: []
 relationships:
 - type: funds
   to: TerraPower, LLC
-  description: 'ARDP award (Oct 2020): $80M initial funding to demonstrate Natrium; cost-shared, DOE total up to $3.2B over seven years across both ARDP demos subject to appropriations.'
+  description: "1 award from the U.S. Department of Energy totaling $1.7 billion (2021): DENE0009054."
   source_url: https://www.energy.gov/ne/articles/us-department-energy-announces-160-million-first-awards-under-advanced-reactor
   quote: DOE is awarding TerraPower LLC (Bellevue, Washington) and X-energy (Rockville, Maryland) $80 million each in initial funding to build two advanced nuclear reactors that can be operational within seven years.
   published: '2020-10-13'
   confidence: 1.0
 - type: funds
   to: X-Energy, Inc.
-  description: 'ARDP award (Oct 2020): $80M initial funding for a four-unit Xe-100 plant and TRISO fuel fabrication facility; cost-shared.'
+  description: "4 awards from the U.S. Department of Energy totaling $967.5 million (first in 2016, latest in 2023): DENE0009040, DENE0008472, DENE0008745 and 1 more."
   source_url: https://www.energy.gov/ne/articles/us-department-energy-announces-160-million-first-awards-under-advanced-reactor
   quote: DOE is awarding TerraPower LLC (Bellevue, Washington) and X-energy (Rockville, Maryland) $80 million each in initial funding to build two advanced nuclear reactors that can be operational within seven years.
   published: '2020-10-13'
@@ -44,7 +44,7 @@ relationships:
   confidence: 1.0
 - type: funds
   to: Commonwealth Fusion Systems
-  description: Selected (May 2023) in the $46M Milestone-Based Fusion Development Program; payments only on verified milestones.
+  description: "1 award from the U.S. Department of Energy totaling $1.5 million (2021): DESC0021623."
   source_url: https://cfs.energy/news-and-media/cfs-doe-milestone-fusion-development-program/
   quote: Commonwealth Fusion Systems (CFS) has been selected by the U.S. Department of Energy (DOE) as an awardee in its $46 million milestone-based commercial fusion energy development program, a program designed to solidify U.S. leadership in commercial fusion energy.
   published: '2023-05-31'
@@ -58,28 +58,28 @@ relationships:
   confidence: 1.0
 - type: supplies
   to: TerraPower, LLC
-  description: Conditional commitment (Apr 2025) to provide HALEU from DOE sources (first-round HALEU allocation); contracting to follow.
+  description: "Conditional HALEU allocation, round 1 (April 9, 2025)"
   source_url: https://www.energy.gov/articles/us-department-energy-distribute-first-amounts-haleu-us-advanced-reactor-developers
   quote: The U.S. Department of Energy (DOE) today made conditional commitments to provide high-assay low-enriched uranium (HALEU) to five U.S. nuclear developers to meet their near-term fuel needs.
   published: '2025-04-09'
   confidence: 1.0
 - type: supplies
   to: Kairos Power
-  description: Conditional HALEU allocation (Apr 2025), first round.
+  description: "Conditional HALEU allocation, round 1 (April 9, 2025)"
   source_url: https://www.energy.gov/articles/us-department-energy-distribute-first-amounts-haleu-us-advanced-reactor-developers
   quote: The U.S. Department of Energy (DOE) today made conditional commitments to provide high-assay low-enriched uranium (HALEU) to five U.S. nuclear developers to meet their near-term fuel needs.
   published: '2025-04-09'
   confidence: 1.0
 - type: supplies
   to: TRISO-X, LLC
-  description: Conditional HALEU allocation (Apr 2025), first round.
+  description: "Conditional HALEU allocation, round 1 (April 9, 2025)"
   source_url: https://www.energy.gov/articles/us-department-energy-distribute-first-amounts-haleu-us-advanced-reactor-developers
   quote: The U.S. Department of Energy (DOE) today made conditional commitments to provide high-assay low-enriched uranium (HALEU) to five U.S. nuclear developers to meet their near-term fuel needs.
   published: '2025-04-09'
   confidence: 1.0
 - type: supplies
   to: Westinghouse Electric Company LLC
-  description: Conditional HALEU allocation (Apr 2025), first round.
+  description: "Conditional HALEU allocation, round 1 (April 9, 2025)"
   source_url: https://www.energy.gov/articles/us-department-energy-distribute-first-amounts-haleu-us-advanced-reactor-developers
   quote: The U.S. Department of Energy (DOE) today made conditional commitments to provide high-assay low-enriched uranium (HALEU) to five U.S. nuclear developers to meet their near-term fuel needs.
   published: '2025-04-09'

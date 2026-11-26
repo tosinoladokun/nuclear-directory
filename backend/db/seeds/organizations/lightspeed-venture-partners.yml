@@ -23,9 +23,12 @@ relationships:
 facilities: []
 notes: 'HQ not verified. #63: HQ (Menlo Park, CA) found only on third-party profiles; not added.'
 description:
-  text: Venture capital firm that invests from seed stage through later rounds.
+  text: "Lightspeed has been the first investor and an early backer of some of the most innovative companies in the world."
   source_url: https://lsvp.com/about/
   quote: In service of bold founders with big ideas, we stand behind our companies with high conviction from Seed to Series F and beyond.
+  also:
+  - source_url: https://lsvp.com/about/
+    quote: "For over twenty years Lightspeed has been the first investor and an early backer of some of the most innovative companies in the world."
 short_description:
   text: 'Seed to growth venture capital'
   source_url: https://lsvp.com/about/
