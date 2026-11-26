@@ -68,6 +68,16 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     assert_empty cut, "at #{width}: no label is cut; only a plant's or company's name may end in an ellipsis"
     names = page.evaluate_script("[...document.querySelectorAll('.nd-chartbars__label[data-truncate]')].filter(e => !e.title).length")
     assert_equal 0, names, "at #{width}: a cut name keeps its full name in the title"
+    outside = page.evaluate_script(<<~JS)
+      [...document.querySelectorAll(".nd-chart .nd-axis__name")].filter((name) => {
+        const card = name.closest(".nd-chart"), box = card.getBoundingClientRect(), style = getComputedStyle(card)
+        const range = document.createRange()
+        range.selectNodeContents(name)
+        const text = range.getBoundingClientRect()
+        return text.right > box.right - parseFloat(style.paddingRight) + 0.5 || text.left < box.left + parseFloat(style.paddingLeft) - 0.5
+      }).map((name) => name.textContent)
+    JS
+    assert_empty outside, "at #{width}: every axis name inside its card's content box (#974)"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth - innerWidth"), :<=, 0, "at #{width}: no sideways scroll"
   end
 
@@ -99,7 +109,7 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     end
   end
 
-  test "every card in the pool, large and small, at 1440, 768, 390, 375 and 320" do
+  test "every card in the pool, large and small, at 1440, 1024, 768, 390, 375 and 320" do
     # A few sets that between them show every question in every slot it can take.
     covering = HomeCharts::POOL.select(&:large?).flat_map do |large|
       todo = HomeCharts::POOL.select(&:small?) - [ large ]
@@ -112,7 +122,7 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     end
     assert_equal HomeCharts::POOL.select(&:small?).map(&:key).sort, covering.flat_map { |set| set.drop(1) }.map(&:key).uniq.sort
 
-    [ 1440, 768, 390, 375, 320 ].each do |width|
+    [ 1440, 1024, 768, 390, 375, 320 ].each do |width|
       resize_viewport(width, 844)
       covering.each do |set|
         visit root_path(home: "b", charts: set.map(&:key).join(","))
