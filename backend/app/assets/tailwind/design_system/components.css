@@ -481,7 +481,9 @@
   .nd-chartbars__value { grid-column: 3; text-align: right; }
   .nd-chartbars__ticks { grid-column: 2; position: relative; height: 16px; margin-top: 4px; color: var(--nd-ink-muted); }
   .nd-chartbars__tick { position: absolute; left: var(--at); transform: translateX(-50%); white-space: nowrap; }
-  .nd-chartbars__valname { grid-column: 2; margin-top: 4px; text-align: center; }
+  /* Ends at the chart's end (#974): "Capacity (GW, net summer)" is wider than the track on a narrow card, so it takes the
+     whole row (empty under the names) and never crosses the card's edge. Already at the 11px data floor; never wraps. */
+  .nd-chartbars__valname { grid-column: 1 / -1; margin-top: 4px; text-align: end; white-space: nowrap; }
 
   /* Columns: the y axis's name above its ticks, the plot with horizontal gridlines, each column's value on top, then
      the x labels (under each column, or on the edges between them for size bands) and the x axis's name. */
