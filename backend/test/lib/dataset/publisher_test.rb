@@ -161,6 +161,20 @@ class Dataset::PublisherTest < ActiveSupport::TestCase
     assert_not_requested @ref
   end
 
+  test "a saved commit GitHub no longer has (404 on compare) is dropped, never stuck; the dry run says so (Infra)" do
+    @release.update!(commit_sha: "commit2", status: "failed")
+    stub_repo
+    stub_writes
+    stub_request(:get, "#{REPO}/compare/head1...commit2").to_return(json({ "message" => "Not Found" }, 404))
+
+    assert_match "main moved on since commit commit2", publisher.dry_run["blocked"]
+    assert_raises(Dataset::Publisher::Refused) { publisher.publish! }
+
+    assert_equal [ "failed", nil ], [ @release.reload.status, @release.commit_sha ]
+    assert @release.rebuildable?, "Rebuild works again"
+    assert_not_requested @move
+  end
+
   test "main that already has the saved commit isn't moved; the tag and release follow" do
     @release.update!(commit_sha: "commit2", status: "failed")
     stub_repo

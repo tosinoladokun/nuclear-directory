@@ -115,7 +115,9 @@ module Dataset
       end
 
       # Where main stands against the saved release commit: :there (main has
-      # it), :ahead (main can move forward to it) or :diverged.
+      # it), :ahead (main can move forward to it) or :diverged. A commit GitHub
+      # no longer has (a 404) counts as diverged, so it's dropped and the next
+      # Publish commits afresh, never stuck (Infra).
       def main_against(head)
         return :there if head == @release.commit_sha
 

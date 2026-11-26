@@ -56,8 +56,9 @@ module Dataset
     def commit(sha) = get("/git/commits/#{sha}")
 
     # How commit `head` stands against `base`: "ahead" (base is its
-    # ancestor), "behind" (it's already in base), "identical" or "diverged".
-    def compare(base, head) = get("/compare/#{base}...#{head}").fetch("status")
+    # ancestor), "behind" (it's already in base), "identical" or "diverged";
+    # nil when GitHub doesn't have one of them (a 404).
+    def compare(base, head) = get("/compare/#{base}...#{head}")&.fetch("status")
 
     # { path => blob sha } for every file in a tree.
     def tree_files(sha)
