@@ -342,7 +342,7 @@ module Seed
         end
 
         Array(doc["facilities"]).each do |item|
-          facility = item["site"].present? ? write_unit(slug, item, sources) : write(slug, :facility, facility_attributes(item), evidence(item, sources))
+          facility = item["site"].present? ? write_unit(slug, item, sources) : write_plant(slug, item, sources)
           next unless facility&.ok?
           # A pending link a human has since rejected or unpublished stays decided.
           next if item["pending"] && closed_link?(organization.id, facility.id, item["type"])
@@ -526,11 +526,17 @@ module Seed
         return @errors << "facilities.yml: #{name.inspect} isn't in any organization file" unless in_docs.include?(name)
 
         # Its organization-file write failed (already in @errors): nothing to fill.
-        facility = plant_named(name) or return
+        # The record, not a lookup's reference (a plant found only by an alias):
+        # its audit trail is read below (#963).
+        facility = Facility.find_by(id: plant_named(name)&.id) or return
+        approved = approved_fields(facility)
 
         FACILITY_FIELDS.each do |field|
           detail = entry[field]
           next unless detail.is_a?(Hash) && detail["value"].present?
+          # A value a person decided after the seed wrote it stands (#960): the
+          # field isn't written, and nor is its evidence for the file's value.
+          next if keep_approved("facilities.yml", facility, { field.to_sym => detail["value"] }, approved:).any?
 
           cited = evidence(detail, sources)
           if field == "thermal_power_kw"
@@ -545,12 +551,13 @@ module Seed
           write("facilities.yml", :facility, { id: facility.id, aliases: entry["other_names"] }, [])
         end
         # A display label, not a sourced fact (DATA.md, Names): no evidence.
-        if entry["short_name"].present?
+        if entry["short_name"].present? && keep_approved("facilities.yml", facility, { short_name: entry["short_name"] }, approved:).empty?
           write("facilities.yml", :facility, { id: facility.id, short_name: entry["short_name"] }, [])
         end
         # An identifier, like its names: EIA's crawl finds the site by it
         # instead of proposing a second one (#229).
-        if entry["eia_plant_id"].present?
+        # A person's later EIA ID stands too (Data Quality, #963).
+        if entry["eia_plant_id"].present? && keep_approved("facilities.yml", facility, { eia_plant_id: entry["eia_plant_id"].to_s }, approved:).empty?
           write("facilities.yml", :facility, { id: facility.id, eia_plant_id: entry["eia_plant_id"].to_s }, [])
         end
       end
@@ -619,7 +626,23 @@ module Seed
             count(:facility, unit.id, :created)
           end
         end
-        write(slug, :facility, facility_attributes(item).except(:name).merge(id: unit.id, parent_id: site.id), evidence(item, sources))
+        attributes = facility_attributes(item).except(:name).merge(id: unit.id, parent_id: site.id)
+        keep_approved(slug, unit, attributes) # a person's later decision on the unit stands (#960)
+        write(slug, :facility, attributes, evidence(item, sources))
+      end
+
+      # A plant named in a company's file, without a site: written by name,
+      # minus any field a person decided after the seed wrote it (#960).
+      def write_plant(slug, item, sources)
+        attributes = facility_attributes(item)
+        existing = Facility.find_by(id: Directory::FactWriter.existing(:facility, attributes))
+        if keep_approved(slug, existing, attributes).any?
+          # Named by id so the write can't miss it; without the file's name, so a
+          # plant found by an alias keeps its own, as a write by name does (Copilot, #963).
+          attributes[:id] = existing.id
+          attributes.delete(:name)
+        end
+        write(slug, :facility, attributes, evidence(item, sources))
       end
 
       # nil when the file gives no source (e.g. an HQ city stated without one).
@@ -691,23 +714,24 @@ module Seed
       # the file's different value is dropped from the write and listed in
       # `kept`, so the file can be brought into line. Only the fields a person
       # decided are kept; the rest of the record is written as usual.
-      def keep_approved(slug, record, attributes)
+      # approved: the record's approved_fields, when the caller has read them already.
+      def keep_approved(slug, record, attributes, approved: nil)
         return [] unless record
 
-        approved_fields(record).filter_map do |field|
+        (approved || approved_fields(record)).filter_map do |field|
           key = field.to_sym
           next unless attributes.key?(key) && !same_value?(attributes[key], record.public_send(field))
 
           stated = attributes.delete(key)
           @kept << "#{slug}: kept #{record.class.name.underscore.humanize(capitalize: false)} #{record.id}'s #{field} " \
-            "#{record.public_send(field).inspect}, approved after the seed wrote it; the file says #{stated.inspect}"
+            "#{shown(record.public_send(field))}, approved after the seed wrote it; the file says #{shown(stated)}"
           key
         end
       end
 
       # Keys an approval's claim names that are the record's identity, never a
       # value the approval decided (a matched company keeps its own name).
-      IDENTITY_KEYS = %w[id name slug aliases relationship_type from_organization_id to_organization_id organization_id facility_id].freeze
+      IDENTITY_KEYS = %w[id name slug aliases relationship_type from_organization_id to_organization_id organization_id facility_id parent_id].freeze
 
       # The fields a person decided, as of now (Database's and Copilot's
       # reviews, #948). Read from the record's audit trail, oldest first:
@@ -742,6 +766,13 @@ module Seed
           end
         end
         protected.select { |field, kept| kept && record.has_attribute?(field) }.keys
+      end
+
+      # A value as the Kept line shows it: a decimal as a plain number (250, not 0.25e3).
+      def shown(value)
+        return value.inspect unless value.is_a?(BigDecimal)
+
+        value.frac.zero? ? value.to_i.to_s : value.to_s("F")
       end
 
       # The same value, a number however it's written (50 and 50.0).
