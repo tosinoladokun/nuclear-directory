@@ -141,7 +141,8 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
   end
 
   test "a site a person renamed back to one of the file's former names isn't renamed again (#967)" do
-    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns"),
+      item(name: "Acme Station 1", site: "Acme Station", type: "operates") ]))
     details = { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ],
       "state" => { "value" => "TN", "source_url" => "https://example.com/where", "quote" => "In Tennessee." } } ] }
     File.write(facilities_file, details.to_yaml)
@@ -156,6 +157,16 @@ class Seed::OrganizationLoaderTest < ActiveSupport::TestCase
     assert_equal [ "Acme Plant", "TN" ], site.reload.attributes.values_at("name", "state")
     assert_equal 1, Facility.where(parent_id: nil).where("name ILIKE 'Acme%'").count, "no second site"
     assert_match(/facilities.yml: kept facility #{site.id}'s name "Acme Plant"/, loader.kept.join("\n"))
+    assert_equal [ site.id ], Facility.where(name: "Acme Station 1").pluck(:parent_id), "its unit stays under it, found by the file's name (Copilot)"
+  end
+
+  test "a site found under a former name only through a lookup is guarded from its record (Copilot, #970)" do
+    site = Facility.create!(name: "Acme Plant", nrc_docket: "07000001")
+    write_file("acme-fuel", org("Acme Fuel", website: "https://acmefuel.com", facilities: [ item(name: "Acme Station", type: "owns") ]))
+    File.write(facilities_file, { "facilities" => [ { "name" => "Acme Station", "other_names" => [ "Acme Plant" ] } ] }.to_yaml)
+    approve(site, state: "NM")
+
+    assert_nothing_raised { Seed::OrganizationLoader.new(@dir, facilities: facilities_file).load! }
   end
 
   test "a hand edit in the admin stands too (Infra, #947)" do

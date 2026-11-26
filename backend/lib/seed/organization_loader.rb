@@ -511,8 +511,9 @@ module Seed
         end
         attributes = { id: former.id, name: entry["name"] }
         # A name a person gave the site after the seed wrote it stands (#967),
-        # even when it's one of the file's former names.
-        return if keep_approved("facilities.yml", former, attributes).any?
+        # even when it's one of the file's former names. Read from the record,
+        # not a lookup's reference (Copilot).
+        return if keep_approved("facilities.yml", Facility.find_by(id: former.id), attributes).any?
 
         slug = entry["name"].parameterize
         attributes[:slug] = slug unless Directory::Lookup.facility(slug:)
@@ -593,7 +594,11 @@ module Seed
       # sourced but never matched elsewhere. An existing unit keeps its name.
       def write_unit(slug, item, sources)
         site_name, name = item["site"].to_s.strip, item["name"].to_s.strip
-        site = Facility.where(parent_id: nil, nrc_docket: nil).where("LOWER(name) = LOWER(?)", site_name).first
+        sites = Facility.where(parent_id: nil, nrc_docket: nil)
+        # By name, else by another name it goes by: a site a person renamed
+        # keeps the file's name as an alias (#967, Copilot), so its units stay under it.
+        site = sites.where("LOWER(name) = LOWER(?)", site_name).first ||
+          sites.where(id: FacilityAlias.where(normalized_alias: FacilityAlias.normalize(site_name)).select(:facility_id)).order(:id).first
         unless site
           # A new site, sourced and decided like any written by this load.
           site = Facility.create!(name: site_name)
