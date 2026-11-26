@@ -22,11 +22,43 @@ class HomeBLayoutTest < ApplicationSystemTestCase
 
   def boxes = page.evaluate_script("[...document.querySelectorAll('.nd-chart')].map(c => { const r = c.getBoundingClientRect(); return [c.dataset.homeChart, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.bottom)] })")
 
+  # Each card's question: its lines counted with a Range (DESIGN.md, one line, rule 2's measure), whether its glyphs are
+  # clipped, its size, and where the ↗ sits. The map's is tried with a three-digit count too (#961).
+  def titles = page.evaluate_script(<<~JS)
+    (() => {
+      const lines = (el) => { const range = document.createRange(); range.selectNodeContents(el)
+        return [...range.getClientRects()].map((rect) => Math.round(rect.top)).filter((top, i, tops) => tops.findIndex((t) => Math.abs(t - top) < 4) === i).length }
+      const measure = (title) => { const box = title.getBoundingClientRect(), range = document.createRange(); range.selectNodeContents(title)
+        const text = range.getBoundingClientRect(), go = title.parentElement.querySelector(".nd-chart__go").getBoundingClientRect()
+        const line = parseFloat(getComputedStyle(title).lineHeight)
+        return { card: title.closest("[data-home-chart]").dataset.homeChart, large: !!title.closest(".nd-chart--large"), text: title.textContent,
+          lines: lines(title), size: getComputedStyle(title).fontSize, cut: text.top < box.top - 1 || text.bottom > box.bottom + 1 || title.scrollWidth > title.clientWidth + 1,
+          arrow: go.top + go.height / 2 > box.top && go.top + go.height / 2 < box.top + line } }
+      const found = [...document.querySelectorAll(".nd-chart__title")].map(measure)
+      const map = document.querySelector("[data-home-chart=plant_map] .nd-chart__title")
+      if (map) { const was = map.textContent; map.textContent = was.replace(/\d+/, "154"); found.push(measure(map)); map.textContent = was }
+      return found
+    })()
+  JS
+
+  def assert_titles(at)
+    width = at.to_i # "390, plant_map, ..."
+    titles.each do |title|
+      assert_operator title["lines"], :<=, 2, "at #{at}: #{title['text']} takes two lines at most"
+      assert_not title["cut"], "at #{width}: #{title['text']} is never cut"
+      assert title["arrow"], "at #{width}: the ↗ beside #{title['text']}'s first line"
+      assert_equal 1, title["lines"], "at 1440: the large card's question on one line" if width == 1440 && title["large"]
+      expected = width < 360 ? "15px" : title["large"] && width >= 1024 || width == 768 ? "20px" : "17px"
+      assert_equal expected, title["size"], "at #{width}: #{title['text']}"
+    end
+  end
+
   def assert_tidy(width)
-    tall = page.evaluate_script("[...document.querySelectorAll('.nd-chart__title, .nd-chartbars__label, .nd-chartsplit__label, .nd-axis__name, .nd-chartcols__xlabel, .nd-home__downloadlink span')].filter(e => e.getBoundingClientRect().height > 30).map(e => e.textContent)")
+    assert_titles(width)
+    tall = page.evaluate_script("[...document.querySelectorAll('.nd-chartbars__label, .nd-chartsplit__label, .nd-axis__name, .nd-chartcols__xlabel, .nd-home__downloadlink span')].filter(e => e.getBoundingClientRect().height > 30).map(e => e.textContent)")
     assert_empty tall, "at #{width}: one line each"
-    cut = page.evaluate_script("[...document.querySelectorAll('.nd-chart__title, .nd-chartbars__label, .nd-chartsplit__label')].filter(e => e.scrollWidth > e.clientWidth + 1 && !e.hasAttribute('data-truncate')).map(e => e.textContent)")
-    assert_empty cut, "at #{width}: no title or label is cut; only a plant's or company's name may end in an ellipsis"
+    cut = page.evaluate_script("[...document.querySelectorAll('.nd-chartbars__label, .nd-chartsplit__label')].filter(e => e.scrollWidth > e.clientWidth + 1 && !e.hasAttribute('data-truncate')).map(e => e.textContent)")
+    assert_empty cut, "at #{width}: no label is cut; only a plant's or company's name may end in an ellipsis"
     names = page.evaluate_script("[...document.querySelectorAll('.nd-chartbars__label[data-truncate]')].filter(e => !e.title).length")
     assert_equal 0, names, "at #{width}: a cut name keeps its full name in the title"
     assert_operator page.evaluate_script("document.documentElement.scrollWidth - innerWidth"), :<=, 0, "at #{width}: no sideways scroll"
@@ -60,7 +92,7 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     end
   end
 
-  test "every card in the pool, large and small, at 1440, 390 and 320" do
+  test "every card in the pool, large and small, at 1440, 768, 390, 375 and 320" do
     # A few sets that between them show every question in every slot it can take.
     covering = HomeCharts::POOL.select(&:large?).flat_map do |large|
       todo = HomeCharts::POOL.select(&:small?) - [ large ]
@@ -73,7 +105,7 @@ class HomeBLayoutTest < ApplicationSystemTestCase
     end
     assert_equal HomeCharts::POOL.select(&:small?).map(&:key).sort, covering.flat_map { |set| set.drop(1) }.map(&:key).uniq.sort
 
-    [ 1440, 390, 320 ].each do |width|
+    [ 1440, 768, 390, 375, 320 ].each do |width|
       resize_viewport(width, 844)
       covering.each do |set|
         visit root_path(home: "b", charts: set.map(&:key).join(","))

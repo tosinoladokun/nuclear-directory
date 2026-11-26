@@ -39,6 +39,13 @@ class HomeChartsTest < ActiveSupport::TestCase
 
   def unit(name) = Facility.find_by!(name:)
 
+  test "every card shows its whole question, with no short form (#961)" do
+    assert_not HomeCharts::Question.members.include?(:short)
+    assert_not File.read(Rails.root.join("config/home_charts.yml")).match?(/^\s*short:/)
+    assert_equal [ "Which US nuclear plants are the largest?", "What kinds of reactors does the US run?", "How many US power reactors are still running?" ],
+      %i[largest_plants reactor_types reactor_status].map { |key| HomeCharts.find(key).question }, "Tosin approved the rewording (#961)"
+  end
+
   test "the pool: every question has a query, a chart kind it can draw and a size, and its not_with names real keys" do
     keys = HomeCharts::POOL.map(&:key)
     assert_equal keys.uniq, keys, "each key once"
@@ -47,8 +54,7 @@ class HomeChartsTest < ActiveSupport::TestCase
       assert_includes HomeCharts::CHARTS, question.chart
       assert File.exist?(Rails.root.join("app/views/home/charts/_#{question.chart}.html.erb")), question.chart
       assert question.sizes.any? && (question.sizes - %i[large small]).empty?, question.key
-      assert_operator format(question.short, count: 54).length, :<=, 24, "#{question.key}: the title on a phone fits one line at 320"
-      assert format(question.short, count: 54).end_with?("?"), "#{question.key}: the short title is still a question (Design, #935)"
+      assert question.question.end_with?("?"), "#{question.key}: the title is a question"
       assert (question.not_with - keys).empty?, question.key
       assert question.axes.values_at(:category, :value).all?(&:present?), "#{question.key}: both axes named" if question.chart == :bars
       assert question.axes.values_at(:x, :y).all?(&:present?), "#{question.key}: both axes named" if question.chart == :columns
