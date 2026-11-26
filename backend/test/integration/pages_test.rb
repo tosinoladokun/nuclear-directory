@@ -74,7 +74,10 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_empty StructuredDataHelper::PUBLISHED_TABLES - Dataset::Export::TABLES.keys, "only tables the export knows, so the schema list has their columns"
     assert_select "main a[href*=?]", "deal_terms", count: 0
     assert_select "main a[href*=?]", "licensing_stages", count: 0
-    assert ld["distribution"].all? { |file| file["contentUrl"].start_with?("https://raw.githubusercontent.com/") }
+    assert ld["distribution"].all? { |file| file["contentUrl"].start_with?("https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.11/") },
+      "pinned to the release's tag, never main (Copilot, #952)"
+    assert_select "main a[href=?]", "https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.11/companies.csv"
+    assert_select "main a[href^='https://raw.githubusercontent.com/'][href*='/main/']", count: 0
 
     get sitemap_path
     assert_includes response.body, data_url
@@ -93,8 +96,10 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "main", text: /v2026\.12/, minimum: 1
     assert_select "main", text: /Seven tables/
     assert_select "main a[href$=?]", "deal_terms.csv", count: 1
+    assert_select "main a[href=?]", "https://raw.githubusercontent.com/tosinoladokun/nuclear-directory-data/v2026.12/deal_terms.csv"
     ld = JSON.parse(css_select("script[type='application/ld+json']").first.text)
     assert_equal 14, ld["distribution"].size
+    assert ld["distribution"].all? { |file| file["contentUrl"].include?("/v2026.12/") }
     get about_path
     assert_select "main", text: /v2026\.12/, minimum: 1
     assert_select "main", text: /v2027\.01/, count: 0

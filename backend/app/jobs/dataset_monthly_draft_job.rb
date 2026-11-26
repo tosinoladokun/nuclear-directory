@@ -4,9 +4,13 @@
 # fails, an alert says so (Sentry and email) until a later build works.
 #
 # Counts and the version go in the email; never file contents or a token.
+#
+# One concurrency group with DatasetBuildDraftJob and DatasetPublishJob (Solid
+# Queue's group defaults to the class name), so this build never replaces a
+# draft's files while Publish is reading them (Copilot).
 class DatasetMonthlyDraftJob < ApplicationJob
   queue_as :default
-  limits_concurrency to: 1, key: "dataset_release", duration: 30.minutes if respond_to?(:limits_concurrency)
+  limits_concurrency to: 1, key: "dataset_release", group: "dataset_release", duration: 30.minutes if respond_to?(:limits_concurrency)
 
   READY = "dataset-draft-ready".freeze
   FAILED = "dataset-draft-failed".freeze

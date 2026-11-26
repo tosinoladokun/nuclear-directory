@@ -47,8 +47,9 @@ class DatasetReleaseWatchJob < ApplicationJob
           body: overdue.map { |release| "#{release.tag} was published #{release.published_at.utc.strftime('%-d %b %H:%M UTC')} (#{release.release_url}). " \
             "Zenodo hasn't shown a version DOI that resolves." }.join("\n") +
             "\n\nCheck the Zenodo webhook on the data repo, and the upload's status on Zenodo.")
-      elsif missing.empty?
-        helper.resolve!(NO_DOI, note: "Every published dataset release has its version DOI.")
+      else
+        # A newer release still inside its wait doesn't keep an older one's alert open (Copilot).
+        helper.resolve!(NO_DOI, note: "No published dataset release is overdue for its version DOI.")
       end
     end
 
@@ -56,7 +57,9 @@ class DatasetReleaseWatchJob < ApplicationJob
       day = now.in_time_zone.to_date
       version = day.strftime("%Y.%m")
       release = DatasetRelease.find_by(version:)
-      return helper.resolve!(LATE, note: "Dataset v#{version} is published.") if release&.published?
+      # v2026.11 and before were published by hand, without a row (Copilot).
+      published = release&.published? || version <= StructuredDataHelper::FIRST_RELEASE
+      return helper.resolve!(LATE, note: "Dataset v#{version} is published.") if published
       return if day.day < DUE_BY_DAY
 
       state = if release.nil? then "No draft has been built."

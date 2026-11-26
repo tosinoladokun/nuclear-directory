@@ -46,7 +46,8 @@ module Dataset
         request["Accept"] = accept if accept
         request["User-Agent"] = "nuclear-directory-dataset"
         Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: TIMEOUT, read_timeout: TIMEOUT) { |http| http.request(request) }
-      rescue Net::OpenTimeout, Net::ReadTimeout, SocketError, SystemCallError, OpenSSL::SSL::SSLError => e
+      # IOError covers EOFError: a connection closed before any response (Copilot).
+      rescue Net::OpenTimeout, Net::ReadTimeout, SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError => e
         raise Error, "#{uri.host} didn't answer (#{e.class.name.demodulize})"
       end
   end

@@ -1,7 +1,8 @@
 <%
   description = "Every published fact in Nuclear Directory as open data: US nuclear companies and facilities, the links between them and the public documents each fact comes from. Free to download as CSV or JSON, licensed CC BY 4.0."
   repo = "https://github.com/#{Dataset::Export::DATA_REPO}"
-  raw = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/main"
+  # The published release's tag, not main: the files always match the release named here (Copilot).
+  raw = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/v#{published_dataset[:version]}"
 %>
 <% content_for :title, "Open data: the US nuclear supply chain dataset | Nuclear Directory" %>
 <% content_for :head do %>

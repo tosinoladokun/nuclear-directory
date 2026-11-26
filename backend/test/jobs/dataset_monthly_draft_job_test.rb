@@ -17,6 +17,8 @@ class DatasetMonthlyDraftJobTest < ActiveSupport::TestCase
     company = Organization.create!(name: "Kairos Power", domain: "kairospower.com", verification_status: "verified", verified_by: "human:tosin")
     company.evidence.create!(source: sources(:press_release), quote: "Kairos Power develops reactors.", found_by: "human", confidence: 1)
     @recorder = Recorder.new
+    # v2026.12 isn't tagged yet (Draft refuses a tagged version).
+    stub_request(:get, "#{REPO}/git/ref/tags/v2026.12").to_return(status: 404, body: "{}")
     DatasetMonthlyDraftJob.alerts = @recorder
     DatasetMonthlyDraftJob.mailer = @recorder
   end
@@ -51,6 +53,32 @@ class DatasetMonthlyDraftJobTest < ActiveSupport::TestCase
     assert_raises(Dataset::Github::Error) { DatasetMonthlyDraftJob.perform_now("2026.12") }
     assert_equal [ "dataset-draft-failed", "The dataset draft v2026.12 couldn't be built" ], @recorder.raised.sole.first(2)
     assert_empty @recorder.mailed
+  end
+
+  test "a previous release with no manifest.json is a failed build, not a refusal (Copilot)" do
+    stub_request(:get, "#{REPO}/releases/latest").to_return(status: 200, body: { tag_name: "v2026.11" }.to_json)
+    stub_request(:get, "#{REPO}/contents/manifest.json?ref=v2026.11").to_return(status: 404, body: { message: "Not Found" }.to_json)
+
+    assert_raises(Dataset::Draft::MissingInput) { DatasetMonthlyDraftJob.perform_now("2026.12") }
+    key, title, body = @recorder.raised.sole
+    assert_equal [ "dataset-draft-failed", "The dataset draft v2026.12 couldn't be built" ], [ key, title ]
+    assert_match "v2026.11 has no manifest.json", body
+    assert_empty @recorder.mailed
+  end
+
+  test "it runs in one concurrency group with Rebuild and Publish, so a build never runs while Publish reads the draft (Copilot)" do
+    groups = [ DatasetMonthlyDraftJob, DatasetBuildDraftJob, DatasetPublishJob ].map { |job| [ job.concurrency_key, job.concurrency_group ] }.uniq
+    assert_equal [ [ "dataset_release", "dataset_release" ] ], groups
+  end
+
+  test "Rebuild clears the failed-build alert once it works (Copilot)" do
+    stub_previous_release
+    DatasetBuildDraftJob.alerts = @recorder
+    DatasetBuildDraftJob.perform_now("2026.12")
+
+    assert_equal [ "dataset-draft-failed" ], @recorder.resolved
+  ensure
+    DatasetBuildDraftJob.alerts = nil
   end
 
   test "a published month isn't rebuilt, and nobody is emailed" do

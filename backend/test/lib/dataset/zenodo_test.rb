@@ -39,4 +39,9 @@ class Dataset::ZenodoTest < ActiveSupport::TestCase
     stub_request(:get, SEARCH).to_timeout
     assert_raises(Dataset::Zenodo::Error) { Dataset::Zenodo.new.version_doi("2026.12") }
   end
+
+  test "a connection closed before any response is a Zenodo::Error too (Copilot)" do
+    stub_request(:get, SEARCH).to_raise(EOFError)
+    assert_raises(Dataset::Zenodo::Error) { Dataset::Zenodo.new.version_doi("2026.12") }
+  end
 end

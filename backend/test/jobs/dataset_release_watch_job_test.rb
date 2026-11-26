@@ -85,6 +85,26 @@ class DatasetReleaseWatchJobTest < ActiveSupport::TestCase
     assert_match "Publishing failed: GitHub said 422", @alerts.raised.sole.last
   end
 
+  test "the DOI alert resolves once nothing is overdue, though a newer release is still in its wait (Copilot)" do
+    now = Time.zone.local(2027, 1, 3, 12)
+    older = published("2026.12", at: now - 1.month)
+    published("2027.01", at: now - 30.minutes)
+    DatasetReleaseWatchJob.zenodo = FakeZenodo.new({ "2026.12" => "10.5281/zenodo.24000001" })
+
+    run_job(now)
+
+    assert_equal "10.5281/zenodo.24000001", older.reload.version_doi
+    assert_includes @alerts.resolved, DatasetReleaseWatchJob::NO_DOI
+    assert_empty @alerts.raised
+  end
+
+  test "November 2026 counts as published, though v2026.11 was published by hand and has no row (Copilot)" do
+    run_job(Time.zone.local(2026, 11, 26, 12))
+
+    assert_empty @alerts.raised
+    assert_includes @alerts.resolved, DatasetReleaseWatchJob::LATE
+  end
+
   test "a published release with its DOI resolves both alerts and calls Zenodo for nothing" do
     published("2026.12", at: Time.zone.local(2026, 12, 2), version_doi: "10.5281/zenodo.24000001")
     DatasetReleaseWatchJob.zenodo = FakeZenodo.new(error: "should not be called")

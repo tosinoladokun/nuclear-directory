@@ -28,7 +28,7 @@ module StructuredDataHelper
     end
   end
   def dataset_json_ld(page_url:, description:)
-    base = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/main"
+    base = "https://raw.githubusercontent.com/#{Dataset::Export::DATA_REPO}/v#{published_dataset[:version]}" # the release's tag, not main
     {
       "@context" => "https://schema.org", "@type" => "Dataset", "@id" => "#{page_url}#dataset", "name" => Dataset::Export::TITLE,
       "description" => description, "url" => page_url, "identifier" => "https://doi.org/#{DATASET_DOI}", "sameAs" => "https://doi.org/#{DATASET_DOI}",
