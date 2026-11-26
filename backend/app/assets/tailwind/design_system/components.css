@@ -446,6 +446,7 @@
   .nd-chart__go { flex: none; display: flex; padding-top: 6px; color: var(--nd-ink-muted); }
   @container (max-width: 519px) { .nd-chart__go { padding-top: 4px; } }
   @media (max-width: 359px) { .nd-chart__go { padding-top: 3px; } }
+  @container (max-width: 239px) { .nd-chart__go { padding-top: 2px; } }
   .nd-chart__head:hover .nd-chart__go, .nd-chart__head:focus-visible .nd-chart__go { color: var(--nd-ink); }
   /* The chart sits 16px under the title; a card stretched past its chart keeps the spare room at the bottom. */
   .nd-chart__body { min-width: 0; }
@@ -1820,9 +1821,12 @@
 @media (max-width: 559px) { .nd-browse__name[data-long] { font-size: 13px; } }
 /* Homepage B's charts (#909): sizes that beat the type utilities on the same elements, so outside the layers. A card's
    question is 20px on cards 520px and wider, 17px on narrower ones (the small cards, and every card on a phone), and
-   15px on screens under 360, where the map's question misses two lines at 16px (#961). The large card's bar names are
+   15px on screens under 360, where the map's question misses two lines at 16px, and 14px on a card narrower than 240px
+   (#961). The large card's bar names are
    15px, 13px when the card is under 520px wide. */
 @container (max-width: 519px) { .nd-chart__title { font-size: 17px; line-height: 24px; } }
 @media (max-width: 359px) { .nd-chart__title { font-size: 15px; line-height: 22px; } }
+/* A card narrower than 240px (a 320 window with a classic scrollbar): 14px, so the map's question stays on two lines (#972). */
+@container (max-width: 239px) { .nd-chart__title { font-size: 14px; line-height: 20px; } }
 .nd-chart--large .nd-chartbars__label { font-size: 15px; }
 @container (max-width: 520px) { .nd-chart--large .nd-chartbars__label { font-size: 13px; } } /* as on the small cards (Design, #935) */

@@ -32,23 +32,30 @@ class HomeBLayoutTest < ApplicationSystemTestCase
         const text = range.getBoundingClientRect(), go = title.parentElement.querySelector(".nd-chart__go").getBoundingClientRect()
         const line = parseFloat(getComputedStyle(title).lineHeight)
         return { card: title.closest("[data-home-chart]").dataset.homeChart, large: !!title.closest(".nd-chart--large"), text: title.textContent,
-          lines: lines(title), size: getComputedStyle(title).fontSize, cut: text.top < box.top - 1 || text.bottom > box.bottom + 1 || title.scrollWidth > title.clientWidth + 1,
+          lines: lines(title), size: getComputedStyle(title).fontSize, content: (() => { const card = title.closest(".nd-chart"), style = getComputedStyle(card)
+            return card.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) })(), cut: text.top < box.top - 1 || text.bottom > box.bottom + 1 || title.scrollWidth > title.clientWidth + 1,
           arrow: go.top + go.height / 2 > box.top && go.top + go.height / 2 < box.top + line } }
       const found = [...document.querySelectorAll(".nd-chart__title")].map(measure)
       const map = document.querySelector("[data-home-chart=plant_map] .nd-chart__title")
-      if (map) { const was = map.textContent; map.textContent = was.replace(/\d+/, "154"); found.push(measure(map)); map.textContent = was }
+      if (map) { const was = map.textContent; map.textContent = was.replace(/[0-9]+/, "154"); found.push(measure(map)); map.textContent = was }
       return found
     })()
   JS
 
   def assert_titles(at)
     width = at.to_i # "390, plant_map, ..."
-    titles.each do |title|
+    # Measure in the real font: a fallback's wider glyphs would wrap a line the page never wraps.
+    page.evaluate_async_script("document.fonts.ready.then(() => arguments[0](true))")
+    found = titles
+    assert found.none? { |title| title["card"] == "plant_map" } || found.any? { |title| title["text"].include?("154 operating") },
+      "at #{at}: the map's question measured with a three-digit count (Copilot, #972)"
+    found.each do |title|
       assert_operator title["lines"], :<=, 2, "at #{at}: #{title['text']} takes two lines at most"
       assert_not title["cut"], "at #{width}: #{title['text']} is never cut"
       assert title["arrow"], "at #{width}: the ↗ beside #{title['text']}'s first line"
       assert_equal 1, title["lines"], "at 1440: the large card's question on one line" if width == 1440 && title["large"]
-      expected = width < 360 ? "15px" : title["large"] && width >= 1024 || width == 768 ? "20px" : "17px"
+      # 14px on a card under 240px (a 320 window with a classic scrollbar, as this test's browser has: no overlay faked).
+      expected = title["content"] < 240 ? "14px" : width < 360 ? "15px" : title["large"] && width >= 1024 || width == 768 ? "20px" : "17px"
       assert_equal expected, title["size"], "at #{width}: #{title['text']}"
     end
   end
