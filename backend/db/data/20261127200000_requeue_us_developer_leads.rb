@@ -49,7 +49,7 @@ class RequeueUsDeveloperLeads < DeployData::Migration
       tries = lead.find_attempts
       lead.update!(normalized_name: normalized) if lead.normalized_name != normalized
       note(lead, url: OWN_PAGES[id])
-      CompanySuggestion.queue(lead, name:, by: BY)
+      CompanySuggestion.queue(lead, name:, by: BY, wait: AFTER_DEPLOY_WAIT)
       say "Lead #{id} queued again as #{name.inspect}#{' with its own page' if OWN_PAGES[id]} (had used #{tries} of its tries)"
     end
 
@@ -60,7 +60,7 @@ class RequeueUsDeveloperLeads < DeployData::Migration
       return say("#{name} is #{existing.status} already (lead #{existing.id}); left as it is") if existing && !existing.status.in?(%w[triage new researching])
 
       lead = Lead.sighted!(name:, kind: "company", key: KEY, label: LABEL, url:)
-      CompanySuggestion.queue(lead, name:, by: BY)
+      CompanySuggestion.queue(lead, name:, by: BY, wait: AFTER_DEPLOY_WAIT)
       say "Added #{name} (#{url}) as lead #{lead.id}, queued to be found"
     end
 

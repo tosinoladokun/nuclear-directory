@@ -20,7 +20,7 @@ class AaloLead < DeployData::Migration
     # Its site, as the box now reads it, so the finder checks aalo.com.
     sources = lead.sources.map { |source| source["key"].to_s.start_with?(CompanySuggestion::KEY) ? source.merge("url" => "https://www.aalo.com/") : source }
     lead.update!(name: "Aalo Atomics", normalized_name: normalized, sources:, status: "new", note: nil, find_attempts: 0, next_find_at: nil)
-    LeadFindJob.perform_later(ID)
+    queue_after_deploy(LeadFindJob, ID)
     say "Lead #{ID}: Aalo Atomics (aalo.com), being found again now"
   end
 end

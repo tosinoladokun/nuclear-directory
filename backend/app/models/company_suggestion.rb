@@ -42,7 +42,9 @@ module CompanySuggestion
     queue(lead, name:, by:)
   end
 
-  def self.queue(lead, name:, by:)
+  # wait: when to find it; a data step passes DeployData::Migration::AFTER_DEPLOY_WAIT, so the find runs on the
+  # release being deployed, not the old one (#1018).
+  def self.queue(lead, name:, by:, wait: nil)
     # The same line again while it's being found: one find is enough (Infra). By when it was queued (decided_at), not
     # updated_at, which the sighting itself moves when the date changes.
     return lead if lead.note == LeadFinding::FINDING && lead.status.in?(%w[new researching]) && lead.decided_at.to_i > 5.minutes.ago.to_i
@@ -50,7 +52,7 @@ module CompanySuggestion
     # His words name it, even a lead first seen in a site search (PM: "cameco").
     lead.update!(name:, status: "new", note: LeadFinding::FINDING, decided_by: by, decided_at: Time.current, reason: nil,
       record_type: nil, record_id: nil, find_attempts: 0, next_find_at: nil)
-    LeadFindJob.perform_later(lead.id)
+    (wait ? LeadFindJob.set(wait:) : LeadFindJob).perform_later(lead.id)
     lead
   end
 
