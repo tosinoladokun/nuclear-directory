@@ -355,7 +355,7 @@ module DataQuality::Matching
       else
         # A proposed name replaces the crawler's spelling at Create; that spelling stays an alias, so
         # later matches still find the company by it (#1000).
-        renamed = fields.key?("name") ? { "aliases" => [ record.name ] } : {}
+        renamed = fields.key?("name") ? { DataQuality::DirectoryClient::REPLACES => record.name } : {}
         [ "organization", { "name" => record.name }.merge(fields, renamed) ]
       end
       claim = Candidate.create!(source_id: source.ref.id, kind:, status: "new", quote:, payload:, notes: "Data Quality proposed it: #{reason}")

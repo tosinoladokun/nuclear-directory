@@ -30,8 +30,8 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     results.first
   end
 
-  def proposed(name = "Fermi America")
-    row = propose(name)
+  def proposed(name = "Fermi America", quote: QUOTE)
+    row = propose(name, quote:)
     assert row["ok"], row.inspect
     DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
     Candidate.find(row["id"])
@@ -40,7 +40,8 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
   test "a pending company's name, with a quote that uses it, becomes a claim on that company carrying the crawler's spelling as an alias" do
     claim = proposed
 
-    assert_equal({ "name" => "Fermi America", "aliases" => [ "Fermi Nuclear" ] }, claim.payload)
+    assert_equal({ "name" => "Fermi America", "replaces" => "Fermi Nuclear" }, claim.payload)
+    assert_not_includes DataQuality::Claim.describe(claim), "Fermi Nuclear", "the verifier never asks the page for the crawler's spelling (Copilot)"
     assert_equal [ "matched", "Organization", @company.id ], claim.values_at(:status, :subject_type, :subject_id), claim.notes
     assert_equal 1, Organization.where("name ILIKE 'Fermi%'").count, "found by the company Data Quality named, never proposed as a second one"
     assert_equal "new_record", DataQuality::Review.inbox_kind(claim), "part of its Create"
@@ -81,6 +82,51 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
       assert_select "#also-claim-#{claim.id} blockquote", /#{QUOTE}/
     end
     assert_select "#inbox-item-#{claim.id}", 0, "on the Create's row, not its own"
+  end
+
+  test "a page that names only the new name supports the claim: the verifier reads just the proposed name (Copilot)" do
+    @page.update!(content_text: QUOTE)
+    claim = proposed
+    seen = []
+    verifier = Struct.new(:seen) { def call(candidate) = seen << DataQuality::Claim.describe(candidate) && DataQuality::Verdict.new(outcome: :review, reason: "asked") }.new(seen)
+    DataQuality::Pipeline.run("dummy", plugin: DummyPlugin.new, only: "verify", verifier:)
+
+    assert_equal [ "There is a company named “Fermi America”." ], seen
+    assert_equal "asked", claim.reload.notes, "checked by the verifier, not held for a missing quote"
+  end
+
+  test "Create approved first: the name proposal left is a change on Tosin's list, Fermi Nuclear → Fermi America, never hidden (Copilot)" do
+    claim = proposed
+    DataQuality::Review.approve([ @create.id ], by: "human:tosin", reason: "Created in Today")
+
+    assert_equal "change", DataQuality::Review.inbox_kind(claim.reload)
+    changes = DataQuality::Differences.changes(claim, DataQuality::DirectoryClient.new.fact(type: "Organization", id: @company.id), directory: DataQuality::DirectoryClient.new)
+    assert_equal({ "name" => [ "Fermi Nuclear", "Fermi America" ] }, changes)
+    assert_not DataQuality::Review.evidence_only?(claim, directory: DataQuality::DirectoryClient.new), "never a bulk Yes"
+  end
+
+  test "a CIK the proposal carries that's another company's by match goes to review, as on the usual path (Copilot)" do
+    act({ action: "propose_fields", target: @company.id, fields: { name: "Fermi America", sec_cik: "0001234567" }, quote: QUOTE,
+          source_url: "https://www.sec.gov/cgi-bin/browse-edgar?CIK=0001234567", reason: "EDGAR" })
+    row = results.first
+    assert row["ok"], row.inspect
+    Organization.create!(name: "Other Co", verification_status: "verified", verified_by: "human:tosin", sec_cik: "0001234567")
+    DataQuality::Stages::Match.call(plugin: DataQuality::Plugins::WebPage.new)
+
+    claim = Candidate.find(row["id"])
+    assert_equal "needs_review", claim.status
+    assert_match "SEC CIK 0001234567 is Other Co's", claim.notes
+  end
+
+  test "two name proposals: the Create row shows the last, the one approval applies (Copilot)" do
+    first = proposed
+    @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
+    second = proposed("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
+    entry = OwnerInbox::Entry.new(kind: "new_record", item: nil, copy_ids: [ first.id, second.id ], checked: false, changes: {})
+
+    assert_equal second, ApplicationController.helpers.proposed_name_claim(entry)
+    DataQuality::Review.approve([ @create.id, first.id, second.id ], by: "human:tosin", reason: "Created in Today")
+    assert_equal "Fermi America Inc.", @company.reload.name
   end
 
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do

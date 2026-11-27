@@ -175,7 +175,7 @@ class DataQuality::DirectoryClient
   # human-verified value (that comes back as a conflict).
   # Data Quality's proposed name (#1000) for the company it named, as matched.
   def proposed_name?(candidate)
-    candidate.kind == "organization" && candidate.subject_type == "Organization" && candidate.payload.to_h.key?("aliases") &&
+    candidate.kind == "organization" && candidate.subject_type == "Organization" && candidate.payload.to_h.key?(REPLACES) &&
       DqAction.where(candidate_id: candidate.id, action: "propose_fields", target_type: "Organization", target_id: candidate.subject_id).exists?
   end
 
@@ -195,7 +195,7 @@ class DataQuality::DirectoryClient
       if candidate.subject_id && !proposed_name?(candidate)
         attributes.delete(:name)
       elsif candidate.subject_id
-        attributes[:aliases] -= [ attributes[:name] ]
+        attributes[:aliases] = [ *attributes[:aliases], candidate.payload[REPLACES] ].compact_blank.uniq - [ attributes[:name] ]
         # Its page's address follows the name it's created under, when free; the
         # crawler's one is kept as a former slug, so any link to it still works.
         slug = attributes[:name].to_s.parameterize
@@ -301,7 +301,10 @@ class DataQuality::DirectoryClient
   # it adds values to. Enrichment never creates records.
   ENRICHMENT_KEY = "identify"
   # Payload keys a write never stores as values.
-  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY, *DataQuality::FieldEvidence::KEYS ].freeze
+  # A name proposal's crawler spelling (#1000): kept as an alias when it's approved, but not a fact the source states,
+  # so the verifier never asks the page for it (Copilot).
+  REPLACES = "replaces"
+  WRITE_SKIPPED = [ *LINK_ENDS, *PAYLOAD_LOCKED, ENRICHMENT_KEY, REPLACES, *DataQuality::FieldEvidence::KEYS ].freeze
 
   def enrichment?(candidate) = candidate.payload.to_h.key?(ENRICHMENT_KEY)
 

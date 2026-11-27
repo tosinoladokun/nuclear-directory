@@ -271,7 +271,7 @@ class DataQuality::Stages::Match < DataQuality::Stage
       site = DqAction.where(candidate:, action: "propose_site_fields").pick(:target_id) if candidate.kind == "facility"
       # Data Quality's name for a pending company (#1000) is found by the company it named: nothing
       # goes by that name yet, so a lookup by it would propose a second company.
-      named = DqAction.where(candidate:, action: "propose_fields").pick(:target_id) if candidate.kind == "organization" && payload.key?("aliases")
+      named = DqAction.where(candidate:, action: "propose_fields").pick(:target_id) if candidate.kind == "organization" && payload.key?(DataQuality::DirectoryClient::REPLACES)
       found ||= if site then proposed_site(site, payload)
       elsif named then proposed_name(named, payload)
       else resolve(candidate.kind.to_sym, payload, closed: :found)
@@ -542,6 +542,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
       return Review.new("proposed a name for #{company.name}, which was #{company.decision}") if company.closed?
       unless company.verification_status == "pending"
         return Review.new("proposed the name #{payload['name']} for #{company.name}, which is published now; a published company's name changes by a reviewed change")
+      end
+
+      # A CIK it carries that's another company's by now goes to review, as on the usual path (Copilot).
+      if (cik = payload["sec_cik"].presence) && (holder = directory.organization(sec_cik: cik)) && holder.id != company.id
+        return Review.new("proposed for #{company.name}, but SEC CIK #{cik} is #{holder.name}'s (##{holder.id}) by now")
       end
 
       Found.new(company, "the company Data Quality named")
