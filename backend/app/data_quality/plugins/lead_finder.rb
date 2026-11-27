@@ -41,7 +41,20 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   BUSY_WAIT = 30
   SEARCH_RESULTS = 5
   NUCLEAR = DataQuality::Plugins::WirePress::STRONG_NUCLEAR
-  US = /\b(?:United States|U\.S\.A?\.?|USA)\b|\b(?:A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\s+\d{5}\b/
+  # Is it a US company (DATA.md, "Is it a US company?"; #987): "United States", "U.S." (also before a space), a US ZIP,
+  # "Charlotte, NC", "Idaho Falls, Idaho", or a headquarters in a US region ("will remain in the Bay Area").
+  US_POSTAL = "A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY]".freeze
+  US_STATES = %w[Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho Illinois
+    Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota Mississippi Missouri Montana Nebraska
+    Nevada Ohio Oklahoma Oregon Pennsylvania Tennessee Texas Utah Vermont Virginia Washington Wisconsin Wyoming] +
+    [ "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Rhode Island", "South Carolina",
+      "South Dakota", "West Virginia" ]
+  US_CITY = "[A-Z][a-z]+(?:[ .'-]+[A-Z][a-z]+){0,3}".freeze
+  US = /(?<![[:alnum:]])(?:United States|U\.S\.(?:A\.?)?|USA)(?![[:alnum:]])|\b(?:#{US_POSTAL})\s+\d{5}\b|\b#{US_CITY},\s+(?:#{US_POSTAL})\b|\b#{US_CITY},\s+(?:#{US_STATES.join('|')})\b/
+  US_HQ_REGION = /headquarter\w*\b[^.]{0,80}?\b(?:the (?:San Francisco )?Bay Area|Silicon Valley|Washington,? D\.?C\.?)/i
+  # A US listing counts only with US incorporation beside it: foreign companies list on Nasdaq too (DQ, 27 Nov).
+  US_LISTING = /\b(?:Nasdaq|NYSE(?: American)?)\s*:\s*[A-Z]{1,5}\b/
+  US_INCORPORATION = /\bInc\.?\s*[·|,–-]\s*Delaware\b|\ba Delaware (?:corporation|limited liability company|LLC)\b|\bincorporated in (?:the State of )?Delaware\b/i
   NEWS_HOSTS = /(?:\A|\.)(?:prnewswire|businesswire|globenewswire|accessnewswire|world-nuclear-news|ans|nucnet|neimagazine|utilitydive|reuters|bloomberg|yahoo)\.(?:com|org)\z/
   NOT_OWN = /(?:\A|\.)(?:linkedin|twitter|x|facebook|youtube|instagram|wikipedia|crunchbase|bloomberg|google|sec|prnewswire|cision)\.[a-z.]+\z/
 
@@ -100,6 +113,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @power_buyer = power_buyer?(id, name)
     @search_failed = @search_capped = false
     @site_for_pending = true
+    @release_links = []
     result = nil
     candidates_for(name, [], found).each do |website|
       # Another company's site is never this one's.
@@ -142,6 +156,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
+    # The company's own releases on a wire site, for its US status (DQ, 27 Nov).
+    @release_links = links.select { |link| (URI.parse(link).host.to_s.downcase rescue "").match?(NEWS_HOSTS) }
     # A staging or preview link is never read, not even for the site's name (Copilot, #932).
     staging, links = links.partition { |link| staging_host?(link) }
     found["checked"] = staging.map { |link| { "verdict" => "staging", "why" => "#{URI(link).host} is a staging or preview host", "website" => link } } if staging.any?
@@ -183,12 +199,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     name = source.title.to_s.squish
     return [] if !source.url.end_with?(LEAD_MARK) || name.blank? || source.content_text.blank?
 
-    blocks = blocks(source.content_text)
     # A site found for a company already listed (a pending one) is claimed for
     # that company by its own name, so Match can't give it to another (Copilot);
     # for a university, national lab or power buyer the sentence need only name it (Tosin, 20 Nov).
     target = (@directory.organization(id: source.enrich_organization_id) if source.enrich_organization_id)
-    sentences = naming_sentences(blocks, name)
+    sentences = self_naming_sentences(source, name)
     quote = (sentences.find { |sentence| nuclear?(sentence, brand(name)) } || (sentences.first if target && (institution?(source.url.delete_suffix(LEAD_MARK)) || power_buyer?(target.id, target.name)))) or return []
     claimed = target ? target.name : page_name(quote.strip, name, site_names(source))
     [ { kind: "organization", quote: quote.strip, payload: { "name" => claimed, "website" => "https://#{URI(source.url).host}" } } ]
@@ -241,12 +256,31 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
 
     # A home page with no address: its own contact or about page (at most two, robots and spacing as always) may show one.
-    CONTACT = %r{contact|about|company|locations?|offices?}i
+    CONTACT = %r{contact|about|company|locations?|offices?|investors?}i
     def blocks(html) = Nokogiri::HTML(html.to_s).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
 
     def naming_sentences(blocks, name) = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }.select { |sentence| names?(sentence, name) }
 
-    def nuclear_sentence?(page, name) = naming_sentences(blocks(page.content_text), name).any? { |sentence| nuclear?(sentence, brand(name)) }
+    def nuclear_sentence?(page, name) = self_naming_sentences(page, name).any? { |sentence| nuclear?(sentence, brand(name)) }
+
+    # Sentences naming the company by its name or by the short name its own site uses for itself (#987: "FANCO is
+    # not merely developing a reactor" on First American Nuclear's home page).
+    def self_naming_sentences(page, name)
+      found = blocks(page.content_text)
+      ([ name ] + short_names(page, name)).flat_map { |each_name| naming_sentences(found, each_name) }.uniq
+    end
+
+    # "First American Nuclear (FANCO)" in the text, or the capitals of its header logo's file or alt ("FANCO-logo.svg"),
+    # kept only when they start with the name's initials, so a partner's logo never counts.
+    def short_names(page, name)
+      initials = (brand(name).downcase.scan(/[[:alnum:]]+/) - NAME_FILLER).map { |word| word[0] }.join
+      return [] if initials.length < 2
+
+      doc = Nokogiri::HTML(page.content_text)
+      found = visible_text(page).scan(/#{Regexp.escape(brand(name))}[^(]{0,12}\(([A-Z][A-Za-z]{1,9})\)/i).flatten
+      found += doc.css("header img, nav img, a[href='/'] img").flat_map { |img| "#{File.basename(img['src'].to_s, '.*')} #{img['alt']}".scan(/\b[A-Z]{2,10}\b/) }
+      found.uniq.select { |short| short.downcase.start_with?(initials) }
+    end
 
     NUCLEAR_LINK = /nuclear|reactor|fission|\bsmr/i
     # Up to 3 pages of the same site whose link or address says nuclear, the
@@ -271,19 +305,63 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       nil
     end
 
-    def us_on_own_pages?(home)
+    # The company's own pages show it's a US company (DATA.md, "Is it a US company?"): the home page, up to three of
+    # its contact, about or investor pages, a second domain of the same brand it links to (terrestrialusa.com to
+    # terrestrialenergy.com) with that domain's contact or about pages, and the company's own wire releases among
+    # the lead's links. A listing counts with incorporation from any of them.
+    def us_shown?(home, name)
+      texts = [ visible_text(home) ]
+      read = ->(page) { page && texts << visible_text(page) && us_text?(texts.join("\n")) }
+      return true if us_text?(texts.first)
+      return true if own_links(home, CONTACT, 3).any? { |url| read.(snapshot(url)) }
+
+      if (other = brand_domain(home, name)) && (page = snapshot(other))
+        return true if read.(page) || own_links(page, CONTACT, 2).any? { |url| read.(snapshot(url)) }
+      end
+      own_releases(name).any? { |release| read.(release) }
+    end
+
+    def us_text?(text) = text.match?(US) || text.match?(US_HQ_REGION) || (text.match?(US_LISTING) && text.match?(US_INCORPORATION))
+
+    # Links on a page to the same site whose address or text matches, never the page itself (Copilot).
+    def own_links(home, pattern, limit)
       base = home.final_url.presence || home.url
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
-      links = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
+      Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"].to_s).to_s.split("#").first rescue next
         uri = URI(url)
-        # The home page itself (a bare "/" link) never takes one of the two places (Copilot).
-        url if uri.host.to_s.downcase.delete_prefix("www.") == host && "#{uri.path} #{link.text}".match?(CONTACT) &&
+        url if uri.host.to_s.downcase.delete_prefix("www.") == host && "#{uri.path} #{link.text}".match?(pattern) &&
           Source.bare_homepage(url) != Source.bare_homepage(base)
-      end.uniq.first(2)
-      links.any? { |url| (page = snapshot(url)) && visible_text(page).match?(US) }
+      end.uniq.first(limit)
     rescue URI::Error
-      false
+      []
+    end
+
+    # Another domain of the same brand that the company's own page links to (DQ, 27 Nov): its address carries the name.
+    def brand_domain(home, name)
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
+      Nokogiri::HTML(home.content_text).css("a[href]").each do |link|
+        uri = (URI.join(base, link["href"].to_s) rescue next)
+        other = uri.host.to_s.downcase
+        next unless uri.is_a?(URI::HTTPS) && other.present? && other.delete_prefix("www.") != host
+        next if other.match?(NOT_OWN) || other.match?(NEWS_HOSTS) || staging_host?(uri.to_s) || !host_names?(uri.to_s, name)
+
+        return "https://#{other}"
+      end
+      nil
+    rescue URI::Error
+      nil
+    end
+
+    # The company's own releases on a wire site among the lead's links (DQ, 27 Nov): only one whose
+    # "About <Company>" section names it, never a partner's release that mentions it.
+    def own_releases(name)
+      Array(@release_links).first(2).filter_map do |url|
+        page = snapshot(url) or next
+        abouts = Nokogiri::HTML(page.content_text).css("p, h2, h3, h4, b, strong").filter_map { |node| node.text.squish[/\AAbout\s+([^:]{2,80}?)\s*:?\z/, 1] }
+        page if abouts.any? { |about| names?(about, name) || names?(name, brand(about)) }
+      end
     end
 
     # Each checked site's verdict, for the lead's note (Backend keeps only the
@@ -313,6 +391,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       if name.match?(%r{\Ahttps?://}i)
         links.unshift(name)
         name = nil
+      # A link alone, kept as its host and path ("nucube.energy"; CompanySuggestion.link_name): the site names it (#987).
+      elsif name.match?(%r{\A[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:/\S*)?\z}i) && links.any? { |link| link.downcase.include?(name.downcase.split("/").first) }
+        name = nil
       end
       links.each do |link|
         slug = link[%r{linkedin\.com/company/([^/?#]+)}i, 1] and name ||= slug.tr("-_", " ").squish.titleize
@@ -320,6 +401,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       [ name, links.reject { |link| link.match?(/linkedin\.com/i) } ]
     end
 
+    # A website alone is named by the part of its title, og:site_name or header logo that its address carries
+    # ("Home | NuCube Energy" on nucube.energy is "NuCube Energy"; #987), else its og:site_name, else its title's
+    # first part that isn't "Home" or a page's own name.
+    GENERIC_TITLE = /\A(?:home(?: ?page)?|about(?: us)?|welcome|contact(?: us)?|index)\z/i
     def site_name(links)
       news = links.find { |link| (URI.parse(link).host.to_s.downcase rescue "").match?(NEWS_HOSTS) }
       return about_name(news) if news
@@ -327,9 +412,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       site = links.filter_map { |link| own_host(link) }.first or return
       page = snapshot(site) or return
       doc = Nokogiri::HTML(page.content_text)
-      named = doc.at_css("meta[property='og:site_name']")&.[]("content").to_s.squish.presence ||
-        doc.at_css("title")&.text.to_s.split(/\s+[|\u2013\u2014-]\s+/).first.to_s.squish.presence
-      named if named && named.length.between?(2, 80)
+      site_name = doc.at_css("meta[property='og:site_name']")&.[]("content").to_s.squish.presence
+      parts = doc.at_css("title")&.text.to_s.split(/\s+[|\u2013\u2014-]\s+|:\s+/).map(&:squish)
+      logos = doc.css("header img[alt], nav img[alt]").map { |img| img["alt"].to_s.sub(/\s*logo\z/i, "").squish }
+      fits = ->(part) { part.length.between?(2, 80) && !part.match?(GENERIC_TITLE) }
+      address = page.final_url.presence || page.url
+      ([ site_name ] + parts + logos).compact.find { |part| fits.(part) && host_names?(address, part) } ||
+        (site_name if site_name && fits.(site_name)) || parts.find(&fits)
     end
 
     # A news page's single "About <Company>" heading names it.
@@ -505,8 +594,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       # customer's in a testimonial (#932: Mainstream Engineering on calnanocorp.com).
       return [ :not_named, page, "The page names #{name} but isn't its own site" ] unless own_site?(page, name)
       return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear_exempt?(website) || nuclear?(text, brand(name))
-      unless text.match?(US) || @us_shown_elsewhere || us_on_own_pages?(page)
-        return [ :not_us, page, "Neither the home page nor its contact or about page shows a US address or 'United States'" ]
+      unless @us_shown_elsewhere || us_shown?(page, name)
+        return [ :not_us, page, "Neither its own pages nor its own releases show a US headquarters, office or address" ]
       end
 
       [ :ok, page, nil ]
@@ -533,6 +622,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     # The address carries the name: "sawtoothsim.com" (its first word), "ws-corp.com" (the brand), "srnl.gov" (its initials).
     NAME_FILLER = %w[of and the for].freeze
+    # A first word many names share never matches an address alone (DQ on #985): "Advanced" isn't advancedenergy.com's.
+    GENERIC_FIRST = %w[university college institute advanced nuclear american national international global united general
+      energy power atomic atomics home about welcome].freeze
     def host_names?(url, name)
       words = brand(name).downcase.scan(/[[:alnum:]]+/)
       return false if words.empty?
@@ -542,7 +634,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       host = PublicSuffix.parse(URI(url).host.to_s.downcase, ignore_private: true)
       labels = [ host.trd, host.sld ].compact.join(".").delete_prefix("www.").split(".").map { |label| label.delete("^a-z0-9") }
       labels.any? do |label|
-        (whole.length >= 3 && label.include?(whole)) || (words.first.length >= 4 && label.start_with?(words.first)) ||
+        (whole.length >= 3 && label.include?(whole)) || (words.first.length >= 4 && !GENERIC_FIRST.include?(words.first) && label.start_with?(words.first)) ||
           (initials.length >= 2 && label == initials) || (initials.length >= 3 && label.start_with?(initials))
       end
     rescue URI::Error, PublicSuffix::Error
