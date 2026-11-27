@@ -6,9 +6,10 @@ class DqPassJob < ApplicationJob
   queue_as :default
   limits_concurrency to: 1, key: "dq_pass", duration: 2.hours if respond_to?(:limits_concurrency)
 
-  # The pass's steps, in order. Each responds to call(run) and returns a
-  # counts Hash. nil: STEPS. Tests set stand-ins.
-  STEPS = [].freeze
+  # The pass's steps, in order: each class's new instance takes call(run) and
+  # returns a counts Hash. Code steps come first, so no model is paid for what code settles.
+  STEPS = [ DqPass::Research ].freeze
+  # nil: STEPS. Tests set stand-ins (anything with call(run)).
   class_attribute :steps, default: nil
   # nil: Autopilot::Alert; tests set a stand-in.
   class_attribute :alerts, default: nil
@@ -29,7 +30,7 @@ class DqPassJob < ApplicationJob
       run = CrawlRun.create!(source_kind: DqPass::SOURCE_KIND, stage: "verify", started_at: now)
       counts = {}
       begin
-        (steps || STEPS).each do |step|
+        (steps || STEPS.map(&:new)).each do |step|
           # Off in the admin stops the run before its next step (Copilot).
           unless DqPass.on?
             counts["stopped_switched_off"] = 1

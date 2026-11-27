@@ -229,6 +229,14 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     matched
   end
 
+  # Brave's candidate sites for a name, within the same daily search limit
+  # (Data Quality's pass, #998, after this finder couldn't confirm one).
+  # Results are only candidates: never kept, as Brave's terms require.
+  def search_sites(name) = search(name)
+
+  # A page through this finder's Fetcher (robots, blocks, once a day), or nil; never a staging or preview host.
+  def read_page(url) = (snapshot(url) unless staging_host?(url))
+
   # The page's own names for itself: its og:site_name and its title.
   def site_names(source)
     doc = Nokogiri::HTML(source.content_text)
