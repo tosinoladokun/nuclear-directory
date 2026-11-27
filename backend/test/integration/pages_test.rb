@@ -110,6 +110,12 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "main", text: /v2027\.01/, count: 0
   end
 
+  test "the about page links to Google's preferred-source setting, with no Google script (#774)" do
+    get about_path
+    assert_select "a.nd-link[href='https://www.google.com/preferences/source?q=nuclear-directory.org']", text: "Add Nuclear Directory as a preferred source on Google"
+    assert_select "script[src*='google.com']", 0
+  end
+
   test "the about page has the licences and the dataset DOI" do
     get about_path
     assert_select "a[href='https://doi.org/10.5281/zenodo.23703377']", "doi:10.5281/zenodo.23703377"
