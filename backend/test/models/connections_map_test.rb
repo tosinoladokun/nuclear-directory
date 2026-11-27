@@ -206,6 +206,20 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert(%w[Alpha\ Fund Beta\ Fund].all? { |name| x[name] < layout.centre.x })
   end
 
+  # #1004: the fold was keyed by node and side, so OPERATES' "13 plants" overwrote OWNS' "2 of 13 plants" and left OWNS a
+  # branch to nothing on desktop.
+  test "a fold under two verbs on the same side is drawn under each, with a node at every branch" do
+    map = ConnectionsMap.for_company(CompanyProfile.new(build_constellation))
+    layout = layout_for(map)
+    right = layout.nodes.select { |placed| placed.x > layout.centre.x }
+
+    assert_includes right.map(&:name), "2 of 13 plants"
+    assert_includes right.map(&:name), "13 plants"
+    branches = layout.lines.select(&:arrow).map { |line| line.path[/\AM[\d.]+ ([\d.]+)/, 1].to_f }
+    right.each { |placed| assert branches.any? { |y| (y - placed.y).abs < 0.5 }, "a branch reaches #{placed.name}" }
+    assert_equal right.size, branches.size - (layout.headings.any? { |heading| heading.anchor == "end" } ? 1 : 0), "every right branch ends at a node"
+  end
+
   test "a partner that both funds the centre and buys its power is drawn once on each side" do
     centre = cite!(company("Two Way Co"))
     partner = cite!(company("Amazon Demo"))
