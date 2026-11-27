@@ -553,6 +553,11 @@ module Directory
       end
     end
 
+    # facility(eia_plant_id:) for many plant ids, in one query: { plant id => FacilityRef } (#1008).
+    def sites_by_plant_id(plants)
+      Facility.where(parent_id: nil, eia_plant_id: plants.map(&:to_s).uniq).order(:id).to_a.group_by(&:eia_plant_id).transform_values { |records| FacilityRef.from(records.first) }
+    end
+
     # organization(domain:) for many domains, in one query: { domain => OrganizationRef } (#1008).
     def organizations_by_domain(domains)
       Organization.where(domain: domains.compact.uniq).order(:id).to_a.group_by(&:domain).transform_values { |records| OrganizationRef.from(records.first) }

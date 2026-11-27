@@ -10,6 +10,7 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     @attached = {}
     @sourced_roles = {}
     @by_domain = {}
+    @sites = {}
   end
 
   # Reads the subjects of these claims, and the sourced roles of the companies among them.
@@ -31,6 +32,10 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     domains = candidates.filter_map { |claim| domain_from(claim.payload.to_h["website"]) if claim.kind == "organization" && claim.payload.to_h["website"].present? }.uniq - @by_domain.keys
     found = __getobj__.organizations_by_domain(domains)
     domains.each { |domain| @by_domain[domain] = found[domain] }
+    # The sites EIA's enrichment of units names by plant ID.
+    plants = candidates.filter_map { |claim| claim.payload.to_h.dig(DataQuality::DirectoryClient::ENRICHMENT_KEY, "eia_plant_id").presence&.to_s }.uniq - @sites.keys
+    found = __getobj__.sites_by_plant_id(plants)
+    plants.each { |plant| @sites[plant] = found[plant] }
     companies = by_type.fetch("Organization", []).map(&:subject_id).uniq - @sourced_roles.keys
     with_role = __getobj__.sourced_role_ids(companies)
     companies.each { |id| @sourced_roles[id] = with_role.include?(id) }
@@ -57,6 +62,15 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
 
     cached = @attached[candidate.subject_type.to_s]
     cached&.key?(candidate.subject_id) ? cached[candidate.subject_id] : __getobj__.attached_record(candidate)
+  end
+
+  def site_for_unit(candidate)
+    plant = candidate.payload.to_h.dig(DataQuality::DirectoryClient::ENRICHMENT_KEY, "eia_plant_id").presence&.to_s or return
+    units = @attached.fetch("Facility", {})
+    return __getobj__.site_for_unit(candidate) unless units.key?(candidate.subject_id) && @sites.key?(plant)
+
+    unit = units[candidate.subject_id] or return
+    DataQuality::DirectoryClient.unit_site(unit) { @sites[plant] }
   end
 
   def sourced_role?(organization_id)

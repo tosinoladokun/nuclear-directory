@@ -40,6 +40,11 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       Candidate.create!(source: @page, crawl_run: @run, kind: "relationship", quote: "q", status: "matched", subject_type: "Relationship", subject_id: link.id,
         payload: { "from_organization" => { "name" => published.name }, "to_organization" => { "name" => company.name }, "relationship_type" => "invests_in" },
         ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+      # Another name for the published company (Copilot), and EIA's enrichment of a published unit with its plant ID.
+      claim(published, { "name" => "QU #{n}" })
+      unit = travel_to(2.days.ago) { Facility.create!(name: "Queries Unit #{n}", nrc_docket: "0500#{format('%04d', n)}", verification_status: "verified", verified_by: "human:tosin") }
+      Candidate.create!(source: @page, crawl_run: @run, kind: "facility", quote: "q", status: "matched", subject_type: "Facility", subject_id: unit.id,
+        payload: { "name" => unit.name, DataQuality::DirectoryClient::ENRICHMENT_KEY => { "eia_plant_id" => "9#{n}" } }, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
       Lead.create!(kind: "company", name: company.name, normalized_name: Lead.normalize(company.name), status: "added", candidate: create,
         first_seen_on: Date.current, last_seen_on: Date.current,
         sources: [ { "label" => CompanySuggestion::LABEL, "first" => Date.current.iso8601, "last" => Date.current.iso8601, "times" => 1 } ])
