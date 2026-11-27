@@ -116,6 +116,21 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "script[src*='google.com']", 0
   end
 
+  test "the about page's summary is one sentence: what the directory is (Tosin, 27 Nov)" do
+    get about_path
+    assert_select "p.nd-info__summary", text: "Nuclear Directory is a free reference to the companies and plants of the US nuclear industry."
+  end
+
+  test "the about page lists the public sources a fact needs, as a list (Tosin, 27 Nov)" do
+    get about_path
+    assert_select "section[aria-labelledby=built]" do
+      assert_select "p", text: "A fact is published only with a public source:"
+      assert_equal [ "A regulator or agency record", "A regulatory filing", "The party's own announcement", "Named news or trade reporting" ],
+        css_select("ul > li").map { |item| item.text.strip }
+    end
+    assert_no_match(/Directories and aggregators|power deal, investment or award needs/, response.body)
+  end
+
   test "the about page has the licences and the dataset DOI" do
     get about_path
     assert_select "a[href='https://doi.org/10.5281/zenodo.23703377']", "doi:10.5281/zenodo.23703377"
@@ -150,7 +165,8 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "#who ~ p, #who + p", /builds and runs Nuclear Directory\. Hosting is supported by Render\./
     assert_select "a[href='https://tosinoladokun.com']", "Tosin Oladokun"
     assert_select "main", text: /not for profit|money only covers/i, count: 0
-    assert_select "#built + p, #built ~ p", /A person checks each fact against its source/
+    assert_select "main", text: /A person checks each fact/, count: 0 # removed (Tosin, 27 Nov)
+    assert_select "a.nd-chip[href='/disclaimer']", "Disclaimer" # still one tap away, in the About menu
   end
 
   test "text pages link the companies they name" do

@@ -4,7 +4,7 @@
   <meta name="description" content="Nuclear Directory is a free, sourced reference to the companies and plants of the US nuclear industry. How it is built, how to use the data and who runs it.">
 <% end %>
 <%= render layout: "pages/frame", locals: { current: :about, title: "About", updated: "October 2026",
-      summary: "Nuclear Directory is a free reference to the companies and plants of the US nuclear industry. Every fact links to the public source it came from.",
+      summary: "Nuclear Directory is a free reference to the companies and plants of the US nuclear industry.",
       facts: [ { label: "Covers", value: "US nuclear industry" }, { label: "Sources", value: "Public records" },
                { label: "Data licence", value: "CC BY 4.0" }, { label: "Code licence", value: "MIT" },
                { label: "Dataset", value: "v#{published_dataset[:version]}", note: "DOI 10.5281/zenodo.23703377" }, { label: "Price", value: "Free" } ] } do %>
@@ -17,13 +17,18 @@
 
   <section class="nd-info__sec" aria-labelledby="built">
     <h2 id="built" class="nd-info__h">How it's built</h2>
-    <p>A fact is published only with a public source: a regulator or agency record, a filing, the party's own announcement, or named news or trade reporting. A power deal, investment or award needs a regulator, filing or party source. Directories and aggregators are leads, never sources.</p>
-    <p>A person checks each fact against its source before it goes live. Each page lists its sources and shows when it was last checked. Corrections are checked against the source before anything changes. Read the <%= link_to "disclaimer", disclaimer_path, class: "nd-link" %> too.</p>
+    <p>A fact is published only with a public source:</p>
+    <ul>
+      <li>A regulator or agency record</li>
+      <li>A regulatory filing</li>
+      <li>The party's own announcement</li>
+      <li>Named news or trade reporting</li>
+    </ul>
   </section>
 
   <section class="nd-info__sec" aria-labelledby="data">
     <h2 id="data" class="nd-info__h">How to use the data</h2>
-    <p>Every published fact is free to download as CSV or JSON from the <%= link_to "data page", data_path, class: "nd-link" %>, which also has the schema. The data is open under <%= link_to "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/", class: "nd-link", rel: "noopener noreferrer" %>: reuse it with credit. The code is open source under the <%= link_to "MIT License", "https://github.com/tosinoladokun/nuclear-directory/blob/main/LICENSE", class: "nd-link", rel: "noopener noreferrer" %>. Short source quotations stay the property of their owners.</p>
+    <p>Every published fact is free to download as CSV or JSON from the <%= link_to "data page", data_path, class: "nd-link" %>, which also has the schema. The data is open under <%= link_to "CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/", class: "nd-link", rel: "noopener noreferrer" %>. Feel free to reuse it with credit. The code is open source under the <%= link_to "MIT License", "https://github.com/tosinoladokun/nuclear-directory/blob/main/LICENSE", class: "nd-link", rel: "noopener noreferrer" %>. Short source quotations stay the property of their owners.</p>
     <p>To cite the dataset, name the release you used and the day you downloaded it: Nuclear Directory (2026), <%= link_to "doi:10.5281/zenodo.23703377", "https://doi.org/10.5281/zenodo.23703377", class: "nd-link", rel: "noopener noreferrer" %>. That DOI covers every release. Each release has its own version DOI on Zenodo, and its README gives the full citation.</p>
   </section>
 
