@@ -1,0 +1,47 @@
+# Data Quality's proposals (#934): a claim citing a page a person or Data
+# Quality found by hand (a web_page source) can only be checked once the page
+# is stored. Without it the verifier sends the claim to review ("The source
+# has no stored content"), so even a blank fill Data Quality checked
+# first-hand can't join Yes to all.
+#
+# After POST /api/dq/matching creates proposals, the pages their claims cite
+# are fetched in a job (ProposalPagesJob), then match and verify run, so the
+# verifier reads the page as stored:
+# - A page with nothing stored is fetched.
+# - A page whose stored text doesn't hold the new claim's quote is fetched
+#   again: it may have changed since. If it did, earlier claims on it are
+#   asked again on the next verify, as for any source whose content changes.
+# - A page that blocks fetching, or robots.txt disallows, is recorded on the
+#   source by Snapshot and stays unstored, so its claim goes to review as before.
+# - A page is fetched at most once a day (Snapshot), and never one a person
+#   has to look at (needs_human).
+#
+# Nothing else re-fetches a web_page source: once stored, a claim is checked
+# against the page as it was then, like any snapshot.
+module DataQuality::ProposalPages
+  # The sources these claims cite that need fetching.
+  def self.due(candidate_ids)
+    plugin = DataQuality::Plugins::WebPage.new
+    Candidate.where(id: candidate_ids).includes(:source).filter_map do |candidate|
+      source = candidate.source
+      next unless source.source_kind == "web_page" && source.crawl_status != "needs_human"
+      next if source.content_text.present? && plugin.quote_in_source?(source, candidate.quote)
+
+      source.id
+    end.uniq
+  end
+
+  # Fetches each source, one at a time, through the polite Fetcher. A failure
+  # on one page is reported and the rest are still fetched.
+  def self.store(source_ids, fetcher: DataQuality::Fetcher.new)
+    Source.where(id: source_ids).order(:id).to_h do |source|
+      result = begin
+        DataQuality::Snapshot.take(source, fetcher:)
+      rescue StandardError => e
+        Rails.error.report(e, handled: true, context: { source_id: source.id })
+        :error
+      end
+      [ source.id, result ]
+    end
+  end
+end

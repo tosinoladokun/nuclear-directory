@@ -55,8 +55,18 @@ module DataQuality::Matching
     # Each source matched again once per request, however many of its ends
     # were settled (Infra: verify is the AI step).
     requeue = Set.new
-    Array(rows).map { |row| apply_one(row.to_h.stringify_keys, directory, requeue) }
-      .tap { requeue.each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[match verify]) } }
+    rows = Array(rows).map { |row| row.to_h.stringify_keys }
+    results = rows.map { |row| apply_one(row, directory, requeue) }
+    # The pages new proposals cite are stored first, then match and verify
+    # run, so a claim is checked against its page (#934).
+    claims = rows.zip(results).select { |row, result| result.ok && PAGE_ACTIONS.include?(row["action"].to_s) }.flat_map { |_, result| result.created_ids }
+    pages = DataQuality::ProposalPages.due(claims)
+    if pages.any?
+      DataQuality::ProposalPagesJob.perform_later(pages, requeue.to_a)
+    else
+      requeue.each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[match verify]) }
+    end
+    results
   end
 
   def self.apply_one(row, directory, requeue = Set.new)
@@ -339,6 +349,8 @@ module DataQuality::Matching
   end
 
   PROPOSALS = %w[propose_role propose_fields propose_link propose_site_fields].freeze
+  # Actions whose created_ids are the claims they made, each citing a page.
+  PAGE_ACTIONS = (PROPOSALS + %w[propose_operator_change]).freeze
 
   # propose_operator_change (#930): a plant's operator replaced, from a source that names the new one. Each claim is
   # Tosin's to decide on its own (Review::OPERATOR_CHANGE): the current "from operates plant" link gets ended_on: since
