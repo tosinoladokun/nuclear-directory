@@ -28,6 +28,7 @@ helion-energy:
   linkedin_id: "3051270"
   linkedin_url: "https://www.linkedin.com/company/helion-energy"
 type-one-energy:
+  x: "@typeoneenergy"
   linkedin: "Type One Energy"
 westinghouse-electric-company:
   x: "@WECNuclear"
@@ -113,6 +114,7 @@ switch:
 university-of-washington:
   x: "@UW"
 talen-energy:
+  x: "@TalenEnergy"
   linkedin: "Talen Energy"
 tennessee-valley-authority:
   x: "@tvanews"
@@ -139,10 +141,12 @@ good-energy-collective-incorporated:
 lawrence-berkeley-national-laboratory:
   x: "@BerkeleyLab"
 entra1-energy:
+  x: "@ENTRAone"
   linkedin: "ENTRA1 Energy"
 converdyn:
   linkedin: "ConverDyn"
 microsoft:
+  x: "@Microsoft"
   linkedin: "Microsoft"
 north-carolina-state-university:
   x: "@NCState"
