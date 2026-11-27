@@ -40,6 +40,21 @@ class DataQuality::Plugins::CompanyPagesTest < ActiveSupport::TestCase
     assert_equal({ "companies" => 0, "pages" => 0 }, DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil), "read once per request")
   end
 
+  test "a page with NUL bytes is stored without them, and the run goes on (#981)" do
+    stub_request(:get, HOME).to_return(body: PAGE.sub("<p>Founded", "<p>\0Founded").sub("<html>", "<html><title>Acme\0 Fission</title>"),
+      headers: { "Content-Type" => "text/html" })
+    @company.update_columns(enrich_requested_at: Time.current)
+    stats = DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)
+
+    assert_equal({ "companies" => 1, "pages" => 2 }, stats)
+    home = Source.find_by!(url: HOME_KEY)
+    assert_equal "ok", home.crawl_status
+    assert_includes home.content_text, "<p>Founded in 2019.</p>"
+    assert_not_includes home.content_text, "\0"
+    assert_equal "Acme Fission", home.title
+    assert @company.reload.enriched_at
+  end
+
   test "extract keeps only values in their quotes and quotes on the page; drops marketing, people and unknown keys" do
     @company.update_columns(enrich_requested_at: Time.current)
     DataQuality::Plugins::CompanyPages.new(gap_fill: 0).crawl(nil)

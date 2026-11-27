@@ -51,7 +51,8 @@ class DataQuality::Snapshot
         return :error
       end
 
-      text = convert(response.body, source, attempt, &to_text)
+      # A converted file's text can carry NUL bytes too, which Postgres can't store (#981).
+      text = convert(response.body, source, attempt, &to_text)&.delete("\0")
       sha = Digest::SHA256.hexdigest(text)
       changed = sha != source.content_sha256
       title = DataQuality::PageTitle.from(response.body, content_type: response.content_type) unless binary
