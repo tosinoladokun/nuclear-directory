@@ -97,13 +97,28 @@ class DqCheckerTest < ActiveSupport::TestCase
 
     on_own = Candidate.create!(source: own, kind: "organization", status: "needs_review", subject: company, quote:,
       payload: { "name" => company.name, "website" => "https://sawtoothsim.example" })
-    checker(approve.call).run
+    llm = approve.call
+    checker(llm).run
     assert_equal [ "approve", "checker-v2" ], CheckerVerdict.find_by!(candidate: on_own).values_at(:verdict, :prompt_version)
+    # The model sees the page's own address and how it names itself (Copilot).
+    prompt = llm.asked.first.last
+    assert_match %r{Page address: https://www\.sawtoothsim\.example/?$}, prompt
+    assert_includes prompt, "Page title: Sawtooth Simulation | Nuclear plant simulators"
 
     elsewhere = Candidate.create!(source: other, kind: "organization", status: "needs_review", subject: company, quote:,
       payload: { "name" => company.name, "website" => "https://sawtoothsim.example" })
     checker(approve.call).run
     assert_equal [ "unsure", "The stored page isn't the claimed site's own page" ], CheckerVerdict.find_by!(candidate: elsewhere).values_at(:verdict, :reason)
+  end
+
+  test "checker-v2: a page too large to check its site here stays unsure, never loaded (Copilot)" do
+    big = Source.create!(url: "https://www.bigsite.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "c",
+      content_text: "<html><head><title>Big Site</title></head><body>Big Site builds reactors. #{'x' * (DqChecker::MAX_CHECKED + 10)}</body></html>")
+    company = Organization.create!(name: "Big Site", verification_status: "pending")
+    claim = Candidate.create!(source: big, kind: "organization", status: "needs_review", subject: company, quote: "Big Site builds reactors.",
+      payload: { "name" => company.name, "website" => "https://bigsite.example" })
+    checker(FakeCheckerLlm.new(extract: [ [ "approve", "Its own page" ] ])).run
+    assert_equal [ "unsure", "The page is too large to check its site here" ], CheckerVerdict.find_by!(candidate: claim).values_at(:verdict, :reason)
   end
 
   test "checker-v2's instructions say the page needn't state its own URL, and another domain never supports a website" do

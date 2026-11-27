@@ -35,7 +35,9 @@ class DqChecker
   ROW_SOURCES = /\A(usaspending|nrc_|arpa_e|doe_|federal_register|sec_)/
   OTHER_HOSTS = /(\A|\.)(linkedin|facebook|twitter|x|youtube|instagram|crunchbase|bloomberg|wikipedia|github|medium|businesswire|prnewswire|globenewswire)\.(com|org)\z/
 
-  Claim = Data.define(:id, :kind, :payload, :quote, :page, :holding, :hold, :source_kind) do
+  Claim = Data.define(:id, :kind, :payload, :quote, :page, :holding, :hold, :source_kind, :identity) do
+    # identity: the stored page's address and its own names for itself, for a website claim (checker-v2); nil otherwise.
+    def initialize(identity: nil, **) = super
     # :hold is why code decides it is unsure before any model reads it, or nil.
     def field = DqChecker.field_for(kind, payload)
   end
@@ -143,7 +145,8 @@ class DqChecker
     page = (window(candidate) unless hold)
     hold ||= "There's no stored page to read" if page.blank?
     hold ||= quote_hold(candidate, source_kind, page)
-    Claim.new(id: candidate.id, kind: candidate.kind, payload: candidate.payload, quote: candidate.quote, source_kind:,
+    identity = identity(candidate) if !hold && DqChecker.field_for(candidate.kind, candidate.payload) == "website"
+    Claim.new(id: candidate.id, kind: candidate.kind, payload: candidate.payload, quote: candidate.quote, source_kind:, identity:,
       page:, holding: holding(org), hold:)
   end
 
@@ -208,6 +211,23 @@ class DqChecker
     text.squish.presence
   end
 
+  # The stored page's address and how it names itself (title, og:site_name, first h1, header logo), each cut
+  # short, read from the page's first IDENTITY_BYTES in SQL so a large page is never loaded (checker-v2, Copilot).
+  IDENTITY_BYTES = 200_000
+  IDENTITY_CHARS = 200
+
+  def identity(candidate)
+    url, final_url, head = Source.where(id: candidate.source_id).pick(:url, :final_url, Arel.sql("left(content_text, #{IDENTITY_BYTES})"))
+    return if url.nil?
+
+    doc = Nokogiri::HTML(head.to_s)
+    logos = doc.css("header img[alt], nav img[alt]").select { |img| "#{img['src']} #{img['class']} #{img['id']} #{img['alt']}".match?(/logo/i) }
+    { "Page address" => final_url.presence || url, "Page title" => doc.at_css("title")&.text,
+      "Site name" => doc.at_css("meta[property='og:site_name']")&.[]("content"), "Main heading" => doc.at_css("h1")&.text,
+      "Logo" => logos.map { |img| img["alt"] }.first }
+      .filter_map { |label, value| "#{label}: #{value.to_s.squish.first(IDENTITY_CHARS)}" if value.present? }.join("\n")
+  end
+
   def holding(org)
     return {} unless org
 
@@ -246,7 +266,7 @@ class DqChecker
     def prompt(claim)
       "Claim kind: #{claim.kind} (#{claim.field})\nClaim: #{JSON.generate(claim.payload)}\n" \
         "What the directory holds for this company: #{claim.holding.any? ? JSON.generate(claim.holding) : 'nothing (a new company)'}\n" \
-        "Quote: #{claim.quote}\n\nPage text around the quote:\n#{claim.page}"
+        "Quote: #{claim.quote}\n\n#{"The stored page:\n#{claim.identity}\n\n" if claim.identity.present?}Page text around the quote:\n#{claim.page}"
     end
 
     # The rules code decides, after a model's approve: each can only make it unsure.
@@ -289,7 +309,11 @@ class DqChecker
       return "The name is shared by many companies" if name.downcase.split(/\W+/).intersect?(GENERIC)
 
       # checker-v2 (DQ, 27 Nov): the stored page must BE the claimed site's own home page, named as the company's own.
-      page = Candidate.find_by(id: claim.id)&.source
+      # Its size first, so a page of several MB is never loaded here (Copilot).
+      source_id = Candidate.where(id: claim.id).pick(:source_id)
+      return "The page is too large to check its site here" if Source.where(id: source_id).pick(Arel.sql("octet_length(content_text)")).to_i > MAX_CHECKED
+
+      page = Source.find_by(id: source_id)
       page_host = (URI.parse(page.final_url.presence || page.url).host.to_s.downcase.delete_prefix("www.") rescue nil) if page
       return "The stored page isn't the claimed site's own page" unless page_host == host
 
