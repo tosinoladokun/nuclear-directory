@@ -67,6 +67,8 @@ class NoWrapTest < ApplicationSystemTestCase
       end
       visit about_path
       assert_selector ".nd-glance__note", text: "DOI 10.5281/zenodo.23703377"
+      # Design (#993): the pairs fill their rows on a phone, and the fact with a note closes the card.
+      assert_equal [ "Covers", "Sources", "Price", "Data licence", "Code licence", "Dataset" ], all(".nd-glance dt").map { |dt| dt.text.sub(/DOI.*/, "").strip }
     end
   end
 
