@@ -47,6 +47,10 @@ gem "json_schemer", "~> 2.4"
 # Anonymous product analytics, sent server-side (#66). See lib/analytics.rb.
 gem "posthog-ruby", "~> 3.0", require: "posthog"
 
+# Registered domains, for the lead finder's staging-host and domain-name checks (#932).
+# A direct dependency: in tests it also arrives through webmock, which hid its absence in production.
+gem "public_suffix", "~> 7.0"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
