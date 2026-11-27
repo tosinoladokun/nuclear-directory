@@ -247,6 +247,19 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "Create clicked on the row: its receipt names the company as created, not the crawler's spelling (Copilot, #1008)" do
+    claim = proposed
+    DataQuality::Recommendations.record("#{@create.id} approve: named\n#{claim.id} approve: its site", by: "human:dq")
+    sign_in_as users(:admin)
+    get admin_inbox_path
+    ids = css_select("#inbox-item-#{@create.id} form[action='#{admin_inbox_decide_path(@create.id, "yes")}'] input[name='ids[]']").map { |input| input["value"] }
+
+    post admin_inbox_decide_path(@create.id, "yes"), params: { ids: }, as: :turbo_stream
+
+    assert_equal "Fermi America", @company.reload.name
+    assert_select "turbo-stream[action=replace][target=inbox-item-#{@create.id}] template span.type-body", "Created Fermi America"
+  end
+
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do
     @company.verify!(by: "human:tosin")
 

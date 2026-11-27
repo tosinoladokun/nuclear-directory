@@ -138,6 +138,8 @@ module AdminHelper
       # Each count once: Today's is the waiting facts plus step 4's requests.
       pending = DataQuality::Review.pending_count
       corrections = CorrectionReport.where(status: %w[open reviewed]).count
+      # Slow to count and slow to change, so read at most every few minutes, in one cache read (#1008).
+      slow = Rails.cache.fetch("admin/nav/slow_counts", expires_in: 10.minutes) { { outputs: PublicPages.new.count, removed: Directory::RemovedList.total } }
       {
         sources: SourceCatalog.total,
         checks: DataQuality::Review.counts.values.sum + pending,
@@ -146,8 +148,8 @@ module AdminHelper
         leads: Lead.status_new.count,
         # Today's own page has it loaded already.
         inbox: (@inbox || OwnerInbox.new).size,
-        outputs: PublicPages.new.count,
-        removed: Directory::RemovedList.total,
+        outputs: slow[:outputs],
+        removed: slow[:removed],
         today: DataQuality::Review.check_counts["all"] + pending + corrections
       }
     end
@@ -386,6 +388,8 @@ module AdminHelper
   # The claim with Data Quality's name for a new company (#1000) going with this Create, or nil.
   def proposed_name_claim(entry)
     return if entry.kind != "new_record"
+    # Today reads every row's at once (#1008).
+    return @inbox.proposed_name_claim(entry) if @inbox.respond_to?(:proposed_name_claim)
 
     # The Create's own claim too: with no other open claim, the name proposal is the row (Copilot).
     named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
@@ -399,6 +403,8 @@ module AdminHelper
   # a merge, #1019), one per name.
   def alias_only_names(entry)
     return [] if entry.kind != "new_record"
+    # Today reads every row's at once (#1008).
+    return @inbox.alias_only_names(entry) if @inbox.respond_to?(:alias_only_names)
 
     named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
     directory = DataQuality::DirectoryClient.new
@@ -409,9 +415,10 @@ module AdminHelper
 
   # A decision in Recently decided (#548): "Created Bluefield Fission",
   # "Approved Meta funds TerraPower", "Said no to Old Lead Co".
-  def inbox_decision(claim)
+  # name: the record's name now, when the caller has it (a Create's receipt names what was created, #1008).
+  def inbox_decision(claim, name: nil)
     record = %w[organization facility].include?(claim.kind)
-    what = record ? claim.payload.to_h["name"].to_s : DataQuality::Claim.describe(claim).delete_suffix(".")
+    what = name.presence || (record ? claim.payload.to_h["name"].to_s : DataQuality::Claim.describe(claim).delete_suffix("."))
     verb = if claim.status_rejected? then "Said no to"
     elsif record && claim.proposed_subject then "Created"
     else "Approved"

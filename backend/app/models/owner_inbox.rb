@@ -16,7 +16,8 @@ class OwnerInbox
     def ids = [ item.candidate_id, *copy_ids ]
   end
 
-  def initialize(directory: DataQuality::DirectoryClient.new)
+  # The records the claims are about are read up front (#1008): one page asks about every waiting claim.
+  def initialize(directory: DataQuality::PrefetchedDirectory.new)
     @directory = directory
     @companions = {}
   end
@@ -28,12 +29,14 @@ class OwnerInbox
       approved = Candidate.where(status: DataQuality::Recommendations::OPEN, dq_recommendation: "approve").select(:id)
       waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all")).or(Candidate.where(id: approved))
         .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").includes(:source).order(id: :desc).to_a
-      firsts = DataQuality::Review.first_batches
-      kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:) }
+      @directory.prefetch(waiting) if @directory.respond_to?(:prefetch)
+      actions = DataQuality::Review.live_actions(waiting.map(&:id))
+      kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:, actions:) }
+      @kinds = kinds.transform_keys(&:id)
       mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
       # A new company's field claims (#760) are decided with its Create, not on their own.
       fields = DataQuality::FieldEvidence.fields_of(mine.select { |c| kinds[c] == "new_record" && c.kind_organization? }.map(&:id))
-        .where.not(subject_id: nil).to_a.group_by { |c| c.payload["field_of"].to_i }
+        .where.not(subject_id: nil).includes(:source).to_a.group_by { |c| c.payload["field_of"].to_i }
       field_ids = fields.values.flatten.map(&:id).to_set
       grouped = mine.reject { |candidate| field_ids.include?(candidate.id) }
         .group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }
@@ -44,6 +47,29 @@ class OwnerInbox
       one_create_per_company(grouped)
     end
   end
+
+  # A claim's inbox kind, read with this page's prefetched records and Data Quality's actions (#1008):
+  # the ones the page already sorted are reused.
+  def kind_of(claim)
+    read_kinds([ claim ])
+    @kinds.fetch(claim.id)
+  end
+
+  # Reads the inbox kinds of these claims (e.g. the leads' claims, #1008) together, as the page's own are.
+  def read_kinds(claims)
+    groups
+    rest = claims.reject { |claim| @kinds.key?(claim.id) }
+    return if rest.empty?
+
+    @directory.prefetch(rest) if @directory.respond_to?(:prefetch)
+    actions = DataQuality::Review.live_actions(rest.map(&:id))
+    rest.each { |claim| @kinds[claim.id] = DataQuality::Review.inbox_kind(claim, directory: @directory, firsts:, actions:) }
+  end
+
+  # Whether a company has a sourced role, read with the page's claims (#1008).
+  def sourced_role?(organization_id) = @directory.sourced_role?(organization_id)
+
+  def firsts = (@firsts ||= DataQuality::Review.first_batches)
 
   # How many facts wait for him, without building their rows (the nav badge).
   def size
@@ -136,12 +162,41 @@ class OwnerInbox
   # What "Yes to all" takes: each checked fact's first copy as Data Quality's
   # call on it, for Recommendations.accept (rechecked under its locks).
   def checked_items
+    claims = claims_by_id
     checked.map do |entry|
-      candidate = Candidate.find(entry.item.candidate_id)
+      candidate = claims[entry.item.candidate_id] || Candidate.find(entry.item.candidate_id)
       DataQuality::Recommendations::Item.new(candidate_id: candidate.id, call: candidate.dq_recommendation, reason: candidate.dq_reason,
         snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
     end
   end
+  # The claims on the page, already read for its groups, by id (#1008): a row's copies and riders without a query each.
+  def claims_by_id = (@claims_by_id ||= groups.values.flatten.index_by(&:id))
+
+  # A row's other claims, in id order.
+  def copies_of(entry) = claims_by_id.values_at(*entry.copy_ids).compact.sort_by(&:id)
+
+  # Data Quality's name proposal a Create row is created under (#1000), as AdminHelper#proposed_name_claim picks it,
+  # for every row at once (#1008): only a proposal still on the company it was proposed for, the last by id.
+  def proposed_name_claim(entry) = name_proposals.dig(entry.item.candidate_id, :named)
+
+  # A row's name proposals that approval only adds as another name (moved off their company by a merge, #1019), one
+  # per name, as AdminHelper#alias_only_names picks them, for every row at once (#1008).
+  def alias_only_names(entry) = name_proposals.dig(entry.item.candidate_id, :aliases) || []
+
+  # { row's claim id => { named:, aliases: } } for every Create row, from one query for Data Quality's proposal actions.
+  def name_proposals
+    @name_proposals ||= begin
+      rows = sections["new_record"]
+      targets = DqAction.where(candidate_id: rows.flat_map(&:ids), action: "propose_fields", target_type: "Organization").pluck(:candidate_id, :target_id).to_h
+      rows.to_h do |row|
+        proposals = claims_by_id.values_at(*row.ids).compact
+          .select { |claim| claim.kind_organization? && claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) && targets.key?(claim.id) }
+        live, moved = proposals.partition { |claim| claim.subject_type == "Organization" && targets[claim.id] == claim.subject_id }
+        [ row.item.candidate_id, { named: live.max_by(&:id), aliases: moved.sort_by(&:id).uniq { |claim| claim.payload["name"] } } ]
+      end
+    end
+  end
+
   # A pending company's other checked claims shown with its Create (one Create per company), by the Create's claim id.
   def companions_of(candidate_ids)
     groups

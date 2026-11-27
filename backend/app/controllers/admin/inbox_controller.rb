@@ -25,13 +25,28 @@ class Admin::InboxController < Admin::BaseController
     stopped = results.reject(&:ok?)
     if stopped.empty?
       kept = keep_as_lead(ids.first) unless yes
-      flash[:notice] = if yes then "Done. It's live."
+      notice = if yes then "Done. It's live."
       elsif kept then "Said no. It's kept in Leads."
       elsif params[:kind] == "change" then "Kept what you decided."
       else "Said no."
       end
       undoable = Array(before).map { |state| DataQuality::Review.undoable(state, by: actor) }
-      flash[:undo] = undo_verifier.generate(undoable, expires_in: 1.hour) if !yes && undoable.all? && undoable.size <= 20
+      undo = undo_verifier.generate(undoable, expires_in: 1.hour) if !yes && undoable.all? && undoable.size <= 20
+      # Clicked on the page (Turbo): only the decided row goes and the message changes, so a run of quick
+      # decisions doesn't rebuild the whole inbox each time (#1008). Reloading shows everything as it is now.
+      if request.format.turbo_stream?
+        # The row becomes a receipt where it was, with the focus (Design); the message is updated too, for screen readers.
+        decided = Candidate.find(params[:candidate_id].to_i)
+        # A Create names what was created: a name Data Quality proposed may have replaced the crawler's (Copilot).
+        created = (DataQuality::DirectoryClient.new.fact(type: decided.subject_type, id: decided.subject_id)&.name if yes && decided.proposed_subject && decided.subject_id)
+        action = (render_to_string(partial: "admin/inbox/undo", formats: :html, locals: { token: undo }) if undo)
+        return render turbo_stream: [
+          turbo_stream.replace("inbox-item-#{decided.id}", partial: "admin/inbox/receipt", formats: :html, locals: { claim: decided, undo:, name: created }),
+          turbo_stream.update("admin-flash", partial: "admin/flash", formats: :html, locals: { notice:, alert: nil, action: })
+        ]
+      end
+      flash[:notice] = notice
+      flash[:undo] = undo if undo
     else
       flash[:alert] = "Not done: #{plain_reasons(stopped).to_sentence}."
       # Also on the row itself, where he clicked (PM, 25 Nov: a refused Yes looked like nothing happened).

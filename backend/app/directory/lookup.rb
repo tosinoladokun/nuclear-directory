@@ -502,6 +502,11 @@ module Directory
     # Whether a company or plant already goes by this name: its own name or
     # one of its aliases, compared as normalized (case, punctuation and legal
     # suffixes don't count).
+    # A name as known_name? compares it (normalized), with no query.
+    def normalized_name(type:, name:)
+      { "Organization" => OrganizationAlias, "Facility" => FacilityAlias }.fetch(type.to_s).normalize(name)
+    end
+
     def known_name?(type:, id:, name:)
       model, aliases = { "Organization" => [ Organization, OrganizationAlias ], "Facility" => [ Facility, FacilityAlias ] }.fetch(type.to_s) { return false }
       record = model.find_by(id:) or return false
@@ -523,6 +528,48 @@ module Directory
       type.to_s.constantize.lock.find_by(id:)
       nil
     end
+
+    # fact_state and fact_attributes for many facts of one type, in a few
+    # queries (their linked records preloaded): { id => [state, attributes] }.
+    # For a page that reads many facts at once, such as Tosin's inbox (#1008).
+    def facts(type:, ids:)
+      raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)
+
+      model = type.to_s.constantize
+      linked = FACT_LINKS.select { |name| model.reflect_on_association(name) }
+      records = model.where(id: ids.uniq).includes(*linked).to_a
+      # A deal term's label names its link's ends: preloaded too, per kind of link.
+      records.filter_map { |record| record.link if record.respond_to?(:link) }.group_by(&:class).each do |link_model, links|
+        ActiveRecord::Associations::Preloader.new(records: links, associations: FACT_LINKS.select { |name| link_model.reflect_on_association(name) }).call
+      end
+      records.to_h do |record|
+        state = FactStateRef.new(type: type.to_s, id: record.id, name: fact_label(record),
+          verification_status: record.verification_status, verified_by: record.verified_by, verified_at: record.verified_at)
+        [ record.id, [ state, pending_attributes(type.to_s.underscore, record).stringify_keys ] ]
+      end
+    end
+
+    # Companies or plants by id, as organization(id:) and facility(id:) give them, in one query (#1008).
+    def refs(type:, ids:)
+      case type.to_s
+      when "Organization" then Organization.where(id: ids.uniq).to_h { |record| [ record.id, OrganizationRef.from(record) ] }
+      when "Facility" then Facility.where(id: ids.uniq).to_h { |record| [ record.id, FacilityRef.from(record) ] }
+      else raise ArgumentError, "not a company or plant: #{type.inspect}"
+      end
+    end
+
+    # facility(eia_plant_id:) for many plant ids, in one query: { plant id => FacilityRef } (#1008).
+    def sites_by_plant_id(plants)
+      Facility.where(parent_id: nil, eia_plant_id: plants.filter_map { |plant| plant.to_s.strip.presence }.uniq).order(:id).to_a.group_by(&:eia_plant_id).transform_values { |records| FacilityRef.from(records.first) }
+    end
+
+    # organization(domain:) for many domains, in one query: { domain => OrganizationRef } (#1008).
+    def organizations_by_domain(domains)
+      Organization.where(domain: domains.compact.uniq).order(:id).to_a.group_by(&:domain).transform_values { |records| OrganizationRef.from(records.first) }
+    end
+
+    # What fact_label and pending_attributes read from a fact's linked records.
+    FACT_LINKS = %i[aliases role technology organization facility from_organization to_organization parent link].freeze
 
     def fact_state(type:, id:)
       raise ArgumentError, "not a fact type: #{type.inspect}" unless FACT_TYPES.include?(type.to_s)

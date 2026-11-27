@@ -342,7 +342,7 @@ class Admin::LiveTest < ActionDispatch::IntegrationTest
     second, reads = load_page.call
     assert_operator second, :<, first * 0.7, "#{first} then #{second}"
     assert_operator second, :<=, 90, "an absolute ceiling for a warm load"
-    assert_operator reads, :<=, 3, "the tag map and the tab counts: one cache read each (Solid Cache reads are queries)"
+    assert_operator reads, :<=, 4, "the tag map, the tab counts and the admin nav's slow counts (#1008): one cache read each (Solid Cache reads are queries)"
     assert_equal body, tabs.call, "same tab counts"
 
     Organization.create!(name: "New Live Co", verification_status: "verified", verified_by: "human:tosin")

@@ -320,11 +320,19 @@ class DataQuality::DirectoryClient
   def site_for_unit(candidate)
     plant = candidate.payload.to_h.dig(ENRICHMENT_KEY, "eia_plant_id").presence or return
     unit = candidate.subject_id && lookup.facility(id: candidate.subject_id) or return
+    self.class.unit_site(unit) { lookup.facility(eia_plant_id: plant) }
+  end
+
+  # The site a docketed unit joins, given the unit and (lazily) the site with its EIA plant ID, or nil.
+  def self.unit_site(unit)
     return if unit.parent_id || unit.nrc_docket.blank?
 
-    site = lookup.facility(eia_plant_id: plant) or return
+    site = yield or return
     site.id unless site.id == unit.id || %w[rejected unpublished].include?(site.verification_status)
   end
+
+  # Sites by EIA plant ID, as facility(eia_plant_id:) finds them, in one query: { plant id => Record } (#1008).
+  def sites_by_plant_id(plants) = lookup.sites_by_plant_id(plants).transform_values { |ref| record("Facility", ref) }
 
   # Site fields a verified unit can fill in when the site has none.
   SITE_FIELDS_FROM_UNIT = %w[state facility_type status country_code latitude longitude].freeze
@@ -408,6 +416,17 @@ class DataQuality::DirectoryClient
     record(type, state, values: lookup.fact_attributes(type:, id:))
   end
 
+  # organization(domain:) for many domains, in one query: { domain => Record } (#1008).
+  def organizations_by_domain(domains) = lookup.organizations_by_domain(domains).transform_values { |ref| record("Organization", ref) }
+
+  # attached_record for many companies or plants of one type, in one query: { id => Record } (#1008).
+  def attached_records(type:, ids:) = lookup.refs(type:, ids:).transform_values { |ref| record(type, ref) }
+
+  # fact for many facts of one type, in a few queries: { id => Record } (#1008).
+  def facts(type:, ids:)
+    lookup.facts(type:, ids:).transform_values { |state, values| record(type, state, values:) }
+  end
+
   # The companies that publicly own this plant or unit now (#382), as ids.
   def published_owner_ids(facility_id:) = lookup.published_owner_ids(facility_id:)
 
@@ -432,6 +451,9 @@ class DataQuality::DirectoryClient
   end
 
   def known_name?(type:, id:, name:) = lookup.known_name?(type:, id:, name:)
+
+  # A name as known_name? compares it, with no query (#1008).
+  def normalized_name(type:, name:) = lookup.normalized_name(type:, name:)
 
   # Holds a fact's row lock until the surrounding transaction ends.
   def lock_fact(type:, id:) = lookup.lock_fact(type:, id:)
