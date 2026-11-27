@@ -25,21 +25,32 @@ class Admin::HealthTest < ActionDispatch::IntegrationTest
     ENV.delete("DQ_AGENT_TOKEN_DIGEST")
   end
 
-  test "Data Quality's pass shows off, and the switch turns it on and off (#998)" do
+  test "Data Quality's pass: off shows one Turn on button with a confirmation; on shows one Turn off button, Pacific times (#998, Design)" do
     get admin_health_path
-    assert_select "#health-dq-pass-state", /\AOff/
-    assert_select "#dq-pass-on button[data-turbo-confirm]"
+    assert_select "#health-dq-pass-state", /\AOff\.\z/
+    assert_select "section[aria-labelledby=health-dq-pass] p", text: /Each night at \d{1,2}:30 [ap]\.m\. Pacific/
+    assert_select "#dq-pass-on button.nd-btn--primary[data-turbo-confirm]", "Turn on"
+    assert_select "#dq-pass-off", false
+    assert_select "section[aria-labelledby=health-dq-pass] [aria-pressed]", false
 
     patch admin_health_dq_pass_path, params: { on: "1" }
     assert_redirected_to admin_health_path
+    assert_match(/runs each night at \d{1,2}:30 [ap]\.m\. Pacific/, flash[:notice])
     assert DqPass.on?
     assert_equal users(:admin).actor, Switch.find_by!(key: DqPass::KEY).changed_by
 
     get admin_health_path
-    assert_select "#health-dq-pass-state", /\AOn, since/
+    assert_select "#health-dq-pass-state", /\AOn, since \d{1,2} \w{3} \d\d:\d\d PT\. First run tonight\./
+    assert_select "#dq-pass-off button.nd-btn--outline:not([data-turbo-confirm])", "Turn off"
+    assert_select "#dq-pass-on", false
 
     patch admin_health_dq_pass_path, params: { on: "0" }
     assert_not DqPass.on?
+  end
+
+  test "the nightly time reads in Pacific: 2:30 a.m. in winter, 3:30 a.m. in summer (#998, Design)" do
+    assert_equal "2:30 a.m.", DqPass.run_time_pacific(now: Time.utc(2026, 12, 2, 12))
+    assert_equal "3:30 a.m.", DqPass.run_time_pacific(now: Time.utc(2027, 7, 2, 12))
   end
 
   test "the switch needs a signed-in admin (#998)" do

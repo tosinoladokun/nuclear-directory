@@ -16,16 +16,15 @@
 
   <section class="nd-stack" aria-labelledby="health-dq-pass">
     <h2 id="health-dq-pass" class="type-admin-h2 m-0">Data Quality's pass</h2>
-    <p class="type-body m-0">Each night at 10:30 UTC it proposes websites and roles for pending companies and recommends rejects. It only recommends: you still decide. It stops at $<%= format("%.2f", DqPass::DAILY_BUDGET) %> a day, shared with the checker.</p>
+    <p class="type-body m-0">Each night at <%= DqPass.run_time_pacific %> Pacific it proposes websites and roles for pending companies and recommends rejects. It only recommends: you still decide. It stops at $<%= format("%.2f", DqPass::DAILY_BUDGET) %> a day, shared with the checker.</p>
     <% on = @dq_pass&.on %>
-    <p class="type-body m-0" id="health-dq-pass-state"><%= on ? "On" : "Off" %><% if @dq_pass %>, since <%= @dq_pass.updated_at.in_time_zone(PipelineHealth::ZONE).strftime("%-d %b %H:%M") %><% end %>.</p>
-    <div class="nd-row" id="health-dq-pass-switch">
-      <%= button_to "Off", admin_health_dq_pass_path, method: :patch, params: { on: "0" }, form: { id: "dq-pass-off" },
-        class: "nd-btn #{on ? 'nd-btn--outline' : 'nd-btn--primary'} type-ui", aria: { pressed: !on } %>
-      <%= button_to "On", admin_health_dq_pass_path, method: :patch, params: { on: "1" }, form: { id: "dq-pass-on" },
-        class: "nd-btn #{on ? 'nd-btn--primary' : 'nd-btn--outline'} type-ui", aria: { pressed: on },
+    <p class="type-body m-0" id="health-dq-pass-state"><%= on ? "On" : "Off" %><% if @dq_pass %>, since <%= @dq_pass.updated_at.in_time_zone(PipelineHealth::ZONE).strftime("%-d %b %H:%M") %> PT<% end %>.<% if on && @dq_pass_runs.none? %> First run tonight.<% end %></p>
+    <% if on %>
+      <%= button_to "Turn off", admin_health_dq_pass_path, method: :patch, params: { on: "0" }, form: { id: "dq-pass-off" }, class: "nd-btn nd-btn--outline type-ui" %>
+    <% else %>
+      <%= button_to "Turn on", admin_health_dq_pass_path, method: :patch, params: { on: "1" }, form: { id: "dq-pass-on" }, class: "nd-btn nd-btn--primary type-ui",
         data: { turbo_confirm: "Run Data Quality's pass each night? It spends up to $#{format('%.2f', DqPass::DAILY_BUDGET)} a day on models." } %>
-    </div>
+    <% end %>
     <% if @dq_pass_runs.any? %>
       <table class="nd-numtable">
         <thead><tr><th scope="col">Run</th><th scope="col">Result</th><th scope="col">Spent ($)</th></tr></thead>

@@ -12,6 +12,6 @@ class Admin::HealthController < Admin::BaseController
   def dq_pass
     on = params[:on] == "1"
     Switch.set!(DqPass::KEY, on, by: actor)
-    redirect_to admin_health_path, notice: on ? "Data Quality's pass is on. It runs each night at 10:30 UTC." : "Data Quality's pass is off."
+    redirect_to admin_health_path, notice: on ? "Data Quality's pass is on. It runs each night at #{DqPass.run_time_pacific} Pacific." : "Data Quality's pass is off."
   end
 end

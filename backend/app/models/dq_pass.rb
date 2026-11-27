@@ -26,6 +26,13 @@ module DqPass
 
   def self.on? = Switch.on?(KEY)
 
+  # When the nightly run starts (config/recurring.yml: 10:30 UTC), in Pacific
+  # time as Admin > Health shows times: "2:30 a.m." (3:30 a.m. in summer).
+  RUN_AT_UTC = { hour: 10, min: 30 }.freeze
+  def self.run_time_pacific(now: Time.current)
+    now.utc.change(**RUN_AT_UTC).in_time_zone(PipelineHealth::ZONE).strftime("%-l:%M %P").sub(/ ([ap])m\z/, ' \1.m.')
+  end
+
   # Never recommended for reject by the pass, in code or by a model (Data
   # Quality, 28 Nov): a university, a national lab or a government body (a
   # model reads those), an investor, or a company a person suggested.
