@@ -2,21 +2,24 @@
 # then matches and verifies each source kind those proposals touched, so the
 # verifier never checks a claim before its page is stored.
 #
-# It writes sources, so it holds the data write lock shared, as a pipeline
-# run does (#301): during a deploy's data steps it waits and tries again,
-# and only queues verify once storing has been tried (Copilot). Out of
-# tries, it queues verify anyway, and the claims go to review as they did
-# before #934.
+# It writes sources, so it holds the locks a web_page pipeline run holds:
+# the data write lock shared (#301), then the web_page run's own lock, so a
+# page is never refreshed while verify reads it (Copilot). During a deploy's
+# data steps, or a web_page run, it waits and tries again, and only queues
+# verify once storing has been tried. Out of tries, it queues verify anyway,
+# and the claims go to review as they did before #934.
 class DataQuality::ProposalPagesJob < ApplicationJob
   queue_as :data_quality
-  retry_on DataQuality::WriteLock::Busy, wait: 5.minutes, attempts: 12 do |job, _error|
+  retry_on DataQuality::WriteLock::Busy, DataQuality::Pipeline::AlreadyRunning, wait: 5.minutes, attempts: 12 do |job, _error|
     job.verify_next
   end
 
   def perform(source_ids, source_kinds)
     begin
-      DataQuality::WriteLock.shared { DataQuality::ProposalPages.store(source_ids) }
-    rescue DataQuality::WriteLock::Busy
+      DataQuality::WriteLock.shared do
+        DataQuality::Pipeline.with_lock("web_page") { DataQuality::ProposalPages.store(source_ids) }
+      end
+    rescue DataQuality::WriteLock::Busy, DataQuality::Pipeline::AlreadyRunning
       raise
     rescue StandardError
       verify_next

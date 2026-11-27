@@ -117,6 +117,21 @@ class DataQuality::ProposalPagesTest < ActiveSupport::TestCase
     assert_equal "needs_review", second.reload.status, "checked as before #934"
   end
 
+  test "while a web_page run holds its lock the job waits and tries again, so a page never changes under verify (Copilot)" do
+    stub_request(:get, @page.url).to_return(body: "<p>#{QUOTE}</p>", headers: { "Content-Type" => "text/html" })
+    config = ActiveRecord::Base.connection_db_config.configuration_hash
+    other = PG.connect(host: config[:host], port: config[:port], dbname: ActiveRecord::Base.connection_db_config.database,
+      user: config[:username], password: config[:password])
+    other.exec("SELECT pg_advisory_lock(#{Zlib.crc32('data_quality:web_page')})")
+    assert_no_enqueued_jobs(only: DataQuality::RunJob) do
+      assert_enqueued_with(job: DataQuality::ProposalPagesJob) { DataQuality::ProposalPagesJob.perform_now([ @page.id ], [ "web_page" ]) }
+    end
+    assert_nil @page.reload.content_text, "not stored while the run holds the lock"
+  ensure
+    other&.exec("SELECT pg_advisory_unlock_all()")
+    other&.close
+  end
+
   test "during a deploy's data steps the job waits and tries again, and doesn't verify yet (Copilot)" do
     original = DataQuality::WriteLock.method(:shared)
     DataQuality::WriteLock.define_singleton_method(:shared) { |&| raise DataQuality::WriteLock::Busy, "deploying" }
