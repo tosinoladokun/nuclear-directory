@@ -307,7 +307,9 @@ class DataQuality::Fetcher
       body = fetched.body.dup
       charset = fetched.http.type_params["charset"]
       body.force_encoding(Encoding.find(charset)) rescue body.force_encoding(Encoding::UTF_8)
-      body.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
+      # NUL bytes dropped: Postgres can't store them in text, and one page
+      # with them failed company_pages two nights running (#981).
+      body.encode(Encoding::UTF_8, invalid: :replace, undef: :replace).delete("\0")
     end
 
     # Akamai puts the id in a header and in the page ("Reference&#32;&#35;18&#46;…").
