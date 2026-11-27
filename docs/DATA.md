@@ -204,6 +204,18 @@ Not a source: anything behind a login or paywall, AI-written summaries, a page t
 
 **Licensing stages are stricter (#379):** only NRC records count, any page on nrc.gov (a project page, ADAMS) or an NRC notice in the Federal Register (on federalregister.gov, or its copy on govinfo.gov; other govinfo.gov publications, such as the Congressional Record, don't count). A licensing stage isn't seeded as pending: until stages can be reviewed in the admin, a lead stays out of the seed. A press release or a news article is a lead: it can be attached, but it never makes a stage public, and FactWriter refuses to verify a stage without an NRC record behind it.
 
+### Is it a US company? (DQ, 27 Nov; #987)
+
+The lead finder and Data Quality decide that a company is in scope (US) from its own words or an official record, never from an aggregator.
+
+- **A US address it calls its headquarters or an office** settles it on its own: "Headquarters … Charlotte, NC", "our engineering headquarters will remain in the Bay Area".
+- **A US stock exchange listing** ("Nasdaq: HDRN") isn't enough on its own, because foreign companies list there too. It counts together with one other US signal from the company's own pages or an official record: a US address, US incorporation ("Inc. · Delaware"), an NRC docket or pre-application, or a DOE award to the company.
+- **The company's own press release on a wire site** (GlobeNewswire, PR Newswire, Business Wire) is the company's own words (tier 2). It must be the company's own release, with its own "About" section, not a partner's release that mentions it.
+  - A sentence in the release body can give the headquarters ("headquartered in Idaho Falls, Idaho").
+  - A dateline ("IDAHO FALLS, Idaho, Oct. 6 –") shows US activity, but never sets the headquarters city.
+- **A second domain of the same brand** may be read when the company's own page links or redirects to it and the brand matches (#985). Its about or contact page is then read like the company's own (terrestrialusa.com leads to terrestrialenergy.com/contact).
+- **Incorporation is not headquarters.** "Delaware" says where a company is incorporated, not where it's based. A US-incorporated company run from abroad (an engineering base in Buenos Aires) goes to Tosin's Create with that noted. It isn't added as US on incorporation alone.
+
 ### Quotes
 
 - **The quote states the value.** "Oglethorpe Power (30%)" supports `owns 30%`; a page that only lists Oglethorpe as a partner doesn't.
