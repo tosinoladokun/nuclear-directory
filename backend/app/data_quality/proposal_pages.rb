@@ -60,10 +60,12 @@ module DataQuality::ProposalPages
   def self.awaiting?(candidate) = awaiting([ candidate ]).any?
 
   # The job will fetch it for this claim: not fetched since the claim was
-  # made, and not already today (Snapshot fetches a source once a day, so a
-  # page fetched or blocked earlier today is checked as it stands; Copilot).
+  # made, and not already on the day the claim was made (Snapshot fetches a
+  # source once a day, so a page fetched or blocked earlier that day is
+  # checked as it stands; Copilot). Judged by the claim's day, not today's,
+  # so verify after midnight agrees with what was queued (Copilot).
   def self.fetch_pending?(source, candidate)
-    source.fetched_at.nil? || (source.fetched_at < candidate.created_at && source.fetched_at.to_date != Date.current)
+    source.fetched_at.nil? || (source.fetched_at < candidate.created_at && source.fetched_at.to_date != candidate.created_at.to_date)
   end
 
   # Fetches each source, one at a time, through the polite Fetcher. A failure

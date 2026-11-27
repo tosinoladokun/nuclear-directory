@@ -92,6 +92,16 @@ class DataQuality::ProposalPagesTest < ActiveSupport::TestCase
     assert_equal "needs_review", field.reload.status, "checked as before #934"
   end
 
+  test "a proposal just before midnight on a page fetched earlier that day isn't held after midnight: nothing was queued for it (Copilot)" do
+    @page.update!(content_text: "Old text.", content_sha256: "old", crawl_status: "ok", fetched_at: Time.zone.parse("2026-11-27 23:30"))
+    travel_to Time.zone.parse("2026-11-27 23:58")
+    late = claim
+    assert_empty DataQuality::ProposalPages.due([ late.id ]), "no job queued: Snapshot won't fetch it again that day"
+
+    travel_to Time.zone.parse("2026-11-28 00:01")
+    assert_not DataQuality::ProposalPages.awaiting?(late), "so verify checks it at once"
+  end
+
   test "a claim whose page fetch was tried and failed, or that waited past WAIT, is verified as before #934" do
     blocked = claim
     @page.update!(fetched_at: 1.minute.from_now, crawl_status: "blocked")
