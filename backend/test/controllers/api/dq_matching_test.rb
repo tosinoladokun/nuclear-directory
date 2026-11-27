@@ -468,11 +468,15 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     quote = "Holtec International is headquartered in Camden, New Jersey."
     rows = ->(url) { [ { action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote:, source_url: url, reason: "Their about page" } ] }
 
-    assert_no_enqueued_jobs(only: DataQuality::RunJob) do
+    freeze_time do
       act(*rows.("https://holtec.example/about"))
+      page = Source.find_by!(url: "https://holtec.example/about")
+      assert_enqueued_with(job: DataQuality::ProposalPagesJob, args: [ [ page.id ], [ "web_page" ] ])
+      # Not now: only the backstop, once the wait is over (Copilot).
+      runs = enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }
+      assert_equal [ (DataQuality::ProposalPages::WAIT + 5.minutes).from_now.to_f ], runs.map { |job| job["scheduled_at"].then { |at| Time.zone.parse(at.to_s).to_f } }
     end
     page = Source.find_by!(url: "https://holtec.example/about")
-    assert_enqueued_with(job: DataQuality::ProposalPagesJob, args: [ [ page.id ], [ "web_page" ] ])
     assert_equal "web_page", page.source_kind
 
     # Once it's stored and holds the quote, the next proposal on it is verified at once.

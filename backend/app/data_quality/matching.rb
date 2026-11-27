@@ -64,7 +64,11 @@ module DataQuality::Matching
     if pages.any?
       # Its own kind too: a retry by request_key returns its claim without
       # adding the kind, and must still be verified after storing (Copilot).
-      DataQuality::ProposalPagesJob.perform_later(pages, (requeue.to_a + Source.where(id: pages).distinct.pluck(:source_kind)).uniq)
+      kinds = (requeue.to_a + Source.where(id: pages).distinct.pluck(:source_kind)).uniq
+      DataQuality::ProposalPagesJob.perform_later(pages, kinds)
+      # A backstop: once the wait is over, the claims are verified even if
+      # the job never got to queue its run (Copilot).
+      kinds.each { |kind| DataQuality::RunJob.set(wait: DataQuality::ProposalPages::WAIT + 5.minutes).perform_later(kind, only: %w[match verify]) }
     else
       requeue.each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[match verify]) }
     end

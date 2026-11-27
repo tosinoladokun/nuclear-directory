@@ -24,7 +24,7 @@ module DataQuality::ProposalPages
     plugin = DataQuality::Plugins::WebPage.new
     Candidate.where(id: candidate_ids).includes(:source).filter_map do |candidate|
       source = candidate.source
-      next unless source.source_kind == "web_page" && !source.crawl_needs_human?
+      next unless source.source_kind == "web_page" && !source.crawl_needs_human? && fetch_pending?(source, candidate)
       next if source.content_text.present? && plugin.quote_in_source?(source, candidate.quote)
 
       source.id
@@ -42,8 +42,15 @@ module DataQuality::ProposalPages
   def self.awaiting?(candidate)
     source = candidate.source
     source.source_kind == "web_page" && !source.crawl_needs_human? && candidate.created_at > WAIT.ago &&
-      (source.fetched_at.nil? || source.fetched_at < candidate.created_at) &&
+      fetch_pending?(source, candidate) &&
       (source.content_text.blank? || !DataQuality::Plugins::WebPage.new.quote_in_source?(source, candidate.quote))
+  end
+
+  # The job will fetch it for this claim: not fetched since the claim was
+  # made, and not already today (Snapshot fetches a source once a day, so a
+  # page fetched or blocked earlier today is checked as it stands; Copilot).
+  def self.fetch_pending?(source, candidate)
+    source.fetched_at.nil? || (source.fetched_at < candidate.created_at && source.fetched_at.to_date != Date.current)
   end
 
   # Fetches each source, one at a time, through the polite Fetcher. A failure
@@ -54,8 +61,13 @@ module DataQuality::ProposalPages
         # Checked again under the row lock as the job runs: a delayed job
         # never fetches a page that became a person's to look at meanwhile
         # (three blocks in a row, or robots.txt), so it stays that way (Copilot).
+        # A page a crawler took over meanwhile (e.g. DOE's loan page) is its
+        # crawler's to store, in its own form (Copilot).
         DataQuality::Snapshot.claim(source) do
-          source.crawl_needs_human? ? :needs_human : DataQuality::Snapshot.take(source, fetcher:)
+          if source.source_kind != "web_page" then :not_web_page
+          elsif source.crawl_needs_human? then :needs_human
+          else DataQuality::Snapshot.take(source, fetcher:)
+          end
         end
       rescue StandardError => e
         Rails.error.report(e, handled: true, context: { source_id: source.id })

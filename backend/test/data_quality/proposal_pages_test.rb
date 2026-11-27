@@ -97,6 +97,26 @@ class DataQuality::ProposalPagesTest < ActiveSupport::TestCase
     assert_not_requested :get, @page.url
   end
 
+  test "store: a page a crawler took over after it was queued is left to that crawler (Copilot)" do
+    ids = DataQuality::ProposalPages.due([ claim.id ])
+    @page.update!(source_kind: "doe_loans")
+
+    assert_equal({ @page.id => :not_web_page }, DataQuality::ProposalPages.store(ids, fetcher: @fetcher))
+    assert_not_requested :get, @page.url
+  end
+
+  test "a second proposal on a page that blocked earlier today isn't held: Snapshot won't fetch it again today (Copilot)" do
+    stub_request(:get, @page.url).to_return(status: 403, body: "Access Denied")
+    DataQuality::ProposalPages.store(DataQuality::ProposalPages.due([ claim.id ]), fetcher: @fetcher)
+
+    travel 1.minute
+    second = claim
+    assert_empty DataQuality::ProposalPages.due([ second.id ]), "no fetch queued"
+    assert_not DataQuality::ProposalPages.awaiting?(second.reload)
+    verify
+    assert_equal "needs_review", second.reload.status, "checked as before #934"
+  end
+
   test "during a deploy's data steps the job waits and tries again, and doesn't verify yet (Copilot)" do
     original = DataQuality::WriteLock.method(:shared)
     DataQuality::WriteLock.define_singleton_method(:shared) { |&| raise DataQuality::WriteLock::Busy, "deploying" }
