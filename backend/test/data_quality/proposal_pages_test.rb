@@ -13,7 +13,12 @@ class DataQuality::ProposalPagesTest < ActiveSupport::TestCase
     @page = Source.create!(url: "https://holtec.example/about", source_kind: "web_page")
   end
 
-  def claim(source = @page, quote: QUOTE) = Candidate.create!(source:, kind: "organization", status: "new", quote:, payload: { "name" => "Holtec International" })
+  # A proposal's claim, recorded as Data Quality's proposal action, as the API makes it.
+  def claim(source = @page, quote: QUOTE, proposed: true)
+    Candidate.create!(source:, kind: "organization", status: "new", quote:, payload: { "name" => "Holtec International" }).tap do |made|
+      DqAction.create!(candidate: made, action: "propose_fields", reason: "r", before: {}, created: [], by: DataQuality::Matching::BY) if proposed
+    end
+  end
 
   test "due: a web page with nothing stored, or whose stored text lacks the new quote; not one that holds it, a person's to look at, or a crawled kind" do
     stored = Source.create!(url: "https://holtec.example/stored", source_kind: "web_page", content_text: "<p>#{QUOTE}</p>", content_sha256: "a")
@@ -77,6 +82,14 @@ class DataQuality::ProposalPagesTest < ActiveSupport::TestCase
     DataQuality::ProposalPages.store([ @page.id ], fetcher: @fetcher)
     verify
     assert_equal [ "needs_review", "checked" ], waiting.reload.values_at(:status, :notes), "checked against the stored page"
+  end
+
+  test "a claim that isn't a proposal's own (a field claim split from one, a lead's) is never held: no job fetches its page (Copilot)" do
+    field = claim(proposed: false)
+    assert_not DataQuality::ProposalPages.awaiting?(field)
+
+    verify
+    assert_equal "needs_review", field.reload.status, "checked as before #934"
   end
 
   test "a claim whose page fetch was tried and failed, or that waited past WAIT, is verified as before #934" do

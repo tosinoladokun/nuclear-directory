@@ -34,17 +34,30 @@ module DataQuality::ProposalPages
   # How long a new claim on a page waiting to be stored is left for its
   # job (ProposalPagesJob) before verify treats it as it did before #934.
   WAIT = 1.hour
+  # The actions a proposal's claims are recorded under (operator changes as propose_link).
+  PROPOSAL_ACTIONS = DataQuality::Matching::PROPOSALS
 
-  # True while a claim's page is being fetched for it: a web page not
-  # fetched since the claim was made, for up to WAIT. Verify leaves such a
-  # claim as it is, so a run already queued before the job doesn't send it
-  # to review for a page that's about to be stored (Copilot).
-  def self.awaiting?(candidate)
-    source = candidate.source
-    source.source_kind == "web_page" && !source.crawl_needs_human? && candidate.created_at > WAIT.ago &&
-      fetch_pending?(source, candidate) &&
-      (source.content_text.blank? || !DataQuality::Plugins::WebPage.new.quote_in_source?(source, candidate.quote))
+  # The claims whose page is being fetched for them, of those given: a
+  # proposal's own claim (it has Data Quality's proposal action, and only
+  # those get a job and a backstop run) on a web page not fetched since it
+  # was made, for up to WAIT. Verify leaves these as they are, so a run
+  # already queued doesn't send them to review for a page about to be
+  # stored (Copilot). Any other claim (a field claim split from a proposal,
+  # a lead's) has no job coming, so it's never held (Copilot).
+  def self.awaiting(candidates)
+    candidates = candidates.select { |candidate| candidate.created_at > WAIT.ago && candidate.source.source_kind == "web_page" }
+    return [] if candidates.empty?
+
+    proposed = DqAction.where(candidate_id: candidates.map(&:id), action: PROPOSAL_ACTIONS).distinct.pluck(:candidate_id).to_set
+    plugin = DataQuality::Plugins::WebPage.new
+    candidates.select do |candidate|
+      source = candidate.source
+      proposed.include?(candidate.id) && !source.crawl_needs_human? && fetch_pending?(source, candidate) &&
+        (source.content_text.blank? || !plugin.quote_in_source?(source, candidate.quote))
+    end
   end
+
+  def self.awaiting?(candidate) = awaiting([ candidate ]).any?
 
   # The job will fetch it for this claim: not fetched since the claim was
   # made, and not already today (Snapshot fetches a source once a day, so a

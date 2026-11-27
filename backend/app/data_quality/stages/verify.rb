@@ -37,7 +37,7 @@ class DataQuality::Stages::Verify < DataQuality::Stage
       # Enrichment still waiting for its NRC unit: nothing to verify yet.
       pending.reject! { |candidate| candidate.status_new? && directory.enrichment?(candidate) }
       # A proposal whose page is still being stored (#934): verified after its job.
-      awaiting = pending.select { |candidate| DataQuality::ProposalPages.awaiting?(candidate) }
+      awaiting = DataQuality::ProposalPages.awaiting(pending)
       pending -= awaiting
       stats["candidates"] = pending.size
       stats["awaiting_page"] = awaiting.size if awaiting.any?
