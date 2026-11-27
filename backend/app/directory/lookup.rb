@@ -560,7 +560,7 @@ module Directory
 
     # facility(eia_plant_id:) for many plant ids, in one query: { plant id => FacilityRef } (#1008).
     def sites_by_plant_id(plants)
-      Facility.where(parent_id: nil, eia_plant_id: plants.map(&:to_s).uniq).order(:id).to_a.group_by(&:eia_plant_id).transform_values { |records| FacilityRef.from(records.first) }
+      Facility.where(parent_id: nil, eia_plant_id: plants.filter_map { |plant| plant.to_s.strip.presence }.uniq).order(:id).to_a.group_by(&:eia_plant_id).transform_values { |records| FacilityRef.from(records.first) }
     end
 
     # organization(domain:) for many domains, in one query: { domain => OrganizationRef } (#1008).

@@ -110,6 +110,7 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     # lists must never break it, or every admin page whose nav counts Today (Copilot).
     def plant_of(claim)
       identify = claim.payload.to_h[DataQuality::DirectoryClient::ENRICHMENT_KEY]
-      identify["eia_plant_id"].presence&.to_s if identify.is_a?(Hash)
+      # Trimmed, as facility(eia_plant_id:) trims it (Copilot).
+      identify["eia_plant_id"].to_s.strip.presence if identify.is_a?(Hash)
     end
 end

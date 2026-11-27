@@ -46,7 +46,8 @@
         </header>
 
         <main class="nd-shell__main">
-          <div id="admin-flash"><%= render "admin/flash", notice: (admin_notice if notice), alert:, action: yield(:flash_action) %></div>
+          <%# A live region that stays on the page, so a message a decision puts in it is announced (#1008, Copilot). %>
+          <div id="admin-flash" aria-live="polite"><%= render "admin/flash", notice: (admin_notice if notice), alert:, action: yield(:flash_action) %></div>
           <%= yield %>
         </main>
       </div>
