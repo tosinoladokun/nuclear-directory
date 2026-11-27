@@ -122,11 +122,36 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     first = proposed
     @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
     second = proposed("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
-    entry = OwnerInbox::Entry.new(kind: "new_record", item: nil, copy_ids: [ first.id, second.id ], checked: false, changes: {})
+    entry = OwnerInbox::Entry.new(kind: "new_record", item: Struct.new(:candidate_id).new(@create.id), copy_ids: [ first.id, second.id ], checked: false, changes: {})
 
     assert_equal second, ApplicationController.helpers.proposed_name_claim(entry)
     DataQuality::Review.approve([ @create.id, first.id, second.id ], by: "human:tosin", reason: "Created in Today")
     assert_equal "Fermi America Inc.", @company.reload.name
+  end
+
+  test "a name another company takes between the proposal and match goes to review (Copilot)" do
+    row = propose("Fermi America")
+    Organization.create!(name: "Fermi America", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "Fermi America")
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+
+    claim = Candidate.find(row["id"])
+    assert_equal "needs_review", claim.status
+    assert_match "but Fermi America (#", claim.notes
+  end
+
+  test "with no other open claim, the name proposal is the Create row itself and still says what it was found as (Copilot)" do
+    claim = proposed
+    claim.update!(ai_recommendation: "recommend_publish", ai_source_sha256: @page.content_sha256) # verified, as the pipeline leaves it
+    @create.destroy! # a pending company with no proposing claim open (seeded, or found by Enrich)
+    DataQuality::Recommendations.record("#{claim.id} approve: its own site", by: "human:dq")
+    sign_in_as users(:admin)
+
+    get admin_inbox_path
+
+    assert_select "#inbox-item-#{claim.id}" do
+      assert_select "strong", "Fermi America"
+      assert_select "#proposed-name-#{claim.id}", "Found as Fermi Nuclear, which stays as another name for it."
+    end
   end
 
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do

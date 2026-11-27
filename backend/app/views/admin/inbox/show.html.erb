@@ -130,7 +130,7 @@
             <% else %>
               <p class="<%= key == "new_record" ? "type-body" : "type-body-strong" %> m-0"><%= inbox_sentence(entry) %></p>
               <% if (named = proposed_name_claim(entry)) %>
-                <p class="type-small text-ink-muted m-0" id="proposed-name-<%= named.id %>">Found as <%= item.payload.to_h["name"] %>, which stays as another name for it.</p>
+                <p class="type-small text-ink-muted m-0" id="proposed-name-<%= named.id %>">Found as <%= named.payload[DataQuality::DirectoryClient::REPLACES] %>, which stays as another name for it.</p>
               <% end %>
               <% if key == "new_record" && (item.payload.to_h.keys - %w[name aliases]).empty? %>
                 <%# Only a name: the source's words say what it is (Design). %>

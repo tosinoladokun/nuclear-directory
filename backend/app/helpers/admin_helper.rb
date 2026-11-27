@@ -382,9 +382,10 @@ module AdminHelper
 
   # The claim with Data Quality's name for a new company (#1000) going with this Create, or nil.
   def proposed_name_claim(entry)
-    return if entry.kind != "new_record" || entry.copy_ids.empty?
+    return if entry.kind != "new_record"
 
-    named = DqAction.where(candidate_id: entry.copy_ids, action: "propose_fields").pluck(:candidate_id)
+    # The Create's own claim too: with no other open claim, the name proposal is the row (Copilot).
+    named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
     # The last one: approval applies claims by id, so the last name is the one it's created under (Copilot).
     Candidate.where(id: named, kind: "organization").order(:id).select { |claim| claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) }.last
   end

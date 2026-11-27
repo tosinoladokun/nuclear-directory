@@ -544,6 +544,10 @@ class DataQuality::Stages::Match < DataQuality::Stage
         return Review.new("proposed the name #{payload['name']} for #{company.name}, which is published now; a published company's name changes by a reviewed change")
       end
 
+      # A name another company goes by now (taken since the proposal) goes to review, never two companies with one name (Copilot).
+      if (holder = directory.organization(name: payload["name"])) && holder.id != company.id
+        return Review.new("proposed the name #{payload['name']} for #{company.name}, but #{holder.name} (##{holder.id}) goes by it now")
+      end
       # A CIK it carries that's another company's by now goes to review, as on the usual path (Copilot).
       if (cik = payload["sec_cik"].presence) && (holder = directory.organization(sec_cik: cik)) && holder.id != company.id
         return Review.new("proposed for #{company.name}, but SEC CIK #{cik} is #{holder.name}'s (##{holder.id}) by now")
