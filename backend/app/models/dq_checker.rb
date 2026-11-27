@@ -322,6 +322,9 @@ class DqChecker
 
       brand = name.split(/\W+/).find { |word| word.length >= 4 }
       named = [ name, brand ].compact.any? { |text| claim.quote.to_s.match?(/(?<![[:alnum:]])#{Regexp.escape(text)}(?![[:alnum:]])/i) }
+      # Or the short form its own site uses ("SRP"), by the same rule Data Quality's pass proposes with (Copilot).
+      named ||= DataQuality::ShortForm.names?(name:, quote: claim.quote, host:,
+        own_names: DataQuality::Plugins::LeadFinder.new(search_key: nil).site_names(page))
       "The quote doesn't name the company" unless named
     end
 

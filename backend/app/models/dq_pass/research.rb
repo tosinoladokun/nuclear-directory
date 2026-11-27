@@ -142,22 +142,30 @@ class DqPass::Research
   # (the lead finder's own_site_for?, under its name or an alias) is kept, so
   # no model reads another party's page (DQ's trial: most of the spend).
   def pages_for(org)
-    return [ own_page(org, home(org.website), trusted: true) ].compact if org.website.present?
-
     names = names_of(org)
-    candidates(org).lazy.filter_map { |url| own_page(org, url, names:) }.first(CANDIDATES)
+    # Its stored website gets the same host and ownership checks as any other candidate (Copilot).
+    return [ own_page(org, home(org.website), names:) ].compact if org.website.present? && allowed_host?(org, home(org.website).to_s)
+    return [] if org.website.present?
+
+    # What it already holds first; Brave only when none of those is a usable page of its own (Copilot).
+    own = known_candidates(org).lazy.filter_map { |url| own_page(org, url, names:) }.first(CANDIDATES)
+    return own if own.any?
+
+    searched(org).lazy.filter_map { |url| own_page(org, url, names:) }.first(CANDIDATES)
   end
 
-  def candidates(org)
+  # The website a claim proposes for it (attached to it, or a field proposal still targeted at it through Data
+  # Quality's live action; Copilot), then its claims' own record pages.
+  def known_candidates(org)
     claims = Candidate.where(kind: "organization", subject_type: "Organization", subject_id: org.id).includes(:source).order(:id).to_a
-    proposed = claims.filter_map { |claim| claim.payload.to_h["website"] if claim.payload.to_h["website"].is_a?(String) }
+    targeted = Candidate.where(kind: "organization", status: DataQuality::Recommendations::OPEN,
+      id: DqAction.live.where(action: "propose_fields", target_type: "Organization", target_id: org.id).select(:candidate_id)).to_a
+    proposed = (claims + targeted).filter_map { |claim| claim.payload.to_h["website"] if claim.payload.to_h["website"].is_a?(String) }
     records = claims.filter_map { |claim| claim.source&.url }
-    known = (proposed + records).filter_map { |url| home(url) }.uniq.select { |url| allowed_host?(org, url) }
-    # Brave only when nothing it already holds could be its site: each search is one of the day's few.
-    return known if known.any?
-
-    finder.search_sites(org.name).to_a.filter_map { |url| home(url) }.uniq.select { |url| allowed_host?(org, url) }
+    (proposed + records).filter_map { |url| home(url) }.uniq.select { |url| allowed_host?(org, url) }
   end
+
+  def searched(org) = finder.search_sites(org.name).to_a.filter_map { |url| home(url) }.uniq.select { |url| allowed_host?(org, url) }
 
   def allowed_host?(org, url)
     host = URI.parse(url).host.to_s.downcase
@@ -169,9 +177,9 @@ class DqPass::Research
     false
   end
 
-  def own_page(org, url, names: nil, trusted: false)
+  def own_page(org, url, names:)
     page = url && finder.read_page(url) or return
-    return unless trusted || finder.own_site_for?(page, names)
+    return unless finder.own_site_for?(page, names)
 
     { url: home(page.final_url.presence || page.url) || url, title: page.title.to_s.squish, text: main_text(page.content_text), source: page }
   end
@@ -243,17 +251,9 @@ class DqPass::Research
       false
     end
 
-    # A short form the site gives itself ("SRP" for Salt River Project; DQ's trial): the company's initials, in the
-    # quote, in the page's own title or site name, and at the start of its address.
     def short_form_ok?(org, page, quote)
-      words = brand(org.name).scan(/[[:alnum:]]+/) - %w[of and the for]
-      short = words.map { |word| word[0] }.join.upcase
-      return false if short.length < 2
-
-      label = URI.parse(page[:url]).host.to_s.downcase.delete_prefix("www.")
-      own_names = [ page[:title], page[:source]&.then { |source| finder.site_names(source) } ].flatten.compact.join(" ")
-      word = /(?<![[:alnum:]])#{short}(?![[:alnum:]])/
-      quote.to_s.match?(word) && own_names.match?(word) && label.start_with?(short.downcase)
+      own_names = [ page[:title], *(page[:source] ? finder.site_names(page[:source]) : []) ]
+      DataQuality::ShortForm.names?(name: org.name, quote:, own_names:, host: URI.parse(page[:url]).host)
     rescue URI::Error
       false
     end

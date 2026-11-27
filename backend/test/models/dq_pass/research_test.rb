@@ -174,6 +174,34 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_equal "https://www.srpnet.example", proposals.find { |claim| claim.payload["website"] }&.payload&.dig("website")
   end
 
+  test "a stored website gets the same checks: a news host, or a page that isn't its own, reaches no model (Copilot)" do
+    @org.update!(website: "https://www.prnewswire.com")
+    llm = FakeLlm.new(extract: answer)
+    assert_equal "no_own_page", researcher(llm:).research(@org)[:outcome]
+
+    @org.update!(website: CUSTOMER)
+    assert_equal "no_own_page", researcher(llm:, finder: FakeFinder.new(pages: { CUSTOMER => CUSTOMER_PAGE })).research(@org)[:outcome]
+    assert_empty llm.asked
+  end
+
+  test "a website proposal still waiting to be matched, targeted at the company, is a candidate (Copilot)" do
+    source = Source.create!(url: "https://records.example/proposal/1", source_kind: "web_page")
+    waiting = Candidate.create!(source:, kind: "organization", status: "new", quote: "Acme Fission", payload: { "name" => "Acme Fission", "website" => HOME })
+    DqAction.create!(candidate: waiting, action: "propose_fields", target_type: "Organization", target_id: @org.id, reason: "r", before: {}, created: [],
+      by: DataQuality::Matching::BY)
+    finder = FakeFinder.new(results: [ "https://unrelated.example" ], pages: { HOME => PAGE })
+    assert_equal "proposed", researcher(llm: FakeLlm.new(extract: answer), finder:).research(@org)[:outcome]
+    assert_empty finder.searched
+  end
+
+  test "when no page it holds is its own, Brave is asked (Copilot)" do
+    source = Source.create!(url: CUSTOMER, source_kind: "lead_finder")
+    Candidate.create!(source:, kind: "organization", status: "matched", quote: "Acme Fission", subject: @org, payload: { "name" => "Acme Fission" })
+    finder = FakeFinder.new(results: [ HOME ], pages: { CUSTOMER => CUSTOMER_PAGE, HOME => PAGE })
+    assert_equal "proposed", researcher(llm: FakeLlm.new(extract: answer), finder:).research(@org)[:outcome]
+    assert_equal [ "Acme Fission" ], finder.searched
+  end
+
   test "the instructions say a fusion developer is reactor_vendor and an EPC firm is reactor_services (DQ's trial)" do
     text = DqPass::Research::INSTRUCTIONS.squish
     assert_includes text, "A fusion developer"
