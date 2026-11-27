@@ -110,7 +110,7 @@ class ConnectionsMap
             y += HEAD
             edges.each do |edge|
               node = other(edge, inbound)
-              place(node, node_x[side], y + ROW / 2.0, r, name: row_name(edge, node), side:, name_x: node_x[side] + sign * (r + NAME_GAP), name_y: y + ROW / 2.0 + 5,
+              place(node, node_x[side], y + ROW / 2.0, r, name: row_name(edge, node), side:, verb:, name_x: node_x[side] + sign * (r + NAME_GAP), name_y: y + ROW / 2.0 + 5,
                 anchor: side == :left ? "end" : "start", slot: slots[side], font: size.font)
               rows << (y + ROW / 2.0)
               y += ROW
@@ -185,8 +185,10 @@ class ConnectionsMap
       # A name's width at full size, the full name (not the short one).
       def full_estimate(edge, node) = row_name(edge, node).length * NAME_CHAR * size.font / size.floor + 12
 
-      def place(node, x, y, r, name:, name_x:, name_y:, anchor:, slot:, font:, side: nil)
-        @placed[side ? "#{node.key}@#{side}" : node.key] = Placed.new(node:, x: x.round(1), y: y.round(1), r:, name:, name_x: name_x.round(1), name_y: name_y.round(1),
+      # One drawn node per row: a partner on both sides is drawn on each, and a fold under two verbs on one side
+      # (Constellation's plants under OWNS and OPERATES) is drawn under each, never one over the other (#1004).
+      def place(node, x, y, r, name:, name_x:, name_y:, anchor:, slot:, font:, side: nil, verb: nil)
+        @placed[side ? "#{node.key}@#{side}@#{verb}" : node.key] = Placed.new(node:, x: x.round(1), y: y.round(1), r:, name:, name_x: name_x.round(1), name_y: name_y.round(1),
           anchor:, slot: slot.round, font:, side:)
       end
   end

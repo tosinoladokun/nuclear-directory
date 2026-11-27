@@ -107,7 +107,11 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     # The server draws the map; the controller (lazy-loaded) handles the click. Wait for it: it marks the drawing laid out.
     assert_selector ".nd-map__view[data-view=folded] .nd-map__svg[data-laid-out=true]"
 
-    find(".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold").click
+    # Constellation's plants fold under OWNS and under OPERATES (#1004): two fold nodes, either opens the plants.
+    assert_selector ".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold", count: 2
+    # Each fold button is named from its own row, so a screen reader hears two different buttons (Design, #1013).
+    assert_equal [ "13 plants. Show them", "2 of 13 plants. Show them" ], all(".nd-map__view[data-view=folded] .nd-map__node--fold").map { |fold| fold["aria-label"] }.sort
+    first(".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold").click
     assert_selector ".nd-map__view[data-view=opened] .nd-map__svg[data-laid-out=true]"
     assert_no_selector ".nd-map__view[data-view=folded]", visible: true
     assert_empty page.evaluate_script(CHECK)

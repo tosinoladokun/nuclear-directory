@@ -49,7 +49,7 @@
                 <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>"><%= inner %></g>
               <% elsif node.fold? %>
                 <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" role="button" tabindex="0"
-                   aria-label="<%= node.name %>. Show them" data-action="click->connections-map#open keydown->connections-map#openKey"><%= inner %></g>
+                   aria-label="<%= placed.name %>. Show them" data-action="click->connections-map#open keydown->connections-map#openKey"><%= inner %></g>
               <% else %>
                 <a href="<%= map_node_url(node) %>" class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" aria-label="<%= node.name %>"><%= inner %></a>
               <% end %>
