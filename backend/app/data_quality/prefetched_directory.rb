@@ -36,6 +36,12 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     plants = candidates.filter_map { |claim| claim.payload.to_h.dig(DataQuality::DirectoryClient::ENRICHMENT_KEY, "eia_plant_id").presence&.to_s }.uniq - @sites.keys
     found = __getobj__.sites_by_plant_id(plants)
     plants.each { |plant| @sites[plant] = found[plant] }
+    # And those sites' own records, which a unit's change names (Copilot).
+    site_ids = found.values.map(&:id).uniq - @facts.fetch("Facility", {}).keys
+    if site_ids.any?
+      sites = __getobj__.facts(type: "Facility", ids: site_ids)
+      (@facts["Facility"] ||= {}).merge!(site_ids.index_with { |id| sites[id] })
+    end
     companies = by_type.fetch("Organization", []).map(&:subject_id).uniq - @sourced_roles.keys
     with_role = __getobj__.sourced_role_ids(companies)
     companies.each { |id| @sourced_roles[id] = with_role.include?(id) }

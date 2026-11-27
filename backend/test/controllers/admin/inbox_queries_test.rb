@@ -42,7 +42,11 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
         ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
       # Another name for the published company (Copilot), and EIA's enrichment of a published unit with its plant ID.
       claim(published, { "name" => "QU #{n}" })
-      unit = travel_to(2.days.ago) { Facility.create!(name: "Queries Unit #{n}", nrc_docket: "0500#{format('%04d', n)}", verification_status: "verified", verified_by: "human:tosin") }
+      # The site it would join, by that plant ID (Copilot: the change names it).
+      unit, = travel_to(2.days.ago) do
+        [ Facility.create!(name: "Queries Unit #{n}", nrc_docket: "0500#{format('%04d', n)}", verification_status: "verified", verified_by: "human:tosin"),
+          Facility.create!(name: "Queries Site #{n}", eia_plant_id: "9#{n}", verification_status: "verified", verified_by: "human:tosin") ]
+      end
       Candidate.create!(source: @page, crawl_run: @run, kind: "facility", quote: "q", status: "matched", subject_type: "Facility", subject_id: unit.id,
         payload: { "name" => unit.name, DataQuality::DirectoryClient::ENRICHMENT_KEY => { "eia_plant_id" => "9#{n}" } }, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
       Lead.create!(kind: "company", name: company.name, normalized_name: Lead.normalize(company.name), status: "added", candidate: create,
@@ -56,23 +60,32 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       subject_type: "Organization", subject_id: company.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha", **options)
   end
 
+  # Queries a page load makes, counted by where in the app they come from, so a failure names the call that grew.
   def queries_for(path)
-    count = 0
-    counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" || payload[:sql].match?(/\A\s*(BEGIN|COMMIT|SAVEPOINT|RELEASE|ROLLBACK)/) }
+    @sites = Hash.new(0)
+    counter = lambda do |*, payload|
+      next if payload[:name] == "SCHEMA" || payload[:sql].match?(/\A\s*(BEGIN|COMMIT|SAVEPOINT|RELEASE|ROLLBACK)/)
+
+      @sites[caller.grep(%r{/app/}).first(3).map { |line| line[%r{app/[^:]+:\d+}] }.join(" < ")] += 1
+    end
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get path }
     assert_response :success
-    count
+    @sites.values.sum
   end
+
+  # The call sites that ran more queries in the later load: what to fix when a growth test fails.
+  def grew(before, after) = after.filter_map { |site, n| "#{n - before[site]} more at #{site}" if n > before[site] }.join("; ")
 
   def queries_for_inbox = queries_for(admin_inbox_path)
 
   test "Today's queries don't grow with the claims waiting, and stay under the cap" do
     add_companies(3, from: 0)
     few = queries_for_inbox
+    before = @sites
     add_companies(12, from: 3)
     many = queries_for_inbox
 
-    assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15: a lookup per claim again"
+    assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15: a lookup per claim again. #{grew(before, @sites)}"
     assert_operator many, :<=, MAX_QUERIES
   end
 
@@ -82,10 +95,11 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       published_on: Date.new(2026, 11, 18), verification_status: "verified", verified_by: "human:tosin", verified_at: Time.current)
     add_companies(3, from: 0)
     few = queries_for(admin_news_item_path(id: item.id))
+    before = @sites
     add_companies(12, from: 3)
     many = queries_for(admin_news_item_path(id: item.id))
 
-    assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15"
+    assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15. #{grew(before, @sites)}"
     assert_operator many, :<=, MAX_QUERIES
   end
 
