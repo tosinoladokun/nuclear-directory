@@ -1250,8 +1250,9 @@
   .nd-map { display: flex; flex-direction: column; gap: var(--nd-space-4); min-width: 0; }
   .nd-map__figure { min-width: 0; }
   .nd-map__view[hidden] { display: none; }
-  /* Never scaled: where the middle column can't hold its 696px, the tree takes over (below). */
-  .nd-map__svg { display: block; width: 696px; height: auto; overflow: visible; }
+  /* Never scaled: as wide as what it draws (696px at most; the controller sets its size), centred under the heading as
+     one unit (#995). Where the middle column can't hold 696px, the tree takes over (below). */
+  .nd-map__svg { display: block; overflow: visible; margin-inline: auto; }
   .nd-map__back { min-height: 44px; padding: 0; border: 0; background: none; color: var(--nd-ink); font: 500 15px/20px var(--font-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
   .nd-map__line { fill: none; stroke: var(--nd-control); stroke-width: 1.5; }
@@ -1300,7 +1301,8 @@
   /* The picture needs 696px: in the single column from 760px, and in the middle column from 1280px; else the tree. */
   @media (max-width: 759px), (min-width: 1024px) and (max-width: 1279px) {
     .nd-map__view { display: none !important; }
-    .nd-tree { display: flex; flex-direction: column; gap: var(--nd-space-2); }
+    /* As wide as its names, centred as a unit (#995); a long one still fills the column and ends in an ellipsis. */
+    .nd-tree { display: flex; flex-direction: column; gap: var(--nd-space-2); width: fit-content; max-width: 100%; margin-inline: auto; }
   }
 }
 

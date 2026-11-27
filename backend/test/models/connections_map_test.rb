@@ -135,7 +135,7 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     received = map.folded.count { |edge| edge.receiver.key == map.centre.key }.positive? ? 1 : 0 # the left trunk's arrowhead, into the record
     given = map.folded.count { |edge| edge.giver.key == map.centre.key } # one branch arrowhead per company on the right
     assert_equal received + given, layout.lines.count(&:arrow)
-    assert_equal 696, layout.width, "the page's middle column"
+    assert_operator layout.width, :<=, 696, "the page's middle column at most"
     assert layout.nodes.all? { |node| node.x.between?(0, layout.width) && node.y.between?(0, layout.height) }
   end
 
@@ -163,9 +163,55 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     layout.headings.each do |heading|
       assert buses.none? { |x| (heading.x - x).abs < 4 }, "#{heading.text} is not on a bus"
     end
-    gap = buses.max - buses.min
+    gap = 2 * buses.map { |x| (x - layout.centre.x).abs }.min # a one-sided map has one bus (#995)
     assert_operator layout.centre.slot, :<=, gap, "the record's name fits between the buses"
     assert_operator layout.centre.slot, :>=, 100
+  end
+
+  test "a side with no connections takes no room: the record is that side's edge, and the trunk clears its name (#995)" do
+    centre = cite!(company("One Sided Generating Company", roles: [ role("utility") ]))
+    %w[North South].each { |name| cite!(link(centre, "operates", cite!(plant("#{name} Station", facility_type: "power_reactor", status: "operating")))) }
+    map = ConnectionsMap.for_company(CompanyProfile.new(centre))
+    layout = layout_for(map)
+
+    assert_empty layout.headings.select { |heading| heading.anchor == "end" }, "nothing on the left"
+    assert_equal [ :right ], layout.bus_x.keys
+    name_half = centre.name.length * ConnectionsMap::Layout::CENTRE_CHAR / 2.0
+    assert_in_delta name_half + ConnectionsMap::Layout::PAD_X, layout.centre.x, 1, "the record's name starts the drawing"
+    trunk = layout.bus_x[:right] - layout.centre.x - layout.size.centre_r
+    assert_operator trunk, :>=, ConnectionsMap::Layout::TRUNK_MIN
+    assert_operator layout.bus_x[:right] - layout.centre.x, :>=, name_half + 12, "the bus clears the record's name"
+    assert_operator layout.width, :<, 696
+  end
+
+  # Copilot on #1002: the record's full name set the trunk with no bound, so a 100-character name on a two-sided map
+  # drew past the 696px column. Its name now gets what's left with every column at its smallest; the controller fits it.
+  test "a very long record name never pushes the drawing past 696px, on one side or two" do
+    utility = role("utility")
+    long = cite!(company("#{'Very Long Name ' * 6}Holdings Incorporated"[0, 100], roles: [ utility ]))
+    cite!(link(cite!(company("Left Supplier Co")), "supplies", long))
+    cite!(link(long, "operates", cite!(plant("Right Station", facility_type: "power_reactor", status: "operating"))))
+    two = layout_for(ConnectionsMap.for_company(CompanyProfile.new(long)))
+    one_sided = cite!(company("#{'Another Long Name ' * 6}"[0, 100], roles: [ utility ]))
+    cite!(link(one_sided, "operates", cite!(plant("Only Station", facility_type: "power_reactor", status: "operating"))))
+    one = layout_for(ConnectionsMap.for_company(CompanyProfile.new(one_sided)))
+
+    [ two, one ].each do |layout|
+      assert_operator layout.width, :<=, 696
+      layout.nodes.each { |placed| assert placed.x.between?(placed.r, layout.width - placed.r), "#{placed.name} inside" }
+      layout.nodes.reject { |placed| placed == layout.centre }.each { |placed| assert_operator placed.slot, :>=, ConnectionsMap::Layout::SLOT_MIN }
+      assert_operator layout.centre.slot, :<=, layout.width - 2 * ConnectionsMap::Layout::PAD_X, "the record's name is fitted to what's left"
+    end
+  end
+
+  test "a column's names get the room the 696px has, up to the cap (#995)" do
+    centre = cite!(company("Room Co", roles: [ role("utility") ]))
+    cite!(link(centre, "operates", cite!(plant("Comanche Peak Generating", facility_type: "power_reactor", status: "operating"))))
+    layout = layout_for(ConnectionsMap.for_company(CompanyProfile.new(centre)))
+
+    name = layout.nodes.find { |placed| placed.side == :right }
+    assert_operator name.slot, :>=, ("Comanche Peak Generating".length * ConnectionsMap::Layout::NAME_CHAR * 15 / 13).floor, "room for the whole name at 15px"
+    assert_operator name.slot, :<=, layout.size.slot + 90
   end
 
   test "givers are always on the left and receivers on the right, whatever the heights" do
