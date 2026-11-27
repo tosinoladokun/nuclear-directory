@@ -24,4 +24,27 @@ class Admin::HealthTest < ActionDispatch::IntegrationTest
   ensure
     ENV.delete("DQ_AGENT_TOKEN_DIGEST")
   end
+
+  test "Data Quality's pass shows off, and the switch turns it on and off (#998)" do
+    get admin_health_path
+    assert_select "#health-dq-pass-state", /\AOff/
+    assert_select "#dq-pass-on button[data-turbo-confirm]"
+
+    patch admin_health_dq_pass_path, params: { on: "1" }
+    assert_redirected_to admin_health_path
+    assert DqPass.on?
+    assert_equal users(:admin).actor, Switch.find_by!(key: DqPass::KEY).changed_by
+
+    get admin_health_path
+    assert_select "#health-dq-pass-state", /\AOn, since/
+
+    patch admin_health_dq_pass_path, params: { on: "0" }
+    assert_not DqPass.on?
+  end
+
+  test "the switch needs a signed-in admin (#998)" do
+    sign_out
+    patch admin_health_dq_pass_path, params: { on: "1" }
+    assert_not DqPass.on?
+  end
 end

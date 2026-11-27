@@ -81,7 +81,8 @@ class PipelineHealth
       QueueWatchdog::KEY => QueueHealth.new(now: @now).problem,
       "indexnow-refused" => ("IndexNow refused the last two batches (check INDEXNOW_KEY and its key file)" if IndexNowSubmission.refused_twice?),
       "search-limit" => search_limit,
-      "sources-silent" => sources_silent
+      "sources-silent" => sources_silent,
+      DqPass::STALLED => DqPass.stalled(now: @now)
     }
   end
 
