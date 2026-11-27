@@ -12,7 +12,7 @@
 # - Any error or the day's budget is "needs a human", never an approve.
 # - At most LIMIT verdicts and DAILY_BUDGET dollars a day, counted from the database.
 class DqChecker
-  PROMPT_VERSION = "checker-v1"
+  PROMPT_VERSION = "checker-v2"
   SOURCE_KIND = "dq_checker"
   LIMIT = 150
   DAILY_BUDGET = 1.0
@@ -67,6 +67,9 @@ class DqChecker
     - Description: says what the company does (nuclear work first for a broad company); no mission or vision
       lines, no division or product-line text, no praise.
     - Website: the https home page on the company's own domain only, never a parent's, a list's or a profile site's.
+      A website claim is supported when the stored page IS the claimed site's home page (its host is the claimed
+      domain) and that page names the company in its title, site name, main heading or logo. The page need not
+      state its own URL. A page on another domain that merely mentions the company never supports its website.
     - No person names: never approve a value that names a person (a founder, an employee, a contact).
     - Role: from the company's own words.
     - News: the item must be about nuclear.
@@ -284,6 +287,14 @@ class DqChecker
 
       name = claim.holding["name"].presence || claim.payload["name"].to_s
       return "The name is shared by many companies" if name.downcase.split(/\W+/).intersect?(GENERIC)
+
+      # checker-v2 (DQ, 27 Nov): the stored page must BE the claimed site's own home page, named as the company's own.
+      page = Candidate.find_by(id: claim.id)&.source
+      page_host = (URI.parse(page.final_url.presence || page.url).host.to_s.downcase.delete_prefix("www.") rescue nil) if page
+      return "The stored page isn't the claimed site's own page" unless page_host == host
+
+      names = [ name, *OrganizationAlias.where(organization_id: claim.holding["id"]).pluck(:alias) ]
+      return "The page doesn't name the company as its own site" unless DataQuality::Plugins::LeadFinder.new(search_key: nil).own_site_for?(page, names)
 
       brand = name.split(/\W+/).find { |word| word.length >= 4 }
       named = [ name, brand ].compact.any? { |text| claim.quote.to_s.match?(/(?<![[:alnum:]])#{Regexp.escape(text)}(?![[:alnum:]])/i) }

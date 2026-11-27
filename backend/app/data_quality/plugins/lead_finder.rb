@@ -229,6 +229,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     matched
   end
 
+  # Whether a page read is the company's own site under any of its names
+  # (its title, og:site_name, first h1, header logo, or its address): for the
+  # checker's website rule and Data Quality's pass (#998; aliases too).
+  def own_site_for?(page, names) = Array(names).compact_blank.any? { |name| own_site?(page, name) }
+
   # The page's own names for itself: its og:site_name and its title.
   def site_names(source)
     doc = Nokogiri::HTML(source.content_text)

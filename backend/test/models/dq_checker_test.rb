@@ -85,6 +85,32 @@ class DqCheckerTest < ActiveSupport::TestCase
     assert_match "done", checker(FakeCheckerLlm.new).run["skipped"]
   end
 
+  test "checker-v2: its own home page on the claimed domain, named in its title, supports the website with no URL in its text; another domain never does (DQ)" do
+    own = Source.create!(url: "https://www.sawtoothsim.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "a",
+      content_text: "<html><head><title>Sawtooth Simulation | Nuclear plant simulators</title></head><body><p>Training that works.</p></body></html>")
+    other = Source.create!(url: "https://www.trainingnews.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "b",
+      content_text: own.content_text.sub("<title>Sawtooth Simulation | Nuclear plant simulators</title>", "<title>Training News</title>") +
+        "<p>Sawtooth Simulation | Nuclear plant simulators</p>")
+    company = Organization.create!(name: "Sawtooth Simulation", verification_status: "pending")
+    approve = -> { FakeCheckerLlm.new(extract: [ [ "approve", "Its own home page names it" ] ]) }
+    quote = "Sawtooth Simulation | Nuclear plant simulators"
+
+    on_own = Candidate.create!(source: own, kind: "organization", status: "needs_review", subject: company, quote:,
+      payload: { "name" => company.name, "website" => "https://sawtoothsim.example" })
+    checker(approve.call).run
+    assert_equal [ "approve", "checker-v2" ], CheckerVerdict.find_by!(candidate: on_own).values_at(:verdict, :prompt_version)
+
+    elsewhere = Candidate.create!(source: other, kind: "organization", status: "needs_review", subject: company, quote:,
+      payload: { "name" => company.name, "website" => "https://sawtoothsim.example" })
+    checker(approve.call).run
+    assert_equal [ "unsure", "The stored page isn't the claimed site's own page" ], CheckerVerdict.find_by!(candidate: elsewhere).values_at(:verdict, :reason)
+  end
+
+  test "checker-v2's instructions say the page needn't state its own URL, and another domain never supports a website" do
+    assert_includes DqChecker::INSTRUCTIONS.squish, "The page need not state its own URL."
+    assert_match(/page on another domain that merely mentions the company never supports its website/, DqChecker::INSTRUCTIONS.squish)
+  end
+
   test "fields by what a claim fills; anything else is never judged" do
     field = ->(kind, payload) { DqChecker.field_for(kind, payload) }
     assert_equal "new_company", field.("organization", { "name" => "A", "aliases" => [] })
