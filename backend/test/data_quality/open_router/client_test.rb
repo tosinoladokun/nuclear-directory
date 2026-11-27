@@ -58,6 +58,20 @@ class DataQuality::OpenRouter::ClientTest < ActiveSupport::TestCase
     assert_equal({ "require_parameters" => true }, bodies.first["provider"])
   end
 
+  test "usage is also kept by model, so an escalated run shows what each model cost (#998)" do
+    stub_request(:post, ENDPOINT).to_return(completion('{"name":"x"}'))
+
+    ask
+    ask
+    ask(role: :verify)
+
+    by_model = @run.reload.stats.dig("llm", "by_model")
+    assert_equal [ "vendor/extractor", "vendor/verifier" ], by_model.keys.sort
+    assert_equal({ "calls" => 2, "prompt_tokens" => 200, "completion_tokens" => 40, "cost" => 0.0024 }, by_model["vendor/extractor"])
+    assert_equal 1, by_model["vendor/verifier"]["calls"]
+    assert_equal 3, @run.stats.dig("llm", "calls"), "the totals are unchanged"
+  end
+
   test "the verify role uses the verifier model" do
     stub = stub_request(:post, ENDPOINT).with { |request| JSON.parse(request.body)["model"] == "vendor/verifier" }
       .to_return(completion('{"name":"x"}'))

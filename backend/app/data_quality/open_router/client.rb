@@ -211,6 +211,16 @@ class DataQuality::OpenRouter::Client
       month["total_tokens"] += usage.to_h.fetch("total_tokens", 0).to_i
       month["cost"] = (month["cost"] + usage.to_h["cost"].to_f).round(6)
 
+      # And by model, so a run that escalates (cheap model first, then the
+      # stronger one) shows what each cost (#998):
+      # "by_model" => { "anthropic/claude-haiku-5.5" => { calls, prompt_tokens, completion_tokens, cost } }
+      if model.present?
+        each = (llm["by_model"] ||= {})[model.to_s] ||= { "calls" => 0, "prompt_tokens" => 0, "completion_tokens" => 0, "cost" => 0 }
+        each["calls"] += 1
+        %w[prompt_tokens completion_tokens].each { |key| each[key] += usage.to_h.fetch(key, 0).to_i }
+        each["cost"] = (each["cost"] + usage.to_h["cost"].to_f).round(6)
+      end
+
       run.update!(stats: run.stats.merge("llm" => llm), model: run.model || model)
     end
 

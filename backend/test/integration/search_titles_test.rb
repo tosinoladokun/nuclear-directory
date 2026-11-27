@@ -89,6 +89,19 @@ class SearchTitlesTest < ActionDispatch::IntegrationTest
     assert_equal "GNF-A: Makes nuclear fuel. Legal name: Global Nuclear Fuel-Americas, LLC.", description
   end
 
+  # #999: "Legal name: Energy Fuels Inc.." on the page description and the X card. One full stop, the name's own.
+  test "a legal name that ends in a full stop keeps just that one; others get one" do
+    abbreviated = cite!(company("Energy Fuels", description: "Mines and mills uranium.", legal_name: "Energy Fuels Inc."))
+    plain = cite!(company("Plain Fuel", description: "Makes nuclear fuel.", legal_name: "Plain Fuel Company"))
+
+    get company_path(slug: abbreviated.slug)
+    assert_equal "Energy Fuels: Mines and mills uranium. Legal name: Energy Fuels Inc.", description # the og and X card text
+    assert_no_match(/\.\./, description)
+
+    get company_path(slug: plain.slug)
+    assert_equal "Plain Fuel: Makes nuclear fuel. Legal name: Plain Fuel Company.", description
+  end
+
   test "a fusion developer with investors says so in its title and description" do
     fusion = technology("fusion", "Fusion")
     helion = cite!(company("Helion Energy", roles: [ role("reactor_vendor") ], techs: [ fusion ], description: "Develops fusion power plants."))
