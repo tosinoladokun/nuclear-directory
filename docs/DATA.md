@@ -96,6 +96,7 @@ The verb is fixed (VOICE.md). Each link needs a quote that states that relations
 - **Abbreviations** are aliases, not display names: "NCP", "INL", "GNF-A".
 - **Slugs** come from the display name, lowercase with hyphens. A rename or merge keeps the old slug as a redirect (#143). Never reuse a slug.
 - **The source's spelling never renames a record.** A new spelling is shown to a person ("the source calls it …") to add as an alias or rename on purpose.
+- **A pending company can be named before Create.** Data Quality proposes its display name (`propose_fields` with `name`), with a quote from the company's own site or an official record that uses the name. Create then uses that name, and the crawler's spelling stays an alias ("City of San Antonio - (TX)" becomes CPS Energy). This doesn't contradict the rule above: the rename is a decision, Data Quality's proposal and Tosin's Create, not a source's spelling applied by itself. A published company's name changes only by a reviewed change. *(Tosin, #1000.)*
 
 ## 4. Values and units
 
@@ -277,6 +278,7 @@ The admin's Live screen and the nightly `data_quality:audit` are planned (Admin 
 | "Not re-checked" windows: 14 days (NRC, EIA), 365 days (others) | PM | #238 |
 | Reactor design types: planned values, roadmap only | Tosin | #238, #263 |
 | Display names are ours; a source's spelling never renames | PM, Backend | #241 |
+| Data Quality may propose a pending company's display name, with a quote; Create uses it and the crawler's spelling stays an alias; never a published company's | Tosin | #1000 |
 | Company display name is the brand it uses; every other spelling is an alias (D1) | Tosin | #238 |
 | Capacity is shown as "MWe" (now MWe, not MW; Site, 3 Nov), noted "Net summer capacity, from EIA" on plant pages (D2) | Tosin | #238 |
 | A counted deal is a signed power deal; frameworks and MOUs are listed separately by stage | Tosin | #253, #255 |

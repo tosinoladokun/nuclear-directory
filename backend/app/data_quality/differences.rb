@@ -100,7 +100,9 @@ module DataQuality::Differences
   def self.changing(candidate, stored, directory:)
     return unless stored
 
-    written = candidate.payload.except(*DataQuality::DirectoryClient::WRITE_SKIPPED, "name", "aliases")
+    # A matched record keeps its name, except for Data Quality's name proposal (#1000), whose name is the change (Copilot).
+    kept = directory.respond_to?(:proposed_name?) && directory.proposed_name?(candidate) ? [ "aliases" ] : [ "name", "aliases" ]
+    written = candidate.payload.except(*DataQuality::DirectoryClient::WRITE_SKIPPED, *kept)
     written.each_with_object({}) do |(name, incoming), fields|
       return unless stored.key?(name)
       next if same?(name, stored[name], incoming, directory:)
