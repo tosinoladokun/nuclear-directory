@@ -41,6 +41,9 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
         payload: { "from_organization" => { "name" => published.name }, "to_organization" => { "name" => company.name }, "relationship_type" => "invests_in" },
         ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
       # Another name for the published company (Copilot), and EIA's enrichment of a published unit with its plant ID.
+      # Data Quality's name proposal for it, still open now it's published (Copilot).
+      proposal = claim(published, { "name" => "Queries Power #{n}", DataQuality::DirectoryClient::REPLACES => published.name })
+      DqAction.create!(candidate: proposal, action: "propose_fields", target_type: "Organization", target_id: published.id, reason: "r", before: {}, created: [], by: DataQuality::Matching::BY)
       # Settled by Data Quality as the same company with its name kept: Tosin's change to decide (Copilot).
       alias_claim = claim(published, { "name" => "QU #{n}" })
       DqAction.create!(candidate: alias_claim, action: "same_as", target_type: "Organization", target_id: published.id, reason: "r", before: {}, created: [], by: DataQuality::Matching::BY)

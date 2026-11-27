@@ -11,10 +11,15 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     @sourced_roles = {}
     @by_domain = {}
     @sites = {}
+    @name_targets = {}
   end
 
   # Reads the subjects of these claims, and the sourced roles of the companies among them.
   def prefetch(candidates)
+    # Data Quality's name proposals among them, and the company each was proposed for (proposed_name?, #1000).
+    unread = candidates.map(&:id) - @name_targets.keys
+    targets = DqAction.where(candidate_id: unread, action: "propose_fields", target_type: "Organization").pluck(:candidate_id, :target_id).to_h
+    unread.each { |id| @name_targets[id] = targets[id] }
     by_type = candidates.select(&:subject_id).group_by(&:subject_type)
     by_type.each do |type, claims|
       next unless fact_kinds.include?(type.to_s.underscore)
@@ -86,6 +91,14 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
 
     wanted = normalized_name(type:, name:)
     [ values["name"], *Array(values["aliases"]) ].compact.any? { |known| normalized_name(type:, name: known) == wanted }
+  end
+
+  # As DirectoryClient#proposed_name?, from the prefetched proposal actions (Copilot).
+  def proposed_name?(candidate)
+    return __getobj__.proposed_name?(candidate) unless @name_targets.key?(candidate.id)
+
+    candidate.kind == "organization" && candidate.subject_type == "Organization" && candidate.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) &&
+      @name_targets[candidate.id] == candidate.subject_id
   end
 
   def sourced_role?(organization_id)
