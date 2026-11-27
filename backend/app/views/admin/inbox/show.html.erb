@@ -10,7 +10,7 @@
 
 <% if flash[:undo] %>
   <% content_for :flash_action do %>
-    <%= button_to "Undo", admin_inbox_undo_path, params: { token: flash[:undo] }, class: "nd-link nd-flash__action type-body", form_class: "nd-flash__undo" %>
+    <%= render "admin/inbox/undo", token: flash[:undo] %>
   <% end %>
 <% end %>
 <div>
@@ -30,13 +30,15 @@
 <% end %>
 
 <%# One line each while it's in the pipeline; once Tosin decides it, it's in Recently decided instead. %>
-<% leads = CompanySuggestion.shown.to_a.reject { |lead| %w[Created Said\ no].include?(LeadFinding.state(lead)) } %>
+<%# Each lead's state read once, with the inbox's own reads (#1008). %>
+<% lead_states = CompanySuggestion.shown.includes(candidate: :source).to_a.index_with { |lead| LeadFinding.state(lead, kind_of: @inbox.method(:kind_of)) } %>
+<% leads = lead_states.keys.reject { |lead| %w[Created Said\ no].include?(lead_states[lead]) } %>
 <% if leads.any? %>
   <section class="nd-stack" aria-labelledby="inbox-leads">
     <h2 id="inbox-leads" class="type-admin-h2 m-0">Your leads <span class="type-count"><%= leads.size %></span></h2>
     <ul class="nd-stack m-0 p-0 list-none">
       <% leads.each do |lead| %>
-        <% state = LeadFinding.state(lead) %>
+        <% state = lead_states[lead] %>
         <li class="nd-inbox__recent" id="lead-<%= lead.id %>">
           <span class="type-body-strong"><%= lead.name %></span>
           <span class="type-body"><%= state %><%= ": #{lead.note.delete_prefix(LeadFinding::UNCONFIRMED).delete_prefix(': ')}" if state == "Couldn't confirm" && lead.note.to_s.length > LeadFinding::UNCONFIRMED.length %></span>

@@ -239,15 +239,23 @@ module DataQuality::Review
     # first batches, a source's own hold), never his.
     INBOX_KINDS = %w[new_record new_fact change dq].freeze
 
-    # firsts: first_batches, passed in once for a whole list.
-    def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new, firsts: first_batches)
+    # { candidate id => Set of Data Quality's live actions on it } for many claims, in one query.
+    def live_actions(candidate_ids)
+      DqAction.live.where(candidate_id: candidate_ids).pluck(:candidate_id, :action)
+        .group_by(&:first).transform_values { |pairs| pairs.to_set(&:last) }
+    end
+
+    # firsts: first_batches, passed in once for a whole list. actions: live_actions for a whole list
+    # (#1008), so each claim doesn't ask; without it, the claim's own are read.
+    def inbox_kind(candidate, directory: DataQuality::DirectoryClient.new, firsts: first_batches, actions: nil)
+      live = actions ? actions.fetch(candidate.id, Set.new) : live_actions([ candidate.id ]).fetch(candidate.id, Set.new)
       return "dq" if lead?(candidate) || candidate.subject_id.nil? || open_company_ends(candidate).any?
       # A source's own hold and its first batch are Data Quality's to read;
       # once it has approved the claim (still current), it's Tosin's to
       # decide, and his Yes (Data Quality's Accept) lifts the hold.
       # Data Quality's own new company or plant is its judgement too (#548).
       checked = (candidate.dq_recommendation == "approve" && DataQuality::Recommendations.current?(candidate)) ||
-        DqAction.live.exists?(candidate_id: candidate.id, action: %w[new subsidiary_of])
+        live.intersect?(%w[new subsidiary_of])
       return "dq" if !checked && candidate.status_needs_review? && DataQuality::Recommendations.source_hold?(candidate)
       # Asked directly: a deal term's own hold would come first in held_reason.
       return "dq" if !checked && candidate.crawl_run_id && firsts[candidate.source.source_kind] == candidate.crawl_run_id
@@ -268,7 +276,7 @@ module DataQuality::Review
       # Quality's (#548). Unless Data Quality settled it as Same as and kept the
       # name (add_alias): then the new name on his record is his to decide.
       if no_value_change?(candidate, directory:)
-        return DqAction.live.exists?(candidate_id: candidate.id, action: "same_as") ? "change" : "dq"
+        return live.include?("same_as") ? "change" : "dq"
       end
 
       "change"
@@ -348,7 +356,9 @@ module DataQuality::Review
     # These waiting candidates as Checks items, in the order given (Today's review, #373).
     def items(ids, directory: DataQuality::DirectoryClient.new)
       by_id = Candidate.where(id: ids).includes(:source, :crawl_run).index_by(&:id)
-      ids.filter_map { |id| by_id[id] }.map { |candidate| item(candidate, directory) }
+      # Read once for every item, not per item (#1008).
+      firsts = first_batches
+      ids.filter_map { |id| by_id[id] }.map { |candidate| item(candidate, directory, firsts:) }
     end
 
     def check_ids(category: "all", source_kind: nil) = category_scope(category, source_kind:).order(:id).pluck(:id)
@@ -1344,7 +1354,7 @@ module DataQuality::Review
       # Keys an edit may not change for this kind of fact.
       def locked_keys(kind) = DataQuality::Review.read_only_keys(kind)
 
-      def item(candidate, directory)
+      def item(candidate, directory, firsts: first_batches)
         record = directory.attached_record(candidate)
         differences = DataQuality::Differences.with_human_verified(candidate, record, directory:)
         Item.new(candidate_id: candidate.id, kind: candidate.kind, status: candidate.status, claim: DataQuality::Claim.describe(candidate),
@@ -1354,7 +1364,7 @@ module DataQuality::Review
           ai_model: candidate.ai_model, ai_checked_at: candidate.ai_checked_at, verify_run_id: candidate.verify_run_id,
           subject_type: candidate.subject_type, subject_id: candidate.subject_id, record:, differences:,
           found_by: candidate.crawl_run&.model, crawl_run_id: candidate.crawl_run_id, category: category_of(candidate),
-          held: held_reason(candidate, directory:, record:), **(DataQuality::Recommendations.current?(candidate) ? { dq_recommendation: candidate.dq_recommendation, dq_reason: candidate.dq_reason } : {}))
+          held: held_reason(candidate, directory:, record:, firsts:), **(DataQuality::Recommendations.current?(candidate) ? { dq_recommendation: candidate.dq_recommendation, dq_reason: candidate.dq_reason } : {}))
       end
 
       # The same rules as category_scope, for one candidate.

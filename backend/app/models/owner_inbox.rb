@@ -16,7 +16,8 @@ class OwnerInbox
     def ids = [ item.candidate_id, *copy_ids ]
   end
 
-  def initialize(directory: DataQuality::DirectoryClient.new)
+  # The records the claims are about are read up front (#1008): one page asks about every waiting claim.
+  def initialize(directory: DataQuality::PrefetchedDirectory.new)
     @directory = directory
     @companions = {}
   end
@@ -28,8 +29,10 @@ class OwnerInbox
       approved = Candidate.where(status: DataQuality::Recommendations::OPEN, dq_recommendation: "approve").select(:id)
       waiting = Candidate.where(id: DataQuality::Review.check_ids(category: "all")).or(Candidate.where(id: approved))
         .where("candidates.payload->>'lead' IS DISTINCT FROM 'true'").includes(:source).order(id: :desc).to_a
-      firsts = DataQuality::Review.first_batches
-      kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:) }
+      @directory.prefetch(waiting) if @directory.respond_to?(:prefetch)
+      actions = DataQuality::Review.live_actions(waiting.map(&:id))
+      kinds = waiting.index_with { |candidate| DataQuality::Review.inbox_kind(candidate, directory: @directory, firsts:, actions:) }
+      @kinds = kinds.transform_keys(&:id)
       mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
       # A new company's field claims (#760) are decided with its Create, not on their own.
       fields = DataQuality::FieldEvidence.fields_of(mine.select { |c| kinds[c] == "new_record" && c.kind_organization? }.map(&:id))
@@ -44,6 +47,18 @@ class OwnerInbox
       one_create_per_company(grouped)
     end
   end
+
+  # A claim's inbox kind, read with this page's prefetched records and Data Quality's actions (#1008):
+  # the ones the page already sorted are reused.
+  def kind_of(claim)
+    groups
+    @kinds.fetch(claim.id) do
+      @directory.prefetch([ claim ]) if @directory.respond_to?(:prefetch)
+      @kinds[claim.id] = DataQuality::Review.inbox_kind(claim, directory: @directory, firsts: firsts)
+    end
+  end
+
+  def firsts = (@firsts ||= DataQuality::Review.first_batches)
 
   # How many facts wait for him, without building their rows (the nav badge).
   def size

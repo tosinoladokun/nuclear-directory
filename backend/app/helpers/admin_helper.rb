@@ -138,6 +138,8 @@ module AdminHelper
       # Each count once: Today's is the waiting facts plus step 4's requests.
       pending = DataQuality::Review.pending_count
       corrections = CorrectionReport.where(status: %w[open reviewed]).count
+      # Slow to count and slow to change, so read at most every few minutes, in one cache read (#1008).
+      slow = Rails.cache.fetch("admin/nav/slow_counts", expires_in: 10.minutes) { { outputs: PublicPages.new.count, removed: Directory::RemovedList.total } }
       {
         sources: SourceCatalog.total,
         checks: DataQuality::Review.counts.values.sum + pending,
@@ -146,8 +148,8 @@ module AdminHelper
         leads: Lead.status_new.count,
         # Today's own page has it loaded already.
         inbox: (@inbox || OwnerInbox.new).size,
-        outputs: PublicPages.new.count,
-        removed: Directory::RemovedList.total,
+        outputs: slow[:outputs],
+        removed: slow[:removed],
         today: DataQuality::Review.check_counts["all"] + pending + corrections
       }
     end

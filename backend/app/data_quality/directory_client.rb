@@ -383,6 +383,14 @@ class DataQuality::DirectoryClient
     record(type, state, values: lookup.fact_attributes(type:, id:))
   end
 
+  # attached_record for many companies or plants of one type, in one query: { id => Record } (#1008).
+  def attached_records(type:, ids:) = lookup.refs(type:, ids:).transform_values { |ref| record(type, ref) }
+
+  # fact for many facts of one type, in a few queries: { id => Record } (#1008).
+  def facts(type:, ids:)
+    lookup.facts(type:, ids:).transform_values { |state, values| record(type, state, values:) }
+  end
+
   # The companies that publicly own this plant or unit now (#382), as ids.
   def published_owner_ids(facility_id:) = lookup.published_owner_ids(facility_id:)
 

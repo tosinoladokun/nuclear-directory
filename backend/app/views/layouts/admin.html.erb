@@ -46,8 +46,7 @@
         </header>
 
         <main class="nd-shell__main">
-          <% if notice %><div class="nd-flash" role="status"><p class="type-body"><%= admin_notice %></p><%= yield :flash_action %></div><% end %>
-          <% if alert %><div class="nd-flash" role="alert"><%= icon("warning-circle") %><p class="type-body-strong"><%= alert %></p></div><% end %>
+          <div id="admin-flash"><%= render "admin/flash", notice: (admin_notice if notice), alert:, action: yield(:flash_action) %></div>
           <%= yield %>
         </main>
       </div>

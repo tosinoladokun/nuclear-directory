@@ -1,0 +1,3 @@
+<%# The admin's flash, also replaced on its own after a decision in Today (#1008). %>
+<% if notice %><div class="nd-flash" role="status"><p class="type-body"><%= notice %></p><%= action %></div><% end %>
+<% if alert %><div class="nd-flash" role="alert"><%= icon("warning-circle") %><p class="type-body-strong"><%= alert %></p></div><% end %>
