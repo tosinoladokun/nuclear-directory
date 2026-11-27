@@ -415,9 +415,10 @@ module AdminHelper
 
   # A decision in Recently decided (#548): "Created Bluefield Fission",
   # "Approved Meta funds TerraPower", "Said no to Old Lead Co".
-  def inbox_decision(claim)
+  # name: the record's name now, when the caller has it (a Create's receipt names what was created, #1008).
+  def inbox_decision(claim, name: nil)
     record = %w[organization facility].include?(claim.kind)
-    what = record ? claim.payload.to_h["name"].to_s : DataQuality::Claim.describe(claim).delete_suffix(".")
+    what = name.presence || (record ? claim.payload.to_h["name"].to_s : DataQuality::Claim.describe(claim).delete_suffix("."))
     verb = if claim.status_rejected? then "Said no to"
     elsif record && claim.proposed_subject then "Created"
     else "Approved"

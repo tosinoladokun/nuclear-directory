@@ -1,5 +1,5 @@
 <%# A decided row, in place (#1008): what was decided, and Undo after a No (Design). Reloading Today lists it in Recently decided. %>
 <li class="nd-inbox__recent" id="inbox-item-<%= claim.id %>" tabindex="-1" data-controller="receipt">
-  <span class="type-body"><%= inbox_decision(claim) %></span>
+  <span class="type-body"><%= inbox_decision(claim, name: name) %></span>
   <% if undo %><%= render "admin/inbox/undo", token: undo %><% end %>
 </li>

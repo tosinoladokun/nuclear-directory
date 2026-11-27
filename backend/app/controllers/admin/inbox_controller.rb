@@ -37,9 +37,11 @@ class Admin::InboxController < Admin::BaseController
       if request.format.turbo_stream?
         # The row becomes a receipt where it was, with the focus (Design); the message is updated too, for screen readers.
         decided = Candidate.find(params[:candidate_id].to_i)
+        # A Create names what was created: a name Data Quality proposed may have replaced the crawler's (Copilot).
+        created = (DataQuality::DirectoryClient.new.fact(type: decided.subject_type, id: decided.subject_id)&.name if yes && decided.proposed_subject && decided.subject_id)
         action = (render_to_string(partial: "admin/inbox/undo", formats: :html, locals: { token: undo }) if undo)
         return render turbo_stream: [
-          turbo_stream.replace("inbox-item-#{decided.id}", partial: "admin/inbox/receipt", formats: :html, locals: { claim: decided, undo: }),
+          turbo_stream.replace("inbox-item-#{decided.id}", partial: "admin/inbox/receipt", formats: :html, locals: { claim: decided, undo:, name: created }),
           turbo_stream.update("admin-flash", partial: "admin/flash", formats: :html, locals: { notice:, alert: nil, action: })
         ]
       end
