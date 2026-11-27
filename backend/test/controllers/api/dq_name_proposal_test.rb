@@ -131,6 +131,32 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     assert propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")["ok"], "once both are decided"
   end
 
+  test "a reopened or undone name proposal can't be open beside a different one (#1019, Copilot)" do
+    first = proposed
+    before = DataQuality::Review.undo_state(first.id)
+    DataQuality::Review.reject([ first.id ], by: "human:tosin", reason: "Said no in Today")
+    undo = DataQuality::Review.undoable(before, by: "human:tosin")
+    @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
+    second = propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
+    assert second["ok"], second.inspect
+
+    reopened = DataQuality::Review.reopen([ first.id ], by: "human:tosin", reason: "Try again").sole
+    assert_equal [ "another name for the company, Fermi America Inc. (##{second['id']}), is open; decide or close it first" ], reopened.errors
+    undone = DataQuality::Review.undo_all([ undo ], by: "human:tosin")
+    assert_match "another name for the company, Fermi America Inc.", undone.errors.join
+    assert first.reload.status_rejected?
+  end
+
+  test "a name proposal reads the open ones under the company's row lock, so two at once can't both pass (Copilot)" do
+    statements = []
+    counter = ->(*, payload) { statements << payload[:sql] }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { propose("Fermi America") }
+
+    lock = statements.index { |sql| sql.match?(/FROM "organizations" WHERE "organizations"\."id" = .* FOR UPDATE/) }
+    check = statements.index { |sql| sql.include?("payload ? ") }
+    assert lock && check && lock < check, "the company is locked before the open proposals are read"
+  end
+
   test "a name another company takes between the proposal and match goes to review (Copilot)" do
     row = propose("Fermi America")
     Organization.create!(name: "Fermi America", verification_status: "verified", verified_by: "human:tosin").aliases.create!(alias: "Fermi America")
