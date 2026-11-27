@@ -269,7 +269,13 @@ class DataQuality::Stages::Match < DataQuality::Stage
       # Data Quality's site fields (#916) are found by the site it named, never by name or docket: the claim
       # carries only its name and the proposed fields, so the verifier checks nothing else (DQ, 25 Nov).
       site = DqAction.where(candidate:, action: "propose_site_fields").pick(:target_id) if candidate.kind == "facility"
-      found ||= site ? proposed_site(site, payload) : resolve(candidate.kind.to_sym, payload, closed: :found)
+      # Data Quality's name for a pending company (#1000) is found by the company it named: nothing
+      # goes by that name yet, so a lookup by it would propose a second company.
+      named = DqAction.where(candidate:, action: "propose_fields").pick(:target_id) if candidate.kind == "organization" && payload.key?(DataQuality::DirectoryClient::REPLACES)
+      found ||= if site then proposed_site(site, payload)
+      elsif named then proposed_name(named, payload)
+      else resolve(candidate.kind.to_sym, payload, closed: :found)
+      end
       # Data Quality's proposal is for the company it named; if its CIK is
       # another's by now, it goes to review, never to that company (#693).
       if found.is_a?(Found) && (proposed = DqAction.where(candidate:, action: "propose_fields").pick(:target_id)) && proposed != found.record.id
@@ -526,6 +532,33 @@ class DataQuality::Stages::Match < DataQuality::Stage
       return Review.new("proposed for #{site.name}, but EIA plant ID #{plant} is #{holder.name}'s (##{holder.id}) by now") if holder && holder.id != site.id
 
       Found.new(site, "the site Data Quality named")
+    end
+
+    # The pending company Data Quality proposed a name for (#1000), while it's still pending: once
+    # published (or decided), its name changes only by a reviewed change, so the claim goes to review.
+    def proposed_name(id, payload)
+      company = directory.fact(type: "Organization", id:)
+      return Review.new("proposed a name for company ##{id}, which no longer exists") unless company
+      return Review.new("proposed a name for #{company.name}, which was #{company.decision}") if company.closed?
+      unless company.verification_status == "pending"
+        return Review.new("proposed the name #{payload['name']} for #{company.name}, which is published now; a published company's name changes by a reviewed change")
+      end
+
+      # A name another company goes by now (taken since the proposal) goes to review, never two companies with one name (Copilot).
+      if (holder = directory.organization(name: payload["name"])) && holder.id != company.id
+        return Review.new("proposed the name #{payload['name']} for #{company.name}, but #{holder.name} (##{holder.id}) goes by it now")
+      end
+      # A website whose domain is another company's goes to review, as on the usual path (Copilot).
+      domain = payload.key?("domain") ? payload["domain"].presence : payload["website"].presence
+      if domain && (holder = directory.organization(domain:)) && holder.id != company.id
+        return Review.new("proposed for #{company.name}, but its website's domain is #{holder.name}'s (##{holder.id})")
+      end
+      # A CIK it carries that's another company's by now goes to review, as on the usual path (Copilot).
+      if (cik = payload["sec_cik"].presence) && (holder = directory.organization(sec_cik: cik)) && holder.id != company.id
+        return Review.new("proposed for #{company.name}, but SEC CIK #{cik} is #{holder.name}'s (##{holder.id}) by now")
+      end
+
+      Found.new(company, "the company Data Quality named")
     end
 
     def resolve(type, payload, closed: :review)

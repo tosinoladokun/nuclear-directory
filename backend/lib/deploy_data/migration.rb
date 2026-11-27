@@ -28,6 +28,10 @@ module DeployData
   # - Never rescue a database error inside `up`: let it raise. A swallowed
   #   error leaves Postgres' transaction aborted, so the step's savepoint can't
   #   roll back cleanly and every later statement fails (Backend's review, #813).
+  # - A job it queues waits past the release switch: queue_after_deploy(Job,
+  #   *args), never Job.perform_later. The step runs in Render's pre-deploy,
+  #   while the old release's worker still runs; a job queued at once runs on
+  #   the old code (#1018: #1016's re-queued finds ran the old finder).
   # It runs in the deploy's transaction with the seed and the other new
   # migrations, each in its own savepoint (#811): one that raises is rolled
   # back alone, reported and tried again at the next deploy; the others and
@@ -49,6 +53,13 @@ module DeployData
     def by = self.class::BY
 
     def up = raise(NotImplementedError, "#{self.class.name} must define up")
+
+    # Long enough for the new release to take over from the old one, whose
+    # worker would otherwise run the job on the old code (#1018).
+    AFTER_DEPLOY_WAIT = 15.minutes
+
+    # Queues a job to run once the new release serves (#1018).
+    def queue_after_deploy(job, *args) = job.set(wait: AFTER_DEPLOY_WAIT).perform_later(*args)
 
     def say(message)
       Array(message).each do |line|

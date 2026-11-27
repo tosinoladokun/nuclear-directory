@@ -129,6 +129,9 @@
               <% end %>
             <% else %>
               <p class="<%= key == "new_record" ? "type-body" : "type-body-strong" %> m-0"><%= inbox_sentence(entry) %></p>
+              <% if (named = proposed_name_claim(entry)) %>
+                <p class="type-small text-ink-muted m-0" id="proposed-name-<%= named.id %>">Found as <%= named.payload[DataQuality::DirectoryClient::REPLACES] %>, which stays as another name for it.</p>
+              <% end %>
               <% if key == "new_record" && (item.payload.to_h.keys - %w[name aliases]).empty? %>
                 <%# Only a name: the source's words say what it is (Design). %>
                 <p class="type-small text-ink-muted m-0">“<%= item.quote %>”</p>
@@ -152,8 +155,11 @@
                     <%# A role from its own page shows as its name (#811). %>
                     <% values = if field.kind == "organization_role"
                          { "role" => (@role_names ||= Role.pluck(:key, :name).to_h)[field.payload["role"]] || field.payload["role"] }
+                       elsif field == named
+                         # Data Quality's name for it (#1000), with the quote that uses it.
+                         { "name" => field.payload["name"] }.merge(field.payload.except("name", "aliases", DataQuality::DirectoryClient::REPLACES, *DataQuality::FieldEvidence::KEYS))
                        else
-                         field.payload.except("name", "aliases", *DataQuality::FieldEvidence::KEYS)
+                         field.payload.except("name", "aliases", DataQuality::DirectoryClient::REPLACES, *DataQuality::FieldEvidence::KEYS)
                        end %>
                     <% next if values.empty? %>
                     <div class="nd-stack" id="<%= field.payload["field_of"] ? "field-claim" : "also-claim" %>-<%= field.id %>">

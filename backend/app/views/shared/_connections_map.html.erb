@@ -42,14 +42,14 @@
                 <rect class="nd-map__ring" x="<%= (placed.x - placed.r).round(1) %>" y="<%= (placed.y - placed.r).round(1) %>" width="<%= placed.r * 2 %>" height="<%= placed.r * 2 %>" rx="<%= centre ? 8 : 6 %>"></rect>
                 <% if (icon_name = map_node_icon(map, node)) %><%= map_icon(icon_name, placed.x, placed.y, centre ? 20 : 16) %><% end %>
                 <text class="nd-map__name" x="<%= placed.name_x %>" y="<%= placed.name_y %>" text-anchor="<%= placed.anchor %>"
-                      data-slot="<%= placed.slot %>" data-font="<%= placed.font %>" data-floor="<%= layout.size.floor %>"
+                      data-slot="<%= placed.slot %>" data-font="<%= placed.font %>" data-floor="<%= layout.size.floor %>"<% if placed.side %> data-side="<%= placed.side %>"<% end %>
                       data-short="<%= node.short_name if placed.name == node.name %>" style="font-size: <%= placed.font %>px"><%= placed.name %><title><%= node.name %></title></text>
               <% end %>
               <% if centre %>
                 <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>"><%= inner %></g>
               <% elsif node.fold? %>
                 <g class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" role="button" tabindex="0"
-                   aria-label="<%= node.name %>. Show them" data-action="click->connections-map#open keydown->connections-map#openKey"><%= inner %></g>
+                   aria-label="<%= placed.name %>. Show them" data-action="click->connections-map#open keydown->connections-map#openKey"><%= inner %></g>
               <% else %>
                 <a href="<%= map_node_url(node) %>" class="<%= classes.compact.join(" ") %>" data-key="<%= node.key %>" aria-label="<%= node.name %>"><%= inner %></a>
               <% end %>

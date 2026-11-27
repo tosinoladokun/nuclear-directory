@@ -1,0 +1,35 @@
+# Seed research for #805 (NEA SMR dashboard pass; PM's go, 27 Nov 2026). Quotes copied from NuCube's own releases on GlobeNewswire, read this session.
+name: NuCube Energy
+legal_name: NuCube Energy, Inc.
+aliases:
+- NuCube Energy, Inc.
+- NuCube
+website: https://www.nucube.energy
+hq:
+  city: Idaho Falls
+  state: ID
+  source_url: https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html
+  quote: Founded in 2023 and headquartered in Idaho Falls, Idaho, NuCube is an advanced-nuclear technology company developing factory-built microreactors that deliver firm, carbon-free electricity and high-temperature process heat at the point of use.
+  confidence: 1.0
+status: active
+roles:
+- key: reactor_vendor
+  source_url: https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html
+  quote: NuCube Energy, Inc. is an advanced-nuclear technology company developing factory-built, solid-state microreactors that deliver firm, carbon-free power and high-temperature process heat on site.
+  confidence: 1.0
+technologies:
+- key: fission
+  source_url: https://www.globenewswire.com/news-release/2026/10/20/3383987/0/en/nucube-energy-secures-25-million-anchor-investment-from-the-alaska-industrial-development-and-export-authority.html
+  quote: The Company's NuSun™ platform is built around a solid-state, heat-pipe-cooled reactor that eliminates the coolant pumps and complex heat exchangers, as well as large pressure vessels found in conventional reactors, supporting a passively safe, walk-away design intended to simplify licensing, lower lifecycle cost, and accelerate commercial scaling compared to other advanced nuclear technologies.
+  confidence: 1.0
+relationships: []
+facilities: []
+notes: 'From the #805 pass over NEA''s SMR dashboard (edition 4), a names-only lead list that is never cited. The lead finder could not propose it (lead 125): its home page has no sentence naming it with its nuclear work, so PM routed it by seed (27 Nov), with Tosin''s merge as the decision. Every quote is from NuCube''s own releases ("About NuCube Energy" and "Company Background" sections) on GlobeNewswire; nucube.energy and GlobeNewswire both refuse plain fetches (403), so quotes were read through a page extractor. country_code not set: the releases name Idaho Falls, Idaho but not the country. The $25M AIDEA investment (Oct 2026) and the Launch Two (NASDAQ: LPBB) business combination are not recorded here; they are for a later link proposal.'
+description:
+  text: Develops factory-built, solid-state microreactors for on-site power and high-temperature process heat.
+  source_url: https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html
+  quote: NuCube Energy, Inc. is an advanced-nuclear technology company developing factory-built, solid-state microreactors that deliver firm, carbon-free power and high-temperature process heat on site.
+short_description:
+  text: 'Factory-built microreactor developer'
+  source_url: https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html
+  quote: NuCube Energy, Inc. is an advanced-nuclear technology company developing factory-built, solid-state microreactors that deliver firm, carbon-free power and high-temperature process heat on site.
