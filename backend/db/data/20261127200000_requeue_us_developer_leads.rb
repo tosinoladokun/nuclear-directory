@@ -40,7 +40,14 @@ class RequeueUsDeveloperLeads < DeployData::Migration
 
       domain = NAMES.keys.find { |host| ([ lead.name ] + lead.sources.map { |source| source["url"].to_s }).any? { |text| text.downcase.include?(host) } }
       name = NAMES.fetch(domain, lead.name)
+      normalized = Lead.normalize(name)
+      # Renamed with its normalized name, so a later sighting of the name finds this lead (Copilot; as AaloLead does).
+      if (other = Lead.where(kind: lead.kind, normalized_name: normalized).where.not(id:).first)
+        return say("Lead #{id} (#{lead.name}) left as it is: lead #{other.id} is already #{name}")
+      end
+
       tries = lead.find_attempts
+      lead.update!(normalized_name: normalized) if lead.normalized_name != normalized
       note(lead, url: OWN_PAGES[id])
       CompanySuggestion.queue(lead, name:, by: BY)
       say "Lead #{id} queued again as #{name.inspect}#{' with its own page' if OWN_PAGES[id]} (had used #{tries} of its tries)"

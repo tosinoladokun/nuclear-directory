@@ -414,6 +414,15 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_empty Candidate.where(kind: "organization")
   end
 
+  test "a staging wire link is never read as a release either (Copilot, #987)" do
+    stub_request(:get, %r{\Ahttps://www\.hadron\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://www.hadron.example", "<html><head><title>Hadron Energy</title></head><body><p>Hadron Energy builds a micro modular reactor.</p></body></html>")
+    staging = "https://staging.globenewswire.com/news-release/hadron.html"
+    result = Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example", staging).id, finder: finder)
+    assert_includes result.reason, "not US"
+    assert_not_requested :get, staging
+  end
+
   test "a staging link given as the lead is never read, not even for its name, and the note says why (Copilot, #932)" do
     staging = "https://public-stag.3keysoft.example"
     result = Plugin.call(lead(staging).id, finder: finder)
@@ -446,17 +455,20 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     Lead.sighted!(name:, kind: "company", key: "nea:805", label: "NEA list")
   def html_page(url, body) = stub_request(:get, url).to_return(body:, headers: { "Content-Type" => "text/html" })
 
-  test "a script-built home page: the US headquarters is read on the brand's main domain it links to (#987: Terrestrial)" do
+  test "a script-built home page with only its title and a link: the brand's main domain is checked and claimed (#987: Terrestrial; Copilot)" do
     stub_request(:get, %r{\Ahttps://(www\.)?terrestrial(usa|energy)\.example/robots\.txt}).to_return(status: 404)
-    html_page("https://terrestrialusa.example", "<html><head><title>Terrestrial Energy: the most capital-efficient SMR</title></head><body>" \
-      "<p>Terrestrial Energy is building the most capital-efficient SMR nuclear plant for rapid deployment at scale.</p>" \
-      "<a href=\"https://www.terrestrialenergy.example/\">Terrestrial Energy</a></body></html>")
-    html_page("https://www.terrestrialenergy.example/", "<html><head><title>Terrestrial Energy</title></head><body><a href=\"/contact\">Contact</a></body></html>")
+    html_page("https://terrestrialusa.example", "<html><head><title>Terrestrial Energy: the most capital-efficient SMR</title>" \
+      "<meta name=\"description\" content=\"Terrestrial Energy is building the most capital-efficient SMR nuclear plant.\"></head>" \
+      "<body><div id=\"root\"></div><a href=\"https://www.terrestrialenergy.example/\"></a></body></html>")
+    html_page("https://www.terrestrialenergy.example/", "<html><head><title>Terrestrial Energy</title></head><body>" \
+      "<p>Terrestrial Energy is a developer of Generation IV nuclear plants that use its Integral Molten Salt Reactor.</p><a href=\"/contact\">Contact</a></body></html>")
     html_page("https://www.terrestrialenergy.example/contact", "<html><body><p>Reach Terrestrial Energy at our Charlotte, NC headquarters.</p></body></html>")
 
     result = Plugin.call(listed_lead("terrestrialusa.example", "https://terrestrialusa.example").id, finder: finder)
     assert_equal :proposed, result.outcome, result.reason
-    assert_equal "Terrestrial Energy", Candidate.find(result.candidate_id).payload["name"], "named by the title part its address carries"
+    claim = Candidate.find(result.candidate_id)
+    assert_equal [ "Terrestrial Energy", "https://www.terrestrialenergy.example" ], claim.payload.values_at("name", "website"),
+      "named by the title part its address carries, claimed on the main domain"
   end
 
   test "the company's own wire release can show it's US; a partner's release can't (#987: NuCube)" do
@@ -465,9 +477,11 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
       "<p>NuCube Energy builds factory-made microreactors.</p></body></html>")
     own = "https://www.globenewswire.com/news-release/2026/06/25/1/0/en/nucube.html"
     partner = "https://www.globenewswire.com/news-release/2026/06/26/2/0/en/partner.html"
-    html_page(own, "<html><body><p>Founded in 2023 and headquartered in Idaho Falls, Idaho, NuCube is an advanced-nuclear technology company.</p>" \
-      "<h3>About NuCube Energy</h3><p>NuCube Energy develops microreactors.</p></body></html>")
-    html_page(partner, "<html><body><p>Acme Grid, of Austin, TX 78701, signed with NuCube Energy.</p><h3>About Acme Grid</h3></body></html>")
+    html_page(own, "<html><body><p>NuCube Energy announced a listing.</p><h3>About NuCube Energy</h3>" \
+      "<p>Founded in 2023 and headquartered in Idaho Falls, Idaho, NuCube is an advanced-nuclear technology company.</p></body></html>")
+    # A partner's release, with both About sections: Acme's Austin address is never NuCube's (Copilot).
+    html_page(partner, "<html><body><p>Acme Grid signed with NuCube Energy.</p><h3>About Acme Grid</h3><p>Acme Grid, 1 Main St, Austin, TX 78701.</p>" \
+      "<h3>About NuCube Energy</h3><p>NuCube Energy develops factory-built microreactors.</p></body></html>")
 
     refused = Plugin.call(listed_lead("NuCube Energy", "https://www.nucube.example", partner).id, finder: finder)
     assert_includes refused.reason, "not US"
@@ -497,6 +511,9 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert plugin.send(:us_text?, "Our engineering headquarters will remain in the Bay Area.")
     assert_not plugin.send(:us_text?, "Hadron Energy, Inc. (Nasdaq: HDRN)")
     assert_not plugin.send(:us_text?, "Nuclearis Energy, Inc. · Delaware"), "incorporation alone isn't headquarters"
+    assert_not plugin.send(:us_text?, "Nuclearis Energy is incorporated in Wilmington, Delaware and headquartered in Buenos Aires, Argentina"),
+      "an incorporation city isn't a US office (Copilot)"
+    assert plugin.send(:us_text?, "Acme is incorporated in Delaware and headquartered in Austin, Texas")
   end
 
   test "US forms: 'U.S.' before a space, City, ST and City, State; never a lone two-letter word" do

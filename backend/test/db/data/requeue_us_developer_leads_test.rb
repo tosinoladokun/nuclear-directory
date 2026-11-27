@@ -27,7 +27,8 @@ class RequeueUsDeveloperLeadsTest < ActiveSupport::TestCase
 
     assert_equal [ "NuCube Energy", "new", 0, nil ], nucube.reload.attributes.values_at("name", "status", "find_attempts", "next_find_at")
     assert_includes Directory::Leads.find(125).urls, RequeueUsDeveloperLeads::OWN_PAGES[125]
-    assert_equal [ "First American Nuclear", 0 ], fanco.reload.attributes.values_at("name", "find_attempts")
+    assert_equal [ "First American Nuclear", "first american nuclear", 0 ], fanco.reload.attributes.values_at("name", "normalized_name", "find_attempts")
+    assert_equal fanco, Lead.sighted!(name: "First American Nuclear", kind: "company", key: "nea:later", label: "NEA list"), "no duplicate later (Copilot)"
     assert_equal [ "Valar Atomics", 0, "human:tosin" ], named.reload.attributes.values_at("name", "find_attempts", "decided_by")
     scaled = Lead.find_by!(normalized_name: "scaled atomics")
     assert_equal [ "Scaled Atomics", "new" ], [ scaled.name, scaled.status ]
@@ -43,6 +44,13 @@ class RequeueUsDeveloperLeadsTest < ActiveSupport::TestCase
     assert_equal "Hadron Energy", hadron.reload.name
     assert_includes Directory::Leads.find(110).urls, RequeueUsDeveloperLeads::OWN_PAGES[110]
     assert_equal [ 2, "researching" ], duplicate.reload.attributes.values_at("find_attempts", "status")
+  end
+
+  test "a website-only lead isn't renamed onto another lead that already has the name (Copilot)" do
+    stuck(124, "deepfission.com", url: "https://deepfission.com")
+    other = Lead.sighted!(name: "Deep Fission", kind: "company", key: "nea:other", label: "NEA list")
+    assert_includes run_it.output.join("\n"), "Lead 124 (deepfission.com) left as it is: lead #{other.id} is already Deep Fission"
+    assert_equal "deepfission.com", Lead.find(124).name
   end
 
   test "a lead a person decided is left; a rerun changes nothing" do

@@ -156,11 +156,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
-    # The company's own releases on a wire site, and its own pages a person gave, for its US status (DQ, 27 Nov).
-    @release_links = links.select { |link| (URI.parse(link).host.to_s.downcase rescue "").match?(NEWS_HOSTS) }
-    @given_links = links
     # A staging or preview link is never read, not even for the site's name (Copilot, #932).
     staging, links = links.partition { |link| staging_host?(link) }
+    # The company's own releases on a wire site, and its own pages a person gave, for its US status (DQ, 27 Nov);
+    # never a staging link (Copilot).
+    @release_links = links.select { |link| (URI.parse(link).host.to_s.downcase rescue "").match?(NEWS_HOSTS) }
+    @given_links = links
     found["checked"] = staging.map { |link| { "verdict" => "staging", "why" => "#{URI(link).host} is a staging or preview host", "website" => link } } if staging.any?
     # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
     name ||= site_name(links)
@@ -320,10 +321,16 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       if (other = brand_domain(home, name)) && (page = snapshot(other))
         return true if read.(page) || own_links(page, CONTACT, 2).any? { |url| read.(snapshot(url)) }
       end
-      own_releases(name).any? { |release| read.(release) }
+      own_releases(name).any? { |about| texts << about && us_text?(texts.join("\n")) }
     end
 
-    def us_text?(text) = text.match?(US) || text.match?(US_HQ_REGION) || (text.match?(US_LISTING) && text.match?(US_INCORPORATION))
+    # Where it's incorporated or registered is never its headquarters (DATA.md): "incorporated in Wilmington,
+    # Delaware" is left out before looking for a US address, up to the next "and" (Copilot).
+    INCORPORATION_CLAUSE = /\b(?:incorporated|registered|organized|formed)\s+(?:in|under)\b(?:(?!\band\b)[^.;])*/i
+    def us_text?(text)
+      located = text.gsub(INCORPORATION_CLAUSE, " ")
+      located.match?(US) || located.match?(US_HQ_REGION) || (text.match?(US_LISTING) && text.match?(US_INCORPORATION))
+    end
 
     # Pages of this site the lead itself links to (a story stating its headquarters; DQ, 27 Nov), never the home page.
     def given_pages(home)
@@ -367,13 +374,17 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       nil
     end
 
-    # The company's own releases on a wire site among the lead's links (DQ, 27 Nov): only one whose
-    # "About <Company>" section names it, never a partner's release that mentions it.
+    # The company's own words in a wire release among the lead's links (DQ, 27 Nov): only the text of its own
+    # "About <Company>" section, so a partner's release with both companies' About sections never lends the
+    # partner's address (Copilot). Returns that text for each release that has one.
+    ABOUT_HEADING = /\AAbout\s+([^:]{2,80}?)\s*:?\z/
     def own_releases(name)
       Array(@release_links).first(2).filter_map do |url|
         page = snapshot(url) or next
-        abouts = Nokogiri::HTML(page.content_text).css("p, h2, h3, h4, b, strong").filter_map { |node| node.text.squish[/\AAbout\s+([^:]{2,80}?)\s*:?\z/, 1] }
-        page if abouts.any? { |about| names?(about, name) || names?(name, brand(about)) }
+        nodes = Nokogiri::HTML(page.content_text).css("p, h2, h3, h4, b, strong, li")
+        start = nodes.index { |node| (about = node.text.squish[ABOUT_HEADING, 1]) && (names?(about, name) || names?(name, brand(about))) } or next
+        section = nodes[(start + 1)..].take_while { |node| !node.text.squish.match?(ABOUT_HEADING) }
+        section.map { |node| node.text.squish }.join("\n").presence
       end
     end
 
@@ -602,6 +613,16 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       # (The Fetcher never follows a redirect to another host, so the page's own host is the one checked.)
       page = snapshot(website) or return [ :not_found, nil, "Couldn't read the site" ]
       text = visible_text(page)
+      # A home page built by script shows almost nothing but links to the brand's main domain
+      # (terrestrialusa.com to terrestrialenergy.com): that domain is checked, once, and becomes the source (Copilot).
+      if text.length < SCRIPT_SHELL && !@following_brand && (main = brand_domain(page, name))
+        begin
+          @following_brand = true
+          return verify(name, main)
+        ensure
+          @following_brand = false
+        end
+      end
       return [ :not_named, page, "The page doesn't name #{name}" ] unless names?(text, name)
       # The name, the nuclear work and the address must be the site owner's, not a
       # customer's in a testimonial (#932: Mainstream Engineering on calnanocorp.com).
@@ -614,6 +635,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       [ :ok, page, nil ]
     end
 
+    # Fewer visible characters than this: a page drawn by script (#987).
+    SCRIPT_SHELL = 200
     # A subdomain word that marks a copy for testing or review ("staging.", "public-stag.", "dev2.").
     STAGING_WORDS = %w[stag stage staging dev develop development test testing qa uat preview sandbox].freeze
     # Only the labels before the registered domain count ("stage.co.uk" is a company's own domain; Copilot).
