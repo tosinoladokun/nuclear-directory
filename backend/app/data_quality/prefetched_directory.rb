@@ -9,6 +9,7 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     @facts = {}
     @attached = {}
     @sourced_roles = {}
+    @by_domain = {}
   end
 
   # Reads the subjects of these claims, and the sourced roles of the companies among them.
@@ -26,10 +27,22 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
       found = __getobj__.attached_records(type:, ids:)
       (@attached[type] ||= {}).merge!(ids.index_with { |id| found[id] })
     end
+    # The companies their websites' domains belong to, which a restated website is checked against.
+    domains = candidates.filter_map { |claim| domain_from(claim.payload.to_h["website"]) if claim.kind == "organization" && claim.payload.to_h["website"].present? }.uniq - @by_domain.keys
+    found = __getobj__.organizations_by_domain(domains)
+    domains.each { |domain| @by_domain[domain] = found[domain] }
     companies = by_type.fetch("Organization", []).map(&:subject_id).uniq - @sourced_roles.keys
     with_role = __getobj__.sourced_role_ids(companies)
     companies.each { |id| @sourced_roles[id] = with_role.include?(id) }
     self
+  end
+
+  def organization(id: nil, name: nil, domain: nil, sec_cik: nil, eia_utility_id: nil)
+    if domain && [ id, name, sec_cik, eia_utility_id ].all?(&:nil?) && @by_domain.key?(normalized = domain_from(domain) || domain)
+      return @by_domain[normalized]
+    end
+
+    __getobj__.organization(id:, name:, domain:, sec_cik:, eia_utility_id:)
   end
 
   def fact(type:, id:)

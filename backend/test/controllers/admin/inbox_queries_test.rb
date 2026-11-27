@@ -12,6 +12,9 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
   setup do
     sign_in_as users(:admin)
     @page = Source.create!(url: "https://www.nrc.gov/test/queries.html", source_kind: "dummy", crawl_status: "ok", content_sha256: "sha", content_text: "q")
+    # An earlier batch from this source, so these claims aren't its first batch (Data Quality's to read first, Copilot).
+    first = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 2.days.ago)
+    Candidate.create!(source: @page, crawl_run: first, kind: "organization", payload: { "name" => "x" }, quote: "q", status: "rejected")
     @run = CrawlRun.create!(source_kind: "dummy", stage: "crawl", status: "succeeded", started_at: 1.day.ago)
   end
 
@@ -29,6 +32,9 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       published = travel_to(2.days.ago) { Organization.create!(name: "Queries Utility #{n}", hq_city: "Bethesda", verification_status: "verified", verified_by: "human:tosin") }
       published.aliases.create!(alias: published.name)
       claim(published, { "name" => published.name, "hq_city" => "Rockville" })
+      # Its website restated, with its derived domain (Copilot).
+      published.update_columns(website: "https://utility#{n}.example", domain: "utility#{n}.example")
+      claim(published, { "name" => published.name, "website" => "https://utility#{n}.example" })
       # A link between them, and a lead Tosin added that found the new company (Copilot).
       link = Relationship.create!(from_organization: published, to_organization: company, relationship_type: "invests_in", verification_status: "pending")
       Candidate.create!(source: @page, crawl_run: @run, kind: "relationship", quote: "q", status: "matched", subject_type: "Relationship", subject_id: link.id,

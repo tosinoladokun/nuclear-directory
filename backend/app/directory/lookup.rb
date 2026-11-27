@@ -553,6 +553,11 @@ module Directory
       end
     end
 
+    # organization(domain:) for many domains, in one query: { domain => OrganizationRef } (#1008).
+    def organizations_by_domain(domains)
+      Organization.where(domain: domains.compact.uniq).order(:id).to_a.group_by(&:domain).transform_values { |records| OrganizationRef.from(records.first) }
+    end
+
     # What fact_label and pending_attributes read from a fact's linked records.
     FACT_LINKS = %i[aliases role technology organization facility from_organization to_organization parent link].freeze
 

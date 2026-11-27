@@ -383,6 +383,9 @@ class DataQuality::DirectoryClient
     record(type, state, values: lookup.fact_attributes(type:, id:))
   end
 
+  # organization(domain:) for many domains, in one query: { domain => Record } (#1008).
+  def organizations_by_domain(domains) = lookup.organizations_by_domain(domains).transform_values { |ref| record("Organization", ref) }
+
   # attached_record for many companies or plants of one type, in one query: { id => Record } (#1008).
   def attached_records(type:, ids:) = lookup.refs(type:, ids:).transform_values { |ref| record(type, ref) }
 
