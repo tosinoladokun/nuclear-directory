@@ -55,6 +55,49 @@ class DqPass::CodeRejectsTest < ActiveSupport::TestCase
     assert_not rejected?(broken)
   end
 
+  # A recipient's stored USAspending source: every award row, as the plugin writes it.
+  def usaspending_source(org, *descriptions)
+    header = DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS.to_csv
+    rows = descriptions.each_with_index.map { |text, i| usaspending_row(org.name.upcase, text).sub("DEAR0001910", "DEAR000#{i}") + "\n" }
+    Source.create!(url: "https://www.usaspending.gov/recipient/#{org.id}", source_kind: "usaspending_doe_awards", content_text: header + rows.join)
+  end
+
+  test "every award of a USAspending recipient counts, not only the largest one its claim quotes (Copilot, #1003)" do
+    org = pending("Mixed Awards Co")
+    source = usaspending_source(org, "GRID BATTERY STORAGE DEMONSTRATION", "ADVANCED REACTOR FUEL CLADDING")
+    mixed = Candidate.create!(source:, kind: "organization", status: "matched", payload: { "name" => org.name }, subject: org,
+      quote: usaspending_row(org.name.upcase, "GRID BATTERY STORAGE DEMONSTRATION"))
+    other = pending("Battery Only Co")
+    battery = Candidate.create!(source: usaspending_source(other, "GRID BATTERY STORAGE", "SOLAR INVERTERS"), kind: "organization",
+      status: "matched", payload: { "name" => other.name }, subject: other, quote: usaspending_row(other.name.upcase, "GRID BATTERY STORAGE"))
+
+    run_step
+
+    assert_not rejected?(mixed), "a smaller award names nuclear work"
+    assert rejected?(battery)
+  end
+
+  test "an ML accession with a letter is a document's title on its own (Copilot, #1003)" do
+    accession = claim(pending("ML24123A456"), "nrc_adams", "ML24123A456")
+    run_step
+    assert rejected?(accession)
+  end
+
+  test "only an owns or operates link keeps a utility; an offtake or vendor link doesn't (Copilot, #1003)" do
+    plant = Facility.create!(name: "Example Station", verification_status: "verified", verified_by: "human:test")
+    offtaker = pending("Offtake Power Co", eia_utility_id: "88881")
+    FacilityRelationship.create!(organization: offtaker, facility: plant, relationship_type: "offtakes_from")
+    owner = pending("Owner Power Co", eia_utility_id: "88882")
+    FacilityRelationship.create!(organization: owner, facility: plant, relationship_type: "owns")
+    off = claim(offtaker, "usaspending_recipients", "Recipient: OFFTAKE POWER CO")
+    own = claim(owner, "usaspending_recipients", "Recipient: OWNER POWER CO")
+
+    run_step
+
+    assert rejected?(off)
+    assert_not rejected?(own)
+  end
+
   test "a document's title, a utility with no nuclear plant, and a foreign record with no US address" do
     doc = claim(pending("Westinghouse Summary Report ML24123A456"), "nrc_adams", "Summary Report")
     utility = claim(pending("Plains Power Co", eia_utility_id: "99999"), "usaspending_recipients", "Recipient: Plains Power Co, nuclear fuel study")

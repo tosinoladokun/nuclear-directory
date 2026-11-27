@@ -53,6 +53,24 @@ class DqPass::RecordRolesTest < ActiveSupport::TestCase
     assert_nil proposed_role(batteries), "the fusion search label alone isn't nuclear work"
   end
 
+  test "a university's smaller nuclear award gives its role, quoted by that award's description (Copilot, #1003)" do
+    uni = pending("Mixed State University", website: "https://www.mixed.example.edu")
+    columns = DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS
+    row = ->(id, text) { [ id, "MIXED STATE UNIVERSITY", "1.0", "2025-01-01", "2027-12-31", "assistance", "81.121", "fusion",
+      "https://www.usaspending.gov/award/#{id}", id, "r", text, "Department of Energy" ].to_csv }
+    source = Source.create!(url: "https://www.usaspending.gov/recipient/mixed", source_kind: "usaspending_doe_awards",
+      content_text: columns.to_csv + row.("A1", "GRID BATTERY STORAGE") + row.("A2", %(FUSION "REACTOR" MATERIALS RESEARCH)))
+    Candidate.create!(source:, kind: "organization", status: "matched", quote: row.("A1", "GRID BATTERY STORAGE").chomp,
+      payload: { "name" => uni.name }, subject: uni)
+
+    run_step
+
+    role = proposed_role(uni)
+    assert_equal %(FUSION "REACTOR" MATERIALS RESEARCH), role.quote
+    assert DataQuality::Plugins::UsaspendingDoeAwards.new.quote_in_source?(source, role.quote),
+      "the description with its quotes is found in the stored CSV, which writes them doubled"
+  end
+
   test "no role: a university without a .edu site, one on an award with no nuclear work or only LENR, a company's award, a lab not on the list" do
     award(pending("Example University"), "Project: Advanced Reactors")
     award(pending("Stanford University", website: "https://www.stanford.edu"), "Project: Low-energy nuclear reactions (LENR) calorimetry")

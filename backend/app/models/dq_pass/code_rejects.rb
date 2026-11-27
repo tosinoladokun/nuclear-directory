@@ -16,8 +16,10 @@ require "csv"
 class DqPass::CodeRejects
   AWARDS = %w[arpa_e_projects usaspending_doe_awards usaspending_recipients].freeze
   LENR = /\b(?:low[- ]energy nuclear reactions?|LENR)\b/i
-  DOCUMENT_TITLE = /\b(?:summary report|audit plan|assignment of project number|presentation materials|transmittal)\b|\bML\d{8,}\b|\b(?:docket|project)\s*(?:no\.?|number)?\s*\d{2,}/i
+  DOCUMENT_TITLE = /\b(?:summary report|audit plan|assignment of project number|presentation materials|transmittal)\b|\bML\d{5}[A-Z]?\d{3,5}\b|\b(?:docket|project)\s*(?:no\.?|number)?\s*\d{2,}/i
   COUNTRY_SOURCES = %w[lead_finder wire_press].freeze
+  # The plant links that mean a utility owns or runs one; never vendor_for or offtakes_from (Copilot).
+  PLANT_LINKS = %w[owns operates].freeze
 
   def initialize(apply: ->(rows) { DataQuality::Matching.apply(rows) })
     @apply = apply
@@ -51,10 +53,10 @@ class DqPass::CodeRejects
     return "the name is a document's title, not a company's" if org.name.to_s.match?(DOCUMENT_TITLE)
     if kinds.any? && (kinds - AWARDS).empty?
       # Only award text that was read: a recipient row or an unreadable row says nothing either way (DQ, #1003).
-      texts = claims.map { |claim| self.class.award_text(claim) }.reject(&:blank?)
+      texts = claims.flat_map { |claim| self.class.award_texts(claim) }.reject(&:blank?)
       return "its award records name no nuclear work" if texts.any? && texts.none? { |text| nuclear?(text) }
     end
-    if org.eia_utility_id.present? && !kinds.include?("eia_owners") && FacilityRelationship.where(organization_id: org.id).none?
+    if org.eia_utility_id.present? && !kinds.include?("eia_owners") && FacilityRelationship.where(organization_id: org.id, relationship_type: PLANT_LINKS).none?
       return "a utility that owns or runs no nuclear plant"
     end
     foreign = claims.select { |claim| claim.source&.source_kind.in?(COUNTRY_SOURCES) }
@@ -62,19 +64,27 @@ class DqPass::CodeRejects
     "its record says it's in #{foreign['country_code']}, with no US address" if foreign && org.hq_state.blank? && claims.none? { |claim| claim.payload.to_h["hq_state"].present? }
   end
 
-  # The words an award record says about the work: for a USAspending row (a
-  # CSV row whose search column is the crawler's own label, "nuclear_grants"),
-  # its description column only; a recipient row has none; an ARPA-E line is
-  # all award text (DQ, #1003).
-  def self.award_text(claim)
+  # What an award record says about the work, one text per award: for a
+  # USAspending recipient's source, every award's description column (its
+  # search column is the crawler's own label, and its claim quotes only the
+  # largest award; Copilot); a recipient row has none; an ARPA-E line is all
+  # award text (DQ, #1003).
+  def self.award_texts(claim)
     case claim.source&.source_kind
     when "usaspending_doe_awards"
-      columns = DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS
-      fields = (CSV.parse_line(claim.quote.to_s) rescue nil)
-      fields && fields.size == columns.size ? fields[columns.index("description")].to_s : ""
-    when "usaspending_recipients" then ""
-    else claim.quote.to_s
+      rows = (CSV.parse(claim.source.content_text.to_s, headers: true) rescue nil)
+      descriptions = rows ? rows.filter_map { |row| row["description"].to_s.squish.presence if row["recipient_name"].present? } : []
+      descriptions.presence || [ description_of(claim.quote) ].compact
+    when "usaspending_recipients" then []
+    else [ claim.quote.to_s ]
     end
+  end
+
+  # The description column of one award row, as the plugin writes it, or nil.
+  def self.description_of(row)
+    columns = DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS
+    fields = (CSV.parse_line(row.to_s) rescue nil)
+    fields[columns.index("description")].to_s.squish.presence if fields && fields.size == columns.size
   end
 
   # Nuclear words other than LENR's ("low-energy nuclear reactions" names nuclear but isn't; DQ, 28 Nov).
