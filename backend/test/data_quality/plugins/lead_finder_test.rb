@@ -414,6 +414,15 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_empty Candidate.where(kind: "organization")
   end
 
+  test "a staging wire link is never read as a release either (Copilot, #987)" do
+    stub_request(:get, %r{\Ahttps://www\.hadron\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://www.hadron.example", "<html><head><title>Hadron Energy</title></head><body><p>Hadron Energy builds a micro modular reactor.</p></body></html>")
+    staging = "https://staging.globenewswire.com/news-release/hadron.html"
+    result = Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example", staging).id, finder: finder)
+    assert_includes result.reason, "not US"
+    assert_not_requested :get, staging
+  end
+
   test "a staging link given as the lead is never read, not even for its name, and the note says why (Copilot, #932)" do
     staging = "https://public-stag.3keysoft.example"
     result = Plugin.call(lead(staging).id, finder: finder)
@@ -439,6 +448,108 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     company = Organization.create!(name: "Sawtooth Simulation", verification_status: "verified", verified_by: "human:tosin")
 
     assert_equal :proposed, site_finder(site).find_site(company.id, "Sawtooth Simulation").outcome
+  end
+
+  # A lead from a list (not a person's), so its own pages must show it's a US company (#987).
+  def listed_lead(name, *urls) = urls.each_with_index.map { |url, i| Lead.sighted!(name:, kind: "company", key: "nea:805:#{i}", label: "NEA list", url:) }.last ||
+    Lead.sighted!(name:, kind: "company", key: "nea:805", label: "NEA list")
+  def html_page(url, body) = stub_request(:get, url).to_return(body:, headers: { "Content-Type" => "text/html" })
+
+  test "a script-built home page with only its title and a link: the brand's main domain is checked and claimed (#987: Terrestrial; Copilot)" do
+    stub_request(:get, %r{\Ahttps://(www\.)?terrestrial(usa|energy)\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://terrestrialusa.example", "<html><head><title>Terrestrial Energy: the most capital-efficient SMR</title>" \
+      "<meta name=\"description\" content=\"Terrestrial Energy is building the most capital-efficient SMR nuclear plant.\"></head>" \
+      "<body><div id=\"root\"></div><a href=\"https://www.terrestrialenergy.example/\"></a></body></html>")
+    html_page("https://www.terrestrialenergy.example/", "<html><head><title>Terrestrial Energy</title></head><body>" \
+      "<p>Terrestrial Energy is a developer of Generation IV nuclear plants that use its Integral Molten Salt Reactor.</p><a href=\"/contact\">Contact</a></body></html>")
+    html_page("https://www.terrestrialenergy.example/contact", "<html><body><p>Reach Terrestrial Energy at our Charlotte, NC headquarters.</p></body></html>")
+
+    result = Plugin.call(listed_lead("terrestrialusa.example", "https://terrestrialusa.example").id, finder: finder)
+    assert_equal :proposed, result.outcome, result.reason
+    claim = Candidate.find(result.candidate_id)
+    assert_equal [ "Terrestrial Energy", "https://www.terrestrialenergy.example" ], claim.payload.values_at("name", "website"),
+      "named by the title part its address carries, claimed on the main domain"
+  end
+
+  test "the company's own wire release can show it's US; a partner's release can't (#987: NuCube)" do
+    stub_request(:get, %r{\Ahttps://(www\.)?(nucube\.example|globenewswire\.com)/robots\.txt}).to_return(status: 404)
+    html_page("https://www.nucube.example", "<html><head><title>Home | NuCube Energy</title></head><body>" \
+      "<p>NuCube Energy builds factory-made microreactors.</p></body></html>")
+    own = "https://www.globenewswire.com/news-release/2026/06/25/1/0/en/nucube.html"
+    partner = "https://www.globenewswire.com/news-release/2026/06/26/2/0/en/partner.html"
+    html_page(own, "<html><body><p>NuCube Energy announced a listing.</p><h3>About NuCube Energy</h3>" \
+      "<p>Founded in 2023 and headquartered in Idaho Falls, Idaho, NuCube is an advanced-nuclear technology company.</p></body></html>")
+    # A partner's release, with both About sections: Acme's Austin address is never NuCube's (Copilot).
+    html_page(partner, "<html><body><p>Acme Grid signed with NuCube Energy.</p><h3>About Acme Grid</h3><p>Acme Grid, 1 Main St, Austin, TX 78701.</p>" \
+      "<h3>About NuCube Energy</h3><p>NuCube Energy develops factory-built microreactors.</p></body></html>")
+
+    refused = Plugin.call(listed_lead("NuCube Energy", "https://www.nucube.example", partner).id, finder: finder)
+    assert_includes refused.reason, "not US"
+    Lead.delete_all
+    Source.where(url: [ "https://www.nucube.example" ]).delete_all
+    found = Plugin.call(listed_lead("NuCube Energy", "https://www.nucube.example", own).id, finder: finder)
+    assert_equal :proposed, found.outcome, found.reason
+  end
+
+  test "a listing alone isn't US; with Delaware incorporation or a headquarters region it is (#987: Hadron)" do
+    stub_request(:get, %r{\Ahttps://www\.hadron\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://www.hadron.example", "<html><head><title>Hadron Energy</title></head><body><p>Hadron Energy builds a micro modular reactor.</p>" \
+      "<p>Hadron Energy, Inc. (Nasdaq: HDRN)</p><a href=\"/investor-relations\">Investor relations</a></body></html>")
+    html_page("https://www.hadron.example/investor-relations", "<html><body><p>Stories and filings.</p></body></html>")
+    assert_includes Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example").id, finder: finder).reason, "not US"
+
+    plugin = Plugin.new(search_key: nil)
+    # Its own story page, given with the lead (DQ), states its headquarters.
+    story = "https://www.hadron.example/p/second-location"
+    html_page(story, "<html><body><p>Our engineering headquarters will remain in the Bay Area.</p></body></html>")
+    Lead.delete_all
+    Source.where(url: "https://www.hadron.example").delete_all
+    found = Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example", story).id, finder: finder)
+    assert_equal :proposed, found.outcome, found.reason
+
+    assert plugin.send(:us_text?, "Hadron Energy, Inc. (Nasdaq: HDRN). Hadron Energy, Inc. · Delaware")
+    assert plugin.send(:us_text?, "Our engineering headquarters will remain in the Bay Area.")
+    assert_not plugin.send(:us_text?, "Hadron Energy, Inc. (Nasdaq: HDRN)")
+    assert_not plugin.send(:us_text?, "Nuclearis Energy, Inc. · Delaware"), "incorporation alone isn't headquarters"
+    assert_not plugin.send(:us_text?, "Nuclearis Energy is incorporated in Wilmington, Delaware and headquartered in Buenos Aires, Argentina"),
+      "an incorporation city isn't a US office (Copilot)"
+    assert plugin.send(:us_text?, "Acme is incorporated in Delaware and headquartered in Austin, Texas")
+  end
+
+  test "US forms: 'U.S.' before a space, City, ST and City, State; never a lone two-letter word" do
+    [ "a U.S. company", "Indianapolis, IN 46204", "Charlotte, NC headquarters", "headquartered in Idaho Falls, Idaho", "Frederick, Maryland" ].each do |text|
+      assert_match Plugin::US, text
+    end
+    [ "Toronto, ON", "CONTACT US", "London, England", "about us" ].each { |text| assert_no_match Plugin::US, text }
+  end
+
+  test "the short name the site uses for itself carries the quote (#987: FANCO)" do
+    stub_request(:get, %r{\Ahttps://fanuclear\.example/(robots\.txt|about-us)}).to_return(status: 404)
+    html_page("https://fanuclear.example", "<html><head><title>First American Nuclear Co.</title></head><body><header><a href=\"/\">" \
+      "<img src=\"/uploads/FANCO-logo.svg\" alt=\"\"></a></header><p>First American Nuclear is developing a practical approach to utility-scale power.</p>" \
+      "<p>FANCO is not merely developing a reactor.</p><p>310 E 96th St, Indianapolis, IN 46204</p></body></html>")
+
+    result = Plugin.call(listed_lead("fanuclear.example", "https://fanuclear.example").id, finder: finder)
+    assert_equal :proposed, result.outcome, result.reason
+    claim = Candidate.find(result.candidate_id)
+    assert_equal [ "First American Nuclear Co.", "FANCO is not merely developing a reactor." ], [ claim.payload["name"], claim.quote ]
+  end
+
+  test "a website alone is named by the title part its address carries, never 'Home' (#987)" do
+    plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil)
+    { "https://www.valaratomics.example" => [ "The New Atomic Age | Valar Atomics", "Valar Atomics" ],
+      "https://www.nucube.example" => [ "Home | NuCube Energy", "NuCube Energy" ] }.each do |site, (title, name)|
+      stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
+      html_page(site, "<html><head><title>#{title}</title></head><body></body></html>")
+      assert_equal name, plugin.send(:site_name, [ site ])
+    end
+  end
+
+  test "a generic first word never matches another company's address alone (DQ on #985)" do
+    plugin = Plugin.new(search_key: nil)
+    assert_not plugin.send(:host_names?, "https://www.advancedenergy.example", "Advanced Fission")
+    assert_not plugin.send(:host_names?, "https://www.nuclearfuels.example", "Nuclear Engineering Partners")
+    assert plugin.send(:host_names?, "https://www.sawtoothsim.example", "Sawtooth Simulation")
   end
 
   test "a published company with no website is searched too, after the pending ones (PM, 24 Nov)" do
