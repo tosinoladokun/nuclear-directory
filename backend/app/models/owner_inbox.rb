@@ -177,19 +177,24 @@ class OwnerInbox
 
   # Data Quality's name proposal a Create row is created under (#1000), as AdminHelper#proposed_name_claim picks it,
   # for every row at once (#1008): only a proposal still on the company it was proposed for, the last by id.
-  def proposed_name_claim(entry)
-    @proposed_names ||= begin
+  def proposed_name_claim(entry) = name_proposals.dig(entry.item.candidate_id, :named)
+
+  # A row's name proposals that approval only adds as another name (moved off their company by a merge, #1019), one
+  # per name, as AdminHelper#alias_only_names picks them, for every row at once (#1008).
+  def alias_only_names(entry) = name_proposals.dig(entry.item.candidate_id, :aliases) || []
+
+  # { row's claim id => { named:, aliases: } } for every Create row, from one query for Data Quality's proposal actions.
+  def name_proposals
+    @name_proposals ||= begin
       rows = sections["new_record"]
       targets = DqAction.where(candidate_id: rows.flat_map(&:ids), action: "propose_fields", target_type: "Organization").pluck(:candidate_id, :target_id).to_h
       rows.to_h do |row|
-        named = claims_by_id.values_at(*row.ids).compact.select do |claim|
-          claim.kind_organization? && claim.subject_type == "Organization" && claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) &&
-            targets[claim.id] == claim.subject_id
-        end
-        [ row.item.candidate_id, named.max_by(&:id) ]
+        proposals = claims_by_id.values_at(*row.ids).compact
+          .select { |claim| claim.kind_organization? && claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) && targets.key?(claim.id) }
+        live, moved = proposals.partition { |claim| claim.subject_type == "Organization" && targets[claim.id] == claim.subject_id }
+        [ row.item.candidate_id, { named: live.max_by(&:id), aliases: moved.sort_by(&:id).uniq { |claim| claim.payload["name"] } } ]
       end
     end
-    @proposed_names[entry.item.candidate_id]
   end
 
   # A pending company's other checked claims shown with its Create (one Create per company), by the Create's claim id.

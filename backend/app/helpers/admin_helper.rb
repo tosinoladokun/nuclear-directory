@@ -403,6 +403,8 @@ module AdminHelper
   # a merge, #1019), one per name.
   def alias_only_names(entry)
     return [] if entry.kind != "new_record"
+    # Today reads every row's at once (#1008).
+    return @inbox.alias_only_names(entry) if @inbox.respond_to?(:alias_only_names)
 
     named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
     directory = DataQuality::DirectoryClient.new
