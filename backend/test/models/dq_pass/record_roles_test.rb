@@ -39,6 +39,20 @@ class DqPass::RecordRolesTest < ActiveSupport::TestCase
     assert_equal [ "university", text ], [ role.payload["role"], role.quote ]
   end
 
+  test "a university on a USAspending row is quoted by the award's description only, never the crawler's label (DQ, #1003)" do
+    uni = pending("Example State University", website: "https://www.example.edu")
+    row = [ "DENE0009", "EXAMPLE STATE UNIVERSITY", "500000.0", "2025-01-01", "2027-12-31", "assistance", "81.121", "fusion",
+      "https://www.usaspending.gov/award/X", "X", "r-1", "MOLTEN SALT REACTOR CORROSION STUDIES", "Department of Energy" ].to_csv.chomp
+    award(uni, row, kind: "usaspending_doe_awards")
+    batteries = pending("Battery State University", website: "https://battery.example.edu")
+    award(batteries, row.sub("MOLTEN SALT REACTOR CORROSION STUDIES", "GRID BATTERY STORAGE").sub("EXAMPLE", "BATTERY"), kind: "usaspending_doe_awards")
+
+    run_step
+
+    assert_equal "MOLTEN SALT REACTOR CORROSION STUDIES", proposed_role(uni).quote
+    assert_nil proposed_role(batteries), "the fusion search label alone isn't nuclear work"
+  end
+
   test "no role: a university without a .edu site, one on an award with no nuclear work or only LENR, a company's award, a lab not on the list" do
     award(pending("Example University"), "Project: Advanced Reactors")
     award(pending("Stanford University", website: "https://www.stanford.edu"), "Project: Low-energy nuclear reactions (LENR) calorimetry")

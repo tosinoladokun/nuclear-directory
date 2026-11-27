@@ -54,8 +54,9 @@ class DqPass::RecordRoles
     return unless org.name.to_s.match?(UNIVERSITY) && edu?(org.website)
 
     award = Candidate.where(kind: "organization", subject_type: "Organization", subject_id: org.id).includes(:source).order(:id)
-      .find { |claim| claim.source&.source_kind.in?(AWARDS) && DqPass::CodeRejects.nuclear?(claim.quote.to_s) } or return
-    row(org, "university", award.source.url, award.quote, "a university on a nuclear or fusion award")
+      .find { |claim| claim.source&.source_kind.in?(AWARDS) && DqPass::CodeRejects.nuclear?(DqPass::CodeRejects.award_text(claim)) } or return
+    # A USAspending row is quoted by its description only, never the crawler's own label (DQ, #1003).
+    row(org, "university", award.source.url, DqPass::CodeRejects.award_text(award), "a university on a nuclear or fusion award")
   end
 
   private

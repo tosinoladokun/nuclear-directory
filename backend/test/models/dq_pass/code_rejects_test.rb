@@ -26,6 +26,25 @@ class DqPass::CodeRejectsTest < ActiveSupport::TestCase
     assert_not rejected?(fusion)
   end
 
+  # A USAspending award row as the plugin stores it (its search column is the crawler's own label).
+  def usaspending_row(recipient, description)
+    [ "DEAR0001910", recipient, "2910346.0", "2024-07-12", "2027-07-11", "assistance", "81.135", "fusion",
+      "https://www.usaspending.gov/award/ASST_NON_DEAR0001910_089", "ASST_NON_DEAR0001910_089", "9fbce0fa-R", description,
+      "Department of Energy" ].to_csv.chomp
+  end
+
+  test "a USAspending row is judged by its description, not the crawler's search label (fusion is a word) (DQ, #1003)" do
+    steel = pending("Limelight Steel")
+    claim(steel, "usaspending_doe_awards", usaspending_row("LIMELIGHT STEEL INC.", "REVOLUTIONIZING ORE TO STEEL TO IMPACT EMISSIONS (ROSIE) SBIR/STTR"))
+    recipient = claim(steel, "usaspending_recipients", "Recipient: LIMELIGHT STEEL INC.\nCity: OAKLAND\nState: CA")
+    reactor = claim(pending("Fission Parts"), "usaspending_doe_awards", usaspending_row("FISSION PARTS INC.", "ADVANCED REACTOR FUEL CLADDING"))
+
+    run_step
+
+    assert rejected?(recipient)
+    assert_not rejected?(reactor)
+  end
+
   test "a document's title, a utility with no nuclear plant, and a foreign record with no US address" do
     doc = claim(pending("Westinghouse Summary Report ML24123A456"), "nrc_adams", "Summary Report")
     utility = claim(pending("Plains Power Co", eia_utility_id: "99999"), "usaspending_recipients", "Recipient: Plains Power Co, nuclear fuel study")

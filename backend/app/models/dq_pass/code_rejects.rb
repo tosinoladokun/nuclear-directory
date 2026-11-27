@@ -1,3 +1,5 @@
+require "csv"
+
 # Data Quality's pass, step 1 (#998): recommends reject, in code and with no
 # model, for a pending company whose own records show it's out of scope.
 # Data Quality's rules (28 Nov). It only recommends: Tosin's Accept decides.
@@ -49,7 +51,7 @@ class DqPass::CodeRejects
     kinds = claims.map { |claim| claim.source&.source_kind }.compact.uniq
     return "the name is a document's title, not a company's" if org.name.to_s.match?(DOCUMENT_TITLE)
     if kinds.any? && (kinds - AWARDS).empty?
-      texts = claims.map { |claim| claim.quote.to_s }
+      texts = claims.map { |claim| self.class.award_text(claim) }
       return "its award records name no nuclear work" if texts.none? { |text| nuclear?(text) }
     end
     if org.eia_utility_id.present? && !kinds.include?("eia_owners") && FacilityRelationship.where(organization_id: org.id).none?
@@ -58,6 +60,21 @@ class DqPass::CodeRejects
     foreign = claims.select { |claim| claim.source&.source_kind.in?(COUNTRY_SOURCES) }
       .map { |claim| claim.payload.to_h }.find { |payload| payload["country_code"].present? && payload["country_code"] != "US" }
     "its record says it's in #{foreign['country_code']}, with no US address" if foreign && org.hq_state.blank? && claims.none? { |claim| claim.payload.to_h["hq_state"].present? }
+  end
+
+  # The words an award record says about the work: for a USAspending row (a
+  # CSV row whose search column is the crawler's own label, "nuclear_grants"),
+  # its description column only; a recipient row has none; an ARPA-E line is
+  # all award text (DQ, #1003).
+  def self.award_text(claim)
+    case claim.source&.source_kind
+    when "usaspending_doe_awards"
+      columns = DataQuality::Plugins::UsaspendingDoeAwards::COLUMNS
+      fields = (CSV.parse_line(claim.quote.to_s) rescue nil)
+      fields && fields.size == columns.size ? fields[columns.index("description")].to_s : ""
+    when "usaspending_recipients" then ""
+    else claim.quote.to_s
+    end
   end
 
   # Nuclear words other than LENR's ("low-energy nuclear reactions" names nuclear but isn't; DQ, 28 Nov).
