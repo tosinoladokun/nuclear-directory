@@ -484,6 +484,17 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_enqueued_with(job: DataQuality::RunJob, args: [ "web_page", { only: %w[match verify] } ])
   end
 
+  test "a retry by request_key still has its page stored and then verified (Copilot, #934)" do
+    row = { action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote: "In Camden.",
+            source_url: "https://holtec.example/about", reason: "r", request_key: "dq-934-1" }
+    act(row)
+    clear_enqueued_jobs
+    act(row)
+
+    assert_equal 1, Candidate.where(source: Source.find_by!(url: row[:source_url])).count, "the same claim"
+    assert_enqueued_with(job: DataQuality::ProposalPagesJob, args: [ [ Source.find_by!(url: row[:source_url]).id ], [ "web_page" ] ])
+  end
+
   test "a page that blocks fetching stays unstored, so its claim goes to review as before (#934)" do
     stub_request(:get, "https://holtec.example/robots.txt").to_return(status: 404)
     stub_request(:get, "https://holtec.example/about").to_return(status: 403, body: "Access Denied")

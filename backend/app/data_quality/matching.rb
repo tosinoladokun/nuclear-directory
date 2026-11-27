@@ -62,7 +62,9 @@ module DataQuality::Matching
     claims = rows.zip(results).select { |row, result| result.ok && PAGE_ACTIONS.include?(row["action"].to_s) }.flat_map { |_, result| result.created_ids }
     pages = DataQuality::ProposalPages.due(claims)
     if pages.any?
-      DataQuality::ProposalPagesJob.perform_later(pages, requeue.to_a)
+      # Its own kind too: a retry by request_key returns its claim without
+      # adding the kind, and must still be verified after storing (Copilot).
+      DataQuality::ProposalPagesJob.perform_later(pages, (requeue.to_a + Source.where(id: pages).distinct.pluck(:source_kind)).uniq)
     else
       requeue.each { |kind| DataQuality::RunJob.perform_later(kind, only: %w[match verify]) }
     end

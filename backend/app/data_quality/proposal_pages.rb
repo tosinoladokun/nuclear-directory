@@ -24,11 +24,26 @@ module DataQuality::ProposalPages
     plugin = DataQuality::Plugins::WebPage.new
     Candidate.where(id: candidate_ids).includes(:source).filter_map do |candidate|
       source = candidate.source
-      next unless source.source_kind == "web_page" && source.crawl_status != "needs_human"
+      next unless source.source_kind == "web_page" && !source.crawl_needs_human?
       next if source.content_text.present? && plugin.quote_in_source?(source, candidate.quote)
 
       source.id
     end.uniq
+  end
+
+  # How long a new claim on a page waiting to be stored is left for its
+  # job (ProposalPagesJob) before verify treats it as it did before #934.
+  WAIT = 1.hour
+
+  # True while a claim's page is being fetched for it: a web page not
+  # fetched since the claim was made, for up to WAIT. Verify leaves such a
+  # claim as it is, so a run already queued before the job doesn't send it
+  # to review for a page that's about to be stored (Copilot).
+  def self.awaiting?(candidate)
+    source = candidate.source
+    source.source_kind == "web_page" && !source.crawl_needs_human? && candidate.created_at > WAIT.ago &&
+      (source.fetched_at.nil? || source.fetched_at < candidate.created_at) &&
+      (source.content_text.blank? || !DataQuality::Plugins::WebPage.new.quote_in_source?(source, candidate.quote))
   end
 
   # Fetches each source, one at a time, through the polite Fetcher. A failure
@@ -36,7 +51,12 @@ module DataQuality::ProposalPages
   def self.store(source_ids, fetcher: DataQuality::Fetcher.new)
     Source.where(id: source_ids).order(:id).to_h do |source|
       result = begin
-        DataQuality::Snapshot.take(source, fetcher:)
+        # Checked again under the row lock as the job runs: a delayed job
+        # never fetches a page that became a person's to look at meanwhile
+        # (three blocks in a row, or robots.txt), so it stays that way (Copilot).
+        DataQuality::Snapshot.claim(source) do
+          source.crawl_needs_human? ? :needs_human : DataQuality::Snapshot.take(source, fetcher:)
+        end
       rescue StandardError => e
         Rails.error.report(e, handled: true, context: { source_id: source.id })
         :error
