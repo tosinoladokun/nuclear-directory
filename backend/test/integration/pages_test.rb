@@ -11,14 +11,18 @@ class PagesTest < ActionDispatch::IntegrationTest
     assert_select "h2#counts", "Analytics"
     assert_select "section[aria-labelledby=counts] p", /We use PostHog to see how the site is used\. We record:/
     # Everything analytics records, one item each (Tosin's shorter list, 27 Nov).
-    assert_equal [ "pages viewed and how long they stay open", "searches and how many results they found", "links you follow off the site (the domain only)",
-      "clicks on things that don't respond", "how fast pages load", "which homepage version you saw (we're testing two) and what you clicked on it",
-      "your country, worked out from your IP address" ], css_select("section[aria-labelledby=counts] ul > li").map { |item| item.text.strip }
-    assert_select "section[aria-labelledby=counts] p", /No cookies, no recordings, and one visit isn't linked to the next/
-    # #205: PostHog uses the IP to count visitors and drops it; the country comes from our lookup.
-    assert_select "section[aria-labelledby=counts] p", /PostHog doesn't store your IP address\. Your IP address and browser are used, without being stored, to count unique visitors and to pick your homepage version\./
-    assert_select "section[aria-labelledby=counts] p a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
-    assert_select "section[aria-labelledby=counts] p a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
+    assert_equal [ "Pages viewed and how long they stay open", "Searches and how many results they found", "Links you follow off the site (the domain only)",
+      "Clicks on things that don't respond", "How fast pages load",
+      "Which homepage version you saw (we're testing two) and what you clicked on it",
+      "Your browser and device type",
+      "Your country, from your IP address, which also counts unique visitors and picks your homepage version, and isn't stored (IP Geolocation by DB-IP, CC BY 4.0)" ], css_select("section[aria-labelledby=counts] ul > li").map { |item| item.text.strip }
+    # #205: the IP counts visitors and gives the country, and isn't stored; #909: it picks the homepage version. The
+    # browser and device type are recorded (PostHog's $browser, $os and $device_type, which sanitize keeps; Copilot, #997).
+    assert_no_match(/browser are used, without being stored/, response.body)
+    # DB-IP asks for its linked credit, and CC BY 4.0 for the licence named with its link (section 3(a)(1)(C)).
+    assert_select "section[aria-labelledby=counts] li a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
+    assert_select "section[aria-labelledby=counts] li a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
+    assert_select ".nd-glance", /Recordings.*None/m
     assert_select ".nd-glance", /through this site/ # the scripts go through this site (the facts card says so)
     assert_select ".nd-info__updated", /Last updated November 2026/ # the Analytics section was rewritten (27 Nov)
     assert_no_match(/set to discard IP addresses/, response.body)

@@ -110,7 +110,7 @@ class HomeTest < ActionDispatch::IntegrationTest
 
   test "the privacy page says how the homepage version is chosen (#909)" do
     get "/privacy"
-    assert_includes response.body, "Your IP address and browser are used, without being stored, to count unique visitors and to pick your homepage version."
+    assert_includes response.body, "which also counts unique visitors and picks your homepage version, and isn't stored"
   end
 
   test "the site header on other pages uses the same instant search" do

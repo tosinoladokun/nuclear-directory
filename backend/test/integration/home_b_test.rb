@@ -100,6 +100,6 @@ class HomeBTest < ActionDispatch::IntegrationTest
   # The homepage's clicks (categories, charts, records, the download link) are recorded, so Privacy says so (27 Nov list).
   test "the privacy page names the homepage clicks" do
     get "/privacy"
-    assert_includes response.body, "which homepage version you saw (we're testing two) and what you clicked on it"
+    assert_includes response.body, "and what you clicked on it"
   end
 end
