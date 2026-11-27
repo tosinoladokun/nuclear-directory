@@ -349,10 +349,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         [ data ].flatten.flat_map { |item| item.is_a?(Hash) && item["@graph"].is_a?(Array) ? item["@graph"] : [ item ] }
       end
       # The whole name, legal ending and punctuation aside: never "Energy" or "Hadron Energy Holdings" for Hadron Energy (Copilot).
-      wanted = OrganizationAlias.normalize(name)
+      wanted = @directory.normalize_organization_name(name)
       own = blocks.select do |block|
         block.is_a?(Hash) && (Array(block["@type"]) & ORGANIZATION_TYPES).any? && block["name"].is_a?(String) &&
-          OrganizationAlias.normalize(block["name"]) == wanted
+          @directory.normalize_organization_name(block["name"]) == wanted
       end
       addresses = own.flat_map { |block| [ block["address"] ].flatten }.select { |address| address.is_a?(Hash) }
       lines = addresses.filter_map do |address|
