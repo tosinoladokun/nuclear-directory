@@ -133,7 +133,11 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal "text/vnd.turbo-stream.html", response.media_type
-    assert_select "turbo-stream[action=remove][target=inbox-item-#{create.id}]"
+    # The row becomes a receipt where it was, with the focus and the Undo (Design).
+    assert_select "turbo-stream[action=replace][target=inbox-item-#{create.id}] template li.nd-inbox__recent#inbox-item-#{create.id}[tabindex='-1'][data-controller=receipt]" do
+      assert_select "span.type-body", "Said no to Queries Fission 0"
+      assert_select "form[action=?]", admin_inbox_undo_path
+    end
     assert_select "turbo-stream[action=update][target=admin-flash] template", /Said no/
     assert_select "turbo-stream[action=update][target=admin-flash] template form[action=?]", admin_inbox_undo_path
     assert create.reload.status_rejected?

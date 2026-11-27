@@ -35,9 +35,11 @@ class Admin::InboxController < Admin::BaseController
       # Clicked on the page (Turbo): only the decided row goes and the message changes, so a run of quick
       # decisions doesn't rebuild the whole inbox each time (#1008). Reloading shows everything as it is now.
       if request.format.turbo_stream?
+        # The row becomes a receipt where it was, with the focus (Design); the message is updated too, for screen readers.
+        decided = Candidate.find(params[:candidate_id].to_i)
         action = (render_to_string(partial: "admin/inbox/undo", formats: :html, locals: { token: undo }) if undo)
         return render turbo_stream: [
-          turbo_stream.remove("inbox-item-#{params[:candidate_id].to_i}"),
+          turbo_stream.replace("inbox-item-#{decided.id}", partial: "admin/inbox/receipt", formats: :html, locals: { claim: decided, undo: }),
           turbo_stream.update("admin-flash", partial: "admin/flash", formats: :html, locals: { notice:, alert: nil, action: })
         ]
       end
