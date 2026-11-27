@@ -18,6 +18,9 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
       @results
     end
 
+    # The lead finder's own test, on the page as stored.
+    def own_site_for?(page, names) = DataQuality::Plugins::LeadFinder.new(search_key: nil).own_site_for?(page, names)
+
     def read_page(url)
       html = @pages[url] or return
       Source.find_or_create_by!(url:) { |row| row.source_kind = "web_page" }.tap do |source|
@@ -105,7 +108,40 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_empty proposals
   end
 
-  test "a reject only when the strong model says it's out of scope, as a recommendation on its open claims" do
+  CUSTOMER = "https://www.calnano.example".freeze
+  CUSTOMER_PAGE = "<html><head><title>California Nanotechnologies | Cryomilling</title></head><body><main>" \
+    "<h1>Advanced materials</h1><p>Acme Fission designs and builds microreactors for remote sites, and we mill their powders.</p></main></body></html>".freeze
+
+  test "a customer's page that mentions the company is never its site, and no role or reject comes from it (DQ, #1005)" do
+    finder = FakeFinder.new(results: [ CUSTOMER ], pages: { CUSTOMER => CUSTOMER_PAGE })
+    llm = FakeLlm.new(extract: answer(website: CUSTOMER, website_quote: "Acme Fission designs and builds microreactors for remote sites"))
+    assert_equal "nothing", researcher(llm:, finder:).research(@org)[:outcome]
+
+    llm = FakeLlm.new(extract: answer(sure: false), verify: answer(website: nil, out_of_scope: true))
+    source = Source.create!(url: "https://records.example/award/9", source_kind: "arpa_e_projects")
+    claim = Candidate.create!(source:, kind: "organization", status: "matched", quote: "Organization: Acme Fission", payload: { "name" => "Acme Fission" }, subject: @org)
+    researcher(llm:, finder:).research(@org)
+    assert_nil claim.reload.dq_recommendation, "not from another company's page"
+    assert_empty proposals
+  end
+
+  test "its own site passes under an alias when the crawler's spelling fails the name test (DQ, #1005)" do
+    org = Organization.create!(name: "ACME FISSION TECHNOLOGIES LLC", verification_status: "pending")
+    OrganizationAlias.create!(organization: org, alias: "Acme Fission")
+    CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", stats: { DataQuality::Plugins::LeadFinder::SITE_FOR => org.id })
+    assert_equal "proposed", researcher(llm: FakeLlm.new(extract: answer)).research(org)[:outcome]
+  end
+
+  test "never a reject for a university, lab, government body, investor or a company a person suggested, even on the strong model's word (DQ, #1005)" do
+    uni = Organization.create!(name: "Example University", website: HOME, verification_status: "pending")
+    source = Source.create!(url: "https://records.example/award/10", source_kind: "arpa_e_projects")
+    claim = Candidate.create!(source:, kind: "organization", status: "matched", quote: "Organization: Example University", payload: { "name" => "Example University" }, subject: uni)
+    researcher(llm: FakeLlm.new(extract: answer(sure: false), verify: answer(role: nil, out_of_scope: true))).research(uni)
+    assert_nil claim.reload.dq_recommendation
+  end
+
+  test "a reject only when the strong model says it's out of scope, from its own site, as a recommendation on its open claims" do
+    @org.update!(website: HOME)
     source = Source.create!(url: "https://records.example/award/1", source_kind: "arpa_e_projects")
     claim = Candidate.create!(source:, kind: "organization", status: "matched", quote: "Organization: Acme Fission", payload: { "name" => "Acme Fission" }, subject: @org)
     researcher(llm: FakeLlm.new(extract: answer(website: nil, role: nil, out_of_scope: true))).research(@org)

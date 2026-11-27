@@ -234,6 +234,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # Results are only candidates: never kept, as Brave's terms require.
   def search_sites(name) = search(name)
 
+  # Whether a page read is the company's own site under any of its names
+  # (its title, og:site_name, first h1, header logo, or its address), for
+  # Data Quality's pass (#998; DQ: aliases too, crawler spellings vary).
+  def own_site_for?(page, names) = Array(names).compact_blank.any? { |name| own_site?(page, name) }
+
   # A page through this finder's Fetcher (robots, blocks, once a day), or nil; never a staging or preview host.
   def read_page(url) = (snapshot(url) unless staging_host?(url))
 

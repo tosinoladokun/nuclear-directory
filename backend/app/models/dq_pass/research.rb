@@ -124,7 +124,7 @@ class DqPass::Research
     urls = org.website.present? ? [ home(org.website) ] : finder.search_sites(org.name).first(CANDIDATES)
     urls.compact.uniq.filter_map do |url|
       page = finder.read_page(url) or next
-      { url: home(page.final_url.presence || page.url) || url, title: page.title.to_s.squish, text: main_text(page.content_text) }
+      { url: home(page.final_url.presence || page.url) || url, title: page.title.to_s.squish, text: main_text(page.content_text), source: page }
     end
   end
 
@@ -136,21 +136,29 @@ class DqPass::Research
     node.text.squish.first(PAGE_CHARS)
   end
 
-  # The proposals an answer allows, after code's checks.
+  # The proposals an answer allows, after code's checks. A role or a reject
+  # comes only from the company's own page: its website's, or the page
+  # accepted as its website now; never another company's page that Brave
+  # found (DQ, #1005).
   def rows_for(org, pages, answer)
     rows = []
     site = answer["website"].presence && pages.find { |page| page[:url] == home(answer["website"]) }
-    if org.website.blank? && site && website_ok?(org, site, answer["website_quote"])
-      rows << { "action" => "propose_fields", "target" => org.id, "fields" => { "website" => site[:url] }, "source_url" => site[:url],
+    accepted = org.website.blank? && site && website_ok?(org, site, answer["website_quote"]) ? site : nil
+    if accepted
+      rows << { "action" => "propose_fields", "target" => org.id, "fields" => { "website" => accepted[:url] }, "source_url" => accepted[:url],
         "quote" => answer["website_quote"], "reason" => reason(answer, "its own home page"), "request_key" => key(org, "website") }
     end
+    own = org.website.present? ? pages.find { |page| page[:url] == home(org.website) } : accepted
+    return rows unless own
+
     role = answer["role"].to_s
-    quoted = pages.find { |page| self.class.quoted?(answer["role_quote"], page[:text]) }
-    if role.present? && quoted && !OrganizationRole.where(organization_id: org.id).exists? && directory.role_key?(role)
-      rows << { "action" => "propose_role", "target" => org.id, "role" => role, "source_url" => quoted[:url], "quote" => answer["role_quote"],
+    if role.present? && self.class.quoted?(answer["role_quote"], own[:text]) && !OrganizationRole.where(organization_id: org.id).exists? &&
+        directory.role_key?(role)
+      rows << { "action" => "propose_role", "target" => org.id, "role" => role, "source_url" => own[:url], "quote" => answer["role_quote"],
         "reason" => reason(answer, "its own page states the work"), "request_key" => key(org, "role:#{role}") }
     end
-    if answer["out_of_scope"] && answer["escalated"]
+    # A reject only on the strong model's word, and never for those Data Quality keeps from rejects.
+    if answer["out_of_scope"] && answer["escalated"] && !DqPass.never_reject?(org)
       Candidate.where(kind: "organization", subject_type: "Organization", subject_id: org.id, status: DataQuality::Recommendations::OPEN,
         dq_recommendation: nil).order(:id).each do |claim|
         rows << { "action" => "recommend", "id" => claim.id, "verdict" => "reject", "reason" => reason(answer, "out of scope"),
@@ -167,17 +175,23 @@ class DqPass::Research
   end
 
   private
+    # The company's own site, by the lead finder's own test (#985: its title,
+    # site name, first h1, header logo or address names it; never a staging
+    # host, which read_page refuses), under its name or an alias; the quote
+    # word for word on that page and naming it; and no other company's site.
     def website_ok?(org, page, quote)
+      names = [ org.name, *OrganizationAlias.where(organization_id: org.id).pluck(:alias) ]
+      return false unless finder.own_site_for?(page[:source], names)
       return false unless self.class.quoted?(quote, page[:text]) || self.class.quoted?(quote, page[:title])
-
-      brand = org.name.to_s.squish.sub(/[,\s]+(?:inc|llc|corp|corporation|co|company|ltd|limited)\.?\z/i, "")
-      return false unless quote.to_s.downcase.include?(brand.downcase)
+      return false unless names.any? { |name| quote.to_s.downcase.include?(brand(name).downcase) }
 
       host = URI.parse(page[:url]).host.to_s.downcase.delete_prefix("www.")
       !Organization.where.not(id: org.id).where("lower(website) ~ ?", "^https?://(www\\.)?#{Regexp.escape(host)}(/|$)").exists?
     rescue URI::Error
       false
     end
+
+    def brand(name) = name.to_s.squish.sub(/[,\s]+(?:inc|llc|corp|corporation|co|company|ltd|limited)\.?\z/i, "")
 
     def ask(role, org, pages)
       DqPass.check_budget!(now: @now)
