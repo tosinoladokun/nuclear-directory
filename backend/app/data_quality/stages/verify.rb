@@ -36,7 +36,11 @@ class DataQuality::Stages::Verify < DataQuality::Stage
       pending = candidates.where(status: %w[new matched]).includes(:source).order(:id).to_a
       # Enrichment still waiting for its NRC unit: nothing to verify yet.
       pending.reject! { |candidate| candidate.status_new? && directory.enrichment?(candidate) }
+      # A proposal whose page is still being stored (#934): verified after its job.
+      awaiting = DataQuality::ProposalPages.awaiting(pending)
+      pending -= awaiting
       stats["candidates"] = pending.size
+      stats["awaiting_page"] = awaiting.size if awaiting.any?
 
       # Code checks first; only what passes goes to the model.
       held = pending.to_h { |candidate| [ candidate.id, hold_reason(candidate) ] }.compact

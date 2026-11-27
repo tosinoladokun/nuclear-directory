@@ -75,7 +75,6 @@ class DataQuality::Pipeline
 
     result
   end
-  private_class_method :with_lock
 
   # Yields holding the source kind's lock and returns the block's value, or
   # returns false without yielding when another session holds it.

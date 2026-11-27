@@ -4,6 +4,7 @@ require_relative "../../data_quality/support/dummy_plugin"
 # #548 option a: Data Quality's agent settles company claims through a
 # token-only API; nothing it does publishes, and each action can be undone.
 class Api::DqMatchingTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
   TOKEN = "dq-test-token".freeze
 
   setup do
@@ -461,6 +462,56 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     assert_match "merged or taken off", DataQuality::Matching.undo(DqAction.sole.id)
     assert_equal made.id, wrong.reload.subject_id
     assert_equal "pending", made.reload.verification_status
+  end
+
+  test "a proposal citing a page with nothing stored stores it in a job before match and verify run (#934)" do
+    quote = "Holtec International is headquartered in Camden, New Jersey."
+    rows = ->(url) { [ { action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote:, source_url: url, reason: "Their about page" } ] }
+
+    freeze_time do
+      act(*rows.("https://holtec.example/about"))
+      page = Source.find_by!(url: "https://holtec.example/about")
+      assert_enqueued_with(job: DataQuality::ProposalPagesJob, args: [ [ page.id ], [ "web_page" ] ])
+      # Not now: only the backstop, once the wait is over (Copilot).
+      runs = enqueued_jobs.select { |job| job["job_class"] == "DataQuality::RunJob" }
+      assert_equal [ (DataQuality::ProposalPages::WAIT + 5.minutes).from_now.to_f ], runs.map { |job| job["scheduled_at"].then { |at| Time.zone.parse(at.to_s).to_f } }
+    end
+    page = Source.find_by!(url: "https://holtec.example/about")
+    assert_equal "web_page", page.source_kind
+
+    # Once it's stored and holds the quote, the next proposal on it is verified at once.
+    clear_enqueued_jobs
+    page.update!(content_text: "<p>#{quote}</p>", content_sha256: "s", crawl_status: "ok")
+    act(*rows.(page.url))
+    assert results.first["ok"], results.inspect
+    assert_no_enqueued_jobs(only: DataQuality::ProposalPagesJob)
+    assert_enqueued_with(job: DataQuality::RunJob, args: [ "web_page", { only: %w[match verify] } ])
+  end
+
+  test "a retry by request_key still has its page stored and then verified (Copilot, #934)" do
+    row = { action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote: "In Camden.",
+            source_url: "https://holtec.example/about", reason: "r", request_key: "dq-934-1" }
+    act(row)
+    clear_enqueued_jobs
+    act(row)
+
+    assert_equal 1, Candidate.where(source: Source.find_by!(url: row[:source_url])).count, "the same claim"
+    assert_enqueued_with(job: DataQuality::ProposalPagesJob, args: [ [ Source.find_by!(url: row[:source_url]).id ], [ "web_page" ] ])
+  end
+
+  test "a page that blocks fetching stays unstored, so its claim goes to review as before (#934)" do
+    stub_request(:get, "https://holtec.example/robots.txt").to_return(status: 404)
+    stub_request(:get, "https://holtec.example/about").to_return(status: 403, body: "Access Denied")
+    act({ action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden" }, quote: "In Camden.", source_url: "https://holtec.example/about", reason: "r" })
+    page = Source.find_by!(url: "https://holtec.example/about")
+
+    DataQuality::ProposalPages.store([ page.id ], fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }))
+
+    assert_equal [ "blocked", nil ], page.reload.values_at(:crawl_status, :content_text)
+    claim = Candidate.find(results.first["id"])
+    run = CrawlRun.create!(stage: "verify", source_kind: "web_page", status: "running", started_at: Time.current)
+    verdict = DataQuality::Verifiers::Agent.new.verdicts([ claim ], run:, plugin: DataQuality::Plugins::WebPage.new).fetch(claim.id)
+    assert_equal DataQuality::Verifiers::Agent::NOTHING_STORED, verdict
   end
 
   test "propose_fields: sourced values for a published company become one company claim, a Change for Tosin; bad fields are refused" do
