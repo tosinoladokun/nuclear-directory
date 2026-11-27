@@ -36,13 +36,15 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       subject_type: "Organization", subject_id: company.id, ai_recommendation: "recommend_publish", ai_source_sha256: "sha", **options)
   end
 
-  def queries_for_inbox
+  def queries_for(path)
     count = 0
     counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" || payload[:sql].match?(/\A\s*(BEGIN|COMMIT|SAVEPOINT|RELEASE|ROLLBACK)/) }
-    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get admin_inbox_path }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { get path }
     assert_response :success
     count
   end
+
+  def queries_for_inbox = queries_for(admin_inbox_path)
 
   test "Today's queries don't grow with the claims waiting, and stay under the cap" do
     add_companies(3, from: 0)
@@ -51,6 +53,19 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
     many = queries_for_inbox
 
     assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15: a lookup per claim again"
+    assert_operator many, :<=, MAX_QUERIES
+  end
+
+  # Every admin page's nav counts Today's waiting facts: on 27 Nov a news item took 1,861 queries for it (Infra).
+  test "another admin page's nav count of Today doesn't grow with the claims either (a news item)" do
+    item = NewsItem.create!(url: "https://example.org/news/queries", title: "Vogtle exemption", headline: "Vogtle exemption", publisher: "NRC",
+      published_on: Date.new(2026, 11, 18), verification_status: "verified", verified_by: "human:tosin", verified_at: Time.current)
+    add_companies(3, from: 0)
+    few = queries_for(admin_news_item_path(id: item.id))
+    add_companies(12, from: 3)
+    many = queries_for(admin_news_item_path(id: item.id))
+
+    assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15"
     assert_operator many, :<=, MAX_QUERIES
   end
 
