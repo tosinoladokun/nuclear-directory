@@ -180,7 +180,8 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       end
       verdict, page, why = verify(name, website)
       # A lead a person typed: the sentence may be on another page of its site (DQ, 20 Nov: Fluor's nuclear page).
-      if @person_added && page && (verdict == :not_nuclear || (verdict == :ok && !nuclear_sentence?(page, name))) && (inner = nuclear_page(page, name))
+      # Any lead whose home page passed: the sentence may be on its investor or about page (#1015: Deep Fission, Hadron).
+      if page && ((@person_added && verdict == :not_nuclear) || (verdict == :ok && !nuclear_sentence?(page, name))) && (inner = nuclear_page(page, name))
         verdict, page, why = :ok, inner, nil
       end
       (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
@@ -292,10 +293,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
       links = Nokogiri::HTML(home.content_text).css("a[href]").filter_map do |link|
         url = URI.join(base, link["href"].to_s).to_s.split("#").first rescue next
-        # The page already checked never takes one of the three places (Copilot).
+        # The page already checked never takes one of the places (Copilot).
         url if URI(url).host.to_s.downcase.delete_prefix("www.") == host && "#{URI(url).path} #{link.text}".match?(NUCLEAR_LINK) &&
           Source.bare_homepage(url) != Source.bare_homepage(base)
       end.uniq.first(3)
+      # Then its contact, about or investor pages, where a company often says what it builds (#1015).
+      links = (links + own_links(home, CONTACT, 3)).uniq.first(4)
       links.each do |url|
         break unless reserve(NUCLEAR_PAGES, NUCLEAR_PAGES_PER_DAY)
 
@@ -312,9 +315,14 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # terrestrialenergy.com) with that domain's contact or about pages, and the company's own wire releases among
     # the lead's links. A listing counts with incorporation from any of them.
     def us_shown?(home, name)
-      texts = [ visible_text(home) ]
-      read = ->(page) { page && texts << visible_text(page) && us_text?(texts.join("\n")) }
-      return true if us_text?(texts.first)
+      texts = [ visible_text(home), structured_address(home, name) ].compact
+      read = lambda do |page|
+        next false unless page
+
+        texts.push(visible_text(page), *structured_address(page, name))
+        us_text?(texts.join("\n"))
+      end
+      return true if us_text?(texts.join("\n"))
       return true if given_pages(home).any? { |url| read.(snapshot(url)) }
       return true if own_links(home, CONTACT, 3).any? { |url| read.(snapshot(url)) }
 
@@ -327,6 +335,31 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Where it's incorporated or registered is never its headquarters (DATA.md): "incorporated in Wilmington,
     # Delaware" is left out before looking for a US address, up to the next "and" (Copilot).
     INCORPORATION_CLAUSE = /\b(?:incorporated|registered|organized|formed)\s+(?:in|under)\b(?:(?!\band\b)[^.;])*/i
+    # The address in the page's own structured data (JSON-LD), as "Charlotte, NC 28217, United States", only from an
+    # Organization or Corporation block whose name is the company's: never a parent's or a partner's on the page (DQ, #1015).
+    ORGANIZATION_TYPES = %w[Organization Corporation LocalBusiness].freeze
+    def structured_address(page, name)
+      blocks = Nokogiri::HTML(page.content_text).css("script[type='application/ld+json']").flat_map do |script|
+        data = begin
+          JSON.parse(script.text)
+        rescue JSON::ParserError
+          next []
+        end
+        [ data ].flatten.flat_map { |item| item.is_a?(Hash) && item["@graph"].is_a?(Array) ? item["@graph"] : [ item ] }
+      end
+      own = blocks.select do |block|
+        block.is_a?(Hash) && (Array(block["@type"]) & ORGANIZATION_TYPES).any? && block["name"].is_a?(String) &&
+          (names?(block["name"], name) || names?(name, brand(block["name"])))
+      end
+      lines = own.flat_map { |block| [ block["address"] ].flatten }.select { |address| address.is_a?(Hash) }.map do |address|
+        country = address["addressCountry"].is_a?(Hash) ? address["addressCountry"]["name"] : address["addressCountry"]
+        country = "United States" if country.to_s.match?(/\A(?:US|USA|U\.S\.A?\.?)\z/i)
+        place = [ address["addressLocality"], [ address["addressRegion"], address["postalCode"] ].compact.join(" ").presence ].compact.join(", ")
+        [ place.presence, country.presence ].compact.join(", ")
+      end
+      lines.compact_blank.join("\n").presence
+    end
+
     def us_text?(text)
       located = text.gsub(INCORPORATION_CLAUSE, " ")
       located.match?(US) || located.match?(US_HQ_REGION) || (text.match?(US_LISTING) && text.match?(US_INCORPORATION))
@@ -361,8 +394,12 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     def brand_domain(home, name)
       base = home.final_url.presence || home.url
       host = URI(base).host.to_s.downcase.delete_prefix("www.")
-      Nokogiri::HTML(home.content_text).css("a[href]").each do |link|
-        uri = (URI.join(base, link["href"].to_s) rescue next)
+      doc = Nokogiri::HTML(home.content_text)
+      # Its links, and the address it gives as its own (canonical, og:url) on a page drawn by script (#1015: Terrestrial).
+      hrefs = doc.css("a[href]").map { |link| link["href"] } + doc.css("link[rel~='canonical'][href]").map { |link| link["href"] } +
+        doc.css("meta[property='og:url'][content]").map { |meta| meta["content"] }
+      hrefs.each do |href|
+        uri = (URI.join(base, href.to_s) rescue next)
         other = uri.host.to_s.downcase
         next unless uri.is_a?(URI::HTTPS) && other.present? && other.delete_prefix("www.") != host
         next if other.match?(NOT_OWN) || other.match?(NEWS_HOSTS) || staging_host?(uri.to_s) || !host_names?(uri.to_s, name)

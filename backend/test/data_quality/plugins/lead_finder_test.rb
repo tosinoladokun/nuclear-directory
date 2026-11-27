@@ -552,6 +552,58 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert plugin.send(:host_names?, "https://www.sawtoothsim.example", "Sawtooth Simulation")
   end
 
+  # Terrestrial's stored home page (#1015), trimmed: no links, its main domain only as canonical, its address only in
+  # its own structured data, its words only in <noscript>.
+  TERRESTRIAL_SHELL = <<~HTML.freeze
+    <html><head><title>Terrestrial Energy: the most capital-efficient SMR</title>
+    <meta name="description" content="Terrestrial Energy is building the most capital-efficient SMR nuclear plant for rapid deployment at scale. Generation IV technology built for lower costs and faster deployment where industry needs it most." />
+    <link rel="canonical" href="https://www.terrestrialenergy.example/" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Corporation", "name": "Terrestrial Energy",
+      "address": {"@type": "PostalAddress", "streetAddress": "2730 W Tyvola Road, Suite 100", "addressLocality": "Charlotte",
+      "addressRegion": "NC", "postalCode": "28217", "addressCountry": "US"}}</script></head>
+    <body><div id="root"></div><noscript><p>Terrestrial Energy is building the most capital-efficient SMR nuclear plant for rapid deployment at scale.</p></noscript></body></html>
+  HTML
+
+  test "the company's own structured-data address shows it's US (#1015: Terrestrial's stored page)" do
+    stub_request(:get, %r{\Ahttps://terrestrialusa\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://terrestrialusa.example", TERRESTRIAL_SHELL)
+    result = Plugin.call(listed_lead("Terrestrial Energy", "https://terrestrialusa.example").id, finder: finder)
+    assert_equal :proposed, result.outcome, result.reason
+    assert_equal "Terrestrial Energy is building the most capital-efficient SMR nuclear plant for rapid deployment at scale.",
+      Candidate.find(result.candidate_id).quote
+  end
+
+  test "structured data about another company never lends its address (DQ, #1015)" do
+    plugin = Plugin.new(search_key: nil)
+    parent = Source.new(url: "https://acme.example", content_text: TERRESTRIAL_SHELL.sub('"name": "Terrestrial Energy"', '"name": "Acme Holdings"'))
+    assert_nil plugin.send(:structured_address, parent, "Terrestrial Energy")
+    own = Source.new(url: "https://terrestrialusa.example", content_text: TERRESTRIAL_SHELL)
+    assert_equal "Charlotte, NC 28217, United States", plugin.send(:structured_address, own, "Terrestrial Energy")
+  end
+
+  test "a page's canonical address of the same brand is followed like a link; another brand's never is (#1015)" do
+    plugin = Plugin.new(search_key: nil)
+    shell = Source.new(url: "https://terrestrialusa.example", content_text: TERRESTRIAL_SHELL)
+    assert_equal "https://www.terrestrialenergy.example", plugin.send(:brand_domain, shell, "Terrestrial Energy")
+    other = Source.new(url: "https://terrestrialusa.example", content_text: TERRESTRIAL_SHELL.sub("terrestrialenergy.example", "acmeholdings.example"))
+    assert_nil plugin.send(:brand_domain, other, "Terrestrial Energy")
+  end
+
+  test "the nuclear sentence may be on the investor page, for any lead (#1015: Hadron, Deep Fission)" do
+    stub_request(:get, %r{\Ahttps://www\.hadron\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://www.hadron.example", "<html><head><title>Hadron Energy</title></head><body><p>Hadron Energy. Always on. Always ready.</p>" \
+      "<p>Resilient power from a micro modular reactor.</p><p>3 Twin Dolphin Drive, Redwood City, CA 94065</p>" \
+      "<a href=\"/investor-relations\">Investor relations</a></body></html>")
+    html_page("https://www.hadron.example/investor-relations", "<html><body><p>Hadron Energy is developing a 10 MW electric micro modular " \
+      "reactor (MMR) designed for factory manufacturing.</p></body></html>")
+
+    result = Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example").id, finder: finder)
+    assert_equal :proposed, result.outcome, result.reason
+    claim = Candidate.find(result.candidate_id)
+    assert_equal [ "https://www.hadron.example", "Hadron Energy is developing a 10 MW electric micro modular reactor (MMR) designed for factory manufacturing." ],
+      [ claim.payload["website"], claim.quote ]
+  end
+
   test "a published company with no website is searched too, after the pending ones (PM, 24 Nov)" do
     pending = Organization.create!(name: "Fresh Fission")
     listed = Organization.create!(name: "Steady Fission", verification_status: "verified", verified_by: "human:tosin")

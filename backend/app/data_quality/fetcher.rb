@@ -280,6 +280,12 @@ class DataQuality::Fetcher
         return response(url, :blocked, status:, reason: "Bot challenge (HTTP #{status}) from #{http['Server'] || 'the server'}")
       end
 
+      # A captcha page served as a success (SiteGround's 202 with a refresh to /.well-known/sgcaptcha/): a block,
+      # recorded, never worked around (#1015: Nuclearis).
+      if (200..299).cover?(status) && !binary && captcha_page?(fetched)
+        return response(url, :blocked, status:, reason: "Bot challenge (captcha page, HTTP #{status}) from #{http['Server'] || 'the server'}")
+      end
+
       case status
       when 200..299
         body = binary ? fetched.body.b : body_of(fetched)
@@ -297,6 +303,15 @@ class DataQuality::Fetcher
     end
 
     def challenge?(http) = http["cf-mitigated"].to_s.casecmp?("challenge")
+
+    # A short page that only refreshes to a captcha or challenge, or a 202 that only refreshes elsewhere.
+    CAPTCHA_REFRESH = /<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*(?:captcha|challenge)/i
+    def captcha_page?(fetched)
+      return false if fetched.body.to_s.bytesize > 4_096
+
+      body = body_of(fetched)
+      body.match?(CAPTCHA_REFRESH) || (fetched.http.code.to_i == 202 && body.match?(/<meta[^>]+http-equiv=["']?refresh/i))
+    end
 
     def response(url, kind, status: nil, body: nil, etag: nil, last_modified: nil, reason: nil, block_reference: nil,
       content_type: nil, truncated: false)

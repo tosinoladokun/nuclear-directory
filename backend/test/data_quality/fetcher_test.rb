@@ -81,6 +81,14 @@ class DataQuality::FetcherTest < ActiveSupport::TestCase
     assert_equal "18.abc", @fetcher.get(PAGE).block_reference
   end
 
+  test "a captcha page served as a success is a block, never worked around (#1015: Nuclearis)" do
+    stub_request(:get, PAGE).to_return(status: 202, headers: { "Content-Type" => "text/html" },
+      body: "<html><head><link rel=\"icon\" href=\"data:;\"><meta http-equiv=\"refresh\" content=\"0;/.well-known/sgcaptcha/?r=%2F\"></meta></head></html>")
+    response = @fetcher.get(PAGE)
+    assert_equal :blocked, response.kind
+    assert_match "Bot challenge (captcha page, HTTP 202)", response.reason
+  end
+
   test "never fetches what robots.txt disallows" do
     response = @fetcher.get("https://example.gov/private/page")
 
