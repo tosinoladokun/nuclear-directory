@@ -3,7 +3,9 @@
 # each stuck lead is reset the way Tosin's suggestion resets one (CompanySuggestion.queue: tries back to 0, found again
 # now), the website-only ones with the company's own name, and Scaled Atomics (never a lead) is added. Tosin approved
 # ("yes, fix the finder", via PM). Leads 119 (MobileNuclear) and 128 (ThorCon) are left to run out: neither is a current
-# US company. NuCube's own GlobeNewswire release (its "About NuCube Energy") is added to its lead, for its US status.
+# US company. Lead 116 is Hadron again (110 is too), so only 110 is queued, or Hadron could be proposed twice (DQ).
+# Each company's own page that states it's US is added to its lead (DQ): NuCube's GlobeNewswire release (its "About
+# NuCube Energy") and Hadron's story ("engineering headquarters will remain in the Bay Area").
 #
 # Pinned on the lead ids DQ listed. A lead already added or ignored was decided by a person: left and said. Each lead
 # reset here gets a "dq:987" sighting, so a rerun leaves it alone.
@@ -11,12 +13,15 @@ class RequeueUsDeveloperLeads < DeployData::Migration
   BY = "human:tosin"
   KEY = "dq:987".freeze
   LABEL = "Data Quality (#987)".freeze
-  LEAD_IDS = [ 92, 110, 112, 114, 116, 124, 125, 127 ].freeze
+  LEAD_IDS = [ 92, 110, 112, 114, 124, 125, 127 ].freeze
   # The company's own name for a website-only lead, by its site's domain.
   NAMES = { "deepfission.com" => "Deep Fission", "nuclearisenergy.com" => "Nuclearis Energy", "nucube.energy" => "NuCube Energy",
     "terrestrialusa.com" => "Terrestrial Energy", "terrestrialenergy.com" => "Terrestrial Energy", "hadronenergy.com" => "Hadron Energy",
     "fanuclear.com" => "First American Nuclear" }.freeze
-  RELEASES = { "nucube.energy" => "https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html" }.freeze
+  OWN_PAGES = {
+    "nucube.energy" => "https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html",
+    "hadronenergy.com" => "https://www.hadronenergy.com/p/hadron-energy-announces-second-location-in-new-york-city"
+  }.freeze
   SCALED_ATOMICS = [ "Scaled Atomics", "https://www.scaledatomics.com" ].freeze
 
   def up
@@ -35,9 +40,9 @@ class RequeueUsDeveloperLeads < DeployData::Migration
       domain = NAMES.keys.find { |host| ([ lead.name ] + lead.sources.map { |source| source["url"].to_s }).any? { |text| text.downcase.include?(host) } }
       name = NAMES.fetch(domain, lead.name)
       tries = lead.find_attempts
-      note(lead, url: RELEASES[domain])
+      note(lead, url: OWN_PAGES[domain])
       CompanySuggestion.queue(lead, name:, by: BY)
-      say "Lead #{id} queued again as #{name.inspect}#{' with its own release' if RELEASES[domain]} (had used #{tries} of its tries)"
+      say "Lead #{id} queued again as #{name.inspect}#{' with its own page' if OWN_PAGES[domain]} (had used #{tries} of its tries)"
     end
 
     def add_scaled_atomics
@@ -53,7 +58,7 @@ class RequeueUsDeveloperLeads < DeployData::Migration
 
     def sighted?(lead) = lead.sources.any? { |source| source["key"] == KEY }
 
-    # The re-queue noted on the lead (and the release it reads), so it shows where it came from and a rerun skips it.
+    # The re-queue noted on the lead (and its own page to read), so it shows where it came from and a rerun skips it.
     def note(lead, url:)
       today = Date.current
       entry = { "key" => KEY, "label" => LABEL, "url" => url, "times" => 1, "first" => today.to_s, "last" => today.to_s }.compact

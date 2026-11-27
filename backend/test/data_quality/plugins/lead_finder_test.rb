@@ -485,6 +485,14 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_includes Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example").id, finder: finder).reason, "not US"
 
     plugin = Plugin.new(search_key: nil)
+    # Its own story page, given with the lead (DQ), states its headquarters.
+    story = "https://www.hadron.example/p/second-location"
+    html_page(story, "<html><body><p>Our engineering headquarters will remain in the Bay Area.</p></body></html>")
+    Lead.delete_all
+    Source.where(url: "https://www.hadron.example").delete_all
+    found = Plugin.call(listed_lead("Hadron Energy", "https://www.hadron.example", story).id, finder: finder)
+    assert_equal :proposed, found.outcome, found.reason
+
     assert plugin.send(:us_text?, "Hadron Energy, Inc. (Nasdaq: HDRN). Hadron Energy, Inc. · Delaware")
     assert plugin.send(:us_text?, "Our engineering headquarters will remain in the Bay Area.")
     assert_not plugin.send(:us_text?, "Hadron Energy, Inc. (Nasdaq: HDRN)")

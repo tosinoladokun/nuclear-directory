@@ -113,7 +113,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @power_buyer = power_buyer?(id, name)
     @search_failed = @search_capped = false
     @site_for_pending = true
-    @release_links = []
+    @release_links = @given_links = []
     result = nil
     candidates_for(name, [], found).each do |website|
       # Another company's site is never this one's.
@@ -156,8 +156,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
-    # The company's own releases on a wire site, for its US status (DQ, 27 Nov).
+    # The company's own releases on a wire site, and its own pages a person gave, for its US status (DQ, 27 Nov).
     @release_links = links.select { |link| (URI.parse(link).host.to_s.downcase rescue "").match?(NEWS_HOSTS) }
+    @given_links = links
     # A staging or preview link is never read, not even for the site's name (Copilot, #932).
     staging, links = links.partition { |link| staging_host?(link) }
     found["checked"] = staging.map { |link| { "verdict" => "staging", "why" => "#{URI(link).host} is a staging or preview host", "website" => link } } if staging.any?
@@ -313,6 +314,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       texts = [ visible_text(home) ]
       read = ->(page) { page && texts << visible_text(page) && us_text?(texts.join("\n")) }
       return true if us_text?(texts.first)
+      return true if given_pages(home).any? { |url| read.(snapshot(url)) }
       return true if own_links(home, CONTACT, 3).any? { |url| read.(snapshot(url)) }
 
       if (other = brand_domain(home, name)) && (page = snapshot(other))
@@ -322,6 +324,17 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     end
 
     def us_text?(text) = text.match?(US) || text.match?(US_HQ_REGION) || (text.match?(US_LISTING) && text.match?(US_INCORPORATION))
+
+    # Pages of this site the lead itself links to (a story stating its headquarters; DQ, 27 Nov), never the home page.
+    def given_pages(home)
+      base = home.final_url.presence || home.url
+      host = URI(base).host.to_s.downcase.delete_prefix("www.")
+      Array(@given_links).select do |url|
+        (URI(url).host.to_s.downcase.delete_prefix("www.") == host rescue false) && Source.bare_homepage(url) != Source.bare_homepage(base)
+      end.first(2)
+    rescue URI::Error
+      []
+    end
 
     # Links on a page to the same site whose address or text matches, never the page itself (Copilot).
     def own_links(home, pattern, limit)
