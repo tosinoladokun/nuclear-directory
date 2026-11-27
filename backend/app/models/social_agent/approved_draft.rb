@@ -191,7 +191,11 @@ class SocialAgent::ApprovedDraft
       profile = CompanyProfile.new(company)
       deals = profile.deals.map { |deal| [ deal.from_organization.name, "and", deal.to_organization.name, deal.description ].compact.join(" ") }
       facts = { "name" => company.name, "description" => profile.description, "headquarters" => [ profile.hq_city, profile.hq_state ].compact_blank.join(", "), "records" => deals.join("; ") }.compact_blank
-      item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts:, source_url: @source_url.presence || company.website, source_quote: facts.values.join("\n"),
+      # Its verified X handle (config/social_tags.yml), as the generator's facts carry it, so Rules#tags allows exactly
+      # that one tag (#1007). Not part of the source quote: a handle is a label, not something the source states.
+      handle = SocialAgent::Picker.tags.dig(company.slug, "x") if @platform == "x"
+      item = SocialAgent::Item.new(subject: company, kind: "spotlight", facts: facts.merge({ "x_handle" => handle }.compact_blank),
+        source_url: @source_url.presence || company.website, source_quote: facts.values.join("\n"),
         path: "/companies/#{company.slug}", organization_ids: [ company.id ])
       fetcher = @fetcher || self.class.fetcher
       ready, pre = SocialAgent.prepare(item, fetcher)

@@ -332,6 +332,13 @@ module DataQuality::Matching
         # Only before Create: a published company's name changes by a reviewed change, never this way.
         raise Abort, "#{record.name} is published; its name can't be proposed this way" unless record.verification_status == "pending"
         raise Abort, "#{fields['name'].inspect} is already its name" if fields["name"] == record.name
+        # One name proposal open per company (#1019): which of two would be written is easy to misread, so another
+        # waits until the first is decided or closed.
+        # Read under the company's row lock (held to the end of this transaction), so two requests at once can't
+        # both find none open (Copilot).
+        directory.lock_fact(type: "Organization", id: record.id)
+        open = open_name_proposal(record.id, fields["name"])
+        raise Abort, "the name proposal ##{open.id} (#{open.payload['name']}) for #{record.name} is still open; close it first" if open
         if (holder = directory.organization(name: fields["name"])) && holder.id != record.id
           raise Abort, "#{fields['name'].inspect} is #{holder.name}'s (##{holder.id}); if they're the same company, settle it with same_as"
         end
@@ -375,6 +382,21 @@ module DataQuality::Matching
   end
 
   PROPOSALS = %w[propose_role propose_fields propose_link propose_site_fields].freeze
+  # Another open name proposal (#1019) for this company, with a different name, or nil: one name is open at a time.
+  # except: the claim being proposed or restored. Read it under the company's row lock.
+  def self.open_name_proposal(company_id, name, except: nil)
+    proposed_for = DqAction.where(action: "propose_fields", target_type: "Organization", target_id: company_id).select(:candidate_id)
+    Candidate.where(status: DataQuality::Recommendations::OPEN, kind: "organization", id: proposed_for).where.not(id: except)
+      .where("candidates.payload ? :key", key: DataQuality::DirectoryClient::REPLACES).where.not("candidates.payload->>'name' = ?", name.to_s).order(:id).first
+  end
+
+  # The company a name proposal was made for, or nil when the claim isn't one.
+  def self.name_proposal_company(candidate)
+    return unless candidate.kind == "organization" && candidate.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES)
+
+    DqAction.where(candidate_id: candidate.id, action: "propose_fields", target_type: "Organization").pick(:target_id)
+  end
+
   # Actions whose created_ids are the claims they made, each citing a page.
   PAGE_ACTIONS = (PROPOSALS + %w[propose_operator_change]).freeze
 

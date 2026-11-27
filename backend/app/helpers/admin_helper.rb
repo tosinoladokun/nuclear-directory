@@ -373,7 +373,10 @@ module AdminHelper
     return claim_text(item) unless entry.kind == "new_record"
 
     # Data Quality's name for it (#1000) is the name it's created under.
-    name = proposed_name_claim(entry)&.payload&.dig("name").presence || payload["name"].to_s
+    named = proposed_name_claim(entry)
+    # A name proposal that approval won't write as the name (moved to another company by a merge) is named by its company (#1019).
+    shown = item.record&.name if named.nil? && payload.key?(DataQuality::DirectoryClient::REPLACES)
+    name = named&.payload&.dig("name").presence || shown.presence || payload["name"].to_s
     city = payload["hq_city"].presence || payload["city"].presence
     state = payload["hq_state"].presence || payload["state"].presence
     where = [ city, state ].compact.join(", ")
@@ -390,8 +393,22 @@ module AdminHelper
 
     # The Create's own claim too: with no other open claim, the name proposal is the row (Copilot).
     named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
-    # The last one: approval applies claims by id, so the last name is the one it's created under (Copilot).
-    Candidate.where(id: named, kind: "organization").order(:id).select { |claim| claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) }.last
+    directory = DataQuality::DirectoryClient.new
+    # Only a proposal still on the company it was proposed for writes the name (#1019); Review.approve takes a row's
+    # claims by id, so of those the last by id is the name it's created under.
+    Candidate.where(id: named, kind: "organization").order(:id).select { |claim| directory.proposed_name?(claim) }.last
+  end
+
+  # A row's name proposals that approval only adds as another name (moved off the company they were proposed for by
+  # a merge, #1019), one per name.
+  def alias_only_names(entry)
+    return [] if entry.kind != "new_record"
+
+    named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
+    directory = DataQuality::DirectoryClient.new
+    Candidate.where(id: named, kind: "organization").order(:id)
+      .select { |claim| claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) && !directory.proposed_name?(claim) }
+      .uniq { |claim| claim.payload["name"] }
   end
 
   # A decision in Recently decided (#548): "Created Bluefield Fission",
