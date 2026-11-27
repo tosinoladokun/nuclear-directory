@@ -197,7 +197,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
   end
 
   test "a short full name still matches whole; the home page link never takes a contact place (Copilot)" do
-    stub_request(:get, HOME).to_return(body: "<html><body><p>GSE provides nuclear engineering services.</p>" \
+    stub_request(:get, HOME).to_return(body: "<html><head><title>GSE Solutions</title></head><body><p>GSE provides nuclear engineering services.</p>" \
       "<a href=\"/\">The Nuclear Company</a><a href=\"/about\">About</a><a href=\"/contact\">Contact</a></body></html>", headers: { "Content-Type" => "text/html" })
     stub_request(:get, "#{HOME}/about").to_return(body: "<html><body><p>Our story.</p></body></html>", headers: { "Content-Type" => "text/html" })
     stub_request(:get, "#{HOME}/contact").to_return(body: "<html><body><p>1 Main St, Austin, TX 78701</p></body></html>", headers: { "Content-Type" => "text/html" })
@@ -316,7 +316,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
   end
 
   test "a pending company's site needn't state nuclear work, only name it; each search's verdicts are kept for the misses breakdown (PM, 20 Nov)" do
-    stub_request(:get, "https://mines.edu/").to_return(body: "<html><body><p>Colorado School of Mines, Golden. Admissions and research.</p></body></html>", headers: { "Content-Type" => "text/html" })
+    stub_request(:get, "https://mines.edu/").to_return(body: "<html><head><title>Colorado School of Mines</title></head><body><p>Colorado School of Mines, Golden. Admissions and research.</p></body></html>", headers: { "Content-Type" => "text/html" })
     stub_request(:get, "https://other.example/").to_return(body: "<html><body><p>Unrelated shop.</p></body></html>", headers: { "Content-Type" => "text/html" })
     stub_request(:get, %r{\Ahttps://(mines\.edu|other\.example)/robots\.txt}).to_return(status: 404)
     mines = Organization.create!(name: "Colorado School of Mines")
@@ -380,6 +380,48 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     stub_request(:get, "#{home}/").to_return(body: %(<html><body><p>Capped builds plants.</p><a href="/nuclear">Nuclear</a></body></html>), headers: { "Content-Type" => "text/html" })
     assert_equal :unconfirmed, Plugin.call(lead("Capped", url: home).id, finder: finder).outcome
     assert_not_requested :get, "#{home}/nuclear"
+  end
+
+  def site_finder(*sites) = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil, search: ->(_) { sites },
+    pipeline: ->(plugin) { DataQuality::Pipeline.run("lead_finder", plugin:, only: %w[extract match]) })
+
+  test "another company's page that names it in a testimonial is not its site (#932: Mainstream Engineering on calnanocorp.com)" do
+    site = "https://www.calnanocorp.example"
+    stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
+    stub_request(:get, site).to_return(headers: { "Content-Type" => "text/html" }, body: <<~HTML)
+      <html><head><title>California Nanotechnologies | Cryomilling</title><meta property="og:site_name" content="California Nanotechnologies"></head>
+      <body><header><img src="/logo.png" alt="California Nanotechnologies logo"></header><h1>Advanced materials processing</h1>
+      <p>We cryomill powders for nuclear fuel and reactor research.</p>
+      <blockquote><p>"Fast turnaround and careful work." Jane Doe, Mainstream Engineering. Mainstream Engineering builds nuclear instrumentation.</p></blockquote>
+      <p>California Nanotechnologies, 17220 S Main St, Gardena, CA 90248</p></body></html>
+    HTML
+    company = Organization.create!(name: "Mainstream Engineering", verification_status: "verified", verified_by: "human:tosin")
+
+    result = site_finder(site).find_site(company.id, "Mainstream Engineering")
+    assert_equal :unconfirmed, result.outcome
+    assert_equal [ "not_named" ], result.found["checked"].map { |check| check["verdict"] }
+    assert_empty Candidate.where(kind: "organization")
+  end
+
+  test "a staging or preview host is never the website, even with the company's own text (#932: WSC on public-stag.3keysoft.com)" do
+    staging = "https://public-stag.3keysoft.example"
+    company = Organization.create!(name: "WSC, Inc.", verification_status: "verified", verified_by: "human:tosin")
+
+    result = site_finder(staging).find_site(company.id, "WSC, Inc.")
+    assert_equal :unconfirmed, result.outcome
+    assert_equal [ "staging" ], result.found["checked"].map { |check| check["verdict"] }
+    assert_not_requested :get, staging
+    assert_empty Candidate.where(kind: "organization")
+  end
+
+  test "the company's own site passes on its address alone when its title and heading don't name it (#932)" do
+    site = "https://www.sawtoothsim.example"
+    stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
+    stub_request(:get, site).to_return(headers: { "Content-Type" => "text/html" }, body: "<html><head><title>Home</title></head><body>" \
+      "<h1>Training that works</h1><p>Sawtooth Simulation builds nuclear plant simulators.</p><p>Idaho Falls, ID 83402</p></body></html>")
+    company = Organization.create!(name: "Sawtooth Simulation", verification_status: "verified", verified_by: "human:tosin")
+
+    assert_equal :proposed, site_finder(site).find_site(company.id, "Sawtooth Simulation").outcome
   end
 
   test "a published company with no website is searched too, after the pending ones (PM, 24 Nov)" do

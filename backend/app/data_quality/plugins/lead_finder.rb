@@ -284,7 +284,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Each checked site's verdict, for the lead's note (Backend keeps only the
     # reason): "acme.com: not US; a search result: not named". A search
     # result's address is never kept (Brave's terms), only its verdict.
-    VERDICTS = { "not_us" => "not US", "not_nuclear" => "no nuclear work", "not_named" => "not named", "not_found" => "unreadable" }.freeze
+    VERDICTS = { "staging" => "staging host", "not_us" => "not US", "not_nuclear" => "no nuclear work", "not_named" => "not named", "not_found" => "unreadable" }.freeze
     def checked_summary(found)
       found["checked"].map do |check|
         site = check["website"] ? URI(check["website"]).host.to_s.delete_prefix("www.") : "a search result"
@@ -488,17 +488,58 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       "https://#{host}"
     end
 
-    # [:ok | :not_found | :not_named | :not_nuclear | :not_us, page, why]
+    # [:ok | :staging | :not_found | :not_named | :not_nuclear | :not_us, page, why]
     def verify(name, website)
+      # A web agency's staging or preview copy is never the company's website (#932: WSC on public-stag.3keysoft.com).
+      return [ :staging, nil, "#{URI(website).host} is a staging or preview host" ] if staging_host?(website)
+      # (The Fetcher never follows a redirect to another host, so the page's own host is the one checked.)
       page = snapshot(website) or return [ :not_found, nil, "Couldn't read the site" ]
       text = visible_text(page)
       return [ :not_named, page, "The page doesn't name #{name}" ] unless names?(text, name)
+      # The name, the nuclear work and the address must be the site owner's, not a
+      # customer's in a testimonial (#932: Mainstream Engineering on calnanocorp.com).
+      return [ :not_named, page, "The page names #{name} but isn't its own site" ] unless own_site?(page, name)
       return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear_exempt?(website) || nuclear?(text, brand(name))
       unless text.match?(US) || @us_shown_elsewhere || us_on_own_pages?(page)
         return [ :not_us, page, "Neither the home page nor its contact or about page shows a US address or 'United States'" ]
       end
 
       [ :ok, page, nil ]
+    end
+
+    # A subdomain word that marks a copy for testing or review ("staging.", "public-stag.", "dev2.").
+    STAGING_WORDS = %w[stag stage staging dev develop development test testing qa uat preview sandbox].freeze
+    def staging_host?(url)
+      labels = URI(url).host.to_s.downcase.split(".")[0...-2].to_a
+      labels.flat_map { |label| label.split("-") }.any? { |word| STAGING_WORDS.include?(word.sub(/\d+\z/, "")) }
+    rescue URI::Error
+      false
+    end
+
+    # The page is the company's own when its name is in the page's own name for
+    # itself (title, og:site_name, the first h1, the header's logo) or its address.
+    def own_site?(page, name)
+      doc = Nokogiri::HTML(page.content_text)
+      logos = doc.css("header img[alt], nav img[alt]").select { |img| "#{img['src']} #{img['class']} #{img['id']} #{img['alt']}".match?(/logo/i) }
+      marks = site_names(page) + [ doc.at_css("h1")&.text.to_s.squish ] + logos.map { |img| img["alt"].squish }
+      marks.any? { |mark| names?(mark, name) } || host_names?(page.final_url.presence || page.url, name)
+    end
+
+    # The address carries the name: "sawtoothsim.com" (its first word), "ws-corp.com" (the brand), "srnl.gov" (its initials).
+    NAME_FILLER = %w[of and the for].freeze
+    def host_names?(url, name)
+      words = brand(name).downcase.scan(/[[:alnum:]]+/)
+      return false if words.empty?
+
+      whole = words.join
+      initials = (words - NAME_FILLER).map { |word| word[0] }.join
+      labels = URI(url).host.to_s.downcase.delete_prefix("www.").split(".")[0...-1].map { |label| label.delete("^a-z0-9") }
+      labels.any? do |label|
+        (whole.length >= 3 && label.include?(whole)) || (words.first.length >= 4 && label.start_with?(words.first)) ||
+          (initials.length >= 2 && label == initials) || (initials.length >= 3 && label.start_with?(initials))
+      end
+    rescue URI::Error
+      false
     end
 
     # A page as a source of this kind, read through the shared Fetcher.
