@@ -227,6 +227,26 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     assert_includes other.aliases.pluck(:alias), "Fermi America"
   end
 
+  test "a row with a live proposal and one merged in shows both: the name it's created under, and the alias the other adds (Design)" do
+    other = give_sourced_role(Organization.create!(name: "Fermi Holdings", verification_status: "pending"))
+    @page.update!(content_text: "#{@page.content_text} Fermi Holdings America is its parent's brand.")
+    moved = propose("Fermi Holdings America", target: other.id, quote: "Fermi Holdings America is its parent's brand.")
+    assert moved["ok"], moved.inspect
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new) # attached to Fermi Holdings, then merged in
+    Directory::FactWriter.merge_organization(from_id: other.id, into_id: @company.id, by: "human:tosin", reason: "One company")
+    assert_equal @company.id, Candidate.find(moved["id"]).subject_id
+    live = proposed
+    DataQuality::Recommendations.record("#{@create.id} approve: named\n#{live.id} approve: its site\n#{moved['id']} approve: its brand", by: "human:dq")
+    sign_in_as users(:admin)
+
+    get admin_inbox_path
+
+    assert_select "#inbox-item-#{@create.id}" do
+      assert_select "#proposed-name-#{live.id}", /Found as Fermi Nuclear/
+      assert_select "#alias-name-#{moved['id']}", "Adds “Fermi Holdings America” as another name for it."
+    end
+  end
+
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do
     @company.verify!(by: "human:tosin")
 
