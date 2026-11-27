@@ -612,6 +612,10 @@ module DataQuality::Review
               errors: [ "the record it was attached to was rejected or taken down; decide that record first" ])
           end
 
+          if (refused = name_proposal_conflict(candidate, directory:))
+            next Result.new(candidate_id: candidate.id, ref: nil, errors: [ refused ])
+          end
+
           # Appended, so the match notes and review decisions that follow don't
           # erase it. The rejection it undoes goes with it.
           reopening = { "by" => by, "at" => Time.current.iso8601, "reason" => reason,
@@ -633,6 +637,18 @@ module DataQuality::Review
     #   before = Review.undo_state(id)              # before the decision
     #   state = Review.undoable(before, by:)        # after it; nil: no Undo
     #   Review.undo_all([ state ], by:)             # all or none
+    # Why a name proposal can't be open again (#1019): another, different name for its company is open, or would be
+    # with also_restoring; nil when it can. Locks the company's row, as a new proposal does.
+    def name_proposal_conflict(candidate, directory:, also_restoring: [])
+      company = DataQuality::Matching.name_proposal_company(candidate) or return
+      directory.lock_fact(type: "Organization", id: company)
+      other = DataQuality::Matching.open_name_proposal(company, candidate.payload["name"], except: candidate.id)
+      other ||= Candidate.where(id: also_restoring - [ candidate.id ]).find do |c|
+        DataQuality::Matching.name_proposal_company(c) == company && c.payload["name"] != candidate.payload["name"]
+      end
+      "another name for the company, #{other.payload['name']} (##{other.id}), is open; decide or close it first" if other
+    end
+
     def undo_state(candidate_id)
       candidate = Candidate.find_by(id: candidate_id) or return
       { "id" => candidate.id, "status" => candidate.status }
@@ -660,6 +676,12 @@ module DataQuality::Review
         closed = candidates.values.find { |c| c.subject_id && directory.fact(type: c.subject_type, id: c.subject_id)&.closed? }
         if closed
           result = Result.new(candidate_id: closed.id, ref: nil, errors: [ "the record it was about was decided since, so it can't be undone here" ])
+          next
+        end
+        # A name proposal back open beside another, different one for its company: one name is open at a time (#1019).
+        restoring = states.select { |state| DataQuality::Recommendations::OPEN.include?(state["status"]) }.filter_map { |state| candidates[state["id"]] }
+        if (claim = restoring.find { |c| name_proposal_conflict(c, directory:, also_restoring: restoring.map(&:id)) })
+          result = Result.new(candidate_id: claim.id, ref: nil, errors: [ name_proposal_conflict(claim, directory:, also_restoring: restoring.map(&:id)) ])
           next
         end
         changed = states.reject { |state| (candidate = candidates[state["id"]]) && undo_stamp(candidate) == state["stamp"] }
