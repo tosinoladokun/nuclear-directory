@@ -11,7 +11,6 @@ hq:
   source_url: https://s203.q4cdn.com/957337755/files/doc_financials/2025/ar/DA2502904-001-10K-Wrap-Full.pdf
   quote: 6700 Las Colinas Boulevard Irving, Texas (Address of principal executive offices)
   confidence: 1.0
-country_code: US
 status: active
 roles:
 - key: reactor_services
