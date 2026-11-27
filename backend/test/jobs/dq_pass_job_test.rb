@@ -22,6 +22,15 @@ class DqPassJobTest < ActiveSupport::TestCase
     DqPassJob.steps = nil
   end
 
+  # Runs the block with Pipeline.with_lock replaced, then puts the real one back.
+  def with_lock_as(stand_in)
+    real = DataQuality::Pipeline.method(:with_lock)
+    DataQuality::Pipeline.define_singleton_method(:with_lock, &stand_in)
+    yield
+  ensure
+    DataQuality::Pipeline.define_singleton_method(:with_lock, real)
+  end
+
   def spend(cost, kind: DqPass::SOURCE_KIND, at: NOW - 1.hour)
     CrawlRun.create!(source_kind: kind, stage: "verify", started_at: at, stats: { "llm" => { "cost" => cost } })
   end
@@ -64,6 +73,45 @@ class DqPassJobTest < ActiveSupport::TestCase
 
     assert_equal [ "failed", "boom" ], CrawlRun.find_by!(source_kind: DqPass::SOURCE_KIND).values_at(:status, :error)
     assert_equal [ DqPass::FAILED ], @alerts.raised.map(&:first)
+  end
+
+  test "a failure keeps what the earlier steps did on the failed run (Copilot)" do
+    Switch.set!(DqPass::KEY, true, by: "human:tosin")
+    DqPassJob.steps = [ ->(_run) { { "code_rejects" => 2 } }, ->(_run) { raise ArgumentError, "boom" } ]
+
+    assert_raises(ArgumentError) { DqPassJob.perform_now(now: NOW) }
+
+    run = CrawlRun.find_by!(source_kind: DqPass::SOURCE_KIND)
+    assert_equal [ "failed", 2 ], [ run.status, run.stats["code_rejects"] ]
+  end
+
+  test "switched off mid-run, it stops before the next step (Copilot)" do
+    Switch.set!(DqPass::KEY, true, by: "human:tosin")
+    second = false
+    DqPassJob.steps = [ ->(_run) { Switch.set!(DqPass::KEY, false, by: "human:tosin"); { "a" => 1 } }, ->(_run) { second = true } ]
+
+    DqPassJob.perform_now(now: NOW)
+
+    assert_not second
+    assert_equal [ "succeeded", 1 ], CrawlRun.find_by!(source_kind: DqPass::SOURCE_KIND).then { |run| [ run.status, run.stats["stopped_switched_off"] ] }
+  end
+
+  test "the run is made and finished inside the pipeline's lock for its kind, so the sweep leaves it; a held lock is a skip (Copilot)" do
+    Switch.set!(DqPass::KEY, true, by: "human:tosin")
+    kinds = []
+    inside = nil
+    DqPassJob.steps = [ ->(_run) { inside = kinds.dup; {} } ]
+    locking = ->(kind, &block) { kinds << kind; block.call.tap { kinds << :released } }
+    with_lock_as(locking) { DqPassJob.perform_now(now: NOW) }
+    assert_equal [ DqPass::SOURCE_KIND ], inside, "the step ran holding the lock"
+    assert_equal [ DqPass::SOURCE_KIND, :released ], kinds
+    assert_equal "succeeded", CrawlRun.find_by!(source_kind: DqPass::SOURCE_KIND).status
+
+    busy = ->(_kind) { raise DataQuality::Pipeline::AlreadyRunning, "busy" }
+    result = with_lock_as(busy) { DqPassJob.perform_now(now: NOW) }
+    assert_equal({ "skipped" => "already running" }, result)
+    assert_equal 1, CrawlRun.where(source_kind: DqPass::SOURCE_KIND).count, "no run made"
+    assert_empty @alerts.raised
   end
 
   test "the cap stops the steps, keeps the run, and raises its own alert, not a failure" do
