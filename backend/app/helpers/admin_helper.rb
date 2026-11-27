@@ -385,6 +385,8 @@ module AdminHelper
   # The claim with Data Quality's name for a new company (#1000) going with this Create, or nil.
   def proposed_name_claim(entry)
     return if entry.kind != "new_record"
+    # Today reads every row's at once (#1008).
+    return @inbox.proposed_name_claim(entry) if @inbox.respond_to?(:proposed_name_claim)
 
     # The Create's own claim too: with no other open claim, the name proposal is the row (Copilot).
     named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
