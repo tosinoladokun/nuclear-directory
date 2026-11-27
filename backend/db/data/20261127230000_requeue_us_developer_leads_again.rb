@@ -27,7 +27,7 @@ class RequeueUsDeveloperLeadsAgain < DeployData::Migration
       today = Date.current
       entry = { "key" => KEY, "label" => LABEL, "times" => 1, "first" => today.to_s, "last" => today.to_s }
       lead.update!(sources: lead.sources + [ entry ], seen_count: lead.seen_count + 1, last_seen_on: [ lead.last_seen_on, today ].compact.max)
-      CompanySuggestion.queue(lead, name: lead.name, by: BY)
+      CompanySuggestion.queue(lead, name: lead.name, by: BY, wait: AFTER_DEPLOY_WAIT)
       say "Lead #{id} (#{lead.name}) queued again (had used #{tries} of its tries)"
     end
   end
