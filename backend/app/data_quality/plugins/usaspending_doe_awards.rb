@@ -195,6 +195,19 @@ class DataQuality::Plugins::UsaspendingDoeAwards < DataQuality::Plugin
   end
 
   # The facts every row's source states, which a single row doesn't repeat.
+
+  # A quote may be one award's description as written, without the CSV's
+  # quoting (a doubled "" inside it): the stored row writes it escaped, so it's
+  # found in the parsed descriptions too (Data Quality's pass, #998; Copilot).
+  def quote_in_source?(source, quote)
+    return true if super
+
+    needle = quote.to_s.squish
+    needle.present? && CSV.parse(source.content_text.to_s, headers: true).any? { |row| row["description"].to_s.squish.include?(needle) }
+  rescue CSV::MalformedCSVError
+    false
+  end
+
   def source_facts(source)
     return unless source.source_kind == source_kind
 
