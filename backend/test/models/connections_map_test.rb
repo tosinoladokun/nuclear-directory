@@ -184,6 +184,26 @@ class ConnectionsMapTest < ActiveSupport::TestCase
     assert_operator layout.width, :<, 696
   end
 
+  # Copilot on #1002: the record's full name set the trunk with no bound, so a 100-character name on a two-sided map
+  # drew past the 696px column. Its name now gets what's left with every column at its smallest; the controller fits it.
+  test "a very long record name never pushes the drawing past 696px, on one side or two" do
+    utility = role("utility")
+    long = cite!(company("#{'Very Long Name ' * 6}Holdings Incorporated"[0, 100], roles: [ utility ]))
+    cite!(link(cite!(company("Left Supplier Co")), "supplies", long))
+    cite!(link(long, "operates", cite!(plant("Right Station", facility_type: "power_reactor", status: "operating"))))
+    two = layout_for(ConnectionsMap.for_company(CompanyProfile.new(long)))
+    one_sided = cite!(company("#{'Another Long Name ' * 6}"[0, 100], roles: [ utility ]))
+    cite!(link(one_sided, "operates", cite!(plant("Only Station", facility_type: "power_reactor", status: "operating"))))
+    one = layout_for(ConnectionsMap.for_company(CompanyProfile.new(one_sided)))
+
+    [ two, one ].each do |layout|
+      assert_operator layout.width, :<=, 696
+      layout.nodes.each { |placed| assert placed.x.between?(placed.r, layout.width - placed.r), "#{placed.name} inside" }
+      layout.nodes.reject { |placed| placed == layout.centre }.each { |placed| assert_operator placed.slot, :>=, ConnectionsMap::Layout::SLOT_MIN }
+      assert_operator layout.centre.slot, :<=, layout.width - 2 * ConnectionsMap::Layout::PAD_X, "the record's name is fitted to what's left"
+    end
+  end
+
   test "a column's names get the room the 696px has, up to the cap (#995)" do
     centre = cite!(company("Room Co", roles: [ role("utility") ]))
     cite!(link(centre, "operates", cite!(plant("Comanche Peak Generating", facility_type: "power_reactor", status: "operating"))))

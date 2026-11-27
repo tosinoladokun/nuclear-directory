@@ -60,6 +60,7 @@ class ConnectionsMap
     end
 
     def nodes = placed.values
+    def width_limit = size.width
 
     private
       def other(edge, inbound) = inbound ? edge.giver : edge.receiver
@@ -68,7 +69,12 @@ class ConnectionsMap
         r = size.node_r
         big = size.centre_r
         used = sides.reject { |_, list| list.empty? }.keys
-        name_half = @centre_node.name.length * CENTRE_CHAR / 2.0
+        # The record's name, as far as the 696px allows with every column at its smallest (Copilot, #1002): a longer one
+        # gets that room and the controller fits it (smaller, then its short name, then an ellipsis), so the drawing
+        # never outgrows the column.
+        side_fixed = BRANCH + 2 * r + NAME_GAP + PAD_X + SLOT_MIN
+        most = used.size == 2 ? width_limit / 2.0 - side_fixed - NAME_CLEAR : (width_limit - PAD_X - NAME_CLEAR - side_fixed * used.size) / 2.0
+        name_half = [ @centre_node.name.length * CENTRE_CHAR / 2.0, most ].min
         # From the record's centre to each bus: a trunk of TRUNK_MIN at least, and far enough that the bus clears the
         # record's name under it. A side with no rows has no trunk or bus: the record (or its name) is that side's edge.
         reach = [ big + TRUNK_MIN, name_half + NAME_CLEAR ].max
