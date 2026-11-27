@@ -38,6 +38,10 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
   end
 
   def attached_record(candidate)
+    return unless candidate.subject_id
+    # A link, role or term is its fact, as the directory reads it; read through this cache (Copilot).
+    return fact(type: candidate.subject_type, id: candidate.subject_id) unless %w[Organization Facility].include?(candidate.subject_type)
+
     cached = @attached[candidate.subject_type.to_s]
     cached&.key?(candidate.subject_id) ? cached[candidate.subject_id] : __getobj__.attached_record(candidate)
   end

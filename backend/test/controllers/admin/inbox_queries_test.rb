@@ -25,9 +25,18 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       site = claim(company, { "name" => company.name, "website" => "https://fission#{n}.example" })
       DataQuality::Recommendations.record("#{create.id} approve: on the NRC page\n#{site.id} approve: its own site", by: "human:dq")
       DqAction.create!(candidate: create, action: "new", reason: "r", before: {}, created: [], by: DataQuality::Matching::BY)
-      published = Organization.create!(name: "Queries Utility #{n}", hq_city: "Bethesda", verification_status: "verified", verified_by: "human:tosin")
+      # Published two days ago: today's would use up the day's Creates (OwnerInbox::CREATES_A_DAY), leaving no rows to show.
+      published = travel_to(2.days.ago) { Organization.create!(name: "Queries Utility #{n}", hq_city: "Bethesda", verification_status: "verified", verified_by: "human:tosin") }
       published.aliases.create!(alias: published.name)
       claim(published, { "name" => published.name, "hq_city" => "Rockville" })
+      # A link between them, and a lead Tosin added that found the new company (Copilot).
+      link = Relationship.create!(from_organization: published, to_organization: company, relationship_type: "invests_in", verification_status: "pending")
+      Candidate.create!(source: @page, crawl_run: @run, kind: "relationship", quote: "q", status: "matched", subject_type: "Relationship", subject_id: link.id,
+        payload: { "from_organization" => { "name" => published.name }, "to_organization" => { "name" => company.name }, "relationship_type" => "invests_in" },
+        ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+      Lead.create!(kind: "company", name: company.name, normalized_name: Lead.normalize(company.name), status: "added", candidate: create,
+        first_seen_on: Date.current, last_seen_on: Date.current,
+        sources: [ { "label" => CompanySuggestion::LABEL, "first" => Date.current.iso8601, "last" => Date.current.iso8601, "times" => 1 } ])
     end
   end
 

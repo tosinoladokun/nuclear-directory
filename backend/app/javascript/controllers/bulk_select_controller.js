@@ -22,6 +22,12 @@ export default class extends Controller {
 
   disconnect() { document.removeEventListener("keydown", this.onKey) }
 
+  // A row decided on its own goes from the page (#1008, a Turbo Stream): the count and bar follow (Copilot).
+  boxTargetDisconnected(box) {
+    if (this.last === box) this.last = null
+    if (this.hasBarTarget) this.update()
+  }
+
   pick(event) {
     const box = event.currentTarget
     if (event.shiftKey && this.last) {

@@ -51,12 +51,23 @@ class OwnerInbox
   # A claim's inbox kind, read with this page's prefetched records and Data Quality's actions (#1008):
   # the ones the page already sorted are reused.
   def kind_of(claim)
-    groups
-    @kinds.fetch(claim.id) do
-      @directory.prefetch([ claim ]) if @directory.respond_to?(:prefetch)
-      @kinds[claim.id] = DataQuality::Review.inbox_kind(claim, directory: @directory, firsts: firsts)
-    end
+    read_kinds([ claim ])
+    @kinds.fetch(claim.id)
   end
+
+  # Reads the inbox kinds of these claims (e.g. the leads' claims, #1008) together, as the page's own are.
+  def read_kinds(claims)
+    groups
+    rest = claims.reject { |claim| @kinds.key?(claim.id) }
+    return if rest.empty?
+
+    @directory.prefetch(rest) if @directory.respond_to?(:prefetch)
+    actions = DataQuality::Review.live_actions(rest.map(&:id))
+    rest.each { |claim| @kinds[claim.id] = DataQuality::Review.inbox_kind(claim, directory: @directory, firsts:, actions:) }
+  end
+
+  # Whether a company has a sourced role, read with the page's claims (#1008).
+  def sourced_role?(organization_id) = @directory.sourced_role?(organization_id)
 
   def firsts = (@firsts ||= DataQuality::Review.first_batches)
 
@@ -151,12 +162,19 @@ class OwnerInbox
   # What "Yes to all" takes: each checked fact's first copy as Data Quality's
   # call on it, for Recommendations.accept (rechecked under its locks).
   def checked_items
+    claims = claims_by_id
     checked.map do |entry|
-      candidate = Candidate.find(entry.item.candidate_id)
+      candidate = claims[entry.item.candidate_id] || Candidate.find(entry.item.candidate_id)
       DataQuality::Recommendations::Item.new(candidate_id: candidate.id, call: candidate.dq_recommendation, reason: candidate.dq_reason,
         snapshot: candidate.dq_payload_sha256, claim: nil, subject_type: candidate.subject_type, subject_id: candidate.subject_id, why: nil, waiting: true)
     end
   end
+  # The claims on the page, already read for its groups, by id (#1008): a row's copies and riders without a query each.
+  def claims_by_id = (@claims_by_id ||= groups.values.flatten.index_by(&:id))
+
+  # A row's other claims, in id order.
+  def copies_of(entry) = claims_by_id.values_at(*entry.copy_ids).compact.sort_by(&:id)
+
   # A pending company's other checked claims shown with its Create (one Create per company), by the Create's claim id.
   def companions_of(candidate_ids)
     groups

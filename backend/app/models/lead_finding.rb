@@ -60,7 +60,8 @@ module LeadFinding
   end
 
   # kind_of: how to read a claim's inbox kind (OwnerInbox#kind_of reads many at once, #1008).
-  def self.state(lead, kind_of: ->(claim) { DataQuality::Review.inbox_kind(claim) })
+  # sourced_role: whether a company has a sourced role (OwnerInbox#sourced_role? reads them with its own, #1008).
+  def self.state(lead, kind_of: ->(claim) { DataQuality::Review.inbox_kind(claim) }, sourced_role: ->(id) { Directory::Lookup.sourced_role?(id) })
     note = lead.note.to_s
     return SAID_NO if lead.status_ignored? && lead.reason == SAID_NO
     return note if lead.status_ignored? && note.start_with?(CLOSED)
@@ -74,7 +75,7 @@ module LeadFinding
     when "rejected" then "Said no"
     else
       # Still being filled in until its company has a sourced role (#638): Enrich adds it the same night or the next.
-      return "Finding" unless claim.subject_type == "Organization" && claim.subject_id && Directory::Lookup.sourced_role?(claim.subject_id)
+      return "Finding" unless claim.subject_type == "Organization" && claim.subject_id && sourced_role.call(claim.subject_id)
 
       %w[new_record new_fact change].include?(kind_of.call(claim)) ? "In your inbox" : "Waiting for check"
     end
