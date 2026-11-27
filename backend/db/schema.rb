@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_28_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -870,6 +870,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.index ["url"], name: "index_sources_on_url", unique: true
     t.check_constraint "crawl_status::text = ANY (ARRAY['pending'::character varying::text, 'ok'::character varying::text, 'blocked'::character varying::text, 'needs_human'::character varying::text])", name: "sources_crawl_status_check"
     t.check_constraint "link_status IS NULL OR (link_status::text = ANY (ARRAY['ok'::character varying::text, 'dead'::character varying::text, 'failing'::character varying::text, 'error'::character varying::text, 'blocked'::character varying::text, 'disallowed'::character varying::text]))", name: "sources_link_status_check"
+  end
+
+  create_table "switches", force: :cascade do |t|
+    t.string "key", null: false
+    t.boolean "on", default: false, null: false
+    t.string "changed_by"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_switches_on_key", unique: true
   end
 
   create_table "takeoff_proposals", force: :cascade do |t|

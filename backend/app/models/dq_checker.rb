@@ -10,12 +10,12 @@
 # - The cheap model (OPENROUTER_EXTRACT_MODEL) answers first; "unsure" goes to the verify model.
 # - Code last: the hard rules can only lower an approve (to unsure), never raise anything.
 # - Any error or the day's budget is "needs a human", never an approve.
-# - At most LIMIT verdicts and DAILY_BUDGET dollars a day, counted from the database.
+# - At most LIMIT verdicts a day, and DqPass::DAILY_BUDGET dollars a day shared with Data Quality's pass (#998),
+#   counted from the database.
 class DqChecker
   PROMPT_VERSION = "checker-v1"
   SOURCE_KIND = "dq_checker"
   LIMIT = 150
-  DAILY_BUDGET = 1.0
   BATCH = 25
   WINDOW = 4_000
   # A whole call, retries included: OpenRouter's keep-alive bytes reset the read timeout, so one slow answer
@@ -107,7 +107,7 @@ class DqChecker
     counts = Hash.new(0)
     due.limit(left).find_in_batches(batch_size: BATCH) do |batch|
       batch.each do |candidate|
-        if spent_today >= DAILY_BUDGET
+        unless DqPass.budget_left?(now: @now)
           counts["stopped_for_budget"] = 1
           break
         end
@@ -234,7 +234,7 @@ class DqChecker
 
     def llm_call(role, claim)
       # Before every call, the verify call after an unsure too (Copilot).
-      raise DataQuality::Budget::Exceeded, "the day's checker budget is used" if spent_today >= DAILY_BUDGET
+      raise DataQuality::Budget::Exceeded, "the day's checker budget is used" unless DqPass.budget_left?(now: @now)
 
       llm.structured(role:, schema: SCHEMA, schema_name: "checker_verdict", crawl_run: @run, reasoning_effort: "low",
         messages: [ { role: "system", content: INSTRUCTIONS }, { role: "user", content: prompt(claim) } ])
@@ -291,11 +291,6 @@ class DqChecker
     end
 
     def unsure(reason) = Answer.new(verdict: "unsure", reason:, confidence: nil, model: nil, escalated: false)
-
-    # Counted from the database (crawl_runs stats), never a cache: every checker run started today, UTC.
-    def spent_today
-      CrawlRun.where(source_kind: SOURCE_KIND, started_at: @now.utc.beginning_of_day..).sum("COALESCE((stats->'llm'->>'cost')::numeric, 0)").to_f
-    end
 
     # Read 30 s, two attempts (Infra), the same OpenRouter key and monthly budget as the pipeline.
     def llm

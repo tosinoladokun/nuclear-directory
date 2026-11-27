@@ -85,6 +85,13 @@ class DqCheckerTest < ActiveSupport::TestCase
     assert_match "done", checker(FakeCheckerLlm.new).run["skipped"]
   end
 
+  test "the checker shares Data Quality's pass's daily cap: the pass's spend stops it too (#998)" do
+    website_claim
+    CrawlRun.create!(source_kind: DqPass::SOURCE_KIND, stage: "verify", started_at: NOW - 1.hour, stats: { "llm" => { "cost" => DqPass::DAILY_BUDGET } })
+    assert_equal 1, checker(FakeCheckerLlm.new).run["stopped_for_budget"]
+    assert_equal 0, CheckerVerdict.count
+  end
+
   test "fields by what a claim fills; anything else is never judged" do
     field = ->(kind, payload) { DqChecker.field_for(kind, payload) }
     assert_equal "new_company", field.("organization", { "name" => "A", "aliases" => [] })

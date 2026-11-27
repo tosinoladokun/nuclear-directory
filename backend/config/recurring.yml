@@ -36,6 +36,10 @@ production:
   dq_checker:
     class: DqCheckerJob
     schedule: every day at 10am UTC
+  # Data Quality's daily pass (#998), after the checker. Does nothing while its switch (Admin > Health) is off.
+  dq_pass:
+    class: DqPassJob
+    schedule: every day at 10:30am UTC
   # The pipeline's health (#811): counts kept daily, problems to Sentry. After the night's crawl and finds.
   pipeline_health:
     class: PipelineHealthJob

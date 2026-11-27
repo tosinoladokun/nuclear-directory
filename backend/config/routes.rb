@@ -77,6 +77,8 @@ Rails.application.routes.draw do
     get "social" => "social#show", as: :social
     # Whether the pipeline runs alone (#811).
     get "health" => "health#show", as: :health
+    # Data Quality's daily pass (#998): its switch, off until a person turns it on.
+    patch "health/dq-pass" => "health#dq_pass", as: :health_dq_pass
     # The monthly open dataset release (#950): the draft, Rebuild, Dry run and Publish.
     get "dataset-releases" => "dataset_releases#show", as: :dataset_releases
     post "dataset-releases/build" => "dataset_releases#build", as: :dataset_releases_build
