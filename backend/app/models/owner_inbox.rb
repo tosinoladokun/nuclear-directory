@@ -36,7 +36,7 @@ class OwnerInbox
       mine = waiting.select { |candidate| SECTIONS.include?(kinds[candidate]) }
       # A new company's field claims (#760) are decided with its Create, not on their own.
       fields = DataQuality::FieldEvidence.fields_of(mine.select { |c| kinds[c] == "new_record" && c.kind_organization? }.map(&:id))
-        .where.not(subject_id: nil).to_a.group_by { |c| c.payload["field_of"].to_i }
+        .where.not(subject_id: nil).includes(:source).to_a.group_by { |c| c.payload["field_of"].to_i }
       field_ids = fields.values.flatten.map(&:id).to_set
       grouped = mine.reject { |candidate| field_ids.include?(candidate.id) }
         .group_by { |candidate| [ kinds[candidate], candidate.kind, candidate.subject_type, candidate.subject_id, candidate.payload.to_h.sort ] }

@@ -34,11 +34,11 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
       (@attached[type] ||= {}).merge!(ids.index_with { |id| found[id] })
     end
     # The companies their websites' domains belong to, which a restated website is checked against.
-    domains = candidates.filter_map { |claim| domain_from(claim.payload.to_h["website"]) if claim.kind == "organization" && claim.payload.to_h["website"].present? }.uniq - @by_domain.keys
+    domains = candidates.filter_map { |claim| website = claim.payload.to_h["website"]; domain_from(website) if claim.kind == "organization" && website.is_a?(String) && website.present? }.uniq - @by_domain.keys
     found = __getobj__.organizations_by_domain(domains)
     domains.each { |domain| @by_domain[domain] = found[domain] }
     # The sites EIA's enrichment of units names by plant ID.
-    plants = candidates.filter_map { |claim| claim.payload.to_h.dig(DataQuality::DirectoryClient::ENRICHMENT_KEY, "eia_plant_id").presence&.to_s }.uniq - @sites.keys
+    plants = candidates.filter_map { |claim| plant_of(claim) }.uniq - @sites.keys
     found = __getobj__.sites_by_plant_id(plants)
     plants.each { |plant| @sites[plant] = found[plant] }
     # And those sites' own records, which a unit's change names (Copilot).
@@ -76,7 +76,7 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
   end
 
   def site_for_unit(candidate)
-    plant = candidate.payload.to_h.dig(DataQuality::DirectoryClient::ENRICHMENT_KEY, "eia_plant_id").presence&.to_s or return
+    plant = plant_of(candidate) or return
     units = @attached.fetch("Facility", {})
     return __getobj__.site_for_unit(candidate) unless units.key?(candidate.subject_id) && @sites.key?(plant)
 
@@ -104,4 +104,12 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
   def sourced_role?(organization_id)
     @sourced_roles.key?(organization_id) ? @sourced_roles[organization_id] : __getobj__.sourced_role?(organization_id)
   end
+
+  private
+    # The EIA plant ID an enrichment claim names, or nil, whatever shape its payload has: a claim this page merely
+    # lists must never break it, or every admin page whose nav counts Today (Copilot).
+    def plant_of(claim)
+      identify = claim.payload.to_h[DataQuality::DirectoryClient::ENRICHMENT_KEY]
+      identify["eia_plant_id"].presence&.to_s if identify.is_a?(Hash)
+    end
 end

@@ -28,6 +28,11 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
       site = claim(company, { "name" => company.name, "website" => "https://fission#{n}.example" })
       DataQuality::Recommendations.record("#{create.id} approve: on the NRC page\n#{site.id} approve: its own site", by: "human:dq")
       DqAction.create!(candidate: create, action: "new", reason: "r", before: {}, created: [], by: DataQuality::Matching::BY)
+      # A field from its own page riding with the Create (#760; Copilot: their sources were read per row).
+      field_page = Source.create!(url: "https://fission#{n}.example/about", source_kind: "dummy", crawl_status: "ok", content_sha256: "f", content_text: "Austin")
+      field = Candidate.create!(source: field_page, crawl_run: @run, kind: "organization", quote: "Austin", status: "needs_review", subject_type: "Organization",
+        subject_id: company.id, payload: { "name" => company.name, "field_of" => create.id, "hq_city" => "Austin" })
+      DataQuality::Recommendations.record("#{field.id} approve: its about page", by: "human:dq")
       # Published two days ago: today's would use up the day's Creates (OwnerInbox::CREATES_A_DAY), leaving no rows to show.
       published = travel_to(2.days.ago) { Organization.create!(name: "Queries Utility #{n}", hq_city: "Bethesda", verification_status: "verified", verified_by: "human:tosin") }
       published.aliases.create!(alias: published.name)
@@ -106,6 +111,18 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
 
     assert_operator many, :<=, few + 5, "#{few} queries with 3 companies, #{many} with 15. #{grew(before, @sites)}"
     assert_operator many, :<=, MAX_QUERIES
+  end
+
+  test "a claim with a malformed payload doesn't break Today or another admin page's nav (Copilot)" do
+    add_companies(1, from: 0)
+    unit = Facility.create!(name: "Odd Unit", nrc_docket: "05009999", verification_status: "verified", verified_by: "human:tosin")
+    Candidate.create!(source: @page, crawl_run: @run, kind: "facility", quote: "q", status: "matched", subject_type: "Facility", subject_id: unit.id,
+      payload: { "name" => unit.name, DataQuality::DirectoryClient::ENRICHMENT_KEY => "not a hash" }, ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
+    company = Organization.find_by!(name: "Queries Utility 0")
+    claim(company, { "name" => company.name, "website" => { "not" => "a string" } })
+
+    get admin_inbox_path
+    assert_response :success
   end
 
   test "a decision clicked on the page removes only its row and shows the message, without rebuilding the inbox" do
