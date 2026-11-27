@@ -93,6 +93,29 @@ class CompanyProfile
   # listed with its stage, never counted (#487).
   def counted_deals = deals.reject(&:stage)
 
+  # How a description that isn't a signed deal starts (the connections map's rule, #363).
+  NOT_SIGNED_DEAL = [ "MOU", "Framework", "Term sheet", "Binding term sheet", "Letter of intent", "Non-binding", "Preorder", "Option",
+    "Conditional", "Announced plan", "Agreement to explore", "Partnership", "Strategic agreement", "Prepayment" ].freeze
+
+  # The deals a count calls deals (DATA.md: a deal is a signed power deal): signed supply and power deals, as the
+  # connections map counts arrows. A power deal with verified terms is signed when a term counts (agreement, status and
+  # conditions say so), else its words must say "Signed"; any other deal unless it starts with an earlier stage or is
+  # pending. A framework or MOU, an announced or conditional one, and any investment or funding (counted as investors) are
+  # not. The page's descriptions and its card image all read this, so they never disagree (#910).
+  def signed_deals
+    @signed_deals ||= counted_deals.select do |deal|
+      next false unless %w[supplies offtake_with].include?(deal.relationship_type)
+
+      terms = deal.deal_terms.select { |term| term.verification_status == "verified" }
+      text = deal.description.to_s.strip
+      if deal.relationship_type == "offtake_with"
+        terms.any? ? terms.any?(&:counted?) : text.match?(/\ASigned\b/i)
+      else
+        NOT_SIGNED_DEAL.none? { |label| text.match?(/\A#{Regexp.escape(label)}\b/i) } && !text.match?(/\bpending\b/i)
+      end
+    end
+  end
+
   def parents
     @parents ||= Relationship.published.subsidiary_of.where(from_organization: organization)
       .includes(:to_organization, evidence: :source).select { |link| link.evidence.any? }

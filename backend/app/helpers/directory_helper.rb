@@ -492,27 +492,9 @@ module DirectoryHelper
       .map { |l| l.facility.parent || l.facility }.uniq
   end
 
-  # How a description that isn't a signed deal starts (the connections map's rule, #363).
-  NOT_SIGNED_DEAL = [ "MOU", "Framework", "Term sheet", "Binding term sheet", "Letter of intent", "Non-binding", "Preorder", "Option",
-    "Conditional", "Announced plan", "Agreement to explore", "Partnership", "Strategic agreement", "Prepayment" ].freeze
-
-  # Signed supply and power deals, as the connections map counts arrows: a power deal with verified terms is signed when a
-  # term counts (agreement, status and conditions say so), else its words must say "Signed"; any other deal unless it starts
-  # with an earlier stage or is pending. A framework or MOU, an announced or conditional one, and any investment or funding
-  # (counted as investors) are not.
-  def company_signed_deals(profile)
-    profile.counted_deals.select do |deal|
-      next false unless %w[supplies offtake_with].include?(deal.relationship_type)
-
-      terms = deal.deal_terms.select { |term| term.verification_status == "verified" }
-      text = deal.description.to_s.strip
-      if deal.relationship_type == "offtake_with"
-        terms.any? ? terms.any?(&:counted?) : text.match?(/\ASigned\b/i)
-      else
-        NOT_SIGNED_DEAL.none? { |label| text.match?(/\A#{Regexp.escape(label)}\b/i) } && !text.match?(/\bpending\b/i)
-      end
-    end
-  end
+  # Signed supply and power deals, as DATA.md counts deals: CompanyProfile#signed_deals, the one place every count reads
+  # (the page's descriptions and its card image, #910).
+  def company_signed_deals(profile) = profile.signed_deals
 
   # What a company is, as a noun phrase for a sentence; only roles with a plain company noun (the title's words).
   COMPANY_NOUNS = TITLE_ROLES.merge(

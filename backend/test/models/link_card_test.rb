@@ -86,7 +86,7 @@ class LinkCardTest < ActiveSupport::TestCase
 
   # Stands in for CompanyProfile: only what for_company reads.
   Company = Struct.new(:name, :hq_city, :hq_state, :shown_roles, :plant_links, :deals, :category, keyword_init: true) do
-    def counted_deals = deals
+    def signed_deals = deals
   end
   Link = Struct.new(:relationship_type, :facility, :started_on, :ended_on, :ownership_pct)
 

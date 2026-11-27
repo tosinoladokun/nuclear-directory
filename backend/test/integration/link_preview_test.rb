@@ -87,6 +87,27 @@ class LinkPreviewTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # #910: the card image counted every deal and link (Kairos 5) while og:description counted signed deals (2); on X both
+  # show together. Both read CompanyProfile#signed_deals now: a signed supply deal counts; an MOU, an investment and a
+  # grant are on the page but aren't deals (DATA.md).
+  test "a company's card image and its descriptions count the same deals" do
+    kairos = company("Kairos Power", description: "Builds fluoride salt-cooled reactors.")
+    cite!(kairos)
+    cite!(link(cite!(company("Fuel Co")), "supplies", kairos).tap { |deal| deal.update!(description: "Supplies TRISO fuel.") })
+    cite!(link(cite!(company("Power Buyer")), "offtake_with", kairos).tap { |deal| deal.update!(description: "MOU to buy power from its fleet.") })
+    cite!(link(cite!(company("Investor Co")), "invests_in", kairos))
+    cite!(link(cite!(company("Grant Office")), "funds", kairos))
+    profile = CompanyProfile.find("kairos-power")
+    assert_operator profile.counted_deals.size, :>, profile.signed_deals.size, "the page lists more links than it counts as deals"
+
+    get company_path(slug: "kairos-power")
+    og = css_select("meta[property='og:description']").sole["content"]
+    meta = css_select("meta[name='description']").sole["content"]
+    card = LinkCard.for_company(profile).footer_right
+    [ og, meta, card ].each { |text| assert_includes text, "1 deal", text }
+    [ og, meta, card ].each { |text| assert_no_match(/\b[2-9] deals\b/, text) }
+  end
+
   test "a category keeps its own preview address; search and filters don't" do
     get companies_path(category: "reactor-developers", state: "CA", q: "x")
     assert_select "meta[property='og:url'][content=?]", "http://www.example.com/companies?category=reactor-developers"
