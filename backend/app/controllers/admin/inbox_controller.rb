@@ -14,7 +14,7 @@ class Admin::InboxController < Admin::BaseController
   # Yes or No on one fact, with its copies from other pages. A No gets an
   # Undo for an hour (Today review's: every copy back as it was, or none).
   def decide
-    ids = Array(params[:ids]).map(&:to_i).presence || [ params[:candidate_id].to_i ]
+    ids = OwnerInbox.approval_order(Array(params[:ids]).map(&:to_i).presence || [ params[:candidate_id].to_i ])
     yes = params[:decision] == "yes"
     before = ids.map { |id| DataQuality::Review.undo_state(id) } unless yes
     results = if yes
@@ -90,7 +90,8 @@ class Admin::InboxController < Admin::BaseController
     riders = claims.select do |claim|
       (company = company_of[claim.id]) && companies.include?(company) && OwnerInbox.rides_along?(claim, company, company:)
     end
-    results += DataQuality::Review.approve(riders.map(&:id), by: actor, reason: "With its Create") if riders.any?
+    # By id (#1019): a company's last name proposal is the one written, as its row showed.
+    results += DataQuality::Review.approve(riders.map(&:id).sort, by: actor, reason: "With its Create") if riders.any?
     done, stopped = results.partition(&:ok?)
     flash[:notice] = "Done: #{helpers.pluralize(done.size, 'item')} live." if done.any?
     flash[:alert] = "#{helpers.pluralize(stopped.size, 'item')} stayed: #{stopped.flat_map(&:errors).uniq.to_sentence}." if stopped.any?
@@ -185,7 +186,7 @@ class Admin::InboxController < Admin::BaseController
           elsif claim.id == main && !OwnerInbox.judged?(claim) then "Data Quality hasn't checked it"
           end
         end
-        results = yes ? DataQuality::Review.approve(ids, by: actor, reason: SELECTED_YES, safe_check: recheck) : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today (selected)")
+        results = yes ? DataQuality::Review.approve(OwnerInbox.approval_order([ main, *(ids - [ main ]) ]), by: actor, reason: SELECTED_YES, safe_check: recheck) : DataQuality::Review.reject(ids, by: actor, reason: "Said no in Today (selected)")
         stopped = results.reject(&:ok?)
         return stopped.flat_map(&:errors).uniq if stopped.any?
 

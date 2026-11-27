@@ -385,9 +385,12 @@ module AdminHelper
     return if entry.kind != "new_record"
 
     # The Create's own claim too: with no other open claim, the name proposal is the row (Copilot).
-    named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
-    # The last one: approval applies claims by id, so the last name is the one it's created under (Copilot).
-    Candidate.where(id: named, kind: "organization").order(:id).select { |claim| claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) }.last
+    order = OwnerInbox.approval_order(entry.ids)
+    named = DqAction.where(candidate_id: order, action: "propose_fields").pluck(:candidate_id)
+    directory = DataQuality::DirectoryClient.new
+    # Only one approval will write as the name (on the company it was proposed for, #1019), and of those the last
+    # approved: the row's claims are approved in OwnerInbox.approval_order, so that's the name it's created under.
+    Candidate.where(id: named, kind: "organization").select { |claim| directory.proposed_name?(claim) }.max_by { |claim| order.index(claim.id) }
   end
 
   # A decision in Recently decided (#548): "Created Bluefield Fission",

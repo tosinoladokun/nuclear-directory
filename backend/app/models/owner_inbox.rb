@@ -172,6 +172,13 @@ class OwnerInbox
     end
   end
 
+  # The order a row's claims are approved in, wherever they're approved together: the row's own claim, then the
+  # rest by id (#1019). The last of a company's name proposals is then the name it's created under, as its row shows.
+  def self.approval_order(ids)
+    first, *rest = ids
+    [ first, *rest.sort ].compact
+  end
+
   # Judged for a bulk Yes (#777): Data Quality's own approve, still current, never contradicted, its quote still in its
   # page. Yes to all and Approve selected take only these; anything else is decided on its own row.
   # An operator change (#930) is never ticked: Tosin decides each of its two claims on its own.
