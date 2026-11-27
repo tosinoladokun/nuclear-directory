@@ -45,6 +45,16 @@ class DqPass::CodeRejectsTest < ActiveSupport::TestCase
     assert_not rejected?(reactor)
   end
 
+  test "a company with only recipient rows, or an unreadable award row, has no award text read: never rejected for it (DQ, #1003)" do
+    only = claim(pending("Recipient Only Co"), "usaspending_recipients", "Recipient: RECIPIENT ONLY CO\nCity: RENO\nState: NV")
+    broken = claim(pending("Broken Row Co"), "usaspending_doe_awards", "not, a \"valid row")
+
+    run_step
+
+    assert_not rejected?(only)
+    assert_not rejected?(broken)
+  end
+
   test "a document's title, a utility with no nuclear plant, and a foreign record with no US address" do
     doc = claim(pending("Westinghouse Summary Report ML24123A456"), "nrc_adams", "Summary Report")
     utility = claim(pending("Plains Power Co", eia_utility_id: "99999"), "usaspending_recipients", "Recipient: Plains Power Co, nuclear fuel study")

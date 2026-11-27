@@ -17,7 +17,6 @@ class DqPass::CodeRejects
   AWARDS = %w[arpa_e_projects usaspending_doe_awards usaspending_recipients].freeze
   LENR = /\b(?:low[- ]energy nuclear reactions?|LENR)\b/i
   DOCUMENT_TITLE = /\b(?:summary report|audit plan|assignment of project number|presentation materials|transmittal)\b|\bML\d{8,}\b|\b(?:docket|project)\s*(?:no\.?|number)?\s*\d{2,}/i
-  NEVER = /\b(?:universit(?:y|ies)|college|institute of technology|national lab(?:oratory)?|laboratory|department of|u\.s\. |agency|administration|authority|commission|capital|ventures|partners|fund)\b/i
   COUNTRY_SOURCES = %w[lead_finder wire_press].freeze
 
   def initialize(apply: ->(rows) { DataQuality::Matching.apply(rows) })
@@ -51,8 +50,9 @@ class DqPass::CodeRejects
     kinds = claims.map { |claim| claim.source&.source_kind }.compact.uniq
     return "the name is a document's title, not a company's" if org.name.to_s.match?(DOCUMENT_TITLE)
     if kinds.any? && (kinds - AWARDS).empty?
-      texts = claims.map { |claim| self.class.award_text(claim) }
-      return "its award records name no nuclear work" if texts.none? { |text| nuclear?(text) }
+      # Only award text that was read: a recipient row or an unreadable row says nothing either way (DQ, #1003).
+      texts = claims.map { |claim| self.class.award_text(claim) }.reject(&:blank?)
+      return "its award records name no nuclear work" if texts.any? && texts.none? { |text| nuclear?(text) }
     end
     if org.eia_utility_id.present? && !kinds.include?("eia_owners") && FacilityRelationship.where(organization_id: org.id).none?
       return "a utility that owns or runs no nuclear plant"
@@ -85,14 +85,5 @@ class DqPass::CodeRejects
 
     def open?(claim) = claim.status.in?(DataQuality::Recommendations::OPEN)
 
-    def never?(org)
-      org.name.to_s.match?(NEVER) || person_suggested?(org) ||
-        OrganizationRole.where(organization_id: org.id, role: Role.where(key: %w[venture_capital university national_lab government_agency])).exists?
-    end
-
-    def person_suggested?(org)
-      Lead.where(kind: "company", normalized_name: Lead.normalize(org.name)).any? do |lead|
-        lead.sources.any? { |source| source["key"].to_s.match?(DataQuality::Plugins::LeadFinder::PERSON_KEYS) }
-      end
-    end
+    def never?(org) = DqPass.never_reject?(org)
 end
