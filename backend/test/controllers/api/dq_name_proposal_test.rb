@@ -169,6 +169,16 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     assert_equal "Fermi Nuclear", @company.reload.name
   end
 
+  test "a website it carries whose domain is another company's goes to review, as on the usual path (Copilot)" do
+    Organization.create!(name: "Other Co", verification_status: "verified", verified_by: "human:tosin", website: "https://fermiamerica.com", domain: "fermiamerica.com")
+    row = propose("Fermi America", website: "https://www.fermiamerica.com")
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+
+    claim = Candidate.find(row["id"])
+    assert_equal "needs_review", claim.status
+    assert_match "its website's domain is Other Co's", claim.notes
+  end
+
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do
     @company.verify!(by: "human:tosin")
 

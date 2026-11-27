@@ -548,6 +548,11 @@ class DataQuality::Stages::Match < DataQuality::Stage
       if (holder = directory.organization(name: payload["name"])) && holder.id != company.id
         return Review.new("proposed the name #{payload['name']} for #{company.name}, but #{holder.name} (##{holder.id}) goes by it now")
       end
+      # A website whose domain is another company's goes to review, as on the usual path (Copilot).
+      domain = payload.key?("domain") ? payload["domain"].presence : payload["website"].presence
+      if domain && (holder = directory.organization(domain:)) && holder.id != company.id
+        return Review.new("proposed for #{company.name}, but its website's domain is #{holder.name}'s (##{holder.id})")
+      end
       # A CIK it carries that's another company's by now goes to review, as on the usual path (Copilot).
       if (cik = payload["sec_cik"].presence) && (holder = directory.organization(sec_cik: cik)) && holder.id != company.id
         return Review.new("proposed for #{company.name}, but SEC CIK #{cik} is #{holder.name}'s (##{holder.id}) by now")
