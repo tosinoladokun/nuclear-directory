@@ -5,9 +5,9 @@
 <% end %>
 <%= render layout: "pages/frame", locals: { current: :about, title: "About", updated: "October 2026",
       summary: "Nuclear Directory is a free reference to the companies and plants of the US nuclear industry.",
-      facts: [ { label: "Covers", value: "US nuclear industry" }, { label: "Sources", value: "Public records" },
+      facts: [ { label: "Covers", value: "US nuclear industry" }, { label: "Sources", value: "Public records" }, { label: "Price", value: "Free" },
                { label: "Data licence", value: "CC BY 4.0" }, { label: "Code licence", value: "MIT" },
-               { label: "Dataset", value: "v#{published_dataset[:version]}", note: "DOI 10.5281/zenodo.23703377" }, { label: "Price", value: "Free" } ] } do %>
+               { label: "Dataset", value: "v#{published_dataset[:version]}", note: "DOI 10.5281/zenodo.23703377", wide: true } ] } do %>
   <section class="nd-info__sec" aria-labelledby="what">
     <h2 id="what" class="nd-info__h">What it is</h2>
     <p>The directory lists US companies, power plants and sites across the whole industry, from fuel and reactor developers to waste, research and investors. It also shows how they are connected: who owns, operates, supplies or buys from whom.</p>

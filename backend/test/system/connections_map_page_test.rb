@@ -77,11 +77,11 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     end
   end
 
-  test "the map is 696px wide in the page's middle column, after the header and before Deals and links" do
+  test "the map fits the page's middle column (696px at most), after the header and before Deals and links" do
     visit "/companies/#{build_constellation.slug}"
     assert_selector ".nd-map__svg[data-laid-out=true]"
 
-    assert_equal 696, page.evaluate_script("document.querySelector('.nd-map__svg').getBoundingClientRect().width").round
+    assert_operator page.evaluate_script("document.querySelector('.nd-map__svg').getBoundingClientRect().width").round, :<=, 696
     map, deals = page.evaluate_script("['.nd-map', '#deals'].map((selector) => document.querySelector(selector)?.getBoundingClientRect().top)")
     assert_operator map, :<, deals.to_f.nonzero? || map + 1
     assert_equal "Connections", find(".nd-map h2").text[/\AConnections/]
@@ -107,7 +107,11 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     # The server draws the map; the controller (lazy-loaded) handles the click. Wait for it: it marks the drawing laid out.
     assert_selector ".nd-map__view[data-view=folded] .nd-map__svg[data-laid-out=true]"
 
-    find(".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold").click
+    # Constellation's plants fold under OWNS and under OPERATES (#1004): two fold nodes, either opens the plants.
+    assert_selector ".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold", count: 2
+    # Each fold button is named from its own row, so a screen reader hears two different buttons (Design, #1013).
+    assert_equal [ "13 plants. Show them", "2 of 13 plants. Show them" ], all(".nd-map__view[data-view=folded] .nd-map__node--fold").map { |fold| fold["aria-label"] }.sort
+    first(".nd-map__view[data-view=folded] .nd-map__svg .nd-map__node--fold").click
     assert_selector ".nd-map__view[data-view=opened] .nd-map__svg[data-laid-out=true]"
     assert_no_selector ".nd-map__view[data-view=folded]", visible: true
     assert_empty page.evaluate_script(CHECK)
@@ -164,7 +168,7 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
     visit url
     assert_selector ".nd-map__svg[data-laid-out=true]"
     assert_no_selector ".nd-tree", visible: true
-    assert_equal 696, page.evaluate_script("document.querySelector('.nd-map__svg').getBoundingClientRect().width").round
+    assert_operator page.evaluate_script("document.querySelector('.nd-map__svg').getBoundingClientRect().width").round, :<=, 696
   end
 
   test "opening a folded row doesn't move its branch away from its verb" do
@@ -178,5 +182,83 @@ class ConnectionsMapPageTest < ApplicationSystemTestCase
 
     assert_in_delta before, after, 1
     assert_operator after, :<, 56
+  end
+
+  # #995 (Tosin): the record and its branches, as one unit, centred under the Connections heading at every width.
+  # Vistra has connections on one side only, NuScale one connection, Constellation both sides.
+  def build_vistra
+    vistra = cite!(company("Vistra Corporation", roles: [ role("utility") ]))
+    buyer = Role.find_by(key: "data_center_offtaker") || role("data_center_offtaker")
+    %w[Amazon Meta].each { |name| deal(cite!(company(name, roles: [ buyer ])), "offtake_with", vistra, "Signed 20-year PPA (2025) for nuclear power.") }
+    [ "Beaver Valley", "Comanche Peak", "Davis Besse", "Perry" ].each do |name|
+      cite!(link(vistra, "operates", cite!(plant(name, facility_type: "power_reactor", status: "operating", state: "TX"))))
+    end
+    vistra
+  end
+
+  def build_nuscale
+    nuscale = cite!(company("NuScale Power", roles: [ role("reactor_vendor") ]))
+    deal(nuscale, "supplies", cite!(company("ENTRA1 Energy")), "Signed exclusive agreement (2025) to market NuScale plants.")
+    nuscale
+  end
+
+  # What is drawn (the record, lines, headings and names; or, where the tree takes over, the tree) against its section:
+  # [offset of the centres, inside?]. The drawn content, not the <svg> box, which could be wider than what it draws.
+  CENTRED = <<~JS.freeze
+    (() => {
+      const section = document.querySelector(".nd-map").getBoundingClientRect()
+      const svg = [ ...document.querySelectorAll(".nd-map__svg") ].find((element) => element.getClientRects().length > 0)
+      const rects = svg ? [ ...svg.querySelectorAll(":scope > g") ].map((group) => group.getBoundingClientRect()).filter((rect) => rect.width > 0)
+        : [ document.querySelector(".nd-tree").getBoundingClientRect() ]
+      const left = Math.min(...rects.map((rect) => rect.left)), right = Math.max(...rects.map((rect) => rect.right))
+      return [ (left + right) / 2 - (section.left + section.right) / 2, left >= section.left - 0.5 && right <= section.right + 0.5 ]
+    })()
+  JS
+  # Each partner's name on the map: [text, font size, cut?, side]. The record's own name (anchored in the middle) is left out.
+  NAMES = "[...document.querySelectorAll('.nd-map__name:not([text-anchor=middle])')].map((n) => [n.firstChild.nodeValue, n.style.fontSize, 'truncate' in n.dataset, n.getAttribute('text-anchor') === 'start' ? 'right' : 'left'])"
+
+  test "the connections, as one unit, sit centred under the heading at 1440, 1024, 390 and 320 (#995)" do
+    pages = { "Vistra" => "/companies/#{build_vistra.slug}", "NuScale Power" => "/companies/#{build_nuscale.slug}",
+              "Constellation" => "/companies/#{build_constellation.slug}" }
+    [ [ 1440, 900 ], [ 1024, 800 ], [ 390, 844 ], [ 320, 800 ] ].each do |width, height|
+      resize_viewport(width, height)
+      pages.each do |name, url|
+        visit url
+        assert_selector ".nd-map__svg[data-laid-out=true]" if width == 1440
+        offset, inside = page.evaluate_script(CENTRED)
+        assert_in_delta 0, offset, 1, "#{name} at #{width}: centred"
+        assert inside, "#{name} at #{width}: inside its section"
+        assert page.evaluate_script("document.documentElement.scrollWidth <= window.innerWidth"), "#{name} at #{width}: no sideways scroll"
+      end
+    end
+  end
+
+  test "an empty side takes no room, so a one-sided map's names keep their full size (Vistra, #995)" do
+    resize_viewport(1440, 900)
+    visit "/companies/#{build_vistra.slug}"
+    assert_selector ".nd-map__svg[data-laid-out=true]"
+
+    names = page.evaluate_script(NAMES)
+    assert_equal [ "Amazon", "Meta", "Beaver Valley", "Comanche Peak", "Davis Besse", "Perry" ].sort, names.map(&:first).sort, "every name whole"
+    assert names.all? { |_, size, cut, side| size == "15px" && !cut && side == "right" }, names.inspect
+    assert_empty page.evaluate_script(CHECK)
+  end
+
+  test "the names in one column share one size: a long one shrinks its neighbours with it (#995)" do
+    kairos = cite!(company("Kairos Demo Power", roles: [ role("reactor_vendor") ]))
+    deal(cite!(company("U.S. Department of Energy Office of Nuclear Energy Programs")), "funds", kairos, "Award (2020): ARDP risk reduction.")
+    deal(kairos, "supplies", cite!(company("Google")), "Signed master plant development agreement (2024) for 500 MW.")
+    [ "Hermes Low-Power Demonstration Reactor Site", "Hermes 2" ].each do |name|
+      cite!(link(kairos, "operates", cite!(plant(name, facility_type: "research_reactor", status: "under_construction", state: "TN"))))
+    end
+    resize_viewport(1440, 900)
+    visit "/companies/#{kairos.slug}"
+    assert_selector ".nd-map__svg[data-laid-out=true]"
+
+    sizes = page.evaluate_script(NAMES).map { |_, size, _, side| [ side, size ] }
+    assert_operator sizes.size, :>=, 4
+    sizes.group_by(&:first).each { |side, column| assert_equal 1, column.map(&:last).uniq.size, "#{side}: #{column.inspect}" }
+    right = sizes.select { |side, _| side == "right" }.map(&:last).uniq
+    assert_operator right.first.to_f, :<, 15, "the long plant name sets its column's size, Google's included"
   end
 end

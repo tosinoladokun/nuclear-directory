@@ -10,6 +10,7 @@ module Autopilot
       "no-creates" => "DQ",
       "social-silent" => "Backend", "posts-unknown" => "Backend", "social-queue" => "Infra",
       "dataset-draft-failed" => "Infra", "dataset-doi" => "Infra", "dataset-release-late" => "Infra", "dataset-draft-ready" => "DQ",
+      "dq-pass-failed" => "Infra", "dq-pass-stalled" => "Infra", "dq-pass-budget" => "DQ",
       "budget" => "PM"
     }.freeze
 

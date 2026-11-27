@@ -85,6 +85,54 @@ class DqCheckerTest < ActiveSupport::TestCase
     assert_match "done", checker(FakeCheckerLlm.new).run["skipped"]
   end
 
+  test "checker-v2: its own home page on the claimed domain, named in its title, supports the website with no URL in its text; another domain never does (DQ)" do
+    own = Source.create!(url: "https://www.sawtoothsim.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "a",
+      content_text: "<html><head><title>Sawtooth Simulation | Nuclear plant simulators</title></head><body><p>Training that works.</p></body></html>")
+    other = Source.create!(url: "https://www.trainingnews.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "b",
+      content_text: own.content_text.sub("<title>Sawtooth Simulation | Nuclear plant simulators</title>", "<title>Training News</title>") +
+        "<p>Sawtooth Simulation | Nuclear plant simulators</p>")
+    company = Organization.create!(name: "Sawtooth Simulation", verification_status: "pending")
+    approve = -> { FakeCheckerLlm.new(extract: [ [ "approve", "Its own home page names it" ] ]) }
+    quote = "Sawtooth Simulation | Nuclear plant simulators"
+
+    on_own = Candidate.create!(source: own, kind: "organization", status: "needs_review", subject: company, quote:,
+      payload: { "name" => company.name, "website" => "https://sawtoothsim.example" })
+    llm = approve.call
+    checker(llm).run
+    assert_equal [ "approve", "checker-v2" ], CheckerVerdict.find_by!(candidate: on_own).values_at(:verdict, :prompt_version)
+    # The model sees the page's own address and how it names itself (Copilot).
+    prompt = llm.asked.first.last
+    assert_match %r{Page address: https://www\.sawtoothsim\.example/?$}, prompt
+    assert_includes prompt, "Page title: Sawtooth Simulation | Nuclear plant simulators"
+
+    elsewhere = Candidate.create!(source: other, kind: "organization", status: "needs_review", subject: company, quote:,
+      payload: { "name" => company.name, "website" => "https://sawtoothsim.example" })
+    checker(approve.call).run
+    assert_equal [ "unsure", "The stored page isn't the claimed site's own page" ], CheckerVerdict.find_by!(candidate: elsewhere).values_at(:verdict, :reason)
+  end
+
+  test "checker-v2: a page too large to check its site here stays unsure, never loaded (Copilot)" do
+    big = Source.create!(url: "https://www.bigsite.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "c",
+      content_text: "<html><head><title>Big Site</title></head><body>Big Site builds reactors. #{'x' * (DqChecker::MAX_CHECKED + 10)}</body></html>")
+    company = Organization.create!(name: "Big Site", verification_status: "pending")
+    claim = Candidate.create!(source: big, kind: "organization", status: "needs_review", subject: company, quote: "Big Site builds reactors.",
+      payload: { "name" => company.name, "website" => "https://bigsite.example" })
+    checker(FakeCheckerLlm.new(extract: [ [ "approve", "Its own page" ] ])).run
+    assert_equal [ "unsure", "The page is too large to check its site here" ], CheckerVerdict.find_by!(candidate: claim).values_at(:verdict, :reason)
+  end
+
+  test "checker-v2's instructions say the page needn't state its own URL, and another domain never supports a website" do
+    assert_includes DqChecker::INSTRUCTIONS.squish, "The page need not state its own URL."
+    assert_match(/page on another domain that merely mentions the company never supports its website/, DqChecker::INSTRUCTIONS.squish)
+  end
+
+  test "the checker shares Data Quality's pass's daily cap: the pass's spend stops it too (#998)" do
+    website_claim
+    CrawlRun.create!(source_kind: DqPass::SOURCE_KIND, stage: "verify", started_at: NOW - 1.hour, stats: { "llm" => { "cost" => DqPass::DAILY_BUDGET } })
+    assert_equal 1, checker(FakeCheckerLlm.new).run["stopped_for_budget"]
+    assert_equal 0, CheckerVerdict.count
+  end
+
   test "fields by what a claim fills; anything else is never judged" do
     field = ->(kind, payload) { DqChecker.field_for(kind, payload) }
     assert_equal "new_company", field.("organization", { "name" => "A", "aliases" => [] })

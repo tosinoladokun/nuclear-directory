@@ -613,6 +613,10 @@ module Directory
     # "PLANT VOGTLE" alike).
     def normalize_facility_name(name) = FacilityAlias.normalize(name.to_s)
 
+    # A company name as the directory compares names: case, punctuation and
+    # a legal ending aside ("Terrestrial Energy Inc." is "terrestrial energy").
+    def normalize_organization_name(name) = OrganizationAlias.normalize(name.to_s)
+
     # Power plants with no EIA plant ID that aren't rejected or taken off:
     # top-level records (a site, or a one-unit plant kept as one record,
     # like Columbia), each as { id:, state:, site:, names: [name, *aliases] },

@@ -591,7 +591,8 @@ module DirectoryHelper
     text = text.truncate(PREVIEW_LIMIT, separator: " ") if text.length > PREVIEW_LIMIT
     counts = counted([ company_current_sites(profile).size, company_places_noun(profile) ], [ company_signed_deals(profile).size, "deal" ])
     text = fit_counts(text, counts)
-    legal = "Legal name: #{profile.legal_name}." if profile.legal_name.present? && profile.legal_name != profile.name
+    # A legal name that ends in its own full stop ("Energy Fuels Inc.") keeps just that one (#999).
+    legal = "Legal name: #{profile.legal_name.end_with?('.') ? profile.legal_name : "#{profile.legal_name}."}" if profile.legal_name.present? && profile.legal_name != profile.name
     legal && "#{text} #{legal}".length <= PREVIEW_LIMIT ? "#{text} #{legal}" : text
   end
 

@@ -518,10 +518,10 @@ class Api::DqMatchingTest < ActionDispatch::IntegrationTest
     @page.update!(content_text: "Holtec International is headquartered in Camden, New Jersey.")
     act({ action: "propose_fields", target: @holtec.id, fields: { hq_city: "Camden", hq_state: "NJ", short_description: "Spent fuel storage and SMR design" },
       quote: "Holtec International is headquartered in Camden, New Jersey.", source_url: @page.url, reason: "Their own about page" },
-      { action: "propose_fields", target: @holtec.id, fields: { name: "Other" }, quote: "q", source_url: @page.url, reason: "r" },
+      { action: "propose_fields", target: @holtec.id, fields: { name: "Other" }, quote: "Other", source_url: @page.url, reason: "r" },
       { action: "propose_fields", target: @holtec.id, fields: { short_description: "x" * 41 }, quote: "q", source_url: @page.url, reason: "r" })
     assert results.first["ok"], results.inspect
-    assert_match "only website", results.second["error"]
+    assert_match "Holtec International is published; its name can't be proposed this way", results.second["error"], "only a pending company's name (#1000)"
     assert_match "40 characters at most", results.third["error"]
     claim = Candidate.find(results.first["id"])
     assert_equal({ "name" => "Holtec International", "hq_city" => "Camden", "hq_state" => "NJ", "short_description" => "Spent fuel storage and SMR design" }, claim.payload)
