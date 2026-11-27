@@ -9,15 +9,22 @@ class PagesTest < ActionDispatch::IntegrationTest
 
     assert_select "meta[name=description][content*=?]", "dead clicks, the country you're visiting from"
     assert_select "h2#counts", "Analytics"
-    assert_select "section[aria-labelledby=counts]", /how the site is used.*No cookies, and one visit isn't linked to the next.*no session recordings/m
-    assert_select ".nd-glance__fact", text: /Cookies.*One, to protect forms/m
-    # #205: we look up the country and send only that; PostHog uses the IP to count visitors and drops it.
-    assert_select "section[aria-labelledby=counts] p", /which country you're in from your IP address, and adds only the country to the analytics/
-    assert_select "section[aria-labelledby=counts] p", /PostHog receives your IP address and browser with each request so it can count unique visitors without cookies. It doesn't store the IP address/
-    assert_select "section[aria-labelledby=counts] p a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
-    assert_select "section[aria-labelledby=counts] p a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
-    assert_select "section[aria-labelledby=counts] p", /go through this site rather than straight to PostHog/
-    assert_select ".nd-info__updated", /Last updated October 2026/
+    assert_select "section[aria-labelledby=counts] p", /We use PostHog to see how the site is used\. We record:/
+    # Everything analytics records, one item each (Tosin's shorter list, 27 Nov).
+    assert_equal [ "Pages viewed and how long they stay open", "Searches and how many results they found", "Links you follow off the site (the domain only)",
+      "Clicks on things that don't respond", "How fast pages load",
+      "Which homepage version you saw (we're testing two) and what you clicked on it",
+      "Your browser and device type",
+      "Your country, from your IP address, which also counts unique visitors and picks your homepage version, and isn't stored (IP Geolocation by DB-IP, CC BY 4.0)" ], css_select("section[aria-labelledby=counts] ul > li").map { |item| item.text.strip }
+    # #205: the IP counts visitors and gives the country, and isn't stored; #909: it picks the homepage version. The
+    # browser and device type are recorded (PostHog's $browser, $os and $device_type, which sanitize keeps; Copilot, #997).
+    assert_no_match(/browser are used, without being stored/, response.body)
+    # DB-IP asks for its linked credit, and CC BY 4.0 for the licence named with its link (section 3(a)(1)(C)).
+    assert_select "section[aria-labelledby=counts] li a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
+    assert_select "section[aria-labelledby=counts] li a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
+    assert_select ".nd-glance", /Recordings.*None/m
+    assert_select ".nd-glance", /through this site/ # the scripts go through this site (the facts card says so)
+    assert_select ".nd-info__updated", /Last updated November 2026/ # the Analytics section was rewritten (27 Nov)
     assert_no_match(/set to discard IP addresses/, response.body)
   end
 
@@ -149,7 +156,7 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select "strong", text: "In short:", count: 0
       assert_select ".nd-glance dt", minimum: 3
       assert_equal sections, css_select("section h2").map { |h| h["id"] }, path
-      assert_select ".nd-info__updated", /Last updated October 2026/
+      assert_select ".nd-info__updated", path == privacy_path ? /Last updated November 2026/ : /Last updated October 2026/
     end
 
     get privacy_path
