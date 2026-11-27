@@ -50,6 +50,9 @@ Rails.application.routes.draw do
     get "social_posts" => "social_posts#index", as: :api_dq_social_posts
     post "social_approvals" => "social_approvals#create", as: :api_dq_social_approvals
     get "checker" => "checker#index", as: :api_dq_checker
+    # Data Quality's dry-run trial of the pass's research (#998).
+    post "pass_trials" => "pass_trials#create", as: :api_dq_pass_trials
+    get "pass_trials/:id" => "pass_trials#show", as: :api_dq_pass_trial
     # Data Quality's text fixes (#863): edit only, with reason and source, undoable.
     get "edits" => "edits#index", as: :api_dq_edits
     post "edits" => "edits#create"

@@ -13,6 +13,8 @@
 module DqPass
   KEY = "dq_pass".freeze
   SOURCE_KIND = "dq_pass".freeze
+  # Data Quality's dry-run trial of the research (DqPassTrialJob): counted in the daily cap too.
+  TRIAL_KIND = "dq_pass_trial".freeze
   DAILY_BUDGET = 1.0
   # Autopilot alert keys (Autopilot::Owners).
   FAILED = "dq-pass-failed".freeze
@@ -47,9 +49,9 @@ module DqPass
       end
   end
 
-  # Model spend today (UTC) by the pass and the checker together.
+  # Model spend today (UTC) by the pass, its trial and the checker together.
   def self.spent_today(now: Time.current)
-    CrawlRun.where(source_kind: [ SOURCE_KIND, DqChecker::SOURCE_KIND ], started_at: now.utc.beginning_of_day..)
+    CrawlRun.where(source_kind: [ SOURCE_KIND, TRIAL_KIND, DqChecker::SOURCE_KIND ], started_at: now.utc.beginning_of_day..)
       .sum("COALESCE((stats->'llm'->>'cost')::numeric, 0)").to_f
   end
 
