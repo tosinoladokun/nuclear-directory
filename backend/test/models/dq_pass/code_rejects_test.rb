@@ -1,0 +1,63 @@
+require "test_helper"
+
+# #998: the pass's code-only reject recommendations, by Data Quality's rules (28 Nov).
+class DqPass::CodeRejectsTest < ActiveSupport::TestCase
+  def pending(name, **attrs) = Organization.create!(name:, verification_status: "pending", **attrs)
+
+  def claim(org, kind, quote, payload: {}, status: "matched")
+    source = Source.find_or_create_by!(url: "https://records.example/#{kind}/#{org.id}-#{Candidate.count}") { |made| made.source_kind = kind }
+    Candidate.create!(source:, kind: "organization", status:, quote:, payload: { "name" => org.name }.merge(payload), subject: org)
+  end
+
+  def run_step = DqPass::CodeRejects.new.call(CrawlRun.create!(source_kind: DqPass::SOURCE_KIND, stage: "verify"))
+
+  def rejected?(claim) = claim.reload.dq_recommendation == "reject"
+
+  test "an award recipient whose awards name no nuclear work is recommended for reject; LENR isn't nuclear work" do
+    steel = claim(pending("Limelight Steel"), "arpa_e_projects", "Project: Laser-based ironmaking | Organization: Limelight Steel")
+    lenr = claim(pending("Amphionic"), "arpa_e_projects", "Project: Calorimetry of low-energy nuclear reactions (LENR) | Organization: Amphionic")
+    fusion = claim(pending("ExoFusion"), "arpa_e_projects", "Project: Novel Liquid Metal Plasma Facing Component Alloys for fusion | Organization: ExoFusion")
+
+    assert_equal({ "code_rejects" => 2 }, run_step)
+    assert rejected?(steel)
+    assert_match "Server pass (code): its award records name no nuclear work", steel.dq_reason
+    assert_equal DataQuality::Matching::BY, steel.dq_by
+    assert rejected?(lenr)
+    assert_not rejected?(fusion)
+  end
+
+  test "a document's title, a utility with no nuclear plant, and a foreign record with no US address" do
+    doc = claim(pending("Westinghouse Summary Report ML24123A456"), "nrc_adams", "Summary Report")
+    utility = claim(pending("Plains Power Co", eia_utility_id: "99999"), "usaspending_recipients", "Recipient: Plains Power Co, nuclear fuel study")
+    foreign = claim(pending("Nordic Fission AB"), "lead_finder", "Nordic Fission builds reactors", payload: { "country_code" => "SE" })
+    us = claim(pending("Texas Fission"), "lead_finder", "Texas Fission builds reactors", payload: { "country_code" => "SE", "hq_state" => "TX" })
+
+    run_step
+
+    assert rejected?(doc)
+    assert rejected?(utility)
+    assert_match "in SE, with no US address", foreign.reload.dq_reason
+    assert_not rejected?(us), "a US state in a record keeps it"
+  end
+
+  test "never a university, lab, government body or investor, a company a person suggested, or one already decided" do
+    uni = claim(pending("Example University"), "arpa_e_projects", "Project: Batteries | Organization: Example University")
+    fund = claim(pending("Atom Capital"), "usaspending_recipients", "Recipient: Atom Capital")
+    org = pending("Suggested Steel")
+    Lead.sighted!(name: "Suggested Steel", kind: "company", key: "admin:suggest:suggested steel", label: "Added in the admin")
+    suggested = claim(org, "arpa_e_projects", "Project: Steel | Organization: Suggested Steel")
+    approved = claim(pending("Done Steel"), "arpa_e_projects", "Project: Steel", status: "confirmed")
+    published = claim(Organization.create!(name: "Verified Steel", verification_status: "verified", verified_by: "human:tosin"), "arpa_e_projects", "Project: Steel")
+
+    assert_equal({ "code_rejects" => 0 }, run_step)
+    [ uni, fund, suggested, approved, published ].each { |made| assert_not rejected?(made), made.payload["name"] }
+  end
+
+  test "a claim it already recommended isn't sent again, and a second run records nothing new" do
+    steel = claim(pending("Limelight Steel"), "arpa_e_projects", "Project: Laser-based ironmaking")
+    run_step
+    assert rejected?(steel)
+    assert_equal({ "code_rejects" => 0 }, run_step)
+    assert_equal 1, DqAction.where(candidate: steel, action: "recommend").count
+  end
+end
