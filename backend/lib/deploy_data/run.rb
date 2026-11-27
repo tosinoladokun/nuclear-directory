@@ -31,13 +31,19 @@ module DeployData
     class TimedOut < Interrupt; end
 
     MODES = %w[on report].freeze
+    # A pipeline run holds its lock for seconds (Data Quality's proposals,
+    # #983) or for the night's crawl. The data step tries again for up to
+    # LOCK_WAIT before it stops, so a short run at deploy time doesn't skip it
+    # (27 Nov: #991's step stopped on a 20-second ProposalPagesJob).
+    LOCK_WAIT = 300
+    LOCK_RETRY = 15
     SEED_COUNTS = "tmp/seed_counts.json".freeze
 
     attr_reader :report
 
     def initialize(dry_run: false, commit: ENV["RENDER_GIT_COMMIT"], mode: ENV["AUTO_DATA_DEPLOY"],
       backup: Backup, github: GitHub.new, migrations: Migrations.new, root: Rails.root, lock: CrawlLock,
-      seeder: -> { Rails.application.load_seed },
+      seeder: -> { Rails.application.load_seed }, lock_wait: LOCK_WAIT, sleeper: ->(seconds) { sleep seconds },
       checker: -> { Seed::OrganizationLoader.new(Rails.root.join("db/seeds/organizations")).collisions })
       @dry_run = dry_run
       @mode = MODES.include?(mode.to_s.strip) ? mode.to_s.strip : "off"
@@ -47,6 +53,8 @@ module DeployData
       @migrations = migrations
       @root = root
       @lock = lock
+      @lock_wait = lock_wait
+      @sleeper = sleeper
       @seeder = seeder
       @checker = checker
     end
@@ -76,8 +84,9 @@ module DeployData
       @report = Report.new(commit: @commit, pull_request:, label:)
       @status = rolled_back? ? :reported : :applied
 
-      held = @lock.hold { steps }
-      stop!("stopped: the daily crawl is running, so nothing was written; it runs again on the next deploy") unless held
+      held = hold_lock { steps }
+      stop!("stopped: a crawl or Data Quality run held its lock for #{@lock_wait / 60} minutes, so nothing was written; " \
+        "it runs again on the next deploy") unless held
       # A deploy goes on past a failed migration (fail-soft, #811), but a rehearsal must still fail loudly: its whole
       # point is to find that before the merge.
       @status = :failed if @dry_run && @report.failed_migrations.any?
@@ -104,6 +113,21 @@ module DeployData
     end
 
     private
+      # The lock's block, once every pipeline lock is free: tried every
+      # LOCK_RETRY seconds for up to @lock_wait. true when it ran, false when
+      # a run still holds a lock after the last try.
+      def hold_lock(&block)
+        tries = (@lock_wait / LOCK_RETRY) + 1
+        tries.times do |try|
+          return true if @lock.hold(&block)
+          break if try == tries - 1
+
+          puts "deploy-data: a crawl or Data Quality run holds its lock; trying again in #{LOCK_RETRY} seconds"
+          @sleeper.call(LOCK_RETRY)
+        end
+        false
+      end
+
       def report_mode? = !@dry_run && @mode == "report"
       def rolled_back? = @dry_run || report_mode?
 
