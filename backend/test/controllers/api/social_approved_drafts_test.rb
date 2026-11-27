@@ -125,6 +125,20 @@ class Api::SocialApprovedDraftsTest < ActionDispatch::IntegrationTest
     assert response.parsed_body["warnings"].any? { |warning| warning.match?(/isn't in the source|which its source doesn't/) }, response.parsed_body["warnings"].inspect
   end
 
+  test "an X draft tagging the company's own verified handle gets no handle warning; another handle does (#1007)" do
+    own = "#{TEXT}\n\n@VistraCorp"
+    approve({ text: own, sha256: Digest::SHA256.hexdigest("#{own}\n\n#{@link}") })
+    assert_response :created
+    warnings = response.parsed_body["warnings"]
+    assert warnings.none? { |warning| warning.match?(/verified handle|"VistraCorp"/) }, warnings.inspect
+
+    SocialPost.delete_all
+    other = "#{TEXT}\n\n@SomeoneElse"
+    approve({ text: other, sha256: Digest::SHA256.hexdigest("#{other}\n\n#{@link}") })
+    assert_response :created
+    assert response.parsed_body["warnings"].any? { |warning| warning.match?(/@SomeoneElse, which isn't this company's verified handle/) }, response.parsed_body["warnings"].inspect
+  end
+
   test "Send this draft sends an approved draft exactly as stored after the guards, without the content recheck, and the DQ API says how it was approved" do
     monday = Time.find_zone(SocialAgent::ZONE).local(2026, 11, 23, 10, 0)
     ENV["SOCIAL_POSTING_ENABLED"] = "on"
