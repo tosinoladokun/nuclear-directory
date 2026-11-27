@@ -413,6 +413,7 @@ DEPENDENCIES
   pg (~> 1.1)
   posthog-ruby (~> 3.0)
   propshaft
+  public_suffix (~> 7.0)
   puma (>= 5.0)
   rails (~> 8.1.4)
   rubocop-rails-omakase
