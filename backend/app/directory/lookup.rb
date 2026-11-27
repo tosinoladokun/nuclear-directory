@@ -502,6 +502,11 @@ module Directory
     # Whether a company or plant already goes by this name: its own name or
     # one of its aliases, compared as normalized (case, punctuation and legal
     # suffixes don't count).
+    # A name as known_name? compares it (normalized), with no query.
+    def normalized_name(type:, name:)
+      { "Organization" => OrganizationAlias, "Facility" => FacilityAlias }.fetch(type.to_s).normalize(name)
+    end
+
     def known_name?(type:, id:, name:)
       model, aliases = { "Organization" => [ Organization, OrganizationAlias ], "Facility" => [ Facility, FacilityAlias ] }.fetch(type.to_s) { return false }
       record = model.find_by(id:) or return false

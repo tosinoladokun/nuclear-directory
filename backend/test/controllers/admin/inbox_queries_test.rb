@@ -41,7 +41,9 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
         payload: { "from_organization" => { "name" => published.name }, "to_organization" => { "name" => company.name }, "relationship_type" => "invests_in" },
         ai_recommendation: "recommend_publish", ai_source_sha256: "sha")
       # Another name for the published company (Copilot), and EIA's enrichment of a published unit with its plant ID.
-      claim(published, { "name" => "QU #{n}" })
+      # Settled by Data Quality as the same company with its name kept: Tosin's change to decide (Copilot).
+      alias_claim = claim(published, { "name" => "QU #{n}" })
+      DqAction.create!(candidate: alias_claim, action: "same_as", target_type: "Organization", target_id: published.id, reason: "r", before: {}, created: [], by: DataQuality::Matching::BY)
       # The site it would join, by that plant ID (Copilot: the change names it).
       unit, = travel_to(2.days.ago) do
         [ Facility.create!(name: "Queries Unit #{n}", nrc_docket: "0500#{format('%04d', n)}", verification_status: "verified", verified_by: "human:tosin"),

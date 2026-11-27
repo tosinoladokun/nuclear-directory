@@ -79,6 +79,15 @@ class DataQuality::PrefetchedDirectory < SimpleDelegator
     DataQuality::DirectoryClient.unit_site(unit) { @sites[plant] }
   end
 
+  # From the company's prefetched name and aliases, compared as known_name? does (#1008).
+  def known_name?(type:, id:, name:)
+    values = (@facts.dig("Organization", id)&.values if type.to_s == "Organization")
+    return __getobj__.known_name?(type:, id:, name:) unless values
+
+    wanted = normalized_name(type:, name:)
+    [ values["name"], *Array(values["aliases"]) ].compact.any? { |known| normalized_name(type:, name: known) == wanted }
+  end
+
   def sourced_role?(organization_id)
     @sourced_roles.key?(organization_id) ? @sourced_roles[organization_id] : __getobj__.sourced_role?(organization_id)
   end

@@ -452,6 +452,9 @@ class DataQuality::DirectoryClient
 
   def known_name?(type:, id:, name:) = lookup.known_name?(type:, id:, name:)
 
+  # A name as known_name? compares it, with no query (#1008).
+  def normalized_name(type:, name:) = lookup.normalized_name(type:, name:)
+
   # Holds a fact's row lock until the surrounding transaction ends.
   def lock_fact(type:, id:) = lookup.lock_fact(type:, id:)
 
