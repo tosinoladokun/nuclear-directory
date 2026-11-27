@@ -1,8 +1,8 @@
 require "test_helper"
 load Rails.root.join("db/data/20261127230000_requeue_us_developer_leads_again.rb")
 
-# #1015: the four US developers the finder still missed after #987, and NuCube, are found again; decided leads and
-# a rerun are left alone.
+# #1015: the US developers the finder still missed after #987, and NuCube, are found again (never Nuclearis, which
+# Tosin said no to); decided leads and a rerun are left alone.
 class RequeueUsDeveloperLeadsAgainTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
 
@@ -18,7 +18,8 @@ class RequeueUsDeveloperLeadsAgainTest < ActiveSupport::TestCase
   test "queues the five again with tries reset; a decided lead and a rerun are left" do
     terrestrial = stuck(127, "Terrestrial Energy")
     stuck(112, "Deep Fission")
-    added = stuck(124, "Nuclearis Energy", status: "added", tries: 1)
+    added = stuck(125, "NuCube Energy", status: "added", tries: 1)
+    nuclearis = stuck(124, "Nuclearis Energy")
 
     output = nil
     assert_enqueued_jobs 2, only: LeadFindJob do
@@ -26,7 +27,9 @@ class RequeueUsDeveloperLeadsAgainTest < ActiveSupport::TestCase
     end
     assert_equal [ "Terrestrial Energy", "new", 0, nil ], terrestrial.reload.attributes.values_at("name", "status", "find_attempts", "next_find_at")
     assert_includes output, "Lead 127 (Terrestrial Energy) queued again (had used 1 of its tries)"
-    assert_includes output, "Lead 124 (Nuclearis Energy) is added now (a person decided it); left as it is"
+    assert_includes output, "Lead 125 (NuCube Energy) is added now (a person decided it); left as it is"
+    assert_equal [ 1, "researching" ], nuclearis.reload.attributes.values_at("find_attempts", "status"), "Tosin said no to Nuclearis"
+    assert_not_includes output, "Lead 124"
     assert_includes output, "Lead 110 is gone; nothing to do"
     assert_equal "added", added.reload.status
 
