@@ -1,0 +1,56 @@
+# Seed research for #740 (Tosin approved, 27 Nov 2026). Quotes copied from pages read this session: fluor.com, the Centrus release, and Fluor's 2025 Form 10-K as Fluor hosts it.
+name: Fluor
+legal_name: Fluor Corporation
+aliases:
+- Fluor Corporation
+- Fluor Federal Services, Inc.
+website: https://www.fluor.com
+hq:
+  city: Irving
+  state: TX
+  source_url: https://s203.q4cdn.com/957337755/files/doc_financials/2025/ar/DA2502904-001-10K-Wrap-Full.pdf
+  quote: 6700 Las Colinas Boulevard Irving, Texas (Address of principal executive offices)
+  confidence: 1.0
+status: active
+roles:
+- key: reactor_services
+  source_url: https://www.fluor.com/market-reach/industries/power/nuclear
+  quote: Fluor currently supports the nuclear industry with full service EPC and maintenance capabilities for nuclear new build projects, operating plant modifications and operations and maintenance (O&M) services.
+  confidence: 1.0
+- key: waste_decommissioning
+  source_url: https://www.fluor.com/projects/usdoe-nuclear-decontamination-decommissioning
+  quote: For more than 15 years, Fluor has been supporting the U.S. Department of Energy (DOE) mission to decontaminate and decommission (D&D) the Portsmouth site.
+  confidence: 1.0
+technologies:
+- key: fission
+  source_url: https://www.fluor.com/market-reach/industries/power/nuclear
+  quote: Fluor has provided engineering, procurement, construction (EPC) and maintenance services to the nuclear industry since 1946.
+  confidence: 1.0
+relationships:
+- type: supplies
+  to: Centrus Energy
+  description: 'EPC contractor (Feb 2026) for the expansion of the American Centrifuge Plant in Piketon, Ohio, under a multi-year contract with Centrus subsidiary American Centrifuge Operating: engineering and design, procurement, construction oversight and commissioning support.'
+  source_url: https://www.centrusenergy.com/news/centrus-and-fluor-partner-to-advance-major-expansion-of-ohio-uranium-enrichment-plant
+  quote: 'Centrus Energy (NYSE: LEU) today announced that its subsidiary, American Centrifuge Operating, LLC, has agreed to a strategic collaboration with Fluor (NYSE: FLR) to serve as its Engineering, Procurement and Construction (EPC) contractor as Centrus proceeds with its previously announced multi-billion-dollar expansion of its uranium enrichment capacity in Piketon, Ohio.'
+  published: '2026-02-11'
+  confidence: 1.0
+- type: supplies
+  to: Centrus Energy
+  description: 'EPC contractor (Feb 2026) for the expansion of the American Centrifuge Plant in Piketon, Ohio, under a multi-year contract with Centrus subsidiary American Centrifuge Operating: engineering and design, procurement, construction oversight and commissioning support.'
+  source_url: https://www.centrusenergy.com/news/centrus-and-fluor-partner-to-advance-major-expansion-of-ohio-uranium-enrichment-plant
+  quote: Under the multi-year contract, Fluor will lead engineering and design of the expanded capacity in Ohio, manage the supply chain and procurement of key materials and services, oversee construction at the site, and support the commissioning of the new capacity.
+  published: '2026-02-11'
+  confidence: 1.0
+facilities: []
+notes: 'Legal name stated on fluor.com/about-fluor ("Fluor Corporation, a FORTUNE 500 engineering, procurement and construction (EPC) company", the page description) and on the cover of Fluor''s 2025 Form 10-K as Fluor hosts it (q4cdn PDF linked from fluor.com corporate reporting): "FLUOR CORPORATION (Exact name of registrant as specified in its charter)". Piketon (#740): the building work Tosin meant is the Centrus expansion above (Fluor EPC since Feb 2026); there is no plant-link kind for an EPC contractor, so it is a supplies link to Centrus. The DOE Portsmouth cleanup is separate: Fluor-BWXT Portsmouth, LLC held the D&D contract from 2010; since 2025 it is Southern Ohio Cleanup Company, LLC (Amentum, Fluor Federal Services, Cavendish Nuclear USA), per fluor.com: "DOE awarded a $4.6 billion D&D contract to Fluor-BWXT Portsmouth, LLC, a Fluor-led partnership, in 2010. In 2025, the Southern Ohio Cleanup Company, LLC, which includes team members Amentum and Fluor, assumed responsibility for the site under a new $5.87 billion follow-on contract." No record for Fluor-BWXT Portsmouth (its contract ended) and no BWXT link (no current tie a primary source states); the Portsmouth site is not in the directory. NuScale: no link. Fluor sold its stake through 2025-26 (Fluor release, Feb 2026: 71 million shares sold, the remaining 40 million to be sold in Q2 2026), and reports in 2026 say the sale of the last 40 million is complete; invests_in would be false today. sec_cik not set: the 10-K cover read does not state it.'
+description:
+  text: Engineering and construction company that provides EPC and maintenance services to the nuclear industry.
+  source_url: https://www.fluor.com/market-reach/industries/power/nuclear
+  quote: Fluor currently supports the nuclear industry with full service EPC and maintenance capabilities for nuclear new build projects, operating plant modifications and operations and maintenance (O&M) services.
+  also:
+  - source_url: https://www.fluor.com/about-fluor
+    quote: Facts and company information about Fluor Corporation, a FORTUNE 500 engineering, procurement and construction (EPC) company.
+short_description:
+  text: 'Nuclear engineering and construction'
+  source_url: https://www.fluor.com/market-reach/industries/power/nuclear
+  quote: Fluor has provided engineering, procurement, construction (EPC) and maintenance services to the nuclear industry since 1946.
