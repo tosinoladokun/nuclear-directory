@@ -80,7 +80,7 @@ class LinkCard
     # A planned site isn't one it has yet (Commonwealth Fusion's Fall Line; DQ).
     links = ->(type) { profile.plant_links.select { |link| link.relationship_type == type && (link.facility.status || link.facility.parent&.status) != "planned" && current.call(link) && running.call(link) } }
     places = ->(type) { links.call(type).map { |link| link.facility.parent || link.facility }.uniq }
-    operates, owns, deals = places.call("operates").size, places.call("owns").size, profile.counted_deals.size
+    operates, owns, deals = places.call("operates").size, places.call("owns").size, profile.signed_deals.size # signed deals, as the page's descriptions count them (#910)
     # "plant" only when every one is a power plant, else "site" (a fuel facility isn't a plant; the og text and the page say the same).
     noun = ->(type) { places.call(type).all? { |place| place.facility_type == "power_reactor" } ? "plant" : "site" }
     # "Owns" when no ownership link is a part share; "stakes in" once one is (an ownership_pct under 100; Energy Northwest owns Columbia outright; DQ).
