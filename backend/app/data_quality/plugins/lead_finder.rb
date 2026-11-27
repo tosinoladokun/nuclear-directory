@@ -142,10 +142,15 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
     name, links = read_input(lead)
+    # A staging or preview link is never read, not even for the site's name (Copilot, #932).
+    staging, links = links.partition { |link| staging_host?(link) }
+    found["checked"] = staging.map { |link| { "verdict" => "staging", "why" => "#{URI(link).host} is a staging or preview host", "website" => link } } if staging.any?
     # A website alone: the name the site gives itself (its og:site_name, else its title's first part).
     name ||= site_name(links)
     found["name"] = name
-    return unconfirmed(name, nil, "No company name to look for", found) if name.blank?
+    if name.blank?
+      return unconfirmed(name, nil, found["checked"] ? "No company name to look for (#{checked_summary(found)})" : "No company name to look for", found)
+    end
 
     if (known = @directory.organization(name:))
       return outcome(:duplicate, name:, organization_id: known.id, reason: "Already listed", found:)
@@ -509,10 +514,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     # A subdomain word that marks a copy for testing or review ("staging.", "public-stag.", "dev2.").
     STAGING_WORDS = %w[stag stage staging dev develop development test testing qa uat preview sandbox].freeze
+    # Only the labels before the registered domain count ("stage.co.uk" is a company's own domain; Copilot).
     def staging_host?(url)
-      labels = URI(url).host.to_s.downcase.split(".")[0...-2].to_a
-      labels.flat_map { |label| label.split("-") }.any? { |word| STAGING_WORDS.include?(word.sub(/\d+\z/, "")) }
-    rescue URI::Error
+      subdomain = PublicSuffix.parse(URI(url).host.to_s.downcase, ignore_private: true).trd.to_s
+      subdomain.split(/[.-]/).any? { |word| STAGING_WORDS.include?(word.sub(/\d+\z/, "")) }
+    rescue URI::Error, PublicSuffix::Error
       false
     end
 
@@ -533,12 +539,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
       whole = words.join
       initials = (words - NAME_FILLER).map { |word| word[0] }.join
-      labels = URI(url).host.to_s.downcase.delete_prefix("www.").split(".")[0...-1].map { |label| label.delete("^a-z0-9") }
+      host = PublicSuffix.parse(URI(url).host.to_s.downcase, ignore_private: true)
+      labels = [ host.trd, host.sld ].compact.join(".").delete_prefix("www.").split(".").map { |label| label.delete("^a-z0-9") }
       labels.any? do |label|
         (whole.length >= 3 && label.include?(whole)) || (words.first.length >= 4 && label.start_with?(words.first)) ||
           (initials.length >= 2 && label == initials) || (initials.length >= 3 && label.start_with?(initials))
       end
-    rescue URI::Error
+    rescue URI::Error, PublicSuffix::Error
       false
     end
 

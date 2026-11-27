@@ -414,6 +414,23 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_empty Candidate.where(kind: "organization")
   end
 
+  test "a staging link given as the lead is never read, not even for its name, and the note says why (Copilot, #932)" do
+    staging = "https://public-stag.3keysoft.example"
+    result = Plugin.call(lead(staging).id, finder: finder)
+    assert_equal :unconfirmed, result.outcome
+    assert_includes result.reason, "public-stag.3keysoft.example: staging host"
+    assert_not_requested :get, staging
+    assert_not_requested :get, "#{staging}/robots.txt"
+  end
+
+  test "only labels before the registered domain mark a staging host, multi-part suffixes included (Copilot, #932)" do
+    plugin = Plugin.new(search_key: nil)
+    staging = %w[https://public-stag.3keysoft.com https://staging.acme.co.uk https://dev2.acme.com https://www.uat.acme.com.au https://staging.acme.herokuapp.com]
+    own = %w[https://stage.co.uk https://www.stage.co.uk https://www.devtech.com https://testing.com https://acme.com.au https://www.contest.co.uk]
+    staging.each { |url| assert plugin.send(:staging_host?, url), url }
+    own.each { |url| assert_not plugin.send(:staging_host?, url), url }
+  end
+
   test "the company's own site passes on its address alone when its title and heading don't name it (#932)" do
     site = "https://www.sawtoothsim.example"
     stub_request(:get, "#{site}/robots.txt").to_return(status: 404)
