@@ -154,6 +154,21 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "Create approved before match: the unattached name proposal can't be approved into a second company (Copilot)" do
+    row = propose("Fermi America")
+    DataQuality::Review.approve([ @create.id ], by: "human:tosin", reason: "Created in Today")
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new)
+    claim = Candidate.find(row["id"])
+    assert_equal [ "needs_review", nil ], claim.values_at(:status, :subject_id)
+
+    result = DataQuality::Review.approve([ claim.id ], by: "human:tosin", reason: "Approved in Today").sole
+
+    assert_not result.ok?
+    assert_match "isn't attached to", result.errors.join
+    assert_equal 1, Organization.where("name ILIKE 'Fermi%'").count, "no second company"
+    assert_equal "Fermi Nuclear", @company.reload.name
+  end
+
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do
     @company.verify!(by: "human:tosin")
 

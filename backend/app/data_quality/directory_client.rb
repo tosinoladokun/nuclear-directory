@@ -180,6 +180,10 @@ class DataQuality::DirectoryClient
   end
 
   def write_fact(candidate, confidence:, crawl_run:, by: nil, reason: nil, edited: false)
+    # A name proposal names the company Data Quality proposed it for (#1000): never a new company of its own (Copilot).
+    if candidate.kind == "organization" && candidate.payload.to_h.key?(REPLACES) && !candidate.subject_id
+      return WriteResult.new(ref: nil, errors: [ "it proposes a name for a company it isn't attached to; Data Quality proposes it again if it's still right" ], created: false)
+    end
     # The record written is the one match attached, never an id, a link end or
     # a slug in the payload (payloads aren't validated; Review locks these too).
     attributes = candidate.payload.except(*WRITE_SKIPPED).symbolize_keys
