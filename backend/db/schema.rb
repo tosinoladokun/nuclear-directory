@@ -70,15 +70,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
 
   create_table "checker_verdicts", force: :cascade do |t|
     t.bigint "candidate_id", null: false
-    t.bigint "crawl_run_id"
-    t.string "field", null: false
-    t.string "verdict", null: false
-    t.string "reason", null: false
     t.decimal "confidence", precision: 3, scale: 2
-    t.string "model"
-    t.boolean "escalated", default: false, null: false
-    t.string "prompt_version", null: false
+    t.bigint "crawl_run_id"
     t.datetime "created_at", null: false
+    t.boolean "escalated", default: false, null: false
+    t.string "field", null: false
+    t.string "model"
+    t.string "prompt_version", null: false
+    t.string "reason", null: false
+    t.string "verdict", null: false
     t.index ["candidate_id", "prompt_version"], name: "index_checker_verdicts_on_candidate_id_and_prompt_version", unique: true
     t.index ["created_at"], name: "index_checker_verdicts_on_created_at"
     t.check_constraint "verdict::text = ANY (ARRAY['approve'::character varying::text, 'reject'::character varying::text, 'unsure'::character varying::text])", name: "checker_verdicts_verdict_check"
@@ -349,9 +349,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
   end
 
   create_table "index_now_submissions", force: :cascade do |t|
-    t.integer "urls", null: false
     t.boolean "accepted", null: false
     t.datetime "created_at", null: false
+    t.integer "urls", null: false
     t.index ["created_at"], name: "index_index_now_submissions_on_created_at"
   end
 
@@ -417,6 +417,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
   create_table "news_items", force: :cascade do |t|
     t.string "url", null: false
     t.string "title", null: false
+    t.string "headline"
     t.string "publisher"
     t.date "published_on", null: false
     t.text "summary"
@@ -426,7 +427,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.string "verified_by"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "headline"
     t.index ["published_on"], name: "index_news_items_on_published_on"
     t.index ["url"], name: "index_news_items_on_url", unique: true
     t.index ["verification_status"], name: "index_news_items_on_verification_status"
@@ -510,15 +510,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.string "verified_by"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "short_name"
     t.string "sec_cik"
-    t.string "eia_utility_id"
+    t.string "short_name"
+    t.string "short_description"
     t.datetime "enrich_requested_at"
     t.datetime "enriched_at"
+    t.boolean "enrich_deep", default: false, null: false
     t.string "exchange"
     t.string "ticker"
-    t.string "short_description"
-    t.boolean "enrich_deep", default: false, null: false
+    t.string "eia_utility_id"
     t.index ["domain"], name: "index_organizations_on_domain", unique: true
     t.index ["eia_utility_id"], name: "index_organizations_on_eia_utility_id", unique: true, where: "(eia_utility_id IS NOT NULL)"
     t.index ["enrich_requested_at"], name: "index_organizations_on_enrich_requested_at", where: "(enrich_requested_at IS NOT NULL)"
@@ -551,6 +551,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.bigint "to_organization_id", null: false
     t.string "relationship_type", null: false
     t.text "description"
+    t.string "short_phrase"
     t.date "started_on"
     t.date "ended_on"
     t.decimal "confidence", precision: 3, scale: 2
@@ -559,7 +560,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.string "verified_by"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "short_phrase"
     t.index ["from_organization_id", "to_organization_id", "relationship_type"], name: "index_relationships_uniqueness", unique: true
     t.index ["from_organization_id"], name: "index_relationships_on_from_organization_id"
     t.index ["to_organization_id"], name: "index_relationships_on_to_organization_id"
@@ -618,7 +618,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["platform", "slug", "sha256"], name: "index_social_approvals_on_platform_and_slug_and_sha256", unique: true
-    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying::text, 'linkedin'::character varying::text])", name: "social_approvals_platform_check"
+    t.check_constraint "platform::text = ANY (ARRAY['x'::character varying, 'linkedin'::character varying]::text[])", name: "social_approvals_platform_check"
     t.check_constraint "sha256::text ~ '^[0-9a-f]{64}$'::text", name: "social_approvals_sha256_check"
   end
 
@@ -887,7 +887,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_26_090000) do
     t.datetime "updated_at", null: false
     t.index ["status", "batch"], name: "index_takeoff_proposals_on_status_and_batch"
     t.index ["subject_type", "subject_id"], name: "index_takeoff_proposals_on_subject_type_and_subject_id"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'taken_off'::character varying::text, 'kept'::character varying::text])", name: "takeoff_proposals_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'taken_off'::character varying, 'kept'::character varying]::text[])", name: "takeoff_proposals_status_check"
   end
 
   create_table "technologies", force: :cascade do |t|
