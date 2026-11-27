@@ -131,6 +131,11 @@
               <p class="<%= key == "new_record" ? "type-body" : "type-body-strong" %> m-0"><%= inbox_sentence(entry) %></p>
               <% if (named = proposed_name_claim(entry)) %>
                 <p class="type-small text-ink-muted m-0" id="proposed-name-<%= named.id %>">Found as <%= named.payload[DataQuality::DirectoryClient::REPLACES] %>, which stays as another name for it.</p>
+              <% else %>
+                <%# A name proposal approval won't write as the name (moved by a merge) still adds it: say so (Design, #1019). %>
+                <% alias_only_names(entry).each do |claim| %>
+                  <p class="type-small text-ink-muted m-0" id="alias-name-<%= claim.id %>">Adds “<%= claim.payload["name"] %>” as another name for it.</p>
+                <% end %>
               <% end %>
               <% if key == "new_record" && (item.payload.to_h.keys - %w[name aliases]).empty? %>
                 <%# Only a name: the source's words say what it is (Design). %>

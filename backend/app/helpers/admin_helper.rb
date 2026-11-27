@@ -395,6 +395,18 @@ module AdminHelper
     Candidate.where(id: named, kind: "organization").order(:id).select { |claim| directory.proposed_name?(claim) }.last
   end
 
+  # A row's name proposals that approval only adds as another name (moved off the company they were proposed for by
+  # a merge, #1019), one per name.
+  def alias_only_names(entry)
+    return [] if entry.kind != "new_record"
+
+    named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
+    directory = DataQuality::DirectoryClient.new
+    Candidate.where(id: named, kind: "organization").order(:id)
+      .select { |claim| claim.payload.to_h.key?(DataQuality::DirectoryClient::REPLACES) && !directory.proposed_name?(claim) }
+      .uniq { |claim| claim.payload["name"] }
+  end
+
   # A decision in Recently decided (#548): "Created Bluefield Fission",
   # "Approved Meta funds TerraPower", "Said no to Old Lead Co".
   def inbox_decision(claim)

@@ -221,6 +221,7 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     get admin_inbox_path
     assert_select "#inbox-item-#{claim.id} strong", "Fermi Holdings", "the row names the company it's on (Copilot)"
     assert_select "#proposed-name-#{claim.id}", 0
+    assert_select "#inbox-item-#{claim.id} #alias-name-#{claim.id}.type-small.text-ink-muted", "Adds “Fermi America” as another name for it.", "the alias approval adds is on the row (Design)"
     DataQuality::Review.approve([ claim.id ], by: "human:tosin", reason: "Approved in Today")
     assert_equal "Fermi Holdings", other.reload.name
     assert_includes other.aliases.pluck(:alias), "Fermi America"
