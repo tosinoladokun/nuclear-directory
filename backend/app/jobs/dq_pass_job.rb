@@ -7,8 +7,8 @@ class DqPassJob < ApplicationJob
   limits_concurrency to: 1, key: "dq_pass", duration: 2.hours if respond_to?(:limits_concurrency)
 
   # The pass's steps, in order: each class's new instance takes call(run) and
-  # returns a counts Hash. Code steps come first, so no model is paid for what code settles.
-  STEPS = [ DqPass::Research ].freeze
+  # returns a counts Hash. Code first, so no model is paid for what code settles.
+  STEPS = [ DqPass::CodeRejects, DqPass::RecordRoles, DqPass::Research ].freeze
   # nil: STEPS. Tests set stand-ins (anything with call(run)).
   class_attribute :steps, default: nil
   # nil: Autopilot::Alert; tests set a stand-in.

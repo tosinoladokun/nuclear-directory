@@ -118,15 +118,43 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     assert_match "SEC CIK 0001234567 is Other Co's", claim.notes
   end
 
-  test "two name proposals: the Create row shows the last, the one approval applies (Copilot)" do
+  test "a second, different name for a company waits until the first is decided or closed (#1019)" do
     first = proposed
     @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
-    second = proposed("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
-    entry = OwnerInbox::Entry.new(kind: "new_record", item: Struct.new(:candidate_id).new(@create.id), copy_ids: [ first.id, second.id ], checked: false, changes: {})
 
-    assert_equal second, ApplicationController.helpers.proposed_name_claim(entry)
-    DataQuality::Review.approve([ @create.id, first.id, second.id ], by: "human:tosin", reason: "Created in Today")
-    assert_equal "Fermi America Inc.", @company.reload.name
+    row = propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
+    assert_equal "the name proposal ##{first.id} (Fermi America) for Fermi Nuclear is still open; close it first", row["error"]
+    again = propose("Fermi America")
+    assert again["ok"], again.inspect
+
+    Candidate.where(id: [ first.id, again["id"] ]).update_all(status: "rejected")
+    assert propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")["ok"], "once both are decided"
+  end
+
+  test "a reopened or undone name proposal can't be open beside a different one (#1019, Copilot)" do
+    first = proposed
+    before = DataQuality::Review.undo_state(first.id)
+    DataQuality::Review.reject([ first.id ], by: "human:tosin", reason: "Said no in Today")
+    undo = DataQuality::Review.undoable(before, by: "human:tosin")
+    @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
+    second = propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
+    assert second["ok"], second.inspect
+
+    reopened = DataQuality::Review.reopen([ first.id ], by: "human:tosin", reason: "Try again").sole
+    assert_equal [ "another name for the company, Fermi America Inc. (##{second['id']}), is open; decide or close it first" ], reopened.errors
+    undone = DataQuality::Review.undo_all([ undo ], by: "human:tosin")
+    assert_match "another name for the company, Fermi America Inc.", undone.errors.join
+    assert first.reload.status_rejected?
+  end
+
+  test "a name proposal reads the open ones under the company's row lock, so two at once can't both pass (Copilot)" do
+    statements = []
+    counter = ->(*, payload) { statements << payload[:sql] }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { propose("Fermi America") }
+
+    lock = statements.index { |sql| sql.match?(/FROM "organizations" WHERE "organizations"\."id" = .* FOR UPDATE/) }
+    check = statements.index { |sql| sql.include?("payload ? ") }
+    assert lock && check && lock < check, "the company is locked before the open proposals are read"
   end
 
   test "a name another company takes between the proposal and match goes to review (Copilot)" do
@@ -177,6 +205,46 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     claim = Candidate.find(row["id"])
     assert_equal "needs_review", claim.status
     assert_match "its website's domain is Other Co's", claim.notes
+  end
+
+  test "a company merged into another before Create: its row shows no proposed name, and approval only adds it as an alias (#1019)" do
+    claim = proposed
+    other = give_sourced_role(Organization.create!(name: "Fermi Holdings", verification_status: "pending"))
+    Directory::FactWriter.merge_organization(from_id: @company.id, into_id: other.id, by: "human:tosin", reason: "One company")
+    assert_equal other.id, claim.reload.subject_id
+    entry = OwnerInbox::Entry.new(kind: "new_record", item: Struct.new(:candidate_id).new(claim.id), copy_ids: [], checked: false, changes: {})
+
+    assert_nil ApplicationController.helpers.proposed_name_claim(entry), "never shown as the name it won't be"
+    claim.update!(ai_recommendation: "recommend_publish", ai_source_sha256: @page.content_sha256)
+    @create.destroy!
+    sign_in_as users(:admin)
+    get admin_inbox_path
+    assert_select "#inbox-item-#{claim.id} strong", "Fermi Holdings", "the row names the company it's on (Copilot)"
+    assert_select "#proposed-name-#{claim.id}", 0
+    assert_select "#inbox-item-#{claim.id} #alias-name-#{claim.id}.type-small.text-ink-muted", "Adds “Fermi America” as another name for it.", "the alias approval adds is on the row (Design)"
+    DataQuality::Review.approve([ claim.id ], by: "human:tosin", reason: "Approved in Today")
+    assert_equal "Fermi Holdings", other.reload.name
+    assert_includes other.aliases.pluck(:alias), "Fermi America"
+  end
+
+  test "a row with a live proposal and one merged in shows both: the name it's created under, and the alias the other adds (Design)" do
+    other = give_sourced_role(Organization.create!(name: "Fermi Holdings", verification_status: "pending"))
+    @page.update!(content_text: "#{@page.content_text} Fermi Holdings America is its parent's brand.")
+    moved = propose("Fermi Holdings America", target: other.id, quote: "Fermi Holdings America is its parent's brand.")
+    assert moved["ok"], moved.inspect
+    DataQuality::Stages::Match.call(plugin: DummyPlugin.new) # attached to Fermi Holdings, then merged in
+    Directory::FactWriter.merge_organization(from_id: other.id, into_id: @company.id, by: "human:tosin", reason: "One company")
+    assert_equal @company.id, Candidate.find(moved["id"]).subject_id
+    live = proposed
+    DataQuality::Recommendations.record("#{@create.id} approve: named\n#{live.id} approve: its site\n#{moved['id']} approve: its brand", by: "human:dq")
+    sign_in_as users(:admin)
+
+    get admin_inbox_path
+
+    assert_select "#inbox-item-#{@create.id}" do
+      assert_select "#proposed-name-#{live.id}", /Found as Fermi Nuclear/
+      assert_select "#alias-name-#{moved['id']}", "Adds “Fermi Holdings America” as another name for it."
+    end
   end
 
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do
