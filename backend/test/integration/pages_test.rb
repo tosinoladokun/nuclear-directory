@@ -9,15 +9,18 @@ class PagesTest < ActionDispatch::IntegrationTest
 
     assert_select "meta[name=description][content*=?]", "dead clicks, the country you're visiting from"
     assert_select "h2#counts", "Analytics"
-    assert_select "section[aria-labelledby=counts]", /how the site is used.*No cookies, and one visit isn't linked to the next.*no session recordings/m
-    assert_select ".nd-glance__fact", text: /Cookies.*One, to protect forms/m
-    # #205: we look up the country and send only that; PostHog uses the IP to count visitors and drops it.
-    assert_select "section[aria-labelledby=counts] p", /which country you're in from your IP address, and adds only the country to the analytics/
-    assert_select "section[aria-labelledby=counts] p", /PostHog receives your IP address and browser with each request so it can count unique visitors without cookies. It doesn't store the IP address/
+    assert_select "section[aria-labelledby=counts] p", /We use PostHog to see how the site is used\. We record:/
+    # Everything analytics records, one item each (Tosin's shorter list, 27 Nov).
+    assert_equal [ "pages viewed and how long they stay open", "searches and how many results they found", "links you follow off the site (the domain only)",
+      "clicks on things that don't respond", "how fast pages load", "which homepage version you saw (we're testing two) and what you clicked on it",
+      "your country, worked out from your IP address" ], css_select("section[aria-labelledby=counts] ul > li").map { |item| item.text.strip }
+    assert_select "section[aria-labelledby=counts] p", /No cookies, no recordings, and one visit isn't linked to the next/
+    # #205: PostHog uses the IP to count visitors and drops it; the country comes from our lookup.
+    assert_select "section[aria-labelledby=counts] p", /PostHog doesn't store your IP address\. Your IP address and browser are used, without being stored, to count unique visitors and to pick your homepage version\./
     assert_select "section[aria-labelledby=counts] p a[href='https://db-ip.com']", "IP Geolocation by DB-IP"
     assert_select "section[aria-labelledby=counts] p a[href='https://creativecommons.org/licenses/by/4.0/']", "CC BY 4.0"
-    assert_select "section[aria-labelledby=counts] p", /go through this site rather than straight to PostHog/
-    assert_select ".nd-info__updated", /Last updated October 2026/
+    assert_select ".nd-glance", /through this site/ # the scripts go through this site (the facts card says so)
+    assert_select ".nd-info__updated", /Last updated November 2026/ # the Analytics section was rewritten (27 Nov)
     assert_no_match(/set to discard IP addresses/, response.body)
   end
 
@@ -134,7 +137,7 @@ class PagesTest < ActionDispatch::IntegrationTest
       assert_select "strong", text: "In short:", count: 0
       assert_select ".nd-glance dt", minimum: 3
       assert_equal sections, css_select("section h2").map { |h| h["id"] }, path
-      assert_select ".nd-info__updated", /Last updated October 2026/
+      assert_select ".nd-info__updated", path == privacy_path ? /Last updated November 2026/ : /Last updated October 2026/
     end
 
     get privacy_path

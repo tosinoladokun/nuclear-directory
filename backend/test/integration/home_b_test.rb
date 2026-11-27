@@ -97,8 +97,9 @@ class HomeBTest < ActionDispatch::IntegrationTest
     assert_select ".nd-charts", count: 0, message: "the test is off, so a plain visit is A"
   end
 
-  test "the privacy page names the chart and download clicks" do
+  # The homepage's clicks (categories, charts, records, the download link) are recorded, so Privacy says so (27 Nov list).
+  test "the privacy page names the homepage clicks" do
     get "/privacy"
-    assert_includes response.body, "which category, chart or download link you clicked"
+    assert_includes response.body, "which homepage version you saw (we're testing two) and what you clicked on it"
   end
 end
