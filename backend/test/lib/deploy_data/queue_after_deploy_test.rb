@@ -40,5 +40,26 @@ class DeployData::QueueAfterDeployTest < ActiveSupport::TestCase
     assert_enqueued_with(job: LeadFindJob, args: [ lead.id ], at: nil) do
       CompanySuggestion.queue(lead, name: "Acme Fission", by: "human:tosin")
     end
+    assert_equal [ "new", nil ], lead.reload.values_at(:status, :next_find_at), "a suggestion is found at once"
+  end
+
+  test "a delayed lead isn't due until its wait ends, for a queued job or the nightly batch (Copilot)" do
+    found = []
+    finder, LeadFindJob.finder = LeadFindJob.finder, ->(lead) { found << lead.id; Struct.new(:outcome, :reason).new(:unconfirmed, "no website found") }
+    lead = Lead.sighted!(name: "Acme Fission", kind: "company", key: "nea:2", label: "NEA list")
+    CompanySuggestion.queue(lead, name: "Acme Fission", by: "human:tosin", wait: DeployData::Migration::AFTER_DEPLOY_WAIT)
+    assert_equal "researching", lead.reload.status
+
+    LeadFindJob.perform_now(lead.id)
+    assert_not_includes LeadFinding.due.ids, lead.id, "not in the nightly batch"
+    assert_empty found, "an older queued job leaves it"
+
+    travel DeployData::Migration::AFTER_DEPLOY_WAIT + 1.second do
+      assert_includes LeadFinding.due.ids, lead.id
+      LeadFindJob.perform_now(lead.id)
+    end
+    assert_equal [ lead.id ], found
+  ensure
+    LeadFindJob.finder = finder
   end
 end

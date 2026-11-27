@@ -25,13 +25,15 @@ class RequeueUsDeveloperLeadsTest < ActiveSupport::TestCase
       output = run_it.output.join("\n")
     end
 
-    assert_equal [ "NuCube Energy", "new", 0, nil ], nucube.reload.attributes.values_at("name", "status", "find_attempts", "next_find_at")
+    # Waits as researching until the new release finds it (#1018).
+    assert_equal [ "NuCube Energy", "researching", 0 ], nucube.reload.attributes.values_at("name", "status", "find_attempts")
+    assert nucube.next_find_at.future?
     assert_includes Directory::Leads.find(125).urls, RequeueUsDeveloperLeads::OWN_PAGES[125]
     assert_equal [ "First American Nuclear", "first american nuclear", 0 ], fanco.reload.attributes.values_at("name", "normalized_name", "find_attempts")
     assert_equal fanco, Lead.sighted!(name: "First American Nuclear", kind: "company", key: "nea:later", label: "NEA list"), "no duplicate later (Copilot)"
     assert_equal [ "Valar Atomics", 0, "human:tosin" ], named.reload.attributes.values_at("name", "find_attempts", "decided_by")
     scaled = Lead.find_by!(normalized_name: "scaled atomics")
-    assert_equal [ "Scaled Atomics", "new" ], [ scaled.name, scaled.status ]
+    assert_equal [ "Scaled Atomics", "researching" ], [ scaled.name, scaled.status ]
     assert_includes output, "Lead 125 queued again as \"NuCube Energy\" with its own page (had used 2 of its tries)"
     assert_includes output, "Lead 110 is gone; nothing to do"
     assert_not_includes output, "Lead 116", "116 is Hadron again: only 110 is queued (DQ)"

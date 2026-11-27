@@ -25,7 +25,9 @@ class RequeueUsDeveloperLeadsAgainTest < ActiveSupport::TestCase
     assert_enqueued_jobs 2, only: LeadFindJob do
       output = run_it.output.join("\n")
     end
-    assert_equal [ "Terrestrial Energy", "new", 0, nil ], terrestrial.reload.attributes.values_at("name", "status", "find_attempts", "next_find_at")
+    # Waits as researching until the new release finds it (#1018).
+    assert_equal [ "Terrestrial Energy", "researching", 0 ], terrestrial.reload.attributes.values_at("name", "status", "find_attempts")
+    assert terrestrial.next_find_at.future?
     assert_includes output, "Lead 127 (Terrestrial Energy) queued again (had used 1 of its tries)"
     assert_includes output, "Lead 125 (NuCube Energy) is added now (a person decided it); left as it is"
     assert_equal [ 1, "researching" ], nuclearis.reload.attributes.values_at("find_attempts", "status"), "Tosin said no to Nuclearis"
