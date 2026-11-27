@@ -371,7 +371,10 @@ module AdminHelper
     return claim_text(item) unless entry.kind == "new_record"
 
     # Data Quality's name for it (#1000) is the name it's created under.
-    name = proposed_name_claim(entry)&.payload&.dig("name").presence || payload["name"].to_s
+    named = proposed_name_claim(entry)
+    # A name proposal that approval won't write as the name (moved to another company by a merge) is named by its company (#1019).
+    shown = item.record&.name if named.nil? && payload.key?(DataQuality::DirectoryClient::REPLACES)
+    name = named&.payload&.dig("name").presence || shown.presence || payload["name"].to_s
     city = payload["hq_city"].presence || payload["city"].presence
     state = payload["hq_state"].presence || payload["state"].presence
     where = [ city, state ].compact.join(", ")
@@ -385,12 +388,11 @@ module AdminHelper
     return if entry.kind != "new_record"
 
     # The Create's own claim too: with no other open claim, the name proposal is the row (Copilot).
-    order = OwnerInbox.approval_order(entry.ids)
-    named = DqAction.where(candidate_id: order, action: "propose_fields").pluck(:candidate_id)
+    named = DqAction.where(candidate_id: entry.ids, action: "propose_fields").pluck(:candidate_id)
     directory = DataQuality::DirectoryClient.new
-    # Only one approval will write as the name (on the company it was proposed for, #1019), and of those the last
-    # approved: the row's claims are approved in OwnerInbox.approval_order, so that's the name it's created under.
-    Candidate.where(id: named, kind: "organization").select { |claim| directory.proposed_name?(claim) }.max_by { |claim| order.index(claim.id) }
+    # Only a proposal still on the company it was proposed for writes the name (#1019); Review.approve takes a row's
+    # claims by id, so of those the last by id is the name it's created under.
+    Candidate.where(id: named, kind: "organization").order(:id).select { |claim| directory.proposed_name?(claim) }.last
   end
 
   # A decision in Recently decided (#548): "Created Bluefield Fission",

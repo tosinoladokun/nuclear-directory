@@ -118,15 +118,17 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     assert_match "SEC CIK 0001234567 is Other Co's", claim.notes
   end
 
-  test "two name proposals: the Create row shows the last, the one approval applies (Copilot)" do
+  test "a second, different name for a company waits until the first is decided or closed (#1019)" do
     first = proposed
     @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
-    second = proposed("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
-    entry = OwnerInbox::Entry.new(kind: "new_record", item: Struct.new(:candidate_id).new(@create.id), copy_ids: [ first.id, second.id ], checked: false, changes: {})
 
-    assert_equal second, ApplicationController.helpers.proposed_name_claim(entry)
-    DataQuality::Review.approve([ @create.id, first.id, second.id ], by: "human:tosin", reason: "Created in Today")
-    assert_equal "Fermi America Inc.", @company.reload.name
+    row = propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
+    assert_equal "the name proposal ##{first.id} (Fermi America) for Fermi Nuclear is still open; close it first", row["error"]
+    again = propose("Fermi America")
+    assert again["ok"], again.inspect
+
+    Candidate.where(id: [ first.id, again["id"] ]).update_all(status: "rejected")
+    assert propose("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")["ok"], "once both are decided"
   end
 
   test "a name another company takes between the proposal and match goes to review (Copilot)" do
@@ -179,42 +181,6 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     assert_match "its website's domain is Other Co's", claim.notes
   end
 
-  test "two name proposals through Yes to all: the name written is the one the row showed (#1019)" do
-    first = proposed
-    @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
-    second = proposed("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
-    # A second checked company, so Yes to all is offered (it takes two or more).
-    other = give_sourced_role(Organization.create!(name: "Second Fission", verification_status: "pending"))
-    another = Candidate.create!(source: @page, kind: "organization", status: "needs_review", quote: "Licensee: Fermi Nuclear.",
-      payload: { "name" => "Second Fission" }, subject: other, proposed_subject: true)
-    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page\n#{first.id} approve: its site\n#{second.id} approve: its filing\n#{another.id} approve: named", by: "human:dq")
-    sign_in_as users(:admin)
-    get admin_inbox_path
-    assert_select "#inbox-item-#{@create.id} strong", "Fermi America Inc."
-    shown = css_select("form[action='#{admin_inbox_yes_all_path}'] input[name=shown]").first["value"]
-
-    post admin_inbox_yes_all_path, params: { shown: }
-
-    assert_equal "Fermi America Inc.", @company.reload.name, flash[:alert].to_s
-  end
-
-  test "two name proposals by the row's own Create button: the name written is the one the row showed (#1019)" do
-    first = proposed
-    @page.update!(content_text: "#{@page.content_text} Fermi America Inc. is its legal name.")
-    second = proposed("Fermi America Inc.", quote: "Fermi America Inc. is its legal name.")
-    DataQuality::Recommendations.record("#{@create.id} approve: named on the NRC page\n#{first.id} approve: its site\n#{second.id} approve: its filing", by: "human:dq")
-    sign_in_as users(:admin)
-    get admin_inbox_path
-    assert_select "#inbox-item-#{@create.id} strong", "Fermi America Inc."
-    form = css_select("#inbox-item-#{@create.id} form[action='#{admin_inbox_decide_path(@create.id, "yes")}']").first
-    ids = form.css("input[name='ids[]']").map { |input| input["value"] }
-    assert_equal [ @create.id, first.id, second.id ].sort, ids.map(&:to_i).sort
-
-    post admin_inbox_decide_path(@create.id, "yes"), params: { ids: }
-
-    assert_equal "Fermi America Inc.", @company.reload.name, flash[:alert].to_s
-  end
-
   test "a company merged into another before Create: its row shows no proposed name, and approval only adds it as an alias (#1019)" do
     claim = proposed
     other = give_sourced_role(Organization.create!(name: "Fermi Holdings", verification_status: "pending"))
@@ -223,13 +189,15 @@ class Api::DqNameProposalTest < ActionDispatch::IntegrationTest
     entry = OwnerInbox::Entry.new(kind: "new_record", item: Struct.new(:candidate_id).new(claim.id), copy_ids: [], checked: false, changes: {})
 
     assert_nil ApplicationController.helpers.proposed_name_claim(entry), "never shown as the name it won't be"
+    claim.update!(ai_recommendation: "recommend_publish", ai_source_sha256: @page.content_sha256)
+    @create.destroy!
+    sign_in_as users(:admin)
+    get admin_inbox_path
+    assert_select "#inbox-item-#{claim.id} strong", "Fermi Holdings", "the row names the company it's on (Copilot)"
+    assert_select "#proposed-name-#{claim.id}", 0
     DataQuality::Review.approve([ claim.id ], by: "human:tosin", reason: "Approved in Today")
     assert_equal "Fermi Holdings", other.reload.name
     assert_includes other.aliases.pluck(:alias), "Fermi America"
-  end
-
-  test "a row's claims are approved in one order wherever they're approved together: its own claim, then the rest by id" do
-    assert_equal [ 9, 3, 5, 12 ], OwnerInbox.approval_order([ 9, 12, 5, 3 ])
   end
 
   test "a published company's name can't be proposed: renaming it stays a reviewed change" do

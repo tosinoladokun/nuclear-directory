@@ -332,6 +332,12 @@ module DataQuality::Matching
         # Only before Create: a published company's name changes by a reviewed change, never this way.
         raise Abort, "#{record.name} is published; its name can't be proposed this way" unless record.verification_status == "pending"
         raise Abort, "#{fields['name'].inspect} is already its name" if fields["name"] == record.name
+        # One name proposal open per company (#1019): which of two would be written is easy to misread, so another
+        # waits until the first is decided or closed.
+        proposed_for = DqAction.where(action: "propose_fields", target_type: "Organization", target_id: record.id).select(:candidate_id)
+        open = Candidate.where(status: DataQuality::Recommendations::OPEN, kind: "organization", id: proposed_for)
+          .where("candidates.payload ? :key", key: DataQuality::DirectoryClient::REPLACES).where.not("candidates.payload->>'name' = ?", fields["name"]).order(:id).first
+        raise Abort, "the name proposal ##{open.id} (#{open.payload['name']}) for #{record.name} is still open; close it first" if open
         if (holder = directory.organization(name: fields["name"])) && holder.id != record.id
           raise Abort, "#{fields['name'].inspect} is #{holder.name}'s (##{holder.id}); if they're the same company, settle it with same_as"
         end
