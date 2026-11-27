@@ -46,7 +46,7 @@ module DataQuality::Claim
     case candidate.kind
     when "organization"
       # Bookkeeping (#760: which claim a field came with) isn't a fact the source states.
-      "There is a company named “#{payload['name']}”#{details(payload.except('name', *DataQuality::FieldEvidence::KEYS))}."
+      "There is a company named “#{payload['name']}”#{details(payload.except('name', DataQuality::DirectoryClient::REPLACES, *DataQuality::FieldEvidence::KEYS))}."
     when "news_item"
       about = Array(payload["about"]).map { |entry| entry["name"] }.compact
       "News: “#{payload['title']}”#{" (#{payload['publisher']}, #{payload['published_on']})" if payload['publisher'] || payload['published_on']}" \

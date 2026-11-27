@@ -47,6 +47,31 @@ class NoWrapTest < ApplicationSystemTestCase
     assert_equal page.evaluate_script("getComputedStyle(document.querySelector('h1')).color"), page.evaluate_script("getComputedStyle(document.querySelector('.nd-info__summary')).color"), "the summary is in ink, the page's main point"
   end
 
+  # #990: the About page's Dataset note, "DOI 10.5281/zenodo.23703377", is one unbreakable string; in a half-width cell at
+  # 320 it ran past the card. It takes the full row now, whole and unclipped.
+  test "every glance fact and note on the info pages stays inside its card, whole, from 320 up" do
+    [ [ 320, 800 ], [ 375, 812 ], [ 390, 844 ], [ 1440, 900 ] ].each do |width, height|
+      resize_viewport(width, height)
+      [ about_path, data_path, privacy_path, disclaimer_path, bot_path ].each do |path|
+        visit path
+        page.evaluate_async_script("document.fonts.ready.then(() => arguments[0](true))")
+        outside = page.evaluate_script(<<~JS)
+          [...document.querySelectorAll(".nd-glance dt, .nd-glance dd, .nd-glance__note")].filter((element) => {
+            const card = element.closest(".nd-glance").getBoundingClientRect(), range = document.createRange()
+            range.selectNodeContents(element)
+            const text = range.getBoundingClientRect()
+            return text.right > card.right + 0.5 || text.left < card.left - 0.5
+          }).map((element) => element.textContent.trim())
+        JS
+        assert_empty outside, "at #{width}, #{path}: every fact inside its card"
+      end
+      visit about_path
+      assert_selector ".nd-glance__note", text: "DOI 10.5281/zenodo.23703377"
+      # Design (#993): the pairs fill their rows on a phone, and the fact with a note closes the card.
+      assert_equal [ "Covers", "Sources", "Price", "Data licence", "Code licence", "Dataset" ], all(".nd-glance dt").map { |dt| dt.text.sub(/DOI.*/, "").strip }
+    end
+  end
+
   test "on a touch phone the footer links are 44px tall and their tap areas never overlap (the credit moved to About, #660)" do
     resize_viewport(390, 844)
     page.driver.browser.execute_cdp("Emulation.setTouchEmulationEnabled", enabled: true, maxTouchPoints: 5)

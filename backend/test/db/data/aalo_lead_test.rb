@@ -14,11 +14,16 @@ class AaloLeadTest < ActiveSupport::TestCase
 
   def run_it = AaloLead.new(reason: "deploy abc1234, PR #1").tap(&:up)
 
-  test "renamed with its site, found again now with its tries reset; a rerun says so" do
-    assert_enqueued_with(job: LeadFindJob, args: [ 105 ]) { run_it }
-    @lead.reload
-    assert_equal [ "Aalo Atomics", "new", 0, nil, "https://www.aalo.com/" ], [ @lead.name, @lead.status, @lead.find_attempts, @lead.next_find_at, @lead.sources.sole["url"] ]
-    assert_includes LeadFinding.due, @lead
+  test "renamed with its site, found again once the new release runs, tries reset; a rerun says so" do
+    freeze_time do
+      wait = DeployData::Migration::AFTER_DEPLOY_WAIT
+      assert_enqueued_with(job: LeadFindJob, args: [ 105 ], at: wait.from_now) { run_it }
+      @lead.reload
+      assert_equal [ "Aalo Atomics", "researching", 0, wait.from_now, "https://www.aalo.com/" ],
+        [ @lead.name, @lead.status, @lead.find_attempts, @lead.next_find_at, @lead.sources.sole["url"] ]
+      assert_not_includes LeadFinding.due, @lead, "not before the new release runs (#1018)"
+      assert_includes LeadFinding.due(now: wait.from_now), @lead
+    end
     assert_match "already", run_it.output.sole
     assert_equal "human:tosin", AaloLead.new(reason: "x").by, "the deploy runner reads it before up"
   end

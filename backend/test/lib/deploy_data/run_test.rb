@@ -28,6 +28,20 @@ class DeployData::RunTest < ActiveSupport::TestCase
     def hold = (@free ? (yield; true) : false)
   end
 
+  # Busy for its first `busy` tries, then free.
+  class BusyThenFree
+    attr_reader :tries
+    def initialize(busy:) = (@busy, @tries = busy, 0)
+
+    def hold
+      @tries += 1
+      return false if @tries <= @busy
+
+      yield
+      true
+    end
+  end
+
   setup do
     @root = Pathname(Dir.mktmpdir)
     write "db/seeds/organizations/westinghouse.yml", "name: Westinghouse\n"
@@ -48,8 +62,10 @@ class DeployData::RunTest < ActiveSupport::TestCase
   end
 
   def run_step(dry_run: false, mode: "on", lock: FakeLock.new, backup: @backup, seeder: @seeder)
+    @waits = []
     run = DeployData::Run.new(dry_run:, commit: "abc1234def", mode:, backup:, github: @github, lock:, root: @root,
-      migrations: DeployData::Migrations.new(@root.join("db/data")), seeder:, checker: -> { @collisions })
+      migrations: DeployData::Migrations.new(@root.join("db/data")), seeder:, checker: -> { @collisions },
+      sleeper: ->(seconds) { @waits << seconds })
     status = nil
     @output = capture_io { status = run.call }.first
     status
@@ -135,11 +151,21 @@ class DeployData::RunTest < ActiveSupport::TestCase
     assert_includes @github.posts.sole[:body], "stopped: the backup didn't finish (exit 1), so nothing was written"
   end
 
-  test "stops while the daily crawl holds its lock" do
+  test "stops when a run still holds its lock after five minutes of tries" do
     assert_equal :stopped, run_step(lock: FakeLock.new(free: false))
     assert_equal 0, @backup.taken
     assert_equal 0, @seeds
-    assert_includes @github.posts.sole[:body], "the daily crawl is running"
+    assert_equal [ 15 ] * 20, @waits, "every 15 seconds for 5 minutes"
+    assert_includes @github.posts.sole[:body], "a crawl or Data Quality run held its lock for 5 minutes"
+  end
+
+  test "a short run holding its lock at deploy time doesn't skip the data step: it waits and goes on (27 Nov, #991)" do
+    lock = BusyThenFree.new(busy: 2)
+    assert_equal :applied, run_step(lock:)
+    assert_equal 3, lock.tries
+    assert_equal [ 15, 15 ], @waits
+    assert_equal 1, @seeds
+    assert_includes @output, "holds its lock; trying again in 15 seconds"
   end
 
   test "a seed that fails writes nothing and is recorded as failed" do
