@@ -18,9 +18,10 @@ class RequeueUsDeveloperLeads < DeployData::Migration
   NAMES = { "deepfission.com" => "Deep Fission", "nuclearisenergy.com" => "Nuclearis Energy", "nucube.energy" => "NuCube Energy",
     "terrestrialusa.com" => "Terrestrial Energy", "terrestrialenergy.com" => "Terrestrial Energy", "hadronenergy.com" => "Hadron Energy",
     "fanuclear.com" => "First American Nuclear" }.freeze
+  # By lead id (DQ): Hadron's lead 110 is name-only in production, so a domain can't find it.
   OWN_PAGES = {
-    "nucube.energy" => "https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html",
-    "hadronenergy.com" => "https://www.hadronenergy.com/p/hadron-energy-announces-second-location-in-new-york-city"
+    125 => "https://www.globenewswire.com/news-release/2026/06/25/3317422/0/en/nucube-energy-to-become-a-publicly-listed-company-through-business-combination-with-launch-two-acquisition-corp.html",
+    110 => "https://www.hadronenergy.com/p/hadron-energy-announces-second-location-in-new-york-city"
   }.freeze
   SCALED_ATOMICS = [ "Scaled Atomics", "https://www.scaledatomics.com" ].freeze
 
@@ -40,9 +41,9 @@ class RequeueUsDeveloperLeads < DeployData::Migration
       domain = NAMES.keys.find { |host| ([ lead.name ] + lead.sources.map { |source| source["url"].to_s }).any? { |text| text.downcase.include?(host) } }
       name = NAMES.fetch(domain, lead.name)
       tries = lead.find_attempts
-      note(lead, url: OWN_PAGES[domain])
+      note(lead, url: OWN_PAGES[id])
       CompanySuggestion.queue(lead, name:, by: BY)
-      say "Lead #{id} queued again as #{name.inspect}#{' with its own page' if OWN_PAGES[domain]} (had used #{tries} of its tries)"
+      say "Lead #{id} queued again as #{name.inspect}#{' with its own page' if OWN_PAGES[id]} (had used #{tries} of its tries)"
     end
 
     def add_scaled_atomics

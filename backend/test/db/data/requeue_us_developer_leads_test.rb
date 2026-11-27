@@ -16,7 +16,7 @@ class RequeueUsDeveloperLeadsTest < ActiveSupport::TestCase
   def run_it = RequeueUsDeveloperLeads.new(reason: "deploy abc1234, PR #1").tap(&:up)
 
   test "resets the stuck leads, names the website-only ones, adds NuCube's release and Scaled Atomics" do
-    nucube = stuck(112, "nucube.energy", url: "https://www.nucube.energy")
+    nucube = stuck(125, "nucube.energy", url: "https://www.nucube.energy")
     fanco = stuck(114, "fanuclear.com", url: "https://fanuclear.com", tries: 1)
     named = stuck(92, "Valar Atomics")
 
@@ -26,27 +26,27 @@ class RequeueUsDeveloperLeadsTest < ActiveSupport::TestCase
     end
 
     assert_equal [ "NuCube Energy", "new", 0, nil ], nucube.reload.attributes.values_at("name", "status", "find_attempts", "next_find_at")
-    assert_includes Directory::Leads.find(112).urls, RequeueUsDeveloperLeads::OWN_PAGES["nucube.energy"]
+    assert_includes Directory::Leads.find(125).urls, RequeueUsDeveloperLeads::OWN_PAGES[125]
     assert_equal [ "First American Nuclear", 0 ], fanco.reload.attributes.values_at("name", "find_attempts")
     assert_equal [ "Valar Atomics", 0, "human:tosin" ], named.reload.attributes.values_at("name", "find_attempts", "decided_by")
     scaled = Lead.find_by!(normalized_name: "scaled atomics")
     assert_equal [ "Scaled Atomics", "new" ], [ scaled.name, scaled.status ]
-    assert_includes output, "Lead 112 queued again as \"NuCube Energy\" with its own page (had used 2 of its tries)"
+    assert_includes output, "Lead 125 queued again as \"NuCube Energy\" with its own page (had used 2 of its tries)"
     assert_includes output, "Lead 110 is gone; nothing to do"
     assert_not_includes output, "Lead 116", "116 is Hadron again: only 110 is queued (DQ)"
   end
 
-  test "Hadron's lead gets its own story page; its duplicate 116 is never queued (DQ)" do
-    hadron = stuck(110, "hadronenergy.com", url: "https://hadronenergy.com")
-    duplicate = stuck(116, "Hadron Energy")
+  test "Hadron's name-only lead gets its own story page; its duplicate 116 is never queued (DQ)" do
+    hadron = stuck(110, "Hadron Energy")
+    duplicate = stuck(116, "hadronenergy.com", url: "https://hadronenergy.com")
     run_it
     assert_equal "Hadron Energy", hadron.reload.name
-    assert_includes Directory::Leads.find(110).urls, RequeueUsDeveloperLeads::OWN_PAGES["hadronenergy.com"]
+    assert_includes Directory::Leads.find(110).urls, RequeueUsDeveloperLeads::OWN_PAGES[110]
     assert_equal [ 2, "researching" ], duplicate.reload.attributes.values_at("find_attempts", "status")
   end
 
   test "a lead a person decided is left; a rerun changes nothing" do
-    decided = stuck(125, "Nuclearis Energy", url: "https://nuclearisenergy.com", status: "ignored")
+    decided = stuck(127, "Nuclearis Energy", url: "https://nuclearisenergy.com", status: "ignored")
     run_it
     assert_equal [ "ignored", 2 ], decided.reload.attributes.values_at("status", "find_attempts")
 
