@@ -170,9 +170,40 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_includes DqPass::Research.new(now: NOW + 8.days).due, @org, "a week later"
   end
 
+  test "the companies read stay on the run after the job finishes it, so the weekly retry still sees them (Copilot)" do
+    Switch.set!(DqPass::KEY, true, by: "human:tosin")
+    finder = FakeFinder.new(results: [ HOME ], pages: { HOME => PAGE })
+    DqPassJob.steps = [ DqPass::Research.new(llm: FakeLlm.new(extract: answer), finder:, now: NOW) ]
+    DqPassJob.perform_now(now: NOW)
+    run = CrawlRun.where(source_kind: DqPass::SOURCE_KIND).order(:id).last
+    assert_equal [ @org.id ], run.stats["researched"]
+    assert_equal 1, run.stats["research_count"]
+    assert_not_includes DqPass::Research.new(now: NOW + 1.hour).due, @org
+  ensure
+    DqPassJob.steps = nil
+  end
+
+  test "a company with a website whose home page redirected to www still gets its role (Copilot)" do
+    @org.update!(website: "https://acmefission.example")
+    finder = FakeFinder.new(pages: { "https://acmefission.example" => PAGE })
+    finder.define_singleton_method(:read_page) do |url|
+      super(url)&.tap { |source| source.update!(final_url: "https://www.acmefission.example/") }
+    end
+    llm = FakeLlm.new(extract: answer(website: nil))
+    assert_equal "proposed", researcher(llm:, finder:).research(@org)[:outcome]
+    assert_equal "reactor_vendor", proposals.last.payload["role"]
+  end
+
+  test "one company's failed model call is that company's, not the night's (Copilot)" do
+    llm = FakeLlm.new(extract: DataQuality::OpenRouter::Client::RetriesExhausted.new("invalid output"))
+    counts = researcher(llm:).call(@run)
+    assert_equal 1, counts["research_error"]
+    assert_equal [ @org.id ], @run.reload.stats["researched"]
+  end
+
   test "the night's run keeps who it read, and the daily cap stops it before a model call" do
     counts = researcher(llm: FakeLlm.new(extract: answer)).call(@run)
-    assert_equal 1, counts["researched"]
+    assert_equal 1, counts["research_count"]
     assert_equal [ @org.id ], @run.reload.stats["researched"]
 
     other = Organization.create!(name: "Second Fission", website: "https://second.example", verification_status: "pending")

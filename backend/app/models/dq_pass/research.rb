@@ -72,9 +72,16 @@ class DqPass::Research
     @run = run
     counts = Hash.new(0)
     due.each do |org|
-      result = research(org)
+      result = begin
+        research(org)
+      rescue DataQuality::OpenRouter::Client::Error => e
+        # One company's failed model call (an error, an invalid answer) is that company's, not the night's.
+        Rails.error.report(e, handled: true, context: { dq_pass_research: org.id })
+        { outcome: "error" }
+      end
       run.update!(stats: run.stats.merge("researched" => (run.stats["researched"].to_a + [ org.id ]).uniq))
-      counts["researched"] += 1
+      # The count under its own key: "researched" holds the companies' ids, which the weekly retry reads (Copilot).
+      counts["research_count"] += 1
       counts["research_#{result[:outcome]}"] += 1
     end
     counts.to_h
@@ -148,7 +155,9 @@ class DqPass::Research
       rows << { "action" => "propose_fields", "target" => org.id, "fields" => { "website" => accepted[:url] }, "source_url" => accepted[:url],
         "quote" => answer["website_quote"], "reason" => reason(answer, "its own home page"), "request_key" => key(org, "website") }
     end
-    own = org.website.present? ? pages.find { |page| page[:url] == home(org.website) } : accepted
+    # With a website, the one page read is its home page, wherever it redirected within the site (the Fetcher
+    # keeps redirects on the same site; Copilot): never compared by its URL string.
+    own = org.website.present? ? pages.first : accepted
     return rows unless own
 
     role = answer["role"].to_s
@@ -221,13 +230,14 @@ class DqPass::Research
     def finder = @finder ||= DataQuality::Plugins::LeadFinder.new
     def directory = @directory ||= DataQuality::DirectoryClient.new
 
-    # The cheap model for :extract, the strong one for :verify, on the pipeline's key and monthly guard.
+    # The cheap model for :extract, the strong one for :verify, on the pipeline's key and monthly guard. One
+    # attempt each: the daily cap is checked before every paid call, and the client's own retries wouldn't be (Copilot).
     def llm
       @llm ||= begin
         config = DataQuality::Config.from_env
         DataQuality::OpenRouter::Client.new(config: DataQuality::Config.new(api_key: config.api_key,
           extract_model: ENV["DQ_PASS_CHEAP_MODEL"].presence || CHEAP, verify_model: ENV["DQ_PASS_STRONG_MODEL"].presence || STRONG,
-          monthly_budget: config.monthly_budget, read_timeout: 60, max_attempts: 2))
+          monthly_budget: config.monthly_budget, read_timeout: 60, max_attempts: 1))
       end
     end
 end
