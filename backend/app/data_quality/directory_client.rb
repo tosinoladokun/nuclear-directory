@@ -81,6 +81,7 @@ class DataQuality::DirectoryClient
   # plant ID yet, to find by name and state.
   def plants_without_eia_plant_id = lookup.plants_without_eia_plant_id
   def normalize_facility_name(name) = lookup.normalize_facility_name(name)
+  def normalize_organization_name(name) = lookup.normalize_organization_name(name)
 
   # Runs the block with the candidate's attached fact locked, unless it was
   # rejected or unpublished meanwhile: then returns that fact's Record and
