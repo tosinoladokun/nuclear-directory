@@ -370,13 +370,22 @@ module AdminHelper
     payload = item.payload.to_h
     return claim_text(item) unless entry.kind == "new_record"
 
-    name = payload["name"].to_s
+    # Data Quality's name for it (#1000) is the name it's created under.
+    name = proposed_name_claim(entry)&.payload&.dig("name").presence || payload["name"].to_s
     city = payload["hq_city"].presence || payload["city"].presence
     state = payload["hq_state"].presence || payload["state"].presence
     where = [ city, state ].compact.join(", ")
     what = item.kind == "facility" ? "a plant" : "a company"
     safe_join([ tag.strong(name), ": #{what}#{" in #{where}" if where.present?}.",
       (" #{payload['description'].to_s.strip}" if payload["description"].present?) ].compact)
+  end
+
+  # The claim with Data Quality's name for a new company (#1000) going with this Create, or nil.
+  def proposed_name_claim(entry)
+    return if entry.kind != "new_record" || entry.copy_ids.empty?
+
+    named = DqAction.where(candidate_id: entry.copy_ids, action: "propose_fields").pluck(:candidate_id)
+    Candidate.where(id: named, kind: "organization").order(:id).find { |claim| claim.payload.to_h.key?("aliases") }
   end
 
   # A decision in Recently decided (#548): "Created Bluefield Fission",

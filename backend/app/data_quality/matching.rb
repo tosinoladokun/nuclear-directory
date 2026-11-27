@@ -33,6 +33,7 @@ module DataQuality::Matching
   # Plus the short name a chart or tight label shows ("TVA", "FPL"; #909), 30 characters at most, as the column allows.
   FIELDS = %w[website description short_description hq_city hq_state sec_cik legal_name country_code ticker exchange short_name].freeze
   MAX_SHORT_NAME = 30
+  MAX_NAME = 120
   TICKER = /\A[A-Z0-9][A-Z0-9.\-]{0,7}\z/
   EXCHANGE = /\A[A-Za-z][A-Za-z .&-]{1,19}\z/
   # What a cover calls an exchange, besides its short name: the quote must name the ticker AND the exchange, so a ticker can't ride on an
@@ -276,11 +277,19 @@ module DataQuality::Matching
       return fail_with.call("give the other company: its id or slug") if row["other"].blank?
       return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if row["description"].to_s.length > MAX_DESCRIPTION
     else
-      return fail_with.call("give fields: one or more of #{FIELDS.join(', ')}") if fields.empty?
-      return fail_with.call("only #{FIELDS.join(', ')} can be proposed") unless (fields.keys - FIELDS).empty?
+      return fail_with.call("give fields: one or more of #{(FIELDS + [ 'name' ]).join(', ')}") if fields.empty?
+      return fail_with.call("only #{FIELDS.join(', ')} (and name, for a pending company) can be proposed") unless (fields.keys - FIELDS - [ "name" ]).empty?
       return fail_with.call("give a value for every field") if fields.values.any?(&:blank?)
       return fail_with.call("a short description is #{ShortDescription::MAX} characters at most") if fields["short_description"].to_s.length > ShortDescription::MAX
       return fail_with.call("a description is #{MAX_DESCRIPTION} characters at most") if fields["description"].to_s.length > MAX_DESCRIPTION
+      # A pending company's display name (#1000): the brand its own page or
+      # record uses, quoted, so the source must say it as a whole name.
+      if fields.key?("name")
+        return fail_with.call("a name is #{MAX_NAME} characters at most") if fields["name"].length > MAX_NAME
+        unless quote.match?(/(?<![[:alnum:]])#{Regexp.escape(fields['name'])}(?![[:alnum:]])/i)
+          return fail_with.call("the quote must contain the name #{fields['name']}")
+        end
+      end
       if fields.key?("short_name")
         return fail_with.call("a short name is #{MAX_SHORT_NAME} characters at most") if fields["short_name"].length > MAX_SHORT_NAME
         # The source must use the short name itself, as a whole word, so it can't ride on an unrelated quote.
@@ -319,6 +328,14 @@ module DataQuality::Matching
     Candidate.transaction do
       record, error = target(row, directory)
       raise Abort, error if error
+      if fields.key?("name")
+        # Only before Create: a published company's name changes by a reviewed change, never this way.
+        raise Abort, "#{record.name} is published; its name can't be proposed this way" unless record.verification_status == "pending"
+        raise Abort, "#{fields['name'].inspect} is already its name" if fields["name"] == record.name
+        if (holder = directory.organization(name: fields["name"])) && holder.id != record.id
+          raise Abort, "#{fields['name'].inspect} is #{holder.name}'s (##{holder.id}); if they're the same company, settle it with same_as"
+        end
+      end
       if fields["sec_cik"] && (holder = directory.organization(sec_cik: fields["sec_cik"])) && holder.id != record.id
         raise Abort, "CIK #{fields['sec_cik']} is already #{holder.name}'s (##{holder.id})"
       end
@@ -336,7 +353,10 @@ module DataQuality::Matching
         [ "relationship", { "from_organization" => { "name" => record.name }, "to_organization" => { "name" => other.name },
                             "relationship_type" => row["relationship_type"].to_s, "description" => row["description"].to_s.squish.presence }.compact ]
       else
-        [ "organization", { "name" => record.name }.merge(fields) ]
+        # A proposed name replaces the crawler's spelling at Create; that spelling stays an alias, so
+        # later matches still find the company by it (#1000).
+        renamed = fields.key?("name") ? { "aliases" => [ record.name ] } : {}
+        [ "organization", { "name" => record.name }.merge(fields, renamed) ]
       end
       claim = Candidate.create!(source_id: source.ref.id, kind:, status: "new", quote:, payload:, notes: "Data Quality proposed it: #{reason}")
       DqAction.create!(candidate: claim, action:, target_type: "Organization", target_id: record.id, reason:,

@@ -173,6 +173,12 @@ class DataQuality::DirectoryClient
   # the record's verification alone, since it doesn't vouch for the record
   # itself; even when a human approves it, it doesn't overwrite a
   # human-verified value (that comes back as a conflict).
+  # Data Quality's proposed name (#1000) for the company it named, as matched.
+  def proposed_name?(candidate)
+    candidate.kind == "organization" && candidate.subject_type == "Organization" && candidate.payload.to_h.key?("aliases") &&
+      DqAction.where(candidate_id: candidate.id, action: "propose_fields", target_type: "Organization", target_id: candidate.subject_id).exists?
+  end
+
   def write_fact(candidate, confidence:, crawl_run:, by: nil, reason: nil, edited: false)
     # The record written is the one match attached, never an id, a link end or
     # a slug in the payload (payloads aren't validated; Review locks these too).
@@ -184,7 +190,18 @@ class DataQuality::DirectoryClient
       # The name it was found under becomes an alias only once a verdict accepts
       # it, and a matched company keeps its own name.
       attributes[:aliases] = [ *attributes[:aliases], attributes[:name] ].compact_blank.uniq
-      attributes.delete(:name) if candidate.subject_id
+      # Except Data Quality's name for the pending company it named (#1000): that name is the claim,
+      # and the crawler's spelling (in its aliases) stays an alias.
+      if candidate.subject_id && !proposed_name?(candidate)
+        attributes.delete(:name)
+      elsif candidate.subject_id
+        attributes[:aliases] -= [ attributes[:name] ]
+        # Its page's address follows the name it's created under, when free; the
+        # crawler's one is kept as a former slug, so any link to it still works.
+        slug = attributes[:name].to_s.parameterize
+        taken = organization_by_slug(slug) || former_slug_id(type: "Organization", slug:)
+        attributes[:slug] = slug if slug.present? && !taken
+      end
     end
     # A matched plant keeps its own name too: a candidate found under one of its
     # aliases ("Three Mile Island Unit 1") mustn't rename Crane.
