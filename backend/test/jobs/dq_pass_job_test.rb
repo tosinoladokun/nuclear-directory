@@ -157,6 +157,15 @@ class DqPassJobTest < ActiveSupport::TestCase
     assert_nil DqPass.stalled(now: NOW + 1.day), "off again"
   end
 
+  test "never reject: a university, lab, government body or investor by name or role, or a company a person suggested" do
+    assert DqPass.never_reject?(Organization.new(name: "Example University"))
+    assert DqPass.never_reject?(Organization.new(name: "Atom Capital"))
+    assert DqPass.never_reject?(Organization.new(name: "Tennessee Valley Authority"))
+    assert_not DqPass.never_reject?(Organization.create!(name: "Limelight Steel", verification_status: "pending"))
+    Lead.sighted!(name: "Suggested Steel", kind: "company", key: "admin:suggest:suggested steel", label: "Added in the admin")
+    assert DqPass.never_reject?(Organization.create!(name: "Suggested Steel", verification_status: "pending"))
+  end
+
   test "a just switched-on pass isn't stalled before its first night" do
     travel_to(NOW - 1.hour) { Switch.set!(DqPass::KEY, true, by: "human:tosin") }
     assert_nil DqPass.stalled(now: NOW)

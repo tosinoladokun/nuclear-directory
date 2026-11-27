@@ -26,6 +26,20 @@ module DqPass
 
   def self.on? = Switch.on?(KEY)
 
+  # Never recommended for reject by the pass, in code or by a model (Data
+  # Quality, 28 Nov): a university, a national lab or a government body (a
+  # model reads those), an investor, or a company a person suggested.
+  NEVER_REJECT = /\b(?:universit(?:y|ies)|college|institute of technology|national lab(?:oratory)?|laboratory|department of|u\.s\. |agency|administration|authority|commission|capital|ventures|partners|fund)\b/i
+  NEVER_REJECT_ROLES = %w[venture_capital university national_lab government_agency].freeze
+
+  def self.never_reject?(org)
+    org.name.to_s.match?(NEVER_REJECT) ||
+      OrganizationRole.where(organization_id: org.id, role: Role.where(key: NEVER_REJECT_ROLES)).exists? ||
+      Lead.where(kind: "company", normalized_name: Lead.normalize(org.name)).any? do |lead|
+        lead.sources.any? { |source| source["key"].to_s.match?(DataQuality::Plugins::LeadFinder::PERSON_KEYS) }
+      end
+  end
+
   # Model spend today (UTC) by the pass and the checker together.
   def self.spent_today(now: Time.current)
     CrawlRun.where(source_kind: [ SOURCE_KIND, DqChecker::SOURCE_KIND ], started_at: now.utc.beginning_of_day..)
