@@ -297,8 +297,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         url if URI(url).host.to_s.downcase.delete_prefix("www.") == host && "#{URI(url).path} #{link.text}".match?(NUCLEAR_LINK) &&
           Source.bare_homepage(url) != Source.bare_homepage(base)
       end.uniq.first(3)
-      # Then its contact, about or investor pages, where a company often says what it builds (#1015).
-      links = (links + own_links(home, CONTACT, 3)).uniq.first(4)
+      # Then its contact, about or investor pages, where a company often says what it builds (#1015); the daily
+      # budget, not a cap here, limits how many are read (Copilot).
+      links = (links + own_links(home, CONTACT, 3)).uniq
       links.each do |url|
         break unless reserve(NUCLEAR_PAGES, NUCLEAR_PAGES_PER_DAY)
 
@@ -347,13 +348,19 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         end
         [ data ].flatten.flat_map { |item| item.is_a?(Hash) && item["@graph"].is_a?(Array) ? item["@graph"] : [ item ] }
       end
+      # The whole name, legal ending and punctuation aside: never "Energy" or "Hadron Energy Holdings" for Hadron Energy (Copilot).
+      wanted = OrganizationAlias.normalize(name)
       own = blocks.select do |block|
         block.is_a?(Hash) && (Array(block["@type"]) & ORGANIZATION_TYPES).any? && block["name"].is_a?(String) &&
-          (names?(block["name"], name) || names?(name, brand(block["name"])))
+          OrganizationAlias.normalize(block["name"]) == wanted
       end
-      lines = own.flat_map { |block| [ block["address"] ].flatten }.select { |address| address.is_a?(Hash) }.map do |address|
+      addresses = own.flat_map { |block| [ block["address"] ].flatten }.select { |address| address.is_a?(Hash) }
+      lines = addresses.filter_map do |address|
         country = address["addressCountry"].is_a?(Hash) ? address["addressCountry"]["name"] : address["addressCountry"]
-        country = "United States" if country.to_s.match?(/\A(?:US|USA|U\.S\.A?\.?)\z/i)
+        # An address stated in another country is never US evidence ("Perth, WA 6000, AU"; Copilot).
+        next if country.present? && !country.to_s.match?(/\A(?:US|USA|U\.S\.A?\.?|United States(?: of America)?)\z/i)
+
+        country = "United States" if country.present?
         place = [ address["addressLocality"], [ address["addressRegion"], address["postalCode"] ].compact.join(" ").presence ].compact.join(", ")
         [ place.presence, country.presence ].compact.join(", ")
       end

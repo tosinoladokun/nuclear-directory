@@ -89,6 +89,20 @@ class DataQuality::FetcherTest < ActiveSupport::TestCase
     assert_match "Bot challenge (captcha page, HTTP 202)", response.reason
   end
 
+  test "a captcha with its meta attributes the other way round, as a 200, is a block too (Copilot)" do
+    stub_request(:get, PAGE).to_return(status: 200, headers: { "Content-Type" => "text/html" },
+      body: "<html><head><meta content=\"0;url=/.well-known/sgcaptcha/\" http-equiv=\"refresh\"></head></html>")
+    assert_equal :blocked, @fetcher.get(PAGE).kind
+  end
+
+  test "a captcha served as robots.txt blocks the site, never 'no rules' (Copilot)" do
+    stub_request(:get, ROBOTS).to_return(status: 202, headers: { "Content-Type" => "text/html" },
+      body: "<html><head><meta http-equiv=\"refresh\" content=\"0;/.well-known/sgcaptcha/?r=%2Frobots.txt\"></head></html>")
+    page = stub_request(:get, PAGE)
+    assert_equal :blocked, @fetcher.get(PAGE).kind
+    assert_not_requested page
+  end
+
   test "never fetches what robots.txt disallows" do
     response = @fetcher.get("https://example.gov/private/page")
 

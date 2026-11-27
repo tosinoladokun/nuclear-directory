@@ -214,7 +214,8 @@ class DataQuality::Fetcher
       return classify(robots_uri.to_s, fetched) if challenge?(fetched.http)
 
       case status
-      when 200..299 then DataQuality::Robots.parse(body_of(fetched))
+      # A captcha served as robots.txt is a block too, never "no rules" (Copilot, #1015).
+      when 200..299 then captcha_page?(fetched) ? classify(robots_uri.to_s, fetched) : DataQuality::Robots.parse(body_of(fetched))
       when 401, 403 then classify(robots_uri.to_s, fetched)
       when 400..499 then DataQuality::Robots.parse("")
       else response(robots_uri.to_s, :error, status:, reason: "robots.txt returned #{status}; not crawling #{uri.host}")
@@ -304,13 +305,13 @@ class DataQuality::Fetcher
 
     def challenge?(http) = http["cf-mitigated"].to_s.casecmp?("challenge")
 
-    # A short page that only refreshes to a captcha or challenge, or a 202 that only refreshes elsewhere.
-    CAPTCHA_REFRESH = /<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*(?:captcha|challenge)/i
+    # A short page that only refreshes to a captcha or challenge, or a 202 that only refreshes elsewhere. The meta
+    # tag's attributes are matched in either order (Copilot).
     def captcha_page?(fetched)
       return false if fetched.body.to_s.bytesize > 4_096
 
-      body = body_of(fetched)
-      body.match?(CAPTCHA_REFRESH) || (fetched.http.code.to_i == 202 && body.match?(/<meta[^>]+http-equiv=["']?refresh/i))
+      refreshes = body_of(fetched).scan(/<meta\b[^>]*>/i).select { |tag| tag.match?(/http-equiv\s*=\s*["']?refresh/i) }
+      refreshes.any? { |tag| tag.match?(/content\s*=\s*["'][^"']*(?:captcha|challenge)/i) } || (fetched.http.code.to_i == 202 && refreshes.any?)
     end
 
     def response(url, kind, status: nil, body: nil, etag: nil, last_modified: nil, reason: nil, block_reference: nil,

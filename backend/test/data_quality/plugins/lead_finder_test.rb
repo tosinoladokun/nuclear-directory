@@ -579,6 +579,16 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_nil plugin.send(:structured_address, parent, "Terrestrial Energy")
     own = Source.new(url: "https://terrestrialusa.example", content_text: TERRESTRIAL_SHELL)
     assert_equal "Charlotte, NC 28217, United States", plugin.send(:structured_address, own, "Terrestrial Energy")
+    assert_equal "Charlotte, NC 28217, United States", plugin.send(:structured_address, own, "Terrestrial Energy Inc."), "legal ending aside"
+    # Only the whole name: a block named "Energy" or "Terrestrial Energy Holdings" isn't the company's (Copilot).
+    [ "Energy", "Terrestrial Energy Holdings" ].each do |other|
+      page = Source.new(url: "https://terrestrialusa.example", content_text: TERRESTRIAL_SHELL.sub('"name": "Terrestrial Energy"', "\"name\": \"#{other}\""))
+      assert_nil plugin.send(:structured_address, page, "Terrestrial Energy"), other
+    end
+    # An address in another country is never US, even when it looks like City, ST (Copilot).
+    perth = Source.new(url: "https://terrestrialusa.example", content_text: TERRESTRIAL_SHELL.sub('"addressLocality": "Charlotte"', '"addressLocality": "Perth"')
+      .sub('"addressRegion": "NC"', '"addressRegion": "WA"').sub('"postalCode": "28217"', '"postalCode": "6000"').sub('"addressCountry": "US"', '"addressCountry": "AU"'))
+    assert_nil plugin.send(:structured_address, perth, "Terrestrial Energy")
   end
 
   test "a page's canonical address of the same brand is followed like a link; another brand's never is (#1015)" do
@@ -591,9 +601,12 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
 
   test "the nuclear sentence may be on the investor page, for any lead (#1015: Hadron, Deep Fission)" do
     stub_request(:get, %r{\Ahttps://www\.hadron\.example/robots\.txt}).to_return(status: 404)
+    # Three nuclear-titled links first, then contact, about and investor: the investor page is still tried (Copilot).
+    nuclear_links = %w[/reactor /fission /nuclear-safety].map { |path| "<a href=\"#{path}\">#{path}</a>" }.join
     html_page("https://www.hadron.example", "<html><head><title>Hadron Energy</title></head><body><p>Hadron Energy. Always on. Always ready.</p>" \
-      "<p>Resilient power from a micro modular reactor.</p><p>3 Twin Dolphin Drive, Redwood City, CA 94065</p>" \
-      "<a href=\"/investor-relations\">Investor relations</a></body></html>")
+      "<p>Resilient power from a micro modular reactor.</p><p>3 Twin Dolphin Drive, Redwood City, CA 94065</p>#{nuclear_links}" \
+      "<a href=\"/contact\">Contact</a><a href=\"/about\">About</a><a href=\"/investor-relations\">Investor relations</a></body></html>")
+    %w[/reactor /fission /nuclear-safety /contact /about].each { |path| html_page("https://www.hadron.example#{path}", "<html><body><p>Hadron Energy news.</p></body></html>") }
     html_page("https://www.hadron.example/investor-relations", "<html><body><p>Hadron Energy is developing a 10 MW electric micro modular " \
       "reactor (MMR) designed for factory manufacturing.</p></body></html>")
 
