@@ -34,6 +34,9 @@ module DataQuality::LogoSpec
   SYMBOL_MAX_SIDE = 36.0
   WORDMARK_OPTICAL = 44.0
   WORDMARK_MAX_HEIGHT = 24.0
+  # Rule 8: at most this share of the visible pixels may be lighter than one ink keeps (L* over 90).
+  MAX_LIGHT_SHARE = 0.05
+  LIGHT_REASON = "Part of the logo is white or very light. Use the version made for light backgrounds.".freeze
   MIN_COVERAGE = 0.15
   MAX_COVERAGE = 0.85
   # A disc 4.5px across in the 3× mask: offsets within 2.25px of the centre.
@@ -45,14 +48,16 @@ module DataQuality::LogoSpec
   SVG_NS = "http://www.w3.org/2000/svg"
   FILL = %w[fill fill-rule fill-opacity].freeze
   STROKE = %w[stroke stroke-width stroke-linecap stroke-linejoin stroke-miterlimit stroke-dasharray stroke-dashoffset stroke-opacity].freeze
-  # clipPath is on the allow-list, so a shape may point at one and the clipPath needs an id to be pointed at.
   CLIP = %w[clip-path clip-rule].freeze
+  # id on any allowed element (Tosin, 27 Nov): Illustrator and Inkscape put one on almost every shape. It only names
+  # a part; a clip-path may still point only to a clipPath (check_clip_references).
+  NAMES = %w[id].freeze
   PAINT = (FILL + STROKE + CLIP + %w[transform]).freeze
   ELEMENTS = {
-    "svg" => %w[version id viewBox width height preserveAspectRatio],
+    "svg" => %w[version viewBox width height preserveAspectRatio],
     "g" => [],
     "defs" => [],
-    "clipPath" => %w[id clipPathUnits],
+    "clipPath" => %w[clipPathUnits],
     "path" => %w[d pathLength],
     "rect" => %w[x y width height rx ry],
     "circle" => %w[cx cy r],
@@ -196,7 +201,7 @@ module DataQuality::LogoSpec
   end
 
   def self.check_attributes(element)
-    allowed = ELEMENTS.fetch(element.name) + PAINT
+    allowed = ELEMENTS.fetch(element.name) + PAINT + NAMES
     element.attribute_nodes.each do |attr|
       name = attr.namespace ? "#{attr.namespace.prefix}:#{attr.name}" : attr.name
       value = attr.value.to_s
@@ -257,10 +262,24 @@ module DataQuality::LogoSpec
     [ ink.ifthenelse(255, 0).cast(:uchar), rgb, ink ]
   end
 
+  # Of the visible pixels (alpha of 8% or more), the share lighter than one ink keeps (L* over 90).
+  def self.light_share(image)
+    visible = image.extract_band(3) >= INK_ALPHA
+    light = visible & (image.extract_band(0, n: 3).colourspace(:lab).extract_band(0) > INK_LIGHTNESS)
+    shown = visible.avg
+    shown.zero? ? 0.0 : light.avg / shown
+  end
+
   def self.finish(image, rerender:, steps:, source_type:, source_sha256:)
     mask, rgb, ink = one_ink(image)
     steps << "one ink: kept pixels with alpha of 8% or more and L* of 90 or less"
     raise Reject, "the one-ink version is empty (a logo made for dark backgrounds?)" if mask.max.zero?
+    # Rule 8, on the file as read (an SVG's measuring render), before trimming: a lockup whose name is white must
+    # not quietly become its symbol alone (Kairos Power's homepage logo, 27 Nov).
+    light = light_share(image)
+    # Recorded before deciding, so a rejected file keeps the measurement that explains it (Copilot).
+    steps << "#{(light * 100).round(1)}% of the visible pixels are lighter than L* 90 (at most 5%)"
+    raise Reject, LIGHT_REASON if light > MAX_LIGHT_SHARE
 
     multicolour = multicolour?(rgb, ink)
     left, top, width, height = mask.find_trim(threshold: 0, background: [ 0 ])
