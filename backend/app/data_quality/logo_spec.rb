@@ -277,8 +277,9 @@ module DataQuality::LogoSpec
     # Rule 8, on the file as read (an SVG's measuring render), before trimming: a lockup whose name is white must
     # not quietly become its symbol alone (Kairos Power's homepage logo, 27 Nov).
     light = light_share(image)
-    raise Reject, LIGHT_REASON if light > MAX_LIGHT_SHARE
+    # Recorded before deciding, so a rejected file keeps the measurement that explains it (Copilot).
     steps << "#{(light * 100).round(1)}% of the visible pixels are lighter than L* 90 (at most 5%)"
+    raise Reject, LIGHT_REASON if light > MAX_LIGHT_SHARE
 
     multicolour = multicolour?(rgb, ink)
     left, top, width, height = mask.find_trim(threshold: 0, background: [ 0 ])

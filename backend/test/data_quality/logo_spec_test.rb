@@ -122,7 +122,9 @@ class DataQuality::LogoSpecTest < ActiveSupport::TestCase
   test "rule 8: a lockup with a white name is rejected, not cut down to its symbol (Kairos Power, 27 Nov)" do
     lockup = svg('<circle cx="40" cy="50" r="35" fill="#1d4ed8"/>' + (0..3).map { |i| %(<rect x="#{100 + (i * 60)}" y="30" width="40" height="40" fill="#fff"/>) }.join,
       view: "0 0 340 100")
-    assert_rejected process(lockup), /\APart of the logo is white or very light\. Use the version made for light backgrounds\.\z/
+    rejected = process(lockup)
+    assert_rejected rejected, /\APart of the logo is white or very light\. Use the version made for light backgrounds\.\z/
+    assert rejected.steps.any? { |step| step.match?(/\A\d+(\.\d)?% of the visible pixels are lighter than L\* 90/) }, "the rejection keeps its measurement (Copilot)"
     big_hole = svg(DISC + '<circle cx="50" cy="50" r="15" fill="#fff"/>')
     assert_rejected process(big_hole), /white or very light/
     assert_not process(svg('<circle cx="50" cy="50" r="40" fill="#fff"/>')).reason.match?(/white or very light/), "all white is rule 7's empty one-ink version"
