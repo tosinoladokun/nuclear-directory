@@ -516,6 +516,28 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert plugin.send(:us_text?, "Acme is incorporated in Delaware and headquartered in Austin, Texas")
   end
 
+  test "'formed in' a year keeps the founding city; 'formed under the laws of' or in a state is incorporation (#994, DQ)" do
+    plugin = Plugin.new(search_key: nil)
+    assert plugin.send(:us_text?, "Acme Fission was formed in 2019 in Austin, Texas")
+    assert_not plugin.send(:us_text?, "Nuclearis Energy was formed under the laws of Delaware, Wilmington, Delaware")
+    assert_not plugin.send(:us_text?, "Nuclearis Energy was formed in Wilmington, Delaware and is based in Buenos Aires, Argentina")
+  end
+
+  test "a script-built home page whose brand's main domain is already listed is a duplicate, never a claim (#994, Infra)" do
+    stub_request(:get, %r{\Ahttps://terrestrialusa\.example/robots\.txt}).to_return(status: 404)
+    html_page("https://terrestrialusa.example", "<html><head><title>Terrestrial Energy: the most capital-efficient SMR</title></head>" \
+      "<body><div id=\"root\"></div><a href=\"https://www.terrestrialenergy.example/\"></a></body></html>")
+    listed = Organization.create!(name: "Terrestrial Energy Inc.", domain: "terrestrialenergy.example", verification_status: "verified",
+      verified_by: "human:tosin")
+
+    result = Plugin.call(listed_lead("terrestrialusa.example", "https://terrestrialusa.example").id, finder: finder)
+    assert_equal :duplicate, result.outcome, result.reason
+    assert_equal listed.id, result.organization_id
+    assert_match "already listed", result.reason
+    assert_not Candidate.exists?(kind: "organization"), "no claim"
+    assert_not_requested :get, %r{terrestrialenergy\.example}
+  end
+
   test "US forms: 'U.S.' before a space, City, ST and City, State; never a lone two-letter word" do
     [ "a U.S. company", "Indianapolis, IN 46204", "Charlotte, NC headquarters", "headquartered in Idaho Falls, Idaho", "Frederick, Maryland" ].each do |text|
       assert_match Plugin::US, text
