@@ -138,6 +138,10 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # whose kept claim blocks instead. Only unplaced claims: one matched to a
   # company goes on to Match, which keeps one per fact and replaces a quote
   # the file no longer has (Match#settle).
+  def earlier_claims(source)
+    source.candidates.where(kind: "organization", subject_id: nil, status: %w[new matched needs_review rejected])
+  end
+
   def waiting_claim(attrs, earlier_claims)
     return unless attrs[:kind].to_s == "organization"
 

@@ -69,12 +69,16 @@ class DataQuality::Plugin
   # can't hide a dropped fact.
   def blocks_dropped_check?(_candidate) = true
 
-  # The claim from an earlier read of this source, open (new, matched or
-  # needs review) or rejected, that an extracted claim repeats, so this read
-  # doesn't propose it again (#996); nil to propose it. An open one is seen
-  # again by this read: it takes this read's quote and run (Stages::Extract).
-  # Default: none; each read's rows replace the last read's untouched ones
-  # (Stages::Extract#stale).
+  # The claims from earlier reads of a source that a new read may repeat
+  # (#996), as a query, or nil when the plug-in never holds a claim back
+  # (#1038): then extract runs no query for them. Default: nil.
+  def earlier_claims(_source) = nil
+
+  # The claim among earlier_claims that an extracted claim repeats, so this
+  # read doesn't propose it again (#996); nil to propose it. An open one is
+  # seen again by this read: it takes this read's quote and run
+  # (Stages::Extract). Default: none; each read's rows replace the last
+  # read's untouched ones (Stages::Extract#stale).
   def waiting_claim(_attrs, _earlier_claims) = nil
 
   # Verify (#15) asks these two questions of the plug-in, because only it
