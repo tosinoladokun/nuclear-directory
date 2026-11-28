@@ -76,6 +76,10 @@ class QueueWatchdog
   def catch_up
     paused = SolidQueue::Pause.pluck(:queue_name)
     missed = SolidQueue::RecurringTask.static.where.not(key: NO_CATCH_UP).filter_map do |task|
+      # A task the running code can't load (a deploy's overlap: the old instance sees the new code's task) is left
+      # to the code that has it, never enqueued from here (#938).
+      next if task.class_name.present? && task.class_name.safe_constantize.nil?
+
       due = task.previous_time
       next if due > @now - LATE || due < @now - MAX_LATE
       # Daily or rarer only: 20 hours allows a DST day of 23 (Copilot: hourly and 3-hourly tasks stay out).
