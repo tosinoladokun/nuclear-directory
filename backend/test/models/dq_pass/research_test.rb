@@ -20,6 +20,7 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
 
     # The lead finder's own test, on the page as stored.
     def own_site_for?(page, names) = DataQuality::Plugins::LeadFinder.new(search_key: nil).own_site_for?(page, names)
+    def site_names(page) = DataQuality::Plugins::LeadFinder.new(search_key: nil).site_names(page)
 
     def read_page(url)
       html = @pages[url] or return
@@ -115,7 +116,8 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
   test "a customer's page that mentions the company is never its site, and no role or reject comes from it (DQ, #1005)" do
     finder = FakeFinder.new(results: [ CUSTOMER ], pages: { CUSTOMER => CUSTOMER_PAGE })
     llm = FakeLlm.new(extract: answer(website: CUSTOMER, website_quote: "Acme Fission designs and builds microreactors for remote sites"))
-    assert_equal "nothing", researcher(llm:, finder:).research(@org)[:outcome]
+    assert_equal "no_own_page", researcher(llm:, finder:).research(@org)[:outcome]
+    assert_empty llm.asked, "no model reads another party's page (DQ's trial)"
 
     llm = FakeLlm.new(extract: answer(sure: false), verify: answer(website: nil, out_of_scope: true))
     source = Source.create!(url: "https://records.example/award/9", source_kind: "arpa_e_projects")
@@ -138,6 +140,73 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     claim = Candidate.create!(source:, kind: "organization", status: "matched", quote: "Organization: Example University", payload: { "name" => "Example University" }, subject: uni)
     researcher(llm: FakeLlm.new(extract: answer(sure: false), verify: answer(role: nil, out_of_scope: true))).research(uni)
     assert_nil claim.reload.dq_recommendation
+  end
+
+  test "candidates: the website a claim proposes and its records' own pages come first, and Brave isn't asked (DQ's trial)" do
+    source = Source.create!(url: "https://records.example/award/20", source_kind: "lead_finder")
+    Candidate.create!(source:, kind: "organization", status: "matched", quote: "Acme Fission", subject: @org,
+      payload: { "name" => "Acme Fission", "website" => HOME })
+    finder = FakeFinder.new(results: [ "https://unrelated.example" ], pages: { HOME => PAGE })
+    assert_equal "proposed", researcher(llm: FakeLlm.new(extract: answer), finder:).research(@org)[:outcome]
+    assert_empty finder.searched
+  end
+
+  test "news, aggregator and .gov or .edu hosts are never a company's candidates, unless the company is that kind of body (DQ's trial)" do
+    step = researcher(llm: FakeLlm.new(extract: answer))
+    %w[https://www.prnewswire.com https://factrail.ai https://interconnection.fyi https://www.eia.gov https://chem.rutgers.edu].each do |url|
+      assert_not step.allowed_host?(@org, url), url
+    end
+    assert step.allowed_host?(Organization.new(name: "Sandia National Laboratories"), "https://www.sandia.gov")
+    assert step.allowed_host?(Organization.new(name: "California Institute of Technology"), "https://www.caltech.edu")
+    assert step.allowed_host?(@org, HOME)
+  end
+
+  test "a short form the site gives itself in its title and address names the company (DQ's trial: SRP)" do
+    org = Organization.create!(name: "Salt River Project", verification_status: "pending")
+    CrawlRun.create!(source_kind: "lead_finder", stage: "crawl", stats: { DataQuality::Plugins::LeadFinder::SITE_FOR => org.id })
+    srp = "https://www.srpnet.example"
+    page = "<html><head><title>SRP | Arizona electric power and water</title></head><body><main><p>SRP operates Palo Verde with partners as a public power utility.</p></main></body></html>"
+    finder = FakeFinder.new(results: [ srp ], pages: { srp => page })
+    llm = FakeLlm.new(extract: answer(website: srp, website_quote: "SRP | Arizona electric power and water", role: "utility",
+      role_quote: "SRP operates Palo Verde with partners as a public power utility."))
+    Role.find_by(key: "utility") || Role.create!(key: "utility", name: "Utility")
+    assert_equal "proposed", researcher(llm:, finder:).research(org)[:outcome]
+    assert_equal "https://www.srpnet.example", proposals.find { |claim| claim.payload["website"] }&.payload&.dig("website")
+  end
+
+  test "a stored website gets the same checks: a news host, or a page that isn't its own, reaches no model (Copilot)" do
+    @org.update!(website: "https://www.prnewswire.com")
+    llm = FakeLlm.new(extract: answer)
+    assert_equal "no_own_page", researcher(llm:).research(@org)[:outcome]
+
+    @org.update!(website: CUSTOMER)
+    assert_equal "no_own_page", researcher(llm:, finder: FakeFinder.new(pages: { CUSTOMER => CUSTOMER_PAGE })).research(@org)[:outcome]
+    assert_empty llm.asked
+  end
+
+  test "a website proposal still waiting to be matched, targeted at the company, is a candidate (Copilot)" do
+    source = Source.create!(url: "https://records.example/proposal/1", source_kind: "web_page")
+    waiting = Candidate.create!(source:, kind: "organization", status: "new", quote: "Acme Fission", payload: { "name" => "Acme Fission", "website" => HOME })
+    DqAction.create!(candidate: waiting, action: "propose_fields", target_type: "Organization", target_id: @org.id, reason: "r", before: {}, created: [],
+      by: DataQuality::Matching::BY)
+    finder = FakeFinder.new(results: [ "https://unrelated.example" ], pages: { HOME => PAGE })
+    assert_equal "proposed", researcher(llm: FakeLlm.new(extract: answer), finder:).research(@org)[:outcome]
+    assert_empty finder.searched
+  end
+
+  test "when no page it holds is its own, Brave is asked (Copilot)" do
+    source = Source.create!(url: CUSTOMER, source_kind: "lead_finder")
+    Candidate.create!(source:, kind: "organization", status: "matched", quote: "Acme Fission", subject: @org, payload: { "name" => "Acme Fission" })
+    finder = FakeFinder.new(results: [ HOME ], pages: { CUSTOMER => CUSTOMER_PAGE, HOME => PAGE })
+    assert_equal "proposed", researcher(llm: FakeLlm.new(extract: answer), finder:).research(@org)[:outcome]
+    assert_equal [ "Acme Fission" ], finder.searched
+  end
+
+  test "the instructions say a fusion developer is reactor_vendor and an EPC firm is reactor_services (DQ's trial)" do
+    text = DqPass::Research::INSTRUCTIONS.squish
+    assert_includes text, "A fusion developer"
+    assert_includes text, "is reactor_vendor"
+    assert_includes text, "Engineering, construction or EPC firms are reactor_services, even when they also do waste"
   end
 
   test "a reject only when the strong model says it's out of scope, from its own site, as a recommendation on its open claims" do

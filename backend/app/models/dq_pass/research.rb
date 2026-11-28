@@ -53,7 +53,9 @@ class DqPass::Research
     - role: the one role key from the list that the company's own page states as its nuclear work, or null.
       role_quote: words copied exactly from a page given that state it. A utility, an operator, a lab or a
       university is what the page says it is. Engineering or maintenance services for nuclear plants are
-      reactor_services, not project_developer. A part or equipment maker is components.
+      reactor_services, not project_developer. A part or equipment maker is components. A fusion developer (it
+      designs or builds a fusion machine or power plant) is reactor_vendor. Engineering, construction or EPC firms
+      are reactor_services, even when they also do waste or decommissioning work.
     - out_of_scope: true only when the company's own page shows it does no nuclear work at all.
     - sure: false whenever you hesitate, the pages are thin, or the page may be another company's. Say why in reason.
     Copy quotes character for character; never shorten, join or fix them.
@@ -112,7 +114,8 @@ class DqPass::Research
   # One company: read, ask, check, propose. Returns { outcome:, answer:, proposed:, errors: }.
   def research(org)
     pages = pages_for(org)
-    return { outcome: "no_pages", answer: nil, proposed: [], errors: [] } if pages.empty?
+    # No page of its own: no model is asked (DQ's trial).
+    return { outcome: "no_own_page", answer: nil, proposed: [], errors: [] } if pages.empty?
 
     answer = ask(:extract, org, pages)
     answer = ask(:verify, org, pages).merge("escalated" => true) unless answer["sure"]
@@ -126,14 +129,62 @@ class DqPass::Research
     { outcome: results.any?(&:ok) ? "proposed" : "refused", answer:, proposed: rows, errors: results.reject(&:ok).map(&:error) }
   end
 
-  # The home pages to read: its website's, or Brave's first candidates.
+  # Hosts that are never a company's own site: news and wires, profiles and
+  # aggregators, and government or university sites (unless the company is
+  # that body, by name: a lab, an agency, a university). DQ's trial, 27 Nov:
+  # 13 of 20 searches gave only such pages.
+  NEVER_OWN = /(?:\A|\.)(?:prnewswire|businesswire|globenewswire|accessnewswire|world-nuclear-news|ans|nucnet|neimagazine|utilitydive|reuters|bloomberg|yahoo|linkedin|twitter|x|facebook|youtube|instagram|wikipedia|crunchbase|github|medium|cision|factrail|interconnection|google|sec)\.[a-z.]+\z/
+  PUBLIC_BODY = /\b(?:universit(?:y|ies)|college|institute|laboratory|laboratories|national lab|department|agency|administration|authority|commission)\b/i
+
+  # The company's own home pages to read, at most CANDIDATES: its website;
+  # else the website a claim already proposes, then its claims' own record
+  # pages; then Brave's results. Only a page that is the company's own site
+  # (the lead finder's own_site_for?, under its name or an alias) is kept, so
+  # no model reads another party's page (DQ's trial: most of the spend).
   def pages_for(org)
-    urls = org.website.present? ? [ home(org.website) ] : finder.search_sites(org.name).first(CANDIDATES)
-    urls.compact.uniq.filter_map do |url|
-      page = finder.read_page(url) or next
-      { url: home(page.final_url.presence || page.url) || url, title: page.title.to_s.squish, text: main_text(page.content_text), source: page }
-    end
+    names = names_of(org)
+    # Its stored website gets the same host and ownership checks as any other candidate (Copilot).
+    return [ own_page(org, home(org.website), names:) ].compact if org.website.present? && allowed_host?(org, home(org.website).to_s)
+    return [] if org.website.present?
+
+    # What it already holds first; Brave only when none of those is a usable page of its own (Copilot).
+    own = known_candidates(org).lazy.filter_map { |url| own_page(org, url, names:) }.first(CANDIDATES)
+    return own if own.any?
+
+    searched(org).lazy.filter_map { |url| own_page(org, url, names:) }.first(CANDIDATES)
   end
+
+  # The website a claim proposes for it (attached to it, or a field proposal still targeted at it through Data
+  # Quality's live action; Copilot), then its claims' own record pages.
+  def known_candidates(org)
+    claims = Candidate.where(kind: "organization", subject_type: "Organization", subject_id: org.id).includes(:source).order(:id).to_a
+    targeted = Candidate.where(kind: "organization", status: DataQuality::Recommendations::OPEN,
+      id: DqAction.live.where(action: "propose_fields", target_type: "Organization", target_id: org.id).select(:candidate_id)).to_a
+    proposed = (claims + targeted).filter_map { |claim| claim.payload.to_h["website"] if claim.payload.to_h["website"].is_a?(String) }
+    records = claims.filter_map { |claim| claim.source&.url }
+    (proposed + records).filter_map { |url| home(url) }.uniq.select { |url| allowed_host?(org, url) }
+  end
+
+  def searched(org) = finder.search_sites(org.name).to_a.filter_map { |url| home(url) }.uniq.select { |url| allowed_host?(org, url) }
+
+  def allowed_host?(org, url)
+    host = URI.parse(url).host.to_s.downcase
+    return false if host.match?(NEVER_OWN)
+    return org.name.to_s.match?(PUBLIC_BODY) if host.end_with?(".gov", ".edu", ".mil")
+
+    true
+  rescue URI::Error
+    false
+  end
+
+  def own_page(org, url, names:)
+    page = url && finder.read_page(url) or return
+    return unless finder.own_site_for?(page, names)
+
+    { url: home(page.final_url.presence || page.url) || url, title: page.title.to_s.squish, text: main_text(page.content_text), source: page }
+  end
+
+  def names_of(org) = [ org.name, *OrganizationAlias.where(organization_id: org.id).pluck(:alias) ]
 
   # The page's main text: <main> or <article> when there is one, else the body, without nav, footer, scripts or forms.
   def main_text(html)
@@ -192,10 +243,17 @@ class DqPass::Research
       names = [ org.name, *OrganizationAlias.where(organization_id: org.id).pluck(:alias) ]
       return false unless finder.own_site_for?(page[:source], names)
       return false unless self.class.quoted?(quote, page[:text]) || self.class.quoted?(quote, page[:title])
-      return false unless names.any? { |name| quote.to_s.downcase.include?(brand(name).downcase) }
+      return false unless names.any? { |name| quote.to_s.downcase.include?(brand(name).downcase) } || short_form_ok?(org, page, quote)
 
       host = URI.parse(page[:url]).host.to_s.downcase.delete_prefix("www.")
       !Organization.where.not(id: org.id).where("lower(website) ~ ?", "^https?://(www\\.)?#{Regexp.escape(host)}(/|$)").exists?
+    rescue URI::Error
+      false
+    end
+
+    def short_form_ok?(org, page, quote)
+      own_names = [ page[:title], *(page[:source] ? finder.site_names(page[:source]) : []) ]
+      DataQuality::ShortForm.names?(name: org.name, quote:, own_names:, host: URI.parse(page[:url]).host)
     rescue URI::Error
       false
     end

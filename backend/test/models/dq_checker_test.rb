@@ -111,6 +111,21 @@ class DqCheckerTest < ActiveSupport::TestCase
     assert_equal [ "unsure", "The stored page isn't the claimed site's own page" ], CheckerVerdict.find_by!(candidate: elsewhere).values_at(:verdict, :reason)
   end
 
+  test "a website quote by the short form its own site uses (SRP) can be approved, by the same rule as the pass (Copilot)" do
+    own = Source.create!(url: "https://www.srpnet.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "d",
+      content_text: "<html><head><title>SRP | Arizona electric power and water</title></head><body><p>Power and water.</p></body></html>")
+    company = Organization.create!(name: "Salt River Project", verification_status: "pending")
+    claim = Candidate.create!(source: own, kind: "organization", status: "needs_review", subject: company, quote: "SRP | Arizona electric power and water",
+      payload: { "name" => company.name, "website" => "https://srpnet.example" })
+    checker(FakeCheckerLlm.new(extract: [ [ "approve", "Its own home page" ] ])).run
+    assert_equal "approve", CheckerVerdict.find_by!(candidate: claim).verdict
+
+    assert DataQuality::ShortForm.names?(name: "Salt River Project", quote: "SRP | Arizona", own_names: "SRP | Arizona", host: "www.srpnet.com")
+    assert_not DataQuality::ShortForm.names?(name: "Salt River Project", quote: "SRP news", own_names: "Daily News", host: "srpnet.com"), "not its own title"
+    assert_not DataQuality::ShortForm.names?(name: "Salt River Project", quote: "SRP", own_names: "SRP", host: "azcentral.com"), "not its address"
+    assert_not DataQuality::ShortForm.names?(name: "Public Service Co of NM", quote: "PNM", own_names: "PNM", host: "pnm.com"), "PSCNM isn't PNM"
+  end
+
   test "checker-v2: a page too large to check its site here stays unsure, never loaded (Copilot)" do
     big = Source.create!(url: "https://www.bigsite.example/", source_kind: "web_page", crawl_status: "ok", content_sha256: "c",
       content_text: "<html><head><title>Big Site</title></head><body>Big Site builds reactors. #{'x' * (DqChecker::MAX_CHECKED + 10)}</body></html>")
