@@ -379,17 +379,30 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     assert_empty companies("13994"), "the name matched as the directory normalises it"
   end
 
-  test "a settled or closed company claim doesn't stop a new one, and another owner still gets its own (#996)" do
+  test "an owner rejected yesterday isn't proposed again today; a copy closed as a duplicate doesn't block (#996, DQ)" do
     DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
-    companies("13994").sole.update!(status: "rejected", notes: "Closed by a person")
+    rejected = companies("13994").sole
+    rejected.update!(status: "rejected", notes: "Out of scope: a utility with no nuclear role of its own")
+    companies("13100").sole.update!(status: "rejected", notes: "Duplicate of claim 1")
+
+    read_again!
+
+    assert_equal [ rejected.id ], companies("13994").map(&:id), "a person's No wins over a later read"
+    assert_equal %w[new rejected], companies("13100").map(&:status).sort, "a duplicate's close isn't a decision on the owner"
+  end
+
+  test "a merged company claim doesn't stop a new one, and another owner still gets its own (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    georgia = companies("7140").sole
+    georgia.update_columns(status: "merged", subject_type: "Organization", subject_id: @georgia_power.id)
     companies("13100").sole.update!(status: "needs_review", review_origin: "match")
-    other_id = Candidate.where(kind: "organization").find { |c| c.payload["eia_utility_id"] == "13100" }.payload.merge("eia_utility_id" => "99999")
+    other_id = companies("13100").sole.payload.merge("eia_utility_id" => "99999")
     assert_not plugin.already_waiting?({ kind: "organization", payload: other_id }, Candidate.where(kind: "organization").to_a),
       "the same name under another EIA utility ID is another owner"
 
     read_again!
 
-    assert_equal %w[new rejected], companies("13994").map(&:status).sort, "a closed claim doesn't block a new one"
+    assert_equal %w[merged new], companies("7140").map(&:status).sort, "a settled claim doesn't block"
     assert_equal 1, companies("13100").size
     assert_equal 1, companies("4744").size, "Dalton Utilities, never waiting, is proposed again"
   end

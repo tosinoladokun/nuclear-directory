@@ -26,6 +26,8 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # plants not proposed before are added a night (DQ, 19 Nov), the next ones
   # on later nights; plants proposed before are always read again.
   PLANTS_PER_NIGHT = 25
+  # How Data Quality closes a copy of a claim (#996).
+  DUPLICATE = /\Aduplicate of claim/i
 
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, plants_per_night: PLANTS_PER_NIGHT)
     @fetcher = fetcher
@@ -131,12 +133,20 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # An owner EIA's file names every night, and the directory can't place yet,
   # waits as one company claim until a person settles it (#996): the same
   # EIA utility ID, or when either has none, the same name as the directory
-  # normalises it. A settled or closed claim doesn't count.
-  def already_waiting?(attrs, open_claims)
+  # normalises it. A rejected claim blocks it too, as a person's decision wins
+  # over a later read (DQ, 27 Nov), except a copy closed as a duplicate,
+  # whose kept claim blocks instead. A merged or confirmed one doesn't.
+  def already_waiting?(attrs, earlier_claims)
     return false unless attrs[:kind].to_s == "organization"
 
     payload = attrs[:payload].to_h
-    open_claims.any? { |claim| claim.kind == "organization" && same_owner?(payload, claim.payload.to_h) }
+    earlier_claims.any? do |claim|
+      next false unless claim.kind == "organization"
+      next false if claim.status_rejected? && claim.notes.to_s.match?(DUPLICATE)
+      next false unless claim.status.in?(%w[new matched needs_review rejected])
+
+      same_owner?(payload, claim.payload.to_h)
+    end
   end
 
   private
