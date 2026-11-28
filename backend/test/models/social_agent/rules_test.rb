@@ -81,4 +81,23 @@ class SocialAgent::RulesTest < ActiveSupport::TestCase
     assert_match "source page touches a sensitive topic (contamination)",
       Rules.problems("The NRC received Acme Fission's construction permit application.", item, platform: "x", fetcher: OK.new(200, "after contamination was found")).join
   end
+
+  test "engineering terms aren't sensitive; real accident, injury and death wording still is (#1017)" do
+    fine = [ "Acme Fission finished a fatal flaws evaluation for the NRC application site.",
+      "Acme Fission filed a fatal-flaw study with its NRC application.",
+      "The NRC application includes severe accident mitigation analyses.",
+      "Acme Fission's NRC application covers accident tolerant fuel." ]
+    fine.each { |text| assert_nil Rules.sensitive(text), text }
+    assert_no_match "sensitive", Rules.problems(fine.first, item, platform: "x", fetcher: OK.new(200)).join
+    assert_empty Rules.source_problems("https://www.nrc.gov/notice",
+      OK.new(200, "<article><p>A fatal flaws evaluation found the site suitable. Severe accident mitigation analyses followed.</p></article>"))
+
+    { "A fatal accident closed the NRC site." => "fatal", "Two workers were injured at the NRC site." => "injured",
+      "One worker died after a fatal flaws evaluation." => "died", "A severe accident at the plant." => "accident",
+      "The fuel was accident tolerant until the accident." => "accident" }.each do |text, word|
+      assert_equal word, Rules.sensitive(text), text
+    end
+    assert_equal [ "its source page touches a sensitive topic (killed)" ], Rules.source_problems("https://www.nrc.gov/notice",
+      OK.new(200, "<article><p>A fatal flaws evaluation was done. A falling crane killed a worker.</p></article>"))
+  end
 end
