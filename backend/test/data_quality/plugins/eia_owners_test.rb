@@ -348,4 +348,49 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     second = Candidate.where(kind: "facility_relationship").pluck(Arel.sql("payload->'facility'->>'eia_plant_id'")).compact.uniq
     assert_equal 2, second.size, "the next plant the next night, the first one kept"
   end
+
+  # #996: 13 unplaced owners got a new company claim every night, all from one file.
+  def read_again!
+    source.update_columns(extracted_sha256: nil, extracted_rows_sha256: nil)
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[extract])
+  end
+
+  def companies(eia_id) = Candidate.where(kind: "organization").select { |c| c.payload["eia_utility_id"] == eia_id }
+
+  test "a second night's read adds no company claim for an owner whose claim is still open (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    waiting = companies("13994").sole
+    waiting.update!(status: "needs_review", review_origin: "match", notes: "No company found")
+    others = Candidate.where(kind: "organization").count
+
+    read_again!
+
+    assert_equal [ waiting.id ], companies("13994").map(&:id), "Oglethorpe still has one claim, the first"
+    assert_equal others, Candidate.where(kind: "organization").count, "nor does any other owner get a second"
+  end
+
+  test "an open claim under the same name with no EIA utility ID is the same owner (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    waiting = companies("13994").sole
+    waiting.update!(status: "needs_review", review_origin: "match", payload: waiting.payload.except("eia_utility_id").merge("name" => "OGLETHORPE POWER CORPORATION."))
+
+    read_again!
+
+    assert_empty companies("13994"), "the name matched as the directory normalises it"
+  end
+
+  test "a settled or closed company claim doesn't stop a new one, and another owner still gets its own (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    companies("13994").sole.update!(status: "rejected", notes: "Closed by a person")
+    companies("13100").sole.update!(status: "needs_review", review_origin: "match")
+    other_id = Candidate.where(kind: "organization").find { |c| c.payload["eia_utility_id"] == "13100" }.payload.merge("eia_utility_id" => "99999")
+    assert_not plugin.already_waiting?({ kind: "organization", payload: other_id }, Candidate.where(kind: "organization").to_a),
+      "the same name under another EIA utility ID is another owner"
+
+    read_again!
+
+    assert_equal %w[new rejected], companies("13994").map(&:status).sort, "a closed claim doesn't block a new one"
+    assert_equal 1, companies("13100").size
+    assert_equal 1, companies("4744").size, "Dalton Utilities, never waiting, is proposed again"
+  end
 end

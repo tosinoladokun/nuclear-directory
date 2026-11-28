@@ -128,7 +128,26 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     end
   end
 
+  # An owner EIA's file names every night, and the directory can't place yet,
+  # waits as one company claim until a person settles it (#996): the same
+  # EIA utility ID, or when either has none, the same name as the directory
+  # normalises it. A settled or closed claim doesn't count.
+  def already_waiting?(attrs, open_claims)
+    return false unless attrs[:kind].to_s == "organization"
+
+    payload = attrs[:payload].to_h
+    open_claims.any? { |claim| claim.kind == "organization" && same_owner?(payload, claim.payload.to_h) }
+  end
+
   private
+    def same_owner?(one, other)
+      ids = [ one["eia_utility_id"], other["eia_utility_id"] ]
+      return ids.first.to_s == ids.last.to_s if ids.all?(&:present?)
+
+      names = [ one["name"], other["name"] ].map { |name| @directory.normalize_organization_name(name) }
+      names.first.present? && names.first == names.last
+    end
+
     def year(file) = file[Plants::FILE_LINK, 1]
 
     # Each plant in the source's rows: { plant id => { eia_plant_id:, name:,

@@ -69,6 +69,12 @@ class DataQuality::Plugin
   # can't hide a dropped fact.
   def blocks_dropped_check?(_candidate) = true
 
+  # Whether an extracted claim is already waiting on this source as an open
+  # claim (new, matched or needs review) from an earlier read, so this read
+  # doesn't propose it again (#996). Default: never; each read's rows replace
+  # the last read's untouched ones (Stages::Extract#stale).
+  def already_waiting?(_attrs, _open_claims) = false
+
   # Verify (#15) asks these two questions of the plug-in, because only it
   # knows how its quotes were taken from the source.
 

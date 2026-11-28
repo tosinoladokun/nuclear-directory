@@ -10,6 +10,7 @@
 # rejected, or sent to review by a later stage) are left alone.
 class DataQuality::Stages::Extract < DataQuality::Stage
   BATCH = 25
+  OPEN = %w[new matched needs_review].freeze
   private
     def perform(run)
       stats = { "sources" => 0, "candidates" => 0, "unchanged" => 0, "empty" => 0 }
@@ -78,16 +79,20 @@ class DataQuality::Stages::Extract < DataQuality::Stage
           next false if source.content_sha256 != snapshot || source.extracted_sha256 == snapshot
 
           stale(source).delete_all
-          extracted.each { |attrs| source.candidates.create!(attrs) }
+          # A claim still open from an earlier read isn't proposed again (#996).
+          open_claims = source.candidates.where(status: OPEN).to_a
+          fresh = extracted.reject { |attrs| plugin.already_waiting?(attrs, open_claims) }
+          fresh.each { |attrs| source.candidates.create!(attrs) }
           source.update!(extracted_sha256: snapshot, extracted_rows_sha256: rows)
-          true
+          fresh.size
         end
 
         unless written
           stats["superseded"] = stats.fetch("superseded", 0) + 1
           next
         end
-        stats["candidates"] += extracted.size
+        stats["candidates"] += written
+        stats["already_waiting"] = stats.fetch("already_waiting", 0) + extracted.size - written if written < extracted.size
         stats["sources"] += 1
       end
 
