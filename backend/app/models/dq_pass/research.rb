@@ -27,7 +27,8 @@ class DqPass::Research
   CANDIDATES = 2
   CHEAP = "anthropic/claude-haiku-5.5".freeze
   STRONG = "anthropic/claude-sonnet-5.5".freeze
-  MAIN_DROP = "script, style, noscript, nav, footer, form, iframe, svg, aside".freeze
+  # Never <noscript>: a page drawn by script keeps its real text there (DQ, #1032).
+  MAIN_DROP = "script, style, nav, footer, form, iframe, svg, aside".freeze
 
   SCHEMA = {
     "type" => "object",
@@ -82,6 +83,8 @@ class DqPass::Research
         { outcome: "error" }
       end
       run.update!(stats: run.stats.merge("researched" => (run.stats["researched"].to_a + [ org.id ]).uniq))
+      # Each company's pages are freed before the next, so the web process's memory doesn't stack up (#1026).
+      GC.start
       # The count under its own key: "researched" holds the companies' ids, which the weekly retry reads (Copilot).
       counts["research_count"] += 1
       counts["research_#{result[:outcome]}"] += 1
@@ -177,11 +180,21 @@ class DqPass::Research
     false
   end
 
+  # How much of a page research parses, once its script, style and SVG blocks are dropped (Copilot; <noscript> kept): its head and
+  # the top of its body (title, site name, h1, logo and the start of its text), never a whole page of several MB. Parsing whole pages, about ten times each, added about
+  # 160 MB to the web process for 15 companies (28 Nov, #1026).
+  PAGE_SCAN = 400_000
+  Page = Data.define(:url, :final_url, :title, :content_text)
+
+  # The page, if it's the company's own: read once, cut to PAGE_SCAN, its own names read once.
   def own_page(org, url, names:)
     page = url && finder.read_page(url) or return
-    return unless finder.own_site_for?(page, names)
+    lite = Page.new(url: page.url, final_url: page.final_url, title: page.title,
+      content_text: DataQuality::PageTitle.without_code(page.content_text, bytes: PAGE_SCAN))
+    return unless finder.own_site_for?(lite, names)
 
-    { url: home(page.final_url.presence || page.url) || url, title: page.title.to_s.squish, text: main_text(page.content_text), source: page }
+    { url: home(lite.final_url.presence || lite.url) || url, title: lite.title.to_s.squish, text: main_text(lite.content_text),
+      site_names: finder.site_names(lite), source: lite }
   end
 
   def names_of(org) = [ org.name, *OrganizationAlias.where(organization_id: org.id).pluck(:alias) ]
@@ -244,7 +257,7 @@ class DqPass::Research
     # word for word on that page and naming it; and no other company's site.
     def website_ok?(org, page, quote)
       names = [ org.name, *OrganizationAlias.where(organization_id: org.id).pluck(:alias) ]
-      return false unless finder.own_site_for?(page[:source], names)
+      # Every page kept is its own already (own_page checked it, under the same names): not parsed again.
       return false unless self.class.quoted?(quote, page[:text]) || self.class.quoted?(quote, page[:title])
       return false unless names.any? { |name| quote.to_s.downcase.include?(brand(name).downcase) } || short_form_ok?(org, page, quote)
 
@@ -255,7 +268,7 @@ class DqPass::Research
     end
 
     def short_form_ok?(org, page, quote)
-      own_names = [ page[:title], *(page[:source] ? finder.site_names(page[:source]) : []) ]
+      own_names = [ page[:title], *page[:site_names] ]
       DataQuality::ShortForm.names?(name: org.name, quote:, own_names:, host: URI.parse(page[:url]).host)
     rescue URI::Error
       false
