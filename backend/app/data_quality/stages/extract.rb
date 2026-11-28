@@ -80,8 +80,14 @@ class DataQuality::Stages::Extract < DataQuality::Stage
 
           stale(source).delete_all
           # A claim still open, or closed by a person, from an earlier read isn't proposed again (#996).
+          # An open one is seen again: it quotes the row as it reads now and
+          # belongs to this read, so the dropped check and reconfirmation count it.
           earlier = source.candidates.where(status: EARLIER).to_a
-          fresh = extracted.reject { |attrs| plugin.already_waiting?(attrs, earlier) }
+          fresh = extracted.reject do |attrs|
+            waiting = plugin.waiting_claim(attrs, earlier) or next false
+            waiting.update!(quote: attrs[:quote], crawl_run: run) unless waiting.status_rejected?
+            true
+          end
           fresh.each { |attrs| source.candidates.create!(attrs) }
           source.update!(extracted_sha256: snapshot, extracted_rows_sha256: rows)
           fresh.size

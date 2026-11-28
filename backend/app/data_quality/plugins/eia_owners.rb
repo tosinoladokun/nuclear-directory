@@ -135,13 +135,15 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # EIA utility ID, or when either has none, the same name as the directory
   # normalises it. A rejected claim blocks it too, as a person's decision wins
   # over a later read (DQ, 27 Nov), except a copy closed as a duplicate,
-  # whose kept claim blocks instead. A merged or confirmed one doesn't.
-  def already_waiting?(attrs, earlier_claims)
-    return false unless attrs[:kind].to_s == "organization"
+  # whose kept claim blocks instead. Only unplaced claims: one matched to a
+  # company goes on to Match, which keeps one per fact and replaces a quote
+  # the file no longer has (Match#settle).
+  def waiting_claim(attrs, earlier_claims)
+    return unless attrs[:kind].to_s == "organization"
 
     payload = attrs[:payload].to_h
-    earlier_claims.any? do |claim|
-      next false unless claim.kind == "organization"
+    earlier_claims.find do |claim|
+      next false unless claim.kind == "organization" && claim.subject_id.nil?
       next false if claim.status_rejected? && claim.notes.to_s.match?(DUPLICATE)
       next false unless claim.status.in?(%w[new matched needs_review rejected])
 

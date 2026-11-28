@@ -397,7 +397,7 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     georgia.update_columns(status: "merged", subject_type: "Organization", subject_id: @georgia_power.id)
     companies("13100").sole.update!(status: "needs_review", review_origin: "match")
     other_id = companies("13100").sole.payload.merge("eia_utility_id" => "99999")
-    assert_not plugin.already_waiting?({ kind: "organization", payload: other_id }, Candidate.where(kind: "organization").to_a),
+    assert_nil plugin.waiting_claim({ kind: "organization", payload: other_id }, Candidate.where(kind: "organization").to_a),
       "the same name under another EIA utility ID is another owner"
 
     read_again!
@@ -405,5 +405,28 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     assert_equal %w[merged new], companies("7140").map(&:status).sort, "a settled claim doesn't block"
     assert_equal 1, companies("13100").size
     assert_equal 1, companies("4744").size, "Dalton Utilities, never waiting, is proposed again"
+  end
+
+  test "a claim kept waiting is seen by this read: it quotes the row as it reads now (#996, Copilot)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    waiting = companies("13994").sole
+    waiting.update!(status: "needs_review", review_origin: "match", quote: "an older row")
+    old_run = waiting.crawl_run_id
+
+    read_again!
+
+    waiting.reload
+    assert_equal [ waiting.id ], companies("13994").map(&:id)
+    assert plugin.quote_in_source?(source, waiting.quote), "the quote is the file's row as it reads now"
+    assert_operator waiting.crawl_run_id, :>, old_run, "it belongs to this read, so the dropped check counts it"
+  end
+
+  test "a claim matched to a company doesn't hold back the next read's: Match keeps one per fact (#996, Copilot)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    companies("7140").sole.update_columns(status: "matched", subject_type: "Organization", subject_id: @georgia_power.id)
+
+    read_again!
+
+    assert_equal 2, companies("7140").size, "the new read's claim goes on to Match, which settles the pair"
   end
 end
