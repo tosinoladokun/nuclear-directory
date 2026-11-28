@@ -36,7 +36,8 @@ module SocialAgent
   # page's start), and the page's problems (no answer, sensitive, date not on it). [item, problems]
   def self.prepare(item, fetcher)
     # A sensitive subject in the item's own words is skipped before any writing.
-    return [ item, [ "it touches a sensitive topic (#{$1.downcase})" ] ] if item.own_text =~ SocialAgent::Rules::SENSITIVE
+    topic = SocialAgent::Rules.sensitive(item.own_text)
+    return [ item, [ "it touches a sensitive topic (#{topic.downcase})" ] ] if topic
     return [ item, [ "its source isn't a primary one (#{SocialAgent::Rules.host(item.source_url).presence || 'none'})" ] ] unless SocialAgent::Rules.primary?(item)
 
     problems = SocialAgent::Rules.source_problems(item.source_url, fetcher, item:)

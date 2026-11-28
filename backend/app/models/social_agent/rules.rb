@@ -24,6 +24,13 @@ module SocialAgent::Rules
   # On the fetched page (menus included), a narrower list: a regulator's page always has "Security" in its menu.
   LEDE = 800
   PAGE_SENSITIVE = /\b(incidents?|accidents?|casualt\w*|killed|fatal\w*|contaminat\w*|evacuat\w*|sabotage|theft|stolen|weapons?)\b/i
+  # Engineering terms that share a word with the lists above but name a study or a design, not harm (#1017, DQ 27 Nov):
+  # a "fatal flaws evaluation" is a siting study, "severe accident mitigation" analyses are an NRC licence-renewal
+  # document, "accident tolerant fuel" is a fuel design. They're taken out before matching, so the same word elsewhere
+  # ("a fatal accident", "two workers were injured") is still caught. Words are joined by spaces (non-breaking too) or
+  # hyphens on one line only: an item's fields are joined by newlines, and a headline "Severe accident" over a summary
+  # "Mitigation work continues" must keep its warning (Copilot).
+  ENGINEERING_TERMS = /\b(fatal[[:blank:]-]+flaws?|severe[[:blank:]-]+accident[[:blank:]-]+mitigation|accident[[:blank:]-]+tolerant[[:blank:]-]+fuels?)\b/i
   MONTHS = Date::MONTHNAMES.compact.freeze
   STATES = %w[Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho Illinois
     Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota Mississippi Missouri Montana Nebraska
@@ -76,7 +83,8 @@ module SocialAgent::Rules
     found << "it says the same thing twice" if repeats?(text)
     found << "it says the publisher \"said\" it \"announced\": say what it did, with the source's own verb" if text.match?(/\bsaid\b[^.]{0,80}\bannounced\b/i)
     unsupported_superlatives(text, item).each { |word| found << "it says #{word.inspect}, which its source doesn't" }
-    found << "it touches a sensitive topic (#{$1.downcase})" if "#{text}\n#{item.own_text}" =~ SENSITIVE
+    topic = sensitive("#{text}\n#{item.own_text}")
+    found << "it touches a sensitive topic (#{topic.downcase})" if topic
     found << "it's too like a post from the last #{SIMILAR_DAYS} days" if similar?(text, platform, except_id:)
     found.concat(source_problems(item.source_url, fetcher, item:, text:)) if found.empty?
     # Last, so the source's own problems (it didn't answer, a sensitive page) are what a post that has them is told.
@@ -392,6 +400,12 @@ module SocialAgent::Rules
 
   def tokens(text) = text.downcase.scan(/[[:alnum:]]+/).uniq
 
+  # The first sensitive word in the text, engineering terms aside; nil when there is none.
+  def sensitive(text, pattern = SENSITIVE) = without_engineering_terms(text)[pattern]
+
+  # Each engineering term becomes a same-length blank, so the opening's length (LEDE) still measures the same text.
+  def without_engineering_terms(text) = text.to_s.gsub(ENGINEERING_TERMS) { " " * $&.length }
+
   # The source must answer 200 now (Founder 3.1: fetched within the last day); a block is a block, never retried.
   # Its page is checked for sensitive topics too, beyond the saved quote (Copilot).
   def source_problems(url, fetcher, item: nil, text: nil)
@@ -402,6 +416,7 @@ module SocialAgent::Rules
     # The article's subject, not a word in passing (rehearsal: "beyond any credible accident scenario" in a permit story,
     # "safety incident rates improved"): in its opening, or three times or more.
     article = article_text(response.body.to_s)
+    article = without_engineering_terms(article)
     hits = article.scan(PAGE_SENSITIVE).flatten
     topic = article.first(LEDE)[PAGE_SENSITIVE] || (hits.first if hits.size >= 3)
     return [ "its source page touches a sensitive topic (#{topic.downcase})" ] if topic
