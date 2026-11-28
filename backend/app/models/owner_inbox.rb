@@ -259,6 +259,17 @@ class OwnerInbox
       .includes(:source).order(reviewed_at: :desc).limit(limit)
   end
 
+  CREATED_TYPES = { "Organization" => Organization, "Facility" => Facility }.freeze
+
+  # The name each created company or plant has now, for Recently decided: a name Data Quality
+  # proposed (#1000) may have replaced the crawler's spelling in the Create's payload (#1025).
+  # One query per type, not one per row. { candidate id => name }
+  def created_names(claims)
+    creates = claims.select { |claim| claim.status_merged? && claim.proposed_subject && claim.subject_id && CREATED_TYPES.key?(claim.subject_type) }
+    names = creates.group_by(&:subject_type).to_h { |type, group| [ type, CREATED_TYPES.fetch(type).where(id: group.map(&:subject_id)).pluck(:id, :name).to_h ] }
+    creates.to_h { |claim| [ claim.id, names.dig(claim.subject_type, claim.subject_id) ] }.compact
+  end
+
   private
     # A pending company is one Create (Data Quality, 11 Nov): its other claims (a website, a description, a
     # role from its own page) go with that row, not as Creates of their own. Those checked (the checker agreed

@@ -99,6 +99,24 @@ class Admin::InboxQueriesTest < ActionDispatch::IntegrationTest
     assert_operator many, :<=, MAX_QUERIES
   end
 
+  # Recently decided names each created company by its name now (#1025): read in one query, not one per row.
+  test "Recently decided's queries don't grow with the companies created" do
+    created = lambda do |range|
+      range.each do |n|
+        company = Organization.create!(name: "Queries Created #{n}", verification_status: "verified", verified_by: "human:tosin")
+        claim(company, { "name" => "Queries Crawled #{n}" }, proposed_subject: true, status: "merged", reviewed_by: "human:tosin", reviewed_at: 1.hour.ago)
+      end
+    end
+    created.call(0...3)
+    few = queries_for_inbox
+    before = @sites
+    created.call(3...15)
+    many = queries_for_inbox
+
+    assert_operator many, :<=, few + 2, "#{few} queries with 3 created, #{many} with 15. #{grew(before, @sites)}"
+    assert_select "li.nd-inbox__recent", /Created Queries Created 14/
+  end
+
   # Every admin page's nav counts Today's waiting facts: on 27 Nov a news item took 1,861 queries for it (Infra).
   test "another admin page's nav count of Today doesn't grow with the claims either (a news item)" do
     item = NewsItem.create!(url: "https://example.org/news/queries", title: "Vogtle exemption", headline: "Vogtle exemption", publisher: "NRC",
