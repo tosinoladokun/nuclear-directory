@@ -179,6 +179,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         return outcome(:duplicate, name:, website:, organization_id: known.id, reason: "Its website is already listed", found:)
       end
       verdict, page, why = verify(name, website)
+      if verdict == :listed
+        return outcome(:duplicate, name:, website: @listed[:website], organization_id: @listed[:organization_id], reason: why, found:)
+      end
       # A lead a person typed: the sentence may be on another page of its site (DQ, 20 Nov: Fluor's nuclear page).
       # Any lead whose home page passed: the sentence may be on its investor or about page (#1015: Deep Fission, Hadron).
       if page && ((@person_added && verdict == :not_nuclear) || (verdict == :ok && !nuclear_sentence?(page, name))) && (inner = nuclear_page(page, name))
@@ -348,7 +351,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
 
     # Where it's incorporated or registered is never its headquarters (DATA.md): "incorporated in Wilmington,
     # Delaware" is left out before looking for a US address, up to the next "and" (Copilot).
-    INCORPORATION_CLAUSE = /\b(?:incorporated|registered|organized|formed)\s+(?:in|under)\b(?:(?!\band\b)[^.;])*/i
+    # "Formed" is incorporation only before a place or "under the laws of", never before a year: "formed in 2019 in
+    # Austin, Texas" is where it was founded (#994, DQ).
+    INCORPORATION_CLAUSE = /\b(?:(?:incorporated|registered|organized)\s+(?:in|under)|formed\s+(?:under|in\b(?!\s+\d{4}\b)))\b(?:(?!\band\b)[^.;])*/i
     # The address in the page's own structured data (JSON-LD), as "Charlotte, NC 28217, United States", only from an
     # Organization or Corporation block whose name is the company's: never a parent's or a partner's on the page (DQ, #1015).
     ORGANIZATION_TYPES = %w[Organization Corporation LocalBusiness].freeze
@@ -663,7 +668,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       "https://#{host}"
     end
 
-    # [:ok | :staging | :not_found | :not_named | :not_nuclear | :not_us, page, why]
+    # [:ok | :listed | :staging | :not_found | :not_named | :not_nuclear | :not_us, page, why]
     def verify(name, website)
       # A web agency's staging or preview copy is never the company's website (#932: WSC on public-stag.3keysoft.com).
       return [ :staging, nil, "#{URI(website).host} is a staging or preview host" ] if staging_host?(website)
@@ -673,6 +678,11 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       # A home page built by script shows almost nothing but links to the brand's main domain
       # (terrestrialusa.com to terrestrialenergy.com): that domain is checked, once, and becomes the source (Copilot).
       if text.length < SCRIPT_SHELL && !@following_brand && (main = brand_domain(page, name))
+        # A brand already listed under its main domain is never proposed again (#994, Infra).
+        if (known = @directory.organization(domain: URI(main).host))
+          @listed = { organization_id: known.id, website: main }
+          return [ :listed, nil, "Its main domain #{URI(main).host} is already listed" ]
+        end
         begin
           @following_brand = true
           return verify(name, main)
