@@ -36,7 +36,7 @@ class DqPass::Research
       "website" => { "type" => [ "string", "null" ], "description" => "One of the page URLs given, exactly, or null" },
       "website_quote" => { "type" => [ "string", "null" ], "description" => "Words copied exactly from that page that name the company" },
       "role" => { "type" => [ "string", "null" ], "description" => "One role key from the list, or null" },
-      "role_quote" => { "type" => [ "string", "null" ], "description" => "Words copied exactly from a page given that state that work" },
+      "role_quote" => { "type" => [ "string", "null" ], "description" => "A sentence copied exactly from a page given that says what the company does" },
       "out_of_scope" => { "type" => "boolean", "description" => "True only if the pages show it does no nuclear work at all" },
       "sure" => { "type" => "boolean" },
       "reason" => { "type" => "string", "description" => "One plain line, under 140 characters" }
@@ -52,8 +52,9 @@ class DqPass::Research
     - website: the URL of the page given that is the company's OWN home page (not a parent's, a customer's, a news
       or profile site's), or null. website_quote: words copied exactly from that page that name the company.
     - role: the one role key from the list that the company's own page states as its nuclear work, or null.
-      role_quote: words copied exactly from a page given that state it. A utility, an operator, a lab or a
-      university is what the page says it is. Engineering or maintenance services for nuclear plants are
+      role_quote: a sentence copied exactly from a page given that says what the company does (its subject and
+      verb, as in "X develops microreactors for…"), never a menu label, heading or product name.
+      A utility, an operator, a lab or a university is what the page says it is. Engineering or maintenance services for nuclear plants are
       reactor_services, not project_developer. A part or equipment maker is components. A fusion developer (it
       designs or builds a fusion machine or power plant) is reactor_vendor. Engineering, construction or EPC firms
       are reactor_services, even when they also do waste or decommissioning work.
@@ -228,7 +229,8 @@ class DqPass::Research
     return rows unless own
 
     role = answer["role"].to_s
-    if !out_of_scope && role.present? && self.class.quoted?(answer["role_quote"], own[:text]) && !OrganizationRole.where(organization_id: org.id).exists? &&
+    if !out_of_scope && role.present? && sentence?(answer["role_quote"]) && self.class.quoted?(answer["role_quote"], own[:text]) &&
+        !OrganizationRole.where(organization_id: org.id).exists? &&
         directory.role_key?(role)
       rows << { "action" => "propose_role", "target" => org.id, "role" => role, "source_url" => own[:url], "quote" => answer["role_quote"],
         "reason" => reason(answer, "its own page states the work"), "request_key" => key(org, "role:#{role}") }
@@ -243,6 +245,11 @@ class DqPass::Research
     end
     rows
   end
+
+  # A role's quote is a sentence saying what the company does, not a label or a product name ("Hadron HaloTM ·
+  # Micro modular reactor"; DQ, first live night): at least SENTENCE_WORDS words.
+  SENTENCE_WORDS = 6
+  def sentence?(quote) = quote.to_s.scan(/[[:alpha:]][[:alnum:]'-]*/).size >= SENTENCE_WORDS
 
   # The quote word for word in the text (case and spacing aside), and long enough to mean something.
   def self.quoted?(quote, text)
