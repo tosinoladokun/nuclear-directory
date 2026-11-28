@@ -241,13 +241,14 @@
 </div>
 
 <% recent = @inbox.recent.to_a %>
+<% created_names = @inbox.created_names(recent) %>
 <% if recent.any? %>
   <details class="nd-fold">
     <summary class="type-body-strong">Recently decided <span class="type-count"><%= recent.size %></span></summary>
     <ul class="nd-stack m-0 p-0 list-none">
       <% recent.each do |claim| %>
         <li class="nd-inbox__recent" id="recent-<%= claim.id %>">
-          <span class="type-body"><%= inbox_decision(claim) %></span>
+          <span class="type-body"><%= inbox_decision(claim, name: created_names[claim.id]) %></span>
           <span class="type-small text-ink-muted whitespace-nowrap"><%= claim.reviewed_at.today? ? "today" : (claim.reviewed_at.to_date == Date.yesterday ? "yesterday" : claim.reviewed_at.strftime("%-d %b")) %> <%= claim.reviewed_at.strftime("%H:%M") %></span>
           <% if claim.subject_id %>
             <%= link_to "Open it", admin_fact_path(type: claim.subject_type, id: claim.subject_id), class: "nd-link type-small whitespace-nowrap" %>

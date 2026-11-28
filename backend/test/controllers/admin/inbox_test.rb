@@ -69,6 +69,17 @@ class Admin::InboxTest < ActionDispatch::IntegrationTest
     assert_equal @decided.id, @change.subject_id
   end
 
+  test "Recently decided names a created company by its name now, not the crawler's spelling (#1025)" do
+    post admin_inbox_decide_path(@create.id, "yes"), params: { ids: [ @create.id ] }
+    assert @new_co.reload.verified?
+    # Data Quality's name proposal (#1000), checked and written: the company is live under the new name.
+    @new_co.update!(name: "Bluefield Power")
+
+    get admin_inbox_path
+    assert_select "#recent-#{@create.id}", /Created Bluefield Power/
+    assert_select "#recent-#{@create.id}", text: /Bluefield Fission/, count: 0
+  end
+
   test "Data Quality's no shows on the row, the Yes asks first, and no bulk approve takes it (DQ, 12 Nov)" do
     DataQuality::Recommendations.record("#{@change.id} reject: Rockville is a branch office, not the HQ", by: "human:dq")
     get admin_inbox_path
