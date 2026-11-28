@@ -27,7 +27,7 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # on later nights; plants proposed before are always read again.
   PLANTS_PER_NIGHT = 25
   # How Data Quality closes a copy of a claim (#996).
-  DUPLICATE = /\Aduplicate of claim/i
+  DUPLICATE = /\A(?:Data Quality closed it: )?duplicate of claim/i
 
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, plants_per_night: PLANTS_PER_NIGHT)
     @fetcher = fetcher

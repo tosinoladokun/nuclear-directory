@@ -383,7 +383,7 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
     rejected = companies("13994").sole
     rejected.update!(status: "rejected", notes: "Out of scope: a utility with no nuclear role of its own")
-    companies("13100").sole.update!(status: "rejected", notes: "Duplicate of claim 1")
+    companies("13100").sole.update!(status: "rejected", notes: "Data Quality closed it: Duplicate of claim 5267: same EIA utility ID")
 
     read_again!
 
