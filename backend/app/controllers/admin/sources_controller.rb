@@ -17,6 +17,8 @@ class Admin::SourcesController < Admin::BaseController
     @research = SourceCatalog.research
     @rows = DataQuality::Status.by_kind
     @runs_by_kind = @rows.index_by(&:source_kind)
+    # Each row's last failure, in two queries for all of them (#1029).
+    @failures = SourceCatalog.failures(@official.reject(&:soon).filter_map { |entry| entry.kind if @runs_by_kind.key?(entry.kind) })
   end
 
   def show

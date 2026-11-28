@@ -52,7 +52,7 @@
             <% if run && !entry.soon %>
               <details class="nd-sources__run">
                 <summary class="type-small text-ink-muted">Last run</summary>
-                <% if (failure = SourceCatalog.failure(entry.kind)) %>
+                <% if (failure = @failures[entry.kind]) %>
                   <p class="type-data">The last read failed<% if failure.error.present? %>: <%= failure.error.truncate(120) %><% end %>. These are an earlier run's counts.</p>
                 <% end %>
                 <p class="type-data text-ink-muted">
