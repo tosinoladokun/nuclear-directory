@@ -491,6 +491,105 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
     assert_equal :proposed, found.outcome, found.reason
   end
 
+  # NuCube's case (#1021): its own site passes the own-site check but states no nuclear work; its own release does,
+  # under "About NuCube Energy".
+  NUCUBE_HOME = "<html><head><title>Home | NuCube Energy</title></head><body><h1>NuCube Energy</h1>" \
+    "<p>NuCube Energy builds the energy of tomorrow.</p></body></html>".freeze
+  def nucube_release(about)
+    "<html><body><p>IDAHO FALLS, Idaho -- NuCube Energy announced a listing. GlobeNewswire is a newswire nuclear service.</p>#{about}</body></html>"
+  end
+
+  test "a site with no nuclear sentence is proposed from its own release's About section, with a note (#1021: NuCube)" do
+    stub_request(:get, %r{\Ahttps://(www\.)?(nucube\.example|globenewswire\.com)/robots\.txt}).to_return(status: 404)
+    html_page("https://www.nucube.example", NUCUBE_HOME)
+    own = "https://www.globenewswire.com/news-release/2026/06/25/1/0/en/nucube.html"
+    html_page(own, nucube_release("<h3>About NuCube Energy</h3><p>NuCube Energy, Inc. is an advanced-nuclear technology company " \
+      "developing factory-built, solid-state microreactors. It is headquartered in Idaho Falls, Idaho.</p>"))
+
+    found = Plugin.call(listed_lead("NuCube Energy", "https://www.nucube.example", own).id, finder: finder)
+    assert_equal :proposed, found.outcome, found.reason
+    claim = Candidate.find(found.candidate_id)
+    assert_equal "NuCube Energy, Inc. is an advanced-nuclear technology company developing factory-built, solid-state microreactors.", claim.quote
+    assert_equal [ "NuCube Energy", "https://www.nucube.example" ], claim.payload.values_at("name", "website"), "the website is its own site"
+    assert claim.source.url.start_with?(own), "the source is the release, which has the quote"
+    assert_match "own release on www.globenewswire.com, not its website", claim.notes
+  end
+
+  test "a partner's release, a joint release's background and the release body never give the quote (#1021)" do
+    plugin = Plugin.new(search_key: nil)
+    page = ->(html) { Source.new(url: "https://www.globenewswire.com/x.html", content_text: nucube_release(html)) }
+
+    partner = page.("<h3>About Acme Grid</h3><p>Acme Grid partners with NuCube Energy, which develops nuclear microreactors.</p>")
+    assert_nil plugin.send(:release_quote, partner, "NuCube Energy"), "a partner's About section"
+    holdings = page.("<h3>About NuCube Energy Holdings</h3><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_nil plugin.send(:release_quote, holdings, "NuCube Energy"), "the whole name, not a longer one"
+    joint = page.("<h3>About NuCube Energy</h3><p>Visit us online.</p><h3>About Acme Grid</h3><p>Acme Grid sells power.</p>" \
+      "<h3>Company Background</h3><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_nil plugin.send(:release_quote, joint, "NuCube Energy"), "a joint release's background"
+    body = page.("<p>NuCube Energy develops nuclear microreactors.</p><h3>About NuCube Energy</h3><p>Visit us online.</p>")
+    assert_nil plugin.send(:release_quote, body, "NuCube Energy"), "the release body"
+
+    alone = page.("<h3>About NuCube Energy</h3><p>Visit us online.</p><h3>Company Background</h3><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, alone, "NuCube Energy"), "its own release's background"
+    assert_equal "NuCube Energy develops nuclear microreactors.",
+      plugin.send(:release_quote, page.("<h3>About NuCube Energy Inc.:</h3><p>NuCube Energy develops nuclear microreactors.</p>"), "NuCube Energy"),
+      "legal ending aside"
+  end
+
+  test "a release quote stays in its own section and reads as the page does (#1021, Copilot)" do
+    plugin = Plugin.new(search_key: nil)
+    page = ->(html) { Source.new(url: "https://www.globenewswire.com/x.html", content_text: nucube_release(html)) }
+
+    footer = page.("<div><h3>About NuCube Energy</h3><p>Visit us online.</p></div><div><p>NuCube Energy develops nuclear microreactors.</p></div>")
+    assert_nil plugin.send(:release_quote, footer, "NuCube Energy"), "not a block outside the About section's container"
+    contact = page.("<h3>About NuCube Energy</h3><p>Visit us online.</p><h3>Media contact</h3><p>NuCube Energy press desk, nuclear news.</p>")
+    assert_nil plugin.send(:release_quote, contact, "NuCube Energy"), "not past the next heading"
+
+    bold = page.("<p><b>About NuCube Energy</b></p><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, bold, "NuCube Energy"), "a bold paragraph heading"
+    inline = page.("<p><strong>About NuCube Energy:</strong> NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, inline, "NuCube Energy"), "a heading inline with its text"
+    alone = page.("<p><b>About NuCube Energy</b></p><p>Visit us online.</p><p><b>Company Background</b></p><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, alone, "NuCube Energy"), "bold headings keep the background"
+
+    linked = Source.new(url: "https://www.globenewswire.com/y.html", content_text: nucube_release("<h3>About NuCube Energy</h3>" \
+      "<p><a href=\"https://www.nucube.example\">NuCube Energy</a>, Inc. develops nuclear microreactors.</p>"))
+    quote = plugin.send(:release_quote, linked, "NuCube Energy")
+    assert quote, "found with inline markup"
+    assert plugin.quote_in_source?(linked, quote), "and found again by the quote check"
+
+    two = page.("<h3>About NuCube Energy</h3><p>Our supplier is NuCube Energy, Inc. Acme Grid develops nuclear microreactors.</p>")
+    assert_nil plugin.send(:release_quote, two, "NuCube Energy"), "another company's next sentence isn't the company's"
+  end
+
+  test "only a wire service's release can give the quote, never a news site's article (#1021, Copilot)" do
+    stub_request(:get, %r{\Ahttps://(www\.)?reuters\.com/robots\.txt}).to_return(status: 404)
+    article = "https://www.reuters.com/business/energy/nucube.html"
+    html_page(article, nucube_release("<h3>About NuCube Energy</h3><p>NuCube Energy develops nuclear microreactors.</p>"))
+    plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil)
+    plugin.instance_variable_set(:@release_links, [ article ])
+
+    assert_nil plugin.send(:release_with_quote, "NuCube Energy")
+    assert_not_requested :get, article
+  end
+
+  test "tells the verifier a release is read for its About sentence, not the website (#1021, Copilot)" do
+    release = Source.new(url: "https://www.globenewswire.com/x.html#{Plugin::RELEASE_MARK}www.nucube.example")
+    assert_match "isn't evidence for the company's website", Plugin.new(search_key: nil).source_facts(release)
+    assert_match "home page", Plugin.new(search_key: nil).source_facts(Source.new(url: "https://www.nucube.example#{Plugin::LEAD_MARK}"))
+  end
+
+  test "a partner's release naming the company gives no claim (#1021)" do
+    stub_request(:get, %r{\Ahttps://(www\.)?(nucube\.example|globenewswire\.com)/robots\.txt}).to_return(status: 404)
+    html_page("https://www.nucube.example", NUCUBE_HOME)
+    partner = "https://www.globenewswire.com/news-release/2026/06/26/2/0/en/partner.html"
+    html_page(partner, nucube_release("<h3>About Acme Grid</h3><p>Acme Grid, Austin, TX, buys power from NuCube Energy's nuclear microreactors.</p>"))
+
+    result = Plugin.call(listed_lead("NuCube Energy", "https://www.nucube.example", partner).id, finder: finder)
+    assert_not_equal :proposed, result.outcome
+    assert_not Candidate.exists?(kind: "organization")
+  end
+
   test "a listing alone isn't US; with Delaware incorporation or a headquarters region it is (#987: Hadron)" do
     stub_request(:get, %r{\Ahttps://www\.hadron\.example/robots\.txt}).to_return(status: 404)
     html_page("https://www.hadron.example", "<html><head><title>Hadron Energy</title></head><body><p>Hadron Energy builds a micro modular reactor.</p>" \
