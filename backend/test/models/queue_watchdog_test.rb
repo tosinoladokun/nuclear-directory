@@ -132,4 +132,23 @@ class QueueWatchdogTest < ActiveSupport::TestCase
       assert_empty QueueWatchdog.new(booted: NOW - 1.hour, now: NOW).catch_up
     end
   end
+
+  test "a task whose job class this code can't load is left alone, never enqueued, during a deploy's overlap (#938)" do
+    adapter = PageWarmJob.queue_adapter
+    PageWarmJob.queue_adapter = :solid_queue
+    travel_to NOW + 20.minutes do
+      worker(NOW - 1.minute)
+      # The new code's task, as the old instance sees it: its class doesn't exist here (Solid Queue validates it on create).
+      unknown = SolidQueue::RecurringTask.new(key: "new_code_task", class_name: "NotDeployedHereJob", schedule: "every day at 9am UTC", static: true)
+      unknown.save!(validate: false)
+      SolidQueue::RecurringTask.create!(key: "daily_known", class_name: "PageWarmJob", schedule: "every day at 9am UTC", static: true)
+      watchdog = QueueWatchdog.new(booted: NOW - 1.hour, now: NOW + 20.minutes)
+
+      assert_nothing_raised { assert_equal [ "daily_known" ], watchdog.catch_up }
+      assert_empty watchdog.catch_up, "the unknown task is never enqueued"
+      assert_not SolidQueue::Job.exists?(class_name: "NotDeployedHereJob")
+    end
+  ensure
+    PageWarmJob.queue_adapter = adapter
+  end
 end
