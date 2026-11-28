@@ -215,7 +215,10 @@ class DqPass::Research
     rows = []
     site = answer["website"].presence && pages.find { |page| page[:url] == home(answer["website"]) }
     accepted = org.website.blank? && site && website_ok?(org, site, answer["website_quote"]) ? site : nil
-    if accepted
+    # Out of scope: nothing is proposed for it, only the reject below (DQ's trial 2: Limelight's website with
+    # "no nuclear work"). Its own page is still found, since a reject comes only from that.
+    out_of_scope = answer["out_of_scope"] == true
+    if accepted && !out_of_scope
       rows << { "action" => "propose_fields", "target" => org.id, "fields" => { "website" => accepted[:url] }, "source_url" => accepted[:url],
         "quote" => answer["website_quote"], "reason" => reason(answer, "its own home page"), "request_key" => key(org, "website") }
     end
@@ -225,7 +228,7 @@ class DqPass::Research
     return rows unless own
 
     role = answer["role"].to_s
-    if role.present? && self.class.quoted?(answer["role_quote"], own[:text]) && !OrganizationRole.where(organization_id: org.id).exists? &&
+    if !out_of_scope && role.present? && self.class.quoted?(answer["role_quote"], own[:text]) && !OrganizationRole.where(organization_id: org.id).exists? &&
         directory.role_key?(role)
       rows << { "action" => "propose_role", "target" => org.id, "role" => role, "source_url" => own[:url], "quote" => answer["role_quote"],
         "reason" => reason(answer, "its own page states the work"), "request_key" => key(org, "role:#{role}") }

@@ -202,6 +202,17 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_equal [ "Acme Fission" ], finder.searched
   end
 
+  test "out of scope: no website or role is proposed, only the reject from its own page (DQ's trial 2: Limelight)" do
+    source = Source.create!(url: "https://records.example/award/30", source_kind: "arpa_e_projects")
+    claim = Candidate.create!(source:, kind: "organization", status: "matched", quote: "Organization: Acme Fission", payload: { "name" => "Acme Fission" }, subject: @org)
+    llm = FakeLlm.new(extract: answer(sure: false), verify: answer(out_of_scope: true))
+    result = researcher(llm:).research(@org)
+
+    assert_equal [ "recommend" ], result[:proposed].map { |row| row["action"] }
+    assert_equal "reject", claim.reload.dq_recommendation
+    assert_empty proposals, "no website or role claim"
+  end
+
   test "a page of several MB is parsed only up to PAGE_SCAN, and is still its own site with its text read (#1026)" do
     huge = PAGE.sub("</main>", "</main>#{'<div><p>filler text</p></div>' * 150_000}")
     assert_operator huge.bytesize, :>, DqPass::Research::PAGE_SCAN * 5
