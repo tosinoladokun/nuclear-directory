@@ -26,6 +26,8 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
   # plants not proposed before are added a night (DQ, 19 Nov), the next ones
   # on later nights; plants proposed before are always read again.
   PLANTS_PER_NIGHT = 25
+  # How Data Quality closes a copy of a claim (#996).
+  DUPLICATE = /\A(?:Data Quality closed it: )?duplicate of claim/i
 
   def initialize(fetcher: DataQuality::Fetcher.new, directory: DataQuality::DirectoryClient.new, plants_per_night: PLANTS_PER_NIGHT)
     @fetcher = fetcher
@@ -128,7 +130,36 @@ class DataQuality::Plugins::EiaOwners < DataQuality::Plugin
     end
   end
 
+  # An owner EIA's file names every night, and the directory can't place yet,
+  # waits as one company claim until a person settles it (#996): the same
+  # EIA utility ID, or when either has none, the same name as the directory
+  # normalises it. A rejected claim blocks it too, as a person's decision wins
+  # over a later read (DQ, 27 Nov), except a copy closed as a duplicate,
+  # whose kept claim blocks instead. Only unplaced claims: one matched to a
+  # company goes on to Match, which keeps one per fact and replaces a quote
+  # the file no longer has (Match#settle).
+  def waiting_claim(attrs, earlier_claims)
+    return unless attrs[:kind].to_s == "organization"
+
+    payload = attrs[:payload].to_h
+    earlier_claims.find do |claim|
+      next false unless claim.kind == "organization" && claim.subject_id.nil?
+      next false if claim.status_rejected? && claim.notes.to_s.match?(DUPLICATE)
+      next false unless claim.status.in?(%w[new matched needs_review rejected])
+
+      same_owner?(payload, claim.payload.to_h)
+    end
+  end
+
   private
+    def same_owner?(one, other)
+      ids = [ one["eia_utility_id"], other["eia_utility_id"] ]
+      return ids.first.to_s == ids.last.to_s if ids.all?(&:present?)
+
+      names = [ one["name"], other["name"] ].map { |name| @directory.normalize_organization_name(name) }
+      names.first.present? && names.first == names.last
+    end
+
     def year(file) = file[Plants::FILE_LINK, 1]
 
     # Each plant in the source's rows: { plant id => { eia_plant_id:, name:,

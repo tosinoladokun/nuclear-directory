@@ -348,4 +348,85 @@ class DataQuality::Plugins::EiaOwnersTest < ActiveSupport::TestCase
     second = Candidate.where(kind: "facility_relationship").pluck(Arel.sql("payload->'facility'->>'eia_plant_id'")).compact.uniq
     assert_equal 2, second.size, "the next plant the next night, the first one kept"
   end
+
+  # #996: 13 unplaced owners got a new company claim every night, all from one file.
+  def read_again!
+    source.update_columns(extracted_sha256: nil, extracted_rows_sha256: nil)
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[extract])
+  end
+
+  def companies(eia_id) = Candidate.where(kind: "organization").select { |c| c.payload["eia_utility_id"] == eia_id }
+
+  test "a second night's read adds no company claim for an owner whose claim is still open (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    waiting = companies("13994").sole
+    waiting.update!(status: "needs_review", review_origin: "match", notes: "No company found")
+    others = Candidate.where(kind: "organization").count
+
+    read_again!
+
+    assert_equal [ waiting.id ], companies("13994").map(&:id), "Oglethorpe still has one claim, the first"
+    assert_equal others, Candidate.where(kind: "organization").count, "nor does any other owner get a second"
+  end
+
+  test "an open claim under the same name with no EIA utility ID is the same owner (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    waiting = companies("13994").sole
+    waiting.update!(status: "needs_review", review_origin: "match", payload: waiting.payload.except("eia_utility_id").merge("name" => "OGLETHORPE POWER CORPORATION."))
+
+    read_again!
+
+    assert_empty companies("13994"), "the name matched as the directory normalises it"
+  end
+
+  test "an owner rejected yesterday isn't proposed again today; a copy closed as a duplicate doesn't block (#996, DQ)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    rejected = companies("13994").sole
+    rejected.update!(status: "rejected", notes: "Out of scope: a utility with no nuclear role of its own")
+    companies("13100").sole.update!(status: "rejected", notes: "Data Quality closed it: Duplicate of claim 5267: same EIA utility ID")
+
+    read_again!
+
+    assert_equal [ rejected.id ], companies("13994").map(&:id), "a person's No wins over a later read"
+    assert_equal %w[new rejected], companies("13100").map(&:status).sort, "a duplicate's close isn't a decision on the owner"
+  end
+
+  test "a merged company claim doesn't stop a new one, and another owner still gets its own (#996)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    georgia = companies("7140").sole
+    georgia.update_columns(status: "merged", subject_type: "Organization", subject_id: @georgia_power.id)
+    companies("13100").sole.update!(status: "needs_review", review_origin: "match")
+    other_id = companies("13100").sole.payload.merge("eia_utility_id" => "99999")
+    assert_nil plugin.waiting_claim({ kind: "organization", payload: other_id }, Candidate.where(kind: "organization").to_a),
+      "the same name under another EIA utility ID is another owner"
+
+    read_again!
+
+    assert_equal %w[merged new], companies("7140").map(&:status).sort, "a settled claim doesn't block"
+    assert_equal 1, companies("13100").size
+    assert_equal 1, companies("4744").size, "Dalton Utilities, never waiting, is proposed again"
+  end
+
+  test "a claim kept waiting is seen by this read: it quotes the row as it reads now (#996, Copilot)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    waiting = companies("13994").sole
+    waiting.update!(status: "needs_review", review_origin: "match", quote: "an older row")
+    old_run = waiting.crawl_run_id
+
+    read_again!
+
+    waiting.reload
+    assert_equal [ waiting.id ], companies("13994").map(&:id)
+    assert plugin.quote_in_source?(source, waiting.quote), "the quote is the file's row as it reads now"
+    assert_operator waiting.crawl_run_id, :>, old_run, "it belongs to this read, so the dropped check counts it"
+  end
+
+  test "a claim matched to a company doesn't hold back the next read's: Match keeps one per fact (#996, Copilot)" do
+    DataQuality::Pipeline.run("eia_owners", plugin:, only: %w[crawl extract])
+    companies("7140").sole.update_columns(status: "matched", subject_type: "Organization", subject_id: @georgia_power.id)
+
+    read_again!
+
+    assert_equal 2, companies("7140").size, "the new read's claim goes on to Match, which settles the pair"
+  end
 end
