@@ -259,7 +259,13 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     [ doc.at_css("meta[property='og:site_name']")&.[]("content"), doc.at_css("title")&.text ].compact.map(&:squish)
   end
 
-  def source_facts(_source)
+  def source_facts(source)
+    if source.url.include?(RELEASE_MARK)
+      # The release states the company's nuclear work, never its website, which came from the company's own site (Copilot).
+      return "This is a company's own press release on a wire service, read only for the sentence in its own \"About\" " \
+        "section that names the company and its nuclear work. It isn't evidence for the company's website."
+    end
+
     "This is a company's own home page, read to confirm the company a lead names: its name, its website and that it " \
       "does nuclear work."
   end
@@ -285,8 +291,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     CONTACT = %r{contact|about|company|locations?|offices?|investors?}i
     def blocks(html) = Nokogiri::HTML(html.to_s).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
 
-    # A full stop ends a sentence, but not a legal ending's: "NuCube Energy, Inc. is an advanced-nuclear …" is one (#1021).
-    SENTENCE_END = /(?<=[.!?])(?<!\bInc\.)(?<!\bCorp\.)(?<!\bCo\.)(?<!\bLtd\.)(?<!\bLLC\.)\s+/
+    # A full stop ends a sentence, except a legal ending's when the sentence goes on in lower case: "NuCube Energy,
+    # Inc. is an advanced-nuclear …" is one (#1021), "… NuCube Energy, Inc. Acme Grid develops …" two (Copilot).
+    SENTENCE_END = /(?<=[.!?])\s+(?![a-z])|(?<=[.!?])(?<!\bInc\.)(?<!\bCorp\.)(?<!\bCo\.)(?<!\bLtd\.)(?<!\bLLC\.)\s+/
     def naming_sentences(blocks, name) = blocks.flat_map { |block| block.split(SENTENCE_END) }.select { |sentence| names?(sentence, name) }
 
     def nuclear_sentence?(page, name) = self_naming_sentences(page, name).any? { |sentence| nuclear?(sentence, brand(name)) }
@@ -461,23 +468,48 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # only from the release's "About <Company>" section, whose heading is the lead's whole name, legal ending and
     # punctuation aside (as #1016's JSON-LD), or its "Company Background" when that About section is the release's only
     # one (not a joint release). Never the release's body, a partner's About section, or the wire site's own text.
-    ABOUT_TAGS = "p, h2, h3, h4, b, strong, li".freeze
+    # A section is the blocks after its heading in the same container, up to the next heading of any kind (Copilot):
+    # never a contact section, a related story or the site's footer.
     BACKGROUND_HEADING = /\A(?:Company\s+)?Background\s*:?\z/i
     def release_quote(page, name)
       wanted = @directory.normalize_organization_name(name)
       return if wanted.blank?
 
-      nodes = Nokogiri::HTML(page.content_text).css(ABOUT_TAGS).to_a
-      heading = ->(node) { node.text.squish.match?(ABOUT_HEADING) || node.text.squish.match?(BACKGROUND_HEADING) }
-      section = ->(start) { nodes[(start + 1)..].take_while { |node| !heading.(node) }.map { |node| node.text.squish } }
-      abouts = nodes.each_index.select { |i| nodes[i].text.squish.match?(ABOUT_HEADING) }
-      own = abouts.find { |i| @directory.normalize_organization_name(nodes[i].text.squish[ABOUT_HEADING, 1]) == wanted } or return
-      texts = section.(own)
+      parts = release_parts(page)
+      abouts = parts.each_index.select { |i| parts[i][:heading]&.match?(ABOUT_HEADING) }
+      own = abouts.find { |i| @directory.normalize_organization_name(parts[i][:heading][ABOUT_HEADING, 1]) == wanted } or return
+      texts = section(parts, own)
       if abouts.one?
-        background = nodes.index { |node| node.text.squish.match?(BACKGROUND_HEADING) }
-        texts += section.(background) if background
+        background = parts.index { |part| part[:heading]&.match?(BACKGROUND_HEADING) }
+        texts += section(parts, background) if background
       end
       naming_sentences(texts, name).find { |sentence| nuclear?(sentence, brand(name)) }
+    end
+
+    # The page's blocks in order, none inside another (Copilot): { heading:, text:, parent: }. A heading is an h2-h6,
+    # or a block that is only bold text; a block that starts with a bold "About NuCube Energy" is that heading, then
+    # its text. Text is joined as visible_text joins it, so a quote taken here is found there (Copilot).
+    BLOCK_TAGS = %w[p li h2 h3 h4 h5 h6].freeze
+    def release_parts(page)
+      text_of = ->(nodes) { nodes.flat_map { |node| node.text? ? [ node.text ] : node.xpath(".//text()").map(&:text) }.join(" ").squish }
+      Nokogiri::HTML(page.content_text).css(BLOCK_TAGS.join(", ")).reject { |node| node.ancestors.any? { |up| BLOCK_TAGS.include?(up.name) } }
+        .flat_map do |node|
+          text = text_of.([ node ])
+          next [] if text.blank?
+          next [ { heading: text, parent: node.parent } ] if node.name.match?(/\Ah\d\z/)
+
+          children = node.children.reject { |child| child.text? && child.text.strip.empty? }
+          lead = children.first
+          bold = lead && %w[b strong].include?(lead.name) ? text_of.([ lead ]) : nil
+          next [ { heading: text, parent: node.parent } ] if bold == text
+          next [ { heading: bold, parent: node.parent }, { text: text_of.(children.drop(1)), parent: node.parent } ] if bold&.match?(ABOUT_HEADING) || bold&.match?(BACKGROUND_HEADING)
+
+          [ { text:, parent: node.parent } ]
+        end
+    end
+
+    def section(parts, start)
+      parts[(start + 1)..].take_while { |part| part[:heading].nil? && part[:parent] == parts[start][:parent] }.map { |part| part[:text] }.compact_blank
     end
 
     # The first of the lead's own wire releases with that sentence: [page, quote], or nil. Read once per find.
@@ -485,11 +517,17 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       @release_quotes ||= {}
       return @release_quotes[name] if @release_quotes.key?(name)
 
-      @release_quotes[name] = Array(@release_links).first(2).lazy.filter_map do |url|
+      @release_quotes[name] = Array(@release_links).select { |url| wire?(url) }.first(2).lazy.filter_map do |url|
         page = snapshot(url) or next
+        next unless wire?(page.final_url.presence || page.url)
+
         (quote = release_quote(page, name)) && [ page, quote ]
       end.first
     end
+
+    # A wire service that carries companies' own releases (DATA.md section 5), not a news site that reports on them.
+    WIRE_HOSTS = /(?:\A|\.)(?:prnewswire|businesswire|globenewswire)\.com\z/
+    def wire?(url) = (URI.parse(url.to_s).host.to_s.downcase rescue "").match?(WIRE_HOSTS)
 
     # The claim from a release copied for a lead (#1021): the quote from its own About section, the website the
     # company's own site, which passed the own-site check, and a note saying where the quote came from.

@@ -536,6 +536,49 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
       "legal ending aside"
   end
 
+  test "a release quote stays in its own section and reads as the page does (#1021, Copilot)" do
+    plugin = Plugin.new(search_key: nil)
+    page = ->(html) { Source.new(url: "https://www.globenewswire.com/x.html", content_text: nucube_release(html)) }
+
+    footer = page.("<div><h3>About NuCube Energy</h3><p>Visit us online.</p></div><div><p>NuCube Energy develops nuclear microreactors.</p></div>")
+    assert_nil plugin.send(:release_quote, footer, "NuCube Energy"), "not a block outside the About section's container"
+    contact = page.("<h3>About NuCube Energy</h3><p>Visit us online.</p><h3>Media contact</h3><p>NuCube Energy press desk, nuclear news.</p>")
+    assert_nil plugin.send(:release_quote, contact, "NuCube Energy"), "not past the next heading"
+
+    bold = page.("<p><b>About NuCube Energy</b></p><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, bold, "NuCube Energy"), "a bold paragraph heading"
+    inline = page.("<p><strong>About NuCube Energy:</strong> NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, inline, "NuCube Energy"), "a heading inline with its text"
+    alone = page.("<p><b>About NuCube Energy</b></p><p>Visit us online.</p><p><b>Company Background</b></p><p>NuCube Energy develops nuclear microreactors.</p>")
+    assert_equal "NuCube Energy develops nuclear microreactors.", plugin.send(:release_quote, alone, "NuCube Energy"), "bold headings keep the background"
+
+    linked = Source.new(url: "https://www.globenewswire.com/y.html", content_text: nucube_release("<h3>About NuCube Energy</h3>" \
+      "<p><a href=\"https://www.nucube.example\">NuCube Energy</a>, Inc. develops nuclear microreactors.</p>"))
+    quote = plugin.send(:release_quote, linked, "NuCube Energy")
+    assert quote, "found with inline markup"
+    assert plugin.quote_in_source?(linked, quote), "and found again by the quote check"
+
+    two = page.("<h3>About NuCube Energy</h3><p>Our supplier is NuCube Energy, Inc. Acme Grid develops nuclear microreactors.</p>")
+    assert_nil plugin.send(:release_quote, two, "NuCube Energy"), "another company's next sentence isn't the company's"
+  end
+
+  test "only a wire service's release can give the quote, never a news site's article (#1021, Copilot)" do
+    stub_request(:get, %r{\Ahttps://(www\.)?reuters\.com/robots\.txt}).to_return(status: 404)
+    article = "https://www.reuters.com/business/energy/nucube.html"
+    html_page(article, nucube_release("<h3>About NuCube Energy</h3><p>NuCube Energy develops nuclear microreactors.</p>"))
+    plugin = Plugin.new(fetcher: DataQuality::Fetcher.new(sleeper: ->(_) { }), search_key: nil)
+    plugin.instance_variable_set(:@release_links, [ article ])
+
+    assert_nil plugin.send(:release_with_quote, "NuCube Energy")
+    assert_not_requested :get, article
+  end
+
+  test "tells the verifier a release is read for its About sentence, not the website (#1021, Copilot)" do
+    release = Source.new(url: "https://www.globenewswire.com/x.html#{Plugin::RELEASE_MARK}www.nucube.example")
+    assert_match "isn't evidence for the company's website", Plugin.new(search_key: nil).source_facts(release)
+    assert_match "home page", Plugin.new(search_key: nil).source_facts(Source.new(url: "https://www.nucube.example#{Plugin::LEAD_MARK}"))
+  end
+
   test "a partner's release naming the company gives no claim (#1021)" do
     stub_request(:get, %r{\Ahttps://(www\.)?(nucube\.example|globenewswire\.com)/robots\.txt}).to_return(status: 404)
     html_page("https://www.nucube.example", NUCUBE_HOME)
