@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <%# Not indexed, and no analytics snippet (TracksAnalytics skips /admin). %>
     <meta name="robots" content="noindex, nofollow">
+    <%# No hover prefetch (Turbo 8's default): moving across the nav fetched up to seven heavy admin pages in a few
+        seconds and ran the 512 MB instance out of memory (27-28 Nov, #1026). The public layout has it off too (#68). %>
+    <meta name="turbo-prefetch" content="false">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <link rel="icon" href="<%= site_icon_path("icon.svg") %>" type="image/svg+xml">
