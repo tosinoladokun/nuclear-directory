@@ -58,4 +58,9 @@ class Admin::HealthTest < ActionDispatch::IntegrationTest
     patch admin_health_dq_pass_path, params: { on: "1" }
     assert_not DqPass.on?
   end
+
+  test "the admin layout turns off Turbo's hover prefetch, so a mouse across the nav fetches nothing (#1026)" do
+    get admin_health_path
+    assert_select "head meta[name='turbo-prefetch'][content='false']", 1
+  end
 end
