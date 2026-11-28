@@ -353,7 +353,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # Delaware" is left out before looking for a US address, up to the next "and" (Copilot).
     # "Formed" is incorporation only before a place or "under the laws of", never before a year: "formed in 2019 in
     # Austin, Texas" is where it was founded (#994, DQ).
-    INCORPORATION_CLAUSE = /\b(?:(?:incorporated|registered|organized)\s+(?:in|under)|formed\s+(?:under|in\b(?!\s+(?:19|20)\d\d\b)))\b(?:(?!\band\b)[^.;])*/i
+    INCORPORATION_CLAUSE = /\b(?:(?:incorporated|registered|organized)\s+(?:in|under)|formed\s+(?:under|in\b(?!\s+\d{4}\b)))\b(?:(?!\band\b)[^.;])*/i
     # The address in the page's own structured data (JSON-LD), as "Charlotte, NC 28217, United States", only from an
     # Organization or Corporation block whose name is the company's: never a parent's or a partner's on the page (DQ, #1015).
     ORGANIZATION_TYPES = %w[Organization Corporation LocalBusiness].freeze

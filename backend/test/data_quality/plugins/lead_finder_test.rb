@@ -519,6 +519,7 @@ class DataQuality::Plugins::LeadFinderTest < ActiveSupport::TestCase
   test "'formed in' a year keeps the founding city; 'formed under the laws of' or in a state is incorporation (#994, DQ)" do
     plugin = Plugin.new(search_key: nil)
     assert plugin.send(:us_text?, "Acme Fission was formed in 2019 in Austin, Texas")
+    assert plugin.send(:us_text?, "Acme Fission was formed in 1886 in Pittsburgh, Pennsylvania"), "any year (Copilot)"
     assert_not plugin.send(:us_text?, "Nuclearis Energy was formed under the laws of Delaware, Wilmington, Delaware")
     assert_not plugin.send(:us_text?, "Nuclearis Energy was formed in Wilmington, Delaware and is based in Buenos Aires, Argentina")
   end
