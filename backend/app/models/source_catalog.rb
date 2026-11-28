@@ -102,24 +102,29 @@ class SourceCatalog
       DOMAIN_GROUPS[domain] || (domain.end_with?(".gov") ? "government" : "company-sites")
     end
 
+    # Each row in a few queries for all of them, not a batch per row (#1029).
     def official
-      kinds = Source.where.not(source_kind: RESEARCH_KIND).distinct.pluck(:source_kind)
-      (OFFICIAL.keys + (kinds - OFFICIAL.keys)).filter_map do |kind|
-        sources = Source.where(source_kind: kind)
+      rows = Source.where.not(source_kind: RESEARCH_KIND).pluck(:id, :source_kind, :crawl_status, :fetched_at)
+      by_kind = rows.group_by { |_, kind, _, _| kind }
+      facts = facts_by_source(rows.map(&:first))
+      (OFFICIAL.keys + (by_kind.keys - OFFICIAL.keys)).filter_map do |kind|
+        sources = by_kind.fetch(kind, [])
         # A crawler that hasn't run yet shows as Soon; an unknown kind only when it has documents.
-        next if sources.none? && !OFFICIAL.key?(kind)
+        next if sources.empty? && !OFFICIAL.key?(kind)
 
-        entry_for(kind, OFFICIAL.dig(kind, :name) || kind.humanize, sources, kind:, note: OFFICIAL.dig(kind, :note))
+        entry_for(kind, OFFICIAL.dig(kind, :name) || kind.humanize, sources, facts, kind:, note: OFFICIAL.dig(kind, :note))
       end
     end
 
     def research
-      by_group = Source.where(source_kind: RESEARCH_KIND).pluck(:id, :domain).group_by { |_, domain| group_of(domain) }
+      rows = Source.where(source_kind: RESEARCH_KIND).pluck(:id, :domain, :crawl_status, :fetched_at)
+      by_group = rows.group_by { |_, domain, _, _| group_of(domain) }
+      facts = facts_by_source(rows.map(&:first))
       GROUPS.filter_map do |key, name|
-        ids = by_group.fetch(key, []).map(&:first)
-        next if ids.empty?
+        sources = by_group.fetch(key, [])
+        next if sources.empty?
 
-        entry_for(key, name, Source.where(id: ids))
+        entry_for(key, name, sources, facts)
       end.sort_by { |entry| -entry.documents }
     end
 
@@ -161,12 +166,18 @@ class SourceCatalog
     # The last finished match runs of a kind, newest first: [CrawlRun, …].
     # The newest crawl, extract or match run of this kind that failed after
     # its last good match (so the match counts shown are an earlier run's), or nil.
-    def failure(kind)
-      return unless kind
+    def failure(kind) = (failures([ kind ])[kind] if kind)
 
-      good = CrawlRun.where(source_kind: kind, stage: "match", status: "succeeded").maximum(:started_at)
-      failed = CrawlRun.where(source_kind: kind, stage: %w[crawl extract match], status: "failed")
-      (good ? failed.where("started_at > ?", good) : failed).order(started_at: :desc).first
+    # failure for many kinds, in two queries: { kind => CrawlRun } (#1029). The newest
+    # failed run of a kind is after its last good match whenever any failed run is.
+    def failures(kinds)
+      kinds = kinds.compact
+      return {} if kinds.empty?
+
+      good = CrawlRun.where(source_kind: kinds, stage: "match", status: "succeeded").group(:source_kind).maximum(:started_at)
+      CrawlRun.where(source_kind: kinds, stage: %w[crawl extract match], status: "failed")
+        .select("DISTINCT ON (source_kind) *").order(:source_kind, started_at: :desc, id: :desc)
+        .select { |run| good[run.source_kind].nil? || run.started_at > good[run.source_kind] }.index_by(&:source_kind)
     end
 
     def runs(kind, limit: 10) = CrawlRun.where(source_kind: kind, stage: "match").where.not(status: "running").order(started_at: :desc).limit(limit)
@@ -179,12 +190,17 @@ class SourceCatalog
         Source.where(id: ids)
       end
 
-      def entry_for(key, name, sources, kind: nil, note: nil)
-        statuses = sources.distinct.pluck(:crawl_status)
-        Entry.new(key:, name:, note:, kind:, documents: sources.count, facts: public_facts(sources.ids).uniq { |_, type, id| [ type, id ] }.size,
-          last_read_at: sources.maximum(:fetched_at), status: STATUS_ORDER.find { |status| statuses.include?(status) },
-          soon: sources.none? && !OFFICIAL.dig(kind, :daily))
+      # sources: [id, kind or domain, crawl_status, fetched_at] rows; facts: facts_by_source.
+      def entry_for(key, name, sources, facts, kind: nil, note: nil)
+        statuses = sources.map { |_, _, status, _| status }.uniq
+        backed = sources.flat_map { |id, *| facts.fetch(id, []) }.uniq.size
+        Entry.new(key:, name:, note:, kind:, documents: sources.size, facts: backed,
+          last_read_at: sources.filter_map { |*, fetched_at| fetched_at }.max, status: STATUS_ORDER.find { |status| statuses.include?(status) },
+          soon: sources.empty? && !OFFICIAL.dig(kind, :daily))
       end
+
+      # The public facts each source backs, as [type, id]: { source_id => [[type, id], …] }.
+      def facts_by_source(source_ids) = public_facts(source_ids).group_by(&:first).transform_values { |rows| rows.map { |_, type, id| [ type, id ] } }
 
       def documents_for(scope)
         # Only what a Document shows: a fetched body (up to 20 MB) is never read here.
