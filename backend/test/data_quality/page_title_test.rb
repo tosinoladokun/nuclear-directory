@@ -31,4 +31,18 @@ class DataQuality::PageTitleTest < ActiveSupport::TestCase
     assert long.length <= DataQuality::PageTitle::MAX_LENGTH
     assert long.end_with?("...")
   end
+
+  test "only the head is parsed, without its code: a 450 KB inline script before the title, or a huge body, doesn't hide it (Copilot, #1032)" do
+    script = "<script>#{'var x = 1;' * 45_000}</script>"
+    html = "<html><head>#{script}<title>Acme Fission</title></head><body>#{'<p>filler</p>' * 400_000}</body></html>"
+    assert_operator html.bytesize, :>, 5_000_000
+    assert_equal "Acme Fission", DataQuality::PageTitle.from(html, content_type: "text/html")
+    assert_operator DataQuality::PageTitle.without_code(html, bytes: 1_000).bytesize, :<=, 1_000
+    assert_not_includes DataQuality::PageTitle.without_code(html, bytes: 10_000), "var x"
+  end
+
+  test "a title written into the body after an early </head> (Next.js) is still read (Radiant's news pages)" do
+    html = "<html><head><meta charset=utf-8></head><body><link rel=preload href=/a.jpg><title>DOE Selects Radiant | Radiant</title><p>Text</p></body></html>"
+    assert_equal "DOE Selects Radiant | Radiant", DataQuality::PageTitle.from(html, content_type: "text/html")
+  end
 end
