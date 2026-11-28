@@ -10,7 +10,6 @@
 # rejected, or sent to review by a later stage) are left alone.
 class DataQuality::Stages::Extract < DataQuality::Stage
   BATCH = 25
-  EARLIER = %w[new matched needs_review rejected].freeze
   private
     def perform(run)
       stats = { "sources" => 0, "candidates" => 0, "unchanged" => 0, "empty" => 0 }
@@ -82,8 +81,9 @@ class DataQuality::Stages::Extract < DataQuality::Stage
           # A claim still open, or closed by a person, from an earlier read isn't proposed again (#996).
           # An open one is seen again: it quotes the row as it reads now and
           # belongs to this read, so the dropped check and reconfirmation count it.
-          earlier = source.candidates.where(status: EARLIER).to_a
-          fresh = extracted.reject do |attrs|
+          # Only for a plug-in that holds claims back (#1038).
+          earlier = plugin.earlier_claims(source)&.to_a
+          fresh = earlier.nil? ? extracted : extracted.reject do |attrs|
             waiting = plugin.waiting_claim(attrs, earlier) or next false
             waiting.update!(quote: attrs[:quote], crawl_run: run) unless waiting.status_rejected?
             true
