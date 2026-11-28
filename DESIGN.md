@@ -533,7 +533,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 **One ink**
 - Every logo is drawn in `ink`, the text colour, in both themes. No other colour, tint, opacity or gradient.
 - The stored file is a one-colour alpha mask (PNG), drawn with `mask-image` over `background: var(--nd-ink)`, so it flips with the theme.
-- Converting to one ink keeps the shapes and drops the colour. Any pixel with alpha of 8% or more and lightness (L*) of 90 or less becomes ink. Everything else becomes transparent, so a white knockout inside a mark stays a hole.
+- Converting to one ink keeps the shapes and drops the colour. Any pixel with alpha of 8% or more and lightness (L*) of 90 or less becomes ink. Everything else becomes transparent, so a white knockout inside a mark stays a hole. Small white details count toward reject rule 8 but still become holes; more than 5% means the file is a version for dark backgrounds, or a lockup whose name is white.
 
 **Symbol or wordmark**
 - Use the company's symbol when it publishes one on its own: in its brand guide, its press kit, or alone on its site. Otherwise use its wordmark.
@@ -552,16 +552,18 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 
 **Files**
 - **Source:** the company's own website, brand page or press kit, with its URL recorded like any other source. Never a logo service, a search result, Wikipedia or a screenshot.
+- **Where to look first:** the company's press kit or brand page, then its media or newsroom page, and its homepage header last. Header logos are mostly lockups, white versions for a dark header, or sprites holding both. Of six homepage logos tried on 27 Nov, none passed.
 - **Types:** SVG (preferred), or PNG or WebP with transparency. JPEG, GIF, ICO, PDF and EPS are rejected.
 - **Size:** at most 500 KB. A larger file is rejected with "The file is N KB, over the 500 KB limit. Find a smaller SVG or PNG." A PNG or WebP is also limited to 25 million pixels (width × height), so a small file can't decode to gigabytes.
 - **SVG safety (a security rule):**
   - Parsed against an allow-list: `svg`, `g`, `defs`, `clipPath`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline` and `polygon`, with only their geometry, fill, stroke and transform attributes.
   - Also allowed, because they draw nothing:
     - `title`, `desc` and `metadata`, which are read for checking and dropped before rendering;
-    - on `svg`, the attributes `xmlns` and `xmlns:*`, `version`, `id`, `viewBox`, `width`, `height` and `preserveAspectRatio`.
+    - on `svg`, the attributes `xmlns` and `xmlns:*`, `version`, `viewBox`, `width`, `height` and `preserveAspectRatio`;
+    - `id` on any allowed element, because Illustrator and Inkscape exports put one on almost every shape. An `id` only names a part; a `clip-path` may still point only to a `clipPath`.
   - `style` and `class` attributes are still rejected.
   - Clipping is allowed inside the file:
-    - `id` and `clipPathUnits` on `clipPath`;
+    - `clipPathUnits` on `clipPath`;
     - `clip-path` and `clip-rule` on shapes, where `clip-path` is a `url(#id)` that points to a `clipPath` in the same file.
   - A plain DOCTYPE, as Illustrator exports carry, is dropped. A DOCTYPE that declares entities is rejected.
   - Rejected for anything else: `script`, `style`, `image`, `text`, `use`, `foreignObject`, filters, masks, patterns, gradients and animation.
@@ -584,6 +586,7 @@ Every rule is exact, so the processing step can enforce it in code. A logo eithe
 5. The ink covers less than 15% or more than 85% of the trimmed area: a hairline, or a solid badge or app icon.
 6. A part of the mark is thinner than 1.5px at display size all the way through. In the 3× mask, a connected shape vanishes entirely when eroded with a disc 4.5px across. Sharp corners and serifs that thin out at their ends don't count. The mask is thresholded at alpha 50% before eroding. Passes: a 3px stroke with pointed ends, or a serif that tapers into a stem. Fails: a separate 1px underline, or a dot under 1.5px across.
 7. The one-ink version is empty, for example a white logo made for dark backgrounds.
+8. Part of the logo is too light for one ink: of the visible pixels (alpha of 8% or more) in the file as read, before trimming, more than 5% have L* over 90. The reason is "Part of the logo is white or very light. Use the version made for light backgrounds." This stops a lockup with a white name from quietly becoming its symbol alone (Kairos Power's homepage logo, 27 Nov).
 
 **Approval.** A logo that passes goes to Tosin in the admin as a pending logo. He sees the original, from the pending copy, beside the processed mark, at display size, in light and dark, and approves or rejects it. Only an approved logo shows. A source with more than one colour is flagged at approval, so he can check that two colours that touched didn't merge into one shape.
 
