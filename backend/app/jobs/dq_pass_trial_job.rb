@@ -32,6 +32,7 @@ class DqPassTrialJob < ApplicationJob
       researcher.run = run
       results = Organization.where(id: organization_ids).order(:id).map do |org|
         result = researcher.research(org)
+        GC.start # each company's pages freed before the next (#1026)
         answer = result[:answer].to_h
         { "id" => org.id, "name" => org.name, "outcome" => result[:outcome], "model" => answer["model"], "escalated" => answer["escalated"] == true,
           "website" => answer["website"], "website_quote" => answer["website_quote"], "role" => answer["role"], "role_quote" => answer["role_quote"],

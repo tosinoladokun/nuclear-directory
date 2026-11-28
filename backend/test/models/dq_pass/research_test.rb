@@ -202,6 +202,14 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_equal [ "Acme Fission" ], finder.searched
   end
 
+  test "a page of several MB is parsed only up to PAGE_SCAN, and is still its own site with its text read (#1026)" do
+    huge = PAGE.sub("</main>", "</main>#{'<div><p>filler text</p></div>' * 150_000}")
+    assert_operator huge.bytesize, :>, DqPass::Research::PAGE_SCAN * 5
+    llm = FakeLlm.new(extract: answer)
+    assert_equal "proposed", researcher(llm:, finder: FakeFinder.new(results: [ HOME ], pages: { HOME => huge })).research(@org)[:outcome]
+    assert_includes llm.asked.first.last, "designs and builds microreactors"
+  end
+
   test "the instructions say a fusion developer is reactor_vendor and an EPC firm is reactor_services (DQ's trial)" do
     text = DqPass::Research::INSTRUCTIONS.squish
     assert_includes text, "A fusion developer"
