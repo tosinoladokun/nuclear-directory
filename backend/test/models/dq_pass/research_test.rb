@@ -210,6 +210,14 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_includes llm.asked.first.last, "designs and builds microreactors"
   end
 
+  test "a 450 KB inline script before <main> doesn't push the page's own text and heading past the cap (Copilot, #1032)" do
+    scripted = PAGE.sub("<body>", "<body><script>#{'var tracking = 1;' * 30_000}</script>")
+    assert_operator scripted.bytesize, :>, DqPass::Research::PAGE_SCAN
+    llm = FakeLlm.new(extract: answer)
+    assert_equal "proposed", researcher(llm:, finder: FakeFinder.new(results: [ HOME ], pages: { HOME => scripted })).research(@org)[:outcome]
+    assert_includes llm.asked.first.last, "designs and builds microreactors"
+  end
+
   test "the instructions say a fusion developer is reactor_vendor and an EPC firm is reactor_services (DQ's trial)" do
     text = DqPass::Research::INSTRUCTIONS.squish
     assert_includes text, "A fusion developer"

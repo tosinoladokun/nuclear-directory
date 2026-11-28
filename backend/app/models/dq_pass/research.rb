@@ -179,8 +179,8 @@ class DqPass::Research
     false
   end
 
-  # How much of a page research parses: its head and the top of its body (title, site name, h1, logo and the
-  # start of its text), never a whole page of several MB. Parsing whole pages, about ten times each, added about
+  # How much of a page research parses, once its script, style and SVG blocks are dropped (Copilot): its head and
+  # the top of its body (title, site name, h1, logo and the start of its text), never a whole page of several MB. Parsing whole pages, about ten times each, added about
   # 160 MB to the web process for 15 companies (28 Nov, #1026).
   PAGE_SCAN = 400_000
   Page = Data.define(:url, :final_url, :title, :content_text)
@@ -189,7 +189,7 @@ class DqPass::Research
   def own_page(org, url, names:)
     page = url && finder.read_page(url) or return
     lite = Page.new(url: page.url, final_url: page.final_url, title: page.title,
-      content_text: page.content_text.to_s.byteslice(0, PAGE_SCAN).scrub)
+      content_text: DataQuality::PageTitle.without_code(page.content_text, bytes: PAGE_SCAN))
     return unless finder.own_site_for?(lite, names)
 
     { url: home(lite.final_url.presence || lite.url) || url, title: lite.title.to_s.squish, text: main_text(lite.content_text),
