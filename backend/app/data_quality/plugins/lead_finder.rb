@@ -34,6 +34,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   NUCLEAR_PAGES = "nuclear_pages".freeze
   NUCLEAR_PAGES_PER_DAY = 30
   LEAD_MARK = "#lead-finder".freeze
+  # A company's own wire release that gave the nuclear-work quote (#1021), copied as this kind's source: the release's
+  # address, this mark, then the host of the company's own site, which the claim's website is.
+  RELEASE_MARK = "#lead-finder-release=".freeze
   # Brave's plan allows 1 request a second (Infra): this much between our calls.
   SEARCH_GAP = 1.1
   # Another run holding this kind's lock: waits and tries again, then :retry (not a try).
@@ -114,6 +117,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     @search_failed = @search_capped = false
     @site_for_pending = true
     @release_links = @given_links = []
+    @release_quotes = {}
     result = nil
     candidates_for(name, [], found).each do |website|
       # Another company's site is never this one's.
@@ -155,6 +159,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     # What a person said about it ("Austin microreactor startup"; Backend #806), for the search.
     @hints = Array(lead.respond_to?(:hints) ? lead.hints : nil).join(" ").squish.first(80)
     found = {}
+    @release_quotes = {}
     name, links = read_input(lead)
     # A staging or preview link is never read, not even for the site's name (Copilot, #932).
     staging, links = links.partition { |link| staging_host?(link) }
@@ -186,6 +191,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       end
       (found["checked"] ||= []) << { "verdict" => verdict.to_s, "why" => why }.merge(found.key?("searched") ? {} : { "website" => website })
       next unless verdict == :ok
+      # No such sentence on its own site: its own wire release's About section may give it (#1021: NuCube).
+      if !nuclear_sentence?(page, name) && (release, = release_with_quote(name))
+        return propose(name, website, page, found, release:)
+      end
 
       return propose(name, website, page, found)
     end
@@ -200,6 +209,7 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
   # The pending company, from the verified home page.
   def extract(source, _run)
     name = source.title.to_s.squish
+    return release_claim(source, name) if source.url.include?(RELEASE_MARK)
     return [] if !source.url.end_with?(LEAD_MARK) || name.blank? || source.content_text.blank?
 
     # A site found for a company already listed (a pending one) is claimed for
@@ -275,7 +285,9 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
     CONTACT = %r{contact|about|company|locations?|offices?|investors?}i
     def blocks(html) = Nokogiri::HTML(html.to_s).css("p, li, h1, h2, h3, h4").map { |node| node.xpath(".//text()").map(&:text).join(" ").squish }
 
-    def naming_sentences(blocks, name) = blocks.flat_map { |block| block.split(/(?<=[.!?])\s+/) }.select { |sentence| names?(sentence, name) }
+    # A full stop ends a sentence, but not a legal ending's: "NuCube Energy, Inc. is an advanced-nuclear …" is one (#1021).
+    SENTENCE_END = /(?<=[.!?])(?<!\bInc\.)(?<!\bCorp\.)(?<!\bCo\.)(?<!\bLtd\.)(?<!\bLLC\.)\s+/
+    def naming_sentences(blocks, name) = blocks.flat_map { |block| block.split(SENTENCE_END) }.select { |sentence| names?(sentence, name) }
 
     def nuclear_sentence?(page, name) = self_naming_sentences(page, name).any? { |sentence| nuclear?(sentence, brand(name)) }
 
@@ -443,6 +455,52 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
         section = nodes[(start + 1)..].take_while { |node| !node.text.squish.match?(ABOUT_HEADING) }
         section.map { |node| node.text.squish }.join("\n").presence
       end
+    end
+
+    # The sentence naming the company and its nuclear work in its own wire release (#1021; DQ's rule, DATA.md section 5):
+    # only from the release's "About <Company>" section, whose heading is the lead's whole name, legal ending and
+    # punctuation aside (as #1016's JSON-LD), or its "Company Background" when that About section is the release's only
+    # one (not a joint release). Never the release's body, a partner's About section, or the wire site's own text.
+    ABOUT_TAGS = "p, h2, h3, h4, b, strong, li".freeze
+    BACKGROUND_HEADING = /\A(?:Company\s+)?Background\s*:?\z/i
+    def release_quote(page, name)
+      wanted = @directory.normalize_organization_name(name)
+      return if wanted.blank?
+
+      nodes = Nokogiri::HTML(page.content_text).css(ABOUT_TAGS).to_a
+      heading = ->(node) { node.text.squish.match?(ABOUT_HEADING) || node.text.squish.match?(BACKGROUND_HEADING) }
+      section = ->(start) { nodes[(start + 1)..].take_while { |node| !heading.(node) }.map { |node| node.text.squish } }
+      abouts = nodes.each_index.select { |i| nodes[i].text.squish.match?(ABOUT_HEADING) }
+      own = abouts.find { |i| @directory.normalize_organization_name(nodes[i].text.squish[ABOUT_HEADING, 1]) == wanted } or return
+      texts = section.(own)
+      if abouts.one?
+        background = nodes.index { |node| node.text.squish.match?(BACKGROUND_HEADING) }
+        texts += section.(background) if background
+      end
+      naming_sentences(texts, name).find { |sentence| nuclear?(sentence, brand(name)) }
+    end
+
+    # The first of the lead's own wire releases with that sentence: [page, quote], or nil. Read once per find.
+    def release_with_quote(name)
+      @release_quotes ||= {}
+      return @release_quotes[name] if @release_quotes.key?(name)
+
+      @release_quotes[name] = Array(@release_links).first(2).lazy.filter_map do |url|
+        page = snapshot(url) or next
+        (quote = release_quote(page, name)) && [ page, quote ]
+      end.first
+    end
+
+    # The claim from a release copied for a lead (#1021): the quote from its own About section, the website the
+    # company's own site, which passed the own-site check, and a note saying where the quote came from.
+    def release_claim(source, name)
+      site = source.url.split(RELEASE_MARK, 2).last.to_s
+      return [] if name.blank? || site.blank? || source.content_text.blank?
+
+      quote = release_quote(source, name) or return []
+      [ { kind: "organization", quote: quote.strip, notes: "The nuclear-work quote is from #{name}'s own release on " \
+          "#{URI(source.url).host}, not its website (#{site}), which names it as its own",
+        payload: { "name" => page_name(quote.strip, name), "website" => "https://#{site}" } } ]
     end
 
     # Each checked site's verdict, for the lead's note (Backend keeps only the
@@ -684,7 +742,10 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       # The name, the nuclear work and the address must be the site owner's, not a
       # customer's in a testimonial (#932: Mainstream Engineering on calnanocorp.com).
       return [ :not_named, page, "The page names #{name} but isn't its own site" ] unless own_site?(page, name)
-      return [ :not_nuclear, page, "The page states no nuclear work" ] unless nuclear_exempt?(website) || nuclear?(text, brand(name))
+      # Or the company's own wire release states it, in its About section (#1021).
+      unless nuclear_exempt?(website) || nuclear?(text, brand(name)) || release_with_quote(name)
+        return [ :not_nuclear, page, "The page states no nuclear work" ]
+      end
       unless @us_shown_elsewhere || us_shown?(page, name)
         return [ :not_us, page, "Neither its own pages nor its own releases show a US headquarters, office or address" ]
       end
@@ -743,12 +804,16 @@ class DataQuality::Plugins::LeadFinder < DataQuality::Plugin
       source if source.crawl_ok? && source.content_text.present?
     end
 
-    def propose(name, website, page, found, organization_id: nil)
+    def propose(name, website, page, found, organization_id: nil, release: nil)
       # The verified home page, copied as this kind's own source (its URL marked): only
-      # a page that passed verify is ever extracted here (Copilot).
-      verified = Source.find_or_initialize_by(url: "#{page.final_url.presence || page.url}#{LEAD_MARK}")
-      verified.update!(source_kind:, title: name, crawl_status: "ok", fetched_at: page.fetched_at, http_status: page.http_status,
-        content_text: page.content_text, content_sha256: page.content_sha256, extracted_sha256: nil, enrich_organization_id: organization_id)
+      # a page that passed verify is ever extracted here (Copilot). Or the company's own
+      # release that gave the quote, marked with the verified site's host (#1021).
+      site = page.final_url.presence || page.url
+      url = release ? "#{release.url.split('#').first}#{RELEASE_MARK}#{URI(site).host}" : "#{site}#{LEAD_MARK}"
+      copied = release || page
+      verified = Source.find_or_initialize_by(url:)
+      verified.update!(source_kind:, title: name, crawl_status: "ok", fetched_at: copied.fetched_at, http_status: copied.http_status,
+        content_text: copied.content_text, content_sha256: copied.content_sha256, extracted_sha256: nil, enrich_organization_id: organization_id)
       BUSY_TRIES.times do |attempt|
         @pipeline.call(self)
         break
