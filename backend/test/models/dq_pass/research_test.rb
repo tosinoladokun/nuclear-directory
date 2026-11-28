@@ -238,6 +238,17 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_includes DataQuality::PageTitle.without_code(shell, bytes: 10_000), "designs and builds microreactors"
   end
 
+  test "a role quote must be a sentence saying what the company does, never a product label (DQ, first live night: Hadron)" do
+    labelled = PAGE.sub("</main>", "<p>Acme Halo™ · Micro modular reactor</p></main>")
+    finder = FakeFinder.new(results: [ HOME ], pages: { HOME => labelled })
+    llm = FakeLlm.new(extract: answer(role_quote: "Acme Halo™ · Micro modular reactor"))
+    researcher(llm:, finder:).research(@org)
+    assert_nil proposals.find { |claim| claim.kind == "organization_role" }, "a product label isn't a role quote"
+
+    assert_includes DqPass::Research::INSTRUCTIONS.squish, "never a menu label, heading or product name"
+    assert DqPass::Research.new.sentence?("Acme Fission designs and builds microreactors for remote sites.")
+  end
+
   test "the instructions say a fusion developer is reactor_vendor and an EPC firm is reactor_services (DQ's trial)" do
     text = DqPass::Research::INSTRUCTIONS.squish
     assert_includes text, "A fusion developer"
