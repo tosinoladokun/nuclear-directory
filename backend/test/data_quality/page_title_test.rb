@@ -40,4 +40,9 @@ class DataQuality::PageTitleTest < ActiveSupport::TestCase
     assert_operator DataQuality::PageTitle.without_code(html, bytes: 1_000).bytesize, :<=, 1_000
     assert_not_includes DataQuality::PageTitle.without_code(html, bytes: 10_000), "var x"
   end
+
+  test "a title written into the body after an early </head> (Next.js) is still read (Radiant's news pages)" do
+    html = "<html><head><meta charset=utf-8></head><body><link rel=preload href=/a.jpg><title>DOE Selects Radiant | Radiant</title><p>Text</p></body></html>"
+    assert_equal "DOE Selects Radiant | Radiant", DataQuality::PageTitle.from(html, content_type: "text/html")
+  end
 end

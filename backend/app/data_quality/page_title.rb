@@ -21,14 +21,19 @@ module DataQuality::PageTitle
     return unless html?(body, content_type)
 
     html = without_code(body, bytes: SCAN)
-    # Only its head when it has one: the title and og:title live there.
+    # Its head first, where the title and og:title usually are; else all of the capped page, since some frameworks
+    # write the title into the body (Next.js: Radiant's news pages; DQ's check of every stored title, 28 Nov).
     head_end = html.index(%r{</head\s*>}i)
-    doc = Nokogiri::HTML(head_end ? html[0, head_end] : html)
-    title = doc.at_css("head title, title")&.text.presence ||
-      doc.at_css('meta[property="og:title"]')&.[]("content")
+    title = title_in(Nokogiri::HTML(html[0, head_end])) if head_end
+    title ||= title_in(Nokogiri::HTML(html))
     title = title.to_s.squish
     title.truncate(MAX_LENGTH, separator: " ") if title.present?
   end
+
+  def self.title_in(doc)
+    doc.at_css("head title, title")&.text.presence || doc.at_css('meta[property="og:title"]')&.[]("content").presence
+  end
+  private_class_method :title_in
 
   def self.html?(body, content_type)
     return content_type.to_s.match?(%r{html}i) if content_type.present?
