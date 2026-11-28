@@ -100,4 +100,17 @@ class SocialAgent::RulesTest < ActiveSupport::TestCase
     assert_equal [ "its source page touches a sensitive topic (killed)" ], Rules.source_problems("https://www.nrc.gov/notice",
       OK.new(200, "<article><p>A fatal flaws evaluation was done. A falling crane killed a worker.</p></article>"))
   end
+
+  test "an engineering term never hides a harm word across a line break, and a non-breaking space still joins one (Copilot on #1044)" do
+    assert_equal "accident", Rules.sensitive("Severe accident\nMitigation work continues at the nuclear plant.")
+    assert_equal "fatal", Rules.sensitive("A fatal\nflaw in the valve was found after the event.")
+    assert_equal "accident", Rules.sensitive("A reactor accident\ntolerant fuel test was stopped.")
+    joined = SocialAgent::Item.new(subject: nil, kind: "news", facts: { "title" => "Severe accident" }, source_url: "https://www.nrc.gov/notice",
+      path: "/", organization_ids: [], source_quote: "Mitigation work continues at the nuclear plant.")
+    assert_equal "Severe accident\nMitigation work continues at the nuclear plant.", joined.own_text
+    assert_match "sensitive topic (accident)", Rules.problems("The NRC received Acme Fission's construction permit application.", joined,
+      platform: "x", fetcher: OK.new(200)).join
+    assert_nil Rules.sensitive("Acme Fission finished a fatal\u00a0flaws evaluation.")
+    assert_nil Rules.sensitive("The application covers accident\u00a0tolerant fuel.")
+  end
 end

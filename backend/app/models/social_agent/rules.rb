@@ -27,8 +27,10 @@ module SocialAgent::Rules
   # Engineering terms that share a word with the lists above but name a study or a design, not harm (#1017, DQ 27 Nov):
   # a "fatal flaws evaluation" is a siting study, "severe accident mitigation" analyses are an NRC licence-renewal
   # document, "accident tolerant fuel" is a fuel design. They're taken out before matching, so the same word elsewhere
-  # ("a fatal accident", "two workers were injured") is still caught.
-  ENGINEERING_TERMS = /\b(fatal[\s-]+flaws?|severe[\s-]+accident[\s-]+mitigation|accident[\s-]+tolerant[\s-]+fuels?)\b/i
+  # ("a fatal accident", "two workers were injured") is still caught. Words are joined by spaces (non-breaking too) or
+  # hyphens on one line only: an item's fields are joined by newlines, and a headline "Severe accident" over a summary
+  # "Mitigation work continues" must keep its warning (Copilot).
+  ENGINEERING_TERMS = /\b(fatal[[:blank:]-]+flaws?|severe[[:blank:]-]+accident[[:blank:]-]+mitigation|accident[[:blank:]-]+tolerant[[:blank:]-]+fuels?)\b/i
   MONTHS = Date::MONTHNAMES.compact.freeze
   STATES = %w[Alabama Alaska Arizona Arkansas California Colorado Connecticut Delaware Florida Georgia Hawaii Idaho Illinois
     Indiana Iowa Kansas Kentucky Louisiana Maine Maryland Massachusetts Michigan Minnesota Mississippi Missouri Montana Nebraska
