@@ -8,6 +8,9 @@ class DataQuality::ProposalPagesTest < ActiveSupport::TestCase
   QUOTE = "Holtec International is headquartered in Camden, New Jersey.".freeze
 
   setup do
+    # Midday, so a test that steps forward a minute (or compares a fetch with a claim's day) never crosses midnight
+    # in the app's time zone; the test about midnight sets its own times (#1027's CI ran at 23:59 UTC).
+    travel_to Time.zone.parse("2026-11-27 12:00")
     @fetcher = DataQuality::Fetcher.new(sleeper: ->(_) { })
     stub_request(:get, "https://holtec.example/robots.txt").to_return(status: 404)
     @page = Source.create!(url: "https://holtec.example/about", source_kind: "web_page")
