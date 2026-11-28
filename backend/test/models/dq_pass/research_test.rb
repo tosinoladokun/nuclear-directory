@@ -218,6 +218,15 @@ class DqPass::ResearchTest < ActiveSupport::TestCase
     assert_includes llm.asked.first.last, "designs and builds microreactors"
   end
 
+  test "a page drawn by script, whose only text is in <noscript>, still reaches the model (DQ, #1032: Terrestrial)" do
+    shell = "<html><head><title>Acme Fission | Microreactors</title></head><body><div id=root></div>" \
+      "<script>#{'var app = 1;' * 50_000}</script><noscript><p>Acme Fission designs and builds microreactors for remote sites.</p></noscript></body></html>"
+    llm = FakeLlm.new(extract: answer)
+    assert_equal "proposed", researcher(llm:, finder: FakeFinder.new(results: [ HOME ], pages: { HOME => shell })).research(@org)[:outcome]
+    assert_includes llm.asked.first.last, "designs and builds microreactors"
+    assert_includes DataQuality::PageTitle.without_code(shell, bytes: 10_000), "designs and builds microreactors"
+  end
+
   test "the instructions say a fusion developer is reactor_vendor and an EPC firm is reactor_services (DQ's trial)" do
     text = DqPass::Research::INSTRUCTIONS.squish
     assert_includes text, "A fusion developer"

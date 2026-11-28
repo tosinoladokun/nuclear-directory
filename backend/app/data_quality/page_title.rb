@@ -6,8 +6,9 @@
 module DataQuality::PageTitle
   MAX_LENGTH = 300
   # Script, style and inline-SVG blocks: dropped, as text, before any parse, so a page's own text and head aren't
-  # pushed past a cap by inline code (Copilot, #1032).
-  CODE_BLOCKS = %r{<(script|style|noscript|svg)\b[^>]*>.*?</\1\s*>}mi
+  # pushed past a cap by inline code (Copilot, #1032). Never <noscript>: on a page drawn by script it carries the
+  # page's real text (DQ: Terrestrial's nuclear sentence).
+  CODE_BLOCKS = %r{<(script|style|svg)\b[^>]*>.*?</\1\s*>}mi
   # At most this much of a page is parsed for its title: its <head>, without its code, never a whole page of
   # several MB (the web process's memory, #1026).
   SCAN = 200_000

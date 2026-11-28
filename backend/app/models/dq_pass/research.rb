@@ -27,7 +27,8 @@ class DqPass::Research
   CANDIDATES = 2
   CHEAP = "anthropic/claude-haiku-5.5".freeze
   STRONG = "anthropic/claude-sonnet-5.5".freeze
-  MAIN_DROP = "script, style, noscript, nav, footer, form, iframe, svg, aside".freeze
+  # Never <noscript>: a page drawn by script keeps its real text there (DQ, #1032).
+  MAIN_DROP = "script, style, nav, footer, form, iframe, svg, aside".freeze
 
   SCHEMA = {
     "type" => "object",
@@ -179,7 +180,7 @@ class DqPass::Research
     false
   end
 
-  # How much of a page research parses, once its script, style and SVG blocks are dropped (Copilot): its head and
+  # How much of a page research parses, once its script, style and SVG blocks are dropped (Copilot; <noscript> kept): its head and
   # the top of its body (title, site name, h1, logo and the start of its text), never a whole page of several MB. Parsing whole pages, about ten times each, added about
   # 160 MB to the web process for 15 companies (28 Nov, #1026).
   PAGE_SCAN = 400_000
